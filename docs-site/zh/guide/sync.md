@@ -126,7 +126,7 @@ coffer sync history --limit 20
 
 有两样东西是刻意不动地方的,而它们是同一个道理:一台机器*拿保险库做了什么*,属于那台机器自己。
 
-**触达范围不同步。** 一个资源的开关和它的 agent scope —— 网页界面上那个「关闭 / 全部生效 / 限定范围」控件,以及命令行上的 `coffer resource enable|disable` / `coffer scope set` —— 是在它生效的那台机器上设定的。每台机器各设各的,而一轮收敛既不读也不写它们中的任何一个。所以"这个工作用的 MCP 服务器属于台式机,不属于笔记本",是在笔记本上说的:
+**触达范围不同步。** 一个资源的开关和它的 agent scope —— 网页界面上那个触达范围按钮,按钮上写着这个资源当下触达到哪里,点开的面板里是「已禁用 / 所有 agent / 只限选中的」;以及命令行上的 `coffer resource enable|disable` / `coffer scope set` —— 是在它生效的那台机器上设定的。每台机器各设各的,而一轮收敛既不读也不写它们中的任何一个。所以"这个工作用的 MCP 服务器属于台式机,不属于笔记本",是在笔记本上说的:
 
 ```bash
 coffer resource disable mcp_server:work-jira      # on the laptop

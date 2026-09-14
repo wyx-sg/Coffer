@@ -1,9 +1,13 @@
 // frontend/src/components/reach/BulkReachActions.test.tsx
 //
-// The bulk half of the reach control: each segment writes the SAME state to
+// The bulk half of the reach control: each choice writes the SAME state to
 // EVERY selected row, and partial failure is reported rather than swallowed.
 // The old bar offered Enable/Disable only, which could not express the state the
 // rows themselves could be in.
+//
+// Its button cannot state a current reach the way a row's does — a mixed
+// selection has none — so it names the action instead, opens with nothing
+// chosen, and writes nothing at all if the user picks nothing.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -48,16 +52,48 @@ function mount(props: Partial<Parameters<typeof BulkReachActions>[0]> = {}) {
   return { onDone, qc };
 }
 
-const bar = () => within(screen.getByTestId("bulk-reach-control"));
+/** The bulk bar's one button. */
+const trigger = () => within(screen.getByTestId("bulk-reach-control")).getByRole("button");
+const openPanel = () => fireEvent.click(trigger());
+const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
+const closePanel = () =>
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+/** Open the panel and pick one whole-value choice, which also closes it. */
+const pick = (label: RegExp) => {
+  openPanel();
+  fireEvent.click(choice(label));
+};
 
 afterEach(() => vi.clearAllMocks());
 
 describe("BulkReachActions", () => {
+  test("the button names the action, because a mixed selection has no state to name", async () => {
+    // In a row the label IS the current reach. Here it would have to pick one
+    // of the states the selection holds and misreport the rest.
+    mount();
+    expect(trigger()).toHaveTextContent(/set reach/i);
+    openPanel();
+    for (const label of [/^disabled$/i, /every agent/i, /only selected agents/i]) {
+      expect(choice(label)).not.toBeChecked();
+    }
+  });
+
+  test("dismissing the panel without choosing writes nothing to any row", async () => {
+    const { onDone } = mount();
+    openPanel();
+    closePanel();
+    expect(resources.disable).not.toHaveBeenCalled();
+    expect(resources.enable).not.toHaveBeenCalled();
+    expect(scope.put).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
   test("Disabled disables every selected row and writes no scope", async () => {
     resources.disable.mockResolvedValue(undefined);
     const { onDone } = mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /^disabled$/i }));
+    pick(/^disabled$/i);
 
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
     expect(resources.disable.mock.calls.map((c) => c[1]).sort()).toEqual(["reviewing", "writing"]);
@@ -70,7 +106,7 @@ describe("BulkReachActions", () => {
     scope.put.mockResolvedValue(undefined);
     mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /everywhere/i }));
+    pick(/every agent/i);
 
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     expect(resources.enable).toHaveBeenCalledTimes(2);
@@ -82,7 +118,8 @@ describe("BulkReachActions", () => {
     scope.put.mockResolvedValue(undefined);
     mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /restricted/i }));
+    openPanel();
+    fireEvent.click(choice(/only selected agents/i));
     // The panel opens on an EMPTY draft: a bulk write is a new intent, not an
     // edit of whichever row happened to be first.
     expect(
@@ -92,7 +129,7 @@ describe("BulkReachActions", () => {
     fireEvent.click(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"));
     expect(scope.put).not.toHaveBeenCalled();
 
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    closePanel();
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     expect(scope.put.mock.calls.map((c) => [c[1], c[2]])).toEqual([
       ["writing", { agents: ["claude"] }],
@@ -100,12 +137,13 @@ describe("BulkReachActions", () => {
     ]);
   });
 
-  test("a kind with no scope gets two segments, and Enabled writes only the flag", async () => {
+  test("a kind with no scope gets two choices, and Enabled writes only the flag", async () => {
     resources.enable.mockResolvedValue(undefined);
     mount({ rows: [{ kind: "channel", name: "tg" }], supportsScope: false });
 
-    expect(bar().queryByRole("button", { name: /everywhere/i })).toBeNull();
-    fireEvent.click(bar().getByRole("button", { name: /^enabled$/i }));
+    openPanel();
+    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
+    fireEvent.click(choice(/^enabled$/i));
 
     await waitFor(() => expect(resources.enable).toHaveBeenCalledWith("channel", "tg"));
     expect(scope.put).not.toHaveBeenCalled();
@@ -119,7 +157,7 @@ describe("BulkReachActions", () => {
     );
     const { onDone } = mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /^disabled$/i }));
+    pick(/^disabled$/i);
 
     // Both attempted — allSettled, not Promise.all.
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
@@ -140,7 +178,7 @@ describe("BulkReachActions", () => {
     );
     mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /everywhere/i }));
+    pick(/every agent/i);
 
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
     expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
@@ -150,7 +188,7 @@ describe("BulkReachActions", () => {
     resources.disable.mockResolvedValue(undefined);
     mount();
 
-    fireEvent.click(bar().getByRole("button", { name: /^disabled$/i }));
+    pick(/^disabled$/i);
 
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
     expect(toastSuccess.mock.calls[0][0]).toMatch(/2 succeeded/i);
@@ -162,7 +200,7 @@ describe("BulkReachActions", () => {
     const { qc } = mount({ invalidate: [["skills"]] });
     const invalidate = vi.spyOn(qc, "invalidateQueries");
 
-    fireEvent.click(bar().getByRole("button", { name: /^disabled$/i }));
+    pick(/^disabled$/i);
 
     await waitFor(() => expect(invalidate).toHaveBeenCalled());
     const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));

@@ -53,45 +53,51 @@ function seed(opts: {
 
 const only = (agents: string[] | null): Scope => ({ agents });
 
-/** Close the picker, which is when the staged selection is written. */
-function closeList() {
+/** The one button: its text is the reach, and clicking it opens the panel. */
+const trigger = () => within(screen.getByTestId("scope-control")).getByRole("button");
+const openPanel = () => fireEvent.click(trigger());
+const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
+
+/** Dismiss the panel, which is when the staged choice is written. */
+function closePanel() {
   fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 }
 
-function openList() {
-  fireEvent.click(screen.getByRole("button", { name: /restricted/i }));
+/** Open the panel and land on the pick-list, which is the only choice that
+ *  leaves it open. */
+function openPicker() {
+  openPanel();
+  fireEvent.click(choice(/only selected agents/i));
 }
-
-const segment = (label: RegExp) => screen.getByRole("button", { name: label });
 
 afterEach(() => vi.clearAllMocks());
 
 describe("ScopeControl", () => {
-  test("everywhere marks that segment active and hides the pick-list", () => {
+  test("everywhere reads as every agent, with no panel open", () => {
     seed({ scope: null });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    expect(segment(/everywhere/i)).toHaveAttribute("aria-pressed", "true");
-    expect(segment(/^disabled$/i)).toHaveAttribute("aria-pressed", "false");
-    expect(segment(/restricted/i)).toHaveAttribute("aria-pressed", "false");
+    expect(trigger()).toHaveTextContent(/every agent/i);
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  test("switching everywhere -> restricted opens the list and PUTs on close", () => {
+  test("switching everywhere -> only selected opens the list and PUTs on close", () => {
     seed({ scope: null });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    // Opening stages nothing on the server — the dormant hint describes the
-    // staged selection, not a write that already happened.
+    openPicker();
+    // Picking the list stages nothing on the server — the dormant hint
+    // describes the staged selection, not a write that already happened.
     expect(mutate).not.toHaveBeenCalled();
     expect(screen.getByText(/dormant/i)).toBeInTheDocument();
-    closeList();
+    closePanel();
     expect(mutate).toHaveBeenCalledWith(only([]));
   });
 
-  test("switching restricted -> everywhere PUTs null", () => {
+  test("switching only-selected -> every agent PUTs null", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    fireEvent.click(segment(/everywhere/i));
+    openPanel();
+    fireEvent.click(choice(/every agent/i));
     expect(mutate).toHaveBeenCalledWith(null);
     expect(enableMutate).not.toHaveBeenCalled();
   });
@@ -99,106 +105,131 @@ describe("ScopeControl", () => {
   test("checking an agent adds it to the stored selection", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
+    openPanel();
     fireEvent.click(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox"));
-    closeList();
+    closePanel();
     expect(mutate).toHaveBeenCalledWith(only(["claude", "codex"]));
   });
 
-  test("a scope naming nobody registered here is explained on the trigger and in the panel", () => {
+  test("a scope naming nobody registered here is explained on the button and in the panel", () => {
+    // The button would otherwise read "1 agent" and look perfectly healthy
+    // while reaching nobody on this machine, so the note colours it too.
     seed({ scope: only(["ghost"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
+    expect(trigger()).toHaveAttribute("title", expect.stringMatching(/names no agent registered/i));
+    expect(trigger().className).toContain("status-warn");
+    openPanel();
     expect(screen.getByText(/names no agent registered/i)).toBeInTheDocument();
   });
 
   test("a scope that excludes nothing raises no note", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
+    expect(trigger().className).not.toContain("status-warn");
+    openPanel();
     expect(screen.queryByText(/inactive/i)).not.toBeInTheDocument();
   });
 
   test("a scoped-in agent that is not registered here renders with an unknown hint", () => {
     seed({ scope: only(["ghost"]), agents: [{ name: "claude" }] });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
+    openPanel();
     const row = within(screen.getByTestId("scope-agent-ghost"));
     expect(row.getByText("ghost")).toBeInTheDocument();
     expect(row.getByText(/not registered/i)).toBeInTheDocument();
   });
 
-  test("unticking every-agent stages an empty agent list and warns it is dormant", () => {
+  test("a stored scope spelling every-agent the long way reads as every agent", () => {
+    // `{agents: null}` and `null` are one state; the button and the panel must
+    // not disagree about which.
     seed({ scope: only(null) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    fireEvent.click(screen.getByRole("checkbox", { name: /every agent/i }));
+    expect(trigger()).toHaveTextContent(/every agent/i);
+    openPanel();
+    expect(choice(/every agent/i)).toBeChecked();
+  });
+
+  test("narrowing from every agent stages an empty list and warns it is dormant", () => {
+    seed({ scope: only(null) });
+    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
+    openPicker();
     expect(screen.getByText(/dormant/i)).toBeInTheDocument();
-    closeList();
+    closePanel();
     expect(mutate).toHaveBeenCalledWith(only([]));
   });
 
-  test("a restricted scope relaxed to every agent normalises to null", () => {
+  test("relaxing a restricted scope back to every agent writes null, not a full list", () => {
+    // "Every agent" is its own choice with its own write, so the wire never
+    // carries the same state under a second name.
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
-    fireEvent.click(screen.getByRole("checkbox", { name: /every agent/i }));
-    closeList();
+    openPanel();
+    fireEvent.click(choice(/every agent/i));
     expect(mutate).toHaveBeenCalledWith(null);
+    expect(mutate).toHaveBeenCalledOnce();
   });
 
   test("shows the empty hint when no agent is registered and none is scoped", () => {
     seed({ scope: only([]), agents: [] });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    openList();
+    openPanel();
     expect(screen.getByText(/no agents registered/i)).toBeInTheDocument();
   });
 
   test("a kind that declares no scope still gets a working enable/disable", () => {
     // Every kind Coffer ships today declares scope; this is the fallback for
-    // one that does not, so the control never has to be forked for it.
+    // one that does not, so the control never has to be forked for it. It stays
+    // ONE button so a table's status column reads the same whatever the kind.
     seed({ scope: null, supports_scope: false });
     render(<ScopeControl kind="unscoped_kind" name="tg" enabled />);
-    expect(screen.queryByRole("button", { name: /everywhere/i })).not.toBeInTheDocument();
-    expect(segment(/^enabled$/i)).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(segment(/^disabled$/i));
+    expect(trigger()).toHaveTextContent(/^enabled/i);
+    openPanel();
+    expect(screen.queryByRole("radio", { name: /every agent/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+    fireEvent.click(choice(/^disabled$/i));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "unscoped_kind", name: "tg" });
     expect(mutate).not.toHaveBeenCalled();
   });
 
-  test("a disabled resource renders with the first segment active", () => {
+  test("a disabled resource says so, and no scope state claims to be live", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled={false} />);
-    expect(segment(/^disabled$/i)).toHaveAttribute("aria-pressed", "true");
-    // Scope survives the disable, but neither scope segment claims to be live.
-    expect(segment(/restricted/i)).toHaveAttribute("aria-pressed", "false");
-    expect(segment(/everywhere/i)).toHaveAttribute("aria-pressed", "false");
+    expect(trigger()).toHaveTextContent(/^disabled/i);
+    openPanel();
+    expect(choice(/^disabled$/i)).toBeChecked();
+    // Scope survives the disable, so the list it will come back to is visible —
+    // but neither scope choice claims to be the live one.
+    expect(choice(/only selected agents/i)).not.toBeChecked();
+    expect(choice(/every agent/i)).not.toBeChecked();
+    expect(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox")).toBeChecked();
   });
 
-  test("clicking Disabled disables the resource and leaves the scope alone", () => {
+  test("choosing Disabled disables the resource and leaves the scope alone", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    fireEvent.click(segment(/^disabled$/i));
+    openPanel();
+    fireEvent.click(choice(/^disabled$/i));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "fs" });
     expect(mutate).not.toHaveBeenCalled();
   });
 
-  test("everywhere on a disabled resource both enables it and clears the scope", () => {
+  test("every agent on a disabled resource both enables it and clears the scope", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled={false} />);
-    fireEvent.click(segment(/everywhere/i));
+    openPanel();
+    fireEvent.click(choice(/every agent/i));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "fs" });
     expect(mutate).toHaveBeenCalledWith(null);
   });
 
-  test("restricted on a disabled resource enables on close, without rewriting the scope", () => {
+  test("the pick-list on a disabled resource enables on close, without rewriting the scope", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled={false} />);
-    openList();
+    openPicker();
     // Nothing yet: a write here would refetch the list and move the row the
     // open panel is anchored to.
     expect(enableMutate).not.toHaveBeenCalled();
-    closeList();
+    closePanel();
     expect(enableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "fs" });
     expect(mutate).not.toHaveBeenCalled();
   });
@@ -210,63 +241,76 @@ describe("ScopeControl", () => {
     render(<ScopeControl kind="skill" name="writing" enabled scope={only(["codex"])} />);
 
     expect(vi.mocked(scopeHooks.useResourceScope)).toHaveBeenCalledWith("skill", "writing", false);
-    expect(segment(/restricted/i)).toHaveAttribute("aria-pressed", "true");
-    expect(segment(/everywhere/i)).toHaveAttribute("aria-pressed", "false");
-    openList();
+    expect(trigger()).toHaveTextContent(/^1 agent/i);
+    openPanel();
+    expect(choice(/only selected agents/i)).toBeChecked();
     expect(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox")).toBeChecked();
   });
 
-  test("a pre-fetched null scope still means everywhere", () => {
+  test("a pre-fetched null scope still means every agent", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="skill" name="writing" enabled scope={null} />);
-    expect(segment(/everywhere/i)).toHaveAttribute("aria-pressed", "true");
+    expect(trigger()).toHaveTextContent(/every agent/i);
   });
 
-  test("every segment goes inert while a write is in flight", () => {
+  test("the control goes inert while a write is in flight", () => {
     seed({ scope: null });
     vi.mocked(scopeHooks.useUpdateResourceScope).mockReturnValue({
       mutate,
       isPending: true,
     } as unknown as ReturnType<typeof scopeHooks.useUpdateResourceScope>);
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);
-    expect(segment(/^disabled$/i)).toBeDisabled();
-    expect(segment(/everywhere/i)).toBeDisabled();
-    expect(segment(/restricted/i)).toBeDisabled();
+    expect(trigger()).toBeDisabled();
   });
 });
 
-describe("the selection commits when the popover closes", () => {
+describe("the choice commits when the panel closes", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("opening the list writes nothing", () => {
-    // Clicking the segment used to PUT straight away. That refetched the
+  test("opening the panel writes nothing", () => {
+    // Clicking a segment used to PUT straight away. That refetched the
     // resource list under an open popover, and the row it is anchored to moved
     // — so the panel appeared under a different row.
     seed({ scope: null });
     render(<ScopeControl kind="mcp_server" name="fs" enabled scope={null} />);
-    openList();
+    openPanel();
     expect(mutate).not.toHaveBeenCalled();
+    expect(disableMutate).not.toHaveBeenCalled();
+    expect(enableMutate).not.toHaveBeenCalled();
   });
 
-  test("ticking two agents writes once, when the popover closes", () => {
+  test("ticking two agents writes once, when the panel closes", () => {
     seed({ scope: only([]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled scope={only([])} />);
-    openList();
+    openPanel();
     fireEvent.click(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"));
     fireEvent.click(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox"));
     expect(mutate).not.toHaveBeenCalled();
 
-    closeList();
+    closePanel();
     // One write carrying the whole selection, not one per tick.
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith(only(["claude", "codex"]));
   });
 
-  test("closing an untouched list of the same selection writes nothing", () => {
+  test("closing an untouched panel of the same selection writes nothing", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled scope={only(["claude"])} />);
-    openList();
-    closeList();
+    openPanel();
+    closePanel();
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
+  test("closing an untouched panel on a DISABLED resource does not re-disable it", () => {
+    // The one the consumer cannot dedupe: a disable has no "same value" to
+    // compare against, so an untouched close would post one and write a real
+    // audit event for a panel the user only glanced at.
+    seed({ scope: only(["claude"]) });
+    render(<ScopeControl kind="mcp_server" name="fs" enabled={false} scope={only(["claude"])} />);
+    openPanel();
+    closePanel();
+    expect(disableMutate).not.toHaveBeenCalled();
+    expect(enableMutate).not.toHaveBeenCalled();
     expect(mutate).not.toHaveBeenCalled();
   });
 });

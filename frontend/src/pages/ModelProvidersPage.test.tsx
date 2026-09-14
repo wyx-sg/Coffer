@@ -1,10 +1,10 @@
 // pages/ModelProvidersPage.test.tsx
 //
 // The connection library is now a DataTable like every other list surface:
-// search + filters + selection + pagination, the per-row three-way reach
-// control, a bulk bar carrying that same control plus delete, and a row click
-// that opens the connection's detail page (where editing and the model
-// curation live — no per-row pencil).
+// search + filters + selection + pagination, the per-row reach control (one
+// button stating the reach, over a panel of choices), a bulk bar carrying that
+// same control plus delete, and a row click that opens the connection's detail
+// page (where editing and the model curation live — no per-row pencil).
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -270,8 +270,8 @@ describe("ModelProvidersPage", () => {
 
     selectFilter("Vendor", "All vendors");
     // The status filter tracks the status COLUMN, which is reach now: an
-    // enabled connection with no scope reads as "Everywhere".
-    selectFilter("Status", "Everywhere");
+    // enabled connection with no scope reads as "Every agent".
+    selectFilter("Status", "Every agent");
     expect(screen.getByText("official")).toBeInTheDocument();
     expect(screen.queryByText("agnes")).not.toBeInTheDocument();
   });
@@ -291,7 +291,7 @@ describe("ModelProvidersPage", () => {
     expect(within(rowFor("official")).getByText("OpenAI")).toBeInTheDocument();
   });
 
-  test("the status cell is the three-way reach control, and it does not navigate", async () => {
+  test("the status cell is the reach control, and it does not navigate", async () => {
     apiMock.list.mockResolvedValue({
       providers: [
         makeProvider({ name: "official", enabled: true }),
@@ -303,20 +303,17 @@ describe("ModelProvidersPage", () => {
 
     // A Switch could not say "offer this endpoint to exactly these agents".
     expect(screen.queryByRole("switch")).toBeNull();
-    const on = within(rowFor("official"));
-    const off = within(rowFor("agnes"));
-    expect(on.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(off.getByRole("button", { name: /^disabled$/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    // One button per row, and its label IS that row's reach.
+    const reachIn = (name: string) =>
+      within(within(rowFor(name)).getByTestId("scope-control")).getByRole("button");
+    expect(reachIn("official")).toHaveTextContent(/every agent/i);
+    expect(reachIn("agnes")).toHaveTextContent(/^disabled/i);
 
-    fireEvent.click(on.getByRole("button", { name: /^disabled$/i }));
+    fireEvent.click(reachIn("official"));
+    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
     await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledWith("provider", "official"));
-    fireEvent.click(off.getByRole("button", { name: /everywhere/i }));
+    fireEvent.click(reachIn("agnes"));
+    fireEvent.click(screen.getByRole("radio", { name: /every agent/i }));
     await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledWith("provider", "agnes"));
     // The control must not fall through to the row's navigation.
     expect(navigateMock).not.toHaveBeenCalled();
@@ -343,18 +340,21 @@ describe("ModelProvidersPage", () => {
 
     // The head checkbox selects the whole page.
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    const bar = within(screen.getByTestId("bulk-reach-control"));
-    // "Everywhere" is enable + an unscoped write, per selected row.
-    fireEvent.click(bar.getByRole("button", { name: /everywhere/i }));
+    // A mixed selection has no current reach, so the bar's button names the
+    // action instead of a state.
+    const bar = () => within(screen.getByTestId("bulk-reach-control")).getByRole("button");
+    expect(bar()).toHaveTextContent(/set reach/i);
+    // "Every agent" is enable + an unscoped write, per selected row.
+    fireEvent.click(bar());
+    fireEvent.click(screen.getByRole("radio", { name: /every agent/i }));
     await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledTimes(2));
     expect(resourceMock.enable.mock.calls.map((c) => c[1]).sort()).toEqual(["agnes", "official"]);
     await waitFor(() => expect(scopeMock.put).toHaveBeenCalledTimes(2));
     expect(scopeMock.put.mock.calls.every((c) => c[2] === null)).toBe(true);
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    fireEvent.click(
-      within(screen.getByTestId("bulk-reach-control")).getByRole("button", { name: /^disabled$/i }),
-    );
+    fireEvent.click(bar());
+    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
     await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledTimes(2));
   });
 

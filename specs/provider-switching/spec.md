@@ -746,9 +746,9 @@ opens, once per visit, with the table saying it is loading while it does.
   settings panel) and on the connection's own detail header.
 - The detail header now carries the shared `ScopeControl` instead of a read-only
   enabled/disabled badge: the list could disable a connection and its own page
-  could not. `provider` declares no per-agent scope, so the control renders its
-  two-segment Disabled/Enabled fallback — and it is now the single place that
-  state is both shown and changed.
+  could not. `provider` declares no per-agent scope, so the control's panel
+  renders its two-choice Disabled / Enabled fallback — and it is now the single
+  place that state is both shown and changed.
 
 ## Amendment 2026-09-12b — A curated model says WHICH KIND of model it is
 

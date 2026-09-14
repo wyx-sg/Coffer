@@ -1,8 +1,8 @@
 // frontend/src/kinds/channel/ChannelsTable.test.tsx
 //
 // The channels list (spec channels, FR-041). Each row carries the platform type,
-// default agent, a live runtime-health badge (Running/Stopped), the three-way
-// reach control, a paired-owner cell and a delete action — the health and
+// default agent, a live runtime-health badge (Running/Stopped), the reach
+// control, a paired-owner cell and a delete action — the health and
 // paired cells fed by the per-row /channels/{name}/status query, which we stub
 // here. The health badge mirrors the MCP-server surface's
 // ServerHealthCell, so this test asserts it reflects the adapter `running`
@@ -121,16 +121,20 @@ describe("ChannelsTable", () => {
     expect(screen.getByText(/Alice/)).toBeInTheDocument();
   });
 
-  test("the state column is the three-way reach control, not a static badge", () => {
+  test("the state column is the reach control, not a static badge", () => {
     stubStatuses({ tg: status("tg") });
     render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
 
     const row = within(screen.getByText("tg").closest("tr") as HTMLElement);
-    expect(row.getByTestId("scope-control")).toBeInTheDocument();
-    expect(row.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    // ONE button, whose label states the channel's current reach.
+    const reach = within(row.getByTestId("scope-control")).getByRole("button");
+    expect(reach).toHaveTextContent(/^every agent$/i);
+    // And unlike a badge it is the place reach is changed: it opens the panel
+    // carrying the three states as choices.
+    fireEvent.click(reach);
+    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /every agent/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /only selected agents/i })).toBeInTheDocument();
   });
 
   test("every row offers a labelled delete, behind a confirmation", () => {
@@ -152,7 +156,10 @@ describe("ChannelsTable", () => {
     expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    expect(screen.getByTestId("bulk-reach-control")).toBeInTheDocument();
+    // The same one-button control the rows carry, naming the action because a
+    // mixed selection has no single reach to report.
+    const bar = within(screen.getByTestId("bulk-reach-control"));
+    expect(bar.getByRole("button")).toHaveTextContent(/set reach/i);
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
 

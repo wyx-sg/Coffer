@@ -78,7 +78,7 @@ describe("McpServerDetailPage", () => {
     });
   });
 
-  test("the scope control's Disabled segment fires the disable mutation", async () => {
+  test("the scope control's Disabled choice fires the disable mutation", async () => {
     const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
     const getMock = vi.fn().mockResolvedValue({
       data: stdioResource,
@@ -95,13 +95,12 @@ describe("McpServerDetailPage", () => {
       expect(screen.getByText("fs")).toBeInTheDocument();
     });
 
-    // Resource is enabled=true, scope is null, so "Everywhere" is the live
-    // segment. Clicking "Disabled" takes the resource out of service.
-    expect(screen.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    fireEvent.click(screen.getByRole("button", { name: /^disabled$/i }));
+    // Resource is enabled=true, scope is null, so the one button reports "Every
+    // agent". Picking "Disabled" in its panel takes the resource out of service.
+    const reach = within(screen.getByTestId("scope-control")).getByRole("button");
+    expect(reach).toHaveTextContent(/every agent/i);
+    fireEvent.click(reach);
+    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith(

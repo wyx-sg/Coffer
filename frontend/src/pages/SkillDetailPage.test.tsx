@@ -4,7 +4,7 @@
 // tabs — Overview, Files. We mock the skill hooks so the page doesn't depend
 // on a running daemon.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { SkillDetailPage } from "./SkillDetailPage";
@@ -99,17 +99,17 @@ describe("SkillDetailPage", () => {
     renderAt();
     expect(screen.getByTestId("scope-control")).toBeInTheDocument();
     expect(screen.queryByTestId("scope-card")).not.toBeInTheDocument();
-    // scope is null on this skill, so "Everywhere" is the live segment.
-    expect(screen.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    // scope is null on this skill, so the one button reports "Every agent".
+    expect(within(screen.getByTestId("scope-control")).getByRole("button")).toHaveTextContent(
+      /every agent/i,
     );
   });
 
-  test("the scope control's Disabled segment takes the skill out of service", () => {
+  test("the scope control's Disabled choice takes the skill out of service", () => {
     mockSkill(LOCAL_SKILL);
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /^disabled$/i }));
+    fireEvent.click(within(screen.getByTestId("scope-control")).getByRole("button"));
+    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", name: "hello" });
   });
 

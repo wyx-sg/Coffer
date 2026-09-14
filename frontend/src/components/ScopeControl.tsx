@@ -7,18 +7,19 @@
 // which expressed the same "reaches nobody" state twice: `enabled=false` in one
 // place and a dormant scope in another.
 //
-// The BUTTONS, LABELS and the restriction panel are not here: they live in
+// The BUTTON, the LABELS and the panel are not here: they live in
 // `components/reach/ReachControl.tsx`, shared with the bulk bar
 // (`BulkReachActions`) so the row control, the detail-page control and the
-// selection-wide control cannot drift into three different three-way choices.
-// This file is the single-resource DATA half: which segment is live, what each
-// one writes, and — because only a single resource has an answer — whether this
-// resource reaches nobody *here*.
+// selection-wide control cannot drift into three different answers to the same
+// question. This file is the single-resource DATA half: which state is live,
+// what each choice writes, and — because only a single resource has an answer —
+// whether this resource reaches nobody *here*.
 //
 // Owning BOTH halves is the point, and it is what makes this control the whole
-// of a resource's reach: `enabled` says whether it is live at all, `scope` says
-// which agents it is live for, and neither alone is the answer. Reach in that
-// sense is MACHINE-LOCAL — held in this vault, never converged with a remote —
+// of a resource's reach — one button whose label is the answer: `enabled` says
+// whether it is live at all, `scope` says which agents it is live for, and
+// neither alone is the answer. Reach in that sense is MACHINE-LOCAL — held in
+// this vault, never converged with a remote —
 // so every machine the user works on sets its own, and this control is where
 // that is set. ReachControl's panel tells the user so; this file is why there
 // is one place to tell them.
@@ -37,19 +38,20 @@
 // first state: disabled beats any scope. Disabling deliberately LEAVES the
 // scope untouched, so re-enabling restores the selection the user had.
 //
-// Mutation pattern: the two whole-value segments write immediately, because
-// each already names a complete state. The pick-list does not — a selection is
-// only finished when the user stops picking — so ReachControl stages it and
-// hands the whole scope over once, on close:
+// Mutation pattern: ReachControl stages the user's choice and hands it over
+// exactly once, when its panel closes — nothing is written while the panel is
+// open, whichever choice was made:
 //   - "Disabled" posts .../disable and writes no scope.
-//   - "Everywhere" enables if needed and writes `null`.
-//   - "Restricted…" opens the pick-list and writes NOTHING yet.
-//   - Closing it enables if needed and writes the staged scope, once, if it
-//     differs from what is stored — normalised back to `null` when the user has
-//     relaxed it to every agent.
+//   - "Every agent" enables if needed and writes `null`.
+//   - "Only selected agents" writes the staged agent list, once, if it differs
+//     from what is stored, and enables if needed. It is always a list:
+//     relaxing back to every agent is the "Every agent" choice above, so the
+//     same state can never arrive here under a second name.
+//   - A panel the user only glanced at writes nothing at all.
 //
 // Kinds that declare no scope still need enable/disable — this control owns it
-// — so they fall back to the shared two-segment Disabled/Enabled group.
+// — so they fall back to the same button over a two-choice Disabled/Enabled
+// panel.
 //
 // The control also sits in the status column of every resource LIST, one
 // instance per row. Mounting the per-resource scope query once per row would
@@ -67,7 +69,6 @@ import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMu
 import {
   useResourceScope,
   useUpdateResourceScope,
-  UNRESTRICTED,
   type ResourceScope,
   type Scope,
 } from "@/lib/hooks/useScope";
@@ -108,18 +109,25 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
   };
 
   const commitScope = (staged: Scope) => {
-    // Enabling is part of what the segment means on a disabled resource, but it
-    // waits for the close like the scope does: writing on open is what moved
-    // the row out from under the panel.
+    // Enabling is part of what the choice means on a disabled resource, but it
+    // waits for the close like the scope does: writing while the panel was open
+    // is what moved the row out from under it.
     enableIfNeeded();
     if (sameScope(scope, staged)) return;
-    // "Every agent" is "everywhere", which the wire spells `null` — storing
-    // `{agents: null}` instead would be the same state under a second name.
-    update.mutate(sameScope(staged, UNRESTRICTED) ? null : staged);
+    // Always a list. "Every agent" is its own choice writing `null` through
+    // `onEverywhere`, so a relaxed-to-everything selection cannot arrive here
+    // as `{agents: null}` — the same state under a second name.
+    update.mutate(staged);
   };
 
   // "Inactive here" is judged against the agents registered in THIS vault —
   // the only ones a scope set on this machine could ever name.
+  //
+  // It earns its keep MORE now that reach is one button, not less. The button
+  // reports the scope, and a scope naming only agents this machine has never
+  // heard of reads as a perfectly healthy "1 agent" while reaching nobody; the
+  // note is the only thing that says otherwise without opening the panel, and
+  // it is what turns the button amber.
   const note = isDormantHere(
     scope,
     (agentsData ?? []).map((a) => a.name),
