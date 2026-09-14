@@ -719,9 +719,9 @@ export interface components {
         DaemonLogRecordOut: {
             timestamp?: string | null;
             level?: string | null;
-            /** @description structlog's `event` field — the message. */
+            /** @description The message — structlog's `event` field, or the text another writer put after its level. */
             event?: string | null;
-            /** @description The whole parsed line: a structlog record's full dict, or `{"raw": "<line>"}` for a line that is not JSON (usually a traceback, and usually the interesting one). */
+            /** @description The whole parsed record. `daemon.log` interleaves several writers (Coffer's structlog JSON, the stdlib formatter, uvicorn, rich, and the cloudflared child's zerolog), normalised onto `timestamp` / `level` / `logger` / `event`, plus `continuation` for the lines (a traceback, a wrapped message) that belong to this record. A line no writer's format fits is kept whole as `{"raw": "<line>"}`. */
             record: {
                 [key: string]: unknown;
             };

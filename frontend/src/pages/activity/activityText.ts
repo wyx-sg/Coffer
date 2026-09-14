@@ -59,18 +59,29 @@ export function describeDaemonRecord(t: TFunction, rec: DaemonLogRecord): string
   return rec.event || (typeof raw === "string" ? raw : "") || t("activity.daemon.noMessage");
 }
 
-/** The structlog logger that emitted a record, if the line carried one. */
+/** The logger that emitted a record, if the line named one. */
 export function daemonLogger(rec: DaemonLogRecord): string {
   const logger = rec.record?.logger;
   return typeof logger === "string" ? logger : "";
 }
 
 /**
+ * The lines the daemon folded into this record — a traceback's frames, a
+ * wrapped message — which belong to it rather than to a row each.
+ */
+function daemonContinuation(rec: DaemonLogRecord): string {
+  const lines = rec.record?.continuation;
+  return Array.isArray(lines) ? lines.filter((l) => typeof l === "string").join(" ") : "";
+}
+
+/**
  * The lowercased free-text haystack for one daemon record: the rendered
- * message, its logger and its level. A line that never parsed as JSON has
- * neither logger nor level — its whole text is the message, which the
- * rendered line already carries.
+ * message, its logger, its level, and the lines folded into it. The folded
+ * lines matter because a traceback is not a row of its own any more — without
+ * them, searching for the exception that caused a failure would find nothing.
  */
 export function daemonSearchHaystack(t: TFunction, rec: DaemonLogRecord): string {
-  return [describeDaemonRecord(t, rec), daemonLogger(rec), rec.level ?? ""].join(" ").toLowerCase();
+  return [describeDaemonRecord(t, rec), daemonLogger(rec), rec.level ?? "", daemonContinuation(rec)]
+    .join(" ")
+    .toLowerCase();
 }

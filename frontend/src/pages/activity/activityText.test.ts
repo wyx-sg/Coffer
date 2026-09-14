@@ -206,4 +206,25 @@ describe("daemonSearchHaystack", () => {
     });
     expect(haystack).toContain("traceback");
   });
+
+  test("a traceback folded into its record is still searchable", () => {
+    // The daemon attaches a traceback to the record that raised it, so those
+    // lines are no longer rows of their own — the search has to reach into
+    // them or the exception a user is looking for matches nothing.
+    const haystack = daemonSearchHaystack(t, {
+      timestamp: "2026-05-22T12:00:00Z",
+      level: "error",
+      event: "consolidate.store.failed",
+      record: {
+        event: "consolidate.store.failed",
+        level: "error",
+        continuation: [
+          "Traceback (most recent call last):",
+          "openai.RateLimitError: Error code: 429",
+        ],
+      },
+    });
+    expect(haystack).toContain("ratelimiterror");
+    expect(haystack).toContain("429");
+  });
 });

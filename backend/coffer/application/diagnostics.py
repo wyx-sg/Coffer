@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
-from coffer.application.log_reader import matches_level, parse_log_line, tail_lines
+from coffer.application.log_reader import matches_level, parse_log_lines, tail_lines
 from coffer.application.repos import AuditRepo
 
 #: A debugging window, not an archive. An agent asking "what just happened"
@@ -76,10 +76,11 @@ def register_diagnostics_builtin_tools(
         ]
 
         records: list[dict[str, Any]] = []
-        for line in reversed(tail_lines(log_path())):
+        # Parse oldest-first — a traceback belongs to the record above it, not
+        # to a record each — then walk backwards for a newest-first answer.
+        for record in reversed(parse_log_lines(tail_lines(log_path()))):
             if len(records) >= limit:
                 break
-            record = parse_log_line(line)
             if not matches_level(record, errors_only):
                 continue
             at = str(record.get("timestamp", ""))
@@ -129,9 +130,10 @@ def register_diagnostics_builtin_tools(
                         "type": "boolean",
                         "default": False,
                         "description": (
-                            "Keep only error-level log records (and anything "
-                            "unparseable, which is usually a traceback). The "
-                            "audit side is unaffected."
+                            "Keep only error-level log records (and any line "
+                            "whose level could not be read at all). A record's "
+                            "traceback rides with it either way. The audit "
+                            "side is unaffected."
                         ),
                     },
                     "event_type": {

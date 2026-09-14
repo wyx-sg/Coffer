@@ -33,11 +33,13 @@ daemon 使用配置为 JSON 输出的 `structlog`，将日志写入 `~/.coffer/l
 
 | 文件 | 内容 |
 | ---- | ---- |
-| `daemon.log` | Coffer 自己的结构化记录。由轮换 handler 界定大小。 |
+| `daemon.log` | Coffer 自己的结构化记录——**以及所有最终落到 daemon 标准输入输出上的其他写入方**（见下）。由轮换 handler 界定大小。 |
 | `upstream/<server>.log` | 单个上游 MCP server 的 stderr，外加一个滚存的 `.log.1`。 |
 | `shim-<pid>-<ts>.log` | 单个 shim 进程的诊断信息。惰性创建——一次什么都没记的运行不留下文件。 |
 
 **上游之所以要有自己的文件，是因为它们过去把 daemon 自己的日志淹没了。** MCP SDK 把每个 stdio server 的 stderr 写到 daemon 自己的 stderr，也就落进 `daemon.log`；上游话很多，而 Coffer 话很少。实测一份 daemon 日志共 4,277 行，其中只有 **62** 行是 Coffer 自己的——而且全是同一种错误——更早的内容在两个月内就被轮换带走了。
+
+**`daemon.log` 不是一种格式，所以读它本身就是一件活。** Coffer 的 structlog 把 JSON 渲染进 `%(message)s`，但它并不是这个文件里唯一的写入方：迁移一跑，alembic 的 `fileConfig` 就把 root handler 换成 `%(levelname)-5.5s [%(name)s] %(message)s`；uvicorn 写 `ERROR:    …`；上游 MCP server 写 rich 面板和 `LEVEL - logger - message`；daemon 为隧道重新拉起的 cloudflared 子进程直接往里写 zerolog（`2026-09-14T06:29:20Z INF … key=value`）——其中一些还带 ANSI 颜色，因为一个往管道里写的子进程并不总是相信自己不在终端里。`application/log_reader.py` 是唯一认得它们全部的地方：它把每一种写入方的行归一到 `timestamp` / `level` / `logger` / `event`，剥掉转义序列，把 traceback 以 `continuation` 折进抛出它的那条记录，并把哪种格式都对不上的一行整行保留为 `{"raw": …}`。两个读取方——`coffer__diagnose` 与 Activity 页 Daemon tab 背后的 `GET /api/v1/daemon/logs`——都走它，因此它们对"一条记录是什么"的理解一致。
 
 **每一个被审计的事件同时也会被记入日志。** `AuditService.record` 为它写入的每一条条目发出一行 INFO，因此审计表认为值得记录的那些操作，对于正在 tail 日志（而不是查 SQLite）的人也是可读的。`details` 载荷刻意**不**进日志：审计表在存储前会应用各 kind 自己的 redactor，在 logger 里重新推导一遍等于复制那个唯一知道哪些字段含密钥的地方。
 

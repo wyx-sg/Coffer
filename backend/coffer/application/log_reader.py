@@ -6,6 +6,19 @@ timeline). Both need the same three decisions — read from the tail, keep an
 unparseable line rather than drop it, and treat "unparseable" as error-level —
 so they live here rather than being copied into a surface.
 
+**The file is not one format.** Coffer's own structlog writes JSON, but that
+is a minority of the lines: the daemon's root handler picks up alembic's
+``%(levelname)-5.5s [%(name)s] %(message)s`` formatter once a migration runs,
+uvicorn writes ``ERROR:    …``, an upstream MCP server writes rich-rendered
+and ``LEVEL - logger - message`` lines, and the cloudflared child process the
+daemon respawns writes zerolog (``2026-09-14T06:29:20Z INF … key=value``) into
+the same file. A reader that only understood structlog JSON left the time,
+level and logger columns empty for ~99% of the file and dumped the whole line
+into the message column, which is the bug this module now exists to not have.
+So every format the file actually carries is normalised onto the same four
+keys — ``timestamp`` / ``level`` / ``logger`` / ``event`` — and a line that
+still matches none of them is kept verbatim as ``raw``.
+
 Pure: no I/O beyond reading the path it is handed, and no knowledge of who is
 asking.
 """
@@ -13,12 +26,71 @@ asking.
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 #: Read from the tail rather than the head: the interesting line is the last
 #: one. Bounded so a 10 MB log cannot be pulled into memory.
 TAIL_BYTES = 512 * 1024
+
+#: CSI sequences (colour, cursor) and OSC strings. A child process writing to
+#: a pipe is not always convinced it is not a terminal — the Codex app-server
+#: colours its stderr, which the daemon relays into this file verbatim — and a
+#: log viewer that renders `ESC[31m` as the text "[31m" is broken either way.
+_ANSI = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))")
+
+#: Every level token any of the writers below spells, onto structlog's own
+#: lowercase vocabulary — so one badge vocabulary serves the whole file.
+#: The 5-character truncations come from ``%(levelname)-5.5s``; the
+#: 3-character ones from zerolog.
+_LEVELS = {
+    "TRACE": "debug",
+    "TRC": "debug",
+    "DEBUG": "debug",
+    "DBG": "debug",
+    "INFO": "info",
+    "INF": "info",
+    "WARN": "warning",
+    "WARNI": "warning",
+    "WARNING": "warning",
+    "WRN": "warning",
+    "ERROR": "error",
+    "ERR": "error",
+    "EXCEPTION": "error",
+    "CRITI": "critical",
+    "CRITICAL": "critical",
+    "FATAL": "critical",
+    "FTL": "critical",
+}
+
+#: Levels that ``errors_only`` keeps. A line whose level we could not read at
+#: all is kept too (see ``matches_level``) — it is usually a traceback.
+_ERROR_LEVELS = {"error", "critical", "exception"}
+
+# cloudflared (zerolog): `2026-09-14T06:29:20Z INF Registered tunnel … ip=…`
+_ZEROLOG = re.compile(
+    r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"
+    r"\s+(?P<level>[A-Z]{3})\s+(?P<event>.*)$"
+)
+# stdlib logging under alembic's formatter: `WARNI [coffer.chat.codex] …`
+_BRACKETED = re.compile(r"^(?P<level>[A-Z]{4,9})\s+\[(?P<logger>[^\]\s]+)\]\s+(?P<event>.*)$")
+# another common stdlib formatter: `WARNING - mcp_atlassian.utils.toolsets - …`
+_DASHED = re.compile(r"^(?P<level>[A-Z]{4,9})\s+-\s+(?P<logger>[\w.\-]+)\s+-\s+(?P<event>.*)$")
+# uvicorn's default: `ERROR:    ASGI callable returned without completing…`
+_PREFIXED = re.compile(r"^(?P<level>[A-Z]{4,9}):\s+(?P<event>.*)$")
+# rich (FastMCP): `[09/10/26 17:53:12] INFO     Starting MCP server … server.py:2506`
+_RICH = re.compile(
+    r"^\[(?P<date>\d{2}/\d{2}/\d{2}) (?P<time>\d{2}:\d{2}:\d{2})\]"
+    r"\s+(?P<level>[A-Z]{4,9})\s+(?P<event>.*)$"
+)
+
+_TRACEBACK_HEADER = "Traceback (most recent call last):"
+#: A rich panel (FastMCP's startup banner) draws its own box; those rows belong
+#: to the line that opened the panel, not to a row each.
+_BOX_DRAWING = "│╭╮╯╰├┤┬┴┼─━┃┌┐└┘"
 
 
 def tail_lines(path: Path, *, max_bytes: int = TAIL_BYTES) -> list[str]:
@@ -38,25 +110,136 @@ def tail_lines(path: Path, *, max_bytes: int = TAIL_BYTES) -> list[str]:
     return [ln for ln in text.splitlines() if ln.strip()]
 
 
-def parse_log_line(line: str) -> dict[str, Any]:
-    """A structlog JSON line as a dict; a non-JSON line as raw text.
+def strip_ansi(text: str) -> str:
+    """``text`` without terminal escape sequences."""
+    return _ANSI.sub("", text)
 
-    Upstream servers now log to their own files, but a stray non-JSON line
-    (a traceback, a library writing straight to stderr) must not make the
-    whole tool fail — it is often the most interesting line in the file.
+
+def _local_wall_clock_to_utc(date: str, time: str) -> str | None:
+    """rich's ``MM/DD/YY HH:MM:SS`` — local wall clock, no offset — as UTC ISO.
+
+    rich prints the daemon's local time and says nothing about the zone, so
+    reading it back needs a zone from somewhere: this is a single-user,
+    single-machine vault, so the machine reading the log is the machine that
+    wrote it and its own zone is the right one. A row is then displayed at the
+    wall-clock time the line claims, which is the whole point of the column.
     """
     try:
-        parsed = json.loads(line)
+        naive = datetime.strptime(f"{date} {time}", "%m/%d/%y %H:%M:%S")
     except ValueError:
-        return {"raw": line}
-    return parsed if isinstance(parsed, dict) else {"raw": line}
+        return None
+    return naive.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _structured(line: str) -> dict[str, Any] | None:
+    """One line as a record, or None when no known writer's format fits."""
+    if line.lstrip().startswith("{"):
+        try:
+            parsed = json.loads(line)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
+
+    for pattern in (_ZEROLOG, _RICH, _BRACKETED, _DASHED, _PREFIXED):
+        match = pattern.match(line)
+        if match is None:
+            continue
+        fields = match.groupdict()
+        level = _LEVELS.get(fields["level"])
+        if level is None:
+            # An all-caps word that is not a level — e.g. a message opening
+            # with `NOTE: …`. Not this writer's line; keep looking.
+            continue
+        record: dict[str, Any] = {"level": level, "event": fields["event"].rstrip()}
+        timestamp = fields.get("timestamp")
+        if pattern is _RICH:
+            timestamp = _local_wall_clock_to_utc(fields["date"], fields["time"])
+        if timestamp:
+            record["timestamp"] = timestamp
+        if fields.get("logger"):
+            record["logger"] = fields["logger"]
+        return record
+    return None
+
+
+def parse_log_line(line: str) -> dict[str, Any]:
+    """One line as a record: the writer's fields where we can read them.
+
+    A structlog line arrives as its own dict; every other writer's line is
+    normalised onto ``timestamp`` / ``level`` / ``logger`` / ``event``. A line
+    that fits none of them is kept whole as ``{"raw": …}`` rather than dropped
+    — it is often the most interesting line in the file.
+    """
+    clean = strip_ansi(line).rstrip()
+    return _structured(clean) or {"raw": clean}
+
+
+def _is_continuation(line: str, *, in_traceback: bool) -> bool:
+    """Whether ``line`` continues the record above it rather than starting one.
+
+    A traceback's frames are indented, its header is not, and its final
+    ``SomeError: …`` line is not either — so the header opens a block that the
+    first unindented line inside it closes (the caller tracks that in
+    ``in_traceback``). Anything else indented, or drawn as a panel border, is
+    the tail of a wrapped message.
+    """
+    head = line[:1]
+    return (
+        in_traceback
+        or line.strip() == _TRACEBACK_HEADER
+        or head.isspace()
+        or (head != "" and head in _BOX_DRAWING)
+    )
+
+
+def parse_log_lines(lines: Iterable[str]) -> list[dict[str, Any]]:
+    """Parsed records, oldest-first, with continuation lines folded in.
+
+    A traceback is not four hundred log records with no time, level or logger:
+    it is the tail of the one record that raised. Those lines are attached to
+    that record under ``continuation`` — visible when the row is expanded,
+    rather than as a run of empty rows pushing the record that explains them
+    off the page.
+    """
+    records: list[dict[str, Any]] = []
+    in_traceback = False
+    for line in lines:
+        clean = strip_ansi(line).rstrip()
+        if not clean.strip():
+            continue
+        structured = _structured(clean)
+        if structured is not None:
+            records.append(structured)
+            in_traceback = False
+            continue
+        if _is_continuation(clean, in_traceback=in_traceback) and records:
+            records[-1].setdefault("continuation", []).append(clean)
+        else:
+            records.append({"raw": clean})
+        # The header opens the block; the first unindented line inside it (the
+        # exception itself, already attached above) closes it.
+        in_traceback = clean.strip() == _TRACEBACK_HEADER or (in_traceback and clean[:1].isspace())
+    return records
 
 
 def matches_level(record: dict[str, Any], errors_only: bool) -> bool:
+    """Whether ``record`` survives the ``errors_only`` filter.
+
+    A record whose level we could not read at all survives too: not knowing
+    what a line was is not evidence that it was harmless.
+    """
     if not errors_only:
         return True
     level = str(record.get("level", "")).lower()
-    return level in {"error", "critical", "exception"} or "raw" in record
+    return level in _ERROR_LEVELS or not level
 
 
-__all__ = ["TAIL_BYTES", "matches_level", "parse_log_line", "tail_lines"]
+__all__ = [
+    "TAIL_BYTES",
+    "matches_level",
+    "parse_log_line",
+    "parse_log_lines",
+    "strip_ansi",
+    "tail_lines",
+]

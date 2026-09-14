@@ -169,17 +169,23 @@ class TokenRotationOut(BaseModel):
 
 
 class DaemonLogRecordOut(BaseModel):
-    """One line of ``daemon.log``, parsed where possible.
+    """One record of ``daemon.log``, parsed where possible.
 
-    ``record`` always carries the whole thing — a structlog line's full dict,
-    or ``{"raw": <line>}`` for a line that is not JSON. The three lifted
-    fields are what a timeline renders without having to know structlog's
-    shape; they are absent on a raw line, which is why they are nullable.
+    ``daemon.log`` interleaves several writers — Coffer's structlog JSON, the
+    stdlib formatter, uvicorn, rich, and the cloudflared child's zerolog — so
+    ``record`` carries whatever that line stated, normalised onto ``timestamp``
+    / ``level`` / ``logger`` / ``event``, plus ``continuation`` for the lines
+    (a traceback, a wrapped message) that belong to this record rather than to
+    one of their own. A line no writer's format fits is kept whole as
+    ``{"raw": <line>}``. The three lifted fields are what a timeline renders
+    without knowing any of that; they are absent on a raw line, which is why
+    they are nullable.
     """
 
     timestamp: str | None = None
     level: str | None = None
-    #: structlog's ``event`` field — the message.
+    #: The message — structlog's ``event`` field, or the text another writer
+    #: put after its level.
     event: str | None = None
     record: dict[str, Any]
 
