@@ -7,9 +7,8 @@ single optional tool wired against its own service rather than the five (six,
 with search) file operations knowledge's ``builtin_tools`` module groups —
 and FR-060 asks for exactly one new tool here, so there is no sibling module
 to fold it into. A composition root that has not wired the memory layer
-simply never advertises it; one that has wired it but has no internal
-connection configured still advertises it, because recall never errors for
-want of one (FR-052's literal fallback).
+simply never advertises it; one that has needs nothing else configured,
+because recall is a literal scan over facts already on disk (FR-052).
 """
 
 from __future__ import annotations
@@ -28,13 +27,12 @@ _AGENT_PROPERTY = {
 }
 
 _DESCRIPTION = (
-    "Ask Coffer's memory layer something in your own words and get back the "
-    "facts that bear on it, each with where it came from — reaching past "
-    "the few-hundred-token digest a session opens with. Reach for it when "
-    "you need something the opening context did not include, or cannot "
-    "name precisely enough to look for by keyword. It always answers: with "
-    "no embedding model available it falls back to literal matching and "
-    "says so in 'mode'."
+    "Look up facts in Coffer's memory layer by a word or phrase, and get "
+    "each one whole with where it came from — reaching past the "
+    "few-hundred-token digest a session opens with. Reach for it when you "
+    "need something the opening context did not include. Matching is "
+    "literal and case-insensitive, over each fact's summary and body, so "
+    "give it a distinctive word or phrase rather than a whole question."
 )
 
 
@@ -51,8 +49,6 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
             agent=agent.strip() if isinstance(agent, str) and agent.strip() else None,
         )
         return {
-            "mode": outcome.mode,
-            "reason": outcome.reason,
             "facts": [
                 {
                     "path": fact.path,
@@ -65,7 +61,6 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
                         {"agent": agent_name, "native_path": native_path}
                         for agent_name, native_path in fact.origins
                     ],
-                    "score": fact.score,
                 }
                 for fact in outcome.facts
             ],
@@ -80,7 +75,9 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "What you need to know, in your own words.",
+                        "description": (
+                            "The word or phrase to look for. Matched literally, case-insensitively."
+                        ),
                     },
                     "agent": _AGENT_PROPERTY,
                 },

@@ -42,7 +42,7 @@ Application services receive their infrastructure dependencies as constructor ar
 
 ### infrastructure/
 
-The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery utilities (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, source fetcher, sync engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (document converters, FTS5, the sqlite-vec index, embeddings, the scope file store) alongside `infrastructure/knowledge_scope/` (the machine-local scope side tables), and `infrastructure/chat/` (the Claude Code and Codex agent drivers, the gateway tool provider, and turn persistence). The cross-cutting `infrastructure/sync/` slice (the export/import bundle on disk) is not a kind.
+The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery utilities (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, source fetcher, sync engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (the on-disk path layout, frontmatter parsing, file I/O, the document converters, and the `ripgrep` wrapper), and `infrastructure/chat/` (the Claude Code and Codex agent drivers, the gateway tool provider, and turn persistence). The cross-cutting `infrastructure/sync/` slice (the export/import bundle on disk) is not a kind.
 
 Infrastructure is wired into the system at the composition root, not imported by domain or application code. Application services receive infrastructure objects as injected dependencies. This means you can swap the real SQLAlchemy repository for a test double (an in-memory dictionary or a SQLite `:memory:` database) without changing a line of application or domain code.
 
@@ -74,7 +74,9 @@ The "extract cross-cutting modules only when a second feature needs them" rule (
 
 These rules are not advisory. They are enforced by two complementary mechanisms in CI:
 
-**importlinter contracts** — declared in `backend/pyproject.toml`, these contracts define the forbidden import pairs and are run as part of `make verify`. A contract violation fails the build with a precise error naming the forbidden import chain. Two families of rules are enforced: layered direction (the four-layer hierarchy) and cross-kind isolation (no `domain/mcp` importing `domain/other_kind`). The "only `infrastructure/credentials/` may import `keyring`" rule is enforced as an importlinter contract (Contract 4 in `backend/pyproject.toml`).
+**importlinter contracts** — declared in `backend/pyproject.toml`, these contracts define the forbidden import pairs and are run as part of `make verify`. A contract violation fails the build with a precise error naming the forbidden import chain. Two families of rules are enforced: layered direction (the four-layer hierarchy) and cross-kind isolation (no `domain/mcp` importing `domain/other_kind`). The "only `infrastructure/credentials/` may import `keyring`" rule is enforced as an importlinter contract.
+
+The "application does not import infrastructure" contract carries a small, named set of exemptions, each written out in the contract's own comment with the reasoning that earned it. They share one shape: the infrastructure in question is a **substrate**, not an engine — path layout, frontmatter parsing, file I/O, the `ripgrep` wrapper, one single-key table's upsert — with nothing behind it that a port/adapter pair would abstract away. `application/knowledge/` composing `infrastructure/knowledge/` is the canonical case: once knowledge became a directory of files, what was left to import was thin enough that routing it through a port would be pure ceremony. Every import not on that list is still a build failure.
 
 **`scripts/check_*.py`** — supplementary Python scripts that enforce architectural rules that importlinter cannot express as simple import graphs, such as the "no cross-cutting extraction before the second feature" rule.
 
@@ -95,7 +97,7 @@ backend/coffer/
 │   ├── agent/                    # agent config value objects
 │   ├── skill/                    # skill value objects
 │   ├── channel/                  # channel config, envelopes, signing
-│   ├── knowledge/                # knowledge scope + entry/document value objects
+│   ├── knowledge/                # collection config + entry/document value objects
 │   ├── chat/                     # chat turn / message value objects
 │   └── sync/                     # sync value objects
 ├── application/
@@ -106,7 +108,7 @@ backend/coffer/
 │   ├── agent/                    # agent services + make_agent_kind
 │   ├── skill/                    # skill services + make_skill_kind
 │   ├── channel/                  # adapter protocol, pairing, inbound runtime
-│   ├── knowledge/                # scope, entry, ingest + retrieval services
+│   ├── knowledge/                # collection, entry, ingest + search services
 │   ├── chat/                     # TurnOrchestrator, history
 │   ├── sync/                     # cross-cutting — vault export / import (not a kind)
 │   ├── credentials/              # cross-cutting — CredentialResolver (refs → secrets)
@@ -118,8 +120,7 @@ backend/coffer/
 │   ├── agent/                    # agent config-file store
 │   ├── skill/                    # master store, source fetcher, sync engine
 │   ├── channel/                  # telegram/seatalk transports, peer repo, render
-│   ├── knowledge/                # converters, FTS5, sqlite-vec index, embeddings, file store
-│   ├── knowledge_scope/          # machine-local scope side tables (roots, labels)
+│   ├── knowledge/                # path layout, frontmatter, file store, converters, ripgrep
 │   ├── chat/                     # LangGraph agent, gateway tool provider, CLI agents
 │   ├── sync/                     # cross-cutting — export-bundle file IO (not a kind)
 │   └── credentials/              # cross-cutting — encrypted credential store + master key — only place importing `keyring`

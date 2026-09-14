@@ -1,16 +1,15 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
 Create a collection, list them, walk one level of the catalogue, read a file,
-write one, delete one, grep, tidy — plus ranked ``search``, document
-``upload``, and the index's ``status``/``rebuild`` (spec knowledge FR-060).
+write one, delete one, grep, tidy — plus ``search`` and document ``upload``
+(spec knowledge FR-060).
 Deleting a collection goes through the kind-agnostic Resource route, since
 collection lifecycle is a Resource concern.
 
 These routes are the *user's* surface and therefore unscoped: per-agent
 authorization (FR-012) governs what an agent sees through the MCP tools, not
-what the person who owns the vault sees in their own UI. ``search``,
-``upload``, ``index`` and ``index/rebuild`` follow the same rule — none of
-them takes an ``agent``.
+what the person who owns the vault sees in their own UI. ``search`` and
+``upload`` follow the same rule — neither takes an ``agent``.
 
 Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``
 — including ``UploadTooLarge`` (FR-037), which ``IngestService`` itself raises
@@ -48,7 +47,6 @@ from coffer.surfaces.http.knowledge.schemas import (
     FileWrite,
     GrepMatchOut,
     GrepOut,
-    IndexStatusOut,
     IngestedDocumentOut,
     SearchHitOut,
     SearchLineOut,
@@ -194,15 +192,11 @@ async def search(
 ) -> SearchOut:
     outcome = await svc.search(body.query, collection=body.collection)
     return SearchOut(
-        mode=outcome.mode,
-        reason=outcome.reason,
         results=[
             SearchHitOut(
                 path=hit.path,
                 title=hit.title,
                 description=hit.description,
-                score=hit.score,
-                heading=hit.heading,
                 lines=[
                     SearchLineOut(line_number=number, line=line) for number, line in hit.excerpt
                 ],
@@ -210,20 +204,6 @@ async def search(
             for hit in outcome.hits
         ],
     )
-
-
-@router.get("/index", response_model=IndexStatusOut)
-async def index_status(
-    svc: SearchService = Depends(get_search_service),  # noqa: B008
-) -> IndexStatusOut:
-    return IndexStatusOut.model_validate(await svc.status(), from_attributes=True)
-
-
-@router.post("/index/rebuild", response_model=IndexStatusOut)
-async def rebuild_index(
-    svc: SearchService = Depends(get_search_service),  # noqa: B008
-) -> IndexStatusOut:
-    return IndexStatusOut.model_validate(await svc.rebuild(), from_attributes=True)
 
 
 @router.post("/upload", response_model=IngestedDocumentOut, status_code=status.HTTP_201_CREATED)

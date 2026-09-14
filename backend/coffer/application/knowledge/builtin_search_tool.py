@@ -1,10 +1,11 @@
-"""The ranked-retrieval tool, registered apart from its five siblings.
+"""The search tool, registered apart from its five siblings.
 
-``coffer__search`` is the one knowledge tool not backed by ``KnowledgeService``
-and the one that is optional: an installation with no ranked retrieval wired
-simply never advertises it, rather than advertising a tool that raises. Both of
-those make it a poor fit inside ``builtin_tools``, whose whole job is the five
-file operations over one service — so it lives here, and that module calls in.
+``coffer__search`` is the one knowledge tool not backed directly by
+``KnowledgeService`` and the one that is optional: an installation with no
+search service wired simply never advertises it, rather than advertising a tool
+that raises. Both of those make it a poor fit inside ``builtin_tools``, whose
+whole job is the five file operations over one service — so it lives here, and
+that module calls in.
 """
 
 from __future__ import annotations
@@ -22,13 +23,15 @@ _AGENT_PROPERTY = {
 }
 
 _DESCRIPTION = (
-    "Find the knowledge files that MEAN what you describe, ranked, each with "
-    "the lines that matched. Reach for it when you cannot afford to browse "
-    "coffer__list first, or when you have no exact words to grep for — ask in "
-    "your own words, as a question or a description of the problem. It always "
-    "answers: with no embedding model available it falls back to a literal "
-    "search and says so in 'mode'. For an identifier or an exact phrase, "
-    "coffer__grep is still the better tool."
+    "Find the knowledge FILES that contain a word or phrase, each with the "
+    "lines that matched — a literal text search, one result per file, with "
+    "the file's title and description so you can tell what you found. Reach "
+    "for it when you want the file rather than the line, and cannot afford to "
+    "browse coffer__list first. Give it a distinctive word or exact phrase, "
+    "not a sentence: matching is literal (a regular expression, case "
+    "sensitive), so a whole question in your own words will find nothing. "
+    "When you want every matching line across the corpus instead, "
+    "coffer__grep is the same matcher reported line by line."
 )
 
 
@@ -49,15 +52,11 @@ def register_search_tool(registry: BuiltinToolRegistry, *, search_service: Searc
             ),
         )
         return {
-            "mode": outcome.mode,
-            "reason": outcome.reason,
             "results": [
                 {
                     "path": hit.path,
                     "title": hit.title,
                     "description": hit.description,
-                    "score": hit.score,
-                    "heading": hit.heading,
                     "lines": [
                         {"line_number": number, "line": line} for number, line in hit.excerpt
                     ],
@@ -75,7 +74,10 @@ def register_search_tool(registry: BuiltinToolRegistry, *, search_service: Searc
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "What you are looking for, in your own words.",
+                        "description": (
+                            "The word, phrase or regular expression to look "
+                            "for. Matched literally and case-sensitively."
+                        ),
                     },
                     "collection": {
                         "type": "string",

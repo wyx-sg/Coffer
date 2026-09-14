@@ -31,7 +31,6 @@ from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.organise import organise_partition
 from coffer.application.memory.overrides import Override, apply
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.reader import RawFact, SourceFile
 from coffer.domain.provider.config import ProviderConfig, ResolvedConnection
@@ -228,7 +227,6 @@ async def test_settled_conflict_survives_a_rebuild(
         resources=resources,
         audit=_FakeAudit(),
         agent_source_resolver=_resolver,
-        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         readers={"claude_code": reader},
     )
 

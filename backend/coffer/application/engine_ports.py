@@ -1,16 +1,16 @@
 """Ports the application reaches Coffer's internal engine through.
 
-Four consumers now need the same three things: the connection Coffer's
-internal engine runs on, a one-shot completion, and an embedder. Knowledge's
-tidy and ingestion, ranked retrieval, and memory's organise pass all reach for
-them, so they live above every kind rather than inside one — filing them under
-`knowledge` was only ever true while knowledge was the sole consumer, and it
-made `application.memory` import `application.knowledge` to get at them.
+Three consumers need the same two things: the connection Coffer's internal
+engine runs on, and a one-shot completion. Knowledge's tidy and ingestion and
+memory's organise pass all reach for them, so they live above every kind rather
+than inside one — filing them under `knowledge` was only ever true while
+knowledge was the sole consumer, and it made `application.memory` import
+`application.knowledge` to get at them.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Protocol
 
 from coffer.domain.provider.config import ResolvedConnection
@@ -20,19 +20,6 @@ class ModelSelectorPort(Protocol):
     """Resolves Coffer's internal-engine connection (the internal-default one)."""
 
     async def get_default(self) -> ResolvedConnection | None: ...
-
-
-class EmbedderPort(Protocol):
-    """Turns text into vectors.
-
-    Contract, and the reason ranked retrieval can never fail a call: ``embed``
-    returns one vector per input in order, or an empty tuple. It does not
-    raise. An empty tuple means "ranking is unavailable right now", which the
-    caller answers with a literal search rather than an error (spec knowledge
-    FR-027).
-    """
-
-    async def embed(self, texts: Sequence[str]) -> tuple[tuple[float, ...], ...]: ...
 
 
 class LlmCompletionPort(Protocol):

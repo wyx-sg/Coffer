@@ -22,6 +22,11 @@ codebase — look at what is there, then read the file.
    read, returning file and line. Use it when you know a string — an
    identifier, a path, a name — rather than a topic. It matches bytes, so CJK
    works and nothing is stemmed away.
+5. **`coffer__search`** runs that same match and reports the *files* it landed
+   in — each with its title, description and the lines that hit — when you want
+   the document rather than the lines. Same rules apply: give it a word or an
+   exact phrase, never a question in your own words. Nothing here ranks by
+   meaning.
 
 Descriptions are the retrieval surface. If nothing in a catalogue looks right,
 grep for a word the file would have to contain, then read what it hits.

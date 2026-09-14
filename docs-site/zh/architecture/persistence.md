@@ -8,14 +8,14 @@
 
 Coffer 是一个本地优先的开发者工具：用户沉淀下来的 AI 资产——已注册的 MCP 服务器、能力偏好、审计历史、知识、聊天会话、通道以及同步状态——必须在不依赖任何云服务的情况下可读可写。这个约束要求持久化层必须是自包含的、零配置的，并且可以简单地备份。
 
-答案是两层结构。`~/.coffer/coffer.db` 中的单个 SQLite 文件是所有控制面状态的事实记录方 (system of record)。批量用户内容——摄取的文档与 agent 写下的笔记——以 markdown 文件的形式存放于本地文件系统（事实源）；SQLite 在其之上承载一个可重建的检索索引（Files as Truth）。不需要安装独立的数据库服务进程，不需要调优连接池，daemon 与存储之间也没有网络跳转。用户的数据就是他们的文件。
+答案是两层结构。`~/.coffer/coffer.db` 中的单个 SQLite 文件是所有控制面状态的事实记录方 (system of record)。批量用户内容——agent 与用户写下的知识，以及被摄取转为 markdown 的文档——以普通文件的形式存放在 `~/.coffer/knowledge/` 下，而这些文件就是知识层的全部：`coffer.db` 里没有任何表映射它们，也没有任何索引架在它们之上（[Knowledge Is Plain Files](/zh/reference/adr/knowledge-is-plain-files)）。不需要安装独立的数据库服务进程，不需要调优连接池，daemon 与存储之间也没有网络跳转。用户的数据就是他们的文件。
 
 ## 为什么选择 SQLite 而非 Postgres
 
 被否决的方案——Postgres 或 MySQL 这类服务端数据库——需要用户安装并管理一个数据库进程、配置凭据、并保持一个服务持续运行。对于单用户本地工具来说，这些开销纯粹是没有任何收益的摩擦成本。
 
 ::: tip 章程不变量
-章程将 SQLite 指定为控制面状态的事实记录方。批量用户内容（按规范引入时）以文件形式存放于本地文件系统，按需建立索引。将控制面迁移到服务端数据库需要走章程修订流程。
+章程将 SQLite 指定为控制面状态的事实记录方。批量用户内容以文件形式存放于本地文件系统。将控制面迁移到服务端数据库需要走章程修订流程。
 :::
 
 SQLite 选择的实际后果塑造了持久化层的每一个细节：
@@ -57,7 +57,7 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`、`mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-后续修订版本陆续加入了 skill、knowledge、embedding 配置、chat、channel、credentials 等表（以及若干索引和数据修复修订版本）；在持续同步被撤销之后，又有一个修订版本把 sync 相关的表删除（[Vault Export and Import-vault-sync](/zh/reference/adr/Vault Export and Import-vault-sync)）。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
+后续修订版本陆续加入了 skill、chat、channel、credentials 等表（以及若干索引和数据修复修订版本）；`20260912_0066_knowledge_is_plain_files.py` 把知识层曾经有过的每一张表都删掉，且一张都不替换；在持续同步被撤销之后，又有一个修订版本把 sync 相关的表删除（[Vault Export and Import-vault-sync](/zh/reference/adr/Vault Export and Import-vault-sync)）。在 daemon 首次启动时，`alembic upgrade head` 会在 HTTP 服务开始接受连接之前运行。由于 Alembic 迁移作为数据文件被打包进 PyInstaller daemon 二进制文件，最终用户的安装在首次启动时也能正确创建 schema，无需单独的迁移步骤。
 
 ## 数据库表概览
 
@@ -79,28 +79,13 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 | `mcp_invocations`            | 网关中每次工具、资源和提示词调用的时序日志：服务器名称、能力键、耗时、状态、会话 ID。永远不存储参数或返回内容。 |
 | `mcp_server_health`          | 每个已注册 MCP 服务器的最新健康状态（`healthy` / `failing` / `unknown`），在每次健康检查时写入。              |
 
-**凭据与 embedding：**
+**凭据：**
 
 | 数据表             | 用途                                                                                                                                                  |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `credentials`      | 信封加密的密钥存储：每个密钥在到达 SQLite 之前都用主密钥进行 Fernet 加密。明文永远不会落盘。参阅[安全](/zh/architecture/security)和 Envelope-Encrypted Credentials。 |
-| `embedding_config` | 检索索引所使用的当前 embedding 提供方/模型配置。                                                                                                     |
 
-**知识基底 (substrate)：**
-
-| 数据表          | 用途                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------- |
-| `documents`     | 每个知识条目对应一行——摄取的文档或写下的笔记——与磁盘上的 markdown 文件相互映射。       |
-| `chunks`        | 检索流水线从 markdown 切分出的逐文档 chunk 行。                                        |
-| `documents_fts` | 支撑对 chunk 文本进行关键词搜索的 FTS5 虚拟表。                                        |
-| _sqlite-vec_    | 每个作用域一个 `vec0` 虚拟表（惰性创建，以 kind + 维度命名），保存 chunk embedding 用于向量搜索。 |
-
-**知识作用域的机器本地侧表：**
-
-| 数据表                          | 用途                                                        |
-| ------------------------------- | ----------------------------------------------------------- |
-| `knowledge_scope_project_roots` | 把一个 `project-<ULID>` 作用域映射到本机磁盘上的项目根目录。 |
-| `knowledge_scope_labels`        | 为名字只是 ULID、看不出含义的作用域提供可读名称。            |
+**知识：** 没有表。一个知识 collection 和其他所有 Resource 一样，只是 kind 无关的 `resources` 表中的一行，而它的内容就是 `~/.coffer/knowledge/<collection>/` 下的 markdown 文件。这些文件的任何东西都不会被映射进 SQLite——标题不会，正文不会，摘要也不会。
 
 **聊天 (chat)：**
 
@@ -124,11 +109,11 @@ Schema 演化由 Alembic 管理，配置文件为 `backend/alembic.ini`，迁移
 
 **导出 / 导入：** 没有表。导出与导入是对活着的仓库执行的一次性操作；没有需要持久化的配置、没有上次运行状态、没有机器注册表，也没有墓碑账本（[Vault Export and Import-vault-sync](/zh/reference/adr/Vault Export and Import-vault-sync)）。
 
-## 文件即事实源，SQLite 是可重建的索引（Files as Truth）
+## 知识就是普通文件（[Knowledge Is Plain Files](/zh/reference/adr/knowledge-is-plain-files)）
 
-上述控制面表是其行的事实记录方。**知识基底**则不同：`~/.coffer/knowledge/` 下的 markdown 文件才是事实源，而 SQLite 检索索引（`documents` / `chunks` / `documents_fts` FTS5 表以及每个作用域的 sqlite-vec 虚拟表）是这些文件的一个**完全可重建**的投影。
+上述控制面表是其行的事实记录方。**知识没有这样的行。** `~/.coffer/knowledge/` 下的 markdown 文件不是任何东西的投影，也不会被投影成任何东西——它们本身就是完整的知识层。
 
-这消除了双事实源问题：如果索引损坏、丢失或经历了 schema 迁移，它会从文件重新生成。`coffer knowledge reindex` 会从磁盘上的 markdown 重建它。备份就是一棵目录树；损坏恢复就是一次 reindex。
+这不是去管理双事实源问题，而是直接让它不存在。没有任何东西需要与磁盘保持同步，因此无论一个文件是用户在编辑器里改的、agent 写的，还是 `git` 拉下来的，它落盘的那一刻就可读、可搜。搜索是对这些文件跑 `ripgrep`：它匹配的是字节，因此既不需要分词器，也不需要导入步骤。备份就是一棵目录树；也没有什么损坏需要恢复：标题与描述始终从每个文件自己的 frontmatter 中读出，因为它们再无别处可来。
 
 ## 级联与完整性规则
 
@@ -147,7 +132,7 @@ Coffer 写入的完整文件集合：
 | `~/.coffer/coffer.db`      | SQLite 数据库（WAL 模式）——事实记录方            |
 | `~/.coffer/daemon.json`    | Daemon PID、端口和 bearer token（权限位 `0600`） |
 | `~/.coffer/master.key`     | 凭据存储主密钥（默认文件存储；可选钥匙串）。参阅[安全](/zh/architecture/security)。 |
-| `~/.coffer/knowledge/`     | 每个作用域一个目录——以 markdown 存放的 `notes/` 与 `docs/`，外加隐藏的 `.raw/` 原件和 `.history/` 笔记旧版本；由 SQLite 索引的事实源 |
+| `~/.coffer/knowledge/`     | 每个 collection 一个 markdown 文件目录——知识层本身，外加隐藏的 `.raw/`（上传文档的原始字节）和 `.history/`（tidy 流程取代掉的旧版本） |
 | `~/.coffer/logs/`          | `structlog` 输出的结构化 JSON 日志文件           |
 | `~/.coffer/bin/`           | 由守护进程在 frozen 启动时部署的 `coffer-mcp-shim`、`coffer-daemon` 及运行时辅助二进制文件 |
 | `~/.coffer/upstream-pids/` | 用于会话追踪的每个上游子进程的 PID 文件          |

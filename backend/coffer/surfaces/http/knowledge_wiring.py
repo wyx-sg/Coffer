@@ -1,30 +1,26 @@
 """Wiring for the one ``knowledge`` kind.
 
-One service for the directory itself, plus two more that ride the same
-internal connection every other internal-LLM consumer in this layer uses:
-``SearchService`` (ranked retrieval, FR-024..FR-029) and ``IngestService``
-(document upload, FR-033..FR-037). Neither can fail to build — with no
-internal connection configured the embedder factory below just returns
-``None`` and ``search`` degrades to literal matching (FR-027); ``IngestService``
-takes the same optional ``completion`` port for the same reason (FR-034).
+One service for the directory itself, plus ``SearchService`` (literal search,
+FR-024..FR-027) and ``IngestService`` (document upload, FR-033..FR-037).
+``SearchService`` needs nothing but the knowledge service — search is ripgrep
+over the files, with no model, key or connection behind it. ``IngestService``
+takes an optional ``completion`` port and so cannot fail to build either: with
+no internal connection configured it falls back to the document's own opening
+prose (FR-034).
 """
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.engine_ports import EmbedderPort
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.kind import make_knowledge_kind
-from coffer.application.knowledge.search import EmbedderFactory, SearchService
+from coffer.application.knowledge.search import SearchService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.infrastructure.knowledge.converters.registry import default_registry
-from coffer.infrastructure.llm.embeddings import remote_embedder
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.dependencies import (
     set_ingest_service,
@@ -39,42 +35,6 @@ if TYPE_CHECKING:
     from coffer.application.provider.service import ProviderService
     from coffer.application.resource_service import ResourceService
     from coffer.domain.provider.config import ResolvedConnection
-
-logger = logging.getLogger(__name__)
-
-
-def _embedder_factory(
-    provider_service: ProviderService,
-    credential_resolver: Callable[[str], str],
-) -> EmbedderFactory:
-    """Resolve the ``internal_default`` connection fresh per call (FR-026), so
-    designating or clearing it takes effect without a restart.
-
-    Every way this can fail to produce an embedder — no connection configured,
-    the connection's protocol has no embeddings endpoint, or its credential
-    will not resolve — collapses to the same answer: ``None``, which the
-    caller reads as "degrade to literal search" (FR-027), never an error.
-    """
-
-    async def _build() -> EmbedderPort | None:
-        try:
-            connection = await provider_service.resolve_internal_connection()
-        except Exception:
-            logger.info("knowledge.embedder.connection_unresolved", exc_info=True)
-            return None
-        if connection is None:
-            return None
-        ref = connection.config.credential_ref
-        api_key: str | None = None
-        if ref is not None:
-            try:
-                api_key = credential_resolver(ref)
-            except Exception:
-                logger.info("knowledge.embedder.credential_unresolved", extra={"ref": ref})
-                return None
-        return remote_embedder(connection, api_key)
-
-    return _build
 
 
 class _InternalModelSelector:
@@ -101,16 +61,12 @@ def wire_knowledge_kind(
     builtin_tools: BuiltinToolRegistry,
     provider_service: ProviderService,
     credential_resolver: Callable[[str], str],
-    scope_evaluator: ScopeEvaluator,
 ) -> KnowledgeService:
     """Wire the ``knowledge`` kind into the app and return its one service."""
-    service = KnowledgeService(resources=resource_svc, audit=audit, scope_evaluator=scope_evaluator)
+    service = KnowledgeService(resources=resource_svc, audit=audit)
     set_knowledge_service(service)
 
-    search_service = SearchService(
-        knowledge=service,
-        embedder_factory=_embedder_factory(provider_service, credential_resolver),
-    )
+    search_service = SearchService(knowledge=service)
     set_search_service(search_service)
 
     ingest_service = IngestService(

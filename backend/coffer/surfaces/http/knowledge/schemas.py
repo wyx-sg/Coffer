@@ -61,8 +61,8 @@ class FileOut(BaseModel):
 
 class FileWrite(BaseModel):
     title: str = Field(min_length=1)
-    #: Required: with no ranked index, the catalogue is the retrieval surface
-    #: and a file that fails to describe itself is unfindable (FR-003).
+    #: Required: the catalogue is the retrieval surface, and a file that fails
+    #: to describe itself is unfindable (FR-003).
     description: str = Field(min_length=1)
     body: str = ""
     #: Exactly one of these. ``directory`` creates a new file there;
@@ -105,29 +105,13 @@ class SearchHitOut(BaseModel):
     path: str
     title: str
     description: str
-    #: Cosine score in ranked mode; ``None`` when the answer came from ripgrep.
-    score: float | None
-    #: The section heading a ranked hit matched under; empty in literal mode.
-    heading: str
     lines: list[SearchLineOut]
 
 
 class SearchOut(BaseModel):
-    #: ``ranked`` or ``literal`` — there is no retrieval mode a caller picks,
-    #: only what the answer says it did (FR-082).
-    mode: str
-    #: Why the answer is literal rather than ranked; empty in ranked mode.
-    reason: str = ""
+    #: One entry per matching file. There is no retrieval mode a caller picks
+    #: and none the answer reports: search is literal, always (FR-024).
     results: list[SearchHitOut]
-
-
-class IndexStatusOut(BaseModel):
-    #: False when no internal connection is configured — ranking is off.
-    available: bool
-    files_indexed: int
-    files_total: int
-    #: Absolute path of the disposable sidecar (FR-025).
-    path: str
 
 
 class IngestedDocumentOut(BaseModel):

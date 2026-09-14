@@ -82,10 +82,6 @@ export interface TidyOut {
   status: string;
 }
 
-/** `ranked` when the disposable sidecar answered; `literal` when it fell back
- * to a ripgrep pass over the same files (FR-027) — never a third state. */
-export type KnowledgeSearchMode = "ranked" | "literal";
-
 /** One matching line quoted back from a hit, so the reader can see why it matched. */
 export interface SearchLineOut {
   line_number: number;
@@ -97,29 +93,13 @@ export interface SearchHitOut {
   path: string;
   title: string;
   description: string;
-  /** Cosine score in ranked mode; `null` when the answer came from ripgrep. */
-  score: number | null;
-  /** The section heading a ranked hit matched under; empty in literal mode. */
-  heading: string;
   lines: SearchLineOut[];
 }
 
-/** Answer to `POST /knowledge/search` — `mode` says how it was found (FR-082). */
+/** Answer to `POST /knowledge/search`. Search is literal — there is no mode to
+ * report and no score to rank by. */
 export interface SearchOut {
-  mode: KnowledgeSearchMode;
-  /** Why the answer is literal rather than ranked; empty in ranked mode. */
-  reason: string;
   results: SearchHitOut[];
-}
-
-/** What the disposable sidecar index holds right now (`GET /knowledge/index`). */
-export interface IndexStatusOut {
-  /** False when no internal connection is configured — ranking is off entirely. */
-  available: boolean;
-  files_indexed: number;
-  files_total: number;
-  /** Absolute path of the sidecar file (FR-025); not rendered, but here for parity with the wire shape. */
-  path: string;
 }
 
 /** What one successful `POST /knowledge/upload` produced. */

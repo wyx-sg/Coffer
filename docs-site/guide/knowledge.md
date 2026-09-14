@@ -1,157 +1,145 @@
 # Knowledge
 
-**Knowledge** is Coffer's one store of everything your agents should know: the notes an agent (or you) wrote down, and the documents you ingested. Both live as Markdown files under `~/.coffer/knowledge/`, both are indexed by the same SQLite index, and both come back from the same search. Files are the source of truth; the index is rebuildable at any time with `coffer knowledge reindex`.
+**Knowledge** is Coffer's one store of everything your agents should know — what an agent (or you) wrote down, and the documents you uploaded. It is a directory of Markdown files under `~/.coffer/knowledge/`, one folder per collection, and those files are the whole of it. There is no index: no vector store, no full-text tables, nothing in `coffer.db` to keep in step with the disk. A file you edited in your own editor, a file an agent just wrote, and a file `git` pulled in all look the same to Coffer, because there is nothing in between.
 
-Coffer used to expose this as two resource kinds — a *knowledge base* you could only read, and a *memory* only agents wrote to. They were never two things. `documents`, `chunks`, FTS5 and sqlite-vec were shared from the very beginning; only the facade was doubled. In practice the knowledge base sat empty, memory already had a `knowledge/` lane of its own, and the split forced every caller to answer "is this memory or knowledge?" before it could pick a tool — a question with no meaning on the calling side. There is now one kind, `knowledge`, one storage root, and one search across the whole of it.
+Coffer used to embed these files and rank retrieval by meaning. That capability was removed deliberately: retrieval is now a literal text search over the files themselves. Nothing is built, rebuilt, or kept fresh, and nothing can be stale.
 
-## Scopes
+## Collections
 
-A knowledge scope is a resource named `knowledge:<scope>`. The name decides how the scope behaves:
-
-- **`global`** — everything true everywhere, regardless of which repo you are in. Auto-provisions the first time anything is written to it.
-- **`project-<ULID>`** — one project, resolved from the git root of the agent's working directory. Also auto-provisions on first use, so you never create one by hand.
-- **any other name** — a collection you created deliberately, e.g. `handbook`. These do **not** auto-provision: silently creating a scope because someone typo'd a name would be worse than an error.
+A collection is a resource named `knowledge:<name>` and the directory `~/.coffer/knowledge/<name>/`. The two appear together, and only because you said so — nothing creates a collection as a side effect of a read or a write, so a name you typo'd is an error rather than a new, silently empty collection.
 
 ```bash
 coffer knowledge create handbook --description "Company onboarding docs"
-coffer knowledge list
-coffer knowledge describe global
+coffer knowledge collections
+coffer resource delete knowledge:handbook     # collection lifecycle is a Resource concern
 ```
 
-Retrieval spans both lanes of a scope, and an agent that names no scope gets the scope of its current project, falling back to `global`.
+Because a collection is a Resource, the framework's per-agent scope decides who may read it. An agent's calls span every collection activated for that agent — there is no scope argument on any knowledge tool, and no collection an agent is authorized for that it has to ask for by name. That authorization is a convention, not a security boundary: an agent holding shell tools can read the directory itself. It prevents mistaken retrieval, not deliberate access.
 
-## What a scope holds
+## What a collection holds
 
-`~/.coffer/knowledge/<scope>/` is a plain directory tree you can read, edit, grep, and back up with ordinary tools:
+`~/.coffer/knowledge/<collection>/` is a plain directory tree you can read, edit, grep and back up with ordinary tools. Below the collection you nest folders however you like; Coffer assigns none of that structure any meaning of its own.
 
-| Path        | What lives there                                                        |
-| ----------- | ----------------------------------------------------------------------- |
-| `notes/`    | What an agent or you wrote. `coffer__write` lands here.                  |
-| `docs/`     | Ingested documents, normalized to Markdown.                             |
-| `.raw/`     | The untouched originals of ingested files. Hidden, so ripgrep skips it. |
-| `.history/` | Note revisions the tidy pass replaced. Hidden, for the same reason.     |
+Every file is Markdown with frontmatter carrying a title and a one-sentence description. The description is not decoration — it is what someone browsing the catalogue chooses from, so write it as "what is in here, and when would I want it". A `README.md` describes the folder it sits in rather than counting as one of its files.
 
-Two content lanes, and two hidden archives behind them. There is nothing else: a note is a note whether an agent just wrote it or the tidy pass has folded it into a topic document since.
+Coffer creates exactly two directories for itself, both dot-prefixed so ripgrep skips them and the catalogue walks past them:
 
-Hand-editing any of these files is fine and expected — Coffer rescans the tree before searching, so out-of-band edits are picked up.
+| Path        | What lives there                                                          |
+| ----------- | ------------------------------------------------------------------------- |
+| `.raw/`     | The original bytes behind an uploaded document, so a bad conversion can be redone. |
+| `.history/` | The revisions the tidy pass superseded.                                   |
 
-## Writing notes
+Hand-editing any of this is fine and expected. There is no write path to hook and no reindex step to forget: the next search reads the file as it is on disk.
 
-A note is a fact, a decision, or a preference worth surviving the session. It lands in `notes/` and is stored verbatim: there is no LLM at write time.
+## Writing files
 
 ```bash
-coffer knowledge remember global "Prefer pnpm over npm in all repos" --title pkg-manager
-coffer knowledge entries global                       # list them
-coffer knowledge get global <entry-id>
-coffer knowledge edit-entry global <entry-id> "…"     # curate
-coffer knowledge forget global <entry-id>
+coffer knowledge write --in handbook \
+  --title "Package manager" \
+  --description "Which package manager every repo here uses, and why" \
+  --body "Prefer pnpm over npm in all repos."
+
+coffer knowledge ls handbook                       # one level of the catalogue
+coffer knowledge read handbook/package-manager.md
+coffer knowledge write --path handbook/package-manager.md --title … --description … --body …
+coffer knowledge delete handbook/package-manager.md
 ```
 
-A note's size is capped by the scope's `max_entry_chars`; raise it with `coffer knowledge configure <scope> --max-entry-chars N`.
+A write is stored verbatim — there is no LLM at write time, and an agent never has to think about filing. `--in` creates a new file in a collection or folder; `--path` replaces an existing one. Dropping a Markdown file into the directory with any editor is an equally complete way to add knowledge.
 
-## Ingesting documents
+## Uploading documents
 
-Hand Coffer a file in any format and it converts it to Markdown, files the result under `docs/`, keeps the original in `.raw/`, chunks it, and indexes it.
+Hand Coffer a file in any format and it converts it to Markdown and files the result as an ordinary knowledge file, keeping the original in `.raw/`.
 
 ```bash
-coffer knowledge ingest handbook ./onboarding.pdf     # any format → Markdown
-coffer knowledge ingest handbook ./notes.docx
-coffer knowledge documents handbook                   # what's inside
-coffer knowledge read handbook <document-id>
+coffer knowledge upload ./onboarding.pdf --collection handbook
+coffer knowledge upload ./notes.docx --collection handbook --directory onboarding
 ```
 
-- Conversion covers pdf, docx, pptx, xlsx, html and more (25 MB default cap, `--max-document-mb` at create time). Re-ingesting the same source needs `--replace`.
-- A document you hand-edit is yours: `coffer knowledge edit` writes it, and it is not silently re-converted from its raw original. `coffer knowledge reconvert` re-runs conversion when you do want that.
-- Coffer remembers where an ingested file came from. `coffer knowledge check-sources <scope>` reports which originals have changed on disk and `coffer knowledge update-source <scope> <document-id>` pulls the new version in. Turn this into a background refresh with `coffer knowledge configure <scope> --auto-update-sources`.
+- Conversion covers pdf, docx, pptx, xlsx, html and more. An upload over the 20 MB ceiling is refused before anything is converted or written, and an unsupported type is refused by name.
+- A converted document is indistinguishable from one you typed: same frontmatter, same audit event, same place in the tree.
+- The description is optional input but never optional output. With no internal model connection configured, Coffer draws one from the document's own opening prose rather than leaving the catalogue entry blank.
 
-## Retrieval
+## Finding things
 
-One search covers notes and documents together — that unification is the whole point.
+Three motions, and you pick by what you already know:
 
 ```bash
-coffer knowledge search handbook "how do I reset my password"   # ranked passages
-coffer knowledge recall global "which package manager?"         # ranked notes + docs
-coffer knowledge grep handbook "TODO"                           # exact / regex, no index
+coffer knowledge ls handbook/onboarding      # browse: folders and files, with descriptions
+coffer knowledge grep "SO_REUSEADDR"         # every matching line, as path:line
+coffer knowledge search "daemon port"        # the files that match, with the lines that matched
 ```
 
-Under the hood the engine has four modes — `grep` (literal/regex over the Markdown), `keyword` (FTS5 with BM25), `vector` (sqlite-vec nearest-neighbour), and `hybrid` (reciprocal-rank fusion over keyword + vector). **Callers never pick a mode.** The scope's configuration decides, and the engine chooses per query; a mode argument would only ask the caller to guess at an internal detail.
+`ls` walks the catalogue one level at a time, so you choose a file from titles and descriptions. `grep` and `search` are the same matcher over the same files — ripgrep across every collection the caller may see — reported two ways: `grep` gives you every matching line, `search` gives you one result per file, with that file's title and description alongside the lines that matched. Reach for `search` when you want the file rather than the line.
 
-Vector retrieval is opt-in per scope:
-
-```bash
-coffer knowledge create research --enable-vector
-coffer knowledge configure handbook --enable-vector
-```
-
-Embedding itself is configured **once for the installation**, under **Settings → Embedding** in the web UI. A scope carries no embedding fields of its own; it opts in purely by listing `vector` among its retrieval modes. A scope that asks for vector with no embedding configured falls back to keyword rather than erroring.
-
-The index is a projection, never the truth. `coffer knowledge reindex <scope>` rebuilds it from the Markdown on disk.
+Matching is literal: a regular expression, case sensitive. Give it a distinctive word or an exact phrase, not a question in your own words — there is no ranking, no scoring and no modes to choose between. What comes back is the files that contain what you typed.
 
 ## The tidy pass
 
-Notes accumulate, and the same fact gets written twice. A periodic **tidy pass** merges duplicate notes and rewrites them into coherent topic documents, in place, inside `notes/`.
+A collection accumulates the way notes do: the same fact written twice from two sessions, one file that grew until it covers four subjects. Nothing about that is wrong at write time, which is why writing stays dumb. The tidying is deferred to a **tidy pass** — a bounded agentic rewrite that reads a collection's files and merges duplicates, splits an overgrown file, and gives each one a title and description that earn it.
 
-It arms itself two ways, because they cover different gaps. **On idle**: each write re-arms one coalescing timer, and after a quiet spell the scopes that changed are tidied — this is what makes it feel like Coffer tidies up after a session ends. **On an interval**: a periodic sweep over every scope, one catch-up pass when the daemon starts and then every few hours. The sweep catches what the idle timer structurally cannot — files you edited in your own editor, a daemon restarted before its timer fired, and scopes nothing has written to lately.
+The pass needs an internal model connection; with none configured it does nothing at all, cleanly. A background sweep runs it on an interval, and it is off until an operator switches it on — an unattended rewriter should be something you turned on, never something you discover running. In a vault that spans machines the sweep runs on exactly one of them, because two machines merging the same files produce two different documents that git would merge as two additions.
 
-Both paths take the scope's write lock, so a sweep and a just-fired timer serialize rather than race, and with no internal model configured the pass does nothing at all. A pass that changed something is recorded in Coffer's audit log as `knowledge_tidied`; a pass that left the notes as it found them reports nothing. There is no per-scope changelog file.
+`.history/` is the entire safety net. Every tool the pass uses archives a file's prior revision before overwriting or retiring it, so a rewrite is always recoverable — there is no diff to approve before a pass lands.
 
-The pass rewrites text you and your agents wrote, unattended. Before any overwrite or merge it moves the prior revision into `.history/`, so a rewrite is always recoverable — that archive is the whole safety net, and there is no diff to approve before a pass lands.
-
-Trigger one by hand whenever you want:
+Run one by hand whenever you want:
 
 ```bash
-coffer knowledge organize <scope>            # run the tidy pass now
-coffer knowledge clear <scope>               # drop every note in a scope
+coffer knowledge organize handbook
 ```
 
-The detail page has a **Tidy** button that does the same thing.
+The collection's page in the web UI has a **Tidy** button that does the same thing.
 
 ## The CLI
 
 Everything above lives under one group, `coffer knowledge`:
 
-| Area      | Commands                                                                                   |
-| --------- | ------------------------------------------------------------------------------------------ |
-| Scopes    | `list` · `describe` · `create` · `configure` · `label` · `delete`                          |
-| Notes     | `remember` · `entries` · `get` · `edit-entry` · `forget` · `clear` · `recall`               |
-| Documents | `ingest` · `documents` · `read` · `edit` · `reconvert` · `delete-doc` · `reindex`           |
-| Retrieval | `search` · `grep`                                                                           |
-| Tidy      | `organize`                                                                                  |
-| Sources   | `check-sources` · `update-source`                                                           |
+| Area        | Commands                        |
+| ----------- | ------------------------------- |
+| Collections | `collections` · `create`        |
+| Files       | `ls` · `read` · `write` · `delete` · `upload` |
+| Retrieval   | `grep` · `search`               |
+| Tidy        | `organize`                      |
+
+Deleting a collection is a Resource operation: `coffer resource delete knowledge:<name>`.
 
 ## The REST surface
 
-The daemon serves knowledge under `/api/v1/knowledge`, with the scope as a path segment and `entries` / `documents` as sub-resources:
+The daemon serves knowledge under `/api/v1/knowledge`. These routes are the *user's* surface and therefore unscoped — per-agent authorization governs what an agent sees through the MCP tools, not what the person who owns the vault sees in their own UI.
 
-| Route                                            | Purpose                            |
-| ------------------------------------------------ | ---------------------------------- |
-| `GET`/`POST` `/api/v1/knowledge`                 | List scopes; create a collection.  |
-| `GET`/`PATCH` `/api/v1/knowledge/{scope}`        | Read or reconfigure one scope.     |
-| `/api/v1/knowledge/{scope}/entries`              | Note CRUD.                         |
-| `/api/v1/knowledge/{scope}/documents`            | Ingest, list, read, edit, delete.  |
-| `/api/v1/knowledge/{scope}/search` · `/recall` · `/grep` | Retrieval.                 |
-| `/api/v1/knowledge/{scope}/organize`             | Run the tidy pass now.             |
-| `/api/v1/knowledge/{scope}/reindex` · `/check-sources` | Maintenance.                 |
+| Route                                             | Purpose                                     |
+| ------------------------------------------------- | ------------------------------------------- |
+| `GET`/`POST` `/api/v1/knowledge/collections`      | List collections; create one.               |
+| `GET` `/api/v1/knowledge/tree?path=…`             | One level of the catalogue.                 |
+| `GET`/`PUT`/`DELETE` `/api/v1/knowledge/file`     | Read, write or delete one file.             |
+| `GET` `/api/v1/knowledge/grep`                    | Matching lines.                             |
+| `POST` `/api/v1/knowledge/search`                 | Matching files, with their matched lines.   |
+| `POST` `/api/v1/knowledge/upload`                 | Convert a document and file it.             |
+| `POST` `/api/v1/knowledge/collections/{name}/tidy` | Run the tidy pass now.                     |
 
-Deleting a whole scope goes through the kind-agnostic resource route, `DELETE /api/v1/resources/knowledge/{name}` — there is no `DELETE /api/v1/knowledge/{scope}`.
+A search answers with `{"results": [{path, title, description, lines: [{line_number, line}]}]}` — the files, and what matched in each.
+
+Deleting a whole collection goes through the kind-agnostic resource route, `DELETE /api/v1/resources/knowledge/{name}` — there is no `DELETE /api/v1/knowledge/collections/{name}`.
 
 ## The MCP tools
 
-Every connected MCP client gets six built-in knowledge tools. Each takes an optional `scope`, defaulting to the current project's scope and falling back to `global`:
+Every connected MCP client gets six built-in knowledge tools. None of them takes a scope: a call spans every collection the calling agent is authorized for, and the gateway supplies that identity at session handshake.
 
-| Tool                 | What it does                                                                       |
-| -------------------- | ---------------------------------------------------------------------------------- |
-| `coffer__search`     | Ranked snippets across notes **and** documents. The engine picks the mode.         |
-| `coffer__grep`       | Literal or regex match over every Markdown file in a scope, with file and line.     |
-| `coffer__read`       | One item in full by id — note or document, resolved automatically.                  |
-| `coffer__list`       | What a scope holds, or `all=true` for every scope with its counts.                  |
-| `coffer__write`      | File a note, store a Markdown document (`filename`), or rewrite one in full (`id`).  |
-| `coffer__delete`     | Remove one note or document by id, file included.                                   |
+| Tool             | What it does                                                                    |
+| ---------------- | ------------------------------------------------------------------------------- |
+| `coffer__list`   | The collections you may read, or one level of the catalogue under a path.        |
+| `coffer__grep`   | Every line matching a pattern, with its file and line number.                    |
+| `coffer__search` | The files matching a word or phrase, each with its title, description and lines. |
+| `coffer__read`   | One file in full, by path.                                                       |
+| `coffer__write`  | Create a file in a collection or folder, or replace one at a path.               |
+| `coffer__delete` | Remove one file, and the `.raw/` original behind it if it had one.               |
 
-Agents both read and write here — a note one agent records is what the next agent recalls, which is the point of keeping it in Coffer rather than in any single agent's own store.
+The motion they are shaped around is **catalogue, then grep**: `list` to choose which file, `grep` to find which line, `search` for when you cannot afford to browse first. They are deliberately not modes of one tool — an agent picks by what it knows, not by a flag.
+
+Agents both read and write here: a file one agent records is what the next agent finds, which is the point of keeping it in Coffer rather than in any single agent's own store.
 
 ## In the web UI
 
-Knowledge is one page under **Resources**. `/knowledge` lists your scopes with note counts, document counts and disk usage; `/knowledge/:scope` opens one scope with two tabs — **Documents** and **Notes** — and a filter box above the tree that matches filenames as you type. Create a collection, drag files in, browse and curate notes, and run a tidy pass, all from there. Server-side retrieval stays where it belongs: `coffer__search` for agents, `coffer knowledge recall` for the CLI.
+Knowledge is one page under **Resources**. `/knowledge` lists your collections with a description and a file count, and **New collection** creates one. `/knowledge/:collection` opens one collection: a folder tree you walk a level at a time with a filter box that matches names as you type, the selected file rendered beside it, a search box over that collection, and two buttons — **Upload** to convert a document into the tree, **Tidy** to run the tidy pass on demand.
 
 [Channels →](/guide/channels)

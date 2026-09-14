@@ -17,7 +17,6 @@ import pathlib
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import (
     ACTOR_AGENT,
@@ -32,6 +31,7 @@ from coffer.domain.knowledge.errors import (
     UnsafeKnowledgePath,
 )
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import is_active
 from coffer.infrastructure.knowledge import fs, paths
 from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES, RipgrepSearch
 
@@ -44,14 +44,10 @@ class KnowledgeService:
         *,
         resources: ResourceService,
         audit: AuditService,
-        scope_evaluator: ScopeEvaluator,
         search: RipgrepSearch | None = None,
     ) -> None:
         self._resources = resources
         self._audit = audit
-        # Visibility asks this, not ``domain.scope``: the machine axis is
-        # already bound into it (see application/scope_evaluator.py).
-        self._scope = scope_evaluator
         self._search = search or RipgrepSearch()
 
     # ----- collections -------------------------------------------------
@@ -65,7 +61,7 @@ class KnowledgeService:
         collections of the previous design died.
         """
         registered = await self._resources.list(kind=KIND_KNOWLEDGE, enabled=True)
-        return sorted(r.name for r in registered if self._scope.is_active(r.scope, agent))
+        return sorted(r.name for r in registered if is_active(r.scope, agent))
 
     async def require_visible(self, relpath: str, agent: str | None) -> str:
         """The collection ``relpath`` names, once confirmed visible to ``agent``."""

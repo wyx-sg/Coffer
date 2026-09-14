@@ -30,10 +30,11 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 - 审计 (audit)：每一次生命周期变更连同 actor 一起入账
 - 模式校验 (schema validation)：每个 kind 一份 Pydantic schema，分发逻辑
   与 kind 无关
-- 作用域 (scope)：可选的激活列表——agent 名字与机器 id 两份，取交集，各自
-  为 `null` 即不受限——由框架统一拥有；每个 kind 自行声明是否支持 scope，
-  并各自拥有自己的执行点；已注册但不激活
-  (registered-but-inactive) 语义 ——
+- 作用域 (scope)：一份可选的 agent 名字列表，为 `null` 即对所有 agent 生效
+  ——由框架统一拥有；每个 kind 自行声明是否支持 scope，并各自拥有自己的执行
+  点；已注册但不激活 (registered-but-inactive) 语义。scope 与 `enabled` 合起
+  来就是这项资源的**生效范围**，而生效范围只属于本机：它在它所作用的那台机
+  器上设置，从不参与收敛 ——
   [Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)
 
 它**不**统一调用语义 (invocation semantics)。每个 kind 自行定义其能力
@@ -48,7 +49,7 @@ coffer 中每一个由用户管理的实体都是一个**资源 (Resource)**，�
 | `agent`          | [agent-registry](../../specs/agent-registry/spec.md) | 一个已注册的编码 agent（如 Claude Code）。承载其配置目录以及 Coffer-MCP 的安装状态。workspace 修订还将 agent 自身的文件呈现为多个**只读**面 (facet)——MCP entries（只列出，唯一的写是 adopt 进 Coffer）、plugins（只列出）、目录型配置项（逐子文件编辑）——全部在读取时从文件派生，绝不落库。Coffer 不再为了移除、开关或卸载某个条目而写入别的工具的私有配置：plugin 的开关/卸载面与 MCP entry 的移除/开关面已删除，`agent_plugin_toggled`、`agent_plugin_uninstalled`、`agent_mcp_entry_removed` 三个审计事件也随之移除。                                                     |
 | `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | 一个主 skill 包，Coffer 可将其投递到一个或多个 agent 的 skill 目录。workspace 修订新增了未托管 skill 扫描（把手工放置的 skill adopt 进主库）。投递由 skill 自身的 `enabled` 与其 agent scope 取交集决定，任一侧变化即调谐——本行曾描述的那套 agent 侧 follow-master-library 策略已删除。                                                                                        |
 | `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | 一个 **collection**——`~/.coffer/knowledge/` 下的一个顶层文件夹，装着 markdown 文件，用户爱怎么嵌套怎么嵌套。collection 是系统唯一认得的边界，它之所以是 Resource，就是为了让框架的 per-agent scope 能授权它；没有任何东西从 cwd 推导，也没有任何东西自动开通。agent 经 MCP 读写它，人在自己的编辑器里读写它，双方触及的是同一批字节。见 [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)。 |
-| `channel`        | [channels](../../specs/channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与受管 agent 对话并接收通知。它的 per-agent scope 读法是**反向**的——它命名的是这条渠道可以驱动哪些 agent，因为渠道是一个不被任何 agent 消费的入站面——用来收窄 `/agent` 与渠道自己的默认 agent；一条什么都驱动不了的渠道不会运行。薄 adapter 架在 turn 平台的接缝之上（spec channels FR-043…FR-055），Web 端 Chat 页面作为第二个接口面也架在同一层上（spec channels FR-072…FR-078）——消息一旦到达 turn 编排器，下游就不再知道它来自哪个接口面（[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.zh.md)、[Chat 是单属主的实时镜像](../../docs/decisions/chat-single-owner-live-mirror.zh.md)）。                                                         |
+| `channel`        | [channels](../../specs/channels/spec.md)             | 一个消息 channel 绑定（Telegram、SeaTalk）。承载传输配置 + 凭据 ref 与一个默认 agent；已配对的 owner 从 IM 应用里与受管 agent 对话并接收通知。它的 per-agent scope 读法是**反向**的——它命名的是这条渠道可以驱动哪些 agent，因为渠道是一个不被任何 agent 消费的入站面——用来收窄 `/agent` 与渠道自己的默认 agent；一条什么都驱动不了的渠道不会运行。渠道不参与同步：它绑在自己命名的那台宿主机的端口、隧道与 webhook URL 上。薄 adapter 架在 turn 平台的接缝之上（spec channels FR-043…FR-055），Web 端 Chat 页面作为第二个接口面也架在同一层上（spec channels FR-072…FR-078）——消息一旦到达 turn 编排器，下游就不再知道它来自哪个接口面（[Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.zh.md)、[Chat 是单属主的实时镜像](../../docs/decisions/chat-single-owner-live-mirror.zh.md)）。                                                         |
 | `memory`         | [memory](../../specs/memory/spec.md)                 | 一个聚合 agent 记忆的 **partition**——一个项目，或 `global`。其事实（fact）读自已注册 agent 各自的原生记忆，从不写回；磁盘上的一切都是派生且可重建的，开发者自己的覆盖决定是唯一不是派生出来的东西。Scope 决定 digest 送达哪些 agent，默认送回它数据来源的那些 agent（[Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)）。                                                         |
 
 知识层是**一个目录，不是一个数据库**。`~/.coffer/knowledge/<collection>/` 下的
@@ -56,13 +57,6 @@ markdown 文件就是任何东西的唯一副本：没有 `documents` 表，也�
 没有任何东西需要对账，用户在自己编辑器里改过的文件下一次读取就是活的
 （[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)，
 它取代了 Files as Truth 与 Retrieval Mode Is Internal）。
-
-带排序的检索架在这套体系之上，却不会成为第二个事实来源。向量存在
-`~/.coffer/index/` 下的一个**可丢弃的 sidecar**里——在仓库之外，也在 `coffer.db`
-之外，导出与备份都不包含它，随时可以删掉。Embedding 走本机已有的
-`internal_default` 连接，因此这一层没有属于自己的 embedding 设置；没有配置、
-或 sidecar 缺失/正在重建时，`search` 会退化为字面检索并如实说明。它不给依赖
-集合添一行东西：相似度就在进程内对几百篇文件的语料算出来。
 
 文件的**路径就是它的身份**——名字是可读的 slug，不是 ULID，因为没有索引之后，
 文件名正是 agent 在 grep 结果里读到的东西。frontmatter 只带 `title`、
@@ -73,13 +67,19 @@ markdown 文件就是任何东西的唯一副本：没有 `documents` 表，也�
 
 检索就是**目录加 ripgrep**。`list` 一次走一层——先是 collection，再是某个目录的
 子项，每个文件带上它的标题与描述——而目录是在调用时遍历目录树生成的，从不物化。
-`grep` 以字面或正则匹配调用方可读的每一个 collection；`read` 返回整个文件。没有
-模式、没有排序、没有分块、没有 `top_k`，也没有 `search` 工具：没有带排序的索引
-之后，它只会是 `grep` 的第二个名字。语义匹配从 embedding 转移到了「模型读目录」，
+`grep` 与 `search` 跑的是同一趟 ripgrep，覆盖调用方可读的每一个 collection，区别
+只在报什么：`grep` 报的是行，`search` 报的是这些行所在的文件，每篇带上它的标题与
+描述；`read` 返回整个文件。没有模式、没有排序、没有分块、没有分数。
+
+**Coffer 不做任何 embedding。** 架在可丢弃向量 sidecar 之上的带排序语义检索建成过、
+也上线过，随后被主动移除（2026-09-14）：`coffer__search` 与 memory 的
+`coffer__recall` 现在都是字面匹配，`~/.coffer/index` 目录、`/embeddings` 客户端，
+以及 embedding 设置的所有痕迹全部消失。代价是实打实的，也如实记在 ADR 里——用调用方
+自己的话提问，不再能找到一个有辨识度的短语找不到的东西。语义匹配落回「模型读目录」，
 只要目录塞得进上下文就成立——到几百篇文件都还从容。
 
-五个 MCP 工具：`coffer__list`、`coffer__grep`、`coffer__read`、`coffer__write`、
-`coffer__delete`。Coffer 还会通过既有的 skill 通道**投递一个知识 skill**
+六个 MCP 工具：`coffer__list`、`coffer__grep`、`coffer__read`、`coffer__search`、
+`coffer__write`、`coffer__delete`。Coffer 还会通过既有的 skill 通道**投递一个知识 skill**
 （spec knowledge FR-042），因为这套设计背后的审计发现：只靠工具描述，agent 从不
 主动伸手够这一层——一个月里每一次知识调用都发生在语料被建起来的那一天。没有任何
 东西被注入会话，也不往任何 agent 自己的记忆里写
@@ -224,4 +224,4 @@ shim 与监听器通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + to
 | 错误        | `domain/errors.py` + FastAPI 全局处理器                                                      | 统一 `{error: {code, message, details}}` 信封；用 `X-Coffer-Trace` header 做关联。                                                                                                                                                                                                                                                                                                                                                  |
 | 日志        | `structlog` 以 JSON-per-line 写入 `~/.coffer/logs/`                                          | 通过 contextvar 实现按请求级别的 trace ID。                                                                                                                                                                                                                                                                                                                                                                                         |
 | 文档抽取    | `DocumentExtractor` 端口 + `infrastructure/chat/document_extract.py`                         | 唯一 import 转换库的地方（MarkItDown，惰性导入且为可选依赖）。它服务的是**入站 channel 附件**（spec channels FR-030）：PDF 或 docx 以抽取出的文本抵达 agent，而不是一个不透明的路径；库缺失或抽取失败时退化为文件附件。知识层不转换任何东西——文件系统就是它的摄入界面，markdown 是它持有的唯一格式（[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)）。 |
-| 同步 (Sync) | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 与**一个用户自有的 git 远端**相互收敛（spec vault-sync，[Vault Sync](../../docs/decisions/vault-sync.zh.md)，章程 0.6.0）。一个形状照搬 `RetentionWorker` 的 worker 跑一轮**收敛**：把仓库差分地序列化进 git 工作树并提交为 `L`，把 `origin/<branch>` 合并进 `L` 得到 `M`，把差异 `L..M` 逐路径应用回仓库——删除也包含在内——然后推送并推进**指针**：那是只存在于本机的记录，记着本仓库确证吸收到的那个提交，也是每一次求差异的基线。应用失败的路径进入一个**重试集**，导出器不得删除它们，于是一份待处理的文档绝不会被当成删除发布出去；没有指针的机器即是在加入，注册表把新机器（指针取 git 空树，因此差异只可能是新增）与回归的机器（指针取它自己描述文件里记着的那个提交）区分开来。应用差异会写入知识与 skill 文件、把资源文档经资源服务 upsert（`${HOME}` 展开，并跑该 kind 的导入闸门）、把 `state/<area>/**` 交给其所属模块，最后重跑每个 kind 的导入后钩子。仲裁者是 git 自己的三方合并——凭据密文改按加密时间排序而不参与合并，未解决的冲突则让这一轮中止且仓库分毫未动——其上还罩着每轮一个的应用前快照 tag，以及一个双向的熔断器：超量的删除无论出现在要应用的一侧还是要发布的一侧，都停下来等确认。每台机器只写它独占的那一个 `machines/<machine_id>.yaml`，因此注册表是工作树的派生视图而不是一张被同步的表；`machine_id` 由宿主机派生、离机前先做哈希，于是重装不会留下一个幽灵。一次性的「导出到一个目录」与「把这样一个目录导入回来」两个表面**已删除**——没有基线的整体覆写，不该与基于差异的应用并存。属横切，不是 kind。资源的 `scope`——agent 名字与机器 id 取交集（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)）——作为普通字段搭乘资源文档。 |
+| 同步 (Sync) | `application/sync/` + `infrastructure/sync/` + CLI 与 HTTP 表面 | 与**一个用户自有的 git 远端**相互收敛（spec vault-sync，[Vault Sync](../../docs/decisions/vault-sync.zh.md)，章程 0.6.0）。一个形状照搬 `RetentionWorker` 的 worker 跑一轮**收敛**：把仓库差分地序列化进 git 工作树并提交为 `L`，把 `origin/<branch>` 合并进 `L` 得到 `M`，把差异 `L..M` 逐路径应用回仓库——删除也包含在内——然后推送并推进**指针**：那是只存在于本机的记录，记着本仓库确证吸收到的那个提交，也是每一次求差异的基线。应用失败的路径进入一个**重试集**，导出器不得删除它们，于是一份待处理的文档绝不会被当成删除发布出去；没有指针的机器即是在加入，注册表把新机器（指针取 git 空树，因此差异只可能是新增）与回归的机器（指针取它自己描述文件里记着的那个提交）区分开来。应用差异会写入知识与 skill 文件、把资源文档经资源服务 upsert（`${HOME}` 展开，并跑该 kind 的导入闸门）、把 `state/<area>/**` 交给其所属模块，最后重跑每个 kind 的导入后钩子。仲裁者是 git 自己的三方合并——凭据密文改按加密时间排序而不参与合并，未解决的冲突则让这一轮中止且仓库分毫未动——其上还罩着每轮一个的应用前快照 tag，以及一个双向的熔断器：超量的删除无论出现在要应用的一侧还是要发布的一侧，都停下来等确认。每台机器只写它独占的那一个 `machines/<machine_id>.yaml`，因此注册表是工作树的派生视图而不是一张被同步的表；`machine_id` 由宿主机派生、离机前先做哈希，于是重装不会留下一个幽灵。一次性的「导出到一个目录」与「把这样一个目录导入回来」两个表面**已删除**——没有基线的整体覆写，不该与基于差异的应用并存。属横切，不是 kind。资源文档只承载身份、描述与配置：一项资源的**生效范围**——它的 `enabled` 开关与它的 agent `scope`——只属于本机，从不参与收敛，因此导入会原样保留本机设定的生效范围，而刚刚抵达的资源落在本机自己的默认值上（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)）。`channel` 这个 kind 根本不被序列化，`resources/channel/**` 在两个方向上都被忽略——渠道是绑在某一台宿主机上的入站表面，而若真去执行旧版本遗留文档的删除，每台机器都会丢掉自己配置的渠道。 |

@@ -12,7 +12,6 @@ import { useTranslation } from "react-i18next";
 import { Library, Plus } from "lucide-react";
 
 import { KnowledgeCreateDialog } from "@/components/knowledge/KnowledgeCreateDialog";
-import { KnowledgeIndexStatus } from "@/components/knowledge/KnowledgeIndexStatus";
 import { KnowledgeWelcomePanel } from "@/components/knowledge/KnowledgeWelcomePanel";
 import { KnowledgeTable } from "@/components/knowledge/KnowledgeTable";
 import { Button } from "@/components/ui/button";
@@ -51,7 +50,6 @@ export function KnowledgePage() {
         onCreated={() => void refetch()}
       />
 
-      <KnowledgeIndexStatus />
 
       {isPending ? (
         <Card>

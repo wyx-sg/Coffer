@@ -1,157 +1,145 @@
 # 知识
 
-**知识**(knowledge)是 Coffer 中唯一一处存放"agent 应该知道的一切"的地方:agent(或你)写下的笔记,以及你摄取进来的文档。两者都以 Markdown 文件形式保存在 `~/.coffer/knowledge/` 下,由同一个 SQLite 索引建索引,并从同一次检索中一并返回。文件是事实来源;索引随时可用 `coffer knowledge reindex` 重建。
+**知识**(knowledge)是 Coffer 中唯一一处存放"agent 应该知道的一切"的地方 —— agent(或你)写下的内容,以及你上传进来的文档。它就是 `~/.coffer/knowledge/` 下的一棵 Markdown 文件目录,一个集合一个文件夹,而这些文件就是它的全部。这里没有索引:没有向量库,没有全文表,`coffer.db` 里也没有任何需要与磁盘保持同步的东西。你在自己编辑器里改过的文件、agent 刚写下的文件、`git` 拉下来的文件,在 Coffer 看来都是同一回事 —— 因为中间什么都没有。
 
-Coffer 曾经把这件事拆成两种资源 kind —— 一个只可读的*知识库*,和一个只有 agent 写入的*记忆*。它们从来就不是两样东西。`documents`、`chunks`、FTS5 和 sqlite-vec 从一开始就是共用的;被复制的只是门面。实际使用中知识库几乎是个空壳,记忆本身早就有自己的 `knowledge/` 车道,而这种拆分还逼着每个调用方在挑工具之前先回答"这算记忆还是知识?"—— 一个在调用侧毫无意义的问题。现在只有一种 kind `knowledge`、一个存储根,以及一次覆盖全部内容的检索。
+Coffer 曾经会把这些文件做 embedding,并按语义对检索结果排序。这项能力是被**有意**移除的:现在的检索就是在文件本身上做字面文本匹配。没有任何东西需要构建、重建或保持新鲜,也没有任何东西会过期。
 
-## 作用域
+## 集合
 
-一个知识作用域就是一个名为 `knowledge:<scope>` 的资源。名字本身决定了它的行为:
-
-- **`global`** —— 无论你在哪个仓库都成立的内容。首次写入时自动开通。
-- **`project-<ULID>`** —— 限定一个项目,由 agent 工作目录的 git 根解析得到。同样在首次使用时自动开通,你从不手工创建。
-- **其他任意名字** —— 你有意创建的集合,例如 `handbook`。它们**不会**自动开通:因为一个名字拼错就悄悄建出一个作用域,比直接报错更糟。
+一个集合就是一个名为 `knowledge:<name>` 的资源,外加 `~/.coffer/knowledge/<name>/` 这个目录。两者一起出现,而且只因为你明确要求 —— 读取或写入都不会顺带创建集合,所以一个拼错的名字换来的是报错,而不是一个悄悄建出来的空集合。
 
 ```bash
 coffer knowledge create handbook --description "Company onboarding docs"
-coffer knowledge list
-coffer knowledge describe global
+coffer knowledge collections
+coffer resource delete knowledge:handbook     # 集合的生命周期是资源的事
 ```
 
-检索会横跨一个作用域的两条车道;未指定作用域的 agent 拿到的是当前项目的作用域,并回退到 `global`。
+因为集合是一种资源,由框架的 per-agent scope 决定谁能读它。一个 agent 的调用会覆盖所有对它启用的集合 —— 任何知识工具都没有 scope 参数,也不存在"某个集合这个 agent 有权限、却必须报出名字才能用"的情况。这层授权是一种约定,而非安全边界:手握 shell 工具的 agent 照样能直接读目录。它防的是误检索,不是蓄意访问。
 
-## 一个作用域里有什么
+## 一个集合里有什么
 
-`~/.coffer/knowledge/<scope>/` 就是一棵普通目录树,你可以用日常工具读取、编辑、grep 和备份:
+`~/.coffer/knowledge/<collection>/` 就是一棵普通目录树,你可以用日常工具读取、编辑、grep 和备份。集合之下你想怎么嵌套文件夹都行,Coffer 不会赋予这套结构任何自己的含义。
+
+每个文件都是带 frontmatter 的 Markdown,其中有标题和一句话描述。描述不是装饰 —— 浏览目录的人正是靠它来挑文件,所以请把它写成"这里面是什么,我什么时候会想要它"。`README.md` 描述的是它所在的那个文件夹,而不计入该文件夹的文件。
+
+Coffer 只为自己创建两个目录,都以点开头,因此 ripgrep 会跳过、目录遍历也会绕开:
 
 | 路径        | 存放什么                                             |
 | ----------- | ---------------------------------------------------- |
-| `notes/`    | agent 或你写下的内容。`coffer__write` 直接落在这里。   |
-| `docs/`     | 摄取进来的文档,已规范化为 Markdown。                  |
-| `.raw/`     | 摄取文件未经改动的原件。隐藏目录,ripgrep 会跳过。     |
-| `.history/` | 整理流程替换掉的笔记旧版本。同样隐藏,同样的理由。      |
+| `.raw/`     | 上传文档的原始字节,以便转换得不好时可以重来。          |
+| `.history/` | 整理流程替换掉的旧版本。                              |
 
-两条内容车道,外加它们背后的两个隐藏归档。再没有别的了:一条笔记就是一条笔记 —— 无论它是 agent 刚写下的,还是之后被整理流程折叠进了某个主题文档。
+手工编辑这些内容是允许且预期之内的。这里没有需要挂钩的写入路径,也没有可能忘记执行的重建索引步骤:下一次检索读到的就是磁盘上此刻的文件。
 
-手工编辑这些文件是允许且预期之内的 —— Coffer 在检索前会重新扫描这棵树,带外编辑会被纳入。
-
-## 写入笔记
-
-一条笔记就是一个值得跨越本次会话保留下来的事实、决策或偏好。它落在 `notes/`,按原文存储:写入时没有 LLM。
+## 写入文件
 
 ```bash
-coffer knowledge remember global "所有仓库优先用 pnpm 而非 npm" --title pkg-manager
-coffer knowledge entries global                       # 列出笔记
-coffer knowledge get global <entry-id>
-coffer knowledge edit-entry global <entry-id> "…"     # 整理
-coffer knowledge forget global <entry-id>
+coffer knowledge write --in handbook \
+  --title "Package manager" \
+  --description "Which package manager every repo here uses, and why" \
+  --body "Prefer pnpm over npm in all repos."
+
+coffer knowledge ls handbook                       # 目录的一层
+coffer knowledge read handbook/package-manager.md
+coffer knowledge write --path handbook/package-manager.md --title … --description … --body …
+coffer knowledge delete handbook/package-manager.md
 ```
 
-单条笔记的长度由作用域的 `max_entry_chars` 限制;用 `coffer knowledge configure <scope> --max-entry-chars N` 调整。
+写入按原文存储 —— 写入时没有 LLM,agent 也从不需要操心归档到哪。`--in` 在某个集合或文件夹下新建文件,`--path` 覆盖已有文件。用任意编辑器把一个 Markdown 文件丢进目录,同样是一种完整的写入方式。
 
-## 摄取文档
+## 上传文档
 
-把任意格式的文件交给 Coffer,它会转换为 Markdown,把结果归入 `docs/`,把原件留在 `.raw/`,分块并建索引。
+把任意格式的文件交给 Coffer,它会转换成 Markdown 并作为一个普通知识文件归档,同时把原件留在 `.raw/`。
 
 ```bash
-coffer knowledge ingest handbook ./onboarding.pdf     # 任意格式 → Markdown
-coffer knowledge ingest handbook ./notes.docx
-coffer knowledge documents handbook                   # 里面有什么
-coffer knowledge read handbook <document-id>
+coffer knowledge upload ./onboarding.pdf --collection handbook
+coffer knowledge upload ./notes.docx --collection handbook --directory onboarding
 ```
 
-- 转换覆盖 pdf、docx、pptx、xlsx、html 等(默认上限 25 MB,创建时可用 `--max-document-mb` 调整)。重新摄取同一来源需要 `--replace`。
-- 你手工编辑过的文档归你所有:`coffer knowledge edit` 会写入它,并且它不会被悄悄地从原件重新转换。确实需要重转时用 `coffer knowledge reconvert`。
-- Coffer 会记住摄取文件的来处。`coffer knowledge check-sources <scope>` 报告哪些原件在磁盘上变化了,`coffer knowledge update-source <scope> <document-id>` 把新版本拉进来。想让它在后台自动刷新,用 `coffer knowledge configure <scope> --auto-update-sources`。
+- 转换覆盖 pdf、docx、pptx、xlsx、html 等。超过 20 MB 上限的上传会在任何转换和写入之前被拒绝,不支持的类型也会被指名拒绝。
+- 转换出来的文档与你手打的文档没有区别:同样的 frontmatter,同样的审计事件,在树里同样的位置。
+- 描述在输入侧可选,在输出侧从不可选。没有配置内部模型连接时,Coffer 会从文档开头的正文中提取一句描述,而不是留下一条空白的目录条目。
 
-## 检索
+## 找东西
 
-一次检索同时覆盖笔记和文档 —— 这种统一正是全部的意义所在。
+三种动作,按你已经知道什么来挑:
 
 ```bash
-coffer knowledge search handbook "如何重置密码"                # 排序段落
-coffer knowledge recall global "用哪个包管理器?"               # 笔记 + 文档一起排序
-coffer knowledge grep handbook "TODO"                          # 精确 / 正则,无索引
+coffer knowledge ls handbook/onboarding      # 浏览:文件夹与文件,带描述
+coffer knowledge grep "SO_REUSEADDR"         # 每一条匹配行,形如 path:line
+coffer knowledge search "daemon port"        # 命中的文件,连同匹配到的那几行
 ```
 
-引擎内部有四种模式 —— `grep`(在 Markdown 上做字面/正则)、`keyword`(FTS5 + BM25)、`vector`(sqlite-vec 最近邻)和 `hybrid`(在 keyword + vector 之上做 RRF 融合)。**调用方从不挑选模式。** 由作用域的配置决定,引擎按每次查询自行选择;把模式参数暴露出去,只会让调用方去猜一个内部细节。
+`ls` 每次走目录的一层,让你从标题和描述里挑出**哪个文件**。`grep` 和 `search` 是同一个匹配器、跑在同一批文件上 —— 都是对调用方可见的每个集合执行 ripgrep —— 只是报告方式不同:`grep` 给你每一条匹配行,`search` 每个文件给一条结果,带上该文件的标题、描述以及匹配到的行。当你要的是文件而不是行时,用 `search`。
 
-向量检索按作用域显式开启:
-
-```bash
-coffer knowledge create research --enable-vector
-coffer knowledge configure handbook --enable-vector
-```
-
-而 embedding 本身是**整个安装配置一次**的,位于 Web UI 的 **Settings → Embedding**。作用域自身不带任何 embedding 字段;它只通过在检索模式里列出 `vector` 来选择加入。未配置 embedding 却要求 vector 的作用域会回退到 keyword,而非报错。
-
-索引只是一份投影,从来不是真相。`coffer knowledge reindex <scope>` 会从磁盘上的 Markdown 重建它。
+匹配是字面的:一个正则表达式,区分大小写。请给它一个有辨识度的词或确切短语,而不是一句用你自己的话写成的问题 —— 这里没有排序、没有打分,也没有模式可挑。返回的就是包含你所输入内容的那些文件。
 
 ## 整理流程
 
-笔记会不断累积,同一件事也会被写下两遍。一个周期性的**整理流程**(tidy pass)会合并重复的笔记,并把它们改写成连贯的主题文档 —— 就地进行,仍在 `notes/` 之内。
+一个集合会像笔记一样堆积起来:同一件事在两次会话里被写了两遍,某个文件一路长到覆盖了四个主题。这在写入时没有任何不对 —— 正因如此写入才保持"笨"。整理被推迟到**整理流程**(tidy pass)里完成:一次有边界的 agentic 改写,读一个集合里的文件,合并重复、拆开过于庞杂的文件,并给每个文件配上名副其实的标题与描述。
 
-它有两条触发路径,因为二者覆盖的缺口不同。**空闲触发**:每次写入都会重置同一个合并计时器,静默一段时间之后,发生过变化的作用域被整理 —— 这正是"会话结束后 Coffer 顺手收拾了一下"的那种感觉。**定时触发**:对每个作用域做周期性巡检,守护进程启动时补一趟,之后每隔几小时一趟。巡检能覆盖空闲计时器结构上覆盖不了的情况 —— 你在自己编辑器里改过的文件、计时器还没触发就重启了的守护进程,以及最近没人写过的作用域。
+这个流程需要一个内部模型连接;没有配置时它干干净净地什么都不做。一个后台巡检会按周期跑它,并且在运维人员主动打开之前一直是关闭的 —— 无人值守的改写者应该是你打开的东西,而不是你某天发现它在跑。在跨机器的 vault 中,巡检只在其中一台上运行:两台机器合并同一批文件会产出两份不同的文档,而 git 会把它们当作两处新增干净地合并进来。
 
-两条路径都会取走作用域的写锁,因此巡检和刚触发的计时器是串行而非竞争的;而在没有配置内部模型时,这个流程什么也不做。真正改动了东西的那一趟会以 `knowledge_tidied` 记入 Coffer 的审计日志;什么也没改动的那一趟不会留下记录。不再有按作用域存放的变更日志文件。
-
-这个流程会在无人值守的情况下改写你和你的 agent 写下的文字。在任何覆盖或合并之前,它会先把上一个版本移入 `.history/`,因此改写始终可恢复 —— 这份归档就是全部的安全网,落地之前没有 diff 需要你批准。
+`.history/` 就是全部的安全网。这个流程用到的每个工具都会在覆盖或撤下一个文件之前先归档它的上一版,因此改写始终可恢复 —— 落地之前没有 diff 需要你批准。
 
 想随时手工跑一趟:
 
 ```bash
-coffer knowledge organize <scope>            # 立刻跑一次整理流程
-coffer knowledge clear <scope>               # 清空一个作用域的全部笔记
+coffer knowledge organize handbook
 ```
 
-详情页上的 **Tidy** 按钮做的是同一件事。
+Web UI 里集合的页面上有一个 **Tidy** 按钮,做的是同一件事。
 
 ## CLI
 
 以上全部都在一个分组 `coffer knowledge` 之下:
 
-| 领域   | 命令                                                                                   |
-| ------ | -------------------------------------------------------------------------------------- |
-| 作用域 | `list` · `describe` · `create` · `configure` · `label` · `delete`                       |
-| 笔记   | `remember` · `entries` · `get` · `edit-entry` · `forget` · `clear` · `recall`           |
-| 文档   | `ingest` · `documents` · `read` · `edit` · `reconvert` · `delete-doc` · `reindex`       |
-| 检索   | `search` · `grep`                                                                       |
-| 整理   | `organize`                                                                              |
-| 来源   | `check-sources` · `update-source`                                                       |
+| 领域 | 命令                                          |
+| ---- | --------------------------------------------- |
+| 集合 | `collections` · `create`                      |
+| 文件 | `ls` · `read` · `write` · `delete` · `upload` |
+| 检索 | `grep` · `search`                             |
+| 整理 | `organize`                                    |
+
+删除一个集合是资源操作:`coffer resource delete knowledge:<name>`。
 
 ## REST 接口
 
-守护进程在 `/api/v1/knowledge` 下提供知识接口,作用域作为路径段,`entries` / `documents` 作为子资源:
+守护进程在 `/api/v1/knowledge` 下提供知识接口。这些路由是*用户*的界面,因此不带 scope —— per-agent 授权管的是 agent 通过 MCP 工具看到什么,而不是 vault 的主人在自己的 UI 里看到什么。
 
-| 路由                                             | 用途                          |
-| ------------------------------------------------ | ----------------------------- |
-| `GET`/`POST` `/api/v1/knowledge`                 | 列出作用域;创建一个集合。     |
-| `GET`/`PATCH` `/api/v1/knowledge/{scope}`        | 读取或重新配置一个作用域。     |
-| `/api/v1/knowledge/{scope}/entries`              | 笔记 CRUD。                   |
-| `/api/v1/knowledge/{scope}/documents`            | 摄取、列出、读取、编辑、删除。 |
-| `/api/v1/knowledge/{scope}/search` · `/recall` · `/grep` | 检索。                |
-| `/api/v1/knowledge/{scope}/organize`             | 立刻跑一次整理流程。           |
-| `/api/v1/knowledge/{scope}/reindex` · `/check-sources` | 维护。                   |
+| 路由                                               | 用途                          |
+| -------------------------------------------------- | ----------------------------- |
+| `GET`/`POST` `/api/v1/knowledge/collections`       | 列出集合;创建一个集合。       |
+| `GET` `/api/v1/knowledge/tree?path=…`              | 目录的一层。                   |
+| `GET`/`PUT`/`DELETE` `/api/v1/knowledge/file`      | 读取、写入或删除一个文件。     |
+| `GET` `/api/v1/knowledge/grep`                     | 匹配到的行。                   |
+| `POST` `/api/v1/knowledge/search`                  | 命中的文件,连同匹配到的行。   |
+| `POST` `/api/v1/knowledge/upload`                  | 转换一份文档并归档。           |
+| `POST` `/api/v1/knowledge/collections/{name}/tidy` | 立刻跑一次整理流程。           |
 
-删除整个作用域走与 kind 无关的资源路由 `DELETE /api/v1/resources/knowledge/{name}` —— 并不存在 `DELETE /api/v1/knowledge/{scope}`。
+一次 search 的响应是 `{"results": [{path, title, description, lines: [{line_number, line}]}]}` —— 哪些文件,以及每个文件里匹配到了什么。
+
+删除整个集合走与 kind 无关的资源路由 `DELETE /api/v1/resources/knowledge/{name}` —— 并不存在 `DELETE /api/v1/knowledge/collections/{name}`。
 
 ## MCP 工具
 
-每个接入的 MCP 客户端会获得六个内置知识工具。每个都接受可选的 `scope`,默认取当前项目的作用域,并回退到 `global`:
+每个接入的 MCP 客户端会获得六个内置知识工具。它们都不接受 scope:一次调用覆盖调用方 agent 被授权的每个集合,而这个身份由网关在会话握手时给出。
 
-| 工具                 | 作用                                                                   |
-| -------------------- | ---------------------------------------------------------------------- |
-| `coffer__search`     | 横跨笔记**与**文档返回排序片段。模式由引擎决定。                        |
-| `coffer__grep`       | 在作用域的每个 Markdown 文件上做字面或正则匹配,返回文件与行号。         |
-| `coffer__read`       | 按 id 读取一项的完整内容 —— 笔记或文档,自动判别。                       |
-| `coffer__list`       | 一个作用域里有什么,或 `all=true` 列出每个作用域及其计数。                |
-| `coffer__write`      | 归档一条笔记、存一份 Markdown 文档(`filename`),或整体重写某项(`id`)。 |
-| `coffer__delete`     | 按 id 删除一条笔记或一个文档,连同文件。                                 |
+| 工具             | 作用                                                        |
+| ---------------- | ----------------------------------------------------------- |
+| `coffer__list`   | 你可读的集合,或某个路径下目录的一层。                        |
+| `coffer__grep`   | 匹配某个模式的每一行,带文件与行号。                          |
+| `coffer__search` | 命中某个词或短语的文件,每个都带标题、描述和匹配到的行。       |
+| `coffer__read`   | 按路径读取一个文件的完整内容。                                |
+| `coffer__write`  | 在某个集合或文件夹下新建文件,或覆盖某个路径上的文件。         |
+| `coffer__delete` | 删除一个文件,连同它在 `.raw/` 里的原件(如果有)。            |
 
-agent 在这里既读也写 —— 一个 agent 记下的笔记,正是下一个 agent 召回的内容,这也正是把它放进 Coffer、而非某个 agent 自己存储里的意义。
+它们围绕的动作是**先看目录,再 grep**:用 `list` 挑出哪个文件,用 `grep` 找到哪一行,而 `search` 用于你来不及先浏览的时候。它们刻意不是同一个工具的三种模式 —— agent 按自己已知的东西来挑,而不是按一个开关。
+
+agent 在这里既读也写 —— 一个 agent 记下的文件,正是下一个 agent 找到的内容,这也正是把它放进 Coffer、而非某个 agent 自己存储里的意义。
 
 ## 在 Web UI 中
 
-知识在 **Resources** 之下是一个页面。`/knowledge` 列出你的作用域,含笔记数、文档数和磁盘占用;`/knowledge/:scope` 打开单个作用域,包含两个标签页 —— **Documents** 和 **Notes** —— 以及树上方一个随输入即时匹配文件名的过滤框。创建集合、把文件拖进去、浏览与整理笔记、跑一次整理流程,都在这里完成。服务端检索留在它该在的地方:agent 用 `coffer__search`,CLI 用 `coffer knowledge recall`。
+知识在 **Resources** 之下是一个页面。`/knowledge` 列出你的集合,含描述与文件数,**New collection** 用于创建;`/knowledge/:collection` 打开单个集合:一棵按层浏览的文件夹树,树上方有一个随输入即时匹配名称的过滤框,旁边渲染选中的文件,还有一个针对该集合的检索框,以及两个按钮 —— **Upload** 把一份文档转换后放进树里,**Tidy** 按需跑一趟整理流程。
 
 [渠道 →](/zh/guide/channels)

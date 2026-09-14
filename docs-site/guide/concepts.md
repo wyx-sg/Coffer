@@ -11,7 +11,7 @@ Five kinds ship today:
 - `mcp_server` — a registered upstream MCP server that carries its transport configuration, credential references, and per-server policies.
 - `agent` — a registered local AI coding agent (`claude_code` or `codex`) whose curated config files Coffer can view and edit, and into which Coffer can install its own MCP server.
 - `skill` — an AgentSkills folder Coffer manages from a single master copy and can deliver to an agent's config directory. Per-agent enable/disable bindings are managed from the agent's detail page.
-- `knowledge` — one scope of what your agents know: the entries they write and the documents you ingest, as Markdown on disk with a rebuildable SQLite index over both. The name carries the scope — `global`, `project-<ULID>`, or a collection you named.
+- `knowledge` — a collection of what your agents know: the files they write and the documents you ingest, as Markdown on disk under `~/.coffer/knowledge/<collection>/`. The files are the only copy — there is no index over them, and search is a literal pass across the files themselves.
 - `channel` — a Telegram or SeaTalk binding that lets you reach your agents from a messaging app.
 
 The framework is kind-agnostic: adding a new kind in the future requires no changes to the core resource machinery.

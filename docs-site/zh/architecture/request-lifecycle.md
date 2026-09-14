@@ -1,7 +1,7 @@
 # 请求全链路
 
 ::: tip 核心模型
-Coffer 如今承载**多条**请求全链路，而不止一条。最初——也仍是最核心的——路径是 **MCP `tools/call`** 全链路：MCP 客户端 → 守护进程 → 上游服务器，入口处 shim 将 stdio 转换为 HTTP/SSE，分发处命名空间解析器将 `filesystem__read_file` 拆分为服务器 `filesystem` 和工具 `read_file`。与之并行的还有 **agent 对话回合**全链路、**channel 入站**全链路和**知识检索**全链路。本页先完整讲解 MCP 路径，再勾勒其余三条。
+Coffer 如今承载**多条**请求全链路，而不止一条。最初——也仍是最核心的——路径是 **MCP `tools/call`** 全链路：MCP 客户端 → 守护进程 → 上游服务器，入口处 shim 将 stdio 转换为 HTTP/SSE，分发处命名空间解析器将 `filesystem__read_file` 拆分为服务器 `filesystem` 和工具 `read_file`。与之并行的还有 **agent 对话回合**全链路、**channel 入站**全链路和**知识搜索**全链路。本页先完整讲解 MCP 路径，再勾勒其余三条。
 :::
 
 ## MCP 工具调用全链路
@@ -226,17 +226,18 @@ Web 端 Chat 页面是同一道接缝的第二个客户端，挂在 `/api/v1/cha
 
 进度由 agent 的能力渲染，而非适配器类型：Telegram 通过编辑同一条消息流式呈现进度，SeaTalk 降级为 ack-then-final。
 
-## 知识检索全链路
+## 知识搜索全链路
 
-检索请求——`coffer__search`、`coffer__grep`，以及 REST 的 `search` / `recall` / `grep` 路由——遵循一条锚定于 [Files as Truth](/zh/reference/adr/files-as-truth-sqlite-retrieval) 的全链路：**markdown 文件是事实来源**，`coffer.db` 只保存派生索引。
+搜索请求——`coffer__search` 与 `coffer__grep`，以及 REST 的 `search` / `grep` 路由——几乎已经没有什么「全链路」可言，而这正是重点（[Knowledge Is Plain Files](/zh/reference/adr/knowledge-is-plain-files)）。调用方与磁盘之间没有索引，也就没有流水线需要走：
 
-- **`grep`** —— 对原始文件做 ripgrep（零索引、与语言无关）。
-- **keyword** —— SQLite **FTS5** 的 `MATCH … ORDER BY bm25()`。
-- **vector** —— **sqlite-vec** 对 chunk 嵌入做 KNN（按作用域可选启用；嵌入来自 Settings 中整个安装配置一次的 OpenAI 兼容端点）。
-- **hybrid** —— 在 keyword + vector 之上做 RRF 融合。
+1. **解析调用方能看到什么。** 服务把调用方的身份换算成 `~/.coffer/knowledge/` 下它被允许搜索的那些 collection 目录。这是唯一一步知识层特有的动作。
+2. **对这些目录跑 `ripgrep`。** 一次字面文本搜索，并排除隐藏条目，使 `.history/` 里的旧版本和 `.raw/` 里的原件永远不会出现在结果中。
+3. **整形匹配结果。** `grep` 原样返回命中的行；`search` 把它们按文件聚合成条目——路径、标题、描述，以及命中的那几行——标题与描述从每个文件自己的 frontmatter 中读出。
 
-引擎根据作用域的配置在这些模式中自行选择——调用方从不指定模式（[Retrieval Mode Is Internal](/zh/reference/adr/retrieval-mode-is-internal)）——并且一次检索同时覆盖作用域的两条车道:agent 写下的条目与你摄取的文档。一次写入（`coffer__write` 或一次摄取）先落成一个 markdown 文件，随后从文件重新生成派生的 FTS5/vec 索引。由于文件即事实，索引随时可重建，用户也可用普通工具 diff/grep/编辑内容。
+memory 的拉取工具 `coffer__recall` 是高一层的同一形状：对调用方可见、且已经载入内存的 fact 做大小写不敏感的子串扫描。
+
+完全没有索引，带来三个结果。**新鲜度由文件本身决定**，因此无论一个文件是用户在编辑器里改的、agent 写的，还是 `git` 拉下来的，它落盘的那一刻就可搜——一次写入（`coffer__write` 或一次摄取）在 markdown 落盘时就结束了，之后没有任何东西需要更新。**没有任何派生物具有权威性**，因为根本不存在派生物。以及**匹配发生在字节层面**，因此中日韩文本无需分词器即可命中，用户也可以用普通工具 grep 和编辑同一批内容。
 
 ---
 
-**参见：** [MCP 网关规约](/zh/reference/specs/mcp-gateway/spec)，[会话子进程模型](/zh/reference/adr/session-subprocess-model)，[Channels 规约](/zh/reference/specs/channels/spec)，[Channel 适配器框架](/zh/reference/adr/channel-adapter-framework)，[Chat 是单属主的实时镜像](/zh/reference/adr/chat-single-owner-live-mirror)，[文件即事实，SQLite 检索](/zh/reference/adr/files-as-truth-sqlite-retrieval)
+**参见：** [MCP 网关规约](/zh/reference/specs/mcp-gateway/spec)，[会话子进程模型](/zh/reference/adr/session-subprocess-model)，[Channels 规约](/zh/reference/specs/channels/spec)，[Channel 适配器框架](/zh/reference/adr/channel-adapter-framework)，[Chat 是单属主的实时镜像](/zh/reference/adr/chat-single-owner-live-mirror)，[知识就是普通文件](/zh/reference/adr/knowledge-is-plain-files)
