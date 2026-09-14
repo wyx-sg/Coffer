@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0074"
+HEAD_REVISION = "0075"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -137,7 +137,10 @@ HEAD_REVISION = "0074"
 # backup run did not. 0074 ADDs
 # ``internal_engine_config.tidy_owner_machine_id`` (the one machine allowed to
 # run the unattended tidy pass) — column-only, table set unchanged; its
-# downgrade drops the column.
+# downgrade drops the column. 0075 CREATEs ``sync_runs`` — every converge round
+# rather than only the last, which the remote's ``last_*`` columns keep
+# answering unchanged; present at head, dropped by its own downgrade, and
+# absent from every revision below it.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -156,17 +159,24 @@ EXPECTED_TABLES = {
     "memory_overrides",
     "sync_convergence_state",
     "sync_held_paths",
+    "sync_runs",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
 # (0052 renames them on the way up and back on the way down), so every stepwise
 # assertion under 0052 compares against this set instead. ``sync_remotes`` comes
 # out too: 0062 created it, so nothing below 0052 has ever seen it, and so do
-# ``memory_overrides`` (0070) and ``sync_convergence_state`` /
-# ``sync_held_paths`` (0073).
+# ``memory_overrides`` (0070), ``sync_convergence_state`` / ``sync_held_paths``
+# (0073) and ``sync_runs`` (0075).
 PRE_MERGE_TABLES = (
     EXPECTED_TABLES
-    - {"sync_remotes", "memory_overrides", "sync_convergence_state", "sync_held_paths"}
+    - {
+        "sync_remotes",
+        "memory_overrides",
+        "sync_convergence_state",
+        "sync_held_paths",
+        "sync_runs",
+    }
 ) | {
     # 0066 drops these at head; every revision below it still has them, and
     # 0066's downgrade recreates them empty so those revisions can drop them.

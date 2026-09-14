@@ -412,6 +412,91 @@ async def test_status_reports_the_remote_and_the_last_round(client, fleet) -> No
     assert body["last_run"]["published"] == run["published"]
 
 
+# --- the run history ---------------------------------------------------------
+
+
+async def test_runs_on_a_fresh_vault_is_empty_not_an_error(client) -> None:
+    """No remote, no rounds. An empty history is the ordinary state."""
+    r = await client.get("/api/v1/sync/runs")
+
+    assert r.status_code == 200
+    assert r.json() == {"runs": []}
+
+
+async def test_every_round_lands_in_the_history_newest_first(client, fleet) -> None:
+    """The whole point of the history: rounds after the first one survive.
+
+    Three rounds, and the second is the only one that changed anything. On the
+    old surface the third round's "nothing changed" was all a user could see,
+    and the round that published the note was gone.
+    """
+    a, _b = fleet
+    await _configure(client, a)
+    first = (await client.post("/api/v1/sync/run", json={})).json()
+    a.write_knowledge("notes", "one", "first note\n")
+    second = (await client.post("/api/v1/sync/run", json={})).json()
+    third = (await client.post("/api/v1/sync/run", json={})).json()
+
+    runs = (await client.get("/api/v1/sync/runs")).json()["runs"]
+
+    assert [r["status"] for r in runs] == [third["status"], second["status"], first["status"]]
+    assert runs[1]["published"] == second["published"]
+    assert runs[1]["published"]["added"] >= 1
+    # Ids are what a surface keys a row on, so they must be distinct even when
+    # two rounds are otherwise identical values.
+    assert len({r["id"] for r in runs}) == 3
+
+
+async def test_a_history_row_carries_everything_the_status_round_did_plus_when(
+    client, fleet
+) -> None:
+    """``RunRecordOut`` is a superset of ``RoundOut``, asserted field by field.
+
+    The two surfaces must describe the same round identically; the timestamps
+    are the only thing the history adds.
+    """
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await _configure(client, a)
+    run = (await client.post("/api/v1/sync/run", json={})).json()
+
+    record = (await client.get("/api/v1/sync/runs")).json()["runs"][0]
+
+    assert {k: record[k] for k in run} == run
+    assert record["started_at"] <= record["finished_at"]
+
+
+async def test_the_newest_history_row_and_the_status_round_are_the_same_round(
+    client, fleet
+) -> None:
+    """Two surfaces, one moment. They are written in one transaction, so a
+    user reading Status and a user reading History must never be looking at
+    different rounds — which a second write, or a second projection, is how
+    this would stop being true."""
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await _configure(client, a)
+    await client.post("/api/v1/sync/run", json={})
+    a.write_knowledge("notes", "two", "second note\n")
+    await client.post("/api/v1/sync/run", json={})
+
+    newest = (await client.get("/api/v1/sync/runs")).json()["runs"][0]
+    last = (await client.get("/api/v1/sync/status")).json()["last_run"]
+
+    assert {k: newest[k] for k in last} == last
+
+
+async def test_runs_caps_what_one_read_returns(client, fleet) -> None:
+    a, _b = fleet
+    await _configure(client, a)
+    await client.post("/api/v1/sync/run", json={})
+    await client.post("/api/v1/sync/run", json={})
+
+    assert len((await client.get("/api/v1/sync/runs?limit=1")).json()["runs"]) == 1
+    assert (await client.get("/api/v1/sync/runs?limit=0")).status_code == 422
+    assert (await client.get("/api/v1/sync/runs?limit=501")).status_code == 422
+
+
 # --- machines ---------------------------------------------------------------
 
 

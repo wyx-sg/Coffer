@@ -236,12 +236,14 @@ MCP 调用记录——以及主密钥，它在任何设置下都不会被写进�
 
 ## REST / Web UI
 
-上面的一切同样是一个顶级 **Sync** 页，带两个 tab —— **Status**（远端、上次与下次轮次、
-最近几轮改了什么、一个运行按钮，以及主密钥卡片）与 **Machines**（注册表表格，标出本机，
-并用文字说明任何密钥指纹不匹配）。冲突与待确认项在 Status 上呈现为横幅。
+上面的一切同样是一个顶级 **Sync** 页，带三个 tab —— **Status**（远端、下次轮次、
+一个运行按钮，以及主密钥卡片）、**History**（这台机器跑过的每一轮，做成表格：什么时候
+跑的、怎么结束的、应用到本机什么、发布到远端什么、落到哪个提交——展开一行还能看到由
+agent 合并的路径、本机应用不了的路径，以及任何失败）与 **Machines**（注册表表格，标出
+本机，并用文字说明任何密钥指纹不匹配）。冲突与待确认项在 Status 上呈现为横幅。
 
-在 HTTP 上，同样这些操作位于 `/api/v1/sync/*` —— `run`、`adopt`、`status`、`restore`、
-`confirm`、`rollback`、`machines` 家族与密钥家族。密钥相关的两条路由传的是密钥
+在 HTTP 上，同样这些操作位于 `/api/v1/sync/*` —— `run`、`adopt`、`status`、`runs`、
+`restore`、`confirm`、`rollback`、`machines` 家族与密钥家族。密钥相关的两条路由传的是密钥
 **材料**，不是路径：`POST /sync/key/export` 收 `{}`，返回 `{"material": "…"}`；
 `POST /sync/key/import` 收 `{"material": "…"}`。上面那两条 CLI 命令仍然写文件、读文件
 ——只是文件 I/O 由 CLI 自己做，守护进程从不打开任何由调用方指定的路径。在 Web UI 里，

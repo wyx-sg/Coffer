@@ -403,10 +403,10 @@ never reaches back into history on its own.
 | CLI | `coffer sync rebuild` · `coffer sync remote set <url> [--branch] [--interval] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync adopt <url>` · `coffer sync now` · `coffer sync status` · `coffer sync restore [--at <rev\|date>]` · `coffer sync confirm` · `coffer sync reject` · `coffer sync rollback` |
 | CLI (machines) | `coffer sync machines` · `coffer sync machine rename <name>` · `coffer sync machine remove <id>` |
 | CLI (key) | `coffer sync key export <file>` · `coffer sync key import <file>` |
-| HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
+| HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `GET /api/v1/sync/runs` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
 | HTTP (machines) | `GET /api/v1/sync/machines` · `PATCH /api/v1/sync/machines/self` · `DELETE /api/v1/sync/machines/{id}` |
 | HTTP (key) | `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
-| UI | A top-level **Sync** page with two tabs — **Status** (remote, last and next round, what the last rounds changed, a run button, the master-key card) and **Machines** (the registry table). Conflicts and pending confirmations appear as a banner on Status, not as a permanent tab. |
+| UI | A top-level **Sync** page with three tabs — **Status** (the remote, the next round, a run button, the master-key card), **History** (every round this machine has run, as a table: when, outcome, what it applied here, what it published, the commit) and **Machines** (the registry table). Conflicts and pending confirmations appear as a banner on Status, not as a permanent tab. Status says what the vault is doing; History says what it has been doing, which one round rendered as prose cannot — a round that failed once is noise, and a round that has failed every hour since Tuesday is the answer. |
 
 ## Acceptance Scenarios
 

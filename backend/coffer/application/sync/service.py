@@ -31,6 +31,7 @@ from coffer.application.sync.ports import (
     MasterKeyPort,
     SyncRemoteRepoPort,
 )
+from coffer.application.sync.service_history import HistoryMixin
 from coffer.application.sync.service_machines import MachinesMixin
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
@@ -42,7 +43,7 @@ from coffer.domain.sync.errors import BackupRemoteInvalid, MasterKeyFileInvalid
 _TOKEN_KEY = "token"
 
 
-class ConvergeService(MachinesMixin):
+class ConvergeService(MachinesMixin, HistoryMixin):
     """Configure the remote, run a round, resolve a held one."""
 
     def __init__(

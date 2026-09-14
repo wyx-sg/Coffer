@@ -344,10 +344,10 @@ git config，不会出现在命令行里，并会从任何被记录的错误中�
 | CLI | `coffer sync remote set <url> [--branch] [--interval] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync adopt <url>` · `coffer sync now` · `coffer sync status` · `coffer sync restore [--at <rev\|date>]` · `coffer sync rebuild` · `coffer sync confirm` · `coffer sync rollback` |
 | CLI（机器） | `coffer sync machines` · `coffer sync machine rename <name>` · `coffer sync machine remove <id>` |
 | CLI（密钥） | `coffer sync key export <file>` · `coffer sync key import <file>` |
-| HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
+| HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `GET /api/v1/sync/runs` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
 | HTTP（机器） | `GET /api/v1/sync/machines` · `PATCH /api/v1/sync/machines/self` · `DELETE /api/v1/sync/machines/{id}` |
 | HTTP（密钥） | `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
-| UI | 一个顶层 **Sync** 页面，两个 tab——**Status**（远端、上一轮与下一轮、最近几轮改了什么、一个运行按钮、主密钥卡片）与 **Machines**（注册表表格）。冲突与待确认项以横幅形式出现在 Status 上，而不是做成常驻 tab。 |
+| UI | 一个顶层 **Sync** 页面，三个 tab——**Status**（远端、下一轮、一个运行按钮、主密钥卡片）、**History**（这台机器跑过的每一轮，做成表格：时间、结果、应用到本机的、发布到远端的、落到的提交）与 **Machines**（注册表表格）。冲突与待确认项以横幅形式出现在 Status 上，而不是做成常驻 tab。Status 讲 vault 此刻在做什么，History 讲它一直在做什么——后者是一轮散文式的报告给不出的：失败一次是噪音，从周二起每小时失败一次才是答案。 |
 
 ## 验收场景
 

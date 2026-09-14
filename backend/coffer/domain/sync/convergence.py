@@ -108,3 +108,16 @@ class ConvergeRun:
     @property
     def ok(self) -> bool:
         return self.status in (ConvergeStatus.OK, ConvergeStatus.NO_CHANGE)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RunRecord:
+    """One round as the history keeps it.
+
+    A round on its own carries no identity — two rounds that changed nothing
+    are equal values — so the history pairs it with the id it was stored
+    under. That id is what a surface keys a row on; it is never shown.
+    """
+
+    id: int
+    run: ConvergeRun

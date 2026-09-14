@@ -1,10 +1,16 @@
-"""SQLAlchemy repository for the single sync-remote row (spec vault-sync).
+"""SQLAlchemy repository for the sync remote and the rounds run against it.
 
-Kept out of ``repos.py`` for the same reason ``retention_repo.py`` is: that
-module is already at its file-size budget, and a table with its own lifecycle
-reads better next to the rules that govern it.
+Spec vault-sync. Kept out of ``repos.py`` for the same reason
+``retention_repo.py`` is: that module is already at its file-size budget, and a
+table with its own lifecycle reads better next to the rules that govern it.
 
-The row carries two different things. The remote's **configuration** — URL,
+Two tables, one repository, because one round writes both: the remote's
+``last_*`` columns are the current state a status surface reads, and
+``sync_runs`` is the history a user scrolls. Recording a round writes them in a
+single transaction, so the newest history row and the remote's columns can
+never describe different rounds.
+
+The remote row carries two different things. The remote's **configuration** — URL,
 branch, credential reference, interval, working tree — is what the user typed,
 and it means the same under bidirectional convergence as it did under one-way
 backup. The **last round** is what Coffer did with it, and that changed shape
@@ -33,11 +39,19 @@ from coffer.domain.sync.convergence import (
     GuardDirection,
     JoinKind,
     PendingConfirmation,
+    RunRecord,
 )
 from coffer.domain.sync.diff import ChangeStatus, DiffSummary, DocChange
-from coffer.infrastructure.persistence.models import SyncRemoteModel
+from coffer.infrastructure.persistence.models import SyncRemoteModel, SyncRunModel
 
 _ROW_ID = 1
+
+#: How many rounds a history read returns when the caller names no limit. The
+#: surface filters and pages in the browser over what it is handed, so this is
+#: the window a user can search — generous, and still one small query. The
+#: application layer passes its own limit (``service_history.DEFAULT_RUN_LIMIT``)
+#: on every call; this is the floor for anything that does not.
+_RUNS_LIMIT = 500
 
 
 def _summary_to_json(summary: DiffSummary) -> list[list[str]]:
@@ -100,24 +114,60 @@ def _run_payload(run: ConvergeRun) -> str:
     )
 
 
-def _payload_of(row: SyncRemoteModel) -> dict[str, Any]:
+def _payload_of(raw: str | None) -> dict[str, Any]:
     """The stored overflow document, or an empty one.
 
     Unreadable JSON degrades to "the round reported nothing further" rather
     than raising: the status and the commit are in columns, and those are what
     the user acts on.
     """
-    if not row.last_run_json:
+    if not raw:
         return {}
     try:
-        data = json.loads(row.last_run_json)
+        data = json.loads(raw)
     except ValueError:
         return {}
     return data if isinstance(data, dict) else {}
 
 
+def _run_of(
+    payload: dict[str, Any],
+    *,
+    status: str,
+    started_at: datetime | None,
+    finished_at: datetime | None,
+    join: str | None,
+    commit: str | None,
+    error: str | None,
+) -> ConvergeRun:
+    """Rebuild a round from its columns and its payload.
+
+    Shared by the remote's ``last_*`` columns and the history's rows, which
+    store the same round the same way — so a round read out of either place
+    reports identically.
+    """
+    # SQLite hands back naive datetimes; everything stored here was written in
+    # UTC, so re-stamping the zone is a read-side fix, not a conversion.
+    finished = _utc(finished_at) or datetime.now(tz=UTC)
+    return ConvergeRun(
+        status=ConvergeStatus(status),
+        started_at=_utc(started_at) or finished,
+        finished_at=finished,
+        join=JoinKind(join) if join else None,
+        applied=_summary_from_json(payload.get("applied")),
+        published=_summary_from_json(payload.get("published")),
+        commit=commit,
+        conflicts=tuple(str(p) for p in payload.get("conflicts", [])),
+        agent_resolved=tuple(str(p) for p in payload.get("agent_resolved", [])),
+        failures=tuple((str(p), str(r)) for p, r in payload.get("failures", [])),
+        locked_refs=tuple(str(r) for r in payload.get("locked_refs", [])),
+        pending=_pending_from_json(payload.get("pending")),
+        error=error,
+    )
+
+
 class SqlAlchemySyncRemoteRepo:
-    """Reads and writes the one ``sync_remotes`` row.
+    """Reads and writes the one ``sync_remotes`` row, and the ``sync_runs`` history.
 
     ``set`` upserts rather than inserts: the schema allows exactly one row, so
     pointing Coffer at a different repository replaces the first remote instead
@@ -125,7 +175,9 @@ class SqlAlchemySyncRemoteRepo:
 
     ``record_run`` is deliberately a no-op when no remote is configured — a run
     result belongs to a remote, and clearing the remote mid-round should
-    discard the result rather than resurrect the row it described.
+    discard the result rather than resurrect the row it described. That applies
+    to both of its writes: a round discarded from the remote row must not
+    survive in the history either.
     """
 
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
@@ -168,10 +220,19 @@ class SqlAlchemySyncRemoteRepo:
             await session.commit()
 
     async def record_run(self, run: ConvergeRun) -> None:
+        """Store the round twice, in one transaction.
+
+        Onto the remote row as ``last_*`` — what a status surface reads without
+        touching the history — and appended to ``sync_runs``. One commit, so
+        the newest history row and those columns can never describe different
+        rounds; and both skipped together when there is no remote, so a
+        cleared remote discards the round rather than resurrecting a row for it.
+        """
         async with self._sm() as session:
             row = await session.get(SyncRemoteModel, _ROW_ID)
             if row is None:
                 return
+            payload = _run_payload(run)
             row.last_started_at = run.started_at
             row.last_run_at = run.finished_at
             row.last_status = run.status.value
@@ -181,8 +242,24 @@ class SqlAlchemySyncRemoteRepo:
                 # A push-failed round reports no new commit; keeping the
                 # previous one tells the user which revision is still waiting.
                 row.last_commit = run.commit
-            row.last_run_json = _run_payload(run)
+            row.last_run_json = payload
             row.updated_at = datetime.now(tz=UTC)
+            session.add(
+                SyncRunModel(
+                    started_at=run.started_at,
+                    finished_at=run.finished_at,
+                    status=run.status.value,
+                    join_kind=run.join.value if run.join else None,
+                    # The history records the round as it happened: a
+                    # push-failed round landed no commit, and carrying the
+                    # previous one forward here — as the remote row must, to
+                    # name the revision still waiting — would put a commit on
+                    # a row that did not produce it.
+                    commit_sha=run.commit,
+                    error=run.error,
+                    payload_json=payload,
+                )
+            )
             await session.commit()
 
     async def last_run(self) -> ConvergeRun | None:
@@ -191,25 +268,46 @@ class SqlAlchemySyncRemoteRepo:
             row = (await session.execute(stmt)).scalar_one_or_none()
         if row is None or row.last_status is None:
             return None
-        payload = _payload_of(row)
-        # SQLite hands back naive datetimes; everything stored here was written
-        # in UTC, so re-stamping the zone is a read-side fix, not a conversion.
-        finished = _utc(row.last_run_at) or datetime.now(tz=UTC)
-        return ConvergeRun(
-            status=ConvergeStatus(row.last_status),
-            started_at=_utc(row.last_started_at) or finished,
-            finished_at=finished,
-            join=JoinKind(row.last_join) if row.last_join else None,
-            applied=_summary_from_json(payload.get("applied")),
-            published=_summary_from_json(payload.get("published")),
+        return _run_of(
+            _payload_of(row.last_run_json),
+            status=row.last_status,
+            started_at=row.last_started_at,
+            finished_at=row.last_run_at,
+            join=row.last_join,
             commit=row.last_commit,
-            conflicts=tuple(str(p) for p in payload.get("conflicts", [])),
-            agent_resolved=tuple(str(p) for p in payload.get("agent_resolved", [])),
-            failures=tuple((str(p), str(r)) for p, r in payload.get("failures", [])),
-            locked_refs=tuple(str(r) for r in payload.get("locked_refs", [])),
-            pending=_pending_from_json(payload.get("pending")),
             error=row.last_error,
         )
+
+    async def list_runs(self, limit: int = _RUNS_LIMIT) -> list[RunRecord]:
+        """Every round this vault has run, newest first.
+
+        Ordered by ``finished_at`` and then by ``id``, because a fast round can
+        finish in the same millisecond it started and SQLite stores that
+        timestamp to no finer resolution — without the id the two would come
+        back in whatever order the index happened to hold them.
+        """
+        async with self._sm() as session:
+            stmt = (
+                select(SyncRunModel)
+                .order_by(SyncRunModel.finished_at.desc(), SyncRunModel.id.desc())
+                .limit(max(1, limit))
+            )
+            rows = list((await session.execute(stmt)).scalars())
+        return [
+            RunRecord(
+                id=row.id,
+                run=_run_of(
+                    _payload_of(row.payload_json),
+                    status=row.status,
+                    started_at=row.started_at,
+                    finished_at=row.finished_at,
+                    join=row.join_kind,
+                    commit=row.commit_sha,
+                    error=row.error,
+                ),
+            )
+            for row in rows
+        ]
 
 
 def _utc(value: datetime | None) -> datetime | None:

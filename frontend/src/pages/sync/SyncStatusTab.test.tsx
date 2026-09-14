@@ -140,7 +140,11 @@ describe("SyncStatusTab", () => {
     expect(rejectMutate).toHaveBeenCalled();
   });
 
-  test("the round report carries what was applied, published, merged and locked", () => {
+  test("what the last round did is not reported here — that is History", () => {
+    // Status reads `last_run` only for the two things that are a STATE: a
+    // conflict and a held round. The round's own report — counts, commit,
+    // merged paths, locked refs — belongs to the history table, where it can
+    // be compared against the rounds before it.
     seed(
       round({
         applied: { added: 3, modified: 1, deleted: 0 },
@@ -154,14 +158,9 @@ describe("SyncStatusTab", () => {
     );
     render(<SyncStatusTab />);
 
-    const report = screen.getByTestId("sync-last-round");
-    expect(report).toHaveTextContent("abc1234");
-    expect(report).toHaveTextContent(/returning machine/i);
-    expect(screen.getByTestId("sync-agent-resolved")).toHaveTextContent(
-      "knowledge/notes/merged.md",
-    );
-    expect(screen.getByTestId("sync-round-failures")).toHaveTextContent("config_dir missing");
-    expect(screen.getByTestId("sync-locked-refs")).toHaveTextContent("github.TOKEN");
+    expect(screen.queryByTestId("sync-last-round")).not.toBeInTheDocument();
+    expect(screen.queryByText("abc1234")).not.toBeInTheDocument();
+    expect(screen.queryByText(/returning machine/i)).not.toBeInTheDocument();
   });
 
   test("the master key lives here, next to what it decrypts", () => {

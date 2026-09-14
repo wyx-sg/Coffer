@@ -166,6 +166,15 @@ def build_prunable_registry() -> PrunableRegistry:
             description="MCP tool/resource/prompt invocation log.",
         )
     )
+    registry.register(
+        PrunableTable(
+            name="sync_runs",
+            timestamp_column="finished_at",
+            default_retention_days=90,
+            display_name="Sync Rounds",
+            description="History of converge rounds against the sync remote.",
+        )
+    )
     # Conversations follow a two-stage lifecycle: idle threads are auto-archived,
     # then archived threads are deleted a while later. Both windows are user-tunable
     # (or None to disable) via the same retention surface as the log tables.

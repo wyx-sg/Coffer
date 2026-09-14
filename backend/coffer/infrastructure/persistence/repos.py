@@ -331,9 +331,15 @@ class SqlAlchemyInternalEngineConfigRepo:
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
-            return GlobalInternalEngineConfig(
-                model=row.model,
-                updated_at=now,
-                auto_tidy_enabled=bool(row.auto_tidy_enabled),
-                tidy_owner_machine_id=row.tidy_owner_machine_id,
-            )
+            return self._to_domain(row, now)
+
+    @staticmethod
+    def _to_domain(
+        row: InternalEngineConfigModel, updated_at: datetime
+    ) -> GlobalInternalEngineConfig:
+        return GlobalInternalEngineConfig(
+            model=row.model,
+            updated_at=updated_at,
+            auto_tidy_enabled=bool(row.auto_tidy_enabled),
+            tidy_owner_machine_id=row.tidy_owner_machine_id,
+        )

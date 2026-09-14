@@ -69,6 +69,28 @@ class RoundOut(BaseModel):
     error: str | None = None
 
 
+class RunRecordOut(RoundOut):
+    """One round as the history holds it: the same report, plus when.
+
+    A superset of ``RoundOut`` rather than a shape of its own, so the two
+    surfaces that show a round — the status page and the history table — can
+    never drift into describing it differently. The timestamps are what the
+    last-round view never needed and a history cannot do without.
+    """
+
+    #: The history row's id. A row key for a surface, never shown: two rounds
+    #: that changed nothing are otherwise indistinguishable values.
+    id: int
+    started_at: datetime
+    finished_at: datetime
+
+
+class SyncRunListOut(BaseModel):
+    #: Newest first, capped by the route. Every round, including the ones that
+    #: changed nothing — those are what make a gap in the record visible.
+    runs: list[RunRecordOut]
+
+
 class AdoptIn(BaseModel):
     #: Only for a returning machine whose recorded base is gone from the
     #: remote's history: ``keep-local`` joins as new and publishes this vault's

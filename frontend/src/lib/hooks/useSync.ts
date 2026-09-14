@@ -21,6 +21,7 @@ export const syncKey = ["sync"] as const;
 export const syncRemoteKey = ["sync", "remote"] as const;
 export const syncStatusKey = ["sync", "status"] as const;
 export const syncMachinesKey = ["sync", "machines"] as const;
+export const syncRunsKey = ["sync", "runs"] as const;
 export const syncKeyFingerprintKey = ["sync", "key-fingerprint"] as const;
 
 export function useSyncRemote() {
@@ -29,6 +30,18 @@ export function useSyncRemote() {
 
 export function useSyncStatus() {
   return useQuery({ queryKey: syncStatusKey, queryFn: () => syncApi.status() });
+}
+
+/**
+ * Every round this vault has run, newest first — the History tab.
+ *
+ * `enabled` is false while another tab is in front: Radix unmounts the others,
+ * and the query is gated besides, so nothing is fetched and thrown away. The
+ * key is under `syncKey`, so running, confirming, rejecting or rolling back a
+ * round refreshes the history along with the status.
+ */
+export function useSyncRuns(enabled = true) {
+  return useQuery({ queryKey: syncRunsKey, queryFn: () => syncApi.runs(), enabled });
 }
 
 /**

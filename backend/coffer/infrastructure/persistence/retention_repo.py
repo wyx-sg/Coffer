@@ -22,6 +22,9 @@ from coffer.infrastructure.persistence.retention import UnknownPrunableTable
 _PRUNABLE_TABLE_ALLOWLIST: dict[str, set[str]] = {
     "audit_log": {"timestamp"},
     "mcp_invocations": {"timestamp"},
+    # A converge round runs on a timer, so its history grows whether or not
+    # anything happened; swept by when the round finished.
+    "sync_runs": {"finished_at"},
     # Conversations have a two-stage lifecycle: archive_older_than stamps
     # archived_at on idle threads (matched by updated_at), then delete_older_than
     # removes them by archived_at — taking their messages along (cascade below).

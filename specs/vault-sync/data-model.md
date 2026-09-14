@@ -42,9 +42,53 @@ response or a log line without redaction.
 
 `last_status` gains the round's vocabulary: `ok`, `no_change`, `joined`,
 `conflict`, `awaiting_confirmation`, `push_failed`, `error`. The `last_*`
-columns describe the most recent round rather than a history — the git history
-on the remote is the real record of what changed, and the pre-apply snapshots
-described below are the record of what was applied here.
+columns are the most recent round denormalised onto the remote, so a status
+surface reads the current state without touching the history; every round,
+including that one, is also appended to `sync_runs` below.
+
+## SQLite — `sync_runs`
+
+Every converge round this machine has run. The remote's `last_*` columns answer
+"what happened just now"; they cannot answer "what has been happening", and
+that is the question a user actually brings to the page — a round that failed
+once is noise, a round that has failed every hour since Tuesday is the answer,
+and a vault that has quietly published nothing for a week looks identical to a
+healthy one through a single row.
+
+Machine-local and **never synced**, for the same reason the pointer is: a
+history that travelled would be another machine's account of rounds this one
+never ran. Each machine keeps its own; the git history on the remote remains
+the record of what *changed*.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | int | autoincrement; a row key for a surface, never shown |
+| `started_at` | ts | |
+| `finished_at` | ts | indexed — read newest-first, pruned oldest-first |
+| `status` | str | the same vocabulary as `last_status` |
+| `join_kind` | str? | `new` / `returning` when the round joined; else null |
+| `commit_sha` | str? | `commit` is reserved in SQL |
+| `error` | str? | redacted of the push credential before it is written |
+| `payload_json` | str? | everything else a `ConvergeRun` carries |
+
+Same column-versus-payload split as the remote row, and for the same reason:
+what a table reads at a glance is a column, and the two diff summaries, the
+conflicted and agent-resolved paths, the per-path failures, the locked refs and
+any held confirmation are one JSON document written exactly once. The counts a
+row shows are derived from that document rather than stored a second time.
+
+Recording a round writes this table and the remote's `last_*` columns in **one
+transaction**, so the newest row here and those columns can never describe
+different rounds — and both are skipped together when no remote is configured,
+so a cleared remote discards the round rather than leaving it orphaned here.
+
+`commit_sha` is the one place the two deliberately differ. The remote row
+carries the previous commit forward through a round that landed none, because
+that revision is what the user is being told is still waiting; a history row
+does not, because it would put a commit on a round that never produced one.
+
+Swept by the retention worker as `sync_runs` (default 90 days): a round runs on
+a timer, so an unbounded log of them is a leak rather than a record.
 
 ## SQLite — `sync_convergence_state` and `sync_held_paths`
 

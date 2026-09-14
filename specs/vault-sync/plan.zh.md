@@ -120,7 +120,9 @@ surfaces/
 - **`VaultApplyPort`** —— `prefix`、`upsert(path)`、`remove(path)`。四个 applier
   在结构上实现它。
 - **`SyncRemoteRepoPort`** —— `get` / `set` / `clear` / `record_run` /
-  `last_run`，这样应用层不必 import 任何基础设施。
+  `last_run` / `list_runs`，这样应用层不必 import 任何基础设施。`record_run`
+  是一步写两处——远端行的 `last_*` 列与一行 `sync_runs`——在同一个事务里完成，
+  因为一轮若被历史漏掉，两边就会对同一个时刻给出不同的说法。
 
 ### 收敛状态存在哪
 
@@ -250,6 +252,7 @@ vault 内容，而在一次改写进行到一半时取的导出是一份撕裂�
 | `POST /sync/run` | `RunIn` | `ConvergeRunOut` | `run_once(join_choice=…)` |
 | `POST /sync/adopt` | `AdoptIn` | `ConvergeRunOut` | 先 `set` 再 `run_once` |
 | `GET /sync/status` | — | `SyncStatusOut` | `last_run` + 状态 + 注册表 |
+| `GET /sync/runs` | `limit` | `SyncRunListOut` | `list_runs`——每一轮，最新在前 |
 | `POST /sync/restore` | `RestoreIn` | `ConvergeRunOut` | 经同一批 applier 应用一个更早的修订 |
 | `POST /sync/confirm` | — | `ConvergeRunOut` | `confirm()` |
 | `POST /sync/reject` | — | `SyncRejectedOut` | `reject()` |

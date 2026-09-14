@@ -258,15 +258,18 @@ feature with a different shape.
 
 ## REST / Web UI
 
-Everything above is also a top-level **Sync** page with two tabs — **Status**
-(the remote, the last and next round, what recent rounds changed, a run button,
-and the master-key card) and **Machines** (the registry table, with this machine
-marked and any key-fingerprint mismatch stated in words). Conflicts and pending
-confirmations appear as a banner on Status.
+Everything above is also a top-level **Sync** page with three tabs —
+**Status** (the remote, the next round, a run button, and the master-key card),
+**History** (every round this machine has run, as a table: when it ran, how it
+ended, what it applied here, what it published to the remote, and the commit it
+landed on — open a row for the paths an agent merged, the ones that could not be
+applied, and anything that failed) and **Machines** (the registry table, with
+this machine marked and any key-fingerprint mismatch stated in words). Conflicts
+and pending confirmations appear as a banner on Status.
 
 Over HTTP the same operations live under `/api/v1/sync/*` — `run`, `adopt`,
-`status`, `restore`, `confirm`, `rollback`, the `machines` family and the key
-family. The key routes carry the key **material**, not a path: `POST
+`status`, `runs`, `restore`, `confirm`, `rollback`, the `machines` family and
+the key family. The key routes carry the key **material**, not a path: `POST
 /sync/key/export` takes `{}` and returns `{"material": "…"}`, and `POST
 /sync/key/import` takes `{"material": "…"}`. The CLI commands above still write
 and read a file — the CLI does that file I/O itself, so the daemon never opens a

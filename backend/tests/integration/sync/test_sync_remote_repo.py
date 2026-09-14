@@ -196,3 +196,113 @@ async def test_a_run_recorded_with_no_remote_configured_is_discarded(
 
     assert await repo.get() is None
     assert await repo.last_run() is None
+
+
+# --- the run history --------------------------------------------------------
+
+
+async def test_the_history_is_empty_until_a_round_runs(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    assert await repo.list_runs() == []
+
+
+async def test_recording_a_round_appends_it_to_the_history(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    """Every round survives, with the whole report — not just the newest.
+
+    The remote row keeps exactly one round. This asserts the other half of
+    ``record_run``: the same round, with its payload intact, also lands in the
+    history it can be compared against later.
+    """
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    started = datetime(2026, 9, 12, 9, 0, tzinfo=UTC)
+    finished = datetime(2026, 9, 12, 9, 0, 30, tzinfo=UTC)
+    run = ConvergeRun(
+        status=ConvergeStatus.OK,
+        started_at=started,
+        finished_at=finished,
+        join=JoinKind.NEW,
+        applied=DiffSummary.of([DocChange("knowledge/notes/a.md", ChangeStatus.ADDED)]),
+        published=DiffSummary.of([DocChange("skills/gone/SKILL.md", ChangeStatus.DELETED)]),
+        commit="abc1234",
+        agent_resolved=("resources/mcp_server/x.yaml",),
+        locked_refs=("mcp/files/token",),
+    )
+
+    await repo.record_run(run)
+
+    (record,) = await repo.list_runs()
+    assert record.id > 0
+    assert record.run == run
+
+
+async def test_the_history_returns_the_rounds_newest_first(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    """Ordered by when they finished, and by id when that ties.
+
+    SQLite stores the timestamp to no finer resolution than the value handed
+    to it, so three rounds stamped identically — which is what a test, and a
+    fast catch-up loop, actually produce — must still come back in the order
+    they were written.
+    """
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    at = datetime(2026, 9, 12, tzinfo=UTC)
+    for commit in ("first", "second", "third"):
+        await repo.record_run(
+            ConvergeRun(status=ConvergeStatus.OK, started_at=at, finished_at=at, commit=commit)
+        )
+
+    records = await repo.list_runs()
+
+    assert [r.run.commit for r in records] == ["third", "second", "first"]
+
+
+async def test_the_history_keeps_a_commitless_round_commitless(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    """The remote row carries the previous commit forward, so the user can see
+    which revision is still waiting to be pushed. A history row must not: it
+    would claim a round produced a commit it never reached."""
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    at = datetime(2026, 9, 12, tzinfo=UTC)
+    await repo.record_run(
+        ConvergeRun(status=ConvergeStatus.OK, started_at=at, finished_at=at, commit="abc1234")
+    )
+
+    await repo.record_run(
+        ConvergeRun(status=ConvergeStatus.FAILED, started_at=at, finished_at=at, error="boom")
+    )
+
+    newest, older = await repo.list_runs()
+    assert newest.run.commit is None
+    assert older.run.commit == "abc1234"
+    last = await repo.last_run()
+    assert last is not None and last.commit == "abc1234"
+
+
+async def test_the_history_returns_at_most_the_limit_asked_for(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    at = datetime(2026, 9, 12, tzinfo=UTC)
+    for i in range(5):
+        await repo.record_run(
+            ConvergeRun(status=ConvergeStatus.OK, started_at=at, finished_at=at, commit=f"c{i}")
+        )
+
+    assert [r.run.commit for r in await repo.list_runs(2)] == ["c4", "c3"]
+
+
+async def test_a_round_recorded_with_no_remote_reaches_neither_store(
+    sm: async_sessionmaker,
+) -> None:  # type: ignore[type-arg]
+    """The two writes are one step, so they are skipped together: a round
+    discarded from the remote row must not survive in the history."""
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    at = datetime(2026, 9, 12, tzinfo=UTC)
+
+    await repo.record_run(
+        ConvergeRun(status=ConvergeStatus.OK, started_at=at, finished_at=at, commit="abc1234")
+    )
+
+    assert await repo.last_run() is None
+    assert await repo.list_runs() == []

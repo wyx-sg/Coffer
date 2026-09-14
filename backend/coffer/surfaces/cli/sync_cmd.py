@@ -241,6 +241,39 @@ def status(ctx: typer.Context) -> None:
         _print_round(last)
 
 
+@app.command("history")
+def history(
+    ctx: typer.Context,
+    limit: int = typer.Option(20, "--limit", help="How many rounds to show, newest first"),
+) -> None:
+    """Every round this machine has run, newest first.
+
+    One line each rather than the full report ``status`` prints: what this
+    answers is the shape of the sequence — whether rounds are still happening,
+    when they stopped, which one moved a lot of documents.
+    """
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/sync/runs", params={"limit": limit})
+        _cli_client.check(r, verbose=verbose)
+        runs = r.json().get("runs") or []
+    if not runs:
+        _console.print("no round yet")
+        return
+    for run in runs:
+        status = run.get("status", "?")
+        style = "yellow" if status in _NEEDS_ATTENTION else "green"
+        commit = (run.get("commit") or "")[:12] or "—"
+        _console.print(
+            f"{run.get('finished_at', '?')}  [{style}]{status}[/{style}]  "
+            + _counts("applied", run.get("applied") or {})
+            + "  "
+            + _counts("published", run.get("published") or {})
+            + f"  {commit}"
+        )
+
+
 # --- remote -----------------------------------------------------------------
 
 

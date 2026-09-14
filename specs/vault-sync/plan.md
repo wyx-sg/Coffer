@@ -131,7 +131,10 @@ no TTL, no timestamp arbitration, no quarantine table. The diff is the ledger.
 - **`VaultApplyPort`** — `prefix`, `upsert(path)`, `remove(path)`. The appliers
   implement it structurally.
 - **`SyncRemoteRepoPort`** — `get` / `set` / `clear` / `record_run` /
-  `last_run`, so the application layer keeps no infrastructure import.
+  `last_run` / `list_runs`, so the application layer keeps no infrastructure
+  import. `record_run` is one step that writes two things — the remote's
+  `last_*` columns and a `sync_runs` row — in one transaction, because a round
+  the history missed would make the two disagree about the same moment.
 
 ### Where the convergence state lives
 
@@ -299,6 +302,7 @@ each other. The routes are a thin projection of two objects: `ConvergeService`
 | `POST /sync/run` | `RunIn` | `ConvergeRunOut` | `run_once(join_choice=…)` |
 | `POST /sync/adopt` | `AdoptIn` | `ConvergeRunOut` | `set` then `run_once` |
 | `GET /sync/status` | — | `SyncStatusOut` | `last_run` + state + registry |
+| `GET /sync/runs` | `limit` | `SyncRunListOut` | `list_runs` — every round, newest first |
 | `POST /sync/restore` | `RestoreIn` | `ConvergeRunOut` | an earlier revision through the same appliers |
 | `POST /sync/confirm` | — | `ConvergeRunOut` | `confirm()` |
 | `POST /sync/reject` | — | `SyncRejectedOut` | `reject()` |
