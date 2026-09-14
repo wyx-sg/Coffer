@@ -1446,6 +1446,14 @@ may drive nothing does not run.
 - **Then** the assistant reply is there — the message store, not the live
   stream, is the system of record.
 
+### Scenario: a channel conversation is named by what the person typed
+
+- **Given** a paired channel whose turns open with a context block naming the
+  message's origin,
+- **When** the first message of a new conversation arrives from that channel,
+- **Then** the conversation is named after the words the person actually typed,
+  not after the context block every turn of every chat shares.
+
 ### Scenario: a conversation the owner named keeps its name
 
 - **Given** a conversation the owner has renamed,
@@ -2000,7 +2008,18 @@ browser — reads in one place instead of two.
   them when the agent reports one. A conversation opens under a placeholder
   title, which System MUST replace with the text of its first user message
   (truncated); once the owner has named a conversation themselves, System MUST
-  NOT overwrite that name — an explicit rename outranks the generated one.
+  NOT overwrite that name — an explicit rename outranks the generated one. The
+  name MUST come from the part of that message the person actually wrote: a
+  channel turn's text opens with the context blocks the channel folds in (the
+  FR-042 origin block, FR-029 thread history), which are identical on every turn
+  of every chat, so naming from the whole text gives every channel conversation
+  the same name. The channel is the layer that knows where its own blocks end,
+  so it passes the human's words down explicitly; the chat platform MUST NOT
+  recognise the block format itself. Where the person wrote nothing at all (a
+  photo or a file on its own), the attachment filenames name the conversation —
+  the one part of such a message a human recognises in a list; where there is
+  nothing nameable at all, the conversation keeps its placeholder title rather
+  than being named after boilerplate.
 - **FR-049**: Conversations MUST follow a two-stage, retention-managed
   lifecycle, both windows configurable under Settings → Data: the retention
   worker auto-archives a conversation with no new message for the auto-archive

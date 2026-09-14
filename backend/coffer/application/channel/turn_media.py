@@ -39,6 +39,25 @@ def attachment_note(attachments: Sequence[Attachment]) -> str:
     return f"(sent {len(attachments)} {kind}{plural}: {names})"
 
 
+def conversation_title_hint(text: str, attachments: Sequence[Attachment]) -> str:
+    """What a conversation opened by this message should be named after (FR-048).
+
+    Take it from the message the person sent — its own text, its own files —
+    and take it BEFORE any context block (the origin header, fetched thread
+    history) is folded into the turn text: those blocks are identical on every
+    turn of every chat, and naming from them gave the chat list a column of
+    indistinguishable conversations.
+
+    With no words at all (a photo or a file on its own) the filenames stand in,
+    rather than ``attachment_note``'s sentence: they are the one part of such a
+    message a human recognises in a list, and they do not spend the title's
+    first characters on wording every image-only conversation would share —
+    which is the very failure this rule exists to fix. Nothing nameable ⇒ ``""``,
+    and the conversation honestly keeps its placeholder title.
+    """
+    return text.strip() or ", ".join(a.filename for a in attachments if a.filename)
+
+
 def _is_image_path(path: str) -> bool:
     return pathlib.Path(path).suffix.lower() in _IMAGE_SUFFIXES
 

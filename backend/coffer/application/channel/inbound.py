@@ -51,7 +51,7 @@ from coffer.application.channel.turn_driver import (
 from coffer.application.channel.turn_driver import (
     Session as _Session,
 )
-from coffer.application.channel.turn_media import attachment_note
+from coffer.application.channel.turn_media import attachment_note, conversation_title_hint
 from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
@@ -234,6 +234,9 @@ class InboundProcessor:
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
         )
+        # FR-048: taken where the person's own message is still intact — before
+        # the context blocks below fold in, and from this message's own files.
+        title_hint = conversation_title_hint(text, attachments)
         if attachments:
             # Remember it (owner-gated already) for a `/save` that follows
             # (spec knowledge FR-036) — never the thread-history attachments
@@ -333,6 +336,7 @@ class InboundProcessor:
                 msg.platform_message_id,
                 msg.sender_mention_id,
                 msg.sender_mention_email,
+                title_hint,
             )
         )
         if session.drain_task is None or session.drain_task.done():
