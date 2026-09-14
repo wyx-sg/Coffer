@@ -16,6 +16,11 @@ from collections.abc import Sequence
 from typing import Any, Protocol
 
 from coffer.application.channel import document_save, model_switch
+from coffer.application.channel.agent_routing import (
+    effective_agent,
+    routable_choices,
+    routable_keys,
+)
 from coffer.application.channel.card_delivery import deliver_card, dispatch_card_tap
 from coffer.application.channel.conversation_ops import (
     explain_conversation_error,
@@ -37,6 +42,15 @@ from coffer.domain.errors import CofferError
 #: FR-065: rendered from the one roster the platform's command menu also reads,
 #: so the help text can never offer a command the menu omits.
 HELP_TEXT = help_text()
+
+#: What `/agent` says when the channel's scope leaves it no agent to offer.
+#: Reachable only in the narrow window where a scope edit has landed but the
+#: runtime has not yet stopped the (now dormant) channel — it must still name
+#: the cause rather than answering with an empty list.
+NO_AGENT_IN_SCOPE = (
+    "This channel is scoped to no agent, so it can drive nothing. "
+    "Widen its scope in Coffer to use it."
+)
 
 
 class SafeSend(Protocol):
@@ -126,7 +140,7 @@ class ChannelCommands:
             running = session.drain_task is not None and not session.drain_task.done()
             row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
             conv = (row.active_conversation_id if row is not None else None) or "none yet"
-            agent = (row.preferred_agent if row is not None else None) or binding.default_agent
+            agent = effective_agent(binding, row.preferred_agent if row is not None else None)
             await send(
                 binding,
                 peer.chat_id,
@@ -198,14 +212,17 @@ class ChannelCommands:
         thread_id: str = "",
     ) -> None:
         parts = text.split()
-        keys = self._agents.agent_keys()
+        # Narrowed to the agents THIS channel may drive (ADR per-agent-resource-scope). The
+        # listing, the card and the validation below all read the same
+        # narrowed set, so a card can never offer a key the check rejects.
+        keys = routable_keys(binding, self._agents)
         if len(parts) < 2:
             row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
-            current = (row.preferred_agent if row is not None else None) or binding.default_agent
-            if binding.adapter.capabilities.supports_buttons:
+            current = effective_agent(binding, row.preferred_agent if row is not None else None)
+            if keys and binding.adapter.capabilities.supports_buttons:
                 # A card the platform refuses must not end the command in
                 # silence — fall through to the plain-text answer below.
-                card = agent_card(current=current, choices=self._agents.agent_choices())
+                card = agent_card(current=current, choices=routable_choices(binding, self._agents))
                 if await deliver_card(
                     binding, peer, card, chat_kind=chat_kind, thread_id=thread_id
                 ):
@@ -213,7 +230,7 @@ class ChannelCommands:
             await send(
                 binding,
                 peer.chat_id,
-                f"Agent: {current}\nAvailable: {', '.join(keys)}",
+                f"Agent: {current}\nAvailable: {', '.join(keys)}" if keys else NO_AGENT_IN_SCOPE,
                 chat_kind=chat_kind,
                 thread_id=thread_id,
             )
@@ -223,7 +240,9 @@ class ChannelCommands:
             await send(
                 binding,
                 peer.chat_id,
-                f"Unknown agent '{key}'. Available: {', '.join(keys)}",
+                f"Unknown agent '{key}'. Available: {', '.join(keys)}"
+                if keys
+                else NO_AGENT_IN_SCOPE,
                 chat_kind=chat_kind,
                 thread_id=thread_id,
             )

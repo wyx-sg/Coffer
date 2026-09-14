@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Power, PowerOff } from "lucide-react";
 
+import { DESTRUCTIVE_ACTION_CLASS } from "@/components/table/BulkDeleteButton";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -71,7 +72,7 @@ export function AgentPluginsBulkActions({
         <Button
           size="sm"
           variant="outline"
-          className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+          className={DESTRUCTIVE_ACTION_CLASS}
           disabled={uninstall.isPending}
           onClick={() => setConfirmUninstall(true)}
         >

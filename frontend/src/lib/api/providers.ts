@@ -15,6 +15,10 @@ export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 
 // The agent types a connection may project into. Decoupled from `protocol`: the
 // user routes any endpoint to any agent (e.g. an openai gateway → Claude Code).
+// The set is not a connection FIELD any more — it is derived from the resource's
+// framework per-agent scope (ADR per-agent-resource-scope), so it appears only on
+// the read side (`Provider.compatible_agents`) and is changed through
+// `PUT /resources/provider/{name}/scope` (see `lib/api/scope.ts`).
 export type AgentType = "claude_code" | "codex";
 
 /**
@@ -69,8 +73,12 @@ export interface Provider {
   base_url: string;
   /** Null for ollama (no key) and any connection created without a credential. */
   credential_ref: string | null;
-  /** Effective (resolved) agents this connection projects into — the explicit
-   * override or the wire default. The Agent Overview picker filters on this. */
+  /** READ-ONLY. The effective agents this connection projects into, derived
+   * server-side from the resource's per-agent scope intersected with the agent
+   * types Coffer knows; empty for a disabled or keyless (ollama) connection. The
+   * Agent Overview picker and the chat ModelPicker filter on this. To CHANGE it,
+   * write the scope (`scopeApi.put("provider", name, …)`) — there is no request
+   * field for it. */
   compatible_agents: AgentType[];
   is_active: boolean;
   /** ≤1 globally — the connection Coffer's internal engine uses. */
@@ -96,8 +104,6 @@ export interface ProviderCreate {
   base_url: string;
   credential_ref?: string | null;
   secret_value?: string | null;
-  /** Override the wire default for which agents the connection projects into. */
-  compatible_agents?: AgentType[] | null;
   /** Curated model set (`{id, modality}` entries); omit or `[]` for "no
    * restriction". */
   models?: ProviderModel[] | null;
@@ -109,7 +115,6 @@ export interface ProviderPatch {
   protocol?: Protocol;
   base_url?: string | null;
   secret_value?: string | null;
-  compatible_agents?: AgentType[] | null;
   /** Whole-value replace of the curated model set; `[]` clears the restriction. */
   models?: ProviderModel[] | null;
   description?: string | null;

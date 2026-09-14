@@ -15,6 +15,7 @@ import pathlib
 from asyncio import to_thread
 from typing import TYPE_CHECKING, Any
 
+from coffer.application.channel.agent_routing import effective_agent
 from coffer.application.channel.ports import ChannelBinding, ChannelPeer
 from coffer.application.channel.selection_cards import collection_card
 
@@ -63,7 +64,7 @@ async def cmd_save(
         )
         return
     row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
-    agent_key = (row.preferred_agent if row is not None else None) or binding.default_agent
+    agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
     parts = text.split(maxsplit=1)
     named = parts[1].strip() if len(parts) > 1 else ""
     if named:
@@ -160,7 +161,7 @@ async def apply_save_collection(
         )
         return
     row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
-    agent_key = (row.preferred_agent if row is not None else None) or binding.default_agent
+    agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
     try:
         doc = await commands._ingest.ingest(
             collection=collection,

@@ -4,7 +4,8 @@
 // a `memory` Resource (spec memory FR-010). A row carries what a partition
 // has — its name, the project root it was named from, how many facts it
 // holds — plus the reach control every scoped Resource gets (ScopeControl),
-// exactly as the mcp-servers and skills lists render it per row.
+// exactly as the mcp-servers and skills lists render it per row, and a bulk
+// bar applying that same reach choice to the whole selection.
 //
 // `enabled`/`scope` do not live on the dedicated partitions endpoint (it only
 // carries what is read off disk: name, project_root, fact_count) — they are
@@ -15,7 +16,9 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
+import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
+import { memoryKey } from "@/kinds/memory/useMemory";
 import type { PartitionOut } from "@/kinds/memory/types";
 
 export interface MemoryPartitionRow extends PartitionOut {
@@ -70,6 +73,22 @@ export function MemoryPartitionsTable({ rows }: { rows: MemoryPartitionRow[] }) 
       search={{
         accessor: (r) => `${r.name} ${r.project_root}`,
         placeholder: t("memory.searchPlaceholder"),
+      }}
+      // No bulk delete: a partition is aggregated from the agents' own
+      // memories, never user-created, so there is nothing here to remove — the
+      // selection bar carries reach alone.
+      selection={{
+        ariaSelectAll: t("common.bulk.selectAll"),
+        ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
+        bulkLabel: (count) => t("common.bulk.selected", { count }),
+        clearLabel: t("common.clear"),
+        renderBulkActions: ({ selectedRows, clear }) => (
+          <BulkReachActions
+            rows={selectedRows.map((r) => ({ kind: "memory", name: r.name }))}
+            invalidate={[memoryKey]}
+            onDone={clear}
+          />
+        ),
       }}
       emptyMessage={t("memory.empty")}
     />

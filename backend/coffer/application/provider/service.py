@@ -4,7 +4,8 @@ provider profiles (spec provider-switching).
 A profile is stored as a ``provider`` resource (CRUD + audit + sync come free
 from ``ResourceService``). This service adds the credential-vault handling, the
 single-active-per-agent invariant, the native-config projection (the "switch",
-chosen by the agent a connection is compatible with — not its wire), and the
+chosen by the agents a connection's per-agent scope reaches — not its wire), and
+the
 per-connection key resolution used by Claude Code's ``apiKeyHelper``.
 
 The credential store is synchronous (short-lived SQLite connections); every
@@ -23,6 +24,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.rename_ops import rename as _rename_op
 from coffer.application.provider.results import ActivateResult, DeactivateResult
+from coffer.application.provider.targets import projection_targets
 from coffer.application.provider.update_ops import update as _update_op
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
@@ -105,12 +107,12 @@ class ProviderService:
     def _cfg(resource: Resource) -> ProviderConfig:
         return ProviderConfig.model_validate(resource.config)
 
-    @staticmethod
-    def _compat(cfg: ProviderConfig) -> list[AgentType]:
-        """Hydrate the connection's resolved compatible-agent value strings into
-        ``AgentType`` — the projection seam where the agent kind enters (the
-        config itself stays agent-free for the cross-kind import contract)."""
-        return [AgentType(a) for a in cfg.resolved_compatible_agents()]
+    @classmethod
+    def _compat(cls, resource: Resource) -> list[AgentType]:
+        """The agent types this connection projects into — its framework-level
+        scope, hydrated at the projection seam (ADR per-agent-resource-scope).
+        A disabled or keyless connection projects into nothing."""
+        return projection_targets(resource, cls._cfg(resource))
 
     # --- CRUD ----------------------------------------------------------------
 
@@ -122,7 +124,6 @@ class ProviderService:
         base_url: str,
         secret_value: str | None = None,
         credential_ref: str | None = None,
-        compatible_agents: _AgentTypes | None = None,
         models: _CuratedModels | None = None,
         description: str | None = None,
         actor: str = "api",
@@ -130,11 +131,13 @@ class ProviderService:
         """Create a connection. For anthropic/openai/unknown supply EXACTLY one
         of ``secret_value`` (stored to the vault under ``provider/<name>/key``)
         or ``credential_ref`` (reuse an existing vault entry). An ``ollama``
-        connection has no key — supply neither. ``compatible_agents`` overrides
-        the wire default for which agents the connection projects into (``None``
-        ⇒ the default). The model lives apart from the connection (spec provider-switching E3)
-        and is chosen at the point of use; ``models`` only curates WHICH of the
-        endpoint's models that choice is offered (``None``/empty ⇒ all of them)."""
+        connection has no key — supply neither. WHICH agents the connection
+        projects into is its per-agent scope, pre-filled from the wire by the
+        kind and edited afterwards through the framework's scope surface
+        (``PUT /resources/provider/<name>/scope``). The model lives apart from
+        the connection (spec provider-switching E3) and is chosen at the point of use;
+        ``models`` only curates WHICH of the endpoint's models that choice is
+        offered (``None``/empty ⇒ all of them)."""
         ref: str | None
         minted = False
         if protocol is Protocol.OLLAMA:
@@ -153,10 +156,6 @@ class ProviderService:
             protocol=protocol,
             base_url=base_url,
             credential_ref=ref,
-            # Store AgentType members as their value strings (config is agent-free).
-            compatible_agents=(
-                [a.value for a in compatible_agents] if compatible_agents is not None else None
-            ),
             models=list(models or []),
             is_active=False,
         )
@@ -184,7 +183,6 @@ class ProviderService:
         protocol: Protocol | None = None,
         base_url: str | None = None,
         secret_value: str | None = None,
-        compatible_agents: _AgentTypes | None = None,
         models: _CuratedModels | None = None,
         description: str | None = None,
         actor: str = "api",
@@ -196,7 +194,6 @@ class ProviderService:
             protocol=protocol,
             base_url=base_url,
             secret_value=secret_value,
-            compatible_agents=compatible_agents,
             models=models,
             description=description,
             actor=actor,
@@ -221,7 +218,7 @@ class ProviderService:
     # --- switch + key resolution --------------------------------------------
 
     async def activate(self, name: str, *, actor: str = "api") -> ActivateResult:
-        """Make ``name`` the active connection for each of its compatible agents
+        """Make ``name`` the active connection for each agent its scope reaches
         and project it into every enabled agent of those types.
 
         Projection happens BEFORE the ``is_active`` flip so a native-config write
@@ -233,11 +230,11 @@ class ProviderService:
         """
         resource = await self.get(name)
         cfg = self._cfg(resource)
-        targets = self._compat(cfg)
+        targets = self._compat(resource)
         agents = await self._agents.list()
 
         # 1) Project first. ollama (no targets) is internal-only — projects to
-        #    no agent. ``skipped`` lists compatible agents with no registered one.
+        #    no agent. ``skipped`` lists in-scope agents with no registered one.
         projected: list[str] = []
         for at in targets:
             projected.extend(self._projector.project_type(name, cfg, agents, at))
@@ -254,7 +251,7 @@ class ProviderService:
             if r.name == name:
                 continue
             rc = self._cfg(r)
-            other = set(self._compat(rc))
+            other = set(self._compat(r))
             if not rc.is_active or not (other & mine):
                 continue
             for at in other - mine:
@@ -282,7 +279,7 @@ class ProviderService:
     async def deactivate(self, wire: Protocol, *, actor: str = "api") -> DeactivateResult:
         """Switch the agent behind ``wire`` (anthropic→Claude Code, openai→Codex)
         back to its built-in login: de-project Coffer's keys and clear the active
-        connection's ``is_active``. A connection compatible with multiple agents
+        connection's ``is_active``. A connection reaching multiple agents
         is reverted as a unit (the single ``is_active`` flag is all-or-nothing).
         Idempotent; de-projects before the flip, mirroring :meth:`activate`."""
         agent_type = _AGENT_FOR_WIRE.get(wire)
@@ -293,7 +290,7 @@ class ProviderService:
             deprojected = self._projector.deproject_type(agents, agent_type)
             for r in await self.list():
                 rc = self._cfg(r)
-                compat = self._compat(rc)
+                compat = self._compat(r)
                 if not rc.is_active or agent_type not in compat:
                     continue
                 for at in compat:
@@ -318,12 +315,12 @@ class ProviderService:
         return await self._key_of(self._cfg(await self.get(name)), label=name)
 
     async def resolve_active_key_for_agent(self, agent_type: AgentType) -> str:
-        """The decrypted key of the connection currently active AND compatible
-        with ``agent_type`` — Codex's ``COFFER_PROVIDER_KEY`` injection. Raises
-        ``NoActiveProvider`` if none."""
+        """The decrypted key of the connection currently active AND reaching
+        ``agent_type`` (its scope, ∩ ``enabled``) — Codex's
+        ``COFFER_PROVIDER_KEY`` injection. Raises ``NoActiveProvider`` if none."""
         for r in await self.list():
             rc = self._cfg(r)
-            if rc.is_active and agent_type in self._compat(rc):
+            if rc.is_active and agent_type in self._compat(r):
                 return await self._key_of(rc, label=agent_type.value)
         raise NoActiveProvider(agent_type.value)
 

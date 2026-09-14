@@ -43,8 +43,25 @@ async def update_scope(
     except ValueError as e:
         raise ScopeInvalidError(str(e)) from e
     # Confirms existence up front (raises ResourceNotFound) — mirrors
-    # update_config's before-read.
-    await service.get(ref)
+    # update_config's before-read, and gives the kind's pre-validation hook
+    # below the resource it has to judge the proposed scope against.
+    before = await service.get(ref)
+    # Kind-level pre-validation: runs BEFORE persistence + audit, the exact
+    # opposite of its neighbour ``on_scope_changed`` at the end of this
+    # function. The two differ because they answer different questions: this one
+    # may REJECT the edit, so it must see the row as it still is and leave it
+    # untouched when it raises, while a reconciliation reacts to an edit that
+    # already happened and has to read the stored scope to do so. A kind that
+    # supplies neither is unaffected.
+    if kind_def.validate_scope_for is not None:
+        try:
+            pre_result = kind_def.validate_scope_for(before, scope)
+            if inspect.isawaitable(pre_result):
+                await pre_result
+        except ValueError as e:
+            # Same envelope as the shape check above (SCOPE_INVALID → 422), so
+            # the wire contract is one code for "this scope is not acceptable".
+            raise ScopeInvalidError(str(e)) from e
     updated = await service._repo.update_scope(ref, scope)
     if updated is None:
         raise ResourceNotFound(ref.kind, ref.name)

@@ -1,7 +1,9 @@
 // components/settings/connectionPresets.ts — provider presets for the add-
-// connection form, plus the default agent-compatibility per wire. A preset fills
-// the endpoint + protocol; the user can still re-target which agents it projects
-// into via the compatible-agents checkboxes (e.g. an openai gateway → Claude Code).
+// connection form. A preset fills the endpoint + protocol; which agents the
+// connection reaches is not decided here at all — that is the resource's
+// framework per-agent scope, owned by the shared ScopeControl (the wire's own
+// default is applied server-side by `Kind.default_scope` when the connection is
+// created).
 import type { AgentType, Protocol } from "@/lib/api/providers";
 
 export interface Preset {
@@ -59,28 +61,10 @@ function normaliseEndpoint(url: string): string {
   return url.trim().toLowerCase().replace(/\/+$/, "");
 }
 
-// The agents a connection projects into BY DEFAULT, mirroring the backend
-// (`_DEFAULT_COMPATIBLE`). The form pre-fills the checkboxes from this. Every
-// wire offers both agents: the protocol decides model introspection and whether
-// a key is needed, not who may be driven by the endpoint (an openai gateway
-// driving Claude Code is a first-class case), so the default is the widest set
-// and the user narrows it. ollama is the exception — internal-only, it projects
-// into no agent.
-export function defaultCompatibleAgents(protocol: Protocol | ""): AgentType[] {
-  switch (protocol) {
-    case "ollama":
-      return [];
-    default:
-      return ["claude_code", "codex"];
-  }
-}
-
-// The agents a user can tick a connection as compatible with.
-export const SELECTABLE_AGENTS: AgentType[] = ["claude_code", "codex"];
-
-// One display label per agent type, shared by every surface that renders the
-// compatible-agents set (the form's checkboxes, the list table's chips, the
-// detail page's configuration card).
+// One display label per agent type, shared by every surface that RENDERS the
+// effective compatible-agents set (the list table's chips, the detail page's
+// configuration card). Nothing writes that set any more — it is derived from the
+// resource's scope — so these labels are read-only display.
 export const AGENT_LABEL_KEY: Record<AgentType, string> = {
   claude_code: "settings.connections.agentClaudeCode",
   codex: "settings.connections.agentCodex",

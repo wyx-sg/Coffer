@@ -69,10 +69,17 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
   // (not its wire), so a connection the user routed to this agent shows up even if
   // its endpoint speaks a different wire (the agnes case: an openai gateway →
   // Claude Code) — consistent with the Agent Overview picker.
+  //
+  // `enabled` is tested alongside `is_active` because they answer different
+  // questions and can disagree: `compatible_agents` reports the CONFIGURED
+  // reach (not narrowed by the switch), and `is_active` is a claim about the
+  // agent's config file that the daemon's boot self-check exists to correct. A
+  // connection the user switched off is not one to offer models from.
   const activeConnection = useMemo(
     () =>
       (providers.data ?? []).find(
-        (p) => (p.compatible_agents ?? []).includes(agentKey as AgentType) && p.is_active,
+        (p) =>
+          p.enabled && p.is_active && (p.compatible_agents ?? []).includes(agentKey as AgentType),
       ) ?? null,
     [providers.data, agentKey],
   );

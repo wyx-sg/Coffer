@@ -53,7 +53,10 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import cors, daemon_routes, host_guard, webui
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.agent_skill_wiring import wire_agent_and_skill_kinds
+from coffer.surfaces.http.agent_skill_wiring import (
+    run_skill_drift_boot_heal,
+    wire_agent_and_skill_kinds,
+)
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
@@ -250,9 +253,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # (best-effort; see credential_composition for the mechanics).
     await run_legacy_keychain_migration(app.state.kinds, sm, credential_store, audit)
 
-    # Boot projection heal: the agents' native config files are not Coffer's to
-    # own, so re-derive the projection the registry implies (best-effort).
+    # Boot heals — best-effort, never allowed to fail startup (see
+    # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(app)
+    await run_skill_drift_boot_heal(app)
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.

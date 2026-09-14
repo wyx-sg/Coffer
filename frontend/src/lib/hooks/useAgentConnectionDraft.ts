@@ -49,8 +49,18 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   // Filter by the connection's explicit compatible-agents set (not its wire), so
   // a connection the user routed to this agent type shows up even if its endpoint
   // speaks a different wire (the agnes case: an openai gateway → Claude Code).
+  //
+  // `enabled` is a separate test and has to be made here: `compatible_agents`
+  // reports the CONFIGURED reach, deliberately not narrowed by the switch (so a
+  // management surface can still show a disabled connection's agent list). This
+  // picker offers connections to project RIGHT NOW, so it wants the
+  // intersection — without it, a connection the user switched off stayed
+  // offerable here.
   const compatible = useMemo(
-    () => (providers.data ?? []).filter((p) => (p.compatible_agents ?? []).includes(agent.type)),
+    () =>
+      (providers.data ?? []).filter(
+        (p) => p.enabled && (p.compatible_agents ?? []).includes(agent.type),
+      ),
     [providers.data, agent.type],
   );
   const active = useMemo(() => compatible.find((p) => p.is_active) ?? null, [compatible]);

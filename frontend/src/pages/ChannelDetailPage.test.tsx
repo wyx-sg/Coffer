@@ -3,7 +3,7 @@
 // The channel operating surface (spec channels, User Stories 2 + 8). Data hooks
 // and the generic resource mutations are mocked so the test asserts the
 // page's own rendering: status (peer + callback), pairing-code generation,
-// and the enable/disable toggle wiring.
+// and the header reach control's wiring.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -22,6 +22,16 @@ vi.mock("@/lib/hooks/useChannels", () => ({
 }));
 vi.mock("@/lib/hooks/useAgentProviders", () => ({
   useAgentProviders: vi.fn(() => ({ data: [] })),
+}));
+// The header carries ScopeControl now. On a detail page it fetches its own
+// scope, so the hooks behind it are stubbed rather than served by a real client.
+// `channel` declares scope, so the control renders all three segments.
+vi.mock("@/lib/hooks/useScope", () => ({
+  useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
+  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+}));
+vi.mock("@/lib/hooks/useAgents", () => ({
+  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
 }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
@@ -179,13 +189,22 @@ describe("ChannelDetailPage", () => {
     expect(screen.getByRole("button", { name: /copy/i })).toBeInTheDocument();
   });
 
-  test("toggling the enabled switch calls the disable mutation", () => {
+  test("the header reach control disables the channel", () => {
     stubResource(true);
     stubStatus();
     stubPairing();
     renderPage();
 
-    fireEvent.click(screen.getByRole("switch"));
+    // No Switch any more: the header carries the same three-way reach control
+    // the row does, so the two surfaces say the same thing about the same
+    // channel — including "answer only for these agents", which a Switch cannot.
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.getByRole("button", { name: /every agent/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /selected agents/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^disabled$/i }));
     expect(disable.mutate).toHaveBeenCalledWith({ kind: "channel", name: "st" });
     expect(enable.mutate).not.toHaveBeenCalled();
   });

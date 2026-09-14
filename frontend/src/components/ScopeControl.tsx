@@ -1,16 +1,22 @@
 // frontend/src/components/ScopeControl.tsx
 //
-// ScopeControl: the single control that answers "who does this resource
-// reach?" — it owns both the resource's `enabled` flag and its per-agent
-// activation scope (ADR per-agent-resource-scope). It replaces the old pair of controls (an enable
-// Switch in the page header + a separate "Activation scope" card further down),
-// which expressed the same "reaches nobody" state twice: `enabled=false` in one
-// place and `scope=[]` (the dormant warning) in another.
+// ScopeControl: ONE resource's answer to "who does this reach?" — it owns both
+// the resource's `enabled` flag and its per-agent activation scope
+// (ADR per-agent-resource-scope). It replaces the old pair of controls (an
+// enable Switch in the page header + a separate "Activation scope" card further
+// down), which expressed the same "reaches nobody" state twice: `enabled=false`
+// in one place and `scope=[]` (the dormant warning) in another.
+//
+// The BUTTONS, LABELS and AGENT PANEL are not here: they live in
+// `components/reach/ReachControl.tsx`, shared with the bulk bar
+// (`BulkReachActions`) so the row control, the detail-page control and the
+// selection-wide control cannot drift into three different three-way choices.
+// This file is the single-resource DATA half: which segment is live, and what
+// each one writes.
 //
 // Data: GET/PUT /resources/{kind}/{name}/scope (useResourceScope /
 // useUpdateResourceScope) plus POST .../enable|disable
-// (useEnableResource/useDisableResource); useAgents() supplies the registered
-// agent list.
+// (useEnableResource/useDisableResource).
 //
 // The scope value is a single axis: a list of agent names.
 //   null  → active for every agent ("Every agent")
@@ -21,42 +27,27 @@
 // scope untouched, so re-enabling restores the agent selection the user had.
 //
 // Mutation pattern: the two whole-value segments write immediately, because
-// each already names a complete state. The agent list does not — a selection
-// is only finished when the user stops picking — so it stages locally and
-// writes once, when the panel closes:
+// each already names a complete state. The agent list does not — a selection is
+// only finished when the user stops picking — so ReachControl stages it and
+// hands it over once, on close:
 //   - "Disabled" posts .../disable and writes no scope.
 //   - "Every agent" enables if needed and writes `null`.
 //   - "Selected agents" opens the list and writes NOTHING yet.
-//   - A checkbox edits a local draft.
-//   - Closing the list writes the draft, once, if it differs from what is
-//     stored. Writing per tick refetched the resource list under the open
-//     panel, and since the row it is anchored to can move, the panel appeared
-//     under a different row.
-// An agent name in the list that isn't registered here is legal (a resource can
-// be scoped in before the agent exists), so it renders as an extra row.
+//   - Closing the list enables if needed and writes the staged list, once, if
+//     it differs from what is stored.
 //
-// Kinds that declare no scope (agent, channel, knowledge_base, memory) still
-// need enable/disable — this control now owns it — so they fall back to a
-// two-segment Disabled/Enabled group.
+// Kinds that declare no scope still need enable/disable — this control owns it
+// — so they fall back to the shared two-segment Disabled/Enabled group.
 //
-// The control also sits in the status column of the skills and MCP-servers
-// LISTS, one instance per row, because a resource's reach is no longer a plain
-// on/off the user can read off a Switch. Mounting the per-resource scope query
-// once per row would turn one list render into one GET per row, so the list
-// callers pass `scope` straight from the payload they already fetched
-// (`SkillOut.scope` / `ResourceOut.scope`) and the query stays off: the list
-// costs zero extra requests. Passing `scope` also asserts "this kind supports
-// scope", which is true of the only two kinds whose lists mount it. The detail
-// pages pass nothing and keep fetching, since they render one resource.
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import { useTranslation } from "react-i18next";
-
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useAgents } from "@/lib/hooks/useAgents";
+// The control also sits in the status column of every resource LIST, one
+// instance per row. Mounting the per-resource scope query once per row would
+// turn one list render into one GET per row, so the list callers pass `scope`
+// straight from the payload they already fetched (`ResourceOut.scope` /
+// `SkillOut.scope`, or a merge of `GET /resources?kind=…` where the kind has a
+// dedicated list endpoint) and the query stays off: the list costs zero extra
+// requests. The detail pages pass nothing and keep fetching, since they render
+// one resource.
+import { ReachControl, type ReachMode } from "@/components/reach/ReachControl";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import {
   useResourceScope,
@@ -64,8 +55,6 @@ import {
   type ResourceScope,
   type Scope,
 } from "@/lib/hooks/useScope";
-
-const GROUP_CLASS = "flex items-center gap-1 rounded-md border border-border p-0.5";
 
 interface Props {
   kind: string;
@@ -78,55 +67,28 @@ interface Props {
 }
 
 export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props) {
-  const { t } = useTranslation();
   const prefetched = presetScope !== undefined;
   const { data: fetchedScope } = useResourceScope(kind, name, !prefetched);
   const scopeData: ResourceScope | undefined = prefetched
     ? { scope: presetScope, supports_scope: true }
     : fetchedScope;
-  const { data: agentsData } = useAgents();
   const update = useUpdateResourceScope(kind, name);
   const enable = useEnableResource();
   const disable = useDisableResource();
 
   const busy = update.isPending || enable.isPending || disable.isPending;
-  // While the scope query is in flight, assume the kind supports scope (the
-  // two kinds mounting this control today do); the fallback only matters once
-  // the server has said otherwise.
+  // While the scope query is in flight, assume the kind supports scope; the
+  // fallback only matters once the server has said otherwise.
   const supportsScope = scopeData ? scopeData.supports_scope : true;
   const scope = scopeData?.scope ?? null;
-  const isSelected = enabled && scope !== null;
 
-  // Shared look for one segment of the group: the active one is filled, the
-  // rest are quiet, and every one of them is inert while a write is in flight.
-  const segment = (active: boolean) =>
-    ({
-      type: "button",
-      size: "sm",
-      variant: active ? "secondary" : "ghost",
-      "aria-pressed": active,
-      disabled: busy,
-    }) as const;
+  const mode: ReachMode = !enabled ? "disabled" : scope === null ? "every" : "selected";
 
   const enableIfNeeded = () => {
     if (!enabled) enable.mutate({ kind, name });
   };
-  const goDisabled = () => disable.mutate({ kind, name });
-  const goEveryAgent = () => {
-    enableIfNeeded();
-    if (scope !== null) update.mutate(null);
-  };
-  // The agent list's staged selection: `null` while the panel is closed.
-  const [draft, setDraft] = useState<string[] | null>(null);
 
-  const openList = (open: boolean) => {
-    if (open) {
-      setDraft(scope ?? []);
-      return;
-    }
-    const staged = draft;
-    setDraft(null);
-    if (staged === null) return;
+  const commitAgents = (staged: string[]) => {
     // Enabling is part of what the segment means on a disabled resource, but it
     // waits for the close like the scope does: writing on open is what moved
     // the row out from under the panel.
@@ -135,93 +97,23 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
     const unchanged =
       current !== null &&
       current.length === staged.length &&
-      current.every((name) => staged.includes(name));
+      current.every((agent) => staged.includes(agent));
     if (unchanged) return;
     update.mutate(staged);
   };
 
-  if (!supportsScope) {
-    return (
-      <div className={GROUP_CLASS} data-testid="scope-control">
-        <Button {...segment(!enabled)} onClick={goDisabled}>
-          {t("common.disabled")}
-        </Button>
-        <Button {...segment(enabled)} onClick={enableIfNeeded}>
-          {t("common.enabled")}
-        </Button>
-      </div>
-    );
-  }
-
-  const stored = scope ?? [];
-  const selected = draft ?? stored;
-  const registered = (agentsData ?? []).map((a) => a.name);
-  const unknown = selected.filter((n) => !registered.includes(n));
-  const rows = [
-    ...registered.map((n) => ({ name: n, known: true })),
-    ...unknown.map((n) => ({ name: n, known: false })),
-  ];
-
-  const toggleAgent = (agentName: string, checked: boolean) => {
-    setDraft((current) => {
-      const base = current ?? selected;
-      return checked ? [...base, agentName] : base.filter((a) => a !== agentName);
-    });
-  };
-
-  const selectedLabel =
-    selected.length > 0
-      ? `${t("scope.selectedAgents")} (${selected.length})`
-      : t("scope.selectedAgents");
-
   return (
-    <div className={GROUP_CLASS} data-testid="scope-control">
-      <Button {...segment(!enabled)} onClick={goDisabled}>
-        {t("common.disabled")}
-      </Button>
-      <Button {...segment(enabled && scope === null)} onClick={goEveryAgent}>
-        {t("scope.everyAgent")}
-      </Button>
-      <Popover open={draft !== null} onOpenChange={openList}>
-        <PopoverTrigger asChild>
-          <Button {...segment(isSelected)}>
-            {selectedLabel}
-            <ChevronDown className="size-3.5" aria-hidden />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 space-y-3 p-3">
-          <p className="text-xs text-muted-foreground">{t("scope.subtitle")}</p>
-
-          {selected.length === 0 ? (
-            <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-400">
-              {t("scope.dormant")}
-            </p>
-          ) : null}
-
-          {rows.length === 0 ? (
-            <p className="text-xs text-muted-foreground">{t("scope.noAgents")}</p>
-          ) : (
-            <div className="space-y-2">
-              {rows.map((row) => (
-                <label
-                  key={row.name}
-                  data-testid={`scope-agent-${row.name}`}
-                  className="flex w-full cursor-pointer items-center gap-2 rounded-md border border-border/60 p-2.5 text-sm"
-                >
-                  <Checkbox
-                    checked={selected.includes(row.name)}
-                    disabled={busy}
-                    aria-label={row.name}
-                    onChange={(e) => toggleAgent(row.name, e.target.checked)}
-                  />
-                  <span className="font-medium">{row.name}</span>
-                  {!row.known ? <Badge variant="outline">{t("scope.unknownAgent")}</Badge> : null}
-                </label>
-              ))}
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-    </div>
+    <ReachControl
+      mode={mode}
+      supportsScope={supportsScope}
+      busy={busy}
+      initialAgents={scope ?? []}
+      onDisabled={() => disable.mutate({ kind, name })}
+      onEveryAgent={() => {
+        enableIfNeeded();
+        if (scope !== null) update.mutate(null);
+      }}
+      onSelectedAgents={commitAgents}
+    />
   );
 }

@@ -178,9 +178,16 @@ class ResourceService:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
-                # A freshly registered resource is always unscoped (ADR per-agent-resource-scope):
-                # active for every agent until the user narrows it.
-                scope=None,
+                # A freshly registered resource is unscoped (ADR per-agent-resource-scope) —
+                # active for every agent until the user narrows it — UNLESS the
+                # kind supplies a starting scope. Only `provider` does: "every
+                # agent" would widen a new connection past the wire default its
+                # projection targets used to come from.
+                scope=(
+                    kind_def.default_scope(validated)
+                    if kind_def.default_scope is not None
+                    else None
+                ),
             )
         )
         await self._audit.record(

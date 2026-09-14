@@ -2,11 +2,15 @@
 
 ``credential_ref`` is immutable — it is the vault address the connection owns,
 and moving it is what ``rename_ops`` exists for. ``protocol`` is NOT immutable:
-nothing keys off the wire (projection targets come from ``compatible_agents``,
-see ``projector``), so an endpoint that turns out to speak a different wire
-than the probe guessed is corrected in place rather than deleted and
-re-entered, key and all. The re-validate below enforces the one rule the wire
-does carry: an ollama connection holds no key and projects nowhere.
+nothing keys off the wire (projection targets come from the resource's
+per-agent scope, see ``targets``), so an endpoint that turns out to speak a
+different wire than the probe guessed is corrected in place rather than deleted
+and re-entered, key and all. The re-validate below enforces the one rule the
+wire does carry: an ollama connection holds no key.
+
+Which agents a connection projects into is NOT patched here: it is the
+framework-level scope on the resource row, edited through the scope surface
+every scoped kind shares.
 
 Lives here rather than in ``provider/service.py`` because that module is at its
 file-size ceiling; ``ProviderService.update`` stays a thin delegate, mirroring
@@ -23,7 +27,7 @@ from coffer.domain.provider.errors import ProviderCredentialSourceInvalid
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
-    from coffer.application.provider.service import ProviderService, _AgentTypes, _CuratedModels
+    from coffer.application.provider.service import ProviderService, _CuratedModels
 
 
 async def update(
@@ -33,7 +37,6 @@ async def update(
     protocol: Protocol | None = None,
     base_url: str | None = None,
     secret_value: str | None = None,
-    compatible_agents: _AgentTypes | None = None,
     models: _CuratedModels | None = None,
     description: str | None = None,
     actor: str = "api",
@@ -45,8 +48,6 @@ async def update(
         config["protocol"] = protocol.value
     if base_url is not None:
         config["base_url"] = base_url
-    if compatible_agents is not None:
-        config["compatible_agents"] = [a.value for a in compatible_agents]
     if models is not None:
         config["models"] = [m.model_dump(mode="json") for m in models]
     # Re-validate so a bad edit is rejected before the rotation / DB write.

@@ -54,6 +54,7 @@ async def open_conversation(
         default_agent=binding.default_agent,
         default_agent_config=binding.default_agent_config,
         preferred_agent=row.preferred_agent if row is not None else None,
+        agent_scope=binding.agent_scope,
     )
     conv = await conversations.create_conversation(
         agent_key=spec.agent_key,

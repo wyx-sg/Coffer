@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { skillsApi, type RepairReportOut, type SkillImportRequest } from "@/lib/api/skills";
+import { skillsApi, type SkillImportRequest } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
 
 const SKILLS_KEY = ["skills"] as const;
@@ -47,24 +47,6 @@ export function useRemoveSkill() {
   const onError = useSkillToastError();
   return useMutation({
     mutationFn: (name: string) => skillsApi.remove(name),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: SKILLS_KEY });
-    },
-    onError,
-  });
-}
-
-export function useVerifySkills() {
-  return useMutation({
-    mutationFn: () => skillsApi.verify(),
-  });
-}
-
-export function useRepairSkillDrift() {
-  const qc = useQueryClient();
-  const onError = useSkillToastError();
-  return useMutation<RepairReportOut, unknown, void>({
-    mutationFn: () => skillsApi.repair(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: SKILLS_KEY });
     },

@@ -19,15 +19,11 @@ vi.mock("@/lib/hooks/useSkills", () => ({
   useSkills: vi.fn(),
   useImportSkill: vi.fn(),
   useRemoveSkill: vi.fn(),
-  useVerifySkills: vi.fn(),
-  useRepairSkillDrift: vi.fn(),
 }));
 const hooks = await import("@/lib/hooks/useSkills");
 const useSkillsMock = vi.mocked(hooks.useSkills);
 const useImportSkillMock = vi.mocked(hooks.useImportSkill);
 const useRemoveSkillMock = vi.mocked(hooks.useRemoveSkill);
-const useVerifySkillsMock = vi.mocked(hooks.useVerifySkills);
-const useRepairSkillDriftMock = vi.mocked(hooks.useRepairSkillDrift);
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -58,7 +54,6 @@ function stubHooks(opts: {
   data?: SkillOut[];
   isPending?: boolean;
   error?: unknown;
-  verifyEntries?: unknown[];
 }) {
   useSkillsMock.mockReturnValue({
     data: opts.data,
@@ -75,23 +70,6 @@ function stubHooks(opts: {
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof hooks.useRemoveSkill>);
-  useVerifySkillsMock.mockReturnValue({
-    mutate: vi.fn(),
-    reset: vi.fn(),
-    data: { entries: opts.verifyEntries ?? [] },
-    isPending: false,
-    isError: false,
-    error: null,
-  } as unknown as ReturnType<typeof hooks.useVerifySkills>);
-  useRepairSkillDriftMock.mockReturnValue({
-    mutate: vi.fn(),
-    reset: vi.fn(),
-    data: undefined,
-    isPending: false,
-    isError: false,
-    isSuccess: false,
-    error: null,
-  } as unknown as ReturnType<typeof hooks.useRepairSkillDrift>);
 }
 
 acceptance("skill-manager", "desktop and CLI cover every operation", async () => {
@@ -171,11 +149,10 @@ describe("SkillsPage", () => {
     expect(screen.queryByTestId("skill-degraded-badge")).not.toBeInTheDocument();
   });
 
-  test("the header no longer carries a Verify action (moved into the table)", () => {
+  test("no surface offers Verify any more — the header keeps only Add skill", () => {
     stubHooks({ data: SAMPLE });
     render(<SkillsPage />, { wrapper: wrap(null) });
-    // Only the per-row Verify buttons from SkillsTable remain; there is no
-    // page-level Verify next to Add skill.
     expect(screen.getByRole("button", { name: /add skill/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /verify/i })).toBeNull();
   });
 });

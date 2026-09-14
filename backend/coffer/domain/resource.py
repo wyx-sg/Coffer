@@ -135,9 +135,52 @@ class Kind:
     # Whether this kind supports the framework-level per-agent activation
     # scope (ADR per-agent-resource-scope). False (the default) means the kind has no scope at all:
     # ResourceService.update_scope rejects any non-null payload for it (422).
-    # `mcp_server` and `skill` set this True; `agent`, `channel`,
-    # `knowledge_base` and `memory` deliberately do not.
+    # `mcp_server`, `skill`, `knowledge`, `memory`, `channel` and `provider`
+    # set this True; `agent` deliberately does not — it IS the agent, so there
+    # is nothing for a per-agent scope to narrow.
     supports_scope: bool = False
+    # Optional kind-supplied starting scope, consulted ONCE by
+    # ``ResourceService.register`` (ADR per-agent-resource-scope). Given the validated config,
+    # returns the scope the new row is created with; ``None`` keeps the
+    # framework default (unscoped — active for every agent).
+    #
+    # It exists for a kind whose "every agent" default would be WRONG rather
+    # than merely wide: `provider` pre-fills the wire's own projection default
+    # (an ollama connection projects into no agent at all), so a newly created
+    # connection behaves exactly as it did when that default lived inside its
+    # config. A kind for which "every agent until narrowed" is right — every
+    # other one today — supplies nothing.
+    #
+    # It is deliberately a function of the CONFIG alone, so the kind-agnostic
+    # register path can call it with what it already has. A kind whose starting
+    # scope depends on something outside the config — `memory` defaults to the
+    # agents a partition was aggregated FROM (spec memory FR-014) — cannot use
+    # this hook and sets the scope itself right after registering.
+    default_scope: Callable[[dict[str, Any]], list[str] | None] | None = None
+    # Optional PRE-write hook for ``ResourceService.update_scope`` (ADR per-agent-resource-scope):
+    # given the resource as it currently stands and the scope proposed for it,
+    # raise ``ValueError`` to reject the edit before anything is persisted. The
+    # kind-agnostic path converts that into ``ScopeInvalidError``, so the API
+    # answer has the same shape as a malformed-payload rejection and a kind
+    # never names a surface-level error code.
+    #
+    # It is the scope path's counterpart to ``on_update_config`` — the same
+    # "the kind gets a say before a write" precedent — and deliberately fires at
+    # the opposite end of the operation from its neighbour ``on_scope_changed``
+    # below; ``resource_scope_ops`` explains why the two differ.
+    #
+    # Only `channel` supplies one today: its scope names the agents it may
+    # DRIVE, so a narrowing that excluded its own ``default_agent`` would store
+    # a row the runtime then refuses to start. Rejecting it here is what keeps
+    # that invariant true on BOTH write paths (config and scope) rather than
+    # only on the config one. Sync or async; the service awaits an Awaitable.
+    validate_scope_for: (
+        Callable[
+            [Resource, list[str] | None],
+            Awaitable[None] | None,
+        ]
+        | None
+    ) = None
     # Optional post-write hook for ``ResourceService.update_scope`` (ADR per-agent-resource-scope).
     # Receives the ref whose scope just changed; invoked AFTER persistence +
     # audit (unlike ``on_update_config``, which runs BEFORE — scope

@@ -3,8 +3,9 @@
 // The MCP servers list now renders via the shared DataTable: rows navigate to
 // the detail page on click, each row carries a health badge + the three-state
 // ScopeControl (the server's reach, the same control the detail header mounts)
-// + delete action, and a leading checkbox column drives bulk
-// enable/disable/delete over the selected rows.
+// + delete action, and a leading checkbox column drives the bulk bar: that same
+// three-state reach control applied to the whole selection, plus delete. An
+// Enable/Disable pair there offered strictly less than the row it summarises.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
@@ -129,6 +130,19 @@ describe("McpServersTable", () => {
   test("a search box is available", () => {
     render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
     expect(screen.getByRole("textbox")).toBeInTheDocument();
+  });
+
+  test("the bulk bar carries the row's reach control, not an Enable/Disable pair", () => {
+    render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
+    expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
+
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    const bar = within(screen.getByTestId("bulk-reach-control"));
+    expect(bar.getByRole("button", { name: /^disabled$/i })).toBeInTheDocument();
+    expect(bar.getByRole("button", { name: /every agent/i })).toBeInTheDocument();
+    expect(bar.getByRole("button", { name: /selected agents/i })).toBeInTheDocument();
+    // Delete stays its own button beside it.
+    expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
 
   test("renders selection checkboxes (select-all + one per row)", () => {

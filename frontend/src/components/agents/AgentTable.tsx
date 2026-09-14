@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Trash2 } from "lucide-react";
 
 import { AgentBulkActions } from "@/components/agents/AgentBulkActions";
 import { AgentMcpStatusBadge } from "@/components/agents/AgentMcpControls";
 import { DataTable, type Column } from "@/components/DataTable";
+import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -89,19 +89,11 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
       header: "",
       className: "text-right",
       cell: (a) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-destructive"
-          aria-label={t("agents.deleteAria", { name: a.name })}
+        <RowDeleteButton
+          ariaLabel={t("agents.deleteAria", { name: a.name })}
           disabled={remove.isPending}
-          onClick={(e) => {
-            e.stopPropagation();
-            setDeletingName(a.name);
-          }}
-        >
-          <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
-        </Button>
+          onDelete={() => setDeletingName(a.name)}
+        />
       ),
     },
   ];

@@ -6,6 +6,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { KnowledgeDetailPage } from "./KnowledgeDetailPage";
 import { acceptance } from "@/test/acceptance";
@@ -46,12 +47,18 @@ function stubInertDefaults() {
 }
 
 function renderPage() {
+  // The header's reach control reads the collection's Resource, so the page now
+  // needs a real query client — the fetch never resolves here, and the control
+  // renders from its own defaults.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={["/knowledge/shopee"]}>
-      <Routes>
-        <Route path="/knowledge/:scope" element={<KnowledgeDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={["/knowledge/shopee"]}>
+        <Routes>
+          <Route path="/knowledge/:scope" element={<KnowledgeDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

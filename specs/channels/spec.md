@@ -694,10 +694,11 @@ so there is nothing to arbitrate: an **enabled channel runs its adapter here**,
 on the machine whose daemon holds it, and a disabled channel runs nowhere.
 There is no machine binding, no affinity field, and no per-machine override.
 
-The `channel` kind declares no `scope`
-([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)): a
-non-null value is rejected at validation (422). Enabling is the only control
-over whether the adapter starts.
+The `channel` kind DOES declare a `scope`
+([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)), but
+it answers a different question from where the adapter runs — see FR-079. Scope
+names the agents a channel may drive; enabling says whether it runs here at all.
+The two meet in one place: a channel that may drive nothing does not run.
 
 If the user carries a bundle to a second machine (spec vault-export-import) the channel is
 registered there too — pairing state rides along in the bundle's
@@ -1636,6 +1637,38 @@ produce it on its own.
 - **When** the transport normalizes the message,
 - **Then** the platform id the mention needs is kept, not discarded with them.
 
+### Scenario: a channel may only route to the agents in its scope
+
+- **Given** a paired channel whose scope names one of the two registered agents,
+- **When** the owner sends `/agent`, and then `/agent <the other one>`,
+- **Then** the listing and the selection card offer only the scoped agent, and
+  the switch to the other one is refused — whether it is typed or tapped from a
+  card rendered before the scope was narrowed.
+
+### Scenario: a channel scoped to no agent is dormant
+
+- **Given** an enabled channel whose scope is set to the empty list,
+- **When** the channel runtime reconciles,
+- **Then** its adapter is never started and the channel reports as not running,
+  so it accepts no turn it would have to refuse.
+
+### Scenario: reject narrowing a channel's scope past its default agent
+
+- **Given** a running channel whose `default_agent` is one registered agent,
+- **When** the owner narrows its scope to a non-empty set that excludes that
+  agent,
+- **Then** the edit is rejected with a message naming both the default agent and
+  the proposed scope, nothing is persisted, and the channel keeps running — the
+  narrowing never silently takes the bot offline.
+
+### Scenario: edit a dormant channel's configuration
+
+- **Given** a channel the owner switched off by scoping it to no agent,
+- **When** the owner corrects a field of its configuration, such as its bot
+  token ref,
+- **Then** the edit is accepted and the channel stays dormant — off is not
+  frozen.
+
 
 ## Channels as a management plane (north star)
 
@@ -2190,6 +2223,46 @@ decision it rests on is recorded in
   a Coffer connection is an optional override, not a prerequisite (see the
   2026-06-22 amendment of
   [Provider Switching](../../docs/decisions/provider-switching.md)).
+
+- **FR-079**: A channel MUST carry the framework's per-agent `scope`
+  ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
+  read as **the agents this channel may drive**. Every other kind's scope names
+  the agents a resource is *delivered to*; a channel is consumed by no agent —
+  it is an inbound surface — so the axis is inverted rather than borrowed, and
+  the spec says so explicitly because a reader who assumes the usual reading
+  gets it backwards.
+
+  - `scope = null` MUST mean every registered agent. That is the pre-scope
+    behaviour and what every existing channel carries, so no channel needs a
+    data migration.
+  - `scope = [<agent>, …]` MUST narrow `/agent` at all three of its surfaces:
+    the listing, the selection card, and the validation of a chosen key
+    (typed or tapped). They MUST read one narrowed set — a card that offers an
+    agent the next check rejects is the specific failure this requires.
+  - **The invariant:** a channel's `default_agent` MUST be an agent the channel
+    may drive — inside its scope whenever that scope is non-empty. It MUST be
+    enforced on BOTH write paths, so the inconsistent state cannot be stored at
+    all: an edit to the configuration is rejected when it names a
+    `default_agent` outside the current scope, and an edit to the scope is
+    rejected when the proposed non-empty scope excludes the current
+    `default_agent`. A scope edit MUST NOT be accepted and then leave the
+    channel unable to run — narrowing a reach silently taking a live bot offline
+    is the specific failure this requires. Each rejection MUST name both the
+    default agent and the scope, so the owner sees the two ways forward: widen
+    the scope, or change the default agent first.
+  - `scope = []` (dormant) MUST mean the channel drives nothing, and MUST fail
+    early rather than per-turn: the runtime does not start its adapter, so no
+    message is ever accepted only to be refused. The management surface reports
+    it as not running. Widening the scope is how the owner brings it back.
+  - `scope = []` MUST be accepted on both write paths. It is the vault-wide
+    meaning of dormant — this channel is off — and off MUST NOT also mean
+    frozen: a channel the owner deliberately switched off MUST remain editable,
+    so a wrong bot token or tunnel token can still be corrected without
+    reactivating it first.
+  - A thread's sticky `/agent` choice MUST be dropped in favour of the channel
+    default once the scope no longer admits it, so narrowing a scope takes
+    effect on the next conversation rather than waiting on whoever set the
+    preference.
 
 ## Deliberately out of scope
 

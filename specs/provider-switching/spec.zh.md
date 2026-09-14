@@ -95,10 +95,40 @@ anthropic`，Codex 注入 `resolve_active_key(OPENAI)`），所以把这种连�
 静默解析到**另一条**连接的 key——凭证错配。修复办法：把「连接投射到哪些 agent」与「endpoint 说哪种
 wire」解耦，并按**连接**解析密钥。
 
-- **F1 — 连接上的 `compatible_agents`。** 连接显式携带 `compatible_agents ⊆ {claude_code, codex}`
-  （`null` ⇒ wire 默认：所有带凭据的 wire 都是两者，ollama 为 `[]`——它仅供内部使用）。添加/编辑
-  对话框同样按此预填复选框——默认全部勾选——由用户收窄（或把 openai 网关路由给 Claude Code）。
-  JSON 载荷——无需 DB 迁移。
+- **F1 — 连接投射到哪些 agent——2026-09-13 修订。** 连接携带一个「投给哪些 agent」的集合：
+  `⊆ {claude_code, codex}`，按 wire 预填（所有带凭据的 wire 都是两者，ollama 为 `[]`——它仅供
+  内部使用），再由用户收窄——把 openai 网关路由给 Claude Code 就是这么做的。
+
+  它**最初**被实现为 `compatible_agents`，一个位于连接自身 config 内的字段。现在它是资源行上
+  **框架级的 per-agent `scope`**
+  （[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：`provider`
+  kind 声明 `supports_scope`，而 `compatible_agents` 已从 config、从 `ProviderCreate`、从
+  `ProviderPatch` 中删除。两个 kind 用两种方式回答同一个问题，正是这个框架字段要终结的事，而
+  `provider` 是最后一个还在用自己那套回答的 kind。
+
+  两个轴对「未设置」的含义并不一致，而这正是本次搬迁的全部风险所在：`compatible_agents = null`
+  意味着*该 wire 的默认值*（对 ollama 而言是「一个都不给」），而框架的 `scope = null` 意味着
+  *所有 agent*。因此：
+
+  - **迁移 0071 把每一行都物化**——它算出旧字段解析出的有效集合，具体地写进 `scope`，再把已死的
+    键从 config 里剥掉。触达范围逐字节不变；downgrade 会把值放回去。
+  - **新建的连接按 wire 预填**，走框架的 `Kind.default_scope` 钩子，因此其行为与之前完全一致，
+    而不是一上来就触达所有 agent。
+  - **`enabled` 只在投射这一处生效。** 被禁用的连接不投射到任何地方，也解析不出 key。但**配置态
+    的可达范围**——这条连接被设置成覆盖哪些 agent——的报告不受这个收窄影响，因为两者回答的是不同
+    的问题，一个字段承载不了两个答案：把 `enabled` 揉进去会让被禁用连接报告出空的 agent 列表，于是
+    「关掉一条连接」看起来像是把列表抹掉了，「重新打开」又看起来像恢复了从未丢失的数据。`enabled`
+    与它同在一个载荷里，所以想要交集的客户端自己取——而那两个「此刻就要拿一条连接去用」的客户端
+    （agent 的连接选择器与聊天的模型选择器）**必须**取。`is_active` 与 `enabled`
+    并不冗余，两者都保留：`enabled` 是用户对资源本身的开关，而 `is_active` 记录的是「这条连接
+    当前被*写入*了它所触达的那些 agent」（每个 agent 类型至多一条）——那是关于磁盘上某个文件的
+    断言，也正是启动自检存在的理由：它要抓的就是这个断言与文件不一致。
+  - **`scope = []` 即休眠**，与其他每个可 scope 的 kind 给它的含义一致：该连接触达不到任何
+    agent，因此没有任何 agent 会解析出它的 key。
+
+  重新指向是一次 scope 编辑（`PUT /api/v1/resources/provider/{name}/scope`、
+  `coffer scope set provider:<name> --agents …`），落在每个可 scope 的 kind 共享的那个界面上，
+  而不再是只有这一个 kind 才有的字段。
 - **F2 — 投射 writer 按 AGENT 类型选，不按 protocol。** 兼容 `claude_code` 的连接写 Claude 的
   `settings.json`（anthropic 形态）；兼容 `codex` 写 Codex 的 `config.toml`。`protocol` 现仅用于模型
   自省与是否需要 key。
@@ -111,10 +141,11 @@ wire」解耦，并按**连接**解析密钥。
   兼容 agent，并从之前激活的连接手里接管这些 agent（把那条连接从新连接不覆盖的 agent 上 deproject）。
   `use-builtin/{wire}` 还原该 wire 背后的 agent；兼容多个 agent 的连接作为整体还原（单个 `is_active`
   标志是全有或全无）。
-- **F5 — 连接页移除每行「切换」。** 激活按 agent，落在 Agent 详情 → 概览页（按 `compatible_agents`
-  过滤连接）。连接页是库：增 / 改 / 删 + 展示每条连接的兼容 agent。
+- **F5 — 连接页移除每行「切换」。** 激活按 agent，落在 Agent 详情 → 概览页（按连接所触达的
+  agent 过滤）。连接页是库：增 / 改 / 删 + 展示每条连接的触达范围。
 
-**Supersede：** E5（按-protocol 匹配的兼容性过滤——现为显式 `compatible_agents` 集合）；决策 A /
+**Supersede：** E5（按-protocol 匹配的兼容性过滤——现为显式集合，且自 2026-09-13 起即资源的框架
+scope）；决策 A /
 FR-011 的 per-protocol 单激活（现为 per-agent-type）。**仍不在范围：** proxy / 热切换 / 协议转换。
 
 ## 修订 2026-06-23c — 选连接是草稿；先测试、再确认切换
@@ -208,8 +239,8 @@ id，而这些 id 该 agent 一个都用不了。
   修复：**绝不**把投影写回去，因为一个上次会话遗留的标志并不足以构成把用户的 agent 悄悄改道到某个
   网关的理由（同步的 post-import hook 仍然做投影，因为一次导入承载的是用户明确的切换动作）。反向漂移
   ——文件里有 Coffer 的键但注册表说未激活——只报告，不静默删除。
-  修订 0051 同时清理连接 `compatible_agents` 里已下线的 agent 类型（`cursor` / `opencode` /
-  `openclaw` / `hermes`）：修订 0048 删掉了这些 agent 自己的行，却把它们的名字留在了连接里，而
+  修订 0051 同时清理连接当时那个 `compatible_agents` 字段里已下线的 agent 类型（`cursor` /
+  `opencode` / `openclaw` / `hermes`；该字段已由 0071 物化进框架 scope）：修订 0048 删掉了这些 agent 自己的行，却把它们的名字留在了连接里，而
   `ProviderConfig` 不接受这些值——于是在真实安装上，升级后第一次校验就会抛错，一个本来正常的连接变得
   不可读。
 
@@ -243,8 +274,8 @@ D4 的固定下拉 / 禁止自由输入规则不变。**仍不在范围：** pro
   按序去重、有合理上限），并原样透传给厂商。Coffer 绝不拿 id 去比对自己的名单——2026-09-09
   修订的规则不变；endpoint 不再提供的某个 id 只是一条过期菜单项，不是配置错误。
 - **接口形状。** `ProviderOut.models: list[str]`；`ProviderCreate.models: list[str] | None`
-  （`null` ⇒ 空）；`ProviderPatch.models: list[str] | None`，与 `compatible_agents` 一样是
-  **整值替换**（`null` 保持不变，`[]` 清除限制）。不新增路由——create 与 patch 承载它。
+  （`null` ⇒ 空）；`ProviderPatch.models: list[str] | None`，为**整值替换**
+  （`null` 保持不变，`[]` 清除限制）。不新增路由——create 与 patch 承载它。
 - **审计。** 不新增事件：策展集合就是普通的连接配置，因此对它的修改搭乘
   `ResourceService.update_config` 已经发出的 `resource_updated` 事件，其 `before`/`after`
   详情原样携带 config（provider kind 不声明 redactor，因为它的 config 不含 secret）。
@@ -596,7 +627,8 @@ Resource `name` = profile 名称（在 kind 内唯一，经 `validate_name` 校�
 | `internal_default` | `bool` | 全局最多一条 connection 为内部引擎默认。导入时若 >1，则归一化（保留最近更新的）。 |
 
 > 本表记录的是**最初**的形状。修订 E1 移除了 `model` / `fast_model` / `wire_api`，并把
-> `wire_format` 变成探测出的 `protocol`；2026-06-23 修订新增 `compatible_agents`；
+> `wire_format` 变成探测出的 `protocol`；2026-06-23 修订新增 `compatible_agents`，
+> 而 2026-09-13 修订用资源的框架 per-agent `scope` 取代了它（迁移 0071）；
 > 2026-09-11 修订新增策展的 `models` 集合（空 = 不限制）。当前字段清单见
 > [data-model.md](./data-model.md)。
 
@@ -698,7 +730,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - `GET  /api/v1/providers` → 列出所有 profile（`{ "providers": [ ProviderOut, ... ] }`）
 - `POST /api/v1/providers` → 创建（见下方凭证来源规则）
 - `GET  /api/v1/providers/{name}` → 获取单条 profile
-- `PATCH /api/v1/providers/{name}` → 更新可变字段（`base_url`、`compatible_agents`、`models`、`secret_value`）；`wire_format`/`protocol` 和 `credential_ref` 不可变；`secret_value` 可轮换存储的 secret；`models` 为整值替换（`[]` 清除策展集合）
+- `PATCH /api/v1/providers/{name}` → 更新可变字段（`base_url`、`models`、`secret_value`）；连接触达哪些 agent 是一次 scope 编辑（`PUT /api/v1/resources/provider/{name}/scope`），不是 patch 字段，`ProviderOut.compatible_agents` 只读地报告**配置态**的可达范围（即 scope，不被 `enabled` 收窄——后者同在这个载荷里）；`wire_format`/`protocol` 和 `credential_ref` 不可变；`secret_value` 可轮换存储的 secret；`models` 为整值替换（`[]` 清除策展集合）
 - `POST /api/v1/providers/{name}/rename`（`{new_name}`）→ 改名；在一次操作中迁移自有 vault 条目、重指审计轨迹，并对激活中的连接重新投影。名字已被另一条连接占用时 409，本连接不存在时 404，名字未变时为 no-op
 - `DELETE /api/v1/providers/{name}` → 删除；删除自有 secret 前通过 `find_credential_citations` 守卫
 - `POST /api/v1/providers/{name}/activate` → 切换；返回 `{activated, projected:[agent...], skipped:[agent...]}`
@@ -885,13 +917,20 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **Then** 列出两条连接及其兼容 agent 标签，且**无**每行「Switch」操作——激活按 agent，落在 Agent 概览页
   （TypeScript acceptance 测试）。
 
-### Scenario: route an openai-compatible connection to Claude Code via compatible_agents
+### Scenario: route an openai-compatible connection to Claude Code with its scope
 
-- **Given** 已注册一个 Claude Code agent，并创建一条 `openai`-wire 连接，`compatible_agents = ["claude_code"]`（agnes 场景），
+- **Given** 已注册一个 Claude Code agent，并创建一条 `openai`-wire 连接（agnes 场景），随后把它
+  scope 到 `["claude_code"]`，
 - **When** 用户激活该连接，
 - **Then** 它投射进 Claude Code 的 `settings.json`（anthropic 形态），且
   `apiKeyHelper = "coffer provider key --connection <name>"`，
-  `GET /providers/{name}/key` 返回正是该连接的 key。
+  `GET /providers/{name}/key` 返回正是该连接的 key，报告出的有效 agent 集合跟随 scope。
+
+### Scenario: per-agent key routing follows the connection's scope
+
+- **Given** 两条已激活的连接，只靠 scope 区分——一条 scope 到 `claude_code`，一条到 `codex`，
+- **When** 解析每个 agent 的 key，
+- **Then** 各自解析到自己那条连接的 key；把某条连接禁用、或把它 scope 到没有任何 agent，则它解析不出 key。
 
 ### Scenario: create an ollama connection without a credential
 
@@ -1085,7 +1124,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 **策展模型集合**
 
 - **FR-025**：`ProviderConfig` 必须携带 `models`——该连接向下游**提供**的模型 id 集合（最初写作 `list[str]`；**已由 FR-029 细化**为 `{id, modality}` 对象列表）。**空**列表必须表示不限制（endpoint 提供的所有模型），必须是默认值，也必须是修订 0059 之前创建的每条连接的取值。该字段绝不可被当作「选中的模型」读取：选择仍在使用处（E1/E3）。id 只校验形状——非空白、按序去重、至多 200 个且每个至多 200 字符——并且绝不可与 Coffer 自己写死的模型名单比对。
-- **FR-026**：`ProviderCreate.models`（`null` ⇒ 空）与 `ProviderPatch.models` 必须承载该集合；`ProviderOut.models` 必须返回它。`PATCH` 必须像 `compatible_agents` 一样整值替换——`null` 保持不变，`[]` 清除限制——且不得为此新增路由。对它的修改必须搭乘 provider 更新本就发出的 `resource_updated` 审计事件。
+- **FR-026**：`ProviderCreate.models`（`null` ⇒ 空）与 `ProviderPatch.models` 必须承载该集合；`ProviderOut.models` 必须返回它。`PATCH` 必须整值替换——`null` 保持不变，`[]` 清除限制——且不得为此新增路由。对它的修改必须搭乘 provider 更新本就发出的 `resource_updated` 审计事件。
 
 **改名**
 

@@ -43,7 +43,10 @@ it manages — a `provider` is `{protocol, base_url, credential_ref}`, a vendor
 endpoint and its key; the model is not stored there and is chosen at the point
 of use. **Channels** sat under AGENTS, but a channel is a credentialed
 transport the vault owns, not a consumer of the vault; it belongs beside the
-other assets rather than beside the agents that happen to answer on it.
+other assets rather than beside the agents that happen to answer on it. It is
+named **「消息渠道 / Channels」** and nothing else — sidebar, page header,
+welcome panel and dialogs all say the same words, because a surface the user
+reaches two ways must not have two names.
 
 That leaves AGENTS holding a single entry. The asymmetry is deliberate: agents
 are the one thing in the product that *uses* the vault rather than living in
@@ -52,7 +55,9 @@ it, and collapsing the group would lose that distinction to save one line.
 The app's index (`/`) redirects to `/agents`, so a first-time visitor lands on
 the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Activity and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
 
-All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels, each Activity tab) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are compact icons. Cards are reserved for welcome / empty states only.
+All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels, each Activity tab) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are an icon plus its label — never a bare icon, which reads as a different affordance from the labelled action beside it. Cards are reserved for welcome / empty states only.
+
+Every list surface's status column is the resource's **reach**: the one control that answers "who does this reach?" — Disabled / Every agent / Selected agents — and every detail page carries the same control in its header. It is written once and mounted in three places (the row, the detail header, the selection bar), so the three can never drift into three different three-way choices. A multi-select applies that same choice to the whole selection: a bulk write is a new intent, so its agent panel opens empty rather than on any one row's value, and a row that fails is reported in the batch's one summary rather than silently skipped. Delete stays its own button beside it.
 
 **Observability** (system health / metrics) is planned but not shown today; it appears in the sidebar only once it ships. Activity is not it: a record of what happened is not a measurement of how the system is doing. The reverse rule holds too — an entry is removed when its feature is, which is how Machines left.
 

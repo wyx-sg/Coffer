@@ -5,18 +5,10 @@
 // enforces — and fans them out with allSettled via useBulkMutate. Delete is
 // destructive and owns its own confirm dialog. Kept in its own file so
 // AgentUnmanagedSkills.tsx stays small.
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { agentsApi, type UnmanagedSkillOut } from "@/lib/api/agents";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
@@ -30,7 +22,6 @@ export function AgentUnmanagedSkillsBulkActions({
   clear: () => void;
 }) {
   const { t } = useTranslation();
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const invalidate = [["agents", agentName, "unmanaged-skills"], ["skills"], ["agents", agentName]];
   const adopt = useBulkMutate({ invalidate });
   const remove = useBulkMutate({ invalidate });
@@ -44,7 +35,6 @@ export function AgentUnmanagedSkillsBulkActions({
 
   const deleteAll = async () => {
     await remove.run(rows, (s) => agentsApi.deleteUnmanagedSkill(agentName, s.name, s.location));
-    setConfirmDelete(false);
     clear();
   };
 
@@ -58,38 +48,12 @@ export function AgentUnmanagedSkillsBulkActions({
       >
         {t("agents.skillsTab.adopt")}
       </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-        disabled={remove.isPending}
-        onClick={() => setConfirmDelete(true)}
-      >
-        {t("common.bulk.delete")}
-      </Button>
-
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("common.bulk.delete")}</DialogTitle>
-            <DialogDescription>
-              {t("agents.skillsTab.bulkDeleteConfirm", { count: rows.length })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => void deleteAll()}
-            >
-              {t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkDeleteButton
+        title={t("common.bulk.delete")}
+        description={t("agents.skillsTab.bulkDeleteConfirm", { count: rows.length })}
+        pending={remove.isPending}
+        onConfirm={deleteAll}
+      />
     </>
   );
 }

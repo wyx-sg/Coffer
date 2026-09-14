@@ -24,7 +24,14 @@ _NOW = datetime(2026, 9, 10, tzinfo=UTC)
 _BASE_URL = "https://gateway.example/v1"
 
 
-def _resource(kind: str, name: str, config: dict[str, Any], *, enabled: bool = True) -> Resource:
+def _resource(
+    kind: str,
+    name: str,
+    config: dict[str, Any],
+    *,
+    enabled: bool = True,
+    scope: list[str] | None = None,
+) -> Resource:
     return Resource(
         id=1,
         kind=kind,
@@ -34,6 +41,7 @@ def _resource(kind: str, name: str, config: dict[str, Any], *, enabled: bool = T
         enabled=enabled,
         created_at=_NOW,
         updated_at=_NOW,
+        scope=scope,
     )
 
 
@@ -54,10 +62,12 @@ def _connection(*, is_active: bool = True) -> Resource:
             "protocol": "openai",
             "base_url": _BASE_URL,
             "credential_ref": "agnes-key",
-            # The shape that surfaced this: an openai endpoint routed to Claude Code.
-            "compatible_agents": ["claude_code"],
             "is_active": is_active,
         },
+        # The shape that surfaced this: an openai endpoint routed to Claude
+        # Code. That routing is the resource's per-agent scope now
+        # (ADR per-agent-resource-scope), not a config field.
+        scope=["claude_code"],
     )
 
 

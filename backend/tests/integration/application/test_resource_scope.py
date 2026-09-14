@@ -134,6 +134,82 @@ async def test_update_scope_unknown_ref_raises(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_kind_pre_validation_rejects_before_any_write(tmp_path):
+    """``Kind.validate_scope_for`` is the scope path's counterpart to
+    ``on_update_config``: the kind gets a say BEFORE persistence, so a rejected
+    scope leaves the row — and the audit log — untouched."""
+    seen: list[tuple[str, list[str] | None]] = []
+
+    def _reject_b(resource, scope):
+        seen.append((resource.name, scope))
+        if scope and "agent-b" in scope:
+            raise ValueError("agent-b may not have this")
+
+    svc, audit, engine = await _service(
+        tmp_path,
+        kinds={
+            "picky_kind": Kind(
+                name="picky_kind",
+                display_name="Picky Kind",
+                config_schema=_FakeConfig,
+                supports_scope=True,
+                validate_scope_for=_reject_b,
+            )
+        },
+    )
+    await svc.register(kind="picky_kind", name="t", config={"foo": 1}, actor="cli")
+    with pytest.raises(ScopeInvalidError, match="agent-b"):
+        await svc.update_scope(ResourceRef("picky_kind", "t"), ["agent-b"], actor="cli")
+    # The hook saw the resource as it still stands, and nothing was written.
+    assert seen == [("t", ["agent-b"])]
+    assert (await svc.get(ResourceRef("picky_kind", "t"))).scope is None
+    assert await audit.query(event_type=AuditEventType.RESOURCE_SCOPE_UPDATED.value) == []
+
+    # An acceptable scope still lands.
+    updated = await svc.update_scope(ResourceRef("picky_kind", "t"), ["agent-a"], actor="cli")
+    assert updated.scope == ["agent-a"]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_kind_pre_validation_may_be_async(tmp_path):
+    """Sync or async, exactly like ``on_update_config`` — the service awaits an
+    awaitable hook result."""
+
+    async def _reject(_resource, _scope):
+        raise ValueError("never")
+
+    svc, _, engine = await _service(
+        tmp_path,
+        kinds={
+            "picky_kind": Kind(
+                name="picky_kind",
+                display_name="Picky Kind",
+                config_schema=_FakeConfig,
+                supports_scope=True,
+                validate_scope_for=_reject,
+            )
+        },
+    )
+    await svc.register(kind="picky_kind", name="t", config={"foo": 1}, actor="cli")
+    with pytest.raises(ScopeInvalidError, match="never"):
+        await svc.update_scope(ResourceRef("picky_kind", "t"), ["agent-a"], actor="cli")
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_kind_with_no_pre_validation_hook_is_unaffected(tmp_path):
+    """Every kind but `channel` supplies none, and must behave exactly as before
+    the hook existed."""
+    svc, _, engine = await _service(tmp_path)
+    assert svc._require_kind("scoped_kind").validate_scope_for is None
+    await svc.register(kind="scoped_kind", name="t", config={"foo": 1}, actor="cli")
+    updated = await svc.update_scope(ResourceRef("scoped_kind", "t"), ["anything"], actor="cli")
+    assert updated.scope == ["anything"]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_update_scope_works_for_lifecycle_kind_without_opt_in(tmp_path):
     """update_scope must NOT be gated on allow_lifecycle_kind — the per-agent
     activation scope is a framework-level concern orthogonal to a kind's

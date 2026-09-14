@@ -3,12 +3,14 @@
 // name, the connection's type + state badges, and the actions that change the
 // connection itself — Edit (the existing ProviderForm, in a dialog owned
 // here so the page file stays lean), Delete (confirmed by the page), and the
-// shared ScopeControl, which is where enabled/disabled is both SHOWN and
-// changed. It replaced a read-only badge: the list could flip a provider and its
-// own page could not, and a badge next to the control would have stated the same
-// state twice. `provider` declares no per-agent scope, so the control renders
-// its two-segment Disabled/Enabled fallback. The description sits in the
-// Configuration card rather than here, so it is stated exactly once.
+// shared ScopeControl, which is where this connection's REACH — disabled, every
+// agent, or a chosen set — is both SHOWN and changed. It replaced a read-only
+// badge: the list could flip a provider and its own page could not, and a badge
+// next to the control would have stated the same state twice. `provider` now
+// declares per-agent scope, so this is the three-segment control and the ONLY
+// place a connection's agent set is edited — the Edit dialog deliberately has no
+// control of its own. The description sits in the Configuration card rather than
+// here, so it is stated exactly once.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";

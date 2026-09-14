@@ -8,6 +8,7 @@ subpackages — they cannot import each other (Contract 5).
 
 from __future__ import annotations
 
+import logging
 import pathlib
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,7 @@ from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.resource_service import ResourceService
+from coffer.application.skill.boot_reconcile import SkillDriftBootHeal
 from coffer.application.skill.builtin_tools import register_skill_builtin_tools
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
@@ -56,6 +58,8 @@ from coffer.surfaces.http.workspace_dependencies import (
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
+_log = logging.getLogger(__name__)
 
 
 def wire_agent_and_skill_kinds(
@@ -253,3 +257,32 @@ def wire_agent_and_skill_kinds(
 
     if builtin_tools is not None:
         register_skill_builtin_tools(builtin_tools, resources=resource_svc, skill_service=skill_svc)
+
+    # Boot heal (see application/skill/boot_reconcile): repair_drift's re-link
+    # of a broken/tampered symlink previously only ran from an explicit
+    # click (CLI/REST) — nothing else ever inspects an already-delivered
+    # link's on-disk health, so it never self-healed while the daemon was
+    # simply not running. Stashed on app.state the same way the provider kind
+    # stashes its boot heal in `provider_wiring`, so `run_skill_drift_boot_heal`
+    # can run it from the lifespan without this module owning startup ordering.
+    app.state.skill_drift_boot_heal = SkillDriftBootHeal(skill_service=skill_svc)
+
+
+async def run_skill_drift_boot_heal(app: FastAPI) -> None:
+    """Boot hook: re-deliver the skill drift ``repair_drift`` already knows how
+    to fix safely, instead of waiting for a click on a button nobody used.
+
+    See ``application/skill/boot_reconcile`` for which drift kinds that is and
+    why. Best-effort, like the provider projection sweep it mirrors: whatever
+    it finds is logged, and nothing here is allowed to fail boot.
+    """
+    heal = getattr(app.state, "skill_drift_boot_heal", None)
+    if heal is None:
+        return
+    try:
+        notes = await heal.heal()
+    except Exception:
+        _log.exception("skill_drift_boot_heal.failed")
+        return
+    for note in notes:
+        _log.warning("skill_drift_boot_heal %s", note)

@@ -567,8 +567,11 @@ components:
           returns null). Used solely by Coffer's internal engine when this
           connection is the internal default. Has no API key, so its
           `credential_ref` is absent.
-        - `unknown` → the probe was inconclusive; the connection is offered to
+        - `unknown` → the probe was inconclusive; the connection starts open to
           every agent and the user decides.
+
+        The wire supplies only the scope a NEW connection starts with; which
+        agents it projects into afterwards is its framework per-agent `scope`.
 
     ProviderOut:
       type: object
@@ -608,9 +611,13 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AgentType" }
           description: >-
-            The EFFECTIVE (resolved) agents this connection projects into — the
-            explicit override or the wire default. The projection writer is chosen
-            by agent type, not protocol; the Agent Overview picker filters on this.
+            READ-ONLY. The EFFECTIVE agents this connection projects into,
+            derived from the resource's framework-level per-agent `scope`
+            (ADR per-agent-resource-scope) intersected with the agent types
+            Coffer knows; empty for a disabled or keyless (ollama) connection.
+            The projection writer is chosen by agent type, not protocol; the
+            Agent Overview picker filters on this. To CHANGE it, edit the scope
+            (`PUT /api/v1/resources/provider/{name}/scope`).
         models:
           type: array
           items: { $ref: "#/components/schemas/ProviderModel" }
@@ -672,14 +679,6 @@ components:
             Mutually exclusive with `credential_ref`. For anthropic/openai/unknown
             exactly one of the two must be supplied; for ollama supply
             neither. Never echoed in any response.
-        compatible_agents:
-          type: array
-          nullable: true
-          items: { $ref: "#/components/schemas/AgentType" }
-          description: >-
-            Override the wire default for which agents the connection projects
-            into (e.g. an openai gateway routed to claude_code). Null ⇒ the wire
-            default. ollama must not declare any (it projects into no agent).
         models:
           type: array
           nullable: true
@@ -697,9 +696,11 @@ components:
       additionalProperties: false
       description: >-
         All fields optional. `protocol` and `credential_ref` are immutable
-        and cannot be patched. `compatible_agents` is mutable (re-target then
-        re-activate to re-project). No CHOSEN model is on the connection (spec provider-switching
-        E3); `models` only curates which of the endpoint's models it offers.
+        and cannot be patched. Re-targeting which agents the connection projects
+        into is a SCOPE edit (`PUT /api/v1/resources/provider/{name}/scope`),
+        not a patch field — re-target then re-activate to re-project. No CHOSEN
+        model is on the connection (spec provider-switching E3); `models` only
+        curates which of the endpoint's models it offers.
       properties:
         base_url:
           type: string
@@ -710,20 +711,13 @@ components:
           description: >-
             Rotate the stored secret. Overwrites the vault entry at the
             current `credential_ref`. Never echoed in any response.
-        compatible_agents:
-          type: array
-          nullable: true
-          items: { $ref: "#/components/schemas/AgentType" }
-          description: >-
-            Re-target which agents the connection projects into. Null ⇒ leave
-            unchanged.
         models:
           type: array
           nullable: true
           items: { $ref: "#/components/schemas/ProviderModel" }
           description: >-
-            Replace the curated offered set as a whole (no merging), exactly like
-            `compatible_agents`. Null ⇒ leave unchanged; `[]` clears the
+            Replace the curated offered set as a whole (no merging).
+            Null ⇒ leave unchanged; `[]` clears the
             restriction, so every model the endpoint serves is offered again.
             Each entry carries its own modality; an omitted `modality` stores
             `text`.

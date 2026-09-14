@@ -37,17 +37,18 @@ class ProviderModel(BaseModel):
 class ProviderCreate(BaseModel):
     """Create an LLM connection. For ``anthropic`` / ``openai`` / ``unknown``
     supply EXACTLY one of ``secret_value`` / ``credential_ref``; an ``ollama``
-    connection has no key, so supply neither. ``compatible_agents`` overrides the
-    wire default for which agents the connection projects into (``None`` ⇒ default).
-    ``models`` curates which of the endpoint's models this connection offers
-    downstream, each with its modality (``None`` ⇒ empty ⇒ no restriction)."""
+    connection has no key, so supply neither. WHICH agents the connection
+    projects into is not set here: the new connection starts on the wire's own
+    default scope and is re-targeted through the framework's scope surface
+    (``PUT /api/v1/resources/provider/{name}/scope``), the same one every scoped
+    kind uses. ``models`` curates which of the endpoint's models this connection
+    offers downstream, each with its modality (``None`` ⇒ empty ⇒ no restriction)."""
 
     name: str = Field(min_length=1, max_length=64)
     protocol: Protocol
     base_url: str = Field(min_length=1)
     credential_ref: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
-    compatible_agents: list[AgentType] | None = None
     models: list[ProviderModel] | None = None
     description: str | None = None
 
@@ -55,14 +56,14 @@ class ProviderCreate(BaseModel):
 class ProviderPatch(BaseModel):
     """Partial update. ``credential_ref`` is immutable (it is the vault address
     the connection owns); ``protocol`` is not — the probe that guessed the wire
-    can be wrong, and nothing keys off it. ``compatible_agents`` is mutable
-    (re-target then re-activate to re-project). ``models`` replaces the curated
-    set as a whole: ``None`` leaves it alone, ``[]`` clears the restriction."""
+    can be wrong, and nothing keys off it. Re-targeting which agents the
+    connection projects into is a scope edit, not a patch field (re-target then
+    re-activate to re-project). ``models`` replaces the curated set as a whole:
+    ``None`` leaves it alone, ``[]`` clears the restriction."""
 
     protocol: Protocol | None = None
     base_url: str | None = None
     secret_value: str | None = Field(default=None, max_length=8192)
-    compatible_agents: list[AgentType] | None = None
     models: list[ProviderModel] | None = None
     description: str | None = None
 
@@ -83,9 +84,12 @@ class ProviderOut(BaseModel):
     """An LLM connection as returned by the API (no secret).
 
     ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
-    ``compatible_agents`` is the EFFECTIVE (resolved) set of agents this
-    connection projects into — the explicit override or the wire default — so the
-    UI can filter agents without re-deriving the default. ``models`` is the
+    ``compatible_agents`` is the EFFECTIVE set of agents this connection
+    projects into, derived from the resource's per-agent scope (ADR per-agent-resource-scope)
+    intersected with the agent types Coffer knows, and empty for a disabled or
+    keyless connection — so the UI can filter agents without re-deriving it.
+    It is READ-ONLY: it is reported here, and changed through the scope
+    surface. ``models`` is the
     curated set of models this connection offers to every downstream picker, each
     carrying its modality; EMPTY means no restriction — the endpoint's whole
     catalogue. A picker takes the entries of the modality it serves, so a chat

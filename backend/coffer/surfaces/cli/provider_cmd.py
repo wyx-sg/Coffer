@@ -25,18 +25,13 @@ def add(
     credential_ref: str | None = typer.Option(
         None, "--credential-ref", help="Reuse an existing credential ref instead of --secret"
     ),
-    compatible: list[str] | None = typer.Option(  # noqa: B008 (typer pattern; list annotation)
-        None,
-        "--compatible",
-        help="Agent this connection projects into (claude_code | codex); repeatable. "
-        "Omit to use the wire default.",
-    ),
 ) -> None:
     """Create an LLM connection. For anthropic/openai/unknown supply exactly one
-    of --secret / --credential-ref; an ollama connection needs neither. Pass
-    --compatible to route the connection to specific agents (e.g. an openai
-    gateway to claude_code). The model is chosen at the point of use, not on the
-    connection (spec provider-switching E3)."""
+    of --secret / --credential-ref; an ollama connection needs neither. The new
+    connection starts on the wire's own default scope; route it to specific
+    agents (e.g. an openai gateway to claude_code) with
+    `coffer scope set provider:<name> --agents claude_code`. The model is chosen
+    at the point of use, not on the connection (spec provider-switching E3)."""
     body: dict[str, object] = {
         "name": name,
         "protocol": protocol,
@@ -46,8 +41,6 @@ def add(
         body["secret_value"] = secret
     if credential_ref is not None:
         body["credential_ref"] = credential_ref
-    if compatible:
-        body["compatible_agents"] = compatible
 
     c, _info = _cli_client.client_or_exit()
     with c:

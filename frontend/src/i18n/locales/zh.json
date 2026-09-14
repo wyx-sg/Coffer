@@ -80,7 +80,7 @@
     "collapse": "折叠侧边栏",
     "expand": "展开侧边栏",
     "agents": "Agent",
-    "channels": "渠道",
+    "channels": "消息渠道",
     "activity": "活动",
     "chat": "聊天",
     "modelProviders": "模型提供商"
@@ -266,7 +266,7 @@
       "system": "Coffer",
       "user": "用户",
       "agent": "智能体",
-      "channel": "渠道"
+      "channel": "消息渠道"
     },
     "timeRange": {
       "1h": "最近 1 小时",
@@ -289,7 +289,7 @@
       "agent_plugin_uninstalled": "从 {{resource}} 卸载了一个插件",
       "capability_disabled": "停用了{{capType}} {{key}}（{{resource}}）",
       "capability_enabled": "启用了{{capType}} {{key}}（{{resource}}）",
-      "channel_paired": "完成了 {{resource}} 渠道的配对",
+      "channel_paired": "完成了消息渠道 {{resource}} 的配对",
       "channel_pairing_issued": "为 {{resource}} 签发了配对码",
       "credential_deleted": "已删除凭证",
       "credential_migrated": "凭证已从系统 keychain 迁移",
@@ -539,7 +539,7 @@
       "switch": "切换",
       "active": "使用中",
       "compatibleAgents": "兼容的 Agent",
-      "compatibleAgentsHint": "此提供商可驱动哪些编码 Agent。具体由各 Agent 概览页按 Agent 选择。",
+      "reachHint": "此提供商可触达哪些 Agent，由「触达范围」控件设置 — 在列表中该提供商所在行，或在它自己的详情页。",
       "agentClaudeCode": "Claude Code",
       "agentCodex": "Codex",
       "deleteTitle": "删除模型提供商",
@@ -626,8 +626,8 @@
     "AGENT_CONFIG_REJECTED": "该 agent 配置被拒绝",
     "BACKUP_REMOTE_INVALID": "该备份远端配置无法使用——请检查 URL、分支，以及间隔是否为正整数秒。",
     "BAD_REQUEST": "请求格式有误，已被拒绝。",
-    "CHANNEL_NOT_PAIRED": "该渠道还没有配对的账号",
-    "CHANNEL_NOT_RUNNING": "渠道适配器未在运行",
+    "CHANNEL_NOT_PAIRED": "该消息渠道还没有配对的账号",
+    "CHANNEL_NOT_RUNNING": "消息渠道适配器未在运行",
     "CHANNEL_SEND_FAILED": "向 IM 平台发送失败",
     "CONFIG_FILE_FORMAT_INVALID": "内容不符合该文件的格式，文件未做更改。",
     "CONFIG_FILE_NOT_ALLOWED": "该配置文件不适用于此 agent",
@@ -951,7 +951,6 @@
     "addSubtitle": "从磁盘导入本地 AgentSkills 标准目录。",
     "import": "导入",
     "path": "本地路径",
-    "verify": "校验",
     "name": "名称",
     "source": "来源",
     "description": "描述",
@@ -963,16 +962,6 @@
     "removeConfirmBody": "这会删除主存储文件夹以及所有 agent 端链接。",
     "importConflictTitle": "已存在名为「{{name}}」的 Skill，要替换它吗？",
     "importReplace": "替换",
-    "verify.title": "校验 Skill 链接",
-    "verify.subtitle": "检查每个已启用的绑定是否仍与磁盘上的链接一致。",
-    "verify.checking": "正在检查漂移…",
-    "verify.ok": "未检测到漂移。",
-    "verify.found": "检测到 {{count}} 处漂移：",
-    "verify.fix": "修复",
-    "verify.fixing": "修复中…",
-    "verify.fixed": "已修复 {{count}} 处",
-    "verify.fixRemaining": "仍需手动处理",
-    "verify.fixGlobalNote": "修复操作会从 master 重新下发所有漂移的 skill，包括上方未列出的 skill。",
     "card": {
       "noBindings": "未绑定任何 Agent"
     },
@@ -1073,7 +1062,8 @@
     },
     "delete": {
       "title": "删除集合",
-      "description": "删除「{{name}}」及其中的所有文件？此操作不可撤销。"
+      "description": "删除「{{name}}」及其中的所有文件？此操作不可撤销。",
+      "bulkDescription": "确定删除 {{count}} 个知识集合？每个集合下的所有文件都会从磁盘上移除。"
     },
     "upload": {
       "button": "上传",
@@ -1308,11 +1298,11 @@
   "channels": {
     "title": "消息渠道",
     "subtitle": "把你常用的 IM 账号（Telegram、SeaTalk）接到你的 agent 上。",
-    "add": "添加渠道",
-    "loadFailed": "加载渠道失败",
-    "searchPlaceholder": "搜索渠道…",
-    "noMatches": "没有匹配的渠道。",
-    "backToChannels": "返回渠道列表",
+    "add": "添加消息渠道",
+    "loadFailed": "加载消息渠道失败",
+    "searchPlaceholder": "搜索消息渠道…",
+    "noMatches": "没有匹配的消息渠道。",
+    "backToChannels": "返回消息渠道列表",
     "paired": "已配对",
     "notPaired": "未配对",
     "types": {
@@ -1329,14 +1319,14 @@
     },
     "welcome": {
       "title": "在你常用的 IM 里和 agent 对话",
-      "body": "一个渠道把一个 Telegram 机器人或 SeaTalk 应用接入 Coffer 的对话平台。与你自己的账号配对后，给机器人发消息即可与 agent 对话——回复和通知都会送达 IM 聊天里。",
+      "body": "一个消息渠道把一个 Telegram 机器人或 SeaTalk 应用接入 Coffer 的对话平台。与你自己的账号配对后，给机器人发消息即可与 agent 对话——回复和通知都会送达 IM 聊天里。",
       "featureChat": {
         "title": "随处对话",
         "body": "消息会进入一条普通会话；agent 的回复原路返回 IM 聊天。"
       },
       "featurePair": {
         "title": "只配对给你",
-        "body": "一次性配对码把渠道绑定到你的账号；陌生人会被静默忽略。"
+        "body": "一次性配对码把消息渠道绑定到你的账号；陌生人会被静默忽略。"
       },
       "featureNotify": {
         "title": "推送通知",
@@ -1344,8 +1334,8 @@
       }
     },
     "dialog": {
-      "title": "添加渠道",
-      "subtitle": "密钥保存在 Coffer 的凭据库中；渠道配置只保存引用。",
+      "title": "添加消息渠道",
+      "subtitle": "密钥保存在 Coffer 的凭据库中；消息渠道配置只保存引用。",
       "type": "类型",
       "name": "名称",
       "botToken": "Bot token",
@@ -1357,27 +1347,27 @@
       "publicBaseUrl": "公网回调地址（base URL）",
       "publicBaseUrlHint": "可选。你的隧道公网地址（如 https://xxx.trycloudflare.com）。Coffer 会据此拼出完整回调 URL，供你填到 SeaTalk 开放平台。",
       "tunnelToken": "Cloudflare 隧道 token",
-      "tunnelTokenHint": "可选。填入 cloudflared 命名隧道的连接器 token 后，渠道启用时 Coffer 会自动起并维持隧道（需先装 cloudflared，并在 Cloudflare 控制台把该隧道指向 http://127.0.0.1:8787）。",
-      "created": "渠道 {{name}} 已注册",
+      "tunnelTokenHint": "可选。填入 cloudflared 命名隧道的连接器 token 后，消息渠道启用时 Coffer 会自动起并维持隧道（需先装 cloudflared，并在 Cloudflare 控制台把该隧道指向 http://127.0.0.1:8787）。",
+      "created": "消息渠道 {{name}} 已注册",
       "delivery": "事件投递方式",
       "deliveryWebhook": "Webhook",
       "deliveryWebsocket": "WebSocket",
       "deliveryHint": "Webhook 需要一个公网可达地址和 Signing Secret；WebSocket 由机器人主动向 SeaTalk 建立一条出站连接，两者都不需要。同一个机器人同时只能用其中一种。",
-      "websocketSdkNote": "WebSocket 需要把 SeaTalk 官方 Python SDK 放在 ~/.coffer/vendor（或 $COFFER_SEATALK_SDK_DIR）。它不在 PyPI 上，Coffer 无法随包分发——SDK 到位前该渠道不会启动。",
+      "websocketSdkNote": "WebSocket 需要把 SeaTalk 官方 Python SDK 放在 ~/.coffer/vendor（或 $COFFER_SEATALK_SDK_DIR）。它不在 PyPI 上，Coffer 无法随包分发——SDK 到位前该消息渠道不会启动。",
       "websocketPortalNote": "同时要在 SeaTalk 开发者后台把该机器人的事件投递方式切到 WebSocket。后台的 Re-verify 只有在 Coffer 正持有连接时才能通过。"
     },
     "edit": {
-      "title": "编辑渠道",
+      "title": "编辑消息渠道",
       "subtitle": "更换绑定的 Agent 或轮换密钥。密钥字段留空则保留当前值。",
       "agent": "默认 Agent",
-      "agentHint": "该渠道上的新会话将使用此 Agent。",
+      "agentHint": "该消息渠道上的新会话将使用此 Agent。",
       "newBotToken": "新的机器人 token",
       "newAppSecret": "新的 App Secret",
       "newSigningSecret": "新的 Signing Secret",
       "rotatePlaceholder": "留空则保留当前值",
       "rotateHint": "存入 Coffer 凭据库；沿用现有引用。",
       "save": "保存修改",
-      "saved": "渠道 {{name}} 已更新",
+      "saved": "消息渠道 {{name}} 已更新",
       "signingSecretRequired": "Webhook 投递需要校验每个请求的签名——请填入 SeaTalk 开发者后台的 Signing Secret。"
     },
     "test": {
@@ -1403,7 +1393,7 @@
     },
     "pairing": {
       "title": "配对",
-      "instruction": "生成配对码后，用你自己的账号把它发给机器人。发送者将成为该渠道唯一的所有者——重新配对会替换之前的绑定。",
+      "instruction": "生成配对码后，用你自己的账号把它发给机器人。发送者将成为该消息渠道唯一的所有者——重新配对会替换之前的绑定。",
       "generate": "生成配对码",
       "generating": "生成中…",
       "copy": "复制",
@@ -1435,8 +1425,9 @@
       },
       "websocketHint": "Coffer 主动连向 SeaTalk，因此没有回调地址、监听进程和隧道。一个机器人只能有一条连接：另一个 Coffer 注册同一个应用会把这条挤下线。连接断开期间事件会暂停投递。"
     },
-    "deleteTitle": "删除渠道",
-    "deleteConfirm": "确定删除渠道“{{name}}”？其适配器将停止，配对关系也会被移除。"
+    "deleteTitle": "删除消息渠道",
+    "deleteConfirm": "确定删除消息渠道“{{name}}”？其适配器将停止，配对关系也会被移除。",
+    "bulkDeleteConfirm": "确定删除 {{count}} 个消息渠道？它们的适配器将停止，配对关系也会被移除。"
   },
   "scope": {
     "subtitle": "这项资源对哪些 agent 生效——所有 agent，或只对你选中的那些。不在范围内时它依然保持注册，只是不会被暴露或分发。",
@@ -1444,6 +1435,7 @@
     "selectedAgents": "指定 agent",
     "dormant": "没有选中任何 agent——处于休眠状态。它依然保持注册，但在你至少选中一个 agent 之前不会到达任何 agent。",
     "noAgents": "还没有注册任何 agent。",
-    "unknownAgent": "本机未注册"
+    "unknownAgent": "本机未注册",
+    "bulkReach": "所选项的生效范围"
   }
 }

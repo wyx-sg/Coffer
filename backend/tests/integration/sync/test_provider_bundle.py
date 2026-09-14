@@ -67,7 +67,6 @@ async def test_provider_round_trips_through_a_bundle(tmp_path):  # type: ignore[
         "protocol": "openai",
         "base_url": "https://gw/v1",
         "credential_ref": "provider/acme/key",
-        "compatible_agents": None,
         # The curated set the connection offers downstream rides along with it,
         # each entry keeping the modality that says which picker may offer it.
         "models": [

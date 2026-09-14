@@ -49,23 +49,6 @@ export interface SkillImportRequest {
   overwrite?: boolean;
 }
 
-export interface DriftEntryOut {
-  skill_name: string;
-  agent_name: string;
-  kind: string;
-  target_path: string;
-  suggested_remedy: string;
-}
-
-export interface DriftReportOut {
-  entries: DriftEntryOut[];
-}
-
-export interface RepairReportOut {
-  remediated: DriftEntryOut[];
-  remaining: DriftReportOut;
-}
-
 export interface SkillFileNode {
   name: string;
   path: string;
@@ -147,8 +130,6 @@ export const skillsApi = {
   importLocal: (body: SkillImportRequest) => call<SkillOut>("POST", "/skills/import", body),
   get: (name: string) => call<SkillOut>("GET", `/skills/${enc(name)}`),
   remove: (name: string) => call<void>("DELETE", `/skills/${enc(name)}`),
-  verify: () => call<DriftReportOut>("POST", "/skills/verify"),
-  repair: () => call<RepairReportOut>("POST", "/skills/repair"),
   filesTree: (name: string) => call<SkillFileTreeOut>("GET", `/skills/${enc(name)}/files`),
   fileContent: (name: string, path: string) =>
     call<SkillFileContentOut>("GET", `/skills/${enc(name)}/files/content?path=${enc(path)}`),

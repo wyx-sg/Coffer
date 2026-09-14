@@ -213,6 +213,12 @@ class ChannelBinding:
     # Group inbound gating (FR-035), sourced from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
+    # The agents this channel may drive (ADR per-agent-resource-scope), taken from the
+    # resource row's framework-level ``scope``. ``None`` — every agent — is the
+    # unscoped default and what every channel carried before scope existed.
+    # A channel scoped to no agent (``[]``) is never bound at all: the runtime
+    # treats it as dormant and does not start its adapter.
+    agent_scope: list[str] | None = None
 
 
 @dataclass(frozen=True)

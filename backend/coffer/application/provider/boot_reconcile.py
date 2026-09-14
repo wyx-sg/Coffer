@@ -35,6 +35,7 @@ from collections.abc import Awaitable, Callable
 from typing import Protocol as _Protocol
 
 from coffer.application.provider.projector import ProviderProjector
+from coffer.application.provider.targets import projection_targets
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.types import AgentType
@@ -152,11 +153,10 @@ class ProviderProjectionBootHeal:
                 continue
             if not cfg.is_active:
                 continue
-            for value in cfg.resolved_compatible_agents():
-                try:
-                    agent_type = AgentType(value)
-                except ValueError:
-                    continue
+            # Framework scope decides the reach (ADR per-agent-resource-scope); ``is_active``
+            # decides only whether this is the connection currently projected
+            # into those agents, which is the very claim this pass verifies.
+            for agent_type in projection_targets(row, cfg):
                 active.setdefault(agent_type, row.name)
         return active
 

@@ -44,13 +44,19 @@ def _reject_raw_secret(field: str, value: str) -> str:
     return value
 
 
+#: The agent a channel routes to when its config names none. Exported so the
+#: runtime can read a stored config's routing target without paying for a full
+#: parse (a row it cannot parse is not one it can start either).
+DEFAULT_AGENT = "claude_code"
+
+
 class _CommonChannelFields(BaseModel):
     """Fields shared by every channel type: the agent it routes to by default."""
 
     # The provider key the chat AgentProviderRegistry resolves a turn by
     # (underscore form), NOT the "claude-code" resource name — a hyphenated
     # value reaches turn time and fails with UNKNOWN_AGENT.
-    default_agent: str = "claude_code"
+    default_agent: str = DEFAULT_AGENT
     default_agent_config: dict[str, Any] | None = None
     # Group inbound gating (FR-035). ``require_mention`` (default on) keeps the
     # bot silent in a group until @mentioned / replied-to; ``ignore_other_mentions``
@@ -58,10 +64,13 @@ class _CommonChannelFields(BaseModel):
     # it also mentions the bot, so the bot never butts into human-aimed traffic.
     require_mention: bool = True
     ignore_other_mentions: bool = False
-    # NOTE: a channel curates no models. A new conversation opens on the bound
+    # NOTE: a channel curates no MODELS. A new conversation opens on the bound
     # agent's own CLI default and ``/model`` offers that agent's whole
-    # catalogue, refusing nothing — the channel is a route to an agent, not a
-    # second place to narrow what that agent may run.
+    # catalogue, refusing nothing — picking a model is the agent's business,
+    # and the channel is not a second place to narrow what a given agent may
+    # run. WHICH agents the channel may drive is a different question and is
+    # the channel's own: it is the framework-level per-agent scope on the
+    # resource row (ADR per-agent-resource-scope), not a config field.
     #
     # NOTE: there is no runtime-affinity field here any more. `runs_on` (the
     # machine whose runtime started this channel's adapter) went away with

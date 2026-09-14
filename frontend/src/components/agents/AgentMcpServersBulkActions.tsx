@@ -8,18 +8,10 @@
 // rather than aborting the batch. Delete is destructive (the daemon writes a
 // .bak per touched file) and owns its own confirm dialog. Kept separate to
 // bound the tab file.
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { agentsApi, type McpEntryOut } from "@/lib/api/agents";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
@@ -39,7 +31,6 @@ export function AgentMcpServersBulkActions({
   clear: () => void;
 }) {
   const { t } = useTranslation();
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const adopt = useBulkMutate({
     invalidate: [
       ["agents", agentName, "mcp-entries"],
@@ -60,7 +51,6 @@ export function AgentMcpServersBulkActions({
 
   const deleteAll = async () => {
     await remove.run(rows, (e) => agentsApi.removeMcpEntry(agentName, e.name, e.source));
-    setConfirmDelete(false);
     clear();
   };
 
@@ -74,38 +64,12 @@ export function AgentMcpServersBulkActions({
       >
         {t("agents.workspace.mcp.adopt")}
       </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-        disabled={remove.isPending}
-        onClick={() => setConfirmDelete(true)}
-      >
-        {t("common.delete")}
-      </Button>
-
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("common.delete")}</DialogTitle>
-            <DialogDescription>
-              {t("agents.workspace.mcp.bulkDeleteConfirm", { count: rows.length })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => void deleteAll()}
-            >
-              {t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkDeleteButton
+        title={t("common.delete")}
+        description={t("agents.workspace.mcp.bulkDeleteConfirm", { count: rows.length })}
+        pending={remove.isPending}
+        onConfirm={deleteAll}
+      />
     </>
   );
 }

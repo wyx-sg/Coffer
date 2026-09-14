@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from coffer.application.channel.agent_routing import effective_agent
 from coffer.application.channel.card_delivery import deliver_card
 from coffer.application.channel.conversation_ops import (
     ensure_conversation,
@@ -54,7 +55,7 @@ async def cmd_model(
         current = cfg.model or "(CLI default)"
         if binding.adapter.capabilities.supports_buttons:
             row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
-            key = (row.preferred_agent if row is not None else None) or binding.default_agent
+            key = effective_agent(binding, row.preferred_agent if row is not None else None)
             picks = await commands._model_suggestions.suggest(key)
             card = model_card(current=cfg.model, picks=picks)
             # Same fallback as /agent: a refused card degrades to text.
