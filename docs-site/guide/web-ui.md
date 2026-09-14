@@ -221,10 +221,12 @@ Open **Memory** for what your agents have already learned, read out of their own
 memory and normalised into facts by project. The list is a table like every other one here:
 a row per partition — `global` plus one per project — showing the project it was named
 from, how many facts it holds, and the same **reach** control the MCP-servers and Skills
-lists carry per row, with multi-select for setting reach in bulk. Reach is the three-way
-Disabled / Everywhere / Restricted… choice — on or off, and for which agents — and it is
-set **per machine**: it is never synced, so every machine you work on sets its own. The
-control says so where you use it; [Sync](/guide/sync) says why.
+lists carry per row, with multi-select for setting reach in bulk. Reach is one button
+labelled with where the partition currently reaches — "Every agent", "2 agents",
+"Disabled" — opening a panel where Disabled, Every agent and Only selected agents are the
+choices: on or off, and for which agents. It is set **per machine**: it is never synced,
+so every machine you work on sets its own. The panel says so where you use it;
+[Sync](/guide/sync) says why.
 Nothing on this page is
 created by you, so the header action is **Sync**, not Add; a vault with no partitions yet
 shows the same table with an empty row, and Sync stays where it was.

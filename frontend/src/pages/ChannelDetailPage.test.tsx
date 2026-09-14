@@ -5,7 +5,7 @@
 // page's own rendering: status (peer + callback), pairing-code generation,
 // and the header reach control's wiring.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { ChannelDetailPage } from "./ChannelDetailPage";
@@ -25,7 +25,7 @@ vi.mock("@/lib/hooks/useAgentProviders", () => ({
 }));
 // The header carries ScopeControl now. On a detail page it fetches its own
 // scope, so the hooks behind it are stubbed rather than served by a real client.
-// `channel` declares scope, so the control renders all three segments.
+// `channel` declares scope, so the control's panel offers all three states.
 vi.mock("@/lib/hooks/useScope", () => ({
   UNRESTRICTED: { agents: null },
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
@@ -196,16 +196,15 @@ describe("ChannelDetailPage", () => {
     stubPairing();
     renderPage();
 
-    // No Switch any more: the header carries the same three-way reach control
-    // the row does, so the two surfaces say the same thing about the same
-    // channel — including "answer only for these agents", which a Switch cannot.
+    // No Switch any more: the header carries the same reach control the row
+    // does, so the two surfaces say the same thing about the same channel —
+    // including "answer only for these agents", which a Switch cannot.
     expect(screen.queryByRole("switch")).toBeNull();
-    expect(screen.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByRole("button", { name: /restricted/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^disabled$/i }));
+    const reach = within(screen.getByTestId("scope-control")).getByRole("button");
+    expect(reach).toHaveTextContent(/every agent/i);
+    fireEvent.click(reach);
+    expect(screen.getByRole("radio", { name: /only selected agents/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
     expect(disable.mutate).toHaveBeenCalledWith({ kind: "channel", name: "st" });
     expect(enable.mutate).not.toHaveBeenCalled();
   });

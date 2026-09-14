@@ -105,6 +105,25 @@ resource's **reach**, and reach is machine-local.
    restricting a resource is entitled to know the restriction stops at this
    machine.
 
+   One control means one button, labelled with the answer it already holds —
+   *Every agent*, *2 agents*, *Disabled* — that opens a panel where those states
+   are the choices: *Disabled*, *Every agent*, *Only selected agents* over the
+   scope's tick-list, with the machine-local sentence beneath them. It earned
+   that shape by losing the previous one. Three segments side by side
+   (*Disabled* / *Everywhere* / *Restricted…*) spent three controls on two
+   states, because "everywhere" and "restricted with every agent ticked" are one
+   answer written twice — and the reader had to compare all three to learn which
+   of them was live. A button that states the reach answers that by being read.
+   *Disabled* keeps a choice of its own because it still IS a choice of its own:
+   its own endpoint, its own audit events, and a write that deliberately leaves
+   `scope` alone, so re-enabling restores the agents the user had picked. The
+   panel stages the tick-list and writes exactly once, when it closes — the two
+   whole-value choices close it themselves — so a panel that was opened and
+   dismissed writes nothing at all. A kind that declares no scope gets the same
+   button over a two-choice *Disabled* / *Enabled* panel, and a multi-select,
+   which has no current reach to name, gets one reading *Set reach…* that opens
+   with nothing chosen.
+
 3. **Registered everywhere, active where it is granted.** A resource still
    converges to every machine and stays visible in every registry; out of reach
    it is simply not activated — not exposed, not delivered. The registry remains
@@ -283,7 +302,10 @@ resource's **reach**, and reach is machine-local.
 - Two kinds read scope with a consequence beyond filtering: a dormant channel
   does not run, and a dormant connection projects into no agent. "Dormant" is
   therefore not always merely invisible — for those two it is off. Off is still
-  only off: a dormant resource stays visible, exportable and editable.
+  only off: a dormant resource stays visible, exportable and editable. Dormant
+  is nonetheless not *disabled*, and no surface may print it as such: an empty
+  list is a scope narrowed to nothing, while disabled is the switch thrown — so
+  the reach control reports it as *No agent selected*.
 - Because a kind whose scope has such a consequence can pre-validate the scope
   write (item 1), narrowing a reach can now be REFUSED rather than merely having
   an effect the user did not intend. That is one more way a scope edit can fail,

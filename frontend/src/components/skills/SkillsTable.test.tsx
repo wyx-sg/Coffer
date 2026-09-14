@@ -1,14 +1,19 @@
 // frontend/src/components/skills/SkillsTable.test.tsx
 //
 // The skills list renders via the shared DataTable: rows navigate to the detail
-// page on click, each row carries the three-state ScopeControl (the skill's
-// reach: Disabled / Everywhere / Restricted — the same control the detail
-// page mounts) + a Delete action (which opens a styled confirmation dialog — no
-// window.confirm), a status filter narrows the rows by that same reach, and a
-// checkbox column enables the bulk bar: that same three-state reach control
-// applied to the whole selection, plus Delete. There is no Verify anywhere any
-// more — the drift report kept its CLI and REST surfaces, but the button was
-// never used.
+// page on click, each row carries ScopeControl (the skill's reach — the same
+// control the detail page mounts) + a Delete action (which opens a styled
+// confirmation dialog — no window.confirm), a status filter narrows the rows by
+// that same reach, and a checkbox column enables the bulk bar: that same reach
+// control applied to the whole selection, plus Delete. There is no Verify
+// anywhere any more — the drift report kept its CLI and REST surfaces, but the
+// button was never used.
+//
+// Reach is ONE button per row whose label states the reach ("Every agent" /
+// "1 agent" / "Disabled"), opening a panel where Disabled / Every agent / Only
+// selected agents are radio choices. It used to be those three as buttons side
+// by side in the row. So these tests read the state off the button's TEXT, and
+// change it by opening the panel and picking a radio out of the portal.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
@@ -81,6 +86,15 @@ function wrap(ui: React.ReactNode) {
 function rowFor(name: string): HTMLElement {
   return screen.getByText(name).closest("tr") as HTMLElement;
 }
+
+/** The row's ONE reach button — its text is the skill's current reach. */
+function reachIn(name: string) {
+  return within(within(rowFor(name)).getByTestId("scope-control")).getByRole("button");
+}
+
+/** The panel's choices are portalled out of the row, so they are queried from
+ *  the whole screen rather than within the <tr>. */
+const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
 
 // Open the status filter dropdown and click an option by its label. DataTable
 // renders the filter combobox in its toolbar (first in DOM order) and the
@@ -176,43 +190,38 @@ describe("SkillsTable", () => {
     expect(screen.queryByRole("button", { name: /verify/i })).toBeNull();
   });
 
-  test("the bulk bar carries the same three-way reach control the rows do", () => {
+  test("the bulk bar carries the same reach control the rows do", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
     expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     const bar = within(screen.getByTestId("bulk-reach-control"));
-    // No segment claims to be live: a mixed selection has no single reach.
-    expect(bar.getByRole("button", { name: /^disabled$/i })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(bar.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(bar.getByRole("button", { name: /restricted/i })).toBeInTheDocument();
+    // The button claims no state: a mixed selection has no single reach, so it
+    // names the action instead of misreporting the rows.
+    const trigger = bar.getByRole("button");
+    expect(trigger).toHaveTextContent(/set reach/i);
+
+    // …and for the same reason no choice in its panel starts out selected,
+    // though all three the rows offer are there.
+    fireEvent.click(trigger);
+    for (const label of [/^disabled$/i, /every agent/i, /only selected agents/i]) {
+      expect(choice(label)).not.toBeChecked();
+    }
   });
 
-  test("the status cell is the three-state scope control, not an on/off switch", () => {
+  test("the status cell is the reach control, not an on/off switch", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
 
     expect(screen.queryByRole("switch")).toBeNull();
-    const row = within(rowFor("hello-skill"));
-    expect(row.getByTestId("scope-control")).toBeInTheDocument();
-    expect(row.getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    // A scoped skill lands on "Restricted"; a disabled one on "Disabled".
-    expect(
-      within(rowFor("scoped-skill")).getByRole("button", { name: /restricted/i }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      within(rowFor("git-skill")).getByRole("button", { name: /^disabled$/i }),
-    ).toHaveAttribute("aria-pressed", "true");
+    expect(within(rowFor("hello-skill")).getByTestId("scope-control")).toBeInTheDocument();
+    // The three states an on/off switch could not express, each read straight
+    // off the one button rather than by comparing three segments.
+    expect(reachIn("hello-skill")).toHaveTextContent(/^every agent$/i);
+    // A scoped skill counts the agents it reaches; a disabled one says so.
+    expect(reachIn("scoped-skill")).toHaveTextContent(/^1 agent$/i);
+    expect(reachIn("git-skill")).toHaveTextContent(/^disabled$/i);
   });
 
   test("each row's scope comes from the list payload — no per-row scope fetch", () => {
@@ -231,10 +240,14 @@ describe("SkillsTable", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
 
-    fireEvent.click(within(rowFor("hello-skill")).getByRole("button", { name: /^disabled$/i }));
+    // Each state is picked inside the row's panel; a whole-value choice closes
+    // it and commits on the way out.
+    fireEvent.click(reachIn("hello-skill"));
+    fireEvent.click(choice(/^disabled$/i));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", name: "hello-skill" });
 
-    fireEvent.click(within(rowFor("git-skill")).getByRole("button", { name: /everywhere/i }));
+    fireEvent.click(reachIn("git-skill"));
+    fireEvent.click(choice(/every agent/i));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "skill", name: "git-skill" });
   });
 
@@ -242,10 +255,14 @@ describe("SkillsTable", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
 
-    fireEvent.click(within(rowFor("hello-skill")).getByRole("button", { name: /^disabled$/i }));
-    fireEvent.click(
-      within(rowFor("hello-skill")).getByRole("button", { name: /restricted/i }),
-    );
+    // Not the button that opens the panel, and not the choices inside it
+    // either: the panel is portalled out of the row, but it is still a React
+    // child of the cell, so without the cell's guard its clicks would reach the
+    // row and navigate away mid-choice.
+    fireEvent.click(reachIn("hello-skill"));
+    fireEvent.click(choice(/only selected agents/i));
+    fireEvent.click(within(screen.getByTestId("scope-agent-cc")).getByRole("checkbox"));
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     expect(navigateMock).not.toHaveBeenCalled();
 
     // …while the row itself still navigates.
@@ -261,12 +278,12 @@ describe("SkillsTable", () => {
     expect(screen.queryByText("hello-skill")).toBeNull();
     expect(screen.getByText("git-skill")).toBeInTheDocument();
 
-    selectStatus("Everywhere");
+    selectStatus("Every agent");
     expect(screen.getByText("hello-skill")).toBeInTheDocument();
     expect(screen.queryByText("git-skill")).toBeNull();
     expect(screen.queryByText("scoped-skill")).toBeNull();
 
-    selectStatus("Restricted…");
+    selectStatus("Only selected agents");
     expect(screen.getByText("scoped-skill")).toBeInTheDocument();
     expect(screen.queryByText("hello-skill")).toBeNull();
   });

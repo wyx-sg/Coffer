@@ -126,7 +126,7 @@ A path that fails to apply is reported and rejoins the next round rather than ab
 
 Two things deliberately stay put, and both are the same idea: what a machine *does* with the vault belongs to that machine.
 
-**Reach does not sync.** A resource's on/off switch and its agent scope — the Disabled / Everywhere / Restricted control in the web UI, and `coffer resource enable|disable` / `coffer scope set` on the command line — are set on the machine they apply to. Every machine sets its own, and a converge round never reads or writes either one. So "this work MCP server belongs on the desktop, not the laptop" is said at the laptop:
+**Reach does not sync.** A resource's on/off switch and its agent scope — the reach button in the web UI, the one labelled with where the resource currently reaches, whose panel offers Disabled, Every agent and Only selected agents; and `coffer resource enable|disable` / `coffer scope set` on the command line — are set on the machine they apply to. Every machine sets its own, and a converge round never reads or writes either one. So "this work MCP server belongs on the desktop, not the laptop" is said at the laptop:
 
 ```bash
 coffer resource disable mcp_server:work-jira      # on the laptop

@@ -69,6 +69,12 @@ const ITEMS: CollectionOut[] = [
 
 const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
 
+/** The row's ONE reach button — its text is the collection's current reach.
+ *  (Reach used to be three buttons per row; it is one whose label is the
+ *  answer, opening a panel where the states are the choices.) */
+const reachIn = (name: string) =>
+  within(within(rowFor(name)).getByTestId("scope-control")).getByRole("button");
+
 describe("KnowledgeTable", () => {
   afterEach(() => vi.clearAllMocks());
 
@@ -83,13 +89,10 @@ describe("KnowledgeTable", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
     expect(screen.getAllByTestId("scope-control")).toHaveLength(ITEMS.length);
 
-    expect(within(rowFor("shopee")).getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(
-      within(rowFor("personal")).getByRole("button", { name: /restricted/i }),
-    ).toHaveAttribute("aria-pressed", "true");
+    // One button per row, and its label states that collection's reach — the
+    // merged-in `enabled`/`scope`, read back off the control.
+    expect(reachIn("shopee")).toHaveTextContent(/^every agent$/i);
+    expect(reachIn("personal")).toHaveTextContent(/^1 agent$/i);
   });
 
   test("the Files header cannot wrap — it was breaking one character per line", () => {
@@ -119,7 +122,10 @@ describe("KnowledgeTable", () => {
     expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
-    expect(screen.getByTestId("bulk-reach-control")).toBeInTheDocument();
+    // The same one-button control the rows carry; it names the action rather
+    // than a state, because a mixed selection has no single reach.
+    const bar = within(screen.getByTestId("bulk-reach-control"));
+    expect(bar.getByRole("button")).toHaveTextContent(/set reach/i);
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
 });

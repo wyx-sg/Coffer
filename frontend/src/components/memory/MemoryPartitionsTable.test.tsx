@@ -1,9 +1,11 @@
 // frontend/src/components/memory/MemoryPartitionsTable.test.tsx
 //
 // The partitions list: each row carries its fact count and the same
-// three-state ScopeControl the mcp-servers/skills lists render per row
-// (spec memory FR-062/FR-014). ScopeControl's own hooks are mocked, mirroring
-// `kinds/mcp/McpServersTable.test.tsx` — this suite only exercises the table.
+// ScopeControl the mcp-servers/skills lists render per row (spec memory
+// FR-062/FR-014) — ONE button whose label states the partition's reach,
+// opening a panel where the states are the choices. ScopeControl's own hooks
+// are mocked, mirroring `kinds/mcp/McpServersTable.test.tsx` — this suite only
+// exercises the table.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -60,11 +62,18 @@ describe("MemoryPartitionsTable", () => {
     render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
     const controls = screen.getAllByTestId("scope-control");
     expect(controls).toHaveLength(ROWS.length);
-    // The scoped partition shows its selected-agents segment as active.
-    const coffeeRow = within(screen.getByText("coffer").closest("tr") as HTMLElement);
-    // The trigger reads "Restricted…"; which axis and which names are in the
-    // popover, because scope now has two axes (spec vault-sync).
-    expect(coffeeRow.getByText(/restricted/i)).toBeInTheDocument();
+    // The scoped partition's button reports the scope it is in: a count of the
+    // agents it reaches. WHICH agents those are lives in the panel the button
+    // opens, not in the row.
+    const cofferRow = within(screen.getByText("coffer").closest("tr") as HTMLElement);
+    expect(within(cofferRow.getByTestId("scope-control")).getByRole("button")).toHaveTextContent(
+      /^1 agent$/i,
+    );
+    // …and the unscoped one says so in the same one place.
+    const globalRow = within(screen.getByText("global").closest("tr") as HTMLElement);
+    expect(within(globalRow.getByTestId("scope-control")).getByRole("button")).toHaveTextContent(
+      /^every agent$/i,
+    );
   });
 
   test("selecting rows reveals the same reach control over the whole selection", () => {
@@ -73,7 +82,12 @@ describe("MemoryPartitionsTable", () => {
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     const bar = within(screen.getByTestId("bulk-reach-control"));
-    expect(bar.getByRole("button", { name: /everywhere/i })).toBeInTheDocument();
+    // The same one-button control the rows carry; it names the action rather
+    // than a state, because a mixed selection has no single reach to report.
+    const trigger = bar.getByRole("button");
+    expect(trigger).toHaveTextContent(/set reach/i);
+    fireEvent.click(trigger);
+    expect(screen.getByRole("radio", { name: /every agent/i })).toBeInTheDocument();
     // No bulk delete: a partition is aggregated from the agents' own memories,
     // never user-created, so there is nothing here to remove.
     expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();

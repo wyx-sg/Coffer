@@ -76,9 +76,10 @@ const { probedFor } = vi.hoisted(() => ({ probedFor: [] as string[] }));
 
 // The header's ScopeControl reaches the daemon through hand-written hooks; stub
 // them. `provider` DOES declare per-agent scope (its reach replaced the old
-// `compatible_agents` config key), so the control renders the full three-segment
-// group — Disabled / Everywhere / Restricted — and it is the only place a
-// connection's reach is edited: the Edit dialog has no control of its own.
+// `compatible_agents` config key), so the control's panel offers all three
+// states — Disabled / Every agent / Only selected agents — and it is the only
+// place a connection's reach is edited: the Edit dialog has no control of its
+// own.
 const { enableMutate, disableMutate, updateScopeMutate } = vi.hoisted(() => ({
   enableMutate: vi.fn(),
   disableMutate: vi.fn(),
@@ -571,15 +572,13 @@ describe("ProviderDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "acme" });
 
-    // An enabled connection with an unscoped reach reads as "Everywhere" — and
+    // An enabled connection with an unscoped reach reads as "Every agent" — and
     // this control is the ONLY thing stating that state.
-    const control = within(screen.getByTestId("scope-control"));
-    expect(control.getByRole("button", { name: "Everywhere" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    const control = within(screen.getByTestId("scope-control")).getByRole("button");
+    expect(control).toHaveTextContent("Every agent");
 
-    fireEvent.click(control.getByRole("button", { name: "Disabled" }));
+    fireEvent.click(control);
+    fireEvent.click(screen.getByRole("radio", { name: "Disabled" }));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "provider", name: "acme" });
   });
 
@@ -588,8 +587,10 @@ describe("ProviderDetailPage", () => {
     renderPage();
     await screen.findByRole("heading", { name: "acme" });
 
-    const control = within(screen.getByTestId("scope-control"));
-    fireEvent.click(control.getByRole("button", { name: "Everywhere" }));
+    const control = within(screen.getByTestId("scope-control")).getByRole("button");
+    expect(control).toHaveTextContent("Disabled");
+    fireEvent.click(control);
+    fireEvent.click(screen.getByRole("radio", { name: "Every agent" }));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "provider", name: "acme" });
   });
 

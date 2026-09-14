@@ -1,11 +1,18 @@
 // frontend/src/kinds/mcp/McpServersTable.test.tsx
 //
 // The MCP servers list now renders via the shared DataTable: rows navigate to
-// the detail page on click, each row carries a health badge + the three-state
-// ScopeControl (the server's reach, the same control the detail header mounts)
-// + delete action, and a leading checkbox column drives the bulk bar: that same
-// three-state reach control applied to the whole selection, plus delete. An
-// Enable/Disable pair there offered strictly less than the row it summarises.
+// the detail page on click, each row carries a health badge + ScopeControl (the
+// server's reach, the same control the detail header mounts) + delete action,
+// and a leading checkbox column drives the bulk bar: that same reach control
+// applied to the whole selection, plus delete. An Enable/Disable pair there
+// offered strictly less than the row it summarises.
+//
+// Reach is ONE button per row whose label states the current reach ("Every
+// agent" / "1 agent" / "Disabled"), opening a panel where the states are radio
+// choices. It used to be three buttons side by side, which spent three controls
+// on two states and made the reader compare all three to learn which was live —
+// so these tests read the button's TEXT for the state, and drive a change by
+// opening the panel and picking a radio out of the portal.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
@@ -109,6 +116,15 @@ function rowFor(name: string) {
   return within(screen.getByText(name).closest("tr") as HTMLElement);
 }
 
+/** The row's ONE reach button — its text is the server's current reach. */
+function reachIn(name: string) {
+  return within(rowFor(name).getByTestId("scope-control")).getByRole("button");
+}
+
+/** The panel's choices are portalled out of the row, so they are queried
+ *  from the whole screen rather than within the <tr>. */
+const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
+
 // The status filter's combobox is first in DOM order (the pagination page-size
 // one renders after the table).
 function selectStatus(optionName: string) {
@@ -138,11 +154,18 @@ describe("McpServersTable", () => {
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     const bar = within(screen.getByTestId("bulk-reach-control"));
-    expect(bar.getByRole("button", { name: /^disabled$/i })).toBeInTheDocument();
-    expect(bar.getByRole("button", { name: /everywhere/i })).toBeInTheDocument();
-    expect(bar.getByRole("button", { name: /restricted/i })).toBeInTheDocument();
+    // One button, naming the action rather than a state: a mixed selection has
+    // no current reach, so claiming one would misreport the other rows.
+    const trigger = bar.getByRole("button");
+    expect(trigger).toHaveTextContent(/set reach/i);
     // Delete stays its own button beside it.
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
+
+    // …and the panel it opens offers the row's three states, not Enable/Disable.
+    fireEvent.click(trigger);
+    expect(choice(/^disabled$/i)).toBeInTheDocument();
+    expect(choice(/every agent/i)).toBeInTheDocument();
+    expect(choice(/only selected agents/i)).toBeInTheDocument();
   });
 
   test("renders selection checkboxes (select-all + one per row)", () => {
@@ -151,22 +174,19 @@ describe("McpServersTable", () => {
     expect(screen.getAllByRole("checkbox").length).toBeGreaterThanOrEqual(2);
   });
 
-  test("the status cell is the three-state scope control, not an on/off switch", () => {
+  test("the status cell is the reach control, not an on/off switch", () => {
     render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
 
     expect(screen.queryByRole("switch")).toBeNull();
-    expect(rowFor("files").getByRole("button", { name: /everywhere/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(rowFor("notes").getByRole("button", { name: /restricted/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(rowFor("web").getByRole("button", { name: /^disabled$/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    // Exactly one button per row, and its text IS that server's reach — the
+    // three states an on/off switch could not express, each read straight off
+    // the label instead of by comparing three segments.
+    for (const name of ["files", "web", "notes"]) {
+      expect(rowFor(name).getAllByTestId("scope-control")).toHaveLength(1);
+    }
+    expect(reachIn("files")).toHaveTextContent(/^every agent$/i);
+    expect(reachIn("notes")).toHaveTextContent(/^1 agent$/i);
+    expect(reachIn("web")).toHaveTextContent(/^disabled$/i);
   });
 
   test("each row's scope comes from the list payload — no per-row scope fetch", () => {
@@ -193,10 +213,17 @@ describe("McpServersTable", () => {
 
     render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
 
-    fireEvent.click(rowFor("files").getByRole("button", { name: /^disabled$/i }));
+    // Each state is now picked inside the row's panel; picking a whole-value
+    // choice closes it and commits on the way out.
+    fireEvent.click(reachIn("files"));
+    fireEvent.click(choice(/^disabled$/i));
     expect(disableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "files" });
-    fireEvent.click(rowFor("web").getByRole("button", { name: /everywhere/i }));
+
+    fireEvent.click(reachIn("web"));
+    fireEvent.click(choice(/every agent/i));
     expect(enableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "web" });
+    // Neither the button nor the choice inside the portalled panel may reach
+    // the row underneath it.
     expect(navigateMock).not.toHaveBeenCalled();
 
     // …while the row itself still navigates.
@@ -211,11 +238,11 @@ describe("McpServersTable", () => {
     expect(screen.queryByText("files")).toBeNull();
     expect(screen.getByText("web")).toBeInTheDocument();
 
-    selectStatus("Everywhere");
+    selectStatus("Every agent");
     expect(screen.getByText("files")).toBeInTheDocument();
     expect(screen.queryByText("notes")).toBeNull();
 
-    selectStatus("Restricted…");
+    selectStatus("Only selected agents");
     expect(screen.getByText("notes")).toBeInTheDocument();
     expect(screen.queryByText("files")).toBeNull();
   });
