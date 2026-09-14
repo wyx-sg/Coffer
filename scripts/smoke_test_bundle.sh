@@ -12,10 +12,11 @@
 #   1. Locate coffer-mcp-shim AND coffer-daemon inside the bundle.
 #   2. Start the bundled coffer-daemon under an isolated HOME and wait until it
 #      has published ~/.coffer/daemon.json and is answering /daemon/status.
-#   3. Spawn the shim with the SAME isolated HOME, send one JSON-RPC 2.0
+#   3. Ask that daemon for its root and assert it serves the bundled web UI.
+#   4. Spawn the shim with the SAME isolated HOME, send one JSON-RPC 2.0
 #      "initialize" request over stdin, and assert a well-formed reply comes
 #      back within 15 s — exercising the real shim -> daemon /mcp round-trip.
-#   4. Tear the daemon down and exit 0 on success; non-zero with diagnostics
+#   5. Tear the daemon down and exit 0 on success; non-zero with diagnostics
 #      on failure.
 #
 # The shim only replies once it reaches a live coffer-daemon, and its
@@ -181,30 +182,40 @@ fi
 echo "==> daemon ready on port $PORT"
 
 # ---------------------------------------------------------------------------
-# Step 1b: sqlite-vec vec0 extension probe
+# Step 1b: the bundled web UI
 #
-# A frozen build that failed to bundle sqlite-vec's loadable native extension
-# (vec0.dylib / vec0.so / vec0.dll) would silently degrade vector retrieval to
-# keyword-only — VecIndex.available() swallows the load failure at runtime, so
-# nothing crashes; vector search just stops working. The RUNNING frozen daemon
-# reports whether it could load vec0 as `vec_available` on /daemon/status, so we
-# assert it here. This fails the smoke test instead of shipping a quietly-
-# degraded bundle.
+# `coffer-daemon.spec` folds `frontend/dist` in as `webui/` ONLY when
+# `index.html` is already sitting there at build time — build the binaries
+# without building the frontend first and PyInstaller silently produces a
+# daemon that serves an API and no interface. Nothing about that build fails,
+# and `--version` and /daemon/status both look perfectly healthy, so the smoke
+# test is the one place it can be caught before a release ships it.
+#
+# Asking the RUNNING daemon for its root and requiring a hashed asset
+# reference proves the whole path: the data files made it into the archive,
+# `webui.resolve_webui_dir()` found them inside the bundle, and the route
+# serves them. A bare "200 with some HTML" would not — the not-found page is
+# also HTML.
+#
+# (This step used to assert `vec_available` on /daemon/status, which the
+# daemon no longer reports: sqlite-vec went away with the retrieval index,
+# and `sqlite_vec` is now on the banned-import list in backend/pyproject.toml.
+# The assertion could never pass again, so every healthy build failed here.)
 # ---------------------------------------------------------------------------
 
-echo "==> probing sqlite-vec vec0 extension via /daemon/status (vec_available)"
-STATUS_JSON="$(curl -sf "http://127.0.0.1:$PORT/api/v1/daemon/status" 2>&1)" || {
-    echo "FAIL: could not read /daemon/status to probe vec availability" >&2
+echo "==> checking the daemon serves the bundled web UI"
+INDEX_HTML="$(curl -sf "http://127.0.0.1:$PORT/" 2>&1)" || {
+    echo "FAIL: the bundled daemon does not serve the web UI at /" >&2
+    echo "      (the frozen build has no webui/ — was frontend/dist built" >&2
+    echo "       before the binaries? see backend/coffer-daemon.spec)" >&2
     exit 7
 }
-echo "$STATUS_JSON"
-case "$STATUS_JSON" in
-    *'"vec_available":true'*|*'"vec_available": true'*) : ;;
+case "$INDEX_HTML" in
+    *'assets/index-'*) echo "==> web UI served (hashed asset referenced)" ;;
     *)
-        echo "FAIL: bundled daemon cannot load the sqlite-vec vec0 extension" >&2
-        echo "      (frozen build lost vector retrieval — it would silently fall" >&2
-        echo "       back to keyword-only; see collect_data_files('sqlite_vec') in" >&2
-        echo "       backend/coffer-daemon.spec)" >&2
+        echo "FAIL: / returned no hashed asset reference — the bundled UI is" >&2
+        echo "      missing or stale. Got:" >&2
+        printf '%s\n' "$INDEX_HTML" | head -20 >&2
         exit 7
         ;;
 esac

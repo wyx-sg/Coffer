@@ -41,7 +41,7 @@ daemon 直接作为 Python 进程运行：`coffer daemon start` 调用已安装�
 
 | Spec 文件                      | 输出二进制文件         | 包含内容                                                                                                                                                                                                                  |
 | ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI、SQLAlchemy 2 / aiosqlite、Pydantic 2、`mcp`、`keyring`、Alembic、structlog、Typer、uvicorn、`tomlkit` / `yaml`（agent 配置编辑）、`sqlite_vec`（及其原生 `vec0` 可加载扩展数据文件）、`markitdown`、`openai`，以及对话 agent 栈（`langchain*` / `langgraph`） |
+| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI、SQLAlchemy 2 / aiosqlite、Pydantic 2、`mcp`、`keyring`、Alembic、structlog、Typer、uvicorn、`tomlkit` / `yaml`（agent 配置编辑）、`markitdown`、`openai`，以及对话 agent 栈（`langchain*` / `langgraph`） |
 | `backend/coffer-mcp-shim.spec` | `dist/coffer-mcp-shim` | 仅 `httpx`（shim 是一个轻量级 loopback 转发器）                                                                                                                                                                          |
 | `backend/coffer.spec`          | `dist/coffer`          | 管理 CLI（Typer 应用）                                                                                                                                                                                                  |
 
@@ -51,12 +51,12 @@ PyInstaller 将 Python 解释器、所有依赖以及应用程序代码打包成
 
 Alembic 迁移文件通过 PyInstaller 的 `datas` 机制，以数据文件的形式随 daemon 二进制一起发布。首次启动时，daemon 会在接受连接之前对一个全新的数据库执行 `alembic upgrade head`——最终用户无需额外步骤即可得到正确的 schema。
 
-daemon 二进制还打包了更重的知识与对话依赖（knowledge 与对话两份规范）：用于向量索引的 `sqlite_vec`、用于文档转换的 `markitdown`、用于 embedding 的 `openai`，以及 `langchain*` / `langgraph` 对话 agent 栈。它们在函数内部惰性导入，PyInstaller 的静态分析无法追踪——因此 `coffer-daemon.spec` 把它们显式声明为 hidden imports，让 frozen 的 daemon 能够转换文档、做 embedding、执行向量检索并驱动内置对话 agent。
+daemon 二进制还打包了更重的知识与对话依赖（knowledge 与对话两份规范）：用于文档转换的 `markitdown`、用于 embedding 的 `openai`，以及 `langchain*` / `langgraph` 对话 agent 栈。它们在函数内部惰性导入，PyInstaller 的静态分析无法追踪——因此 `coffer-daemon.spec` 把它们显式声明为 hidden imports，让 frozen 的 daemon 能够转换文档、做 embedding 并驱动内置对话 agent。
 
 构建好的 Web UI（spec ui-shell）同样以数据文件的形式随 daemon 二进制发布，这正是 frozen 的 daemon 能从自己的 origin 提供 UI 的原因。
 
-::: warning 捆绑验证——sqlite-vec 原生扩展
-`sqlite-vec` 以**包数据**而非 Python 子模块的形式分发其可加载原生扩展（`vec0.dylib` / `vec0.so` / `vec0.dll`），因此 `collect_submodules` 永远捕获不到它——`coffer-daemon.spec` 通过 `collect_data_files("sqlite_vec")` 加入它。如果冻结构建缺失该数据文件，daemon 将无法加载 `vec0` 扩展，向量检索会静默降级为仅关键字（`VecIndex.available()` 吞掉加载失败）。因此发布冒烟测试必须把「捆绑的 daemon 能加载 `vec0`」作为一个显式的捆绑验证项（按 [Files as Truth](/zh/reference/adr/files-as-truth-sqlite-retrieval) 与 [PyInstaller Distribution](/zh/reference/adr/distribution-pyinstaller)）。
+::: warning 捆绑验证——Web UI 是一个数据文件
+`coffer-daemon.spec` 只有在 PyInstaller 运行时 `index.html` **已经躺在** `frontend/dist` 里，才会把它作为 `webui/` 折进去。先构建二进制、后构建前端，产出的就是一个只有 API、没有界面的 daemon——而这样的构建什么都不会失败，`status: ready` 照样返回，`--version` 也答得好好的。因此发布冒烟测试会向运行中的 daemon 请求根路径，并要求回来的 HTML 里带有带哈希的 `assets/index-*.js` 引用：这一条同时证明了数据文件进了归档、`webui.resolve_webui_dir()` 在 bundle 内找到了它们，以及路由确实在服务它们（按 [PyInstaller Distribution](/zh/reference/adr/distribution-pyinstaller)）。
 :::
 
 ::: tip 为什么选 PyInstaller，而不是其他方案

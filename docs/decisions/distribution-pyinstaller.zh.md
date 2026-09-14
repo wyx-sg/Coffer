@@ -45,12 +45,15 @@ CI 发布任务产出单一下载层级。**
   FR-030）、`openai`、`langgraph`、`langchain`。包*数据*还需要额外的
   `collect_data_files`，因为 `collect_submodules` 只够得到 Python 模块。
   **2026-09-12 修订：** 本条原本讲的是 sqlite-vec —— 它的
-  `vec0.dylib`/`.so`/`.dll` 作为数据文件打包，bundle 冒烟测试会探测
-  `coffer-daemon --check-vec`，使丢失该扩展的构建直接失败，而不是把向量检索
-  静默降级为仅关键词。知识层已经没有向量索引
-  （[Knowledge Is Plain Files](knowledge-is-plain-files.md)），所以这个探测已经
-  移除。`backend/coffer-daemon.spec` 里仍留着的那几行 `sqlite_vec` 收集已经不
-  服务于任何东西，属于待清理的残留。
+  `vec0.dylib`/`.so`/`.dll` 作为数据文件打包，bundle 冒烟测试会探测它，使丢失
+  该扩展的构建直接失败，而不是把向量检索静默降级为仅关键词。知识层已经没有
+  向量索引（[Knowledge Is Plain Files](knowledge-is-plain-files.md)），所以那几
+  行 `sqlite_vec` 收集与这个探测都已移除。
+  **2026-09-14 修订：** spec 里的收集行确实早已清掉，探测却没有——它一直在断言
+  一个 daemon 不再上报的 `vec_available` 字段，于是每一次健康的构建都栽在这一
+  步。一个过期的断言比没有断言更糟：它会被当成噪音，而被所有人学会忽略的那一
+  步，也就再也警告不了任何人。真正需要被守住的数据文件是构建好的 Web UI，现在
+  这一步断言的就是它。
 - shim 二进制刻意排除 daemon 端的重依赖（FastAPI、uvicorn、SQLAlchemy、
   Alembic、structlog）以保持体积可控 —— shim 只通过 loopback HTTP 与
   daemon 通信，所需仅是 `httpx`。
@@ -108,8 +111,8 @@ CI 发布任务产出单一下载层级。**
   （特别是 Pydantic / SQLAlchemy 升级）可能需要重新走一遍 import graph。
   缓解：在 `research.md` 与 `backend/coffer-*.spec` 中钉住清单，并在 CI
   中跑 bundle smoke test（[`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh) ——
-  把 bundle 自带的 daemon 启动到 `status: ready` 并与 bundle 自带的 shim
-  完成一次 JSON-RPC `initialize`）。
+  把 bundle 自带的 daemon 启动到 `status: ready`、要求它服务捆绑的 Web UI，并与
+  bundle 自带的 shim 完成一次 JSON-RPC `initialize`）。
 
 **运维后续**
 
@@ -119,8 +122,8 @@ CI 发布任务产出单一下载层级。**
   —— 外加一份覆盖全部发布制品的聚合 `SHA256SUMS`（spec mcp-gateway FR-022 / FR-023）。
 - 每次发布前都对 bundle 跑一次 post-build smoke test
   ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh)) ——
-  必须能在 loopback 上启动 bundle 自带的 daemon 到 `status: ready`，并
-  让 bundle 自带的 shim 完成一次 JSON-RPC `initialize`。
+  必须能在 loopback 上启动 bundle 自带的 daemon 到 `status: ready`、在根路径上
+  服务捆绑的 Web UI，并让 bundle 自带的 shim 完成一次 JSON-RPC `initialize`。
 - shim 二进制路径通过 `coffer daemon status`（以及 daemon 托管的 Web UI）
   暴露给用户，以便粘贴进 MCP 客户端配置。
 

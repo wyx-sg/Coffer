@@ -41,7 +41,7 @@ For end-user distribution, `make bundle-binaries` (driven by `scripts/build_bina
 
 | Spec file                      | Output binary          | Includes                                                                                                                                                                                                                  |
 | ------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI, SQLAlchemy 2 / aiosqlite, Pydantic 2, `mcp`, `keyring`, Alembic, structlog, Typer, uvicorn, `tomlkit` / `yaml` (agent config editing), `sqlite_vec` (+ its native `vec0` loadable-extension data file), `markitdown`, `openai`, and the chat-agent stack (`langchain*` / `langgraph`) |
+| `backend/coffer-daemon.spec`   | `dist/coffer-daemon`   | FastAPI, SQLAlchemy 2 / aiosqlite, Pydantic 2, `mcp`, `keyring`, Alembic, structlog, Typer, uvicorn, `tomlkit` / `yaml` (agent config editing), `markitdown`, `openai`, and the chat-agent stack (`langchain*` / `langgraph`) |
 | `backend/coffer-mcp-shim.spec` | `dist/coffer-mcp-shim` | `httpx` only (shim is a thin loopback forwarder)                                                                                                                                                                          |
 | `backend/coffer.spec`          | `dist/coffer`          | the management CLI (Typer app)                                                                                                                                                                                            |
 
@@ -51,12 +51,12 @@ Alongside these, the release archive carries the **runtime helper binaries** the
 
 Alembic migration files ship as data files inside the daemon binary via PyInstaller's `datas` mechanism. On first launch, the daemon runs `alembic upgrade head` against a fresh database before accepting connections — the end-user gets correct schema creation with no separate step.
 
-The daemon binary also bundles the heavier knowledge and chat dependencies (the knowledge and chat specs): `sqlite_vec` for the vector index, `markitdown` for document conversion, `openai` for embeddings, and the `langchain*` / `langgraph` chat-agent stack. These are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, embed, run vector retrieval, and drive the built-in chat agent.
+The daemon binary also bundles the heavier knowledge and chat dependencies (the knowledge and chat specs): `markitdown` for document conversion, `openai` for embeddings, and the `langchain*` / `langgraph` chat-agent stack. These are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, embed and drive the built-in chat agent.
 
 The built web UI (spec ui-shell) also ships as data files inside the daemon binary, which is what lets the frozen daemon serve the UI from its own origin.
 
-::: warning Bundle verification — sqlite-vec native extension
-`sqlite-vec` ships its loadable native extension (`vec0.dylib` / `vec0.so` / `vec0.dll`) as **package data**, not a Python submodule, so `collect_submodules` never captures it — `coffer-daemon.spec` adds it via `collect_data_files("sqlite_vec")`. If this data file is missing from a frozen build, the daemon cannot load the `vec0` extension and vector retrieval silently degrades to keyword-only (`VecIndex.available()` swallows the load failure). The release smoke test must therefore treat "the bundled daemon can load `vec0`" as an explicit bundle-verification item (per [Files as Truth](/reference/adr/files-as-truth-sqlite-retrieval) and [PyInstaller Distribution](/reference/adr/distribution-pyinstaller)).
+::: warning Bundle verification — the web UI is a data file
+`coffer-daemon.spec` folds `frontend/dist` in as `webui/` **only if `index.html` is already there when PyInstaller runs**. Build the binaries without building the frontend first and the result is a daemon that serves an API and no interface — a build that fails nothing, reports `status: ready`, and answers `--version` perfectly well. The release smoke test therefore asks the running daemon for its root and requires a hashed `assets/index-*.js` reference back, which proves the data files reached the archive, `webui.resolve_webui_dir()` found them inside the bundle, and the route serves them ([PyInstaller Distribution](/reference/adr/distribution-pyinstaller)).
 :::
 
 ::: tip Why PyInstaller, not alternatives

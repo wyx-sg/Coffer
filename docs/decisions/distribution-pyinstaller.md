@@ -50,13 +50,17 @@ Concrete choices:
   modules.
   **Revised 2026-09-12:** this bullet used to be about sqlite-vec — its
   `vec0.dylib`/`.so`/`.dll` shipped as a data file and the bundle smoke test
-  probed `coffer-daemon --check-vec`, so that a frozen build which lost the
-  extension failed loudly instead of silently degrading vector retrieval to
-  keyword-only. The knowledge layer has no vector index any more
-  ([Knowledge Is Plain Files](knowledge-is-plain-files.md)), so the probe is
-  gone. The `sqlite_vec` collection lines still sitting in
-  `backend/coffer-daemon.spec` no longer serve anything and are leftovers to
-  clear.
+  probed for it, so that a frozen build which lost the extension failed loudly
+  instead of silently degrading vector retrieval to keyword-only. The
+  knowledge layer has no vector index any more
+  ([Knowledge Is Plain Files](knowledge-is-plain-files.md)), so both the
+  `sqlite_vec` collection lines and the probe are gone.
+  **Revised 2026-09-14:** the spec's collection lines had indeed been cleared,
+  but the probe had not — it kept asserting a `vec_available` field the daemon
+  no longer reports, so it failed on every healthy build. A stale assertion is
+  worse than none: it is read as noise, and the step everyone learns to ignore
+  is the step that cannot warn anybody. The data file that genuinely needs
+  guarding is the built web UI, and that is what the step now asserts.
 - The shim binary deliberately excludes server-side heavy dependencies
   (FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) to keep its size
   manageable — the shim talks to the daemon over loopback HTTP and only
@@ -129,8 +133,8 @@ Concrete choices:
   for Pydantic v2 and SQLAlchemy 2). Mitigation: explicit `hiddenimports`
   lists in the PyInstaller specs, validated by a CI smoke test
   ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh) — boots the bundled daemon to
-  `status: ready` and exchanges a JSON-RPC `initialize` with the bundled
-  shim).
+  `status: ready`, requires it to serve the bundled web UI, and exchanges a
+  JSON-RPC `initialize` with the bundled shim).
 
 **Operational follow-ups**
 
@@ -141,8 +145,9 @@ Concrete choices:
   file covering every published artifact (spec mcp-gateway FR-022 / FR-023).
 - Before every release, the bundle runs a post-build smoke test
   ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh))
-  — must boot the bundled daemon to `status: ready` and let the bundled
-  shim exchange a JSON-RPC `initialize` over loopback.
+  — must boot the bundled daemon to `status: ready`, serve the bundled web UI
+  at its root, and let the bundled shim exchange a JSON-RPC `initialize` over
+  loopback.
 - The shim binary path is exposed to the user via `coffer daemon status`
   (and in the daemon-served web UI) so it can be pasted into MCP-client
   config.
