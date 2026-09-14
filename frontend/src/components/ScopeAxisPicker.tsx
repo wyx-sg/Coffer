@@ -4,6 +4,14 @@
 // "everything" or an explicit selection. Agents and machines are the same
 // control with different rows, so they are one component and not two.
 //
+// The rows stay on screen while "every…" is ticked, showing as unticked. They
+// used to be hidden until the user un-ticked it, which left the machine axis
+// looking like it had nothing to offer — the panel opens on `machines: null`,
+// so "every machine" was the only thing an opened panel ever showed, and the
+// one control whose whole purpose is naming a machine named none. Ticking a
+// row from that state is what un-ticks "every…", so narrowing is one click
+// from where the user already is rather than two in a discovered order.
+//
 // Machines are why this is a PICK-LIST and never a text field: `scope` names a
 // machine by its derived id, and a mistyped id matches nothing, which silently
 // makes the resource dormant instead of failing (spec vault-sync
@@ -58,6 +66,9 @@ export function ScopeAxisPicker({
     ...selected.filter((id) => !known.includes(id)).map((id) => ({ id, label: id })),
   ];
 
+  // `value === null` is "every…", where `base` is empty: ticking a row there
+  // hands back a one-entry list, which IS the un-tick of "every…" — the two
+  // states are one value, so they cannot disagree.
   const toggle = (id: string, checked: boolean) => {
     const base = value ?? [];
     onChange(checked ? [...base, id] : base.filter((entry) => entry !== id));
@@ -79,7 +90,7 @@ export function ScopeAxisPicker({
         <span>{t(everyKey)}</span>
       </label>
 
-      {value === null ? null : rows.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="text-xs text-muted-foreground">{t(emptyKey)}</p>
       ) : (
         <div className="space-y-1.5">

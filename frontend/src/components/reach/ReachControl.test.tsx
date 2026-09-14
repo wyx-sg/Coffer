@@ -147,9 +147,8 @@ describe("the panel stages both axes, then commits once on close", () => {
     seed();
     mount("restricted", { initialScope: only(["claude"]) });
     openList();
-    // Unrestricted to start with, so the rows only appear once "every machine"
-    // is unticked — and then they are checkboxes, not an input.
-    fireEvent.click(screen.getByRole("checkbox", { name: /every machine/i }));
+    // The rows are there with "every machine" still ticked — they are
+    // checkboxes, not an input.
     const row = within(screen.getByTestId(`scope-machine-${OTHER_ID}`));
     expect(row.getByText("desktop")).toBeInTheDocument();
     expect(row.getByRole("checkbox")).toBeInTheDocument();
@@ -162,10 +161,31 @@ describe("the panel stages both axes, then commits once on close", () => {
     seed();
     const h = mount("restricted", { initialScope: only(["claude"]) });
     openList();
-    fireEvent.click(screen.getByRole("checkbox", { name: /every machine/i }));
     fireEvent.click(within(screen.getByTestId(`scope-machine-${OTHER_ID}`)).getByRole("checkbox"));
     closeList();
     expect(h.onRestricted).toHaveBeenCalledOnce();
+    expect(h.onRestricted).toHaveBeenCalledWith(only(["claude"], [OTHER_ID]));
+  });
+
+  test("a machine can be picked while 'every machine' is still ticked", () => {
+    // The panel opens on `machines: null`, so hiding the rows under "every
+    // machine" meant the machine axis opened showing no machine at all — the
+    // one control whose purpose is naming a machine named none, and the user
+    // had to guess that un-ticking a box would reveal a list. The rows are
+    // always on screen; ticking one IS the un-tick of "every machine".
+    seed();
+    const h = mount("restricted", { initialScope: only(["claude"]) });
+    openList();
+
+    const every = screen.getByRole("checkbox", { name: /every machine/i });
+    expect(every).toBeChecked();
+    const row = within(screen.getByTestId(`scope-machine-${OTHER_ID}`)).getByRole("checkbox");
+    expect(row).not.toBeChecked();
+
+    fireEvent.click(row);
+    expect(screen.getByRole("checkbox", { name: /every machine/i })).not.toBeChecked();
+
+    closeList();
     expect(h.onRestricted).toHaveBeenCalledWith(only(["claude"], [OTHER_ID]));
   });
 
