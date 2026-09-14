@@ -2,10 +2,12 @@
 // "Memory" tab on the agent detail page, in two read-only sections that mirror
 // the Skills and MCP-servers tabs (Coffer-managed vs the agent's own):
 //
-//   A. Coffer-managed knowledge — Coffer keeps its own knowledge layer and
-//      agents reach it ONLY via the MCP gateway. It is managed on the standalone
-//      Knowledge page, so this tab does not re-list it: the shared
-//      CofferGatewayRow points straight there.
+//   A. Coffer-managed memory — Coffer aggregates every agent's native memory
+//      into its own partitions, and an agent reaches those back through the MCP
+//      gateway (recall). They are managed on the standalone Memory page, so this
+//      tab does not re-list them: the shared CofferGatewayRow points straight
+//      there. Knowledge is a different layer with its own page and its own tab
+//      pointer — this one must not send the user there.
 //   B. The agent's own memory — the coding agent's OWN native per-project memory
 //      stores (e.g. Claude Code's ~/.claude/projects/<project>/memory/), shown
 //      read-only as a table of (project, path, item count) with open / reveal
@@ -75,14 +77,14 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   return (
     <div className="space-y-3">
       {/* The "managed by Coffer" pointer, in its own box: what the agent reaches
-          THROUGH the gateway lives on the Knowledge page, not here. */}
+          THROUGH the gateway lives on the Memory page, not here. */}
       <Card className="p-4">
         <CofferGatewayRow
           agentName={agent.name}
           title={t("agents.cofferManaged")}
           hint={t("agents.memoryTab.accessViaGateway")}
           buttonLabel={t("agents.memoryTab.openMemoryPage")}
-          onOpen={() => navigate("/knowledge")}
+          onOpen={() => navigate("/memory")}
           notInstalledHint={t("agents.memoryTab.notInstalled")}
         />
       </Card>

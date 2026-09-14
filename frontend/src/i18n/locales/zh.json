@@ -776,9 +776,9 @@
     },
     "agentOwn": "Agent 自有（不经 Coffer）",
     "memoryTab": {
-      "accessViaGateway": "该 agent 通过 MCP 网关访问 Coffer 的知识；请在知识页面管理集合。",
-      "notInstalled": "该 agent 尚未安装 Coffer MCP —— 安装后才能通过网关访问 Coffer 的知识。",
-      "openMemoryPage": "打开知识页面",
+      "accessViaGateway": "该 agent 通过 MCP 网关访问 Coffer 的记忆；请在记忆页面管理分区。",
+      "notInstalled": "该 agent 尚未安装 Coffer MCP —— 安装后才能通过网关访问 Coffer 的记忆。",
+      "openMemoryPage": "打开记忆页面",
       "nativeHint": "该 agent 自己的原生记忆库（不经 Coffer 管理），只读。",
       "nativeEmpty": "该 agent 没有原生记忆库。",
       "searchPlaceholder": "搜索项目或路径…",

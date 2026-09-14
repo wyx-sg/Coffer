@@ -776,9 +776,9 @@
     },
     "agentOwn": "Agent's own (not via Coffer)",
     "memoryTab": {
-      "accessViaGateway": "This agent reaches Coffer's knowledge through the MCP gateway; manage collections on the Knowledge page.",
-      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to give the agent access to Coffer's knowledge.",
-      "openMemoryPage": "Open the Knowledge page",
+      "accessViaGateway": "This agent reaches Coffer's memory through the MCP gateway; manage partitions on the Memory page.",
+      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to give the agent access to Coffer's memory.",
+      "openMemoryPage": "Open the Memory page",
       "nativeHint": "The agent's own native memory stores (not managed by Coffer), read-only.",
       "nativeEmpty": "This agent has no native memory stores.",
       "searchPlaceholder": "Search project or path…",

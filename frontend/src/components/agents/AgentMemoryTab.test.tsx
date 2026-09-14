@@ -2,7 +2,7 @@
 //
 // The "Memory" tab on the agent detail page has two read-only sections: (A) a
 // "Managed by Coffer" card reached via the Coffer MCP gateway — it links to the
-// standalone Knowledge page when Coffer MCP is installed, or shows the
+// standalone Memory page when Coffer MCP is installed, or shows the
 // not-installed note otherwise; and (B) a table of the agent's OWN native
 // per-project memory stores (project / path / item count) with open / reveal
 // row actions — independent of the gateway. We mock the two hooks at the network
@@ -97,16 +97,16 @@ describe("AgentMemoryTab", () => {
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(
-      screen.getByText(/reaches coffer's knowledge through the mcp gateway/i),
+      screen.getByText(/reaches coffer's memory through the mcp gateway/i),
     ).toBeInTheDocument();
   });
 
-  test("the Coffer-managed card links to the standalone Knowledge page", () => {
+  test("the Coffer-managed card links to the standalone Memory page", () => {
     stubMcp(true);
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
-    fireEvent.click(screen.getByRole("button", { name: /open the knowledge page/i }));
-    expect(navigateMock).toHaveBeenCalledWith("/knowledge");
+    fireEvent.click(screen.getByRole("button", { name: /open the memory page/i }));
+    expect(navigateMock).toHaveBeenCalledWith("/memory");
   });
 
   test("without Coffer MCP installed, shows the not-installed note and no link", () => {
@@ -115,7 +115,7 @@ describe("AgentMemoryTab", () => {
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
     expect(screen.getByText(/coffer mcp isn't installed on this agent/i)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /open the knowledge page/i }),
+      screen.queryByRole("button", { name: /open the memory page/i }),
     ).not.toBeInTheDocument();
     // Section B (the agent's own native memory) is independent of the gateway —
     // it still renders when Coffer MCP is not installed.
