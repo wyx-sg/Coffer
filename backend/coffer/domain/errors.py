@@ -50,9 +50,9 @@ class ConfigValidationError(CofferError):
 
 
 class ScopeInvalidError(CofferError):
-    """A machine x agent activation-scope payload failed validation (ADR per-agent-resource-scope):
-    either the kind doesn't declare any ``scope_axes`` (doesn't support scope
-    at all) or the payload's shape/axes don't match what it does declare.
+    """A per-agent activation-scope payload failed validation (ADR per-agent-resource-scope):
+    either the kind does not declare ``supports_scope`` (it carries no scope at
+    all) or the payload's shape is not an agent allow-list.
 
     Deliberately its own class rather than reusing ConfigValidationError so
     surfaces can map it to a dedicated envelope code (SCOPE_INVALID) the

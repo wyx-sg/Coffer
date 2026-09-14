@@ -25,22 +25,6 @@ def _agg():
     ]
 
 
-class _KeywordEmbedder:
-    """Deterministic 2-d embedder: axis 0 = 'issue', axis 1 = 'message'."""
-
-    def __init__(self) -> None:
-        self.embed_calls: list[list[str]] = []
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        self.embed_calls.append(list(texts))
-        return [[float("issue" in t.lower()), float("message" in t.lower())] for t in texts]
-
-
-class _BrokenEmbedder:
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        raise RuntimeError("embedding engine unavailable")
-
-
 def test_descriptor_shape():
     d = tool_search_descriptor()
     assert d["name"] == TOOL_SEARCH_NAME == "coffer__search_tools"
@@ -72,31 +56,12 @@ async def test_execute_rejects_empty_query():
         await execute_tool_search({}, _agg())
 
 
-async def test_execute_semantic_ranks_by_embedding_similarity():
-    embedder = _KeywordEmbedder()
-    out = await execute_tool_search({"query": "send a message"}, _agg(), embedder)
-    # 'message' query embeds to axis 1, matching the Slack tool over GitHub.
+async def test_execute_ranks_by_intent_words():
+    """The one ranker left is BM25 over the tool name + description. The
+    alternative cosine-over-embeddings path went with every other use of
+    embeddings in Coffer."""
+    out = await execute_tool_search({"query": "post slack message"}, _agg())
     assert out["tools"][0]["name"] == "slack__post_message"
-    assert out["total_searched"] == 2
-    assert embedder.embed_calls  # the embedder was actually used
-
-
-async def test_execute_falls_back_to_bm25_when_embedder_fails():
-    # A broken embedder must not hard-fail the search — it degrades to BM25.
-    out = await execute_tool_search({"query": "create github issue"}, _agg(), _BrokenEmbedder())
-    assert out["tools"][0]["name"] == "github__create_issue"
-
-
-async def test_execute_caches_tool_embeddings_across_calls():
-    gateway_tool_search._EMBED_CACHE.clear()
-    embedder = _KeywordEmbedder()
-    await execute_tool_search({"query": "issue"}, _agg(), embedder)
-    await execute_tool_search({"query": "message"}, _agg(), embedder)
-    # The tool (doc) texts are embedded once and cached; across both calls only a
-    # single multi-text batch (the docs) is issued — later calls embed only the
-    # query.
-    doc_batches = [call for call in embedder.embed_calls if len(call) > 1]
-    assert len(doc_batches) == 1
 
 
 def test_corpus_drops_the_duplicated_server_token():

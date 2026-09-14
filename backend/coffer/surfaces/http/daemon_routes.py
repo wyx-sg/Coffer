@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 import coffer
 from coffer.application.audit_service import AuditService
-from coffer.application.log_reader import matches_level, parse_log_line, tail_lines
+from coffer.application.log_reader import matches_level, parse_log_lines, tail_lines
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.logging.files import log_dir
@@ -217,7 +217,7 @@ async def shutdown_daemon() -> Response:
 
 
 def _lift(record: dict[str, Any], key: str) -> str | None:
-    """A structlog field as a string, or None when the line did not carry it."""
+    """A parsed field as a string, or None when the line did not carry it."""
     return str(record[key]) if key in record else None
 
 
@@ -235,7 +235,11 @@ async def list_daemon_logs(
     limit: int = Query(default=100, ge=1, le=500),
 ) -> DaemonLogListOut:
     """The tail of ``daemon.log``, newest-first — the same record ``coffer__diagnose``
-    reads, for the human looking at the Activity page instead of an agent."""
+    reads, for the human looking at the Activity page instead of an agent.
+
+    The file interleaves several writers' formats (see ``log_reader``); they
+    are normalised there onto the same fields, so every row here carries the
+    time, level and logger its line actually stated."""
     # The lexical prefilter below only holds while both sides are UTC: the log
     # writes `…Z`, so a `since` carrying `+08:00` would compare as a later
     # string than the very instant it names and cut the window at the top.
@@ -245,10 +249,11 @@ async def list_daemon_logs(
         since = since.replace(tzinfo=UTC) if since.tzinfo is None else since.astimezone(UTC)
     since_iso = since.isoformat() if since is not None else None
     records: list[DaemonLogRecordOut] = []
-    for line in reversed(tail_lines(log_dir() / "daemon.log")):
+    # Parse oldest-first — a traceback is folded into the record above it —
+    # then walk the result backwards to serve the page newest-first.
+    for record in reversed(parse_log_lines(tail_lines(log_dir() / "daemon.log"))):
         if len(records) >= limit:
             break
-        record = parse_log_line(line)
         if not matches_level(record, errors_only):
             continue
         at = str(record.get("timestamp", ""))

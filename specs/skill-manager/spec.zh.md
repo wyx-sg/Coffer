@@ -67,7 +67,7 @@ agent 的 `config_dir/skills` 文件夹可能在 daemon 不在运行时被外部
 
 ### User Story 6 —— 在 Web UI 中管理 skill（优先级 P2）
 
-用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（由本地 daemon 执行）。投递的决定做在 skill 这一侧——它的 `enabled` 标志与它的 scope——列表的状态列把这两者合起来说清楚：那里放的就是详情页同款的三态触达控件（停用 / 处处生效 / 受限……——「受限」会展开 scope 的两条轴：agents 与 machines），用户无需打开某个 skill 就能改变它触达谁、在哪里触达；列表的状态过滤同样给出这三个状态。因此 agent 详情页不决定任何投递：该 agent 的「Skills」tab 指向 Skill 页面（整个 skill 库、投递状态与「已复制」降级徽标都在那里），本身只承载在该 agent 磁盘上发现的非托管 skill——那些在 UI 别处看不到。
+用户打开 Coffer，看到以数据表呈现的 Skills 页（搜索、筛选、分页、行多选以执行批量操作），可以通过文件选择器导入并浏览列表。Skills 页只管理 skill 资源本身，不管理它的按 agent binding：点击某个 skill 打开详情视图，其中有一个 Overview 元信息 tab 与一个 Files tab（文件树 + 一个只读文件查看器：渲染 Markdown，其他文本文件以原文显示）。该查看器不编辑内容；要修改文件，用户在自己的外部编辑器或文件管理器中打开该文件（或其所在文件夹）——每个文件与文件夹都提供「在外部编辑器中打开」「在文件管理器中显示」操作（由本地 daemon 执行）。投递的决定做在 skill 这一侧——它的 `enabled` 标志与它的 scope——列表的状态列把这两者合起来说清楚：那里放的就是详情页同款的三态触达控件（停用 / 处处生效 / 受限……——「受限」会展开 scope 的 agent 列表），用户无需打开某个 skill 就能改变它触达谁、在哪里触达；列表的状态过滤同样给出这三个状态。因此 agent 详情页不决定任何投递：该 agent 的「Skills」tab 指向 Skill 页面（整个 skill 库、投递状态与「已复制」降级徽标都在那里），本身只承载在该 agent 磁盘上发现的非托管 skill——那些在 UI 别处看不到。
 
 **为什么是这个优先级**：非 CLI 用户需要一个可视化日常管理面板。
 
@@ -152,7 +152,6 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 - a skill with no scope reaches every registered agent
 - a skill scoped to no agent reaches nobody
-- a skill scoped to another machine is delivered to nobody here
 - import delivers a skill only where its scope grants it
 - disabling a skill reclaims every delivered copy
 - re-enabling a skill redelivers it
@@ -176,50 +175,42 @@ agent 会积累 Coffer 从未投递过的 skill——手工拷贝的文件夹、
 
 ## Skill delivery scope（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）
 
-`skill` resource 携带一个框架级的 `scope`——两条相互独立、按 `AND` 组合的
-允许列表 `agents` 与 `machines`，某一轴为 `null` 即表示该轴不设限
-（spec vault-sync，「Scope gains a machine axis」）。它连同该资源自己的
-`enabled` 标志，就是投递规则的**全部**：
+`skill` resource 携带一个框架级的 `scope`——一条 agent 允许列表，为 `null` 即
+不设限（spec vault-sync，「Scope has no machine axis, because reach does not
+travel」）。它连同该资源自己的 `enabled` 标志，就是投递规则的**全部**：
 
 ```
-delivered(skill, agent) 于本机  ⟺  skill.enabled
-                               AND scope.agents   允许这个 agent（null 全允许）
-                               AND scope.machines 允许**本机**（null 全允许）
+delivered(skill, agent)  ⟺  skill.enabled
+                         AND scope.agents 允许这个 agent（null 全允许）
 ```
 
-守护进程知道自己跑在哪台机器上，所以第二条轴不需要会话提供任何输入：它被一次性
-绑定好，与 agent 一同参与判定（`ScopeEvaluator.is_active(skill.scope, agent)`）。
+这个判定就是一次函数调用——`is_active(skill.scope, agent)`——它只接受 agent，
+不接受别的。再没有别的东西为投递把关。这与 `mcp_server` 已有的形状一致——那里
+也是仅由 scope 决定哪些 agent 能看到某个 server 的工具。
 
-再没有别的东西为投递把关。这与 `mcp_server` 已有的形状一致——那里也是仅由
-scope 决定哪个 agent、在哪台机器上能看到某个 server 的工具。
-
-- **scope 的各种状态。** `None`——每台机器上的每个已注册 agent 都收到这个
-  skill（新导入的默认值）。`{"agents": ["claude_code"]}`——只有列出的 agent
-  收到，机器不限；尚未注册的名字是合法的，只是永远匹配不上。
-  `{"machines": ["a3f21c9e4b7d2610"]}`——每个 agent 都收到，但只在那台机器上。
-  两轴都给出——只在两边都匹配的地方生效。任一轴为 `[]`——任何机器上的任何
-  agent 都收不到，而这个 skill 仍留在库中，照常同步、照常可见。
-- **scope 到了别的机器的 skill，在本机不投递给任何人。** 它照样会收敛到本机、
-  照样出现在库里、照样能从本机编辑和导出——但本机上没有任何 agent 会被写入，
-  无论它的 agent 轴怎么写。「在本机休眠」与「被禁用」不是一回事：`enabled` 说
-  的是这个 skill 在所有地方的开关，机器轴说的是它属于哪里。当一个 skill 在本机
-  不生效时，UI 会说明是哪条轴把它排除掉的，并且机器轴排在前面。
+- **scope 的各种状态。** `None`——每个已注册 agent 都收到这个 skill（新导入的
+  默认值）。`{"agents": ["claude_code"]}`——只有列出的 agent 收到；尚未注册的
+  名字是合法的，只是永远匹配不上。`{"agents": []}`——谁都收不到，而这个 skill
+  仍留在库中，照常收敛、照常可见。
+- **这个答案属于本机自己。** 一个 skill 的 `enabled` 标志与它的 scope 合起来就是
+  它的**触达（reach）**，而触达是机器本地的：它在本机设置、在本机生效，也不会被
+  一次收敛带到另一台机器上（spec vault-sync，`## What does not sync`）。收敛带走
+  的是这个 skill 本身——它的文件、它的元信息，即它**是什么**。所以同一个 skill
+  可以在台式机上投递给每个 agent、在笔记本上休眠，而这并不是某条点名机器的
+  scope，只是两台机器各自持有自己的答案。设置触达的界面会把这一点讲明白，因为
+  收窄一个 skill 的人，有权知道这次收窄只到本机为止。
 - **`enabled` 是开关，而且是真开关。** 禁用一个 skill 会收回它的每一份已投递
-  副本——逐条移除 symlink，master 文件夹不动。重新启用会把它重新投递到本机上
-  scope 仍然授予的每个 agent。
-- **scope 是硬性授予，两条轴都是。** 把一个 skill 的 scope 收窄为排除某个此前
-  曾向其投递过的 agent，会在下一次调和时收回该投递，无论那份副本当初是怎么到
-  那里的；放宽 scope 则会投递它。把本机从 `scope.machines` 里去掉，会在同一个
-  把关点收回本机上的每一份副本；再加回来则重新投递。不存在任何按 agent 的状态
-  能违背 skill 的 scope 保住一份副本，也不存在任何按 agent 的状态能把副本挡在
-  scope 已授予的 agent 之外。
+  副本——逐条移除 symlink，master 文件夹不动。重新启用会把它重新投递到 scope
+  仍然授予的每个 agent。
+- **scope 是硬性授予。** 把一个 skill 的 scope 收窄为排除某个此前曾向其投递过的
+  agent，会在下一次调和时收回该投递，无论那份副本当初是怎么到那里的；放宽
+  scope 则会投递它。不存在任何按 agent 的状态能违背 skill 的 scope 保住一份副
+  本，也不存在任何按 agent 的状态能把副本挡在 scope 已授予的 agent 之外。
 - **调和是执行把关点**——包括导入之后运行的按导入调和钩子（spec vault-sync）。只要
   上述判定的答案可能发生变化，它就会运行：一个 skill 被启用或禁用、一个 skill
   的 scope 被编辑、一个 skill 被导入、一个 skill 被移除、一个 agent 被注册、
-  一个 agent 的 `config_dir` 变更，以及一次同步导入之后。每次运行都**按它所在
-  的那台机器**重新计算该 agent 应有的集合，投递缺失的部分，收回不再需要的部
-  分——因此同一条 skill 记录可以在一台机器上被投递、在另一台上被收回，这正是
-  机器轴存在的意义。
+  一个 agent 的 `config_dir` 变更，以及一次同步导入之后。每次运行都重新计算该
+  agent 应有的集合，投递缺失的部分，收回不再需要的部分。
 - **必须直说的取舍。** 现在不再有一个按 agent 的「这个 agent 什么都不要」总
   开关。要让某一个 agent 被排除在全部之外，就把它从每个 skill 的 scope 里去
   掉——`mcp_server` 资源本来就是这么工作的。把某个特定 skill 排除在某个 agent
@@ -392,12 +383,6 @@ scope 决定哪个 agent、在哪台机器上能看到某个 server 的工具。
 - **When** 用户把该 skill 的 scope 设为 `[]`，
 - **Then** 两份已投递副本都被收回，该 skill 仍留在库中（照常列出、照常导出），在其 scope 重新授予某个 agent 之前没有任何 agent 收到它。
 
-### Scenario: a skill scoped to another machine is delivered to nobody here（被 scope 到别的机器上的 skill 在这里谁也到不了）
-
-- **Given** 一个已注册 agent，持有某个已启用 skill 的一份已投递副本，且该 skill 的 scope 授予这个 agent，
-- **When** 用户把该 skill 的 `machines` 轴收窄到一台不是本机的机器，
-- **Then** 这里的已投递副本被收回，本机上没有任何 agent 收到它；而该 skill 本身仍留在库中——照常列出、照常可编辑、照常与远端收敛——并在它 scope 所命名的那台机器上被投递。**在某台机器上休眠，不等于被禁用。**
-
 ### Scenario: import delivers a skill only where its scope grants it（导入只把 skill 投递到其 scope 授予之处）
 
 - **Given** 两个已注册 agent：`claude_code` 与 `codex`，
@@ -472,7 +457,7 @@ scope 决定哪个 agent、在哪台机器上能看到某个 server 的工具。
 - **FR-010**：收回一份已投递副本必须移除目标 link，不动 master。
 - **FR-011**：投递必须报告、绝不覆盖：当目标路径上已经存在不是 Coffer 托管链接的东西时，该 skill 被报告为冲突、既有目标原封不动，投递的其余部分照常进行。（在重新建链前先备份目标的做法只存在于 FR-029 的显式 opt-in drift 修复中。）
 - **FR-012**：当符号链接/目录 junction 不可用（如 FAT32、网络共享）时，系统可降级为复制模式；绑定记录 `link_mode=copy_fallback`（enable 事件审计为 `mode: copy_fallback`），UI 必须呈现该降级状态（Skill 页面对存在此类绑定的 skill 显示 "已复制" 警示徽标）。
-- **FR-012a**（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：当且仅当该 skill 资源已启用**且**这个 skill 的 scope 同时允许该 agent 与**本机**时，这个 skill 才必须在本机被投递给该 agent——即 `skill.enabled AND is_active(skill.scope, agent=<agent>, machine=<本机>)`，即 scope 的两条允许列表按 `AND` 组合，某一轴为 `null` 则该轴全允许。因此，一个 `scope.machines` 没有点名本机的 skill，在本机不投递给**任何** agent，无论它的 agent 轴怎么写：它照样收敛到本机、照样可列出、可编辑、可导出，并在它点名的那些机器上被投递。在某台机器上休眠不等于被禁用。没有别的标志决定一个 skill 是**给**哪些 agent 的：既不是 FR-008 的投递记账，也不是 agent 资源上的任何字段。被**禁用的 agent** 是另一回事，它根本不会被写入——判定说的是一个 skill 属于哪些 agent，而被用户关掉的 agent 是 Coffer 压根不去碰的；它已持有的副本会被收回，重新启用后再调和回来。调和过程中发现一份该判定不再授予的已投递副本，必须按 FR-010 收回它（移除链接、清除投递记录）；发现一份该判定现在授予、而该 agent 尚未持有的副本，必须投递它。
+- **FR-012a**（[ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.zh.md)）：当且仅当该 skill 资源已启用**且**这个 skill 的 scope 允许该 agent 时，这个 skill 才必须被投递给该 agent——即 `skill.enabled AND is_active(skill.scope, agent=<agent>)`，一条允许列表，为 `null` 则全允许。这两者合起来就是该 skill 的**触达（reach）**，而触达是机器本地的：它在它所作用的那台机器上设置，一次收敛既不会把它带走、也不会把它覆盖掉（spec vault-sync `## What does not sync`），因此这个判定不接受机器参数，也没有机器可接受。同一个 skill 仍然可以在本机被投递、在另一台机器上休眠——那是两台机器各自持有自己的 `enabled` 标志与自己的 scope，而不是一条点名机器的 scope。没有别的标志决定一个 skill 是**给**哪些 agent 的：既不是 FR-008 的投递记账，也不是 agent 资源上的任何字段。被**禁用的 agent** 是另一回事，它根本不会被写入——判定说的是一个 skill 属于哪些 agent，而被用户关掉的 agent 是 Coffer 压根不去碰的；它已持有的副本会被收回，重新启用后再调和回来。调和过程中发现一份该判定不再授予的已投递副本，必须按 FR-010 收回它（移除链接、清除投递记录）；发现一份该判定现在授予、而该 agent 尚未持有的副本，必须投递它。
 
 **Drift**
 
@@ -488,7 +473,7 @@ scope 决定哪个 agent、在哪台机器上能看到某个 server 的工具。
 
 **投递调和（工作区增补）**
 
-- **FR-025**：系统必须仅依据 FR-012a 的判定，按 agent 调和投递。一次调和把该 agent 应有的集合算作 `{s.name for s in skills if s.enabled and scope.is_active(s.scope, agent_name)}`，其中 `scope` 是持有本机派生 id 的 `ScopeEvaluator`，因此两条轴都会被判定，同一条 skill 记录可以在本机被需要、在另一台机器上不被需要。它投递其中该 agent 尚未持有的每一个 skill，并收回每一份不再需要的已持有副本。它必须在以下时机运行：一个 skill 被启用或禁用、一个 skill 的 scope 被编辑、一个 skill 被导入、一个 skill 被移除、一个 agent 被注册、一个 agent 被启用或禁用、一个 agent 的 `config_dir` 变更，以及一次同步导入之后的 post-import 钩子。被禁用的 agent 应有集合为空，因此同一次调和会收回它的副本，并在它重新启用时把副本还回去。目标路径冲突遵循 FR-011（报告、绝不覆盖）。agent 资源不携带任何形式的 skill 投递策略——没有跟随标志、没有排除列表、没有按 agent 的退出开关；唯一的输入是 skill 的 `enabled` 标志与它的 `scope`。
+- **FR-025**：系统必须仅依据 FR-012a 的判定，按 agent 调和投递。一次调和把该 agent 应有的集合算作 `{s.name for s in skills if s.enabled and is_active(s.scope, agent_name)}`——一个只接受 agent 的自由函数，既不需要构造 evaluator 对象，也没有机器要绑进去。同一条 skill 记录仍然可以在本机被需要、在另一台机器上不被需要，而且理由比机器轴更站得住脚：这个判定读到的 `enabled` 标志与 scope 都属于本机自己，而把这个 skill 带过来的那一轮收敛，两者都没带。它投递其中该 agent 尚未持有的每一个 skill，并收回每一份不再需要的已持有副本。它必须在以下时机运行：一个 skill 被启用或禁用、一个 skill 的 scope 被编辑、一个 skill 被导入、一个 skill 被移除、一个 agent 被注册、一个 agent 被启用或禁用、一个 agent 的 `config_dir` 变更，以及一次同步导入之后的 post-import 钩子。被禁用的 agent 应有集合为空，因此同一次调和会收回它的副本，并在它重新启用时把副本还回去。目标路径冲突遵循 FR-011（报告、绝不覆盖）。agent 资源不携带任何形式的 skill 投递策略——没有跟随标志、没有排除列表、没有按 agent 的退出开关；唯一的输入是 skill 的 `enabled` 标志与它的 `scope`。
 - **FR-026**：非托管 skill 操作必须可通过 REST API、`coffer agent skill …` / `coffer skill …` CLI（读取支持 `--json`）、以及 Web UI 中该 agent 的 Skills tab 完成。投递本身不是这个 surface 上的操作：它由 skill 资源的 `enabled` 标志与 `scope`，经通用的资源启停与 scope surface 控制。
 
 **生命周期**
@@ -510,7 +495,7 @@ scope 决定哪个 agent、在哪台机器上能看到某个 server 的工具。
 
 ### Key Entities
 
-- **Skill**：kind 为 `skill` 的 Resource，按 `skill:<name>`（name 来自 SKILL.md frontmatter）标识。承载源 provenance、内容哈希、元数据；内容文件夹位于 `~/.coffer/skills/<name>/`。携带一个框架级 `scope`（两条按 `AND` 组合的允许列表 `agents` 与 `machines`，某一轴为 `null` 即不设限；`None` 表示对每台机器上的每个 agent 都生效），它连同该资源自己的 `enabled` 标志直接决定投递（ADR per-agent-resource-scope；见「Skill delivery scope」）。
+- **Skill**：kind 为 `skill` 的 Resource，按 `skill:<name>`（name 来自 SKILL.md frontmatter）标识。承载源 provenance、内容哈希、元数据；内容文件夹位于 `~/.coffer/skills/<name>/`。携带一个框架级 `scope`（一条 agent 允许列表，为 `null` 即不设限；`None` 表示对每个 agent 都生效），它连同该资源自己的 `enabled` 标志直接决定投递（ADR per-agent-resource-scope；见「Skill delivery scope」）。
 - **Skill Source**：记录 skill 来源的结构。本地导入仅含原始路径作 provenance 用。
 - **Skill–Agent Binding**：内部的投递记账，不是面向用户的开关。连接一个 skill Resource 与一个 agent Resource（kind `agent`，按 spec agent-registry）的一行，记录该 agent 当前持有一份已投递副本，并附最近 link path、link mode 与最近 link 时间。磁盘上的 symlink 是 live 表达；这一行是「投递了什么」的持久化记录。
 - **Drift Report**：`verify` 返回的瞬时结构，列出每条与磁盘不一致的 binding，附 drift 类型与建议处置方式。

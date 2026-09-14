@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import contextlib
 import os
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import FastAPI
@@ -33,7 +32,6 @@ from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.sync_state import McpPreferenceSyncState
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.infrastructure.channel.media_retention import default_media_sweep
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
@@ -61,9 +59,7 @@ def wire_mcp_kind(
     audit: AuditService,
     sm: object,
     credential_store: Any,
-    scope_evaluator: ScopeEvaluator,
     builtin_tools: BuiltinToolRegistry | None = None,
-    embedder_provider: Callable[[], Awaitable[Any | None]] | None = None,
 ) -> tuple[SubprocessSupervisor, dict[str, SubprocessSupervisor]]:
     """Build and wire all MCP-specific plumbing into the app.
 
@@ -131,9 +127,7 @@ def wire_mcp_kind(
             preferences=prefs_repo,
             invocations=inv_repo,
             on_dispose=_drop_supervisor,
-            scope_evaluator=scope_evaluator,
             builtin_tools=builtin_tools,
-            embedder_provider=embedder_provider,
         )
 
     # 6. Set ALL the MCP dependency providers
@@ -164,6 +158,15 @@ def build_prunable_registry() -> PrunableRegistry:
             default_retention_days=30,
             display_name="MCP Invocations",
             description="MCP tool/resource/prompt invocation log.",
+        )
+    )
+    registry.register(
+        PrunableTable(
+            name="sync_runs",
+            timestamp_column="finished_at",
+            default_retention_days=90,
+            display_name="Sync Rounds",
+            description="History of converge rounds against the sync remote.",
         )
     )
     # Conversations follow a two-stage lifecycle: idle threads are auto-archived,

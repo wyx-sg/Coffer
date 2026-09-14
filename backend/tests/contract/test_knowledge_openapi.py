@@ -26,15 +26,13 @@ _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/grep"),
     ("POST", "/api/v1/knowledge/collections/{name}/tidy"),
     ("POST", "/api/v1/knowledge/search"),
-    ("GET", "/api/v1/knowledge/index"),
-    ("POST", "/api/v1/knowledge/index/rebuild"),
     ("POST", "/api/v1/knowledge/upload"),
 }
 
-#: Exactly six: ``search`` joins once ranked retrieval is wired (FR-024,
-#: FR-040). Upload is deliberately not among them — a document enters through
-#: a human surface (the Knowledge page, a channel, or this CLI), not an
-#: agent's tool call.
+#: Exactly six: ``search`` joins the five file operations (FR-024, FR-040).
+#: Upload is deliberately not among them — a document enters through a human
+#: surface (the Knowledge page, a channel, or this CLI), not an agent's tool
+#: call.
 _EXPECTED_BUILTIN_TOOLS = {"list", "grep", "read", "write", "delete", "search"}
 
 
@@ -80,8 +78,8 @@ def test_no_builtin_tool_takes_a_scope_or_a_mode(builtin_registry) -> None:  # t
 
 
 def test_a_write_payload_requires_a_description() -> None:
-    """With no ranked index the catalogue is the retrieval surface, so a file
-    that fails to describe itself is unfindable (FR-003)."""
+    """The catalogue is the retrieval surface, so a file that fails to
+    describe itself is unfindable (FR-003)."""
     with pytest.raises(ValueError):
         schemas.FileWrite(title="t", description="", body="b", directory="shopee")
 

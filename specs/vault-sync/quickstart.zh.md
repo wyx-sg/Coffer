@@ -120,10 +120,29 @@ pending  none
 未发生变化的 vault 根本不产生提交。序列化是确定性的，因此无话可说的一轮什么也不产出，
 仓库的历史记录的是变化而不是心跳。
 
-## 5. 把某样东西 scope 到一台机器上
+## 5. 让某样东西不在某台机器上生效
 
 有些东西只属于一台机器——一个工作用的 MCP 服务器、一个需要笔记本上没有的二进制的
-skill。先列出你的机器拿到 id：
+skill。资源本身仍然会收敛到两台机器，因为它的配置在两边都值得拥有。它**触达**到
+哪里则不会：触达范围在它生效的那台机器上设定，每台机器各设各的。
+
+所以，人坐在笔记本前，就在笔记本上说：
+
+```bash
+coffer resource disable mcp_server:work-jira
+```
+
+它在那里仍然被注册、看得见，配置也继续收敛，而 gateway 不会把它的任何工具暴露给
+那台机器上的任何会话。台式机不受影响——而且会一直不受影响，因为触达范围的任何部分
+都不会被发布出去。
+
+限制到单个 agent 的做法一样，而且同样只对你执行它的那台机器生效：
+
+```bash
+coffer scope set mcp_server:work-jira --agents claude-code
+```
+
+想看看 vault 里都有谁，随时列出你的机器：
 
 ```bash
 coffer sync machines
@@ -135,22 +154,7 @@ a3f21c9e4b7d2610  Laptop    darwin  2026-09-13      4f2a91c0b8de  (this machine)
 b7c40d29e1f58a33  Desktop   darwin  2026-09-13      4f2a91c0b8de
 ```
 
-然后按 id 设置 scope：
-
-```bash
-coffer scope set mcp_server:work-jira --machines b7c40d29e1f58a33
-```
-
-这个资源仍然会收敛到两台机器——它在哪里都被注册、都看得见——只是它不在笔记本上激活，
-gateway 不会把它的任何工具暴露给那台机器上的任何会话。把两条轴组合起来，就能表达
-「只要台式机上的 Claude Code」：
-
-```bash
-coffer scope set mcp_server:work-jira \
-  --machines b7c40d29e1f58a33 --agents claude-code
-```
-
-想什么时候重命名机器都行——scope 引用的是 id，标签毫无代价：
+想什么时候重命名机器都行——没有任何东西以标签为键：
 
 ```bash
 coffer sync machine rename "Work desktop"
@@ -236,12 +240,14 @@ MCP 调用记录——以及主密钥，它在任何设置下都不会被写进�
 
 ## REST / Web UI
 
-上面的一切同样是一个顶级 **Sync** 页，带两个 tab —— **Status**（远端、上次与下次轮次、
-最近几轮改了什么、一个运行按钮，以及主密钥卡片）与 **Machines**（注册表表格，标出本机，
-并用文字说明任何密钥指纹不匹配）。冲突与待确认项在 Status 上呈现为横幅。
+上面的一切同样是一个顶级 **Sync** 页，带三个 tab —— **Status**（远端、下次轮次、
+一个运行按钮，以及主密钥卡片）、**History**（这台机器跑过的每一轮，做成表格：什么时候
+跑的、怎么结束的、应用到本机什么、发布到远端什么、落到哪个提交——展开一行还能看到由
+agent 合并的路径、本机应用不了的路径，以及任何失败）与 **Machines**（注册表表格，标出
+本机，并用文字说明任何密钥指纹不匹配）。冲突与待确认项在 Status 上呈现为横幅。
 
-在 HTTP 上，同样这些操作位于 `/api/v1/sync/*` —— `run`、`adopt`、`status`、`restore`、
-`confirm`、`rollback`、`machines` 家族与密钥家族。密钥相关的两条路由传的是密钥
+在 HTTP 上，同样这些操作位于 `/api/v1/sync/*` —— `run`、`adopt`、`status`、`runs`、
+`restore`、`confirm`、`rollback`、`machines` 家族与密钥家族。密钥相关的两条路由传的是密钥
 **材料**，不是路径：`POST /sync/key/export` 收 `{}`，返回 `{"material": "…"}`；
 `POST /sync/key/import` 收 `{"material": "…"}`。上面那两条 CLI 命令仍然写文件、读文件
 ——只是文件 I/O 由 CLI 自己做，守护进程从不打开任何由调用方指定的路径。在 Web UI 里，

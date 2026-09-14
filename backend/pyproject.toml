@@ -54,7 +54,8 @@ dependencies = [
     # rich format it advertises (pdf/docx/pptx/xlsx/xls) raises
     # MissingDependencyException at extraction time. html is built-in.
     # Removed with the index: sqlite-vec (the vector index), llama-index-*,
-    # sentence-transformers, chromadb, mem0ai, pypdf.
+    # sentence-transformers, chromadb, mem0ai, pypdf. Coffer embeds nothing at
+    # all now — knowledge search and memory recall are literal.
     "markitdown[docx,pdf,pptx,xls,xlsx]>=0.1",
     "openai>=1.40",
     # Agent turns: built-in LangGraph multi-LLM agent.
@@ -190,15 +191,6 @@ forbidden_modules = ["coffer.surfaces"]
 # adapters — directly, the same substrate reasoning as knowledge above: there
 # is no engine behind a port, only file I/O and two format parsers, and this
 # is the whole layer's one consumer of them.
-#
-# Fourth exception: ``coffer.application.ranked_retrieval`` — the kind-agnostic
-# engine behind both ``coffer__search`` and ``coffer__recall`` (spec memory
-# FR-052 asks the latter to reuse the former's retrieval wholesale) — composes
-# ``coffer.infrastructure.knowledge.index`` directly: the disposable-sidecar
-# substrate, namespaced so knowledge and memory each get their own file under
-# one root. It is substrate for the same reason the first exception's is: no
-# engine sits behind it to route through a port, just a namespaced on-disk
-# cache either caller may delete at any time.
 [[tool.importlinter.contracts]]
 name = "Application does not import infrastructure"
 type = "forbidden"
@@ -207,7 +199,6 @@ forbidden_modules = ["coffer.infrastructure"]
 ignore_imports = [
     "coffer.application.knowledge.* -> coffer.infrastructure.knowledge.*",
     "coffer.application.memory.* -> coffer.infrastructure.memory.*",
-    "coffer.application.ranked_retrieval -> coffer.infrastructure.retrieval.*",
 ]
 
 # Contract 3: domain is pure — no imports from any other project layer, no
@@ -281,9 +272,8 @@ forbidden_modules = [
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
     # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (Document/retrieval ports, chunker, index) and stay exempt: the
-    # kind-agnostic embedding config is defined in terms of them. Only the
-    # knowledge FACADE is fenced off from the other kinds.
+    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
+    # Only the knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
@@ -318,9 +308,8 @@ forbidden_modules = [
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
     # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (Document/retrieval ports, chunker, index) and stay exempt: the
-    # kind-agnostic embedding config is defined in terms of them. Only the
-    # knowledge FACADE is fenced off from the other kinds.
+    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
+    # Only the knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
@@ -357,9 +346,8 @@ forbidden_modules = [
     "coffer.surfaces.http.agent_routes",
     "coffer.surfaces.cli.agent_cmd",
     # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (Document/retrieval ports, chunker, index) and stay exempt: the
-    # kind-agnostic embedding config is defined in terms of them. Only the
-    # knowledge FACADE is fenced off from the other kinds.
+    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
+    # Only the knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
@@ -438,9 +426,8 @@ forbidden_modules = [
     "coffer.surfaces.http.skill_routes",
     "coffer.surfaces.cli.skill_cmd",
     # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (Document/retrieval ports, chunker, index) and stay exempt: the
-    # kind-agnostic embedding config is defined in terms of them. Only the
-    # knowledge FACADE is fenced off from the other kinds.
+    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
+    # Only the knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
@@ -495,7 +482,8 @@ forbidden_modules = [
 # out of every other package rather than granting either an exemption. The
 # vector-index and embedding SDKs it also used to fence are gone from the
 # dependency set entirely and are banned by Contract 8 instead, so a
-# reintroduction has to be a deliberate act.
+# reintroduction has to be a deliberate act. Coffer no longer embeds anything
+# at any layer.
 [[tool.importlinter.contracts]]
 name = "Engine confinement: the markdown converter lives in infrastructure.chat and infrastructure.knowledge only"
 type = "forbidden"
@@ -530,8 +518,9 @@ forbidden_modules = [
     "mem0",
     "chromadb",
     "sentence_transformers",
-    # Dropped with the knowledge index (ADR knowledge-is-plain-files): there is
-    # no vector store and nothing to embed for, so an import is a mistake.
+    # Dropped with the knowledge index (ADR knowledge-is-plain-files), and now
+    # with embeddings themselves: there is no vector store and nothing to embed
+    # for, so an import is a mistake.
     "sqlite_vec",
     "fastembed",
 ]

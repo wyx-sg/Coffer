@@ -2,8 +2,8 @@
 
 > 中文版: [knowledge-is-plain-files.zh.md](./knowledge-is-plain-files.zh.md)
 
-**Status**: Proposed — revised the same day (see Revision history): document upload, conversion to Markdown with the original under `.raw/`, and ranked semantic retrieval with a sixth tool `coffer__search` are reinstated. Everything else below stands.
-**Date**: 2026-09-12 (revised the same day; see Revision history)
+**Status**: Accepted — twice revised (see Revision history). The 2026-09-12 revision reinstated document upload, conversion to Markdown with the original under `.raw/`, and ranked semantic retrieval with a sixth tool `coffer__search`. The 2026-09-14 revision removes the ranking again — `coffer__search` stays, as a literal search. Everything else below stands.
+**Date**: 2026-09-12 (revised 2026-09-12 and 2026-09-14; see Revision history)
 **Deciders**: Yuxing Wu
 **Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md), [Retrieval mode is an internal engine detail](retrieval-mode-is-internal.md)
 **Related**: spec [knowledge](../../specs/knowledge/spec.md); [Everything Is a Resource Kind](everything-is-a-resource-kind.md) and [Per-Agent Resource Scope](per-agent-resource-scope.md), both of which survive; [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
@@ -279,3 +279,38 @@ affordance.
   - Spec [knowledge](../../specs/knowledge/spec.md) carries the detail: FR-025–
     FR-029 (ranked retrieval), FR-032–FR-037 (writing and ingestion), FR-080–
     FR-082 (constraints).
+- **2026-09-14** — **Ranked retrieval is removed again, and with it every use of
+  embeddings anywhere in Coffer.** `coffer__search` and `coffer__recall` keep
+  their names and keep answering; what each returns is the tier that used to be
+  their fallback, now the whole of them — ripgrep over the collections a caller
+  may see for `search`, a case-insensitive substring scan over facts already in
+  hand for `recall`. This is a deliberate reduction of a capability that was
+  built and did work, not the cleanup of something unused, and it is recorded as
+  such rather than folded back into the 2026-09-12 argument.
+  - **What goes:** the kind-agnostic ranked-retrieval engine both tools shared,
+    the disposable sidecar and the `~/.coffer/index` directory it lived in, the
+    OpenAI-compatible `/embeddings` client, the section splitter and cosine
+    ranker, the `GET /api/v1/knowledge/index` and `POST .../index/rebuild`
+    routes with their `coffer knowledge index` / `reindex` CLI commands, and the
+    `score` / `heading` / `mode` / `reason` fields every answer used to carry.
+    The never-wired cosine alternative inside `coffer__search_tools` goes with
+    them; that tool ranks by BM25, as it always did in practice.
+  - **What the 2026-09-12 revision got right, and what it did not.** Its two
+    constraints held: embeddings never got a settings surface, and the sidecar
+    never became a truth — nothing drifted, and deleting it never lost anything.
+    What did not hold is the premise underneath them. Ranking only ever ran for
+    an installation that had designated an internal connection, so for most of
+    this layer's life the literal path *was* the answer, and it was good enough
+    that the difference did not argue for the machinery standing behind it.
+  - **What this costs, stated plainly.** A query in the caller's own words no
+    longer works: matching is literal, so a question finds nothing where a
+    distinctive phrase finds the file. `coffer__recall` can no longer answer
+    "what do I know that bears on *this*" for a caller with no exact words —
+    the dependency spec `memory` had on ranking is not met any more, and
+    FR-052 now asks for the scan rather than the loop. Embeddings may return;
+    when they do it should be because that gap was felt, not because the
+    component is available.
+  - **No migration drops a table**, because none was left to drop: the
+    `embedding_config` table went with revision 0066 and the index was never in
+    `coffer.db`. Revision 0077 purges the `embedding_config_updated` audit rows
+    whose event type no longer exists.

@@ -2,8 +2,7 @@
 //
 // The Security settings tab. Controls where the master encryption key lives
 // (file beside the DB vs. OS keychain). The card follows the same layout
-// rhythm as DataSettings.tsx and EmbeddingSettings.tsx: explanation on the
-// left, action on the right.
+// rhythm as DataSettings.tsx: explanation on the left, action on the right.
 import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";

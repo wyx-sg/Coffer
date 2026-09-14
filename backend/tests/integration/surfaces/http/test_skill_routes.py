@@ -105,20 +105,35 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         # scope the skill away from the agent — the copy is reclaimed
         r = c.put(
             "/api/v1/resources/skill/hello-world/scope",
-            json={"scope": {"agents": [], "machines": None}},
+            json={"scope": {"agents": []}},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"agents": [], "machines": None}
+        assert r.json()["scope"] == {"agents": []}
         assert not link.exists()
         assert c.get("/api/v1/skills/hello-world").json()["bindings"] == []
 
         # scope it back in — redelivered
         r = c.put(
             "/api/v1/resources/skill/hello-world/scope",
-            json={"scope": {"agents": ["cur"], "machines": None}},
+            json={"scope": {"agents": ["cur"]}},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"agents": ["cur"], "machines": None}
+        assert r.json()["scope"] == {"agents": ["cur"]}
+        assert link.exists()
+
+        # a stale client still sending the withdrawn machine axis is REFUSED,
+        # not quietly obeyed minus the key it does not understand. Obeying it
+        # would store `agents: null` — every agent — from a request whose whole
+        # point was to narrow, which is the one direction a write must never
+        # take by accident.
+        r = c.put(
+            "/api/v1/resources/skill/hello-world/scope",
+            json={"scope": {"agents": None, "machines": ["a3f21c9e4b7d2610"]}},
+        )
+        assert r.status_code == 422, r.text
+        assert c.get("/api/v1/resources/skill/hello-world/scope").json()["scope"] == {
+            "agents": ["cur"]
+        }
         assert link.exists()
 
         # disabling the skill resource reclaims it; re-enabling redelivers

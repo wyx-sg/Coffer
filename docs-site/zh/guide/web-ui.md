@@ -123,7 +123,7 @@ agent；检测对话框列出找到的结果，每一个都需要你确认后才
 东西。每个 agent 都注册到单个**配置目录 (config directory)**（例如 `~/.claude` 或
 `~/.codex`）；Coffer 会把技能交付到该目录的 `skills/` 子文件夹中。
 
-agent 详情页有四个标签：
+agent 详情页有以下标签：
 
 - **Overview** —— 该 agent 的类型与配置目录，以及它的 LLM 连接。在内置登录下，面板会列出
   该 agent 自己的 CLI 所提供的东西，模型选择器与聊天里的 `/model` 卡片提供的正是这些——
@@ -139,6 +139,10 @@ agent 详情页有四个标签：
   来源、传输方式，以及作为纯展示徽章的 enabled 状态；唯一的写操作是 **Adopt** ——
   把该条目接管进 Coffer 成为受管资源。Coffer 不改动别的工具的私有配置，因此这里既没有
   移除、也没有启用/禁用开关。
+- **Memory** —— 该 agent 通过 Coffer 网关能触达的内容（一个指向 Memory 页面的链接）、它的
+  **投递**状态，以及该 agent 自己的原生逐项目记忆库的只读表格。投递是这里唯一的写操作：
+  在该 agent 的设置里安装或移除 Coffer 的会话开始 hook。在 hook 真正跑过一次之前，徽标显示
+  *已安装——从未触发*，因为一个从不触发的 hook 和这个功能压根不存在没有区别。
 - **Config files** —— 在编辑器中打开该 agent 任意经过策展的配置文件。保存时会校验文件
   格式（格式错误的 JSON/TOML 会被拒绝，文件保持不变），以原子方式写入并保留 `.bak`
   备份，并提供一个可滚动到匹配项的查找/替换框。
@@ -176,12 +180,35 @@ agent 头部的 **Install Coffer MCP** 开关会将 Coffer 自身的 `coffer` MC
 - **Notes** —— agent(和你)写下的内容。可在此新增、编辑与删除笔记。
 
 页头带着作用域标题、一支重命名铅笔和项目路径。**Upload** 与 **Tidy** 是仅有的两个按钮
-—— Tidy 按需对 `notes/` 跑一趟整理流程 —— Settings、Check sources 和 Reindex 收在溢出菜单里。
+—— Tidy 按需对其中的文件跑一趟整理流程 —— Settings、Check sources 和 Reindex 收在溢出菜单里。
 只有当作用域里存在转换失败的文档时,标题旁才会出现一条告警。
 
 服务端检索不在这个页面上:agent 用 `coffer__search`,CLI 用 `coffer knowledge recall`。
 
-旧的 `/memory`、`/memory/:name`、`/knowledge-bases` 和 `/knowledge-bases/:name` URL 会重定向到此处。
+旧的 `/knowledge-bases` 和 `/knowledge-bases/:name` URL 会重定向到此处。`/memory` 是它自己的界面——见下文 [Memory](#memory)。
+
+### Memory
+
+打开 **Memory** 查看你的 agent 已经学到的内容——从它们自己的原生记忆里读出来、按项目归一化成
+一组事实。这个列表和这里的其他列表一样是一张表：每个分区一行——`global` 加上每个项目一个——
+显示它命名所依据的项目、持有多少条事实，以及 MCP servers 和 Skills 列表逐行都带的那个
+**触达范围**控件，并支持多选批量设置。触达范围就是「关闭 / 全部生效 / 限定范围…」这个三选
+一——开还是关，以及对哪些 agent——而它是**按机器**设置的：它不参与同步，你用的每台机器都
+各自设置自己的。控件会在你使用它的地方说明这一点，[同步](/zh/guide/sync) 说明为什么。
+本页上的东西都不是你创建的，因此页头动作是
+**Sync** 而不是 Add；还没有任何分区的库看到的是同一张表加一行空状态，Sync 仍在原处。
+
+点击某个分区会打开 `/memory/:name`：它的事实、成对摆出待裁定的冲突、逐条事实的四种覆盖
+（隐藏、置顶、标记为被取代、裁定冲突），以及一次 **Organise** 整理。Coffer 从不写回 agent
+自己的记忆——一条事实唯一非派生的状态，就是你在这里记下的决定。
+
+有两个相关界面是有意放在别处的：
+
+- **投递**——Coffer 的会话开始 hook 是否已为某个 agent 安装、以及上一次真正触发是什么时候
+  ——在那个 **agent** 自己的详情页的 Memory 标签下。hook 写进的是那一个 agent 自己的设置
+  文件，所以它是逐 agent 的状态。
+- 记忆事件的**审计轨迹**和全库其他事件一起，在 [Activity](#activity) 页面的 Changes 标签里。
+  不存在第二份只含记忆的拷贝。
 
 ### Model providers
 

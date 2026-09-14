@@ -33,11 +33,13 @@ Log files are in `~/.coffer/logs/`. Rotation is handled by Python's `logging.han
 
 | File | Holds |
 | ---- | ----- |
-| `daemon.log` | Coffer's own structured records. Bounded by the rotating handler. |
+| `daemon.log` | Coffer's own structured records — **and every other writer that ends up on the daemon's stdio** (see below). Bounded by the rotating handler. |
 | `upstream/<server>.log` | One upstream MCP server's stderr, plus one rolled-aside `.log.1`. |
 | `shim-<pid>-<ts>.log` | One shim process's diagnostics. Created lazily — a run that logs nothing leaves no file. |
 
 **Upstreams get their own files because they used to drown the daemon's.** The MCP SDK writes each stdio server's stderr to the daemon's own stderr, which lands in `daemon.log`; upstreams are chatty and Coffer is not. A measured daemon log held 4,277 lines of which **62** were Coffer's — all one error type — and rotation had carried everything older away inside two months.
+
+**`daemon.log` is not one format, so reading it is its own job.** Coffer's structlog renders JSON into `%(message)s`, but it is not the only writer in that file: once a migration runs, alembic's `fileConfig` re-points the root handler at `%(levelname)-5.5s [%(name)s] %(message)s`, uvicorn writes `ERROR:    …`, an upstream MCP server writes rich panels and `LEVEL - logger - message` lines, and the cloudflared child the daemon respawns for a tunnel writes zerolog (`2026-09-14T06:29:20Z INF … key=value`) straight into it — some of it ANSI-coloured, because a child writing to a pipe is not always convinced it is not a terminal. `application/log_reader.py` is the one place that knows all of them: it normalises every writer's line onto `timestamp` / `level` / `logger` / `event`, strips escape sequences, folds a traceback into the record that raised it under `continuation`, and keeps a line no format fits whole as `{"raw": …}`. Both readers — `coffer__diagnose` and `GET /api/v1/daemon/logs` behind the Activity page's Daemon tab — go through it, so they agree on what a record is.
 
 **Every audited event is also logged.** `AuditService.record` emits an INFO line for each entry it writes, so the operations the audit table considers worth recording are legible to whoever is tailing a log rather than querying SQLite. The `details` payload is deliberately *not* logged: the audit table applies each kind's redactor before storing it, and re-deriving that in the logger would duplicate the one place that knows which fields carry secrets.
 

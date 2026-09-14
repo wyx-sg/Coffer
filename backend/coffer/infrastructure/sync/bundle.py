@@ -4,7 +4,7 @@ Layout::
 
     manifest.json                  # bundle schema version + creation time
     knowledge/ skills/             # mirrors of the live file-backed trees
-    resources/<kind>/<name>.yaml   # one deterministic file per config resource
+    resources/<kind>/<name>.yaml   # one deterministic file per synced resource
     state/<area>/...yaml           # module-owned shared state
     credentials/<ref>.enc          # Fernet ciphertext, opt-in; never the key
     machines/<machine_id>.yaml     # one descriptor per machine, disjointly owned
@@ -187,9 +187,17 @@ class Bundle:
     def write_resource_docs(
         self, docs: Sequence[Mapping[str, object]], *, unserializable: Sequence[str] = ()
     ) -> None:
-        """Converge ``resources/`` on ``docs``: ``docs`` is every resource this
-        vault holds, so a document it does not name was deleted here — unless a
-        held path says this vault never absorbed it.
+        """Converge ``resources/`` on ``docs``: ``docs`` is everything this
+        vault publishes, so a document it does not name was deleted here —
+        unless a held path says this vault never absorbed it.
+
+        "Publishes", not "holds": the exporter withholds the kinds that are
+        bound to one machine, and their documents are meant to leave the tree.
+        A withheld kind is therefore *not* protected the way an unserializable
+        row is, which is the correct treatment in both directions — the first
+        export after a machine upgrades is what finally clears the channel
+        documents an older build left in the shared tree, and no machine acts
+        on that clearing, because the resource applier ignores those paths.
 
         ``unserializable`` is the escape hatch that keeps that sentence true.
         A row the exporter could not render is absent from ``docs`` for a

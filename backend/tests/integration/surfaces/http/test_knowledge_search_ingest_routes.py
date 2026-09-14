@@ -1,19 +1,14 @@
-"""Integration tests for the knowledge layer's ranked-retrieval and ingest
-routes: ``POST /search``, ``GET /index``, ``POST /index/rebuild`` and
-``POST /upload`` (spec knowledge FR-024..FR-029, FR-033..FR-037, FR-060).
+"""Integration tests for the knowledge layer's search and ingest routes:
+``POST /search`` and ``POST /upload`` (spec knowledge FR-024..FR-027,
+FR-033..FR-037, FR-060).
 
 We boot the full FastAPI app (via ``create_app``) so these routes are wired
 exactly as production wires them — real SQLite, real markdown files under a
 temp HOME, the real converter registry — then drive them with a Starlette
-``TestClient`` (an ``httpx.Client`` subclass). No provider is registered in
-this stack, so every test here exercises the "no internal connection
-configured" path (FR-026/FR-027): ranking degrades to literal search, and the
-index reports itself unavailable rather than pretending otherwise.
+``TestClient`` (an ``httpx.Client`` subclass). Search needs nothing configured:
+it is ripgrep over the files, with no model, key or connection behind it.
 
-``client``, ``_create_collection`` and ``_write_file`` live in ``conftest.py``
-now — shared with ``test_knowledge_search_ranking.py``, which needs the same
-app wiring but supplies its own ``FakeEmbedder`` rather than the "no internal
-connection" path this module exercises.
+``client``, ``_create_collection`` and ``_write_file`` live in ``conftest.py``.
 """
 
 from __future__ import annotations
@@ -32,9 +27,9 @@ from .conftest import _create_collection, _write_file
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="search falls back to literal matching when no internal connection is configured",
+    scenario="search returns the files a phrase appears in, with the lines that matched",
 )
-def test_search_falls_back_to_literal_matching_with_no_internal_connection(client) -> None:
+def test_search_returns_the_files_a_phrase_appears_in(client) -> None:
     _create_collection(client, "shopee")
     path = _write_file(
         client,
@@ -49,11 +44,10 @@ def test_search_falls_back_to_literal_matching_with_no_internal_connection(clien
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert data["mode"] == "literal"
-    assert data["reason"]
     assert any(r["path"] == path for r in data["results"])
     hit = next(r for r in data["results"] if r["path"] == path)
-    assert hit["score"] is None
+    assert hit["title"] == "Session Ownership"
+    assert hit["description"] == "Which service owns a login session"
     assert hit["lines"]
 
 
@@ -90,12 +84,12 @@ async def test_builtin_search_tool_spans_only_the_agents_collections(client) -> 
     )
     scoped = client.put(
         "/api/v1/resources/knowledge/secret/scope",
-        json={"scope": {"agents": ["only-agent"], "machines": None}},
+        json={"scope": {"agents": ["only-agent"]}},
     )
     assert scoped.status_code == 200, scoped.text
 
     knowledge_service = get_knowledge_service()
-    search_service = SearchService(knowledge=knowledge_service, embedder_factory=_no_embedder)
+    search_service = SearchService(knowledge=knowledge_service)
     registry = BuiltinToolRegistry()
     register_knowledge_builtin_tools(
         registry, knowledge_service=knowledge_service, search_service=search_service
@@ -108,30 +102,13 @@ async def test_builtin_search_tool_spans_only_the_agents_collections(client) -> 
     assert all(not r["path"].startswith("secret/") for r in outcome["results"])
 
 
-async def _no_embedder():
-    return None
-
-
-# ----- index status / rebuild ----------------------------------------------
-
-
-def test_index_status_reports_unavailable_with_no_internal_connection(client) -> None:
+def test_search_returns_nothing_rather_than_erroring_for_an_unmatched_query(client) -> None:
     _create_collection(client, "shopee")
-    _write_file(client, directory="shopee", title="t", description="d", body="b")
+    _write_file(client, directory="shopee", title="t", description="d", body="account.session")
 
-    resp = client.get("/api/v1/knowledge/index")
+    resp = client.post("/api/v1/knowledge/search", json={"query": "nothingmatchesthis"})
     assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert data["available"] is False
-    assert data["files_total"] == 1
-    assert data["files_indexed"] == 0
-    assert data["path"]
-
-
-def test_rebuild_is_a_clean_no_op_with_no_internal_connection(client) -> None:
-    resp = client.post("/api/v1/knowledge/index/rebuild")
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["available"] is False
+    assert resp.json()["results"] == []
 
 
 # ----- upload ----------------------------------------------------------------

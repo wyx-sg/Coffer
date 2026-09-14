@@ -39,8 +39,8 @@ _AGENT_META_KEY = "coffer/agent"
 def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
     """Stamp the shim's launch cwd — and, when known, its ``--agent`` identity
     — into an ``initialize`` envelope's ``params._meta`` so the daemon can
-    resolve the per-project memory scope and the agent axis of resource
-    scoping. The agent key is omitted entirely when no name was given (an
+    resolve the per-project memory scope and which resources are active for
+    this agent. The agent key is omitted entirely when no name was given (an
     unnamed shim launch, or a client that hasn't been re-installed yet)."""
     params = envelope.get("params")
     if not isinstance(params, dict):

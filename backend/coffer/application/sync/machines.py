@@ -22,8 +22,6 @@ from coffer.application.resource_service import ResourceService
 from coffer.application.sync.ports import BundlePort
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
-from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import Scope
 from coffer.domain.sync.machine import MachineDescriptor
 
 
@@ -145,30 +143,26 @@ class MachineRegistry:
             )
         return views
 
-    async def retire(self, bundle: BundlePort, machine_id: str, *, actor: str) -> int:
-        """Remove a machine and every reference to it, in one change.
+    async def retire(self, bundle: BundlePort, machine_id: str) -> None:
+        """Remove a machine's descriptor. That is the whole of retiring one.
 
-        Both halves belong to the same commit: a descriptor removed while
-        scopes still name the id leaves resources dormant on a machine nobody
-        can see, and a scope stripped while the descriptor stands invites the
-        machine to publish itself again on its next round.
+        It used to be two halves — delete the descriptor, then strip the id out
+        of every ``scope.machines`` — and the second half is gone with the
+        machine axis itself. Nothing outside the registry names a machine now,
+        so there is nothing left to leave dangling — and with no resource to
+        rewrite there is no actor to attribute the rewrite to either, which is
+        why this takes none. The awkward part of the old version went the same
+        way: rebuilding the scope as
+        ``machines=remaining or None`` meant retiring the *last* machine a
+        resource named silently turned "only on that machine" into "on every
+        machine" — a widening nobody asked for, performed by a deletion.
+
+        It answers with nothing, for the same reason: the count it used to
+        return was how many scopes it rewrote.
         """
         if machine_id == self._machine_id:
             raise CannotRetireSelfError(machine_id)
         bundle.delete_machine_descriptor(machine_id)
-        touched = 0
-        for resource in await self._resources.list():
-            scope = resource.scope
-            if scope is None or not scope.machines or machine_id not in scope.machines:
-                continue
-            remaining = [m for m in scope.machines if m != machine_id]
-            await self._resources.update_scope(
-                ResourceRef(resource.kind, resource.name),
-                Scope(agents=scope.agents, machines=remaining or None),
-                actor=actor,
-            )
-            touched += 1
-        return touched
 
     @staticmethod
     def audit_event() -> str:

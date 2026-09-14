@@ -22,10 +22,17 @@ skill、MCP 注册、agent 配置、凭据。不收敛的话每台机器都是�
 
 - **知识**——`~/.coffer/knowledge/<collection>/` 下的 markdown 文件。
 - **Skill**——`~/.coffer/skills/` 下的主 skill 存储。
-- **配置类 resource**——`mcp_server`、`agent`、`skill`、`channel`、`knowledge`、
-  `provider` 的定义（记录系统是 SQLite；序列化为文本）。
-- **共享状态**——归 vault 而非归某一台机器所有的模块自管区域：channel 的 peer
-  配对、MCP 能力偏好、内部引擎设置，以及 agent 的插件清单。
+- **配置类 resource**——`mcp_server`、`agent`、`skill`、`knowledge`、`memory`、
+  `provider` 的定义（记录系统是 SQLite；序列化为文本）。一份 resource 文档只包含
+  身份、描述与配置——也就是这个 resource *是什么*。它能触达到哪里不在其中，见
+  下文。
+- **共享状态**——归 vault 而非归某一台机器所有的模块自管区域：MCP 能力偏好、
+  内部引擎设置，以及 agent 的插件清单。
+
+  channel 的 peer 配对曾经也是这样一个区域，现在不是了。当初的理由是配对属于平台
+  层面，因此把一条 channel 改绑到另一台机器时无需重新配对——而 channel 如今根本
+  不会到达另一台机器，也就没有什么改绑可省了。发布出去的每一份文档，指名的都是
+  对面并不拥有的 channel。
 
   插件清单是**清单，不是复制器**：它记录每台机器上每个 agent 装了哪些插件，
   不会往任何 agent 的配置里写任何东西。
@@ -37,6 +44,27 @@ skill、MCP 注册、agent 配置、凭据。不收敛的话每台机器都是�
 日志、`coffer.db` 本身、`daemon-config.json`、PID 文件、端口分配、聊天历史、
 对话、审计日志、MCP 调用记录，以及任何运行时产物。主密钥**永远不会**被写进
 仓库。
+
+这份清单里有两条是决策而非机制，而它们说的是同一件事：一台机器*拿 vault 做了
+什么*，属于那台机器自己。
+
+- **触达范围 (reach)**——一个 resource 的 `enabled` 标志和它的 `scope`。它们读
+  起来像两个字段，其实是一件事、由同一个控件写下：这个 resource 在这里是不是
+  活的，以及对哪些 agent 是活的。触达范围在它生效的那台机器上设定，每台机器各
+  设各的。把它发布出去，就等于允许一台机器悄悄替另一台机器重新回答一个后者已
+  经为自己回答过的问题——笔记本上那个被刻意熄灭的 server，会在台式机的下一轮
+  之后重新亮起来，而历史里没有任何一条读起来像是有人做的决定。
+- **Channel**——`channel` 这个 kind 根本不导出。channel 是一个绑定在单台机器上
+  的入站界面：它的端口、它的隧道、平台被告知要去回调的那个 webhook URL。一个
+  channel 到了第二台机器上，往好了说是死的，往坏了说是两台机器同时应答同一段
+  对话，所以它没有任何值得传过去的理由。
+
+收敛轮次**必须**在**两个方向上**都忽略 `resources/channel/**`，而入站这一半是
+安全属性，不是整洁问题。一台不再导出 channel 文档的机器，会把树里已有的那些
+文档的移除当作一次普通删除发布出去；而一台遵从了这次删除的机器，会丢掉它自己
+配置的那些 channel。所以这棵树只自我清理一次，且不碰任何一个 vault。发布这一批
+一次性的删除可能会在小 vault 上触发删除守卫，这是对的——用户会被明确告知哪些
+路径将要消失，并确认一次。
 
 对话和审计日志是被刻意排除的：它们记录的是*在某台机器上*发生了什么，而把两台
 机器的活动合并成一段历史，那是另一个形态完全不同的特性（见 `/activity`）。
@@ -69,13 +97,14 @@ skill、MCP 注册、agent 配置、凭据。不收敛的话每台机器都是�
 | | `machine_id` | `machine_name` |
 | --- | --- | --- |
 | 来源 | 从宿主 OS 派生 | 用户选定，默认取 hostname |
-| 是不是键？ | **是**——描述符文件名、`scope` 引用、表键 | 否 |
+| 是不是键？ | **是**——描述符文件名、tidy owner 的引用、表键 | 否 |
 | 可变？ | 否 | **是，随时改，零代价** |
 | 存放 | 缓存在 `daemon-config.json`，丢了就重算 | 存在该机器的描述符里，因此会同步 |
 
 `machine_id` 必须能扛过 Coffer 的重装与卸载，因为一台以新身份回来的机器会变成
-幽灵：所有 scope 到旧 id 的东西都会悄无声息地失效。因此它从宿主机派生，而不是
-由 Coffer 生成：
+幽灵：它是以陌生人而不是以它自己的身份重新入伙，旧的描述符留在注册表里没人再
+去更新它，而所有点过它名字的东西——tidy 的 owner、它自己那枚被找回的 pointer
+——都会悄无声息地不再指向这台机器。因此它从宿主机派生，而不是由 Coffer 生成：
 
 - **macOS**——取 `IOPlatformExpertDevice` 的 `IOPlatformUUID`。
 - **Linux**——取 `/etc/machine-id`，回退到 `/var/lib/dbus/machine-id`。
@@ -107,30 +136,32 @@ skill、MCP 注册、agent 配置、凭据。不收敛的话每台机器都是�
 `last_converged_at` **每个自然日至多重盖一次**，这样一台开着但没事干的机器不会
 每轮都提交一次心跳。因此它的含义是「本机最后一次收敛是哪天」，UI 也这么写。
 
-### Scope 多出一个机器轴
+### Scope 没有机器轴，因为触达范围不外传
 
-`scope` 变成两个彼此独立、`AND` 在一起的列表，各自为 `null` 表示不限制：
+`scope` 只点名 agent，别的什么都不点：
 
 ```yaml
 scope:
   agents: [claude-code]
-  machines: ["a3f21c9e4b7d2610"]
 ```
 
-一个 resource 在机器位于 `machines` **且**会话的 agent 位于 `agents` 时才是活跃
-的。未知的机器 id 处于休眠状态，正如今天未知的 agent 名字一样。
+`null` 表示所有 agent，给出列表则只限于列表之内，`[]` 谁都不匹配——即休眠。
+未知的 agent 名字是合法的，只是永远不会匹配上。
 
-这能表达「只要台式机上那个 Claude Code」，而不需要 0.3.0 设计里那张机器 × agent
-矩阵：只有当要在一个 resource 上说「台式机的 Claude Code *加上*笔记本的 Codex」
-时才需要成对矩阵，而已观察到的用法里没有这种需求。`machines: null` 精确复现
-今天的行为，因此既有行只需增量迁移。
+这里没有机器轴，也没有任何东西留给它去说。触达范围是本机专属的（见
+`## 不同步什么`），所以一台机器*持有*那份 scope 这件事本身，就已经点明了它要激活
+哪些 resource；把机器 id 写进 scope 里，等于把同一个事实在第二个地方再记一遍，
+于是就有了两处可以互相打架的说法。「台式机上亮、笔记本上暗」是靠在每台机器上各自
+这么设来表达的——而这也是用户坐在某台机器前就能亲自核对的唯一一种表达。
 
-scope 编辑器必须把机器做成从注册表构建的选择列表，绝不能是自由文本，这样打错
-一个 id 就不会悄悄停掉一个 resource。当某个 resource 在本机不活跃时，UI 必须
-说明是哪一个轴把它排除掉的。
+去掉这个轴**不得**放宽任何东西。一条点名了机器的既有 scope，在本机要么被那份
+列表准入、要么正因它而休眠；迁移会拿 daemon 当时真正在用的那个机器 id 去逐行
+求解，并写下这台机器本来就已经看到的那个答案，判断不了时则取 `agents: []`——
+休眠。收窄是看得见的，一次点击就能撤销；放宽则是一个 resource 悄无声息地触达到
+了一个本来被挡在外面的 agent。
 
-`enabled` 继续同步。一个 resource 在哪里运行只由 `scope` 表达——一套机制，
-不是两套。
+scope 编辑器**必须**在用户设定触达范围的地方写明：触达范围只对本机生效，不会被
+同步。当某个 resource 在本机处于休眠状态时，它**必须**说明这一点。
 
 ## 收敛轮次
 
@@ -180,8 +211,8 @@ fetch 会直接快进，git 根本没机会做三路合并，于是应用远端�
 一轮完成时 pointer 可以前进到 `M`。任何应用失败的路径会进入重试集，下一轮重试，
 成功后离开该集合。如果一条路径失败的原因是它在本机根本无法应用——比如某个
 `agent` 的 `config_dir` 在这台机器上不存在——则记为**本机不适用**而非待处理：
-它像重试集路径一样被保留，但不重试、也不报为错误，并且 UI 会提示把它 scope 到
-它真正该去的机器上。
+它像重试集路径一样被保留，但不重试、也不报为错误，并且 UI 会照实说明，而不是
+把它摆成一个用户还得去追的失败。
 
 ### 加入一个远端
 
@@ -233,7 +264,8 @@ fetch 会直接快进，git 根本没机会做三路合并，于是应用远端�
 | 路径 | 新增 / 修改 | 删除 |
 | --- | --- | --- |
 | `knowledge/**`、`skills/**` | 写文件 | 删文件 |
-| `resources/<kind>/<name>.yaml` | 经 resource 服务 upsert，展开 `${HOME}` 并跑该 kind 的导入闸门 | 删除该 resource |
+| `resources/<kind>/<name>.yaml` | 经 resource 服务 upsert，展开 `${HOME}` 并跑该 kind 的导入闸门；本地 resource 的触达范围**不**被触碰 | 删除该 resource |
+| `resources/channel/**` | 什么都不做，两个方向都是 | 什么都不做 |
 | `state/<area>/**` | 由该区域的 provider 应用该文档 | 由该区域的 provider 移除它 |
 | `credentials/<ref>.enc` | 写入密文，受下文的新鲜度规则约束 | 删除该凭据 |
 | `machines/*.yaml` | 不做任何事——注册表是从树上读的 | 不做任何事 |
@@ -344,10 +376,10 @@ git config，不会出现在命令行里，并会从任何被记录的错误中�
 | CLI | `coffer sync remote set <url> [--branch] [--interval] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync adopt <url>` · `coffer sync now` · `coffer sync status` · `coffer sync restore [--at <rev\|date>]` · `coffer sync rebuild` · `coffer sync confirm` · `coffer sync rollback` |
 | CLI（机器） | `coffer sync machines` · `coffer sync machine rename <name>` · `coffer sync machine remove <id>` |
 | CLI（密钥） | `coffer sync key export <file>` · `coffer sync key import <file>` |
-| HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
+| HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `GET /api/v1/sync/runs` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
 | HTTP（机器） | `GET /api/v1/sync/machines` · `PATCH /api/v1/sync/machines/self` · `DELETE /api/v1/sync/machines/{id}` |
 | HTTP（密钥） | `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
-| UI | 一个顶层 **Sync** 页面，两个 tab——**Status**（远端、上一轮与下一轮、最近几轮改了什么、一个运行按钮、主密钥卡片）与 **Machines**（注册表表格）。冲突与待确认项以横幅形式出现在 Status 上，而不是做成常驻 tab。 |
+| UI | 一个顶层 **Sync** 页面，三个 tab——**Status**（远端、下一轮、一个运行按钮、主密钥卡片）、**History**（这台机器跑过的每一轮，做成表格：时间、结果、应用到本机的、发布到远端的、落到的提交）与 **Machines**（注册表表格）。冲突与待确认项以横幅形式出现在 Status 上，而不是做成常驻 tab。Status 讲 vault 此刻在做什么，History 讲它一直在做什么——后者是一轮散文式的报告给不出的：失败一次是噪音，从周二起每小时失败一次才是答案。 |
 
 ## 验收场景
 
@@ -474,12 +506,21 @@ git config，不会出现在命令行里，并会从任何被记录的错误中�
 - **When** 用户把它回滚，
 - **Then** vault 回到应用前快照所持有的状态，pointer 也一并回退。
 
-### Scenario: a resource is dormant on a machine outside its scope
+### Scenario: reach stays on the machine it was set on
 
-- **Given** 一个 scope 到某一台机器的 `mcp_server`，
-- **When** 它收敛到另一台机器，
-- **Then** 它在那里被注册且可见，而 gateway 不向那台机器上的任何会话暴露它的
-  任何工具。
+- **Given** 一个两台机器上都存在的 `mcp_server`，在其中一台上被停用、在另一台上
+  被限制到单个 agent，
+- **When** 两台机器收敛，
+- **Then** 每台机器仍然持有它各自被赋予的触达范围——停用的那台依旧停用、受限的
+  那台依旧受限——而此后在任意一台上对该 server 配置的修改都会抵达另一台，并不
+  把它的触达范围一并带过去。
+
+### Scenario: a channel does not travel
+
+- **Given** 在其中一台机器上配置好的一个 `channel`，
+- **When** 两台机器收敛，
+- **Then** 另一台机器上没有任何 channel resource 被注册，而那台机器自己配置的
+  channel 事后仍然在。
 
 ### Scenario: the machine registry shows every machine and cannot conflict
 
@@ -490,18 +531,18 @@ git config，不会出现在命令行里，并会从任何被记录的错误中�
 
 ### Scenario: renaming a machine costs nothing
 
-- **Given** 一台被某个 resource 的 `scope.machines` 引用的机器，
+- **Given** 一台已收敛过、出现在注册表里的机器，
 - **When** 用户把它改名，
-- **Then** 该 resource 的 scope 未变且依然匹配，因为 scope 引用的是 id，而名字
-  住在描述符里。
+- **Then** vault 里没有别的任何东西被改写，而新名字会在下一轮里随这台机器自己的
+  描述符抵达其它机器。
 
 ### Scenario: a machine identity survives reinstalling Coffer
 
 - **Given** 一台机器的 `~/.coffer` 被删除并重装了 Coffer，且其宿主机能提供稳定
   标识符，
 - **When** 它再次采纳该远端，
-- **Then** 它以同一个机器 id 回来、它的描述符被更新而不是被复制出一份，且
-  scope 到它的 resource 重新活跃。
+- **Then** 它以同一个机器 id 回来，它的描述符被更新而不是被复制出一份，因此它是
+  以它自己而不是以陌生人的身份重新入伙。
 
 ### Scenario: tidy runs only on its owner machine
 

@@ -135,7 +135,7 @@ what was found and you confirm each one before it is registered — nothing is r
 automatically. Each agent is registered against a single **config directory** (for example
 `~/.claude` or `~/.codex`); Coffer delivers skills into that directory's `skills/` subfolder.
 
-The agent detail page has four tabs:
+The agent detail page has these tabs:
 
 - **Overview** — the agent's type and config directory, plus its LLM connection. On the
   built-in login the panel lists what the agent's own CLI offers, and the model pickers and
@@ -155,6 +155,12 @@ The agent detail page has four tabs:
   badge, and the one write available is **Adopt** — pulling the entry into Coffer as a
   managed resource. Coffer does not edit another tool's private config, so there is no
   remove and no enable/disable toggle here.
+- **Memory** — what this agent reaches through the Coffer gateway (a link to the Memory
+  page), its **Delivery** state, and a read-only table of the agent's OWN native
+  per-project memory stores. Delivery is the one write here: install or remove Coffer's
+  session-start hook in this agent's settings. The badge reads *Installed — never fired*
+  until the hook has actually run once, because an installed hook that never fires is
+  indistinguishable from no feature at all.
 - **Config files** — open any of the agent's curated config files and edit it in place.
   Saving validates the file's format (malformed JSON/TOML is rejected and the file left
   unchanged), then writes atomically, keeping the previous contents as a `.bak` beside the
@@ -199,15 +205,42 @@ that matches filenames as you type — client-side, no button and no request:
 - **Notes** — what agents (and you) wrote down. Add, edit, and delete notes here.
 
 The header carries the scope title, a rename pencil and the project path. **Upload** and
-**Tidy** are the two buttons — Tidy runs the tidy pass over `notes/` on demand — with
+**Tidy** are the two buttons — Tidy runs the tidy pass over the files it holds on demand — with
 Settings, Check sources and Reindex behind an overflow menu. A warning appears beside the
 title only when the scope holds documents that failed to convert.
 
 Searching the server is not on this page: agents use `coffer__search` and the CLI has
 `coffer knowledge recall`.
 
-The older `/memory`, `/memory/:name`, `/knowledge-bases`, and `/knowledge-bases/:name` URLs
-redirect here.
+The older `/knowledge-bases` and `/knowledge-bases/:name` URLs redirect here. `/memory` is
+its own surface — see [Memory](#memory) below.
+
+### Memory
+
+Open **Memory** for what your agents have already learned, read out of their own native
+memory and normalised into facts by project. The list is a table like every other one here:
+a row per partition — `global` plus one per project — showing the project it was named
+from, how many facts it holds, and the same **reach** control the MCP-servers and Skills
+lists carry per row, with multi-select for setting reach in bulk. Reach is the three-way
+Disabled / Everywhere / Restricted… choice — on or off, and for which agents — and it is
+set **per machine**: it is never synced, so every machine you work on sets its own. The
+control says so where you use it; [Sync](/guide/sync) says why.
+Nothing on this page is
+created by you, so the header action is **Sync**, not Add; a vault with no partitions yet
+shows the same table with an empty row, and Sync stays where it was.
+
+Clicking a partition opens `/memory/:name`: its facts, its conflicts as pairs to settle,
+the four per-fact overrides (hide, pin, mark superseded, settle a conflict), and an
+**Organise** pass. Coffer never writes back into an agent's own memory — a fact's only
+non-derived state is the decision you record here.
+
+Two related surfaces live elsewhere on purpose:
+
+- **Delivery** — whether Coffer's session-start hook is installed for an agent, and when it
+  last actually fired — is on that **agent's** detail page, under its Memory tab. The hook
+  is written into that one agent's own settings file, so it is per-agent state.
+- **The audit trail** for memory events is on the [Activity](#activity) page's Changes tab,
+  with the rest of the vault's. There is no second, memory-only copy of it.
 
 ### Model providers
 

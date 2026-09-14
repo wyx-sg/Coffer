@@ -22,12 +22,12 @@ nothing to redact.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from coffer.application.sync.machines import MachineRegistry, MachineView
 from coffer.application.sync.service import ConvergeService
 from coffer.domain.sync.backup import BackupRemote
-from coffer.domain.sync.convergence import ConvergeRun
+from coffer.domain.sync.convergence import ConvergeRun, RunRecord
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.sync_schemas import (
     AdoptIn,
@@ -45,10 +45,12 @@ from coffer.surfaces.http.sync_schemas import (
     PendingConfirmationOut,
     RestoreIn,
     RoundOut,
+    RunRecordOut,
     SyncRemoteClearedOut,
     SyncRemoteIn,
     SyncRemoteOut,
     SyncRemoteStateOut,
+    SyncRunListOut,
     SyncStatusOut,
 )
 
@@ -120,6 +122,22 @@ def _round_out(run: ConvergeRun) -> RoundOut:
         if pending is not None
         else None,
         error=run.error,
+    )
+
+
+def _record_out(record: RunRecord) -> RunRecordOut:
+    """One history row: the same projection as any round, plus its timestamps.
+
+    Built by widening ``_round_out`` rather than by projecting the round a
+    second time — the history and the status page must describe an identical
+    round identically, and two projections is how that stops being true.
+    """
+    run = record.run
+    return RunRecordOut(
+        id=record.id,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        **_round_out(run).model_dump(),
     )
 
 
@@ -239,6 +257,18 @@ async def status() -> SyncStatusOut:
     )
 
 
+@router.get("/runs", response_model=SyncRunListOut)
+async def list_runs(limit: int = Query(default=500, ge=1, le=500)) -> SyncRunListOut:
+    """Every round this vault has run, newest first.
+
+    Read-only and unfiltered. The surface searches, filters and pages in the
+    browser over the window it is handed, the same way the Activity page does,
+    so this route stays one query with one knob.
+    """
+    records = await get_sync_service().runs(limit)
+    return SyncRunListOut(runs=[_record_out(r) for r in records])
+
+
 # --- machines ---------------------------------------------------------------
 
 
@@ -262,8 +292,8 @@ async def rename_self(body: MachineRenameIn) -> MachineOut:
 
 @router.delete("/machines/{machine_id}", response_model=MachineRemovedOut)
 async def retire_machine(machine_id: str) -> MachineRemovedOut:
-    updated = await get_sync_service().retire_machine(get_machine_registry(), machine_id)
-    return MachineRemovedOut(removed=True, scopes_updated=updated)
+    await get_sync_service().retire_machine(get_machine_registry(), machine_id)
+    return MachineRemovedOut(removed=True)
 
 
 # --- master key -------------------------------------------------------------

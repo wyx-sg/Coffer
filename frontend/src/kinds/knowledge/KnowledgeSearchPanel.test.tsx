@@ -1,10 +1,9 @@
 // frontend/src/kinds/knowledge/KnowledgeSearchPanel.test.tsx
 //
-// Ranked search over the collection in view (spec knowledge FR-024/FR-060,
-// web surface FR-061). `useKnowledgeSearch` runs as a REAL react-query
-// mutation against the mocked wire layer, so the component's own literal-vs-
-// ranked labelling and empty-state handling are what's under test — not a
-// mocked hook's return value.
+// Literal search over the collection in view (spec knowledge FR-024/FR-060).
+// `useKnowledgeSearch` runs as a REAL react-query mutation against the mocked
+// wire layer, so the component's own rendering and empty-state handling are
+// what's under test — not a mocked hook's return value.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -35,17 +34,13 @@ function submitQuery(text: string) {
 }
 
 describe("KnowledgeSearchPanel", () => {
-  test("a ranked result shows title, description, path and matching lines", async () => {
+  test("a result shows title, description, path and matching lines", async () => {
     searchMock.mockResolvedValue({
-      mode: "ranked",
-      reason: "",
       results: [
         {
           path: "shopee/gateway.md",
           title: "Account Gateway",
           description: "where account decisions are made",
-          score: 0.83,
-          heading: "Overview",
           lines: [{ line_number: 3, line: "The orchestration layer." }],
         },
       ],
@@ -59,24 +54,18 @@ describe("KnowledgeSearchPanel", () => {
     expect(screen.getByText("where account decisions are made")).toBeInTheDocument();
     expect(screen.getByText("shopee/gateway.md")).toBeInTheDocument();
     expect(screen.getByText(/The orchestration layer\./)).toBeInTheDocument();
-    // No literal-mode notice on a ranked answer.
-    expect(screen.queryByText(/literal/i)).toBeNull();
 
     fireEvent.click(screen.getByText("Account Gateway"));
     expect(onSelectPath).toHaveBeenCalledWith("shopee/gateway.md");
   });
 
-  test("a literal-mode answer is labelled as such, with its reason — never mistaken for ranked", async () => {
+  test("an answer carries no mode or score to mistake for ranking", async () => {
     searchMock.mockResolvedValue({
-      mode: "literal",
-      reason: "no internal connection",
       results: [
         {
           path: "shopee/gateway.md",
           title: "Account Gateway",
           description: "where account decisions are made",
-          score: null,
-          heading: "",
           lines: [{ line_number: 1, line: "gateway" }],
         },
       ],
@@ -85,13 +74,13 @@ describe("KnowledgeSearchPanel", () => {
 
     submitQuery("gateway");
 
-    expect(await screen.findByText(/literal/i)).toBeInTheDocument();
-    // The reason accompanies the notice, not just a bare "degraded" label.
-    expect(screen.getByText(/internal connection/i)).toBeInTheDocument();
+    expect(await screen.findByText("Account Gateway")).toBeInTheDocument();
+    expect(screen.queryByText(/literal/i)).toBeNull();
+    expect(screen.queryByText(/ranked/i)).toBeNull();
   });
 
   test("an empty result set is a normal state with its own message, not an error", async () => {
-    searchMock.mockResolvedValue({ mode: "ranked", reason: "", results: [] });
+    searchMock.mockResolvedValue({ results: [] });
     renderPanel();
 
     submitQuery("nothing matches this");

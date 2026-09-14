@@ -16,7 +16,7 @@ from typing import Any, Protocol
 
 from coffer.application.sync.git_port import GitMirrorPort
 from coffer.domain.sync.backup import BackupRemote
-from coffer.domain.sync.convergence import ConvergeRun, PendingConfirmation
+from coffer.domain.sync.convergence import ConvergeRun, PendingConfirmation, RunRecord
 from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.serialization import ResourceDoc
 
@@ -28,13 +28,16 @@ class ImportGate(Protocol):
     user can re-run the import once this machine satisfies the precondition
     (e.g. the agent's config dir exists here).
 
-    ``scope`` is the doc's per-agent activation scope, passed so a scope-aware
-    gate can let a doc that is dormant here through untouched instead of
-    failing it on a machine-local precondition that does not apply."""
+    A gate sees the config and nothing else. It used to be handed the document's
+    activation scope as well, so a scope-aware gate could wave a doc that was
+    dormant here past a machine-local precondition — but reach no longer travels
+    (spec vault-sync ``## What does not sync``), and a gate that wants that
+    leniency now reads this machine's own row for it, which is the only place
+    the answer was ever a fact about this machine."""
 
     kind: str
 
-    async def validate(self, config: Mapping[str, object], *, scope: Any = None) -> None: ...
+    async def validate(self, config: Mapping[str, object]) -> None: ...
 
 
 class PostImportHook(Protocol):
@@ -292,10 +295,16 @@ class VaultApplyPort(Protocol):
 
 
 class SyncRemoteRepoPort(Protocol):
-    """Storage for the single sync remote and the last round's outcome.
+    """Storage for the single sync remote and the rounds run against it.
 
     A port rather than the concrete repository so the application layer keeps
     no infrastructure import; the composition root injects the SQLAlchemy one.
+
+    ``record_run`` does two things as one step: it stores the round as the
+    remote's *last*, which is what a status surface reads, and appends it to
+    the *history*, which is what ``list_runs`` returns. One step rather than
+    two calls, because a round the history missed would make the two disagree
+    about the same moment.
     """
 
     async def get(self) -> BackupRemote | None: ...
@@ -307,6 +316,8 @@ class SyncRemoteRepoPort(Protocol):
     async def record_run(self, run: ConvergeRun) -> None: ...
 
     async def last_run(self) -> ConvergeRun | None: ...
+
+    async def list_runs(self, limit: int = ...) -> list[RunRecord]: ...
 
 
 __all__ = [

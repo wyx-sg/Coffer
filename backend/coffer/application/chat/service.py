@@ -275,6 +275,7 @@ class ChatService:
         model_id: str | None = None,
         prompt_tokens: int | None = None,
         completion_tokens: int | None = None,
+        title_hint: str | None = None,
     ) -> Message:
         """Append a new message and bump the conversation's ``updated_at``.
 
@@ -282,6 +283,16 @@ class ChatService:
         from the message text (truncated to ``_TITLE_MAX_CHARS`` chars) — but
         only while the conversation still carries the placeholder title it was
         created with. A title the owner typed is theirs, and outranks the guess.
+
+        ``title_hint`` lets a caller that built the message text say which part
+        of it the human actually wrote. A channel turn opens with context blocks
+        the channel folds in (provenance, thread history) — identical on every
+        turn, so naming from the raw text would give every channel conversation
+        the same name. Only the caller knows where its own blocks end, so it
+        passes the human's words down rather than this layer pattern-matching
+        for a format it must not know about. Empty hint (nothing the human
+        wrote) ⇒ the conversation keeps its placeholder title, which is honest,
+        rather than being named after boilerplate.
         """
         conv = await self.get_conversation(conversation_id)  # existence check
 
@@ -306,7 +317,7 @@ class ChatService:
         # already named the conversation — renaming is an explicit act, and the
         # first message arriving afterwards must not silently undo it.
         if role == Role.USER and seq == 0 and conv.title == _PLACEHOLDER_TITLE:
-            text = _extract_text(content)
+            text = title_hint.strip() if title_hint is not None else _extract_text(content)
             if text:
                 title = text[:_TITLE_MAX_CHARS]
                 await self._conversations.rename(conversation_id, title)

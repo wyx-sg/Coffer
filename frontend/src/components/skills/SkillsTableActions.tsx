@@ -2,8 +2,7 @@
 // Row + bulk actions for SkillsTable, kept out of SkillsTable.tsx so that file
 // stays within its size budget. Per row: the same three-state ScopeControl the
 // detail page carries (the skill's own reach: Disabled / Everywhere /
-// Restricted, the last of those being two axes — agents and machines) + Delete
-// (styled confirm). Bulk: that same reach choice applied to the whole selection
+// Restricted, the last of those naming agents) + Delete (styled confirm). Bulk: that same reach choice applied to the whole selection
 // + Delete them all.
 //
 // There is no Verify/Repair here any more. The drift report still exists on the

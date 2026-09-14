@@ -94,9 +94,13 @@ class SyncRemoteModel(Base):
     credential store — never a secret, so this row is safe to read into an API
     response or a log line without redaction.
 
-    The ``last_*`` columns describe the most recent round rather than a
-    history: what a user needs from it is whether it worked and what to do
-    next, and the git history on the remote is the real record of what changed.
+    The ``last_*`` columns are the most recent round, denormalised onto the
+    remote so a status surface reads it without touching the history: what a
+    user needs at a glance is whether it worked and what to do next. Every
+    round, including this one, is also appended to ``sync_runs``, and both
+    writes happen in the same transaction so the newest history row and these
+    columns can never describe different rounds.
+
     The scalar columns are the ones a status surface reads directly; everything
     else a ``ConvergeRun`` carries — the two diff summaries, the conflicted and
     agent-resolved paths, the per-path failures, the locked refs and any held
@@ -128,6 +132,51 @@ class SyncRemoteModel(Base):
     __table_args__ = (
         CheckConstraint("id = 1", name="ck_sync_remote_single_row"),
         CheckConstraint("interval_seconds > 0", name="ck_sync_remote_interval_positive"),
+    )
+
+
+class SyncRunModel(Base):
+    """Every converge round this vault has run, newest last (spec vault-sync).
+
+    The remote's ``last_*`` columns answer "what happened just now"; this table
+    answers "what has been happening". They are different questions — a round
+    that failed once is noise, a round that has failed every hour since Tuesday
+    is the answer — and only the second one needs a row per round.
+
+    Machine-local, like the pointer: ``coffer.db`` is excluded from the bundle,
+    and a history that travelled would be another machine's account of rounds
+    this one never ran. Each machine keeps its own.
+
+    Same column-versus-payload split as the remote row, for the same reason:
+    what a table reads at a glance is a column, and everything else a
+    ``ConvergeRun`` carries — the two diff summaries, the conflicted and
+    agent-resolved paths, the per-path failures, the locked refs, any held
+    confirmation — is one JSON document written exactly once, so no column can
+    disagree with the payload beside it. The counts a row shows are derived
+    from that payload rather than stored a second time.
+
+    Swept by the retention worker (``sync_runs``), because a round runs on a
+    timer and an unbounded log of them is a leak, not a record.
+    """
+
+    __tablename__ = "sync_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    #: ``new`` / ``returning`` when this round joined a remote; NULL otherwise.
+    join_kind: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: ``commit`` is reserved in SQL, so the column says what it holds instead.
+    commit_sha: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: Already redacted of the push credential by the time it arrives here.
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        # The history is always read newest-first and pruned oldest-first;
+        # both are this index.
+        Index("ix_sync_runs_finished_at", "finished_at"),
     )
 
 

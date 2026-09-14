@@ -34,7 +34,7 @@ describe("useResourceScope", () => {
 
   test("fetches GET /resources/{kind}/{name}/scope", async () => {
     const fetchMock = stubFetch({
-      scope: { agents: ["claude"], machines: null },
+      scope: { agents: ["claude"] },
       supports_scope: true,
     });
 
@@ -43,7 +43,7 @@ describe("useResourceScope", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({
-      scope: { agents: ["claude"], machines: null },
+      scope: { agents: ["claude"] },
       supports_scope: true,
     });
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/resources\/mcp_server\/fs\/scope$/);
@@ -68,7 +68,7 @@ describe("useUpdateResourceScope", () => {
       kind: "mcp_server",
       name: "fs",
       config: {},
-      scope: { agents: ["claude"], machines: null },
+      scope: { agents: ["claude"] },
       enabled: true,
       created_at: "2026-07-10T00:00:00Z",
       updated_at: "2026-07-10T00:00:00Z",
@@ -78,14 +78,14 @@ describe("useUpdateResourceScope", () => {
     const { result } = renderHook(() => useUpdateResourceScope("mcp_server", "fs"), { wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({ agents: ["claude"], machines: null });
+      await result.current.mutateAsync({ agents: ["claude"] });
     });
 
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/resources\/mcp_server\/fs\/scope$/);
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe("PUT");
     expect(JSON.parse(init.body as string)).toEqual({
-      scope: { agents: ["claude"], machines: null },
+      scope: { agents: ["claude"] },
     });
   });
 
@@ -98,7 +98,7 @@ describe("useUpdateResourceScope", () => {
     const { result } = renderHook(() => useUpdateResourceScope("skill", "writing"), { wrapper });
 
     await act(async () => {
-      await result.current.mutateAsync({ agents: [], machines: null });
+      await result.current.mutateAsync({ agents: [] });
     });
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
@@ -118,7 +118,7 @@ describe("useUpdateResourceScope", () => {
 
     await act(async () => {
       try {
-        await result.current.mutateAsync({ agents: [], machines: null });
+        await result.current.mutateAsync({ agents: [] });
       } catch {
         // expected
       }

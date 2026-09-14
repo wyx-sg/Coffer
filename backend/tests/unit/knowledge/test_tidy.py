@@ -13,7 +13,6 @@ import pytest
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.knowledge.tidy import run_tidy
 from coffer.application.knowledge.tidy_worker import TidyWorker
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs, paths
 
@@ -87,7 +86,6 @@ def service(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     return KnowledgeService(
         resources=_Resources(["shopee"]),
         audit=_Audit(),
-        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
     )
 
 

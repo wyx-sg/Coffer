@@ -45,7 +45,7 @@ Facts about a repository belong to that repository; facts about the developer �
 
 ### User Story 3 — The session opens with what matters, not with everything (Priority: P1)
 
-A session starts with a few hundred tokens: who the developer is, what this project's memory holds, and how to ask for more. It does not start with two hundred facts. When the agent needs something it cannot name, it asks in its own words and gets the handful that bear on it.
+A session starts with a few hundred tokens: who the developer is, what this project's memory holds, and how to ask for more. It does not start with two hundred facts. When the agent needs something the digest left out, it looks it up by a distinctive word or phrase and gets those facts back whole.
 
 **Independent Test**: compose the context for a partition holding more facts than the budget allows; confirm the payload stays within the stated bound and names how many facts were left out; then call recall and confirm the omitted fact is reachable.
 
@@ -107,7 +107,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 ### Scenario: recall returns facts the digest omitted
 
-### Scenario: recall falls back to literal matching with no internal connection
+### Scenario: recall matches a phrase in a fact's body
 
 ### Scenario: recall spans only the partitions the calling agent may see
 
@@ -164,22 +164,24 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 - **FR-050**: Delivery MUST have exactly three layers. **L0**, always: who the developer is, what this project's memory holds, and how to ask for more. **L1**, when it fits the budget: the partition's digest, one line per fact. **L2**, on request: `coffer__recall`.
 - **FR-051**: The composed payload MUST be **bounded by an explicit token budget**, and when facts are left out it MUST say how many and how to reach them. Pinned facts, then `global` facts about the person, then the current project's most recent, MUST be preferred in that order.
-- **FR-052**: `coffer__recall` MUST take a natural-language query, span only the partitions the calling agent's scope allows, and return the facts that bear on it with their origins. It MUST use the ranked retrieval of spec [knowledge](../knowledge/spec.md) FR-025..FR-029 — the same internal connection, the same disposable-sidecar rule — and MUST fall back to literal matching, never an error, when no internal connection is configured.
+- **FR-052**: `coffer__recall` MUST take a word or phrase, span only the partitions the calling agent's scope allows, and return the matching facts **whole**, with their origins. Matching MUST be memory's own **case-insensitive substring scan** over the facts already in hand — a fact's body first, and failing that its title and description — with no score, no mode and no reason in the answer. It MUST need no internal connection at all: recall used to borrow spec [knowledge](../knowledge/spec.md)'s ranked retrieval, and that engine was deliberately removed along with every other use of embeddings in Coffer, so there is nothing left for recall to borrow and nothing for it to degrade from. The scan stays memory's own rather than reaching for knowledge's ripgrep, because at the corpus size this layer assumes the facts are already loaded.
 - **FR-053**: A **channel-driven turn** MUST receive L0 and L1 through the system-prompt append the turn platform already composes (spec [channels](../channels/spec.md)). It MUST NOT require a hook, since Coffer owns that context itself.
 - **FR-054**: For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it. Where it has none — Codex, whose only hook events are `PreToolUse`, `PostToolUse`, `PreCompact`, `Stop` and `UserPromptSubmit` — delivery MUST use its earliest per-session event with a **once-per-session guard**, so the digest arrives once rather than on every prompt. Installation MUST be an **explicit act** on Coffer's surface, marker-scoped so it can be identified, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing and is only ever written on the developer's instruction.
 - **FR-055**: Coffer MUST report, per agent, whether delivery is installed and **when it last actually fired**, reporting never-fired until one does. This is the check the removed injection layer lacked: it shipped, was never installed, and nothing said so for two months.
 
 ### Surfaces
 
-- **FR-060**: The MCP gateway MUST expose exactly one new built-in tool, `coffer__recall`. There MUST be no `remember` tool: this layer's facts are derived from agents' own memories, and an agent records something by recording it the way it already does.
+- **FR-060**: The MCP gateway MUST expose exactly one new built-in tool, `coffer__recall`, and its description MUST tell the caller that matching is literal, so an agent gives it a distinctive word or phrase rather than a whole question. There MUST be no `remember` tool: this layer's facts are derived from agents' own memories, and an agent records something by recording it the way it already does.
 - **FR-061**: A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and facts, show one fact with its origins and conflicts, run a sync, run an organise pass, compose the session context, apply and clear each override, and install/inspect/remove delivery for an agent.
-- **FR-062**: The web UI MUST present partitions and their facts, surface conflicts as pairs to settle, expose the four overrides, show per-agent delivery state including last-fired, and read the audit log for this kind.
+- **FR-062**: The web UI MUST present partitions **as a table**, in the same shape whether or not any exist — an installation with no partitions yet MUST get that table's own empty row and a reachable sync, not a different page — and MUST present one partition's facts, surface conflicts as pairs to settle, and expose the four overrides.
+- **FR-064**: Per-agent delivery state, including last-fired (FR-055), MUST be presented on **that agent's own detail page**, not on the partitions surface. Delivery writes one agent's settings file, so it is per-agent state; a surface that is already scoped to an agent MUST NOT make the reader pick one again.
+- **FR-065**: This layer MUST NOT carry an audit surface of its own. Its events are read on the vault-wide audit surface, which every kind shares; a kind-scoped second copy is a duplicate surface, and every event type this layer records MUST therefore be legible there rather than shown as a raw event code.
 - **FR-063**: Every lifecycle act — aggregation, organise, each override, delivery installed or removed — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
 
 ### Constraints
 
 - **FR-070**: This layer MUST add exactly **one** table, holding the developer's overrides. Facts, digests and partition metadata are files or existing Resource rows.
-- **FR-071**: File content MUST leave the machine only through the internal connection the developer configured, for organise and for embedding, exactly as spec [knowledge](../knowledge/spec.md) allows — and not at all when none is configured.
+- **FR-071**: File content MUST leave the machine only through the internal connection the developer configured, and only for the organise pass (FR-030) — exactly as spec [knowledge](../knowledge/spec.md) allows, and not at all when none is configured. Recall MUST send nothing anywhere: it reads no further than the facts on disk.
 - **FR-072**: Reading MUST be confined to the memory paths of registered agents' config directories. Every path built from a source's contents MUST pass a traversal guard.
 - **FR-073**: This layer MUST NOT reintroduce transcript distillation, a journal lane, native-memory projection, or a per-agent capability matrix. The two readers are written as two readers; a third agent earns an abstraction, not before.
 
@@ -188,7 +190,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **SC-001**: A fact learned by one agent is present in the session context composed for a different agent, with no file in either agent's own memory having changed.
 - **SC-002**: Deleting `~/.coffer/memory/` entirely and re-running a sync reproduces every fact, and every override the developer had recorded is still in force.
 - **SC-003**: The session context stays inside its stated token budget on a partition with an order of magnitude more facts than the budget admits, and names what it omitted.
-- **SC-004**: An installation with no internal connection configured still gets partitions, facts, a digest, delivery and recall — with merging, supersession and ranking absent rather than the feature absent.
+- **SC-004**: An installation with no internal connection configured still gets partitions, facts, a digest, delivery and recall — with merging and supersession absent rather than the feature absent. Recall is unaffected either way: it never needed a connection.
 - **SC-005**: The surface can answer, for each agent, whether delivery is installed and when it last fired.
 - **SC-006**: A malformed or unrecognised native memory in one agent leaves the other agent's aggregation, and all previously aggregated facts, intact.
 
@@ -196,6 +198,6 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 - Each supported agent's native memory format is read at the shape it has today. A format change is expected to break the reader; FR-005 exists so that it breaks visibly and locally rather than silently emptying the store.
 - Both supported agents distil their own memory well enough to be a good source. If one stops doing so, the answer is not for Coffer to start reading transcripts, but to reconsider that reader.
-- The corpus stays in the hundreds of facts per partition, which is what makes an in-process ranking and a whole-digest organise pass affordable.
+- The corpus stays in the hundreds of facts per partition, which is what makes a scan over every fact in hand and a whole-digest organise pass affordable.
 - A hook lives in an agent's settings file, not its memory; writing one on the developer's explicit instruction is a different act from projecting memory into an agent, which stays prohibited.
 - Codex exposes no session-start event, so its guard keys on the agent process rather than on a session id it does not publish. That is a best-effort proxy: a guard that misfires costs a repeated digest, never a lost one, which is the right direction for the error to fall.

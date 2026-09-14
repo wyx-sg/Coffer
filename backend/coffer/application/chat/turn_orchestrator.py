@@ -135,6 +135,7 @@ class TurnOrchestrator:
         user_text: str,
         *,
         attachments: Sequence[Attachment] = (),
+        title_hint: str | None = None,
     ) -> asyncio.Queue[AgentEvent | None]:
         """Start a turn and return a dedicated event queue ending in ``None``.
 
@@ -142,12 +143,20 @@ class TurnOrchestrator:
         is already active. The turn also publishes to the conversation bus, so the
         web observes a channel-driven turn live. ``attachments`` (channel media)
         are materialised by the agent adapter this turn only — never persisted.
+        ``title_hint`` names the part of ``user_text`` the human actually wrote,
+        for naming a conversation still under its placeholder title; the channel
+        supplies it because ``user_text`` also carries context blocks only the
+        channel knows the shape of.
         """
         if conversation_id in _ACTIVE_TURNS:
             raise TurnInProgress(conversation_id)
         primary: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
         await self._begin_turn(
-            conversation_id, user_text, primary_queue=primary, attachments=attachments
+            conversation_id,
+            user_text,
+            primary_queue=primary,
+            attachments=attachments,
+            title_hint=title_hint,
         )
         return primary
 
@@ -247,6 +256,7 @@ class TurnOrchestrator:
         *,
         primary_queue: asyncio.Queue[AgentEvent | None] | None,
         attachments: Sequence[Attachment] = (),
+        title_hint: str | None = None,
     ) -> None:
         """Reserve the slot, build the adapter, persist the user message, spawn the
         turn task. Callers guarantee no turn is currently active.
@@ -255,7 +265,9 @@ class TurnOrchestrator:
         ``AttachmentBlock`` references (path/mime/filename, no bytes) after the
         text — the single source of truth. The turn task re-materialises them for
         the adapter by reading them back from history (FR-033), so they survive a
-        daemon restart and are not threaded down as a separate param."""
+        daemon restart and are not threaded down as a separate param.
+        ``title_hint`` rides along to the persisted user message, where the
+        placeholder-title rule uses it instead of the raw text (FR-048)."""
         bus = self._bus_for(conversation_id)
         active = _ActiveTurn(bus=bus, primary_queue=primary_queue)
         # Reserve synchronously — no ``await`` before this insert.
@@ -276,6 +288,7 @@ class TurnOrchestrator:
                     ),
                 ],
                 status="complete",
+                title_hint=title_hint,
             )
         except BaseException:
             # Anything failed before the task spawned — release the reservation.

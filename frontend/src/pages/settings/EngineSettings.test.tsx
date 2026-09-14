@@ -35,7 +35,6 @@ vi.mock("@/lib/hooks/useInternalEngine", () => ({
 }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
-  useTestEmbedding: () => ({ isPending: false, mutate: vi.fn(), reset: vi.fn(), data: undefined }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");

@@ -11,7 +11,6 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 from coffer.infrastructure.knowledge import fs
@@ -68,7 +67,6 @@ def service(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     return KnowledgeService(
         resources=resources,
         audit=_Audit(),
-        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
     )
 
 

@@ -23,7 +23,6 @@ import pytest
 
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
@@ -203,7 +202,6 @@ def fixture(tmp_path: pathlib.Path):
         resources=resources,
         audit=_FakeAudit(),
         agent_source_resolver=_resolver,
-        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
         readers={"claude_code": ClaudeCodeMemoryReader(), "codex": CodexMemoryReader()},
     )
     return {
@@ -263,9 +261,7 @@ async def test_the_project_partition_is_scoped_to_both_agents(fixture) -> None:
     await fixture["service"].aggregate()
 
     row = await fixture["resources"].get(ResourceRef(KIND_MEMORY, "coffer"))
-    # The agent axis names both sources; the machine axis stays unrestricted,
-    # because a partition belongs wherever those agents are (spec vault-sync).
+    # The scope names both sources the partition was aggregated from.
     assert row.scope is not None
     assert set(row.scope.agents or []) == {"claude-code", "codex"}
-    assert row.scope.machines is None
     assert row.config["project_root"] == str(fixture["project_root"])

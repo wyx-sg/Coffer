@@ -14,7 +14,6 @@ import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import { useAudit } from "@/lib/hooks/useAudit";
 import {
   clearOverrideField,
   getFact,
@@ -188,20 +187,4 @@ export function useRemoveDelivery() {
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
-}
-
-/** This kind's audit log (FR-062), reading the one generic audit hook that
- * had no consumer yet. The backend does not tag every memory lifecycle event
- * with `resource_kind=memory` — override events carry no ref at all, and
- * delivery install/remove are tagged `agent` (the thing they modify), not
- * `memory` — so this asks for every event whose type starts with `memory_`, which every one of the six memory events shares
- * (`memory_aggregated`, `memory_organised`, `memory_override_set`,
- * `memory_override_cleared`, `memory_delivery_installed`,
- * `memory_delivery_removed`) and nothing outside this kind does. The filter is
- * applied by the server: doing it here over a fixed window would silently drop
- * whatever fell outside that window, so the log would read complete and not
- * be. */
-export function useMemoryAuditLog(limit = 50) {
-  const query = useAudit({ eventPrefix: "memory_", limit });
-  return { ...query, entries: query.data?.entries ?? [] };
 }

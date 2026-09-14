@@ -100,7 +100,7 @@ Six units carry the weight, and each is named for exactly what it does:
 | `domain/sync/backup.py` | **kept** — `BackupRemote` is the remote's configuration and its fields are unchanged. `record_run` now takes a `ConvergeRun` |
 | `domain/sync/models.py` | **trimmed** — `ImportSummary` goes with the importer; `AreaCount` and `ExportSummary` stay, because the exporter still produces them |
 | `domain/sync/errors.py` | **extended** — gains `SyncJoinAmbiguous`; the bundle and master-key errors stay, because the bundle layout is still what the working tree holds |
-| `domain/sync/serialization.py` | **kept**, carrying the two-axis `scope` |
+| `domain/sync/serialization.py` | **kept** — the resource document is identity, description and config; `enabled` and `scope` are read and discarded, because reach is machine-local |
 | `domain/sync/portability.py`, `manifest.py` | **kept** unchanged |
 | `application/sync/exporter.py` | **kept** — `SyncExporter` is the serializer step 1 calls. What changed is underneath it: `Bundle` now converges differentially instead of clearing |
 | `application/sync/importer.py` | **deleted** — a bundle-wins whole-tree import is precisely the operation this spec removes; `appliers.py` replaces it |
@@ -131,7 +131,10 @@ no TTL, no timestamp arbitration, no quarantine table. The diff is the ledger.
 - **`VaultApplyPort`** — `prefix`, `upsert(path)`, `remove(path)`. The appliers
   implement it structurally.
 - **`SyncRemoteRepoPort`** — `get` / `set` / `clear` / `record_run` /
-  `last_run`, so the application layer keeps no infrastructure import.
+  `last_run` / `list_runs`, so the application layer keeps no infrastructure
+  import. `record_run` is one step that writes two things — the remote's
+  `last_*` columns and a `sync_runs` row — in one transaction, because a round
+  the history missed would make the two disagree about the same moment.
 
 ### Where the convergence state lives
 
@@ -171,15 +174,14 @@ the lock is injectable rather than private.
 
 ## Build order (TDD, each a committable chunk)
 
-1. **Scope's machine axis** — `domain/scope.py` becomes the two-axis `Scope`
-   value object with `excluded_by` naming the axis; `mcp_server` and `skill`
-   carry it, the gateway and the supervisor pass `machine=` alongside `agent=`;
-   `coffer scope set` gains `--machines` / `--no-machines` and
-   `PUT /resources/{kind}/{name}/scope` takes the object shape. Migration `0069`
-   rewrites every `scope_json` by **addition** — `["claude-code"]` becomes
-   `{"agents": ["claude-code"], "machines": null}`, `NULL` stays `NULL` — and
-   inlines the shape rather than importing the domain, so the revision means the
-   same thing forever. No load-time shim reads the old shape afterwards.
+1. **Scope stays one axis, and reach stays home** — `domain/scope.py` keeps the
+   single-axis `Scope` (agents only). A resource's reach — its `enabled` flag and
+   its `scope` together — is machine-local and is not serialized into the bundle
+   at all, so each machine answers "what does this reach here?" for itself. The
+   machine axis this spec once introduced was withdrawn with the same decision;
+   its strip migration inlines the shape rather than importing the domain, so the
+   revision means the same thing forever, and no load-time shim reads the old
+   shape afterwards.
 2. **Machine identity** — `derive_machine_id` (pure), `machine_id.resolve` (the
    three sources and their order), `MachineIdentity` carrying `derived`. Unit
    tests: the raw host identifier never appears in the output; the same raw id
@@ -235,8 +237,7 @@ the lock is injectable rather than private.
    the explicit answer; a descriptor this build cannot parse still proves the
    machine has been here. Registry tests: two machines' descriptors merge with
    no conflict; `publish_self` restamps `last_converged_on` at most once per
-   calendar day; `retire` removes the descriptor **and** strips the id from
-   every `scope.machines` in the same change, and refuses to retire self.
+   calendar day; `retire` removes the descriptor and refuses to retire self.
 10. **`ConvergeRound`** — the seven steps. Unit tests with fakes cover step
     order and each `ConvergeStatus`; integration tests use two tmp vaults and
     one bare repository as machines A and B and replay the spec's scenarios:
@@ -276,9 +277,9 @@ the lock is injectable rather than private.
     master-key card) and a **Machines** tab (the registry table, with the local
     machine marked, a fingerprint mismatch stated in words, and a warning where
     the id came from the fallback file rather than the host). Conflicts and
-    holds render as a banner on Status. The scope editor gains a machine
-    pick-list built from the registry — never a free-text id — and says which
-    axis made a resource dormant here.
+    holds render as a banner on Status. The reach editor states, where reach is
+    set, that it applies to this machine only and is not synced, and says when a
+    resource is dormant here.
 15. **Docs** — architecture.md cross-cutting row, roadmap status, docs-site
     guide and architecture pages, bilingual companions; acceptance markers tie
     each `spec.md` scenario to a test.
@@ -299,6 +300,7 @@ each other. The routes are a thin projection of two objects: `ConvergeService`
 | `POST /sync/run` | `RunIn` | `ConvergeRunOut` | `run_once(join_choice=…)` |
 | `POST /sync/adopt` | `AdoptIn` | `ConvergeRunOut` | `set` then `run_once` |
 | `GET /sync/status` | — | `SyncStatusOut` | `last_run` + state + registry |
+| `GET /sync/runs` | `limit` | `SyncRunListOut` | `list_runs` — every round, newest first |
 | `POST /sync/restore` | `RestoreIn` | `ConvergeRunOut` | an earlier revision through the same appliers |
 | `POST /sync/confirm` | — | `ConvergeRunOut` | `confirm()` |
 | `POST /sync/reject` | — | `SyncRejectedOut` | `reject()` |

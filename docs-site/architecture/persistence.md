@@ -8,14 +8,14 @@ All Coffer state lives on the user's machine. The daemon is the single writer. E
 
 Coffer is a local-first developer tool: the user's accumulated AI assets — registered MCP servers, capability preferences, audit history, knowledge, chat conversations, channels, and sync state — must never depend on a cloud service to be readable or writable. That constraint demands a persistence layer that is self-contained, zero-configuration, and trivially backed up.
 
-The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — ingested documents and the notes agents write — lives as markdown files on the local filesystem (the source of truth); SQLite carries a rebuildable retrieval index over it (Files as Truth). There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
+The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — the knowledge agents and the user write, and documents ingested to markdown — lives as plain files under `~/.coffer/knowledge/`, and the files are the whole of it: no table in `coffer.db` mirrors them and no index sits over them ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files)). There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
 
 ## Why SQLite, not Postgres
 
 The rejected alternative — a server database like Postgres or MySQL — would require the user to install and manage a database process, configure credentials, and keep a service running. For a single-user local tool, that overhead is pure friction with no benefit.
 
 ::: tip Constitutional invariant
-The constitution designates SQLite as the system of record for control-plane state. Bulk user content (when introduced by later specs) is stored as files on the local filesystem, indexed on demand. Migrating the control plane to a server database requires a constitutional amendment.
+The constitution designates SQLite as the system of record for control-plane state. Bulk user content is stored as files on the local filesystem. Migrating the control plane to a server database requires a constitutional amendment.
 :::
 
 The practical consequences of the SQLite choice shape every detail of the persistence layer:
@@ -57,7 +57,7 @@ Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-Later revisions add the skill, knowledge, embedding-config, chat, channel and credentials tables (plus index and data-fix revisions); a later revision drops the sync tables again when continuous sync is withdrawn ([Vault Export and Import-vault-sync](/reference/adr/Vault Export and Import-vault-sync)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
+Later revisions add the skill, chat, channel and credentials tables (plus index and data-fix revisions); `20260912_0066_knowledge_is_plain_files.py` drops every table the knowledge layer ever had, replacing none of them; a later revision drops the sync tables again when continuous sync is withdrawn ([Vault Export and Import-vault-sync](/reference/adr/Vault Export and Import-vault-sync)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
 
 ## Table map
 
@@ -79,28 +79,13 @@ The tables that exist after applying all revisions, grouped by domain:
 | `mcp_invocations`            | Time-series log of every tool, resource, and prompt call through the gateway: server name, capability key, duration, status, session ID. Never stores arguments or return contents. |
 | `mcp_server_health`          | Last-known health status (`healthy` / `failing` / `unknown`) for each registered MCP server, written at each health check.                                                          |
 
-**Credentials & embedding:**
+**Credentials:**
 
 | Table              | Purpose                                                                                                                                                              |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `credentials`      | Envelope-encrypted secret store: each secret is Fernet-encrypted under a master key before it reaches SQLite. Plaintext never lands on disk. See [Security](/architecture/security) and Envelope-Encrypted Credentials. |
-| `embedding_config` | The active embedding provider/model configuration used by the retrieval index.                                                                                      |
 
-**Knowledge substrate:**
-
-| Table           | Purpose                                                                                                                            |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `documents`     | One row per knowledge item — an ingested document or a written note — mirroring the markdown file on disk.                      |
-| `chunks`        | Per-document chunk rows that the retrieval pipeline produces from the markdown.                                                  |
-| `documents_fts` | FTS5 virtual table backing keyword search over chunk text.                                                                       |
-| _sqlite-vec_    | A per-scope `vec0` virtual table (created lazily, named by kind + dimensions) holding chunk embeddings for vector search.         |
-
-**Knowledge scope side tables (machine-local):**
-
-| Table                             | Purpose                                                                       |
-| --------------------------------- | ----------------------------------------------------------------------------- |
-| `knowledge_scope_project_roots`   | Maps a `project-<ULID>` scope to its on-disk project root on this machine.     |
-| `knowledge_scope_labels`          | The human-readable name shown for a scope whose ULID name says nothing.        |
+**Knowledge:** no tables. A knowledge collection is a row in the kind-agnostic `resources` table like every other Resource, and its content is the markdown files under `~/.coffer/knowledge/<collection>/`. Nothing about those files is mirrored into SQLite — not their titles, not their text, not a digest of them.
 
 **Chat:**
 
@@ -124,11 +109,11 @@ The tables that exist after applying all revisions, grouped by domain:
 
 **Export / import:** no tables. Export and import are one-shot operations over the live vault; there is no configuration to persist, no last-run state, no machine registry and no tombstone ledger ([Vault Export and Import-vault-sync](/reference/adr/Vault Export and Import-vault-sync)).
 
-## Files as truth, SQLite as a rebuildable index (Files as Truth)
+## Knowledge is plain files ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files))
 
-The control-plane tables above are the system of record for their rows. The **knowledge substrate** is different: the markdown files under `~/.coffer/knowledge/` are the source of truth, and the SQLite retrieval index (the `documents` / `chunks` / `documents_fts` FTS5 tables plus the per-scope sqlite-vec virtual tables) is a **fully rebuildable** projection of those files.
+The control-plane tables above are the system of record for their rows. **Knowledge has no such row.** The markdown files under `~/.coffer/knowledge/` are not a projection of anything and are not projected into anything — they are the knowledge layer, whole.
 
-This kills the dual-source-of-truth problem: if the index is corrupted, lost, or schema-migrated, it is regenerated from the files. `coffer knowledge reindex` rebuilds it from the markdown on disk. Backup is one directory tree; corruption recovery is a reindex.
+That is what removes the dual-source-of-truth problem outright rather than managing it. There is nothing to keep level with the disk, so a file the user edited in their editor, an agent wrote, or `git` pulled is readable and searchable the instant it lands. Search is `ripgrep` over those files, which matches bytes and therefore needs no tokenizer and no import step. Backup is one directory tree, and there is no corruption to recover from: titles and descriptions are read out of each file's own frontmatter, because there is nowhere else they could come from.
 
 ## Cascade and integrity rules
 
@@ -147,7 +132,7 @@ The full set of files Coffer writes:
 | `~/.coffer/coffer.db`      | SQLite database (WAL mode) — the system of record      |
 | `~/.coffer/daemon.json`    | Daemon PID, port, and bearer token (mode `0600`)       |
 | `~/.coffer/master.key`     | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
-| `~/.coffer/knowledge/`     | One directory per scope — `notes/` and `docs/` as markdown, plus the hidden `.raw/` originals and `.history/` note revisions; the source of truth indexed by SQLite |
+| `~/.coffer/knowledge/`     | One directory per collection of markdown files — the knowledge layer itself, plus the hidden `.raw/` originals behind uploaded documents and the `.history/` revisions the tidy pass superseded |
 | `~/.coffer/logs/`          | Structured JSON log files from `structlog`             |
 | `~/.coffer/bin/`           | `coffer-mcp-shim`, `coffer-daemon` and the runtime helper binaries, deployed by the daemon on a frozen start |
 | `~/.coffer/upstream-pids/` | Per-upstream subprocess PID files for session tracking |

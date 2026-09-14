@@ -241,9 +241,9 @@ paths:
       operationId: renameSelfMachine
       tags:
       - sync
-      description: The name is a label and nothing keys on it — `scope.machines` references the derived
-        id — so renaming costs nothing and breaks no scope. A machine may rename only itself; it writes
-        no other machine's descriptor.
+      description: The name is a label and nothing keys on it — every reference to a machine uses the
+        derived id — so renaming costs nothing. A machine may rename only itself; it writes no other
+        machine's descriptor.
       requestBody:
         required: true
         content:
@@ -268,7 +268,7 @@ paths:
       - sync
       description: Deletes that machine's descriptor from the working tree. For a machine that is gone
         for good, or one whose fallback id did not survive deleting `~/.coffer` and has reappeared under
-        a new one. Resources scoped to the removed id become dormant rather than broken.
+        a new one. Nothing else in the vault references the id, so removing it rewrites no resource.
       parameters:
       - name: machine_id
         in: path
@@ -677,8 +677,7 @@ components:
           items:
             $ref: '#/components/schemas/PathFailureOut'
           description: Paths that cannot apply on this machine at all — an agent whose config_dir does
-            not exist here. Preserved like a pending path, but not retried and not an error; scope them
-            to the machines where they belong.
+            not exist here. Preserved like a pending path, but not retried and not an error.
         pending:
           type: array
           items:

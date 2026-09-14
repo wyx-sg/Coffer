@@ -131,6 +131,16 @@ Coffer 保留三份「发生了什么」的账本：**审计日志**（金库里
 `GET /api/v1/daemon/logs`。守护进程日志那条路由把 token 依赖挂在路由自身上——
 daemon 的 router 让 `/status` 保持开放，而日志内容不是状态。
 
+**守护进程日志不是一种格式，而 Daemon tab 的那几列取决于把它们全都读懂。**
+`daemon.log` 里同时躺着 Coffer 自己的 structlog JSON、迁移跑过之后 root logger
+继承来的标准库 formatter、uvicorn 的默认格式、上游 MCP 服务器的 rich 输出，以及
+守护进程重新拉起的 cloudflared 子进程写下的 zerolog——其中一些还带着颜色转义，
+因为一个往管道里写的子进程并不总是相信自己不在终端里。只认得 structlog 的读取器
+会让几乎每一行的级别、logger 与时间都空着，并把整行原文倒进消息列，那等于没有列。
+所以每一种写入方的格式在抵达页面之前都被归一到同一组字段上、转义序列被剥掉，
+traceback 跟着抛出它的那条记录走，而不是变成一串什么都没有的行。哪种格式都对不上的
+一行仍然整行保留而不是丢掉——它往往正是有意思的那一行。
+
 事件类型重新渲染成口语化的活动行（"Enabled demo-fs"），因此它们的译文在两个 locale
 里一并回来，并像错误码那样被守住：新增一个没有译文的事件类型会让 CI 失败，而不是
 让中文读者在某一行上看到生的 `resource_enabled`。
@@ -144,6 +154,7 @@ daemon 的 router 让 `/status` 保持开放，而日志内容不是状态。
 **Representative scenarios**（完整列表见 `## Acceptance Scenarios`）：
 
 - activity gives each record its own tab
+- the daemon tab reads every writer in the log
 - activity row expands to its raw record
 - a failing record shows its error inside its own tab
 - legacy /audit redirects to activity
@@ -186,6 +197,15 @@ daemon 的 router 让 `/status` 保持开放，而日志内容不是状态。
 - **When** 用户打开 `/activity` 并依次走过它的三个 tab
 - **Then** 每个 tab 用那份记录自己的列渲染出自己那张从新到旧的表——一行活动和 actor；一次调用的服务器、能力、耗时与结果；一条日志的级别、logger 与消息
 - **And** 一条变更读作口语化的一行，而不是生的事件码
+
+### Scenario: the daemon tab reads every writer in the log
+
+- **Given** `daemon.log`里同时有好几种写入方的行——Coffer 自己的 structlog JSON、标准库 formatter、uvicorn、rich，以及 cloudflared 子进程的 zerolog——其中一行带颜色转义，另有一段 traceback 写在抛出它的那条记录下面
+- **When** 用户打开 Daemon tab
+- **Then** 每一行都带着它自己那一行声明过的时间、级别与 logger，且没有任何一行声称自己有没说过的时间或级别
+- **And** 没有任何消息把终端转义序列当文本渲染出来
+- **And** traceback 跟着抛出它的那条记录走，而不是自己变成若干行
+- **And** errors-only 过滤按每一行自己的级别判断，而不是把所有非 JSON 行都当成错误
 
 ### Scenario: activity row expands to its raw record
 

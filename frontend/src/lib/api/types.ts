@@ -488,7 +488,7 @@ export interface components {
          * @example mcp_server:filesystem
          */
         ResourceRef: string;
-        /** @description Where a resource is active: two independent allow-lists, AND-ed. null on an axis means unrestricted; [] matches nothing, i.e. dormant. Machines are named by their derived id, never their display name. */
+        /** @description Which agents a resource is active for, on THIS machine. null means every agent; [] matches nothing, i.e. dormant. Scope is machine-local — it is set on the machine it applies to and is never synced to the others. Unknown properties are rejected (422) rather than ignored: a client still sending the withdrawn `machines` axis means "only there", and silently keeping what is left would store "every agent" — widening the restriction the request was written to make. */
         ScopeOut: {
             /**
              * @example [
@@ -496,12 +496,6 @@ export interface components {
              *     ]
              */
             agents: string[] | null;
-            /**
-             * @example [
-             *       "a3f21c9e4b7d2610"
-             *     ]
-             */
-            machines: string[] | null;
         } | null;
         ResourceOut: {
             ref: components["schemas"]["ResourceRef"];
@@ -719,9 +713,9 @@ export interface components {
         DaemonLogRecordOut: {
             timestamp?: string | null;
             level?: string | null;
-            /** @description structlog's `event` field — the message. */
+            /** @description The message — structlog's `event` field, or the text another writer put after its level. */
             event?: string | null;
-            /** @description The whole parsed line: a structlog record's full dict, or `{"raw": "<line>"}` for a line that is not JSON (usually a traceback, and usually the interesting one). */
+            /** @description The whole parsed record. `daemon.log` interleaves several writers (Coffer's structlog JSON, the stdlib formatter, uvicorn, rich, and the cloudflared child's zerolog), normalised onto `timestamp` / `level` / `logger` / `event`, plus `continuation` for the lines (a traceback, a wrapped message) that belong to this record. A line no writer's format fits is kept whole as `{"raw": "<line>"}`. */
             record: {
                 [key: string]: unknown;
             };

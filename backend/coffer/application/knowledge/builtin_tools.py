@@ -111,8 +111,8 @@ def register_knowledge_builtin_tools(
     """Wire the knowledge tools into the gateway's registry.
 
     ``search_service`` is optional so a composition root that has not wired
-    ranked retrieval still gets the five file tools; when it is absent the
-    sixth is simply not advertised, rather than advertised and broken.
+    search still gets the five file tools; when it is absent the sixth is
+    simply not advertised, rather than advertised and broken.
     """
 
     svc = knowledge_service

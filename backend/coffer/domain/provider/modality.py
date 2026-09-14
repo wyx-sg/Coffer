@@ -4,7 +4,8 @@ An endpoint serves more than chat: the same credential usually reaches an
 embedding model, an image model, sometimes video or speech. A curated entry
 therefore records which kind it is, so a picker asks for the kind it needs
 instead of offering every id to every surface (a chat dropdown narrows to
-``text``; the global embedding setting narrows to ``embedding``).
+``text``). This describes what the ENDPOINT serves; Coffer itself embeds
+nothing, so no Coffer surface asks for ``embedding``.
 
 The stored modality is the TRUTH. :func:`infer_modality` exists for the two
 moments where nobody has said yet — the one-shot migration that converted the

@@ -115,10 +115,12 @@ def _applier(vault: Vault, bundle_dir: pathlib.Path) -> ResourceApplier:
 async def test_a_provider_connection_crosses_to_another_vault_unchanged(machines) -> None:  # type: ignore[no-untyped-def]
     a, b, bundle_dir = machines
     await a.resources.register("provider", "acme", dict(CONFIG), "test", description="Acme gateway")
-    # Narrowed past the wire's own default, so the assertion below can tell a
-    # scope that crossed from one the other vault would have minted itself.
+    # Narrowed on A, and deliberately: the assertion below is that B does NOT
+    # inherit it. Which agents a connection reaches is its reach, and reach is
+    # set on the machine it applies to — a connection arriving somewhere for
+    # the first time takes that machine's own default instead.
     await a.resources.update_scope(
-        ResourceRef("provider", "acme"), Scope(agents=["claude_code"], machines=None), actor="test"
+        ResourceRef("provider", "acme"), Scope(agents=["claude_code"]), actor="test"
     )
 
     summary = await _exporter(a).export(Bundle(bundle_dir, trees=[]))
@@ -135,10 +137,17 @@ async def test_a_provider_connection_crosses_to_another_vault_unchanged(machines
     got = await b.resources.get(ResourceRef("provider", "acme"))
     assert got.config == CONFIG
     assert got.description == "Acme gateway"
+    # The connection crossed; A's answer about how far it reaches did not.
+    # ``scope`` is not a config field, and it is not a document field either.
+    assert "scope" not in yaml.safe_load(raw)
+    assert "enabled" not in yaml.safe_load(raw)
     assert got.enabled is True
-    # Which agents the connection reaches is its framework scope, not a config
-    # field any more, so it crosses on the generic machinery too.
-    assert got.scope == Scope(agents=["claude_code"], machines=None)
+    # B minted its own: the wire's default for this protocol, which is exactly
+    # what a connection registered by hand on B would have started with.
+    default_scope = make_provider_kind().default_scope
+    assert default_scope is not None
+    assert got.scope == default_scope(dict(CONFIG))
+    assert got.scope != Scope(agents=["claude_code"])
     # Spelled out: the curated set keeps its order AND each entry's modality,
     # which is what stops a chat picker from offering an embedding model.
     assert got.config["models"] == [

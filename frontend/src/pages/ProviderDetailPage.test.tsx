@@ -70,7 +70,6 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   },
   useListProviderModels: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
   useTestConnection: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
-  useTestEmbedding: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
   useDetectProtocol: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 const { probedFor } = vi.hoisted(() => ({ probedFor: [] as string[] }));
@@ -86,14 +85,11 @@ const { enableMutate, disableMutate, updateScopeMutate } = vi.hoisted(() => ({
   updateScopeMutate: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useScope", () => ({
-  UNRESTRICTED: { agents: null, machines: null },
+  UNRESTRICTED: { agents: null },
   useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),
   useUpdateResourceScope: () => ({ mutate: updateScopeMutate, isPending: false }),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
-vi.mock("@/lib/hooks/useMachines", () => ({
-  useMachines: vi.fn(() => ({ data: { machines: [] } })),
-}));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: () => ({ mutate: enableMutate, isPending: false }),
   useDisableResource: () => ({ mutate: disableMutate, isPending: false }),

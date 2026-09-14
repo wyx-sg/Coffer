@@ -64,6 +64,21 @@ export interface ConvergeRound {
   error: string | null;
 }
 
+/**
+ * One round as the HISTORY holds it (`RunRecordOut`) — the same report a
+ * status round carries, plus when it ran and the id its row is keyed on.
+ */
+export interface RunRecord extends ConvergeRound {
+  id: number;
+  started_at: string;
+  finished_at: string;
+}
+
+/** `GET /sync/runs` — every round, newest first. */
+export interface SyncRunList {
+  runs: RunRecord[];
+}
+
 /** The one remote this vault converges with. `credential_ref` is a NAME. */
 export interface SyncRemote {
   url: string;
@@ -115,8 +130,6 @@ export interface MachineList {
 
 export interface MachineRemoved {
   removed: boolean;
-  /** How many resources had this machine stripped from their scope with it. */
-  scopes_updated: number;
 }
 
 /** The remote as it is written: every field but the URL carries a default. */
@@ -128,6 +141,11 @@ export const syncApi = {
     call<SyncRemote>("/sync/remote", { method: "PUT", body: remote }),
   clearRemote: () => call<{ cleared: boolean }>("/sync/remote", { method: "DELETE" }),
   status: () => call<SyncStatus>("/sync/status"),
+
+  /** Every round this vault has run, newest first. Unfiltered on purpose:
+   *  the rounds that changed nothing are what make a GAP in the record
+   *  visible, and a history without them reads as an idle vault. */
+  runs: (limit = 500) => call<SyncRunList>(`/sync/runs?limit=${limit}`),
 
   run: () => call<ConvergeRound>("/sync/run", { method: "POST" }),
   confirm: () => call<ConvergeRound>("/sync/confirm", { method: "POST" }),

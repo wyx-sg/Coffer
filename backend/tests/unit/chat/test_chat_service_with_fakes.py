@@ -240,6 +240,74 @@ async def test_second_user_message_does_not_change_title() -> None:
 
 
 @pytest.mark.asyncio
+async def test_title_hint_names_the_conversation_instead_of_the_message_text() -> None:
+    """A caller that wrapped the human's words says which part they wrote.
+
+    A channel turn's text opens with context blocks (provenance, thread
+    history) that are identical on every turn; naming from the raw text gave
+    every channel conversation the same name.
+    """
+    svc, conv_repo, _, _ = make_service()
+    conv = await svc.create_conversation(agent_key="builtin")
+    await svc.append_message(
+        conv.id,
+        role=Role.USER,
+        content=[TextBlock(text="[Message origin]\nplatform: seatalk\n\nwhy is the job stuck?")],
+        title_hint="why is the job stuck?",
+    )
+    updated = await conv_repo.get(conv.id)
+    assert updated is not None
+    assert updated.title == "why is the job stuck?"
+
+
+@pytest.mark.asyncio
+async def test_title_hint_does_not_outrank_a_title_the_owner_set() -> None:
+    svc, conv_repo, _, _ = make_service()
+    conv = await svc.create_conversation(agent_key="builtin")
+    await svc.rename_conversation(conv.id, new_title="Tax questions")
+    await svc.append_message(
+        conv.id,
+        role=Role.USER,
+        content=[TextBlock(text="[Message origin]\n\nhello")],
+        title_hint="hello",
+    )
+    updated = await conv_repo.get(conv.id)
+    assert updated is not None
+    assert updated.title == "Tax questions"
+
+
+@pytest.mark.asyncio
+async def test_an_empty_title_hint_keeps_the_placeholder_rather_than_boilerplate() -> None:
+    """Nothing nameable in the message ⇒ say so, don't name it after a header."""
+    svc, conv_repo, _, _ = make_service()
+    conv = await svc.create_conversation(agent_key="builtin")
+    await svc.append_message(
+        conv.id,
+        role=Role.USER,
+        content=[TextBlock(text="[Message origin]\nplatform: seatalk")],
+        title_hint="",
+    )
+    updated = await conv_repo.get(conv.id)
+    assert updated is not None
+    assert updated.title == "New conversation"
+
+
+@pytest.mark.asyncio
+async def test_title_hint_is_truncated_like_any_other_title() -> None:
+    svc, conv_repo, _, _ = make_service()
+    conv = await svc.create_conversation(agent_key="builtin")
+    await svc.append_message(
+        conv.id,
+        role=Role.USER,
+        content=[TextBlock(text="header\n\n" + "A" * 100)],
+        title_hint="A" * 100,
+    )
+    updated = await conv_repo.get(conv.id)
+    assert updated is not None
+    assert len(updated.title) == 60
+
+
+@pytest.mark.asyncio
 async def test_append_message_increments_seq() -> None:
     svc, _, _msg_repo, _ = make_service()
     conv = await svc.create_conversation(agent_key="builtin")

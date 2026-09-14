@@ -152,6 +152,20 @@ read-only routes for the other two lanes: `GET /api/v1/mcp/invocations`
 daemon-log route carries its token dependency on the route itself — the daemon
 router leaves `/status` open, and log contents are not status.
 
+**The daemon log is not one format, and the Daemon tab's columns depend on
+reading all of them.** `daemon.log` collects Coffer's own structlog JSON, the
+stdlib formatter the root logger inherits once a migration runs, uvicorn's
+default, rich's output from an upstream MCP server, and the zerolog written by
+the cloudflared child the daemon respawns — some of it colour-escaped, because
+a child process writing to a pipe is not always convinced it is not a
+terminal. A reader that understood only structlog left level, logger and time
+empty on almost every row and dumped the whole line into the message column,
+which is the same as having no columns. So every writer's format is normalised
+onto the same fields before it reaches the page, escape sequences are stripped,
+and a traceback rides with the record that raised it instead of becoming a run
+of rows with nothing in them. A line no format fits is still kept whole rather
+than dropped — it is often the interesting one.
+
 Event types are rendered as plain-language activity lines again ("Enabled
 demo-fs"), so their translations return in both locales, guarded the way error
 codes are: a new event type without a string fails CI rather than showing a zh
@@ -168,6 +182,7 @@ work; the legacy `/audit` URL redirects here.
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
 - activity gives each record its own tab
+- the daemon tab reads every writer in the log
 - activity row expands to its raw record
 - a failing record shows its error inside its own tab
 - legacy /audit redirects to activity
@@ -210,6 +225,15 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** the user opens `/activity` and moves through its three tabs
 - **Then** each tab renders that record's own newest-first table with the columns that record has — an activity line and actor; a call's server, capability, duration and outcome; a log record's level, logger and message
 - **And** a change reads as a plain-language line, not a raw event code
+
+### Scenario: the daemon tab reads every writer in the log
+
+- **Given** `daemon.log` holds lines from several writers at once — Coffer's structlog JSON, the stdlib formatter, uvicorn, rich, and the cloudflared child's zerolog — with a colour-escaped line among them and a traceback written under the record that raised it
+- **When** the user opens the Daemon tab
+- **Then** each row carries the time, level and logger its own line stated, and nothing carries a time or a level it never stated
+- **And** no message renders a terminal escape sequence as text
+- **And** the traceback rides with the record that raised it rather than becoming rows of its own
+- **And** the errors-only filter judges each line by its own level rather than treating every non-JSON line as an error
 
 ### Scenario: activity row expands to its raw record
 

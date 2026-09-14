@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError, ResourceAlreadyExists
 from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.scope import is_active
 from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import LocalImportSource
@@ -152,7 +153,7 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
     if not skill.enabled:
         return
     for a in await service._rs.list(kind="agent"):
-        if not a.enabled or not service._scope.is_active(skill.scope, a.name):
+        if not a.enabled or not is_active(skill.scope, a.name):
             continue
         try:
             await service.enable_for(
@@ -202,7 +203,7 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
                 service._sync.remove_directory_link(old_path, link_mode=b.link_mode)
         if not b.enabled:
             continue
-        if not (skill.enabled and service._scope.is_active(skill.scope, agent_name)):
+        if not (skill.enabled and is_active(skill.scope, agent_name)):
             # The predicate no longer grants this delivery — do not resurrect
             # the link. The row keeps its (now stale) enabled/last_link_path
             # until a reconciliation run reclaims it; we only refuse to

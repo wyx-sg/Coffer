@@ -27,6 +27,8 @@ coffer resource disable skill:my-skill                 # take it away from all o
 coffer skill verify                                    # report drift; non-zero exit if any
 ```
 
+Both of those settings — the enable flag and the scope — are **this machine's**. They are never synced, so a skill that converges to your laptop and your desktop can be delivered to different agents on each, and you set that on each. See [Sync](/guide/sync).
+
 - Delivery is a symlink from the agent's `skills/` directory to the master copy, created and reclaimed for you whenever either input changes.
 - Coffer never auto-remediates drift. `verify` reports missing, tampered, or orphaned links; you fix them explicitly (`coffer skill update`, or re-apply the scope).
 - `coffer skill rm <name>` removes a skill and tears down all of its links.

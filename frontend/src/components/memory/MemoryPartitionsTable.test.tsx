@@ -40,7 +40,7 @@ const ROWS: MemoryPartitionRow[] = [
     project_root: "/Users/dev/coffer",
     fact_count: 34,
     enabled: true,
-    scope: { agents: ["claude_code"], machines: null },
+    scope: { agents: ["claude_code"] },
   },
 ];
 

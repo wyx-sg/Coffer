@@ -4,7 +4,7 @@ Boots the full FastAPI app (via ``create_app``) so every route is wired
 exactly as production wires it — real SQLite, a real Claude Code fixture tree
 under a temp HOME, no internal connection configured (organise/recall both
 degrade rather than error, per FR-032/FR-052). ``COFFER_MEMORY_ROOT``,
-``COFFER_KNOWLEDGE_ROOT`` and ``COFFER_INDEX_ROOT`` are all pinned into
+``COFFER_KNOWLEDGE_ROOT`` are all pinned into
 ``tmp_path`` so nothing here ever touches a real ``~/.coffer``.
 """
 
@@ -60,7 +60,6 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_INDEX_ROOT", str(tmp_path / "index"))
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
     (tmp_path / ".codex").mkdir(parents=True, exist_ok=True)
 
@@ -229,7 +228,7 @@ def test_context_scope_enforcement_does_not_leak_an_out_of_scope_partition(
     # Default scope from aggregation is {"cc"} (FR-014) — confirm "outsider"
     # is excluded, then compose context for it against the SAME cwd.
     scope = client.get(f"/api/v1/resources/memory/{partition}/scope").json()
-    assert scope["scope"] == {"agents": ["cc"], "machines": None}
+    assert scope["scope"] == {"agents": ["cc"]}
 
     r = client.post("/api/v1/memory/context", json={"agent": "outsider", "cwd": str(project_root)})
     assert r.status_code == 200, r.text

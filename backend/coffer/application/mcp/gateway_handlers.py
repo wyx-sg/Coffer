@@ -35,11 +35,11 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_uri,
 )
 from coffer.domain.resource import ResourceRef
+from coffer.domain.scope import is_active
 
 if TYPE_CHECKING:
     from coffer.application.mcp.supervisor import SubprocessSupervisor
     from coffer.application.resource_service import ResourceService
-    from coffer.application.scope_evaluator import ScopeEvaluator
 
 
 # --------------------------------------------------------------------------- #
@@ -163,7 +163,6 @@ async def _invoke(
     session_id: str,
     clock: Callable[[], datetime],
     ensure_subscribed: Callable[[str], Any],
-    scope: ScopeEvaluator,
     on_evict: Callable[[str], None] | None = None,
     session_agent: str | None = None,
 ) -> Any:
@@ -182,7 +181,7 @@ async def _invoke(
     # hidden server's namespaced tool name could invoke it directly. The
     # supervisor's spawn gate has no session context, so this check lives
     # here, at the session's invocation seam, where `_session_agent` is known.
-    if not scope.is_active(resource.scope, session_agent):
+    if not is_active(resource.scope, session_agent):
         await record_invocation(
             invocations,
             session_id=session_id,

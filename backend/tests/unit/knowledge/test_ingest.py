@@ -14,7 +14,6 @@ import pytest
 
 from coffer.application.knowledge.ingest import MAX_UPLOAD_BYTES, IngestedDocument, IngestService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.scope_evaluator import ScopeEvaluator
 from coffer.domain.knowledge.converter import UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import CollectionNotFound, KnowledgeFileNotFound, UploadTooLarge
@@ -99,13 +98,10 @@ def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     (``shopee``) and one an unrelated agent may not see (``restricted``)."""
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
-    resources = _Resources(
-        [("shopee", None), ("restricted", Scope(agents=["only-agent"], machines=None))]
-    )
+    resources = _Resources([("shopee", None), ("restricted", Scope(agents=["only-agent"]))])
     return KnowledgeService(
         resources=resources,
         audit=_Audit(),
-        scope_evaluator=ScopeEvaluator(machine_id="test-machine"),
     )
 
 

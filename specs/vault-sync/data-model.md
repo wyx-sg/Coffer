@@ -42,9 +42,53 @@ response or a log line without redaction.
 
 `last_status` gains the round's vocabulary: `ok`, `no_change`, `joined`,
 `conflict`, `awaiting_confirmation`, `push_failed`, `error`. The `last_*`
-columns describe the most recent round rather than a history — the git history
-on the remote is the real record of what changed, and the pre-apply snapshots
-described below are the record of what was applied here.
+columns are the most recent round denormalised onto the remote, so a status
+surface reads the current state without touching the history; every round,
+including that one, is also appended to `sync_runs` below.
+
+## SQLite — `sync_runs`
+
+Every converge round this machine has run. The remote's `last_*` columns answer
+"what happened just now"; they cannot answer "what has been happening", and
+that is the question a user actually brings to the page — a round that failed
+once is noise, a round that has failed every hour since Tuesday is the answer,
+and a vault that has quietly published nothing for a week looks identical to a
+healthy one through a single row.
+
+Machine-local and **never synced**, for the same reason the pointer is: a
+history that travelled would be another machine's account of rounds this one
+never ran. Each machine keeps its own; the git history on the remote remains
+the record of what *changed*.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | int | autoincrement; a row key for a surface, never shown |
+| `started_at` | ts | |
+| `finished_at` | ts | indexed — read newest-first, pruned oldest-first |
+| `status` | str | the same vocabulary as `last_status` |
+| `join_kind` | str? | `new` / `returning` when the round joined; else null |
+| `commit_sha` | str? | `commit` is reserved in SQL |
+| `error` | str? | redacted of the push credential before it is written |
+| `payload_json` | str? | everything else a `ConvergeRun` carries |
+
+Same column-versus-payload split as the remote row, and for the same reason:
+what a table reads at a glance is a column, and the two diff summaries, the
+conflicted and agent-resolved paths, the per-path failures, the locked refs and
+any held confirmation are one JSON document written exactly once. The counts a
+row shows are derived from that document rather than stored a second time.
+
+Recording a round writes this table and the remote's `last_*` columns in **one
+transaction**, so the newest row here and those columns can never describe
+different rounds — and both are skipped together when no remote is configured,
+so a cleared remote discards the round rather than leaving it orphaned here.
+
+`commit_sha` is the one place the two deliberately differ. The remote row
+carries the previous commit forward through a round that landed none, because
+that revision is what the user is being told is still waiting; a history row
+does not, because it would put a commit on a round that never produced one.
+
+Swept by the retention worker as `sync_runs` (default 90 days): a round runs on
+a timer, so an unbounded log of them is a leak rather than a record.
 
 ## SQLite — `sync_convergence_state` and `sync_held_paths`
 
@@ -139,15 +183,17 @@ Deterministic projection of a `Resource`:
 kind: mcp_server
 name: confluence
 description: "..."
-enabled: true
-scope:
-  agents: [claude-code]
-  machines: ["a3f21c9e4b7d2610"]
 config: { ... }          # the validated, json-mode config; keys sorted
 ```
 
 - `created_at` / `updated_at` / the local `id` are **excluded** — machine-local,
   and they would make every round produce a commit.
+- `enabled` and `scope` are **excluded** for a stronger reason than churn: they
+  are one thing, the resource's reach, and reach is machine-local (spec
+  `## What does not sync`). A document written by an older build still carries
+  them; they are parsed and discarded, never rejected, so one machine that has
+  not upgraded cannot stall convergence for the rest.
+- There is no document for a `channel` at all, in either direction.
 - Mapping keys are sorted; there is exactly one document per resource, so an
   unchanged vault produces an unchanged tree.
 - String values under this machine's home are normalized to `${HOME}/...` and
@@ -160,28 +206,35 @@ resource cites. After the whole diff is applied, each kind's post-import hook
 re-applies its machine-local side effects — native config projections, shims,
 skill deliveries — from current state.
 
-### `scope_json` — from a list to two axes
+### `scope_json` — back to one axis
 
-The persisted shape changes, and a migration rewrites every row:
+The machine axis is removed, and a migration rewrites every row that carried
+one:
 
 | | before | after |
 | --- | --- | --- |
 | unrestricted | `null` | `null` |
-| agents only | `["claude-code"]` | `{"agents": ["claude-code"], "machines": null}` |
-| machines only | — | `{"agents": null, "machines": ["a3f21c9e4b7d2610"]}` |
-| both | — | `{"agents": ["claude-code"], "machines": ["a3f21c9e4b7d2610"]}` |
-| dormant | `[]` | `{"agents": [], "machines": null}` |
+| agents only | `{"agents": ["claude-code"], "machines": null}` | `{"agents": ["claude-code"]}` |
+| dormant | `{"agents": [], "machines": null}` | `{"agents": []}` |
+| named machines, this one among them | `{"agents": A, "machines": [… this id …]}` | `{"agents": A}` |
+| named machines, this one not among them | `{"agents": A, "machines": [… other ids …]}` | `{"agents": []}` |
 
-The two axes are `AND`-ed and each `null` means unrestricted, so every existing
-row migrates **by addition**: `machines: null` reproduces today's behaviour
-exactly. The migration is one-way and leaves no load-time shim — `Scope.from_json`
-accepts the object shape only.
+The last two rows are the whole of the migration's argument. A row that named
+machines was, *on this machine*, either admitted by that list or dormant because
+of it, and the answer it already gave here is the answer it must keep giving:
+dropping the key outright would turn "active only on the desktop" into "active
+everywhere", which is the one direction that cannot be allowed. The machine id
+is read from the `daemon-config.json` cache beside the database — the very value
+the running daemon evaluated scope against — and when it cannot be determined
+the row takes `agents: []`, dormant, because narrowing is visible and reversible
+while widening is silent.
 
-The machine axis is keyed by `machine_id`, never by the display name, so
-renaming a machine costs nothing. An unknown machine id is legal and simply
-never matches, exactly as an unknown agent name already is. A scope editor
-builds the machine list from the registry rather than accepting free text, so a
-mistyped id cannot silently disable a resource.
+The migration is idempotent: a row with no `machines` key is left untouched, so
+a re-run matches nothing. It is one-way and leaves no load-time shim —
+`Scope.from_json` accepts the single-axis shape only.
+
+An unknown agent name is legal and simply never matches, so a resource can be
+scoped to an agent that has not been registered here yet.
 
 ### Machine descriptor (`machines/<machine_id>.yaml`)
 
@@ -214,9 +267,10 @@ agents: [claude-code, codex]
 
 The id is cached in `daemon-config.json` and recomputed if lost; the name lives
 here, so it syncs. The asymmetry matters: `machine_id` is the descriptor
-filename, a `scope.machines` reference and a table key, and a machine that comes
-back under a new identity becomes a ghost — everything scoped to the old one
-silently stops.
+filename, the tidy owner's reference and a table key, and a machine that comes
+back under a new identity becomes a ghost — it rejoins as a stranger, its old
+descriptor lingers with nobody to update it, and anything that named it stops
+meaning this machine.
 
 Applying a diff does **nothing** with `machines/*.yaml` in either direction: the
 registry is read from the tree, never projected into anything local.
@@ -227,10 +281,6 @@ Module-owned shared state that belongs to the vault rather than to one machine.
 Each module implements `SyncedStatePort` and the composition root registers the
 providers — the sync slice never imports kind modules. Current areas:
 
-- `channel-peers/<channel>/<chat>.yaml` — pairing identity (chat_id, sender_id,
-  display name, preferred agent, paired_at; the machine-local
-  `active_conversation_id` never travels). A document referencing a channel not
-  present here is reported as a per-path failure and joins the retry set.
 - `mcp-preferences/<server>.yaml` — the DISABLED capabilities per server
   (enabled is the default; seen-timestamps stay machine-local).
 - `agent-plugins/<agent>.yaml` — the plugin inventory: which plugins and

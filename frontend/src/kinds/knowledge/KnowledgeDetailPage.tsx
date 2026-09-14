@@ -19,7 +19,8 @@
 // agents, `coffer knowledge grep` for the CLI — and duplicating it here would
 // be a second search with different rules.
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
@@ -38,6 +39,7 @@ import { useKnowledgeFile, useTidyCollection } from "./useKnowledge";
 export function KnowledgeDetailPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const collection = useParams<{ scope: string }>().scope ?? "";
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -67,6 +69,21 @@ export function KnowledgeDetailPage() {
 
   return (
     <div className="space-y-6 p-6">
+      {/* The way back to the list, as every other detail page carries it. A
+          collection is reached by clicking a row, so leaving it must not
+          depend on the browser's own back button. */}
+      <div className="-ml-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/knowledge")}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="mr-1.5 size-4" />
+          {t("common.backTo", { label: t("nav.knowledge") })}
+        </Button>
+      </div>
+
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">{collection}</h1>
         <div className="flex flex-wrap items-center gap-2">

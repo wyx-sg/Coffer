@@ -42,7 +42,7 @@ application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它�
 
 ### infrastructure/
 
-infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、加密凭据存储与主密钥管理器（`infrastructure/credentials/`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端），以及每种 kind 的 I/O 模块：`infrastructure/agent/`（agent 配置文件存储）、`infrastructure/skill/`（主存储、来源拉取器、同步引擎）、`infrastructure/channel/`（Telegram/SeaTalk 传输、peer 仓库、渲染）、`infrastructure/knowledge/`（文档转换器、FTS5、sqlite-vec 索引、嵌入、作用域文件存储）连同 `infrastructure/knowledge_scope/`（机器本地的作用域侧表）、以及 `infrastructure/chat/`（Claude Code 与 Codex 的 agent 驱动、网关工具 provider、回合持久化）。跨层的 `infrastructure/sync/` 切片（磁盘上的导出/导入包）并非 kind。
+infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、加密凭据存储与主密钥管理器（`infrastructure/credentials/`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端），以及每种 kind 的 I/O 模块：`infrastructure/agent/`（agent 配置文件存储）、`infrastructure/skill/`（主存储、来源拉取器、同步引擎）、`infrastructure/channel/`（Telegram/SeaTalk 传输、peer 仓库、渲染）、`infrastructure/knowledge/`（磁盘路径布局、frontmatter 解析、文件 I/O、文档转换器，以及 `ripgrep` 包装层）、以及 `infrastructure/chat/`（Claude Code 与 Codex 的 agent 驱动、网关工具 provider、回合持久化）。跨层的 `infrastructure/sync/` 切片（磁盘上的导出/导入包）并非 kind。
 
 infrastructure 在组装入口处注入到系统中，不被 domain 或 application 代码直接 import。应用层服务以注入依赖的方式接收 infrastructure 对象。这意味着可以将真实的 SQLAlchemy repository 替换为测试替身（内存字典或 SQLite `:memory:` 数据库），而无需更改任何 application 或 domain 代码。
 
@@ -74,7 +74,9 @@ surfaces 层将外部协议适配为应用层调用。它包含 FastAPI 应用�
 
 这些规则不是建议性的。它们由 CI 中两个互补的机制强制执行：
 
-**importlinter 契约** —— 声明于 `backend/pyproject.toml`，这些契约定义了禁止的 import 对，作为 `make verify` 的一部分运行。契约违规会使构建失败，并给出精确命名违规 import 链的错误。强制执行两族规则：分层方向（四层层次结构）和跨 kind 隔离（禁止 `domain/mcp` import `domain/other_kind`）。「只有 `infrastructure/credentials/` 可以 import `keyring`」规则作为 importlinter 契约（`backend/pyproject.toml` 中的 Contract 4）强制执行。
+**importlinter 契约** —— 声明于 `backend/pyproject.toml`，这些契约定义了禁止的 import 对，作为 `make verify` 的一部分运行。契约违规会使构建失败，并给出精确命名违规 import 链的错误。强制执行两族规则：分层方向（四层层次结构）和跨 kind 隔离（禁止 `domain/mcp` import `domain/other_kind`）。「只有 `infrastructure/credentials/` 可以 import `keyring`」规则也作为 importlinter 契约强制执行。
+
+「application 不得 import infrastructure」这条契约带有一小组具名豁免，每一条都连同让它成立的理由写在契约自己的注释里。它们形状相同：被 import 的 infrastructure 是**基底 (substrate)** 而非引擎——路径布局、frontmatter 解析、文件 I/O、`ripgrep` 包装层、某张单键表的 upsert——背后并没有什么值得用 port/adapter 抽象掉的东西。`application/knowledge/` 直接组合 `infrastructure/knowledge/` 是其中最典型的一例：当知识变成一个文件目录之后，剩下可 import 的东西已经薄到再套一层 port 纯属仪式。凡是不在这份名单上的 import，依旧会让构建失败。
 
 **`scripts/check_*.py`** —— 补充性 Python 脚本，强制执行 importlinter 无法以简单 import 图表达的架构规则，例如「跨层公共模块只在第二个 feature 之后才抽取」规则。
 
@@ -95,7 +97,7 @@ backend/coffer/
 │   ├── agent/                    # agent 配置值对象
 │   ├── skill/                    # skill 值对象
 │   ├── channel/                  # channel 配置、信封、签名
-│   ├── knowledge/                # 知识作用域 + 条目/文档值对象
+│   ├── knowledge/                # collection 配置 + 条目/文档值对象
 │   ├── chat/                     # chat 回合/消息值对象
 │   └── sync/                     # sync 值对象
 ├── application/
@@ -106,7 +108,7 @@ backend/coffer/
 │   ├── agent/                    # agent 服务 + make_agent_kind
 │   ├── skill/                    # skill 服务 + make_skill_kind
 │   ├── channel/                  # 适配器协议、配对、inbound 运行时
-│   ├── knowledge/                # 作用域、条目、摄取 + 检索服务
+│   ├── knowledge/                # collection、条目、摄取 + 搜索服务
 │   ├── chat/                     # TurnOrchestrator、历史
 │   ├── sync/                     # 跨层——仓库导出 / 导入（非 kind）
 │   ├── credentials/              # 跨层——CredentialResolver（引用 → 密钥）
@@ -118,8 +120,7 @@ backend/coffer/
 │   ├── agent/                    # agent 配置文件存储
 │   ├── skill/                    # 主存储、来源拉取器、同步引擎
 │   ├── channel/                  # telegram/seatalk 传输、peer 仓库、渲染
-│   ├── knowledge/                # 转换器、FTS5、sqlite-vec 索引、嵌入、文件存储
-│   ├── knowledge_scope/          # 机器本地的作用域侧表（根目录、标签）
+│   ├── knowledge/                # 路径布局、frontmatter、文件存储、转换器、ripgrep
 │   ├── chat/                     # LangGraph agent、网关工具 provider、CLI agents
 │   ├── sync/                     # 跨层——导出包文件 IO（非 kind）
 │   └── credentials/              # 跨层——加密凭据存储 + 主密钥——唯一被允许 import `keyring` 的位置

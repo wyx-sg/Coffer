@@ -11,10 +11,10 @@ Coffer 中每一个由用户管理的实体都是一个 **Resource（资源）**
 | `mcp_server`     | [mcp-gateway](/zh/reference/specs/mcp-gateway/spec)       | 一个已注册的上游 MCP 服务器：传输配置、凭据引用，以及网关所需的各服务器策略。                     |
 | `agent`          | [agent-registry](/zh/reference/specs/agent-registry/spec) | 一个已注册的本地 AI 编码助手（如 Claude Code）：其配置目录、Coffer-MCP 安装状态及派生的工作区切面。 |
 | `skill`          | [skill-manager](/zh/reference/specs/skill-manager/spec)   | 一个主技能包，Coffer 将其分发到一个或多个 agent 的技能目录中。                                    |
-| `knowledge`      | [007 — 知识层](/zh/reference/specs/knowledge/spec)               | agent 所知内容的一个作用域：它们写下的条目，加上被摄取为 markdown 的任意格式文档，同在一套 grep / FTS5 / 向量检索之下。 |
+| `knowledge`      | [007 — 知识层](/zh/reference/specs/knowledge/spec)               | agent 所知内容的一个 collection：一个 markdown 文件目录——它们写下的条目，加上被摄取为 markdown 的任意格式文档——用 `ripgrep` 做字面搜索。 |
 | `channel`        | [channels](/zh/reference/specs/channels/spec)             | 一个消息通道绑定（Telegram、SeaTalk）：传输配置、凭据引用和一个默认 agent。                       |
 
-`knowledge` 曾经是两个 kind——一个只可读的 `knowledge_base` 和一个只有 agent 写入的 `memory`——但 `documents`、`chunks`、FTS5 与 sqlite-vec 从一开始就是共用的，这种拆分什么也没换来，反而逼着每个调用方先给自己的数据归类才能挑工具。它们现在是一个 kind、一个存储根，磁盘上的 markdown 文件是真相之源，SQLite 是可重建的索引（[Files as Truth](/zh/reference/adr/files-as-truth-sqlite-retrieval)）。一个 knowledge 资源是**共管**的：你和你的 agent 都往里写，其作用域由名字本身读出（`global`、`project-<ULID>`，或你自己命名的集合）。新的 kind 接入同一个框架，无需对框架本身做任何修改。加密凭据存储和仓库导出/导入是刻意设计的**跨切面关注点，而非 kind**：它们服务于每一个 kind，本身并不是被管理的实体。
+`knowledge` 曾经是两个 kind——一个只可读的 `knowledge_base` 和一个只有 agent 写入的 `memory`——但它们从一开始就共用同一套存储，这种拆分什么也没换来，反而逼着每个调用方先给自己的数据归类才能挑工具。它们现在是一个 kind、一个存储根：一个 knowledge 资源**就是** `~/.coffer/knowledge/<name>/` 这个目录，里面的 markdown 文件就是它内容的全部（[Knowledge Is Plain Files](/zh/reference/adr/knowledge-is-plain-files)）。这个 kind 不新增任何自己的表——`resources` 那一行承载 collection 的身份与描述，其余一切都由文件承载。一个 knowledge 资源是**共管**的：你和你的 agent 都往里写。新的 kind 接入同一个框架，无需对框架本身做任何修改。加密凭据存储和仓库导出/导入是刻意设计的**跨切面关注点，而非 kind**：它们服务于每一个 kind，本身并不是被管理的实体。
 
 框架提供四件事，且仅此四件：
 

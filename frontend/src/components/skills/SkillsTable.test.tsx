@@ -130,7 +130,7 @@ const SAMPLE: SkillOut[] = [
     description: "Only for cc",
     source: { type: "local_import", original_path: "/tmp/scoped" },
     enabled: true,
-    scope: { agents: ["cc"], machines: null },
+    scope: { agents: ["cc"] },
     version_hash: "111222333444",
     master_path: "/master/scoped-skill",
     last_synced_from_source_at: null,

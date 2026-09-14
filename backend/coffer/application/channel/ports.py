@@ -215,13 +215,11 @@ class ChannelBinding:
     require_mention: bool = True
     ignore_other_mentions: bool = False
     # The channel's framework-level ``scope``, carried whole off the resource
-    # row (ADR per-agent-resource-scope). Its AGENT axis names the agents this
-    # channel may drive; an unrestricted axis — every agent — is the unscoped
-    # default and what every channel carried before scope existed. A channel
-    # whose agent axis is empty is never bound at all: the runtime treats it as
-    # dormant and does not start its adapter, and neither does it bind one whose
-    # MACHINE axis excludes this machine. So a binding that exists has already
-    # passed both gates, and the routing seams read only the agent axis.
+    # row (ADR per-agent-resource-scope). It names the agents this channel may
+    # drive; an unrestricted scope — every agent — is the default and what every
+    # channel carried before scope existed. A channel whose scope is empty is
+    # never bound at all: the runtime treats it as dormant and does not start
+    # its adapter. So a binding that exists has already passed that gate.
     agent_scope: Scope | None = None
 
 

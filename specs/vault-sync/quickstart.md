@@ -132,10 +132,33 @@ An unchanged vault makes no commit at all. The serialization is deterministic,
 so a round with nothing to say produces nothing, and the repository's history
 records changes rather than heartbeats.
 
-## 5. Scope something to one machine
+## 5. Keep something off one machine
 
 Some things belong on one machine only — a work MCP server, a skill that needs a
-binary the laptop doesn't have. List your machines to get the id:
+binary the laptop doesn't have. The resource itself converges to both machines,
+because its configuration is worth having in both places. What it **reaches**
+does not: reach is set on the machine it applies to, and every machine sets its
+own.
+
+So say it on the laptop, sitting at the laptop:
+
+```bash
+coffer resource disable mcp_server:work-jira
+```
+
+It stays registered and visible there, its configuration keeps converging, and
+the gateway exposes none of its tools to any session on that machine. The
+desktop is untouched — and stays untouched, because nothing about reach is
+published.
+
+Restricting to one agent works the same way, and is also local to the machine
+you run it on:
+
+```bash
+coffer scope set mcp_server:work-jira --agents claude-code
+```
+
+List your machines whenever you want to see who is in the vault:
 
 ```bash
 coffer sync machines
@@ -147,24 +170,7 @@ a3f21c9e4b7d2610  Laptop    darwin  2026-09-13      4f2a91c0b8de  (this machine)
 b7c40d29e1f58a33  Desktop   darwin  2026-09-13      4f2a91c0b8de
 ```
 
-Then scope by id:
-
-```bash
-coffer scope set mcp_server:work-jira --machines b7c40d29e1f58a33
-```
-
-The resource still converges to both machines — it is registered and visible
-everywhere — it simply does not activate on the laptop, and the gateway exposes
-none of its tools to any session there. Combine the axes to say "only the Claude
-Code on the desktop":
-
-```bash
-coffer scope set mcp_server:work-jira \
-  --machines b7c40d29e1f58a33 --agents claude-code
-```
-
-Rename a machine whenever you like — scope references the id, so the label costs
-nothing:
+Rename one whenever you like — nothing keys on the label:
 
 ```bash
 coffer sync machine rename "Work desktop"
@@ -258,15 +264,18 @@ feature with a different shape.
 
 ## REST / Web UI
 
-Everything above is also a top-level **Sync** page with two tabs — **Status**
-(the remote, the last and next round, what recent rounds changed, a run button,
-and the master-key card) and **Machines** (the registry table, with this machine
-marked and any key-fingerprint mismatch stated in words). Conflicts and pending
-confirmations appear as a banner on Status.
+Everything above is also a top-level **Sync** page with three tabs —
+**Status** (the remote, the next round, a run button, and the master-key card),
+**History** (every round this machine has run, as a table: when it ran, how it
+ended, what it applied here, what it published to the remote, and the commit it
+landed on — open a row for the paths an agent merged, the ones that could not be
+applied, and anything that failed) and **Machines** (the registry table, with
+this machine marked and any key-fingerprint mismatch stated in words). Conflicts
+and pending confirmations appear as a banner on Status.
 
 Over HTTP the same operations live under `/api/v1/sync/*` — `run`, `adopt`,
-`status`, `restore`, `confirm`, `rollback`, the `machines` family and the key
-family. The key routes carry the key **material**, not a path: `POST
+`status`, `runs`, `restore`, `confirm`, `rollback`, the `machines` family and
+the key family. The key routes carry the key **material**, not a path: `POST
 /sync/key/export` takes `{}` and returns `{"material": "…"}`, and `POST
 /sync/key/import` takes `{"material": "…"}`. The CLI commands above still write
 and read a file — the CLI does that file I/O itself, so the daemon never opens a

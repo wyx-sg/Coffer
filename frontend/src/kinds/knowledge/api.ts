@@ -16,7 +16,6 @@ import type {
   CollectionListOut,
   CollectionOut,
   FileOut,
-  IndexStatusOut,
   IngestedDocumentOut,
   SearchOut,
   TidyOut,
@@ -96,13 +95,13 @@ export async function tidyCollection(name: string): Promise<TidyOut> {
   return (await r.json()) as TidyOut;
 }
 
-// --- ranked retrieval --------------------------------------------------------
+// --- search -------------------------------------------------------------------
 
 /**
- * Ask a natural-language question over the files the caller may see.
- * `collection` narrows to one; omitted, every visible collection is searched.
- * The answer always says how it was found (`mode`) — there is no retrieval
- * mode to request (FR-024/FR-082).
+ * Find the files a word or phrase appears in, across the files the caller may
+ * see. `collection` narrows to one; omitted, every visible collection is
+ * searched. Matching is literal — there is no ranking and no retrieval mode
+ * (FR-024).
  */
 export async function search(query: string, collection?: string | null): Promise<SearchOut> {
   const r = await fetch(`${knowledgeRoot()}/search`, {
@@ -112,23 +111,6 @@ export async function search(query: string, collection?: string | null): Promise
   });
   await checkOk(r);
   return (await r.json()) as SearchOut;
-}
-
-/** What the disposable sidecar index holds right now. */
-export async function getIndexStatus(): Promise<IndexStatusOut> {
-  const r = await fetch(`${knowledgeRoot()}/index`, { headers: headers() });
-  await checkOk(r);
-  return (await r.json()) as IndexStatusOut;
-}
-
-/** Re-embed every visible file from scratch, discarding what is there. */
-export async function rebuildIndex(): Promise<IndexStatusOut> {
-  const r = await fetch(`${knowledgeRoot()}/index/rebuild`, {
-    method: "POST",
-    headers: headers(),
-  });
-  await checkOk(r);
-  return (await r.json()) as IndexStatusOut;
 }
 
 // --- ingestion ----------------------------------------------------------------

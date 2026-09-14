@@ -1,9 +1,8 @@
 """``coffer knowledge …`` — the knowledge directory from the terminal.
 
 Thin HTTP shells over the daemon, matching the other CLI groups and their
-exit-code mapping (``_cli_client.check``). ``search``, ``upload``, ``index``
-and ``reindex`` round out the group with ranked retrieval and document
-ingestion (spec knowledge FR-060).
+exit-code mapping (``_cli_client.check``). ``search`` and ``upload`` round out
+the group with literal search and document ingestion (spec knowledge FR-060).
 """
 
 from __future__ import annotations
@@ -190,12 +189,11 @@ def organize(
 @app.command("search")
 def search(
     ctx: typer.Context,
-    query: str = typer.Argument(..., help="What you're looking for, in your own words"),
+    query: str = typer.Argument(..., help="The word, phrase or regex to look for"),
     collection: str = typer.Option("", "--collection", help="Restrict to one collection"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Find files by meaning, ranked — falling back to a literal search when no
-    internal connection is configured (and saying so)."""
+    """Find the files a word or phrase appears in, with the lines that matched."""
     payload = {"query": query, "collection": collection or None}
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -205,13 +203,8 @@ def search(
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
-    if data["mode"] == "literal":
-        typer.echo(f"(literal match — {data['reason']})", err=True)
     for hit in data["results"]:
-        score = f"{hit['score']:.3f}" if hit["score"] is not None else "-"
-        typer.echo(f"{hit['path']}  [{score}]  {hit['title']}")
-        if hit["heading"]:
-            typer.echo(f"  under: {hit['heading']}")
+        typer.echo(f"{hit['path']}  {hit['title']}")
         for line in hit["lines"]:
             typer.echo(f"  {line['line_number']}: {line['line']}")
 
@@ -242,43 +235,3 @@ def upload(
             )
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(r.json()["path"])
-
-
-@app.command("index")
-def index_status(
-    ctx: typer.Context,
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Show the ranked-retrieval index's status."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/knowledge/index")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    if not data["available"]:
-        typer.echo("no internal connection configured — ranked search is unavailable")
-        return
-    typer.echo(f"{data['files_indexed']}/{data['files_total']} files indexed at {data['path']}")
-
-
-@app.command("reindex")
-def reindex(
-    ctx: typer.Context,
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Rebuild the ranked-retrieval index from scratch."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/knowledge/index/rebuild")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    if not data["available"]:
-        typer.echo("no internal connection configured — nothing to rebuild")
-        return
-    typer.echo(f"{data['files_indexed']}/{data['files_total']} files indexed at {data['path']}")

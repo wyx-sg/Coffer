@@ -256,7 +256,7 @@ def test_scope_set_on_a_channel_narrows_the_agents_it_may_drive(
     resource = channel_daemon.run(
         channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
     )
-    assert resource.scope == Scope(agents=["claude_code"], machines=None)
+    assert resource.scope == Scope(agents=["claude_code"])
 
 
 def test_register_telegram_without_token_ref_exits_6(channel_daemon: _Daemon) -> None:

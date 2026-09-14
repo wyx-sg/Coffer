@@ -23,8 +23,8 @@ const GENERAL_ITEM: Item = {
   labelKey: "settings.tabs.general",
   icon: SlidersHorizontal,
 };
-// Coffer's own engine — the internal LLM connection/model and the embedding
-// model. Internal configuration, not a resource an agent is served.
+// Coffer's own engine — the internal LLM connection and model its own passes
+// run on. Internal configuration, not a resource an agent is served.
 const ENGINE_ITEM: Item = {
   to: "/settings/engine",
   labelKey: "settings.tabs.engine",

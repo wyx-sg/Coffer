@@ -100,9 +100,15 @@ def _cited_credentials(config: dict[str, Any]) -> dict[str, str]:
 def vault_kinds() -> dict[str, Kind]:
     """The kinds a converging vault carries, minimally but genuinely defined.
 
-    ``mcp_server`` supports scope (the machine axis is tested through it) and
-    cites a credential, so deleting one exercises the orphaned-credential
-    release that seeded the 2026-07-10 incident.
+    ``mcp_server`` supports scope — reach is tested through it — and cites a
+    credential, so deleting one exercises the orphaned-credential release that
+    seeded the 2026-07-10 incident.
+
+    ``channel`` is here because a kind that never travels can only be tested
+    against a vault that has one: it is the single member of
+    :data:`coffer.application.sync.exporter.MACHINE_LOCAL_KINDS`, and both
+    halves of that rule — the export that withholds it and the import that
+    refuses its path — need a real row and a real document to act on.
     """
     return {
         "mcp_server": Kind(
@@ -119,6 +125,12 @@ def vault_kinds() -> dict[str, Kind]:
             supports_scope=True,
         ),
         "agent": Kind(name="agent", display_name="Agent", config_schema=SyncableConfig),
+        "channel": Kind(
+            name="channel",
+            display_name="Channel",
+            config_schema=SyncableConfig,
+            credential_ref_extractor=_cited_credentials,
+        ),
     }
 
 
@@ -141,17 +153,18 @@ class RecordingGate:
     """An ``ImportGate`` that records what it saw and can be told to refuse.
 
     Refusal keys off a marker in the document's config rather than its name,
-    because the port hands the gate a config and a scope and nothing else.
+    because the port hands the gate a config and nothing else — reach does not
+    travel, so there is no scope for it to be handed.
     """
 
     def __init__(self, kind: str) -> None:
         self.kind = kind
-        self.seen: list[tuple[dict[str, Any], Any]] = []
+        self.seen: list[dict[str, Any]] = []
         self.refuse_value: str | None = None
         self.refuse_permanently = False
 
-    async def validate(self, config: Mapping[str, object], *, scope: Any = None) -> None:
-        self.seen.append((dict(config), scope))
+    async def validate(self, config: Mapping[str, object]) -> None:
+        self.seen.append(dict(config))
         if self.refuse_value is not None and config.get("value") == self.refuse_value:
             if self.refuse_permanently:
                 raise GateNotApplicableError(f"{self.kind} cannot apply on this machine")
@@ -617,6 +630,11 @@ class VaultMachine:
             kind, name, config or {"value": name}, "test", allow_lifecycle_kind=True
         )
 
+    async def edit_config(self, kind: str, name: str, config: dict[str, Any]) -> None:
+        await self.resources.update_config(
+            ResourceRef(kind, name), config, "test", allow_lifecycle_kind=True
+        )
+
     async def delete_resource(self, kind: str, name: str) -> None:
         await self.resources.delete(ResourceRef(kind, name), "test")
 
@@ -625,6 +643,20 @@ class VaultMachine:
 
     async def set_scope(self, kind: str, name: str, scope: Scope | None) -> None:
         await self.resources.update_scope(ResourceRef(kind, name), scope, actor="test")
+
+    async def set_enabled(self, kind: str, name: str, enabled: bool) -> None:
+        await self.resources.set_enabled(ResourceRef(kind, name), enabled, actor="test")
+
+    async def reach(self, kind: str, name: str) -> tuple[bool, Scope | None]:
+        """This machine's answer for a resource: is it live, and for whom.
+
+        The two halves are one decision to the user and one assertion here —
+        a test that checked only ``enabled`` would pass while the agent
+        allow-list crossed a machine boundary behind it.
+        """
+        resource = await self.find(kind, name)
+        assert resource is not None, f"{kind}/{name} is not registered on {self.name}"
+        return resource.enabled, resource.scope
 
     async def find(self, kind: str, name: str) -> Any:
         from coffer.domain.errors import ResourceNotFound

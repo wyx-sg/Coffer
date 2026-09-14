@@ -27,7 +27,7 @@ _STATUS: dict[str, int] = {
     "GENERIC_CREATE_NOT_ALLOWED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
-    "SCOPE_INVALID": 422,  # machine x agent activation scope (ADR per-agent-resource-scope)
+    "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)
     "CREDENTIAL_MISSING": 400,
     "CREDENTIAL_IN_USE": 409,
     "CREDENTIAL_LOCKED": 503,
@@ -85,7 +85,6 @@ _STATUS: dict[str, int] = {
     "MEMORY_NOT_FOUND": 404,
     "MEMORY_REJECTED": 422,  # empty / too-long fact rejected at the boundary
     "SCOPE_UNRESOLVED": 400,
-    "EMBEDDING_UNAVAILABLE": 503,
     # spec memory
     "MEMORY_FACT_NOT_FOUND": 404,
     "MEMORY_UNSAFE_PATH": 400,

@@ -1,18 +1,14 @@
 """Unit tests for ``coffer__recall`` (application/memory/recall.py).
 
 ``COFFER_MEMORY_ROOT`` is pinned to ``tmp_path`` by the suite-wide
-``_isolated_memory_root`` fixture (``backend/tests/conftest.py``);
-``COFFER_INDEX_ROOT`` — the disposable sidecar recall shares with knowledge
-(spec memory FR-052) — is pinned locally below, since only knowledge's own
-suite pins it globally. Facts are written for real with
-``infrastructure.memory.store.write_fact`` so ``RecallService`` reads back
-real files, exactly as it does in production; only the ``MemoryPort``
-(scope) and the embedder are faked.
+``_isolated_memory_root`` fixture (``backend/tests/conftest.py``). Facts are
+written for real with ``infrastructure.memory.store.write_fact`` so
+``RecallService`` reads back real files, exactly as it does in production;
+only the ``MemoryPort`` (scope) is faked.
 """
 
 from __future__ import annotations
 
-import pathlib
 from collections.abc import Sequence
 
 import pytest
@@ -21,11 +17,6 @@ from coffer.application.memory.overrides import Override
 from coffer.application.memory.recall import RecallService
 from coffer.domain.memory.fact import TYPE_PROJECT, Fact, Origin
 from coffer.infrastructure.memory import store
-
-
-@pytest.fixture(autouse=True)
-def _pin_index_root(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("COFFER_INDEX_ROOT", str(tmp_path / "index-root"))
 
 
 def _fact(*, slug: str, partition: str, title: str, description: str, body: str) -> Fact:
@@ -74,14 +65,8 @@ class FakeOverrides:
         return self._overrides
 
 
-async def _no_embedder():
-    return None
-
-
 def _service(memory: FakeMemory, overrides: FakeOverrides | None = None) -> RecallService:
-    return RecallService(
-        memory=memory, overrides=overrides or FakeOverrides(), embedder_factory=_no_embedder
-    )
+    return RecallService(memory=memory, overrides=overrides or FakeOverrides())
 
 
 # ---------------------------------------------------------------------------
@@ -89,10 +74,8 @@ def _service(memory: FakeMemory, overrides: FakeOverrides | None = None) -> Reca
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="recall falls back to literal matching with no internal connection"
-)
-async def test_recall_falls_back_to_literal_matching_with_no_internal_connection() -> None:
+@pytest.mark.acceptance(spec="memory", scenario="recall matches a phrase in a fact's body")
+async def test_recall_matches_a_phrase_in_a_facts_body() -> None:
     _persist(
         _fact(
             slug="pip-mirror",
@@ -106,8 +89,6 @@ async def test_recall_falls_back_to_literal_matching_with_no_internal_connection
 
     outcome = await service.recall("unreachable internal mirror")
 
-    assert outcome.mode == "literal"
-    assert outcome.reason
     assert any(f.title == "Local pip mirror is unreachable" for f in outcome.facts)
 
 

@@ -2,8 +2,8 @@
 
 > English: [knowledge-is-plain-files.md](./knowledge-is-plain-files.md)
 
-**Status**: Proposed — 同日修订（见修订历史）：文档上传、转换为 Markdown 并把原件留在 `.raw/`、带排序的语义检索及其第六个工具 `coffer__search`，三项恢复。以下其余内容全部有效。
-**Date**: 2026-09-12（同日修订；见修订历史）
+**Status**: Accepted — 两次修订（见修订历史）。2026-09-12 那次恢复了文档上传、转换为 Markdown 并把原件留在 `.raw/`、以及带排序的语义检索及其第六个工具 `coffer__search`；2026-09-14 那次又把排序去掉了——`coffer__search` 保留，改为字面搜索。以下其余内容全部有效。
+**Date**: 2026-09-12（2026-09-12 与 2026-09-14 两次修订；见修订历史）
 **Deciders**: Yuxing Wu
 **Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md)、[Retrieval mode is an internal engine detail](retrieval-mode-is-internal.md)
 **Related**: spec [knowledge](../../specs/knowledge/spec.md)；[Everything Is a Resource Kind](everything-is-a-resource-kind.md) 与 [Per-Agent Resource Scope](per-agent-resource-scope.md)（两者都保留）；[Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
@@ -213,3 +213,28 @@ collection 一个 Resource，为的是 per-agent 授权；tidy 过程及其 `.hi
     那次精简判对了的过度建设。
   - 细节见 spec [knowledge](../../specs/knowledge/spec.md)：FR-025–FR-029（带排序的
     检索）、FR-032–FR-037（写入与摄入）、FR-080–FR-082（约束）。
+- **2026-09-14** — **带排序的检索再次被移除，Coffer 里所有对 embedding 的使用也一并
+  移除。** `coffer__search` 与 `coffer__recall` 名字不变、照常作答；它们各自返回的，
+  是过去那一层「兜底」，如今变成了它们的全部——`search` 是对调用方可见的 collection
+  跑一遍 ripgrep，`recall` 是对手上已有的 fact 做一次不区分大小写的子串扫描。这是对一
+  个已经建成、也确实能用的能力的**主动缩减**，不是清理一个没人用的东西；这一点在此如实
+  记下，而不是塞回 2026-09-12 那段论证里。
+  - **去掉的是：** 两个工具共用的那个与 kind 无关的排序检索引擎；可丢弃的旁挂索引，以
+    及它所在的 `~/.coffer/index` 目录；OpenAI 兼容的 `/embeddings` 客户端；章节切分与
+    余弦排序；`GET /api/v1/knowledge/index` 与 `POST .../index/rebuild` 两条路由，
+    及其 `coffer knowledge index` / `reindex` 两条 CLI 命令；还有每次作答都带着的
+    `score` / `heading` / `mode` / `reason` 四个字段。`coffer__search_tools` 里那条
+    从未接上过真实 embedder 的余弦分支也一并去掉；那个工具一直以来实际都是 BM25 排序。
+  - **2026-09-12 那次修订对在哪里、又错在哪里。** 它立的两条约束都守住了：embedding
+    始终没有自己的设置面，旁挂索引也始终没有变成一份真相——没有任何东西漂移，删掉它也
+    从未丢过任何东西。没守住的是它们下面那条前提。排序只在用户指定了内部连接的安装上才
+    会真正跑起来，所以这一层的大部分时间里，字面那条路**就是**答案，而且它好用到不足以
+    为背后那套机械辩护。
+  - **代价说清楚。** 用自己的话提问不再有用：匹配是字面的，所以一个问句什么也找不到，
+    而一个有辨识度的短语才能找到那篇文件。`coffer__recall` 也不再能为「给不出确切措辞」
+    的调用方回答「关于**这个**，我知道些什么」——spec `memory` 当初对排序的那份依赖如今
+    不再被满足，FR-052 现在要的是这次扫描，而不是那个循环。embedding 也许会回来；真回
+    来的时候，理由应当是这道缺口被真实地感到了，而不是这个组件恰好可用。
+  - **没有 migration 去删表**，因为已经没有表可删：`embedding_config` 随 0066 走了，
+    索引也从来不在 `coffer.db` 里。0077 只清掉 `embedding_config_updated` 这个已经不
+    存在的事件类型留下的审计行。

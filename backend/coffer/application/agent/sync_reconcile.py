@@ -7,11 +7,12 @@ door. An installation without the agent quarantines the doc (retried every
 run; self-heals once the agent is installed), instead of creating a registry
 row pointing at a dead directory.
 
-Hook: importing resources changes which skills each agent should be holding —
-an imported skill row carries its own ``enabled`` flag and ``scope``, and the
-registry upsert alone performs no on-disk delivery. After every import each
+Hook: importing resources changes which skills each agent should be holding. A
+skill's reach — its ``enabled`` flag and its ``scope`` — is this machine's own
+and never arrives with the document, but the set of skill ROWS does change, and
+the registry upsert alone performs no on-disk delivery. After every import each
 agent's delivered set is reconciled idempotently against the delivery predicate
-(FR-012a) from the converged rows.
+(FR-012a) from the converged rows and this machine's reach.
 """
 
 from __future__ import annotations
@@ -36,13 +37,7 @@ class AgentImportGate:
 
     kind = "agent"
 
-    async def validate(
-        self, config: Mapping[str, object], *, scope: list[str] | None = None
-    ) -> None:
-        # ``scope`` is accepted for interface compatibility only: the `agent`
-        # kind declares no activation scope (ADR per-agent-resource-scope), so there is nothing to
-        # gate on here.
-        del scope
+    async def validate(self, config: Mapping[str, object]) -> None:
         try:
             cfg = AgentConfig.model_validate(dict(config))
         except Exception as e:

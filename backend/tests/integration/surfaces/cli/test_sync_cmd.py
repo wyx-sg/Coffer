@@ -408,22 +408,31 @@ def test_machine_rename_renames_this_machine(fleet: Fleet) -> None:
     assert fleet.a.name == "kitchen table"
 
 
-def test_machine_remove_retires_a_peer_and_strips_its_scopes(fleet: Fleet) -> None:
+def test_machine_remove_retires_a_peer_and_touches_nothing_else(fleet: Fleet) -> None:
+    """Retiring is one change with one effect: the descriptor goes.
+
+    It used to report a second number — how many scopes it had rewritten to
+    drop the retired id — and there is no such number now. Nothing in the vault
+    names a machine, because reach is machine-local, so a retirement has
+    nothing else to reach for and says so by saying only one thing.
+    """
     fleet.run(fleet.b.converge())
     fleet.run(fleet.b.converge())
     fleet.run(fleet.a.register("mcp_server", "shared"))
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
     fleet.ok("sync", "now")
-    fleet.run(fleet.a.set_scope("mcp_server", "shared", Scope(machines=[MACHINE_B])))
+    fleet.run(fleet.a.set_scope("mcp_server", "shared", Scope(agents=["claude-code"])))
 
     result = fleet.ok("sync", "machine", "remove", MACHINE_B)
 
     assert "retired" in result.output
-    assert "1 resource scopes updated" in result.output
+    assert "scopes updated" not in result.output
     assert MACHINE_B[:8] not in fleet.ok("sync", "machine", "list").output
     resource = fleet.run(fleet.a.find("mcp_server", "shared"))
     assert resource is not None
-    assert resource.scope is None or MACHINE_B not in (resource.scope.machines or [])
+    assert resource.scope == Scope(agents=["claude-code"]), (
+        "retiring a machine rewrote a resource's reach"
+    )
 
 
 # --- the master key ---------------------------------------------------------

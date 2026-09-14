@@ -128,7 +128,11 @@ describe("SyncMachinesTab", () => {
     expect(rowFor(OTHER).getByText("—")).toBeInTheDocument();
   });
 
-  test("retiring is offered for other machines only, and states the scope side effect", () => {
+  test("retiring is offered for other machines only, and touches nothing else", () => {
+    // Retiring used to rewrite every scope that named the machine, and the
+    // dialog had to warn about it. Reach is set per machine now and no scope
+    // can name one, so the dialog's job is the opposite: to say that removing
+    // the descriptor is the whole of the change.
     seed([machine(), machine({ machine_id: OTHER, name: "desktop", is_self: false })]);
     render(<SyncMachinesTab />);
 
@@ -136,7 +140,8 @@ describe("SyncMachinesTab", () => {
     fireEvent.click(rowFor(OTHER).getByRole("button", { name: /retire/i }));
 
     const dialog = within(screen.getByRole("dialog"));
-    expect(dialog.getByText(/stripped from the scope of every resource/i)).toBeInTheDocument();
+    expect(dialog.getByText(/nothing else in the vault changes/i)).toBeInTheDocument();
+    expect(dialog.queryByText(/scope/i)).not.toBeInTheDocument();
     fireEvent.click(dialog.getByRole("button", { name: /retire/i }));
     expect(retireMutate).toHaveBeenCalledWith(OTHER, expect.anything());
   });

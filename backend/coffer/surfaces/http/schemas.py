@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from coffer.domain.scope import Scope
 
@@ -30,21 +30,31 @@ class ErrorResponse(BaseModel):
 
 
 class ScopeOut(BaseModel):
-    """A resource's activation scope on the wire: two independent allow-lists,
-    ``AND``-ed (ADR per-agent-resource-scope). ``null`` on an axis means
-    unrestricted; ``[]`` matches nothing, i.e. dormant. Machines are named by
-    their derived id, never their display name."""
+    """A resource's activation scope on the wire: one allow-list of agents
+    (ADR per-agent-resource-scope). ``null`` means unrestricted; ``[]`` matches
+    nothing, i.e. dormant.
+
+    Extra keys are REFUSED rather than ignored, which is the unusual choice and
+    the deliberate one. This model used to carry a second axis, ``machines``,
+    and a client that still sends it — a browser tab left open across the
+    upgrade — means "only on that machine". Ignoring the key would store what
+    is left, ``agents: null``, and that reads as *every agent, everywhere*: the
+    request would silently widen the very restriction it was trying to write.
+    A 422 tells the caller its request was not understood, which is the only
+    honest answer.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     agents: list[str] | None = Field(default=None, examples=[["claude-code"]])
-    machines: list[str] | None = Field(default=None, examples=[["a3f21c9e4b7d2610"]])
 
     @classmethod
     def of(cls, scope: Scope | None) -> ScopeOut | None:
         """The wire shape of a stored scope; null stays null (unscoped)."""
-        return None if scope is None else cls(agents=scope.agents, machines=scope.machines)
+        return None if scope is None else cls(agents=scope.agents)
 
     def to_domain(self) -> Scope:
-        return Scope(agents=self.agents, machines=self.machines)
+        return Scope(agents=self.agents)
 
 
 class ResourceOut(BaseModel):
@@ -54,8 +64,8 @@ class ResourceOut(BaseModel):
     description: str | None = None
     config: dict[str, Any]
     # Framework-level activation scope (ADR per-agent-resource-scope). None =
-    # unscoped (active for every agent, on every machine); only kinds whose
-    # Kind.supports_scope is True may set it. See GET/PUT .../scope below.
+    # unscoped (active for every agent); only kinds whose Kind.supports_scope
+    # is True may set it. See GET/PUT .../scope below.
     scope: ScopeOut | None = None
     enabled: bool
     created_at: datetime
@@ -87,11 +97,14 @@ class ResourceScopeOut(BaseModel):
 
 
 class ResourceScopeUpdate(BaseModel):
-    """PUT .../scope request body: where this resource is active.
+    """PUT .../scope request body: which agents this resource is active for.
 
-    ``scope: null`` clears back to unscoped — every agent, every machine. An
-    axis given a list restricts to it, and an empty list matches nothing, so
-    ``{"agents": []}`` is dormant."""
+    ``scope: null`` clears back to unscoped — every agent. A list restricts to
+    exactly those agents, and an empty list matches nothing, so
+    ``{"agents": []}`` is dormant.
+
+    Scope is set per machine and does not sync: every machine holding this
+    vault decides for itself which of its agents a resource activates for."""
 
     scope: ScopeOut | None = None
 
@@ -169,17 +182,23 @@ class TokenRotationOut(BaseModel):
 
 
 class DaemonLogRecordOut(BaseModel):
-    """One line of ``daemon.log``, parsed where possible.
+    """One record of ``daemon.log``, parsed where possible.
 
-    ``record`` always carries the whole thing — a structlog line's full dict,
-    or ``{"raw": <line>}`` for a line that is not JSON. The three lifted
-    fields are what a timeline renders without having to know structlog's
-    shape; they are absent on a raw line, which is why they are nullable.
+    ``daemon.log`` interleaves several writers — Coffer's structlog JSON, the
+    stdlib formatter, uvicorn, rich, and the cloudflared child's zerolog — so
+    ``record`` carries whatever that line stated, normalised onto ``timestamp``
+    / ``level`` / ``logger`` / ``event``, plus ``continuation`` for the lines
+    (a traceback, a wrapped message) that belong to this record rather than to
+    one of their own. A line no writer's format fits is kept whole as
+    ``{"raw": <line>}``. The three lifted fields are what a timeline renders
+    without knowing any of that; they are absent on a raw line, which is why
+    they are nullable.
     """
 
     timestamp: str | None = None
     level: str | None = None
-    #: structlog's ``event`` field — the message.
+    #: The message — structlog's ``event`` field, or the text another writer
+    #: put after its level.
     event: str | None = None
     record: dict[str, Any]
 
@@ -336,37 +355,6 @@ class CredentialSettingsIn(BaseModel):
     """Request body to relocate the master key."""
 
     master_key_storage: Literal["file", "keychain"]
-
-
-# --- Embedding config (global) ---
-
-
-class EmbeddingConfigOut(BaseModel):
-    """The installation-wide embedding setting: a CONNECTION and one of its
-    models, the same shape the internal-engine setting has. The wire, base URL
-    and credential are the named connection's, resolved at use time, so they are
-    neither stored nor returned here."""
-
-    enabled: bool
-    connection: str | None = None
-    model: str | None = None
-    dimensions: int
-    default_chunk_size: int = 512
-    default_chunk_overlap: int = 64
-    updated_at: datetime | None = None
-
-
-class EmbeddingConfigUpdate(BaseModel):
-    """``connection`` names a configured LLM connection; ``model`` one of the
-    ``embedding``-modality models it offers. A connection that does not exist,
-    whose wire serves no embeddings, or that offers no such model is refused."""
-
-    enabled: bool = False
-    connection: str | None = None
-    model: str | None = None
-    dimensions: int = Field(default=768, ge=1, le=8192)
-    default_chunk_size: int = Field(default=512, ge=64, le=2048)
-    default_chunk_overlap: int = Field(default=64, ge=0)
 
 
 class InternalEngineConfigOut(BaseModel):

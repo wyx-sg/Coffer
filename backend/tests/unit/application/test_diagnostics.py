@@ -96,17 +96,69 @@ async def test_one_call_answers_from_both_records(tmp_path) -> None:
 
 @pytest.mark.asyncio
 async def test_an_unparseable_line_is_kept_not_dropped(tmp_path) -> None:
-    """A traceback is not JSON, and is usually the most interesting line in the
-    file. Dropping it would hide exactly what the agent came for."""
+    """A traceback matches no writer's format, and is usually the most
+    interesting thing in the file. Dropping it would hide exactly what the
+    agent came for — and its frames stay with the line they continue."""
     repo = _FakeAuditRepo([])
     tool = _tool(repo, _log(tmp_path, ["Traceback (most recent call last):", "  ValueError: x"]))
 
     out = await tool.handler({})
 
-    assert [r["raw"] for r in out["log"]] == [
-        "  ValueError: x",
-        "Traceback (most recent call last):",
-    ]
+    assert [r["raw"] for r in out["log"]] == ["Traceback (most recent call last):"]
+    assert out["log"][0]["continuation"] == ["  ValueError: x"]
+
+
+@pytest.mark.asyncio
+async def test_a_traceback_is_returned_with_the_record_that_raised(tmp_path) -> None:
+    """One failure is one record. Returning its frames as records of their own
+    would push the line that explains them off the end of the window."""
+    repo = _FakeAuditRepo([])
+    tool = _tool(
+        repo,
+        _log(
+            tmp_path,
+            [
+                _json_line("error", "consolidate.store.failed"),
+                "Traceback (most recent call last):",
+                '  File "coffer/application/memory/consolidate.py", line 159, in run',
+                "openai.RateLimitError: Error code: 429",
+            ],
+        ),
+    )
+
+    out = await tool.handler({})
+
+    [record] = out["log"]
+    assert record["event"] == "consolidate.store.failed"
+    assert record["continuation"][-1] == "openai.RateLimitError: Error code: 429"
+
+
+@pytest.mark.asyncio
+async def test_every_writers_format_reaches_the_agent_parsed(tmp_path) -> None:
+    """``daemon.log`` interleaves Coffer's structlog with the stdlib formatter
+    and the cloudflared child's zerolog. An agent must get the level and the
+    logger from all of them, not a wall of unparsed text."""
+    repo = _FakeAuditRepo([])
+    # zerolog prints whole seconds and a bare `Z`; keep it inside the window.
+    stamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    tool = _tool(
+        repo,
+        _log(
+            tmp_path,
+            [
+                f"{stamp} ERR failed to serve incoming request",
+                "WARNI [coffer.infrastructure.chat.codex_app_server] \x1b[31mERROR\x1b[0m cache",
+            ],
+        ),
+    )
+
+    out = await tool.handler({})
+
+    codex, tunnel = out["log"]
+    assert codex["level"] == "warning"
+    assert codex["logger"] == "coffer.infrastructure.chat.codex_app_server"
+    assert codex["event"] == "ERROR cache"  # the colour escapes are gone
+    assert (tunnel["level"], tunnel["timestamp"]) == ("error", stamp)
 
 
 @pytest.mark.asyncio

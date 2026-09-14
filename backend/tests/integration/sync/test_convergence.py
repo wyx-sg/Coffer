@@ -141,7 +141,7 @@ async def test_a_remote_addition_is_registered_here(pair) -> None:
     registered = await b.find("mcp_server", "weather")
     assert registered is not None and registered.config["value"] == "weather"
     # The kind's import gate ran before the row was written...
-    assert any(cfg.get("value") == "weather" for cfg, _scope in b.gate.seen)
+    assert any(cfg.get("value") == "weather" for cfg in b.gate.seen)
     # ...and its post-import hook re-applied this machine's side effects after.
     assert b.hook.runs == hooks_before + 1
     assert await b.state.pointer() == run.commit
@@ -453,7 +453,7 @@ async def test_an_agent_resolution_that_validates_is_applied_and_named(pair) -> 
     path = "resources/mcp_server/contested.yaml"
     b.resolver.enabled = True
     b.resolver.writes[path] = (
-        b"config:\n  value: reconciled\nenabled: true\nkind: mcp_server\nname: contested\n"
+        b"config:\n  value: reconciled\ndescription: null\nkind: mcp_server\nname: contested\n"
     )
 
     run = await b.converge()

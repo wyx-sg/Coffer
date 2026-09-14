@@ -5,8 +5,9 @@ connection is a credentialed endpoint ``{protocol, base_url, credential_ref}``;
 the model lives apart from it (spec provider-switching E3) and is chosen at the point of use.
 ``models`` is the curated set the connection OFFERS to that choice — empty means
 no restriction (every model the endpoint serves). Each entry names its
-``modality``, so a chat picker can ask for the ``text`` ones and the global
-embedding setting for the ``embedding`` ones.
+``modality`` — what the ENDPOINT serves, since one base URL answers for chat,
+embeddings, images and more — so a chat picker can ask for the ``text`` ones.
+Coffer itself embeds nothing.
 """
 
 from __future__ import annotations
@@ -148,8 +149,8 @@ class ActiveKeyOut(BaseModel):
 # Introspection: probe a connection, list what it serves.
 #
 # These moved here from the chat page's schema module when that page was
-# removed. They were never chat schemas — the connection editor and the
-# embedding settings are what post to /api/v1/models.
+# removed. They were never chat schemas — the connection editor is what posts
+# to /api/v1/models.
 # ---------------------------------------------------------------------------
 
 
@@ -192,12 +193,3 @@ class ProviderModelsOut(BaseModel):
 
     models: list[ProviderModel]
     message: str = ""
-
-
-class EmbeddingTestIn(BaseModel):
-    """Probe one embedding model. The endpoint, wire and key come from the named
-    CONNECTION — the same connection the global embedding config points at — so
-    a test can never be run against settings the config does not hold."""
-
-    connection: str = Field(min_length=1)
-    model: str = Field(min_length=1)

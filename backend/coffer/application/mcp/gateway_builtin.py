@@ -207,17 +207,12 @@ async def dispatch_tool_search(
     invocations: MCPInvocationRepoPort,
     session_id: str,
     clock: Callable[[], datetime],
-    embedder: Any | None = None,
 ) -> dict[str, Any]:
-    """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap.
-
-    When ``embedder`` is set the ranking is semantic; otherwise BM25
-    (ADR builtin-agent-is-internal-capability).
-    """
+    """Run ``coffer__search_tools`` over ``aggregated_tools``; log + wrap."""
     started = clock()
     try:
         args = params.get("arguments") or {}
-        result = await execute_tool_search(args, aggregated_tools, embedder)
+        result = await execute_tool_search(args, aggregated_tools)
         # Capture the (intent -> ranked tools) shape for the eval flywheel.
         # Best-effort and opt-in (ADR close-the-eval-flywheel); a no-op unless
         # COFFER_EVAL_CAPTURE is set. ``query`` is a validated non-empty str by

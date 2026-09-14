@@ -51,8 +51,11 @@ QUEUE_MAX = 10
 #: transport (FR-036); "" when the transport supplied none — and the asker's
 #: mention id and address, which the group reply opens by @mentioning (FR-070 —
 #: the id is the primary, the address the fallback a cross-organisation sender
-#: may be the only one of).
-_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str, str, str, str]
+#: may be the only one of) — and finally the human's own words, carried apart
+#: from the driving text because that text opens with context blocks the chat
+#: platform must not have to recognise (FR-048; "" when the message body held
+#: nothing nameable).
+_QueuedInbound = tuple[str, tuple[Attachment, ...], str, str, str, str, str, str]
 
 #: Sends one reply back through a channel binding, matching
 #: ``InboundProcessor._safe_send``'s signature (buttons omitted — turn
@@ -96,6 +99,7 @@ class TurnPort(Protocol):
         user_text: str,
         *,
         attachments: Sequence[Attachment] = (),
+        title_hint: str | None = None,
     ) -> asyncio.Queue[Any]: ...
 
     def interrupt_turn(self, conversation_id: str) -> None: ...
@@ -151,6 +155,7 @@ class TurnDriver:
                 reply_to,
                 mention_user_id,
                 mention_user_email,
+                title_hint,
             ) = session.queue.popleft()
             peer = await self._peers.get_by_chat(binding.resource_id, chat_id)
             if peer is None:
@@ -166,6 +171,7 @@ class TurnDriver:
                     reply_to_message_id=reply_to,
                     mention_user_id=mention_user_id,
                     mention_user_email=mention_user_email,
+                    title_hint=title_hint,
                 )
             except asyncio.CancelledError:
                 raise
@@ -184,6 +190,7 @@ class TurnDriver:
         reply_to_message_id: str = "",
         mention_user_id: str = "",
         mention_user_email: str = "",
+        title_hint: str = "",
     ) -> None:
         adapter = binding.adapter
         try:
@@ -211,7 +218,14 @@ class TurnDriver:
             with contextlib.suppress(Exception):
                 await adapter.set_reaction(peer.chat_id, reply_to_message_id, "👀")
         try:
-            queue = await self._turns.start_turn(conversation_id, text, attachments=attachments)
+            # ``text`` opens with the turn's context blocks (origin, thread
+            # history); ``title_hint`` is the human's own words out of the same
+            # message, so a conversation still under its placeholder title is
+            # named after what the person asked and not after a header every
+            # channel turn shares (FR-048).
+            queue = await self._turns.start_turn(
+                conversation_id, text, attachments=attachments, title_hint=title_hint
+            )
         except TurnInProgress:
             await self._safe_send(
                 binding,

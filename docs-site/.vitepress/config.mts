@@ -29,7 +29,7 @@ const guideEn = [
       { text: 'Skills', link: '/guide/skills' },
       { text: 'Knowledge', link: '/guide/knowledge' },
       { text: 'Channels', link: '/guide/channels' },
-      { text: 'Export and import', link: '/guide/sync' },
+      { text: 'Sync', link: '/guide/sync' },
       { text: 'Credentials', link: '/guide/credentials' },
     ],
   },
@@ -89,7 +89,7 @@ const guideZh = [
       { text: '技能', link: '/zh/guide/skills' },
       { text: '知识', link: '/zh/guide/knowledge' },
       { text: '渠道', link: '/zh/guide/channels' },
-      { text: '导出与导入', link: '/zh/guide/sync' },
+      { text: '同步', link: '/zh/guide/sync' },
       { text: '凭证', link: '/zh/guide/credentials' },
     ],
   },
@@ -132,7 +132,7 @@ const contribZh = [
 export default withMermaid(
   defineConfig({
     title: 'Coffer',
-    description: 'Local-first AI agent vault — one secure, shared interface for every AI agent on your machine: MCP tools, skills, knowledge, chat, channels, and vault export/import.',
+    description: 'Local-first AI agent vault — one secure, shared interface for every AI agent on your machine: MCP tools, skills, knowledge, chat, channels, and vault sync.',
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,

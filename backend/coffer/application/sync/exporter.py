@@ -1,13 +1,16 @@
 """Serialize local vault state into the working tree (spec and ADR vault-sync).
 
-Step 1 of a converge round. What comes out is exactly what this vault holds —
-but it is written **differentially**, never by clearing and rewriting: the
+Step 1 of a converge round. What comes out is exactly what this vault publishes
+— but it is written **differentially**, never by clearing and rewriting: the
 bundle is the git working tree that gets three-way-merged, so a wholesale
 rewrite would tell the merge that every document this vault never absorbed had
 been deliberately deleted. That rule is normative (spec vault-sync "Why deletion
 is safe") and it lives in :mod:`coffer.infrastructure.sync.tree_mirror`; what
-this module owes it is an honest and *complete* account of local state, area by
-area, on every export.
+this module owes it is an honest and *complete* account of what this vault
+publishes, area by area, on every export — "complete" measured against the rule
+below, not against the registry, so that what is deliberately withheld is
+withheld the same way every round and never looks like something that went
+missing.
 
 Credentials are omitted unless the remote is configured to carry them, and even
 then only Fernet ciphertext travels; the master key is never written.
@@ -25,10 +28,38 @@ from coffer.domain.sync.models import AreaCount, ExportSummary
 from coffer.domain.sync.portability import normalize_home
 from coffer.domain.sync.serialization import resource_to_doc
 
+#: Resource kinds that never leave the machine they were registered on, and so
+#: are never written into the bundle at all.
+#:
+#: A ``channel`` is an *inbound surface*: it is the webhook URL a platform
+#: posts to, the tunnel that URL resolves through, and the port that tunnel
+#: terminates on — three things that describe one host and mean nothing off it.
+#: A channel that travelled would at best be inert on the other machine, its
+#: callback pointing at a tunnel that machine does not run; at worst it would
+#: come up and answer, and two machines would be replying in the same
+#: conversation, each unaware of the other's turn. Neither outcome is something
+#: the user asked for by pointing two machines at one remote.
+#:
+#: This is the exporting half of the rule. ``ResourceApplier`` holds the
+#: importing half, and reads this same constant — one definition, because the
+#: two halves are not independently correct.
+MACHINE_LOCAL_KINDS = frozenset({"channel"})
+
 
 class SyncExporter:
     """Writes the manifest, mirrored trees, resource docs, shared state, and
-    (opt-in) credential ciphertext into a bundle directory."""
+    (opt-in) credential ciphertext into a bundle directory.
+
+    Two things a resource has are deliberately left behind.
+
+    Its **reach** — ``enabled`` and ``scope``, which are one control in the UI
+    and one decision to the user — is machine-local: it is set on the machine
+    it applies to, and each machine sets its own. Publishing it would let this
+    machine re-answer, silently and every round, a question the machine at the
+    other end had already answered for itself.
+
+    Its whole **document**, when its kind is in :data:`MACHINE_LOCAL_KINDS`: a
+    resource bound to this host has nothing to say to another one."""
 
     def __init__(
         self,
@@ -48,6 +79,14 @@ class SyncExporter:
         docs: list[dict[str, object]] = []
         unserializable: list[str] = []
         for r in await self._resources.list():
+            if r.kind in MACHINE_LOCAL_KINDS:
+                # Not a failure and not an unserializable row: this kind is
+                # withheld on every export, so its absence from ``docs`` is the
+                # steady state the bundle converges on rather than a gap to
+                # protect. Protecting it would be the bug — it would pin the
+                # stale channel documents an older build published into the
+                # tree forever.
+                continue
             try:
                 config = dict(r.config)
                 # The bundle speaks ${HOME}, never this machine's literal home.
@@ -58,10 +97,7 @@ class SyncExporter:
                         kind=r.kind,
                         name=r.name,
                         description=r.description,
-                        enabled=r.enabled,
                         config=config,
-                        # Scope names agents, never paths — it rides verbatim.
-                        scope=r.scope,
                     )
                 )
             except Exception as e:

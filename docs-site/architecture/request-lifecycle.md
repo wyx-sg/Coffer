@@ -1,7 +1,7 @@
 # Request Lifecycle
 
 ::: tip Mental model
-Coffer now serves **several** request lifecycles, not one. The original — and still the load-bearing — path is the **MCP `tools/call`** lifecycle: MCP client → daemon → upstream server, with the shim translating stdio to HTTP/SSE at the entry and the namespace resolver splitting `filesystem__read_file` into server `filesystem` + tool `read_file` at dispatch. Alongside it run an **agent-chat turn** lifecycle, a **channel-inbound** lifecycle, and a **knowledge retrieval** lifecycle. This page walks the MCP path in full detail first, then sketches the other three.
+Coffer now serves **several** request lifecycles, not one. The original — and still the load-bearing — path is the **MCP `tools/call`** lifecycle: MCP client → daemon → upstream server, with the shim translating stdio to HTTP/SSE at the entry and the namespace resolver splitting `filesystem__read_file` into server `filesystem` + tool `read_file` at dispatch. Alongside it run an **agent-chat turn** lifecycle, a **channel-inbound** lifecycle, and a **knowledge search** lifecycle. This page walks the MCP path in full detail first, then sketches the other three.
 :::
 
 ## MCP tool-call lifecycle
@@ -226,17 +226,18 @@ Messaging channels (Telegram, SeaTalk) are how a user reaches an agent away from
 
 Progress is rendered from the agent's capabilities, not the adapter type: Telegram streams progress by editing one message, SeaTalk degrades to ack-then-final.
 
-## Knowledge retrieval lifecycle
+## Knowledge search lifecycle
 
-Retrieval requests — `coffer__search`, `coffer__grep`, and the REST `search` / `recall` / `grep` routes — follow a lifecycle anchored in [Files as Truth](/reference/adr/files-as-truth-sqlite-retrieval): **markdown files are the source of truth**, and `coffer.db` holds only a derived index.
+Search requests — `coffer__search` and `coffer__grep`, and the REST `search` / `grep` routes — have almost no lifecycle left, and that is the point ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files)). There is no index between the caller and the disk, so there is no pipeline to walk:
 
-- **`grep`** — ripgrep over the raw files (zero index, language-agnostic).
-- **keyword** — SQLite **FTS5** with `MATCH … ORDER BY bm25()`.
-- **vector** — **sqlite-vec** KNN over chunk embeddings (opt-in per scope; embeddings come from the installation-wide OpenAI-compatible endpoint configured under Settings).
-- **hybrid** — reciprocal-rank fusion over keyword + vector.
+1. **Resolve what the caller may see.** The service turns the caller's identity into the set of collection directories under `~/.coffer/knowledge/` it is allowed to search. This is the only knowledge-specific step.
+2. **Run `ripgrep` over those directories.** One literal text search, hidden entries excluded so the `.history/` revisions and `.raw/` originals never answer a query.
+3. **Shape the matches.** `grep` returns the matching lines as they are; `search` groups them into file-level hits — path, title, description, and the few lines that matched — reading each file's title and description out of its own frontmatter.
 
-The engine picks among these from the scope's configuration — callers never name a mode ([Retrieval Mode Is Internal](/reference/adr/retrieval-mode-is-internal)) — and one search covers both lanes of the scope, the entries agents wrote and the documents you ingested. A write (`coffer__write`, or an ingest) lands a markdown file first, after which the derived FTS5/vec index is regenerated from the files. Because files are truth, the index can always be rebuilt and the user can diff/grep/edit content with ordinary tools.
+`coffer__recall`, memory's pull tool, is the same shape one layer over: a case-insensitive substring scan across the facts the caller may see, already loaded in memory.
+
+Three consequences follow from having no index at all. **Freshness is decided from the file**, so a file the user edited in their editor, an agent wrote, or `git` pulled is searchable the instant it lands — a write (`coffer__write`, or an ingest) is done when the markdown is on disk, with nothing to update afterwards. **Nothing derived is authoritative**, because nothing is derived. And **matching is byte-level**, so CJK text matches without a tokenizer and the user can grep and edit the same content with ordinary tools.
 
 ---
 
-**See also:** [MCP Gateway spec](/reference/specs/mcp-gateway/spec), [Session subprocess model](/reference/adr/session-subprocess-model), [Channels spec](/reference/specs/channels/spec), [Channel adapter framework](/reference/adr/channel-adapter-framework), [Chat is a single-owner live mirror](/reference/adr/chat-single-owner-live-mirror), [Files as truth, SQLite retrieval](/reference/adr/files-as-truth-sqlite-retrieval)
+**See also:** [MCP Gateway spec](/reference/specs/mcp-gateway/spec), [Session subprocess model](/reference/adr/session-subprocess-model), [Channels spec](/reference/specs/channels/spec), [Channel adapter framework](/reference/adr/channel-adapter-framework), [Chat is a single-owner live mirror](/reference/adr/chat-single-owner-live-mirror), [Knowledge is plain files](/reference/adr/knowledge-is-plain-files)

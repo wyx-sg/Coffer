@@ -69,9 +69,9 @@ async def update_scope(
         AuditEventType.RESOURCE_SCOPE_UPDATED.value,
         ref=ref,
         actor=actor,
-        # Scope carries only agent and machine names — no secrets — so it is
-        # audited verbatim (no redactor needed, unlike config), in the same
-        # two-axis shape the column stores.
+        # Scope carries only agent names — no secrets — so it is audited
+        # verbatim (no redactor needed, unlike config), in the same shape the
+        # column stores.
         details={"scope": scope.to_json() if scope is not None else None},
     )
     # Kind-level reconciliation: runs AFTER persistence +

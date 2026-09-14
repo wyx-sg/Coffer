@@ -3,15 +3,22 @@
 // Lists partitions: `global` plus one per project, aggregated read-only from
 // the agents' own native memories (ADR aggregate-agent-memory-never-write-it)
 // — nothing here is user-created, so Sync (not "Add") is the header action.
-// Delivery state and the audit log are not partition-scoped, so they render
-// once above the table rather than per-partition (the detail page owns facts,
-// conflicts and per-fact overrides for one partition).
+//
+// One table, always — the same shape whether the vault holds a hundred
+// partitions or none, exactly like every other list page. An empty vault gets
+// the table's own empty row, not a different page: a surface that changes
+// shape with its data teaches the reader nothing about where things will be.
+// Sync stays in the header, so it is reachable from the empty state too.
+//
+// Two things that used to render here have moved out. Per-agent DELIVERY is
+// per-agent state — it installs a hook into one agent's own settings file — so
+// it belongs on that agent's detail page (components/agents/AgentMemoryTab).
+// The AUDIT LOG is the Activity page's Changes tab, which reads the whole
+// vault's trail; a second kind-scoped copy here was a duplicate surface.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Brain, RefreshCw } from "lucide-react";
 
-import { MemoryAuditLog } from "@/components/memory/MemoryAuditLog";
-import { MemoryDeliveryPanel } from "@/components/memory/MemoryDeliveryPanel";
 import {
   MemoryPartitionsTable,
   type MemoryPartitionRow,
@@ -41,8 +48,6 @@ export function MemoryPage() {
     });
   }, [partitions, resources]);
 
-  const hasRows = rows.length > 0;
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -56,8 +61,6 @@ export function MemoryPage() {
           </Button>
         }
       />
-
-      <MemoryDeliveryPanel />
 
       {isPending ? (
         <Card>
@@ -74,20 +77,12 @@ export function MemoryPage() {
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
           </CardContent>
         </Card>
-      ) : !hasRows ? (
-        <Card>
-          <CardContent className="space-y-3 py-8 text-center">
-            <p className="text-muted-foreground">{t("memory.empty")}</p>
-            <Button variant="outline" onClick={() => sync.mutate()} disabled={sync.isPending}>
-              {t("memory.sync")}
-            </Button>
-          </CardContent>
-        </Card>
       ) : (
+        // No zero-row branch: DataTable renders its header and its own empty
+        // row, so "no partitions yet" is a line inside the table rather than
+        // a card standing where the table would be.
         <MemoryPartitionsTable rows={rows} />
       )}
-
-      <MemoryAuditLog />
     </div>
   );
 }

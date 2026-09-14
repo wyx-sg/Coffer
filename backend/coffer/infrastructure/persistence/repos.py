@@ -43,7 +43,7 @@ def _to_domain(row: ResourceModel) -> Resource:
 
 
 def _scope_json(scope: Scope | None) -> str | None:
-    """The column's text for ``scope``: the two-axis object, or NULL."""
+    """The column's text for ``scope``: the agent allow-list object, or NULL."""
     return json.dumps(scope.to_json()) if scope is not None else None
 
 
@@ -68,11 +68,21 @@ class SqlAlchemyResourceRepo:
         enabled: bool | None = None,
     ) -> list[Resource]:
         async with self._sm() as session:
+            # Ordered, because the caller renders this as a LIST and the user
+            # clicks a row in it. Without an ORDER BY, SQLite is free to hand
+            # back whatever order the b-tree scan happens to produce, and an
+            # UPDATE can move a row within it: enabling one server made it
+            # trade places with another, the refetched list re-rendered in the
+            # new order, and the row the user had just clicked was no longer
+            # where they clicked it — which reads as "I clicked row 1 and row 4
+            # changed". Name is the column a reader scans, and (kind, name) is
+            # unique, so the order is total and never depends on a write.
             stmt = select(ResourceModel)
             if kind is not None:
                 stmt = stmt.where(ResourceModel.kind == kind)
             if enabled is not None:
                 stmt = stmt.where(ResourceModel.enabled == enabled)
+            stmt = stmt.order_by(ResourceModel.kind, ResourceModel.name)
             rows = (await session.execute(stmt)).scalars().all()
             return [_to_domain(r) for r in rows]
 
@@ -321,9 +331,15 @@ class SqlAlchemyInternalEngineConfigRepo:
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
-            return GlobalInternalEngineConfig(
-                model=row.model,
-                updated_at=now,
-                auto_tidy_enabled=bool(row.auto_tidy_enabled),
-                tidy_owner_machine_id=row.tidy_owner_machine_id,
-            )
+            return self._to_domain(row, now)
+
+    @staticmethod
+    def _to_domain(
+        row: InternalEngineConfigModel, updated_at: datetime
+    ) -> GlobalInternalEngineConfig:
+        return GlobalInternalEngineConfig(
+            model=row.model,
+            updated_at=updated_at,
+            auto_tidy_enabled=bool(row.auto_tidy_enabled),
+            tidy_owner_machine_id=row.tidy_owner_machine_id,
+        )

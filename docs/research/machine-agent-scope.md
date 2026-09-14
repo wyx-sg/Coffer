@@ -5,16 +5,17 @@
 > **Historical record.** This note designed a machine × agent scope **matrix**
 > on top of continuous multi-machine sync. Multi-machine sync is back — as a
 > converge round against a git rendezvous the user owns
-> ([Vault Sync](../../specs/vault-sync/spec.md)) — and `scope` carries a
-> machine axis again, but **not the matrix designed here**: what shipped is two
-> independent allow-lists, `agents` and `machines`, `AND`-ed, each `null`
-> meaning unrestricted
-> ([Per-Agent Resource Scope](../decisions/per-agent-resource-scope.md)). The
-> matrix was dropped on purpose. The only thing a pair-wise matrix expresses
-> that two axes cannot is naming a *different* agent per machine on one
-> resource — "the desktop's Claude Code **plus** the laptop's Codex" — and no
-> observed use needs it. Read the spec and the ADR for the shipped shape; what
-> follows is the record of how both axes were arrived at, matrix included.
+> ([Vault Sync](../../specs/vault-sync/spec.md)) — and the machine axis briefly
+> returned with it, as two independent allow-lists rather than the matrix
+> designed here. It was **withdrawn again on 2026-09-14**, and this time the
+> question this note was investigating is settled rather than deferred: a
+> resource's **reach** — its `enabled` flag and its `scope` together — was made
+> **machine-local**, set on the machine it applies to and never synced
+> ([Per-Agent Resource Scope](../decisions/per-agent-resource-scope.md)). "Only
+> on the desktop" is now answered by *where the setting lives*, not by an axis,
+> so `scope` names agents and nothing else. Read the ADR for the shipped shape;
+> what follows is the record of how the machine axis was arrived at, matrix
+> included.
 
 Design note for generalizing machine identity (spec vault-sync, and the since-removed
 machine-identity ADR) into a

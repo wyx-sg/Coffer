@@ -14,10 +14,8 @@ import {
   createCollection,
   deleteFile,
   getFile,
-  getIndexStatus,
   getTree,
   listCollections,
-  rebuildIndex,
   search,
   tidyCollection,
   uploadFile,
@@ -30,7 +28,6 @@ export const collectionsKey = () => [...knowledgeKey, "collections"] as const;
 export const treeKey = (path: string) => [...knowledgeKey, "tree", path] as const;
 export const fileKey = (path: string) => [...knowledgeKey, "file", path] as const;
 /** The disposable sidecar's status — one global query, not per-collection. */
-export const indexKey = () => [...knowledgeKey, "index"] as const;
 
 export function useKnowledgeCollections() {
   return useQuery({
@@ -124,10 +121,9 @@ export function useUploadKnowledgeFile() {
 }
 
 /**
- * Ranked (or literal-fallback) search over one collection. Modelled as a
- * mutation rather than a query: it runs when the user submits, not whenever
- * its inputs change, and the answer is never cached — a stale ranked result
- * would defeat the point of it being ranked.
+ * Literal search over one collection. Modelled as a mutation rather than a
+ * query: it runs when the user submits, not whenever its inputs change, and
+ * the answer is never cached — the files it searched may have changed since.
  */
 export function useKnowledgeSearch() {
   const { t } = useTranslation();
@@ -138,30 +134,3 @@ export function useKnowledgeSearch() {
   });
 }
 
-/** The disposable sidecar's status: available/staleness, read on the page load. */
-export function useIndexStatus() {
-  return useQuery({
-    queryKey: indexKey(),
-    queryFn: getIndexStatus,
-  });
-}
-
-/**
- * Re-embed every visible file from scratch. Runs synchronously on the
- * backend (the mutation's own `isPending` IS the "running" state — there is
- * no separate progress poll), and its answer is the freshest status there is,
- * so it seeds the cache directly rather than merely invalidating it.
- */
-export function useRebuildIndex() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: rebuildIndex,
-    onSuccess: (data) => {
-      qc.setQueryData(indexKey(), data);
-      toast.success(t("knowledge.index.rebuildDone"));
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}

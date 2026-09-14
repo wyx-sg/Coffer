@@ -688,24 +688,27 @@ status / notify`.
 ## Where a channel runs
 
 A channel's platform identity (a polled bot, a webhook endpoint) tolerates
-only ONE consumer. A converged vault (spec vault-sync) spans several machines
-and every channel row reaches all of them — pairing state rides along in the
-`channel-peers` state area, so it needs no re-pairing — so "which machine
-answers this bot" is a real question, and it is answered by the MACHINE axis of
-the channel's `scope`
-([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)).
-An **enabled channel runs its adapter on the machines its scope names**, and on
-a machine outside that scope it is registered, visible and editable but its
-adapter never starts. An unscoped channel is unrestricted, which means it runs
-wherever it is enabled — the pre-sync behaviour, unchanged for anyone with one
-machine. Enabling a channel on two machines without narrowing its machine axis
-still points two adapters at one bot identity; that remains a deliberate act by
-the user, and the machine axis is the tool for avoiding it.
+only ONE consumer, so "which machine answers this bot" must have exactly one
+answer — and the way to guarantee that is not to narrow a channel down to one
+machine but to never let it reach a second one. **A `channel` does not
+converge.** It is the one kind a round ignores in both directions (spec
+vault-sync, `## What does not sync`): a channel is an inbound surface welded to
+the machine it was registered on — that machine's port, that machine's tunnel,
+the webhook URL the platform was told to call — so a copy arriving anywhere
+else is inert at best and a rival consumer at worst.
 
-The scope's AGENT axis answers a different question from where the adapter runs
-— see FR-079. It names the agents a channel may drive; the machine axis and
-`enabled` say where it runs at all. The two meet in one place: a channel that
-may drive nothing does not run.
+So a channel runs on the machine it was configured on, and there is no other
+machine holding a row that could start a second adapter. A channel runs when it
+is enabled, here, and stops when it is disabled, here. Two adapters can still be
+pointed at one bot identity, but only the way they always could — by someone
+registering the same bot twice, on two machines, by hand — and no field inside
+Coffer could have prevented that one.
+
+A channel's `scope`
+([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))
+therefore says exactly one thing, and it is not about machines — see FR-079. It
+names the agents the channel may DRIVE. The one place it meets the runtime is
+the empty case: a channel that may drive nothing does not run at all.
 
 ## Acceptance Scenarios
 
@@ -1446,6 +1449,14 @@ may drive nothing does not run.
 - **Then** the assistant reply is there — the message store, not the live
   stream, is the system of record.
 
+### Scenario: a channel conversation is named by what the person typed
+
+- **Given** a paired channel whose turns open with a context block naming the
+  message's origin,
+- **When** the first message of a new conversation arrives from that channel,
+- **Then** the conversation is named after the words the person actually typed,
+  not after the context block every turn of every chat shares.
+
 ### Scenario: a conversation the owner named keeps its name
 
 - **Given** a conversation the owner has renamed,
@@ -1660,14 +1671,6 @@ may drive nothing does not run.
 - **Then** the edit is rejected with a message naming both the default agent and
   the proposed scope, nothing is persisted, and the channel keeps running — the
   narrowing never silently takes the bot offline.
-
-### Scenario: a channel scoped to another machine is registered but dark
-
-- **Given** a converged vault whose enabled channel is scoped to a machine that
-  is not this one,
-- **When** the channel runtime reconciles here,
-- **Then** the row is registered and still editable, its adapter is never
-  started, and only the machine its scope names answers the bot.
 
 ### Scenario: edit a dormant channel's configuration
 
@@ -2000,7 +2003,18 @@ browser — reads in one place instead of two.
   them when the agent reports one. A conversation opens under a placeholder
   title, which System MUST replace with the text of its first user message
   (truncated); once the owner has named a conversation themselves, System MUST
-  NOT overwrite that name — an explicit rename outranks the generated one.
+  NOT overwrite that name — an explicit rename outranks the generated one. The
+  name MUST come from the part of that message the person actually wrote: a
+  channel turn's text opens with the context blocks the channel folds in (the
+  FR-042 origin block, FR-029 thread history), which are identical on every turn
+  of every chat, so naming from the whole text gives every channel conversation
+  the same name. The channel is the layer that knows where its own blocks end,
+  so it passes the human's words down explicitly; the chat platform MUST NOT
+  recognise the block format itself. Where the person wrote nothing at all (a
+  photo or a file on its own), the attachment filenames name the conversation —
+  the one part of such a message a human recognises in a list; where there is
+  nothing nameable at all, the conversation keeps its placeholder title rather
+  than being named after boilerplate.
 - **FR-049**: Conversations MUST follow a two-stage, retention-managed
   lifecycle, both windows configurable under Settings → Data: the retention
   worker auto-archives a conversation with no new message for the auto-archive
@@ -2234,15 +2248,17 @@ decision it rests on is recorded in
 
 - **FR-079**: A channel MUST carry the framework's `scope`
   ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
-  two independent `AND`-ed axes (spec vault-sync). Its **agent axis** is read as
-  **the agents this channel may drive**. Every other kind's scope names the
-  agents a resource is *delivered to*; a channel is consumed by no agent — it is
-  an inbound surface — so that axis is inverted rather than borrowed, and the
-  spec says so explicitly because a reader who assumes the usual reading gets it
-  backwards. Its **machine axis** is read the usual way — where this resource is
-  active — which for an inbound surface means which machine answers the bot.
+  one allow-list of agents, read as **the agents this channel may drive**. Every
+  other kind's scope names the agents a resource is *delivered to*; a channel is
+  consumed by no agent — it is an inbound surface — so the list is inverted
+  rather than borrowed, and the spec says so explicitly because a reader who
+  assumes the usual reading gets it backwards. That inverted reading is the
+  whole of what a channel's scope says: there is no second thing in it, and in
+  particular nothing about where the channel runs, because a channel does not
+  travel to a machine that would have to be told not to run it (see "Where a
+  channel runs").
 
-  - An unrestricted agent axis MUST mean every registered agent. That is the
+  - An unrestricted scope MUST mean every registered agent. That is the
     pre-scope behaviour and what every existing channel carries, so no channel
     needs a data migration.
   - `agents: [<agent>, …]` MUST narrow `/agent` at all three of its surfaces:
@@ -2250,11 +2266,11 @@ decision it rests on is recorded in
     (typed or tapped). They MUST read one narrowed set — a card that offers an
     agent the next check rejects is the specific failure this requires.
   - **The invariant:** a channel's `default_agent` MUST be an agent the channel
-    may drive — inside its agent axis whenever that axis is non-empty. It MUST
+    may drive — inside its scope whenever that scope is non-empty. It MUST
     be enforced on BOTH write paths, so the inconsistent state cannot be stored
     at all: an edit to the configuration is rejected when it names a
-    `default_agent` outside the current agent axis, and an edit to the scope is
-    rejected when the proposed non-empty agent axis excludes the current
+    `default_agent` outside the current scope, and an edit to the scope is
+    rejected when the proposed non-empty scope excludes the current
     `default_agent`. A scope edit MUST NOT be accepted and then leave the
     channel unable to run — narrowing a reach silently taking a live bot offline
     is the specific failure this requires. Each rejection MUST name both the
@@ -2263,22 +2279,14 @@ decision it rests on is recorded in
   - `agents: []` (dormant) MUST mean the channel drives nothing, and MUST fail
     early rather than per-turn: the runtime does not start its adapter, so no
     message is ever accepted only to be refused. The management surface reports
-    it as not running. Widening the axis is how the owner brings it back.
+    it as not running. Widening the scope is how the owner brings it back.
   - `agents: []` MUST be accepted on both write paths. It is the vault-wide
     meaning of dormant — this channel is off — and off MUST NOT also mean
     frozen: a channel the owner deliberately switched off MUST remain editable,
     so a wrong bot token or tunnel token can still be corrected without
     reactivating it first.
-  - The **machine axis** MUST gate the runtime and nothing else: a channel
-    whose machine axis excludes this machine MUST be registered, visible and
-    editable here, and its adapter MUST NOT start. That is what stops two
-    machines of one converged vault from both answering the same bot identity.
-    Neither write path may read it — rejecting an edit because the channel
-    belongs to another machine would leave a converged vault holding a channel
-    nobody can correct from where they are sitting — and neither may `/agent`,
-    which only ever runs on a machine the gate already admitted.
   - A thread's sticky `/agent` choice MUST be dropped in favour of the channel
-    default once the agent axis no longer admits it, so narrowing a scope takes
+    default once the scope no longer admits it, so narrowing a scope takes
     effect on the next conversation rather than waiting on whoever set the
     preference.
 

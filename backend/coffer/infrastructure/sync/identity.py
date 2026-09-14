@@ -4,8 +4,10 @@ Two things, and they are not the same kind of thing at all:
 
 * ``machine_id`` is **derived from the host** by
   :mod:`coffer.infrastructure.sync.machine_id`. It keys this machine's
-  descriptor, every ``scope.machines`` entry and the registry row, so it must
-  survive reinstalling Coffer. ``daemon-config.json`` only **caches** it — a
+  descriptor and its registry row — nothing else references a machine — and it
+  must survive reinstalling Coffer, because an id that changed would make a
+  returning machine look like a brand-new one to the remote.
+  ``daemon-config.json`` only **caches** it — a
   lost cache recomputes to the same value, because the host is what produces
   it. Deriving it means reading ``ioreg`` on macOS, which is cheap but not free,
   and the daemon asks for it on every boot.

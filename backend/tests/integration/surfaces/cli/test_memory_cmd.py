@@ -66,7 +66,6 @@ def memory_cli_daemon(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_PORT_RANGE_END", "59909")
     monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_INDEX_ROOT", str(tmp_path / "index"))
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
 
     app = create_app()

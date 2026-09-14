@@ -1,11 +1,10 @@
 // frontend/src/kinds/knowledge/KnowledgeSearchPanel.tsx
 //
-// Ranked (or literal-fallback) search over the collection in view (spec
-// knowledge FR-024, web surface FR-060/FR-061). The filter box above the tree
-// is a client-side name match; this is the other thing — a meaning-based
-// query answered by the backend, which always says HOW it answered
-// (`mode`) so a degraded literal answer can never be mistaken for a ranked
-// one (FR-082). An empty result set gets its own quiet message, not an error.
+// Literal search over the collection in view (spec knowledge FR-024, web
+// surface FR-060). The filter box above the tree is a client-side name match;
+// this is the other thing — a backend pass over the files themselves, which
+// answers with the files a word or phrase appears in and the lines that
+// matched. An empty result set gets its own quiet message, not an error.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Search } from "lucide-react";
@@ -14,17 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { SearchOut } from "./types";
 import { useKnowledgeSearch } from "./useKnowledge";
-
-/**
- * `SearchService.search` (backend) reports its fallback reason as one of a
- * few fixed English phrases, not an error code — map the ones known today to
- * localized copy and fall through to the raw phrase for anything newer.
- */
-const REASON_I18N_KEY: Record<string, string> = {
-  "no internal connection": "knowledge.search.reasonText.noConnection",
-  "embedding unavailable": "knowledge.search.reasonText.embeddingUnavailable",
-  "nothing ranked above threshold": "knowledge.search.reasonText.noneAboveThreshold",
-};
 
 interface Props {
   /** Restricts the query to this collection. */
@@ -44,10 +32,6 @@ export function KnowledgeSearchPanel({ collection, onSelectPath }: Props) {
     if (!q) return;
     search.mutate({ query: q, collection });
   };
-
-  const reasonText = result?.reason
-    ? (REASON_I18N_KEY[result.reason] ? t(REASON_I18N_KEY[result.reason]) : result.reason)
-    : "";
 
   return (
     <div className="space-y-2 rounded-md border p-2">
@@ -79,12 +63,6 @@ export function KnowledgeSearchPanel({ collection, onSelectPath }: Props) {
         <p className="px-1 text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : result ? (
         <div className="space-y-2">
-          {result.mode === "literal" ? (
-            <p className="rounded-sm bg-muted px-2 py-1 text-xs text-muted-foreground">
-              {t("knowledge.search.literalNotice", { reason: reasonText })}
-            </p>
-          ) : null}
-
           {result.results.length === 0 ? (
             <p className="px-1 text-sm text-muted-foreground">{t("knowledge.search.noResults")}</p>
           ) : (

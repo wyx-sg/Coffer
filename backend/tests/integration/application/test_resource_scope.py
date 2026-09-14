@@ -124,7 +124,7 @@ async def test_update_scope_records_audit_event(tmp_path):
     assert entries[0].resource_kind == "scoped_kind"
     assert entries[0].resource_name == "t"
     assert entries[0].actor == "api"
-    assert entries[0].details["scope"] == {"agents": ["agent-a"], "machines": None}
+    assert entries[0].details["scope"] == {"agents": ["agent-a"]}
     await engine.dispose()
 
 
@@ -168,7 +168,7 @@ async def test_kind_pre_validation_rejects_before_any_write(tmp_path):
             ResourceRef("picky_kind", "t"), Scope(agents=["agent-b"]), actor="cli"
         )
     # The hook saw the resource as it still stands, and nothing was written.
-    assert seen == [("t", Scope(agents=["agent-b"], machines=None))]
+    assert seen == [("t", Scope(agents=["agent-b"]))]
     assert (await svc.get(ResourceRef("picky_kind", "t"))).scope is None
     assert await audit.query(event_type=AuditEventType.RESOURCE_SCOPE_UPDATED.value) == []
 
@@ -176,7 +176,7 @@ async def test_kind_pre_validation_rejects_before_any_write(tmp_path):
     updated = await svc.update_scope(
         ResourceRef("picky_kind", "t"), Scope(agents=["agent-a"]), actor="cli"
     )
-    assert updated.scope == Scope(agents=["agent-a"], machines=None)
+    assert updated.scope == Scope(agents=["agent-a"])
     await engine.dispose()
 
 
@@ -218,7 +218,7 @@ async def test_a_kind_with_no_pre_validation_hook_is_unaffected(tmp_path):
     updated = await svc.update_scope(
         ResourceRef("scoped_kind", "t"), Scope(agents=["anything"]), actor="cli"
     )
-    assert updated.scope == Scope(agents=["anything"], machines=None)
+    assert updated.scope == Scope(agents=["anything"])
     await engine.dispose()
 
 

@@ -34,4 +34,4 @@ coffer channel notify mybot "部署完成"        # 向你已配对的账号推�
 
 应用里的 **Channels** 页做同样的事而无需终端:添加一个渠道(一步内存密钥并注册)、配对、开关、并从渠道详情页发送一条测试消息。
 
-[导出与导入 →](/zh/guide/sync)
+[同步 →](/zh/guide/sync)
