@@ -5,6 +5,13 @@ platform's service handles), the adapter factory, the callback-listener
 controller, the SeaTalk WebSocket controller, and the reconciling runtime. Runs
 AFTER ``wire_chat`` and ``wire_knowledge_kind``, whose results it takes as
 parameters.
+
+It also resolves this machine's identity, because a channel names the one
+machine whose daemon runs its adapter (spec channels ``## Where a channel
+runs``) and both the runtime's gate and the kind's validators need the same
+answer. It is read here rather than taken from the sync module because sync is
+wired LATER — and because the binding is not a sync feature: it decides which
+daemon starts an adapter whether or not this vault converges with anything.
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
+from coffer.application.channel.sync_state import ChannelPeerSyncState
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import ResourceRef
@@ -36,6 +44,7 @@ from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocket
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.tunnel_spawn import TunnelController
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
@@ -76,6 +85,14 @@ def wire_channel_kind(
     chat: ChatWiring,
     knowledge: KnowledgeWiring,
 ) -> ChannelRuntime:
+    # Derived from the host, cached in ``daemon-config.json``, and stable for
+    # the life of the daemon — so it is resolved once here rather than on every
+    # reconcile tick and every status read.
+    machine_id = resolve_identity().machine_id
+
+    async def local_machine_id() -> str:
+        return machine_id
+
     peers = ChannelPeerRepo(sm)
     threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
@@ -129,6 +146,7 @@ def wire_channel_kind(
         # URL and token are in ``_daemon_info``.
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
+        machine_id=local_machine_id,
     )
 
     async def on_delete(ref: ResourceRef) -> None:
@@ -149,6 +167,10 @@ def wire_channel_kind(
         # ...and against the agents this channel may drive (ADR per-agent-resource-scope), so
         # an edit cannot bind it to an agent its scope excludes.
         scope_of=channel_scope,
+        # ...except for a channel bound to another machine, whose agents are
+        # that machine's business. Without this a converged channel would be
+        # refused at this registry's door for a fault on nobody's machine.
+        local_machine_id=machine_id,
     )
 
     service = ChannelService(
@@ -163,12 +185,18 @@ def wire_channel_kind(
         http_client=httpx.AsyncClient(),
     )
     set_channel_service(service)
-    # Pairing identity registers no synced state area. It used to: the argument
-    # was that pairings are platform-level, so rebinding a channel to another
-    # machine would need no re-pairing. A channel does not reach another machine
-    # any more (spec vault-sync ``## What does not sync``), so there is no
-    # rebinding for the pairings to save — every pulled document would name a
-    # channel the other machine does not have and be skipped forever, and the
-    # only thing publishing them still achieved was putting chat ids, display
-    # names and sender ids in the remote for nothing.
+    # Pairing identity is a synced state area again. It was removed when
+    # channels stopped travelling — a published pairing would have named a
+    # channel the other machine did not have — and that premise is gone: a
+    # channel travels, so rebinding it to another machine is a thing that
+    # happens, and pairings are what make a rebind cost nothing. They carry
+    # platform identity only; the conversation pointer stays on this machine.
+    #
+    # Registered on ``app.state`` the way every other area is, because sync is
+    # wired after every kind and reads what the kinds left there.
+    providers = getattr(app.state, "sync_state_providers", None)
+    if providers is None:
+        providers = []
+        app.state.sync_state_providers = providers
+    providers.append(ChannelPeerSyncState(resource_svc, peers))
     return runtime

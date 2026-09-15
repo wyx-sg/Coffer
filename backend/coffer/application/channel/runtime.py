@@ -5,6 +5,13 @@ enabled channel resources against the running adapters and converge.
 Enable, disable, config edits, and delete all take effect within a tick;
 REST/CLI/UI never start or stop adapters directly, so reported status is
 always what is actually running.
+
+A channel travels between machines now, so "the enabled channel resources" is
+no longer the same set on every machine: the reconciler answers to the
+channel's **machine binding** as well, and a channel bound elsewhere is simply
+not in this machine's wanted set. That is also why rebinding needs no restart —
+the binding is config, a config change is a tick, and both ends of a rebind are
+reached by the same loop that already handles enable and disable.
 """
 
 from __future__ import annotations
@@ -37,9 +44,8 @@ from coffer.application.channel.supervision_ports import (
     TunnelControllerPort,
     WebSocketControllerPort,
 )
-from coffer.domain.channel.config import DEFAULT_AGENT, parse_channel_config
-from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope, is_active
+from coffer.application.channel.wanted import Gate
+from coffer.domain.channel.config import parse_channel_config
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -70,6 +76,7 @@ class ChannelRuntime:
         websockets: WebSocketControllerPort | None = None,
         materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
+        machine_id: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         self._resources = resources
         self._factory = adapter_factory
@@ -80,13 +87,11 @@ class ChannelRuntime:
         self._websockets = websockets
         self._materialize = materialize
         self._interval = interval_seconds
+        # Which channels are this machine's to run — enabled, bound here, and
+        # able to drive their own default agent. Three gates, one predicate,
+        # kept out of the lifecycle loop (see ``wanted.py``).
+        self._gate = Gate(machine_id_provider=machine_id)
         self._running: dict[str, _Running] = {}
-        # The scope of each channel the last pass found live, keyed by name
-        # (ADR per-agent-resource-scope). Filled by ``_enabled_channels`` from the same
-        # rows it reads for ``Desired``, and stamped onto the binding at start —
-        # a scope edit therefore reaches `/agent` within one tick rather than
-        # waiting on a daemon restart.
-        self._scopes: dict[str, Scope | None] = {}
         self._failed_at: dict[str, float] = {}
         self._listener_latch: Latch[dict[str, str]] = Latch()
         self._tunnel_latch: Latch[dict[str, str]] = Latch()
@@ -202,46 +207,19 @@ class ChannelRuntime:
             # The reconciler must outlive any single bad tick.
             _logger.exception("channel.runtime.tick_failed")
 
+    async def local_machine_id(self) -> str | None:
+        """This machine's id, or ``None`` when no provider is wired.
+
+        Public because the management surface answers "is this channel bound
+        here?" with the same value the gate uses — two answers to that question,
+        derived two ways, is how a surface comes to report a channel as running
+        that nothing ever started.
+        """
+        return await self._gate.machine_id()
+
     async def _enabled_channels(self) -> Desired:
-        # ``enabled`` means it runs here; scope is the second gate. A
-        # channel's scope names the agents it may DRIVE (ADR
-        # per-agent-resource-scope), so a channel whose own ``default_agent``
-        # is outside it can drive nothing and does not run. That is the loud,
-        # early failure: the adapter never starts, the management surface says
-        # the channel is not running, and no message is ever accepted only to
-        # be refused.
-        #
-        # Both write paths now hold ``default_agent`` inside a non-empty scope
-        # (the channel kind's ``on_update_config`` and ``validate_scope_for``),
-        # so the only case this gate can reach is the deliberate one: an empty
-        # allow-list, dormant, the owner switched the channel off. It stays as
-        # written rather than narrowing to that check, as defence-in-depth for
-        # a row that predates the scope-path validation and could still carry
-        # the inconsistent combination.
-        rows = await self._resources.list(kind="channel")
-        live: list[Resource] = []
-        for r in rows:
-            if not r.enabled:
-                continue
-            # Read straight off the stored config rather than parsing it: a row
-            # this cannot read is not one ``_start_adapter`` could start either.
-            default_agent = r.config.get("default_agent") or DEFAULT_AGENT
-            if not is_active(r.scope, str(default_agent)):
-                # The scope and the agent it refused are both in the record, so
-                # the reason a bot went quiet is readable without reconstructing
-                # the comparison by hand.
-                _logger.info(
-                    "channel.not_started",
-                    extra={
-                        "channel": r.name,
-                        "default_agent": default_agent,
-                        "scope": r.scope.to_json() if r.scope is not None else None,
-                    },
-                )
-                continue
-            live.append(r)
-        self._scopes = {r.name: r.scope for r in live}
-        return {r.name: (r.id, dict(r.config)) for r in live}
+        """The channels this machine should be running (see ``wanted``)."""
+        return await self._gate.wanted(self._resources)
 
     def _may_retry(self, name: str) -> bool:
         failed = self._failed_at.get(name)
@@ -290,7 +268,7 @@ class ChannelRuntime:
                 adapter=adapter,
                 require_mention=parsed.require_mention,
                 ignore_other_mentions=parsed.ignore_other_mentions,
-                agent_scope=self._scopes.get(name),
+                agent_scope=self._gate.scopes.get(name),
             )
         )
         self._running[name] = _Running(
@@ -329,7 +307,7 @@ class ChannelRuntime:
         binding, so a scope edit must rebind the channel the same way a config
         edit does — otherwise `/agent` would keep offering the old set until
         the daemon restarted."""
-        scope = self._scopes.get(name)
+        scope = self._gate.scopes.get(name)
         return json.dumps(
             {"config": config, "scope": scope.to_json() if scope is not None else None},
             sort_keys=True,

@@ -8,7 +8,7 @@
 // A blank secret field means "leave it as-is" — no credential write at all.
 import { describe, expect, test } from "vitest";
 
-import { planChannelEdit } from "./schema";
+import { planChannelEdit } from "./editChannel";
 
 describe("planChannelEdit", () => {
   test("telegram: rotating the token writes the same ref, agent change patches config", () => {

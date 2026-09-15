@@ -59,7 +59,8 @@ vi.mock("@/lib/hooks/useResourceMutations", () => {
 
 function renderPage() {
   // ScopeControl reads the agent registry to build its pick-list, so the page
-  // needs a query client.
+  // needs a query client; the organise button's Tooltip needs the provider the
+  // app shell normally hosts, and the page is rendered bare here.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>

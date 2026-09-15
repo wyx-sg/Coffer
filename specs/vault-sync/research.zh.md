@@ -111,7 +111,7 @@ migration 0049 删掉了四张 sync 表，并把 `scope` 从两条轴塌缩成�
 后者当初被撤掉只是因为给它做键的机器注册表要没了。
 
 > 机器轴回来了，又在同一天被再次撤除。这一次的理由不是机器不存在了：一项资源的
-> *触达范围 (reach)*——它的 `enabled` 开关与它的 `scope`——被确定为本机专属，于是
+> *生效范围 (reach)*——它的 `enabled` 开关与它的 `scope`——被确定为本机专属，于是
 > 「这东西在这里触达到哪里」由每台机器各自回答，机器轴也就再没有什么可表达的了。见
 > [Per-agent resource scope](../../docs/decisions/per-agent-resource-scope.zh.md)。
 

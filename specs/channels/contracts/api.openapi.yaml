@@ -584,6 +584,19 @@ components:
             platform actually permits. Empty is the healthy case.
           items:
             $ref: '#/components/schemas/ChannelDiagnosticOut'
+        runs_on:
+          type: string
+          nullable: true
+          description: >-
+            The machine_id of the one machine whose daemon runs this channel's
+            adapter. Null means unbound, which runs nowhere.
+        runs_here:
+          type: boolean
+          description: >-
+            Whether the bound machine is the one answering this request. It
+            separates the two facts `running: false` collapses — a channel that
+            failed to start here, and a channel that was never this machine's
+            to start.
 
     ChannelDiagnosticOut:
       type: object

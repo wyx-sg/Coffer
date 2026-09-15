@@ -91,6 +91,15 @@ class ChannelStatusOut(BaseModel):
     peer: ChannelPeerOut | None
     callback: CallbackInfoOut | None
     diagnostics: list[ChannelDiagnosticOut] = []
+    # The machine whose daemon runs this channel's adapter (spec channels
+    # ``## Where a channel runs``), and whether that machine is the one
+    # answering this request. Both travel, because ``running: false`` is two
+    # different facts — a channel that failed to start here, and a channel that
+    # was never this machine's to start — and a surface cannot tell them apart
+    # from a single boolean. ``runs_on`` is the raw machine id; the name beside
+    # it comes from `GET /sync/machines`, which is where the registry lives.
+    runs_on: str | None = None
+    runs_here: bool = False
 
 
 class NotifyIn(BaseModel):
@@ -151,6 +160,8 @@ async def channel_status(name: str) -> ChannelStatusOut:
         diagnostics=[
             ChannelDiagnosticOut(code=d.code, message=d.message) for d in status.diagnostics
         ],
+        runs_on=status.runs_on,
+        runs_here=status.runs_here,
     )
 
 

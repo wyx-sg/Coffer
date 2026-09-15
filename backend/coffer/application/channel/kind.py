@@ -98,12 +98,33 @@ def _validate_channel_scope(resource: Resource, scope: Scope | None) -> None:
         )
 
 
+def _bound_elsewhere(config: dict[str, Any], local_machine_id: str | None) -> bool:
+    """Whether this channel names a machine that is not this one.
+
+    Such a channel is not this machine's to judge. Its adapter starts on the
+    machine it names, its agents are that machine's agents, and the document
+    reached this registry only because the vault converges — refusing it here
+    would hold a perfectly good document out of the vault for failing a
+    precondition it was never meant to satisfy.
+
+    Unbound (``None``) is NOT elsewhere: an unbound channel is one nobody has
+    placed yet, and it is validated like any other so that binding it here is a
+    single click rather than a click and a rejection.
+    """
+    if local_machine_id is None:
+        return False
+    runs_on = config.get("runs_on")
+    return isinstance(runs_on, str) and bool(runs_on) and runs_on != local_machine_id
+
+
 def _make_validator(
     agent_keys: Callable[[], list[str]] | None,
+    local_machine_id: str | None = None,
 ) -> Callable[[dict[str, Any]], None]:
     def _validate_channel_config(config: dict[str, Any]) -> None:
-        """The default agent must name a registered agent."""
-        if agent_keys is not None:
+        """The default agent must name an agent registered on the machine that
+        runs this channel — which is this one, or none of our business."""
+        if agent_keys is not None and not _bound_elsewhere(config, local_machine_id):
             _validate_default_agent(config, agent_keys)
 
     return _validate_channel_config
@@ -112,6 +133,7 @@ def _make_validator(
 def _make_update_validator(
     agent_keys: Callable[[], list[str]] | None,
     scope_of: Callable[[ResourceRef], Awaitable[Scope | None]] | None,
+    local_machine_id: str | None = None,
 ) -> Callable[[ResourceRef, dict[str, Any], dict[str, Any]], Awaitable[None]] | None:
     """Update-time validation hook (``on_update_config``).
 
@@ -135,6 +157,11 @@ def _make_update_validator(
     async def _validate_update(
         ref: ResourceRef, _before: dict[str, Any], after: dict[str, Any]
     ) -> None:
+        if _bound_elsewhere(after, local_machine_id):
+            # Including the edit that BINDS it elsewhere: handing a channel to
+            # another machine must not be blocked by this machine's opinion of
+            # an agent the other machine is the one to have.
+            return
         scope = await scope_of(ref) if scope_of is not None else None
         try:
             _validate_default_agent(after, agent_keys, scope)
@@ -149,6 +176,7 @@ def make_channel_kind(
     *,
     agent_keys: Callable[[], list[str]] | None = None,
     scope_of: Callable[[ResourceRef], Awaitable[Scope | None]] | None = None,
+    local_machine_id: str | None = None,
 ) -> Kind:
     """Construct the `channel` Kind.
 
@@ -171,6 +199,14 @@ def make_channel_kind(
     (``validate_scope_for``), and needs nothing injected at all, so the two
     paths cannot disagree: a channel's ``default_agent`` is inside its scope
     whichever of the two the user edits.
+
+    ``local_machine_id`` is this machine's id (spec vault-sync "Identity is
+    derived"). It buys exactly one thing: the agent checks above are skipped for
+    a channel bound to a DIFFERENT machine. Those checks ask "will this channel
+    be able to drive anything when it starts", and a channel this machine never
+    starts has no answer to give — without the skip, a converged channel whose
+    owner machine has an agent this one does not would be refused at the
+    registry door every round, for a fault on nobody's machine.
     """
     return Kind(
         name="channel",
@@ -178,8 +214,8 @@ def make_channel_kind(
         config_schema=ChannelConfigModel,
         on_delete=on_delete,
         credential_ref_extractor=_channel_credential_ref_extractor,
-        validate_config=_make_validator(agent_keys),
-        on_update_config=_make_update_validator(agent_keys, scope_of),
+        validate_config=_make_validator(agent_keys, local_machine_id),
+        on_update_config=_make_update_validator(agent_keys, scope_of, local_machine_id),
         # The scope path's own pre-validation, the mirror of the check
         # ``on_update_config`` runs on the config path. Needs nothing injected —
         # it judges a proposed scope against the channel's own stored

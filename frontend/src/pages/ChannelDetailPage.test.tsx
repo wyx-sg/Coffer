@@ -3,7 +3,13 @@
 // The channel operating surface (spec channels, User Stories 2 + 8). Data hooks
 // and the generic resource mutations are mocked so the test asserts the
 // page's own rendering: status (peer + callback), pairing-code generation,
-// and the header reach control's wiring.
+// the machine card (which machine runs the adapter, and rebinding it), and
+// the header reach control's wiring.
+//
+// The machine card and the reach control are deliberately tested apart: they
+// sit a header away from each other and answer different questions — which
+// MACHINE runs the adapter, and which AGENTS the channel may drive — and a
+// test that conflated them would be the first place the UI does too.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -19,8 +25,14 @@ vi.mock("@/lib/hooks/useChannels", () => ({
   useChannelStatus: vi.fn(),
   useIssuePairingCode: vi.fn(),
   useUpdateChannel: vi.fn(),
+  useRebindChannel: vi.fn(),
   useNotifyChannel: vi.fn(),
 }));
+// The machine card joins the binding against the registry and this machine's
+// id. Both are stubbed: the page renders without a QueryClientProvider, and
+// the four binding states are set up directly rather than through a daemon.
+vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
+vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
 vi.mock("@/lib/hooks/useAgentProviders", () => ({
   useAgentProviders: vi.fn(() => ({ data: [] })),
 }));
@@ -42,8 +54,15 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
 }));
 
 const { useResource } = await import("@/lib/hooks/useResources");
-const { useChannelStatus, useIssuePairingCode, useUpdateChannel, useNotifyChannel } =
-  await import("@/lib/hooks/useChannels");
+const {
+  useChannelStatus,
+  useIssuePairingCode,
+  useUpdateChannel,
+  useRebindChannel,
+  useNotifyChannel,
+} = await import("@/lib/hooks/useChannels");
+const { useMachines } = await import("@/lib/hooks/useMachines");
+const { useSyncStatus } = await import("@/lib/hooks/useSync");
 const { useEnableResource, useDisableResource, useDeleteResource } =
   await import("@/lib/hooks/useResourceMutations");
 
@@ -59,12 +78,31 @@ function mutationStub(): MutationStub {
   return { mutate: vi.fn(), isPending: false };
 }
 
-function stubResource(enabled = true) {
+/** This machine, and the other machine in the registry. */
+const HERE = "machine-here";
+const THERE = "machine-there";
+
+const REGISTRY = [
+  { machine_id: HERE, name: "Laptop", is_self: true },
+  { machine_id: THERE, name: "Desktop", is_self: false },
+];
+
+function stubMachines(machines = REGISTRY) {
+  vi.mocked(useMachines).mockReturnValue({ data: { machines } } as unknown as ReturnType<
+    typeof useMachines
+  >);
+}
+
+function stubResource(enabled = true, runsOn: string | null = HERE) {
   useResourceMock.mockReturnValue({
     data: {
       kind: "channel",
       name: "st",
-      config: { channel_type: "seatalk", default_agent: "builtin" },
+      config: {
+        channel_type: "seatalk",
+        default_agent: "builtin",
+        ...(runsOn === null ? {} : { runs_on: runsOn }),
+      },
       enabled,
     },
     isPending: false,
@@ -82,6 +120,8 @@ function stubStatus(status: Partial<ChannelStatus> = {}) {
       pending_pairing: false,
       peer: null,
       callback: null,
+      runs_on: HERE,
+      runs_here: true,
       ...status,
     },
   } as unknown as ReturnType<typeof useChannelStatus>);
@@ -111,6 +151,7 @@ let enable: MutationStub;
 let disable: MutationStub;
 let del: MutationStub;
 let notify: MutationStub;
+let rebind: MutationStub;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -118,6 +159,14 @@ beforeEach(() => {
   disable = mutationStub();
   del = mutationStub();
   notify = mutationStub();
+  rebind = mutationStub();
+  vi.mocked(useRebindChannel).mockReturnValue(
+    rebind as unknown as ReturnType<typeof useRebindChannel>,
+  );
+  vi.mocked(useSyncStatus).mockReturnValue({
+    data: { machine_id: HERE },
+  } as unknown as ReturnType<typeof useSyncStatus>);
+  stubMachines();
   vi.mocked(useEnableResource).mockReturnValue(
     enable as unknown as ReturnType<typeof useEnableResource>,
   );
@@ -294,6 +343,93 @@ describe("ChannelDetailPage", () => {
     expect(screen.getAllByText(/not found/i).length).toBeGreaterThan(0);
     expect(screen.queryByText("raw server text")).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /back to channels/i }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("ChannelDetailPage — the machine that runs the channel", () => {
+  /** The card's picker, by its accessible name. */
+  const picker = () => screen.getByRole("combobox", { name: /machine running st/i });
+
+  test("says plainly when this machine is the one running the adapter", () => {
+    stubResource();
+    stubStatus({ runs_on: HERE, runs_here: true });
+    stubPairing();
+    renderPage();
+
+    expect(screen.getByText(/this machine runs this channel's adapter/i)).toBeInTheDocument();
+    expect(picker()).toHaveTextContent(/Laptop · this machine/i);
+  });
+
+  test("names the other machine, so a stopped adapter here reads as normal", () => {
+    stubResource(true, THERE);
+    stubStatus({ running: false, runs_on: THERE, runs_here: false });
+    stubPairing();
+    renderPage();
+
+    expect(screen.getByText(/Desktop runs this channel's adapter/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("reports a binding no machine claims as a fault", () => {
+    stubResource(true, "machine-gone");
+    stubStatus({ running: false, runs_on: "machine-gone", runs_here: false });
+    stubPairing();
+    renderPage();
+
+    // It runs NOWHERE — the one binding state that nothing but a rebind fixes.
+    expect(screen.getByRole("alert")).toHaveTextContent(/machine-gone/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/runs nowhere/i);
+  });
+
+  test("an unbound channel is reported here and by the daemon's own diagnostic", () => {
+    stubResource(true, null);
+    stubStatus({
+      running: false,
+      runs_on: null,
+      runs_here: false,
+      diagnostics: [
+        { code: "channel_not_bound", message: "This channel is not bound to a machine." },
+      ],
+    });
+    stubPairing();
+    renderPage();
+
+    // The status card renders the daemon's diagnostic verbatim …
+    expect(screen.getByText(/This channel is not bound to a machine\./)).toBeInTheDocument();
+    // … and the machine card says the same thing next to the control that
+    // fixes it, which is the only place the user can act on it.
+    expect(screen.getByText(/no daemon starts it and the bot never answers/i)).toBeInTheDocument();
+    expect(picker()).toHaveTextContent(/not bound/i);
+  });
+
+  test("rebinding writes the binding into the channel's own config", () => {
+    stubResource();
+    stubStatus({ runs_on: HERE, runs_here: true });
+    stubPairing();
+    renderPage();
+
+    // jsdom has no PointerEvent; Radix opens the listbox from the keyboard.
+    fireEvent.keyDown(picker(), { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "Desktop" }));
+
+    expect(rebind.mutate).toHaveBeenCalledWith({
+      config: { channel_type: "seatalk", default_agent: "builtin", runs_on: HERE },
+      runsOn: THERE,
+      machine: "Desktop",
+    });
+  });
+
+  test("states the handover timing and that this is not reach", () => {
+    // Both are things the user cannot see and would otherwise meet as a bug:
+    // a rebind that is not instant on the far side, and a reach control one
+    // header away that answers an entirely different question.
+    stubResource();
+    stubStatus();
+    stubPairing();
+    renderPage();
+
+    expect(screen.getByText(/needs no restart/i)).toBeInTheDocument();
+    expect(screen.getByText(/which agents this channel may drive/i)).toBeInTheDocument();
   });
 });
 

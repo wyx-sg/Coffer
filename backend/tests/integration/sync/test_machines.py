@@ -6,19 +6,18 @@ that the thing every machine reads cannot conflict. And the boundary the
 registry implies: what belongs to a machine rather than to the vault, and so
 must not cross even though the machines share a remote.
 
-Two things stay put. A resource's **reach** — whether it is live here, and for
+One thing stays put. A resource's **reach** — whether it is live here, and for
 which agents — is set on the machine it applies to, and each machine sets its
-own. A **channel** is an inbound surface bound to one host: its webhook URL,
-its tunnel, its port mean nothing anywhere else. Both are asserted here by
-running two real vaults against one real bare repository, because both are
-claims about what a converge round leaves behind, and a serializer test could
-only assert what we believe the round does with it.
+own. It is asserted here by running two real vaults against one real bare
+repository, because it is a claim about what a converge round leaves behind,
+and a serializer test could only assert what we believe the round does with it.
 
-The channel rule's *inbound* half — that a diff deleting a channel document
-must not delete a locally-registered channel — cannot be staged end to end,
-because on this build no machine's export leaves a channel document in the tree
-for a later merge to remove. It is asserted at the applier seam instead, in
-``test_bundle_roundtrip.py``.
+A **channel** used to stay put with it, and no longer does. It travels like any
+other resource and carries, inside its own config, the one machine whose daemon
+runs its adapter — so what this file asserts about a channel is that the
+document crosses and the BINDING crosses with it unaltered. What each machine's
+runtime then does with that binding is asserted where the runtime is, in
+``tests/integration/channel/test_runtime_binding.py``.
 
 The machine ids here are injected, never derived: a test that read this host's
 ``IOPlatformUUID`` would be asserting something about the developer's laptop.
@@ -30,11 +29,22 @@ import pathlib
 
 import pytest
 
+from coffer.application.channel.wanted import Gate
 from coffer.application.sync.machines import CannotRetireSelfError
 from coffer.domain.scope import Scope, is_active
 from coffer.domain.sync.convergence import JoinKind
 from coffer.domain.sync.machine import ID_LENGTH, derive_machine_id
 from tests.integration.sync.harness import MACHINE_A, MACHINE_B, settle, two_machines
+
+
+def _says(machine_id: str):
+    """The Gate's machine-id provider, pinned to one machine."""
+
+    async def _provider() -> str:
+        return machine_id
+
+    return _provider
+
 
 pytestmark = pytest.mark.timeout(120)
 
@@ -207,32 +217,82 @@ async def test_a_newly_arrived_resource_takes_this_machines_default_reach(pair) 
 # --- channels ---------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="a channel does not travel")
-async def test_a_channel_does_not_travel(pair) -> None:
-    """A channel is a webhook URL, a tunnel and a port: one host's inbound
-    surface. Travelling, it would at best be inert on the other machine and at
-    worst come up and answer, so two machines would be taking turns in one
-    conversation, each unaware of the other."""
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a channel travels and runs only on the machine it names"
+)
+async def test_a_channel_travels_carrying_the_machine_that_runs_it(pair) -> None:
+    """The document crosses; the adapter does not.
+
+    What makes that safe is one field. A channel names the machine whose daemon
+    starts its adapter, so the copy that lands on the other machine is a
+    complete, editable channel that machine simply does not run — and the test
+    that matters at this layer is that the name SURVIVES the trip. A binding
+    quietly rewritten or dropped in transit would leave the arriving channel
+    looking like everyone's, which is the rival-consumer failure the whole
+    design exists to prevent.
+    """
     a, b = pair
-    await a.register("channel", "seatalk-a", {"value": "port-8787"})
-    await b.register("channel", "telegram-b", {"value": "port-9090"})
-    await a.register("mcp_server", "travels", {"value": "t"})
+    await a.register("channel", "seatalk-a", {"value": "port-8787", "runs_on": a.machine_id})
+    await b.register("channel", "telegram-b", {"value": "port-9090", "runs_on": b.machine_id})
     await settle(a, b)
 
-    # A's channel did not arrive on B, and B's did not arrive on A.
-    assert await b.resource_names("channel") == ["telegram-b"]
-    assert await a.resource_names("channel") == ["seatalk-a"]
-    # Each machine still holds the one it configured for itself — the round
-    # neither imported a foreign channel nor disturbed the local one.
-    assert await a.find("channel", "seatalk-a") is not None
-    assert await b.find("channel", "telegram-b") is not None
-    # A resource of a kind that *does* travel crossed in the same rounds, so
-    # this is not a vault that simply failed to converge.
-    assert "travels" in await b.resource_names("mcp_server")
+    # Both machines hold both channels now.
+    assert await a.resource_names("channel") == ["seatalk-a", "telegram-b"]
+    assert await b.resource_names("channel") == ["seatalk-a", "telegram-b"]
 
-    # Nothing channel-shaped was ever written to the remote either.
+    # And each copy still names the machine that runs it — A's channel on B
+    # says A, which is what stops B's runtime from starting an adapter for it.
+    arrived = await b.find("channel", "seatalk-a")
+    assert arrived.config["runs_on"] == a.machine_id
+    assert (await a.find("channel", "telegram-b")).config["runs_on"] == b.machine_id
+
+    # The reach of the arriving copy is this machine's own, as for every kind.
+    assert await b.reach("channel", "seatalk-a") == (True, None)
+
+    # The remote carries the documents, which it never used to.
     remote = await a.remote_paths()
-    assert not [p for p in remote if p.startswith("resources/channel/")]
+    assert "resources/channel/seatalk-a.yaml" in remote
+    assert "resources/channel/telegram-b.yaml" in remote
+
+    # And the production gate, run against the rows that actually came off the
+    # remote, answers the way the design needs it to. Asserting the FIELD
+    # survived and asserting the GATE honours the field are two different
+    # claims, and each has its own test elsewhere; this joins them on a row
+    # that has been through YAML and a three-way merge, which is the only
+    # place a binding could arrive intact but unreadable.
+    on_b = await Gate(machine_id_provider=_says(b.machine_id)).wanted(b.resources)
+    assert set(on_b) == {"telegram-b"}, "B must not start an adapter for A's channel"
+    on_a = await Gate(machine_id_provider=_says(a.machine_id)).wanted(a.resources)
+    assert set(on_a) == {"seatalk-a"}, "A must still run its own"
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a synced channel carries a credential reference, never a secret",
+)
+async def test_a_travelling_channel_publishes_refs_and_not_secrets(pair) -> None:
+    """A channel's config was always refs-only. Travelling is what makes that
+    load-bearing rather than merely tidy: the document is now committed to a
+    repository the user pushes somewhere."""
+    a, b = pair
+    a.set_credential("channel/tg/bot-token", "placeholder-not-a-real-bot-token")
+    await a.register(
+        "channel",
+        "tg",
+        {"value": "telegram", "credential_ref": "channel/tg/bot-token"},
+    )
+    await settle(a, b)
+
+    document = await a.remote_text("resources/channel/tg.yaml")
+    assert document is not None
+    assert "channel/tg/bot-token" in document
+    assert "placeholder-not-a-real-bot-token" not in document
+
+    # And nowhere else in the tree either — a credential blob, if this remote
+    # carries credentials at all, is Fernet ciphertext.
+    for path in await a.remote_paths():
+        text = await a.remote_text(path)
+        assert text is None or "placeholder-not-a-real-bot-token" not in text
 
 
 # --- identity ---------------------------------------------------------------

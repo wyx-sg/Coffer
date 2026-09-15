@@ -73,7 +73,12 @@ describe("SyncMachinesTab", () => {
     // stays unambiguous because the derived id is shown alongside the name.
     seed([
       machine({ name: "laptop" }),
-      machine({ machine_id: OTHER, name: "laptop", is_self: false, last_converged_on: "2026-09-11" }),
+      machine({
+        machine_id: OTHER,
+        name: "laptop",
+        is_self: false,
+        last_converged_on: "2026-09-11",
+      }),
     ]);
     render(<SyncMachinesTab />);
 
@@ -128,11 +133,14 @@ describe("SyncMachinesTab", () => {
     expect(rowFor(OTHER).getByText("—")).toBeInTheDocument();
   });
 
-  test("retiring is offered for other machines only, and touches nothing else", () => {
+  test("retiring is offered for other machines only, and says what it leaves", () => {
     // Retiring used to rewrite every scope that named the machine, and the
     // dialog had to warn about it. Reach is set per machine now and no scope
-    // can name one, so the dialog's job is the opposite: to say that removing
-    // the descriptor is the whole of the change.
+    // can name one, so removing the descriptor really is the whole of the
+    // WRITE — but it is no longer the whole of the consequence: a channel
+    // bound to this machine keeps naming it and runs nowhere afterwards, and
+    // the dialog is the only place the user is standing when that becomes
+    // true.
     seed([machine(), machine({ machine_id: OTHER, name: "desktop", is_self: false })]);
     render(<SyncMachinesTab />);
 
@@ -140,7 +148,8 @@ describe("SyncMachinesTab", () => {
     fireEvent.click(rowFor(OTHER).getByRole("button", { name: /retire/i }));
 
     const dialog = within(screen.getByRole("dialog"));
-    expect(dialog.getByText(/nothing else in the vault changes/i)).toBeInTheDocument();
+    expect(dialog.getByText(/nothing else is rewritten/i)).toBeInTheDocument();
+    expect(dialog.getByText(/runs nowhere until you bind it to another/i)).toBeInTheDocument();
     expect(dialog.queryByText(/scope/i)).not.toBeInTheDocument();
     fireEvent.click(dialog.getByRole("button", { name: /retire/i }));
     expect(retireMutate).toHaveBeenCalledWith(OTHER, expect.anything());

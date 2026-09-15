@@ -184,6 +184,18 @@ class ChannelPeerRepo:
             )
             await session.commit()
 
+    async def delete_by_chat(self, resource_id: int, chat_id: str) -> None:
+        """Un-pair one chat. A no-op when it is already gone — two machines
+        un-pairing the same chat is agreement, not a failure."""
+        async with self._sm() as session:
+            await session.execute(
+                delete(ChannelPeerModel).where(
+                    ChannelPeerModel.resource_id == resource_id,
+                    ChannelPeerModel.chat_id == chat_id,
+                )
+            )
+            await session.commit()
+
     async def set_active_conversation(
         self, resource_id: int, chat_id: str, conversation_id: str | None
     ) -> None:

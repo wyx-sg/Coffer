@@ -1,0 +1,132 @@
+"""bind every existing channel to this machine: ``config_json`` gains ``runs_on``
+
+A channel travels again (spec channels ``## Where a channel runs``), and it is
+safe to travel because its config names the ONE machine whose daemon starts its
+adapter. The runtime reads that name and starts nothing it does not recognise —
+which is exactly why an existing channel cannot be left as it is: every row in
+this database was written before the field existed, and to the new runtime a
+channel with no ``runs_on`` is a channel bound to nobody, and so a channel that
+does not run. Upgrading would take every one of the user's bots offline.
+
+So: bind them. This is not a guess. Until this revision a channel never left
+the machine it was registered on, and it ran exactly where its row lived — so
+"this machine" is not the safest answer available, it is the *true* one, and it
+reproduces the behaviour the user had the moment before the upgrade.
+
+This machine's id comes from ``daemon-config.json`` beside the database, the
+same cache the daemon itself reads (``infrastructure.sync.identity``) and the
+same source revision 0076 resolved the withdrawn machine axis against. When it
+cannot be read the row is left UNBOUND rather than bound to an invented id: a
+vault that cannot say which machine it is has no business claiming a channel,
+and unbound is a state the surfaces show plainly with a one-click fix, while a
+wrong id is a channel that silently belongs to a machine that does not exist.
+
+Data-only: no DDL, no table or column added or removed. ``runs_on`` lives in
+``config_json`` because it TRAVELS — config is what a resource document carries
+between machines, while the row's own columns (``enabled``, ``scope_json``)
+carry reach, which deliberately stays home. A real column would have put a
+field that must travel in the one place nothing travels from.
+
+Idempotent: a config that already carries ``runs_on`` is left exactly as found,
+so a re-run matches nothing and a channel the user has already rebound by hand
+is never dragged back.
+
+Revision ID: 0079
+Revises: 0078
+Create Date: 2026-09-14
+"""
+
+from __future__ import annotations
+
+import json
+import pathlib
+from collections.abc import Sequence
+from typing import Any
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "0079"
+down_revision: str | None = "0078"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+_FIELD = "runs_on"
+_DAEMON_CONFIG = "daemon-config.json"
+_MACHINE_ID = "machine_id"
+
+
+def _channel_rows() -> list[tuple[int, str]]:
+    bind = op.get_bind()
+    return [
+        (row[0], row[1])
+        for row in bind.execute(
+            sa.text("SELECT id, config_json FROM resources WHERE kind = 'channel'")
+        ).fetchall()
+    ]
+
+
+def _write(row_id: int, config: Any) -> None:
+    op.get_bind().execute(
+        sa.text("UPDATE resources SET config_json = :config WHERE id = :id"),
+        {"config": json.dumps(config, sort_keys=True), "id": row_id},
+    )
+
+
+def _this_machine_id() -> str | None:
+    """The id cached beside this database, or ``None`` when unreadable.
+
+    Every failure collapses into ``None``: no file, no permission, not JSON,
+    not an object, no id, a blank id, or a database with no directory to look
+    in (``:memory:``). A migration must never fail because a cache is missing,
+    and the honest answer to "which machine is this?" when nothing can say is
+    "we do not know" — never a plausible-looking substitute.
+    """
+    bind = op.get_bind()
+    database = bind.engine.url.database
+    if not database or database == ":memory:":
+        return None
+    try:
+        payload = json.loads((pathlib.Path(database).parent / _DAEMON_CONFIG).read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    cached = payload.get(_MACHINE_ID)
+    if isinstance(cached, str) and cached.strip():
+        return cached.strip()
+    return None
+
+
+def upgrade() -> None:
+    """Every channel keeps running where it already ran."""
+    machine_id = _this_machine_id()
+    if machine_id is None:
+        return
+    for row_id, raw in _channel_rows():
+        try:
+            config = json.loads(raw)
+        except (TypeError, ValueError):
+            continue  # a row the app cannot read either; not this script's to fix
+        if not isinstance(config, dict) or config.get(_FIELD):
+            continue
+        _write(row_id, {**config, _FIELD: machine_id})
+
+
+def downgrade() -> None:
+    """Strip the binding back out.
+
+    Dropping the key is the correct inverse here, and it widens nothing: the
+    build below this revision has no binding gate, so an enabled channel runs
+    on the machine holding its row either way. What the key would do down there
+    is sit in a config Pydantic quietly ignores — and ride into the shared tree
+    as a field nothing reads.
+    """
+    for row_id, raw in _channel_rows():
+        try:
+            config = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(config, dict) or _FIELD not in config:
+            continue
+        _write(row_id, {k: v for k, v in config.items() if k != _FIELD})

@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0078"
+HEAD_REVISION = "0079"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -144,7 +144,10 @@ HEAD_REVISION = "0078"
 # axis back off ``resources.scope_json`` (``{"agents": a, "machines": m}`` ->
 # ``{"agents": a}``), resolving each machine list against this machine's cached
 # id rather than dropping the key, so no row's reach widens — no DDL,
-# table/column set unchanged at head.
+# table/column set unchanged at head. 0079 is DATA-only: it writes ``runs_on``
+# (the machine whose daemon runs the adapter) into every ``kind='channel'``
+# ``config_json``, so an existing channel keeps running exactly where it already
+# ran once the binding gate exists — no DDL, table/column set unchanged at head.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

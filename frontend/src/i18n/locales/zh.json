@@ -1213,6 +1213,7 @@
       "type": "类型",
       "agent": "默认 Agent",
       "health": "健康",
+      "runsOn": "运行机器",
       "paired": "配对"
     },
     "welcome": {
@@ -1259,6 +1260,7 @@
       "tunnelToken": "Cloudflare 隧道 token",
       "tunnelTokenHint": "可选。填入 cloudflared 命名隧道的连接器 token 后，消息渠道启用时 Coffer 会自动起并维持隧道（需先装 cloudflared，并在 Cloudflare 控制台把该隧道指向 http://127.0.0.1:8787）。",
       "created": "消息渠道 {{name}} 已注册",
+      "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
       "delivery": "事件投递方式",
       "deliveryWebhook": "Webhook",
       "deliveryWebsocket": "WebSocket",
@@ -1300,6 +1302,21 @@
       "conversation": "活跃会话",
       "none": "暂无活跃会话",
       "pendingPairing": "有一个配对码尚未使用。"
+    },
+    "machine": {
+      "title": "运行机器",
+      "pickerLabel": "运行 {{name}} 的机器",
+      "thisMachine": "本机",
+      "self": "{{name}} · 本机",
+      "unbound": "未绑定",
+      "unknown": "未知机器（{{id}}）",
+      "runsHere": "这个消息渠道的适配器由本机运行。",
+      "runsElsewhere": "这个消息渠道的适配器由 {{machine}} 运行，不在本机。",
+      "unboundBody": "这个消息渠道没有绑定任何机器，因此没有任何守护进程会启动它，机器人永远不会回话。请选择一台应该负责应答的机器。",
+      "unknownBody": "这个消息渠道绑定在 {{id}} 上，而注册表里没有任何机器认领这个 id——在重新绑定到一台真实存在的机器之前，它不会在任何地方运行。",
+      "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把变更带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
+      "notReach": "这里决定的是「哪台机器运行适配器」。页头的生效范围决定的是「这个渠道可以驱动哪些 agent」。",
+      "rebound": "{{name}} 现在运行在 {{machine}} 上"
     },
     "pairing": {
       "title": "配对",
@@ -1508,7 +1525,8 @@
       "noAgents": "无",
       "retire": "下线",
       "retireTitle": "下线 {{name}}？",
-      "retireBody": "它的描述文件会从注册表里移除，金库里的其他任何东西都不会变——没有任何资源引用机器 id，因为生效范围是在每台机器上各自设置的，而不是记在某台机器名下。",
+      "retireBody": "它的描述文件会从注册表里移除，其他任何东西都不会被改写。生效范围是在每台机器上各自设置的，并不指名任何机器，因此不受影响；而绑定在这台机器上的消息渠道仍然指名着它，在你把它重新绑到另一台机器之前不会在任何地方运行。",
+      "retired": "{{name}} 已退役。",
       "derivedNote": "本机的 id 保存在本地文件里，而不是从宿主机派生的，所以删掉 ~/.coffer 之后它会以一台新机器的身份重新出现，这一行需要手动下线。"
     }
   }

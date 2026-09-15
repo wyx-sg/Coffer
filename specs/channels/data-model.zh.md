@@ -13,7 +13,8 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent: str = "claude_code"  # chat provider key；必须是已注册的 agent
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # 群聊准入（FR-035）
-│   └── ignore_other_mentions: bool = False # 群聊准入（FR-035）
+│   ├── ignore_other_mentions: bool = False # 群聊准入（FR-035）
+│   └── runs_on: str | None = None          # 运行该 adapter 的 machine_id（FR-080）
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -48,6 +49,21 @@ ChannelConfig (discriminator: channel_type)
   `20260912_0068_drop_channel_model_curation.py` 单向地把这两个键从每一条既有 channel
   config 里剥掉，不留 load-time 垫片（房规）——`_CommonChannelFields` 禁止多余键，
   仍带着它们的行在加载时会校验失败。
+- `runs_on` 是唯一那台由其 daemon 启动这条 channel 的 adapter 的机器的
+  `machine_id`（FR-080）。它放在 `config_json` 里而不是自己单独一列，是因为它必须
+  **外传**：config 正是一份 resource 文档在机器之间携带的东西，而行上的 `enabled` /
+  `scope_json` 携带的是生效范围，那是刻意留在本机的。`None` 表示未绑定、哪里都不跑
+  ——绝不表示「就在这里跑」，因为一份谁都没指名的文档在每台机器上的含义都一样，那
+  等于所有机器一起跑。迁移 `20260914_0079_bind_channels_to_this_machine.py` 把本机
+  缓存的 id 写进每一条既有 channel config，于是一条在这个字段存在之前就在跑的
+  channel，此后照样在跑：在那个 revision 之前 channel 从不离开它被注册的那台机器，
+  所以「本机」是真答案，而不是一个稳妥的猜测。数据变更、单向，不留 load-time 垫片
+  （房规）；读不出机器 id 的 vault 会被留作未绑定，各接口面照直显示，而不是拿一个
+  编造的 id 糊过去。
+- 绑定到**别的**机器的 channel，在两条写入路径上都豁免 `default_agent` 的 registry
+  校验。那条校验问的是这条 channel 启动时能不能驱动点什么，而一条本机从不启动的
+  channel 给不出答案；没有这条豁免的话，一条收敛过来、其属主机器上有本机没有的
+  agent 的 channel，每一轮都会被挡在 registry 门口。
 - `delivery` 决定 SeaTalk 那几个字段哪些合法，整条规则由一个
   `model_validator(mode="after")` 统一持有，使「允许的组合」与「禁止的组合」永远不会
   各自漂移（FR-071）：
@@ -99,6 +115,13 @@ ChannelConfig (discriminator: channel_type)
 
 `sender_id` / `preferred_agent` 都可空，使本修订前配对的 peer 优雅退化：
 null sender id 表示 chat-id-only 闸，null agent 首选表示用 channel 默认值。
+
+这张表是**部分同步**的，而且这条缝是从行内部穿过去的，不是绕着行走的（spec vault-sync
+的 `state/channel-peers/**`）。`chat_id`、`sender_id`、`display_name` 与
+`preferred_agent` 都是关于平台的事实，所以它们随渠道一起走——一条搬到另一台机器却
+不带它们的渠道，会让属主每次都从手机上重新配对一遍。`active_conversation_id` 是指向
+**本机** conversations 的软引用，而会话不同步，所以它从不外传；一份抵达的配对会保留
+这里原本就有的那个指针。
 
 迁移：`20260612_0015_channel_tables.py`（创建 + 对称的 downgrade）；
 `20260614_0022_channel_peer_differentiation.py` 增加上述两个可空列。模型

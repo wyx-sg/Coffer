@@ -16,6 +16,18 @@ app = typer.Typer(help="Manage messaging channels (Telegram, SeaTalk)")
 _console = Console()
 
 
+def _this_machine_id(client: Any, *, verbose: bool) -> str:
+    """This daemon's machine id, from the surface that already publishes it.
+
+    The CLI cannot derive it: the id is read from the host by the daemon and
+    cached beside the database, and a CLI deriving its own would be a second
+    answer to an identity question that must have exactly one.
+    """
+    r = client.get("/sync/status")
+    _cli_client.check(r, verbose=verbose)
+    return str(r.json()["machine_id"])
+
+
 @app.command("list")
 def list_cmd(
     ctx: typer.Context,
@@ -32,7 +44,11 @@ def list_cmd(
         typer.echo(_json.dumps(items, indent=2))
         return
     table = Table(title="Channels")
-    for col in ("Name", "Type", "Agent", "Enabled"):
+    # "Runs on" is the machine id rather than a name: resolving a name needs
+    # the machine registry, which only exists once this vault converges with a
+    # remote, and a column that is blank on a single-machine install would say
+    # less than the id does. `coffer sync machines` maps the two.
+    for col in ("Name", "Type", "Agent", "Enabled", "Runs on"):
         table.add_column(col)
     for it in items:
         config = it.get("config", {})
@@ -41,6 +57,7 @@ def list_cmd(
             str(config.get("channel_type", "")),
             str(config.get("default_agent", "")),
             "yes" if it.get("enabled") else "no",
+            str(config.get("runs_on") or "unbound"),
         )
     _console.print(table)
 
@@ -69,8 +86,19 @@ def register(
     agent_config: str | None = typer.Option(
         None, "--agent-config", help="Default agent config as JSON"
     ),
+    runs_on: str | None = typer.Option(
+        None,
+        "--runs-on",
+        help="machine_id of the machine that runs this channel (default: this one)",
+    ),
 ) -> None:
-    """Register a channel (secrets must already be in the keychain)."""
+    """Register a channel (secrets must already be in the keychain).
+
+    The channel is bound to THIS machine unless ``--runs-on`` names another:
+    a channel runs on exactly one machine, and the one the user is typing at is
+    the only defensible guess. Binding at creation is also what keeps "unbound"
+    rare enough to be an error state rather than a routine one.
+    """
     verbose = (ctx.obj or {}).get("verbose", False)
     config: dict[str, Any] = {"channel_type": channel_type, "default_agent": default_agent}
     if agent_config is not None:
@@ -113,6 +141,7 @@ def register(
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
     c, _info = _cli_client.client_or_exit()
     with c:
+        config["runs_on"] = runs_on if runs_on else _this_machine_id(c, verbose=verbose)
         # A new channel is created unscoped, so an enabled one starts here and
         # may drive every registered agent (ADR per-agent-resource-scope).
         # Narrowing the agents it may drive is a later, separate edit —
@@ -161,6 +190,9 @@ def status(
         return
     typer.echo(f"channel:  {body['name']} ({body['channel_type']})")
     typer.echo(f"enabled:  {body['enabled']}    running: {body['running']}")
+    binding = body.get("runs_on") or "unbound"
+    where = "this machine" if body.get("runs_here") else "another machine"
+    typer.echo(f"runs on:  {binding} ({where})")
     typer.echo(f"pairing:  {'code pending' if body['pending_pairing'] else 'no pending code'}")
     peer = body.get("peer")
     if peer:
@@ -180,6 +212,35 @@ def status(
         # FR-060: a setting that reads correctly here and does nothing in the
         # chat is worth interrupting for.
         typer.echo(f"warning:  {diagnostic['message']}")
+
+
+@app.command("bind")
+def bind(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Channel name"),
+    machine_id: str | None = typer.Argument(
+        None, help="machine_id to bind to (default: this machine)"
+    ),
+) -> None:
+    """Bind a channel to the machine that should run its adapter.
+
+    Takes effect without a restart: the binding is config, and both daemons
+    reconcile config on their own loop. The machine LOSING the channel stops
+    its adapter within a tick of seeing the change; the machine gaining it
+    starts one within a tick of the converge round that brings the change over.
+    Run it from the machine that currently holds the channel and the handover
+    has no overlap at all.
+    """
+    verbose = (ctx.obj or {}).get("verbose", False)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/resources/channel/{name}")
+        _cli_client.check(r, verbose=verbose)
+        config = dict(r.json().get("config") or {})
+        config["runs_on"] = machine_id if machine_id else _this_machine_id(c, verbose=verbose)
+        r = c.patch(f"/resources/channel/{name}", json={"config": config})
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"channel:{name} runs on {config['runs_on']}")
 
 
 @app.command("notify")

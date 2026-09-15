@@ -91,7 +91,7 @@ surfaces/
 | `domain/sync/backup.py` | **保留** —— `BackupRemote` 就是远端的配置，字段不变。`record_run` 现在收的是 `ConvergeRun` |
 | `domain/sync/models.py` | **裁剪** —— `ImportSummary` 随导入器一起去掉；`AreaCount` 与 `ExportSummary` 留下，因为导出器仍然产出它们 |
 | `domain/sync/errors.py` | **扩充** —— 新增 `SyncJoinAmbiguous`；bundle 与主密钥相关的错误留下，因为工作树里放的仍然是 bundle 布局 |
-| `domain/sync/serialization.py` | **保留** —— 资源文档只包含身份、描述与配置；`enabled` 与 `scope` 读进来就丢掉，因为触达范围是本机专属的 |
+| `domain/sync/serialization.py` | **保留** —— 资源文档只包含身份、描述与配置；`enabled` 与 `scope` 读进来就丢掉，因为生效范围是本机专属的 |
 | `domain/sync/portability.py`、`manifest.py` | **原样保留** |
 | `application/sync/exporter.py` | **保留** —— `SyncExporter` 就是第 1 步调用的序列化器。变的是它底下的东西：`Bundle` 现在差分收敛而不再清空 |
 | `application/sync/importer.py` | **删除** —— 「bundle 说了算」的整树导入正是本 spec 要移除的操作；由 `appliers.py` 取代 |
@@ -155,8 +155,8 @@ vault 内容，而在一次改写进行到一半时取的导出是一份撕裂�
 
 ## 构建顺序（TDD，每步可独立提交）
 
-1. **scope 仍是一条轴，触达范围留在本机** —— `domain/scope.py` 保持单轴的 `Scope`
-   （只有 agent）。一个资源的触达范围 —— 它的 `enabled` 标志与它的 `scope` 合在一起
+1. **scope 仍是一条轴，生效范围留在本机** —— `domain/scope.py` 保持单轴的 `Scope`
+   （只有 agent）。一个资源的生效范围 —— 它的 `enabled` 标志与它的 `scope` 合在一起
    —— 是本机专属的，根本不会被序列化进 bundle，因此每台机器自己回答「这东西在这里
    触达到哪」。本 spec 一度引入的那条机器轴，随同一个决策被撤回；剥除它的 migration
    把形态内联而不是 import 领域模型，这样这个 revision 的含义永远不变，之后也没有任何
@@ -227,7 +227,7 @@ vault 内容，而在一次改写进行到一半时取的导出是一份撕裂�
 14. **前端** —— 一个顶级 **Sync** 页，带 **Status** tab（远端表单、上次与下次轮次、
     最近几轮改了什么、一个运行按钮、主密钥卡片）与 **Machines** tab（注册表表格，
     标出本机、用文字说明指纹不匹配，并在 id 来自兜底文件而非主机时给出提示）。冲突
-    与扣留在 Status 上渲染为横幅。触达范围编辑器要在设定触达范围的地方写明：它只对
+    与扣留在 Status 上渲染为横幅。生效范围编辑器要在设定生效范围的地方写明：它只对
     本机生效、不会被同步，并在某个资源于本机休眠时说明这一点。
 15. **文档** —— architecture.md 的横切行、roadmap 状态、docs-site 的 guide 与
     architecture 页面、中文 companion；用验收标记把 `spec.md` 中每个场景与一个测试

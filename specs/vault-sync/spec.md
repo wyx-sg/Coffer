@@ -38,14 +38,20 @@ anything.
   resource document is identity, description and config — what the resource
   *is*. What it reaches is not in it; see below.
 - **Shared state** — module-owned areas that belong to the vault rather than to
-  one machine: MCP capability preferences, internal engine settings, and the
-  agent plugin inventory.
+  one machine: MCP capability preferences, internal engine settings, the agent
+  plugin inventory, and channel peer pairings.
 
-  Channel peer pairings were such an area and no longer are. The argument for
-  them was that pairings are platform-level, so rebinding a channel to another
-  machine would need no re-pairing — and a channel does not reach another
-  machine any more, so there is no rebinding left for them to save. Every
-  published document would name a channel the other side does not have.
+  Channel peer pairings are here again. They were removed on the reasoning that
+  pairings are platform-level, so rebinding a channel to another machine would
+  need no re-pairing — and a channel did not reach another machine any more, so
+  there was no rebinding left for them to save. A channel travels again and
+  names the machine that runs it (`## What does not sync`), so the premise is
+  gone and so is the removal: a channel that moved without its pairings would
+  make the owner re-pair from their phone every time, which is the exact cost
+  the area existed to avoid. What travels is platform identity — chat id,
+  sender id, display name, the chat's sticky agent. The **active conversation
+  pointer does not**: conversations are machine-local, and a published pointer
+  would name a conversation the other machine does not have.
 
   The plugin inventory is an **inventory, not a replicator**: it records which
   plugins each agent has on each machine and writes nothing into any agent's
@@ -59,8 +65,8 @@ Logs, `coffer.db` itself, `daemon-config.json`, PID files, port allocations,
 chat history, conversations, the audit log, MCP invocation records, and any
 runtime artifact. The master key is **never** written into the repository.
 
-Two entries in this list are decisions rather than mechanics, and both say the
-same thing: what a machine *does* with the vault belongs to that machine.
+One entry in this list is a decision rather than mechanics, and it says what a
+machine *does* with the vault belongs to that machine.
 
 - **Reach** — a resource's `enabled` flag and its `scope`. They read like two
   fields but they are one thing, written by one control: whether this resource
@@ -70,20 +76,48 @@ same thing: what a machine *does* with the vault belongs to that machine.
   laptop that deliberately left a server dark would find it live again after the
   desktop's next round, with nothing in the history that reads like a decision
   anyone made.
-- **Channels** — the `channel` kind is not exported at all. A channel is an
-  inbound surface bound to one machine: its port, its tunnel, the webhook URL a
-  platform has been told to call. A channel arriving on a second machine is at
-  best inert and at worst a second machine answering the same conversation, so
-  there is nothing for it to be worth.
 
-A round MUST ignore `resources/channel/**` in **both** directions, and the
-inbound half is a safety property rather than tidiness. A machine that stops
-exporting channel documents publishes the removal of the ones already in the
-tree as an ordinary deletion; a machine that honoured that deletion would lose
-the channels it configured for itself. So the tree tidies itself once, and no
-vault is touched by it. Publishing that one-time batch of deletions may trip the
-deletion guard on a small vault, which is correct — the user is shown exactly
-which paths are going and confirms once.
+> **Amendment 2026-09-14 (channels travel, and each names the machine that runs
+> it).** Withdraws the `channel` entry from this list and the rule that a round
+> ignores `resources/channel/**` in both directions.
+>
+> **Why the reversal.** The entry said a channel is an inbound surface bound to
+> one machine — its port, its tunnel, the webhook URL a platform has been told
+> to call — so a channel arriving on a second machine is "at best inert and at
+> worst a second machine answering the same conversation". The danger was real
+> and is unchanged. What the entry lacked was a way to say **which** machine the
+> one live consumer is; having no such field, it could only keep the document
+> from moving. A channel now carries `runs_on`, the `machine_id` of the single
+> machine whose daemon starts its adapter (spec channels FR-080), and only that
+> machine starts one. The objection is answered rather than avoided: the
+> document travels, the adapter does not.
+>
+> **What that buys.** The second machine holds the channel's configuration, its
+> credential references and its pairings, so taking over a bot is a rebind
+> rather than a re-registration — and a machine that has died is no longer a
+> machine that took a bot with it. A channel bound to a dead machine is one
+> click from running on a live one.
+>
+> **What it costs.** Two things, both stated rather than hidden. First, an extra
+> field that MUST be right: a binding naming a machine nobody claims leaves the
+> channel running nowhere, so it is reported as a fault rather than treated as
+> permission for any machine to start (FR-080). Second, a **one-way upgrade
+> ordering**: a machine still running the withholding build keeps deleting
+> channel documents out of the shared tree, and a machine running this one
+> honours those deletions like any other. Both machines must be upgraded before
+> a channel is expected to travel; until then the publish-side deletion guard is
+> what stands between a stale exporter and somebody's channels.
+>
+> **Alternatives considered.** *Keeping channels machine-local and adding a
+> "claim" protocol* — rejected: it needs the same field plus a negotiation, and
+> a negotiation between machines that may not both be running has no answer.
+> *Expressing the binding as a machine axis on `scope`* — rejected, and for the
+> reason the machine axis was removed in the first place: reach is machine-local
+> and the binding is one answer the machines share, so putting them in one field
+> gives "where does this apply" two meanings and two ways to disagree.
+>
+> The pairings paragraph in `## What syncs` is restored by the same amendment,
+> and for the same reason: its removal was justified by this entry.
 
 Conversations and the audit log are deliberately excluded: they are records of
 what happened *on a machine*, and a merged history of two machines' activity
@@ -198,6 +232,16 @@ would record the same fact a second time, in a second place, with two ways to
 disagree. "Live on the desktop, dark on the laptop" is expressed by setting it
 that way on each — which is also the only expression the user can verify from
 the machine they are sitting at.
+
+**A channel's machine binding is not this axis coming back.** `runs_on` (spec
+channels FR-080) and reach answer different questions and belong in different
+places for the same reason. Reach is "which agents, here" — a local answer each
+machine gives itself, so it stays on the row and never travels. The binding is
+"which machine runs the adapter" — one answer the machines share, so it lives in
+the channel's config and travels with it. The withdrawn machine axis was neither
+of those: it recorded, in a travelling field, a fact each machine already stated
+by holding its own reach. A binding records a fact no machine can state alone,
+because it is about which of them acts.
 
 Removing the axis MUST NOT widen anything. A stored scope that named machines
 was, on this machine, either admitted by that list or dormant because of it; the
@@ -327,7 +371,6 @@ pointer cannot skip it.
 | --- | --- | --- |
 | `knowledge/**`, `skills/**` | write the file | remove the file |
 | `resources/<kind>/<name>.yaml` | upsert through the resource service, with `${HOME}` expanded and the kind's import gate run; the local resource's reach is **not** touched | delete the resource |
-| `resources/channel/**` | nothing, in either direction | nothing |
 | `state/<area>/**` | the area's provider applies the document | the area's provider removes it |
 | `credentials/<ref>.enc` | write the ciphertext, subject to the freshness rule below | delete the credential |
 | `machines/*.yaml` | nothing — the registry is read from the tree | nothing |
@@ -338,12 +381,17 @@ other deletion does. After the diff is applied, each kind's post-import hook
 re-applies its machine-local side effects — native config projections, shims,
 skill deliveries — from current state.
 
+A `channel` is upserted by the same row as every other kind, and its arrival
+starts nothing: what it carries is a machine binding, and a machine that is not
+the one named simply holds the document. The channel kind's own registration
+checks are relaxed for exactly that case (spec channels FR-080) — a channel
+bound elsewhere is not judged here against agents this machine happens to have,
+because it is not this machine that will drive them.
+
 A state document reaches the tree only while there is a decision to carry, so
 its deletion is that decision being taken back, and each area honours it in its
 own terms:
 
-- **`state/memory-overrides/<digest>`** — the override whose fact key digests to
-  the document's name is cleared.
 - **`state/mcp-preferences/<server>`** — a document exists only while something
   on that server is disabled, so its deletion re-enables every capability on
   that server. The preference rows stay: enabled is their default, and their
@@ -635,13 +683,6 @@ never reaches back into history on its own.
 - **Then** the vault returns to the state the pre-apply snapshot holds and the
   pointer returns with it.
 
-### Scenario: memory overrides travel but the derived tree does not
-
-- **Given** a developer who hid one fact and pinned another on one machine,
-- **When** the two machines converge,
-- **Then** both decisions are in force on the other machine, and nothing under
-  `~/.coffer/memory/` was carried across.
-
 ### Scenario: reach stays on the machine it was set on
 
 - **Given** an `mcp_server` present on both machines, disabled on one of them and
@@ -652,12 +693,30 @@ never reaches back into history on its own.
   server's configuration on either machine reaches the other without carrying
   its reach along.
 
-### Scenario: a channel does not travel
+### Scenario: a channel travels and runs only on the machine it names
 
-- **Given** a `channel` configured on one machine,
+- **Given** a `channel` configured on one machine and bound to it,
 - **When** the two machines converge,
-- **Then** no channel resource is registered on the other machine, and a channel
-  that machine configured for itself is still there afterwards.
+- **Then** the channel is registered on the other machine with its binding
+  intact, that machine starts no adapter for it, and the machine it names still
+  runs it.
+
+### Scenario: a channel's pairings travel with it
+
+- **Given** a paired `channel` on one machine,
+- **When** the two machines converge and the channel is rebound to the other,
+- **Then** the owner's pairing is present on the machine that now runs it and no
+  re-pairing is asked for, and the conversation pointer each machine holds is
+  its own.
+
+### Scenario: a synced channel carries a credential reference, never a secret
+
+- **Given** a `channel` whose configuration cites credential refs for its bot
+  token and signing secret,
+- **When** a round exports the vault,
+- **Then** the channel's document in the working tree holds the refs and no
+  secret material, and the secrets themselves appear only as Fernet ciphertext
+  and only when the remote is configured to carry credentials.
 
 ### Scenario: the machine registry shows every machine and cannot conflict
 

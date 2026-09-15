@@ -360,6 +360,10 @@ export interface components {
             callback: components["schemas"]["CallbackInfoOut"] | null;
             /** @description Contradictions between the channel's configuration and what the platform actually permits. Empty is the healthy case. */
             diagnostics?: components["schemas"]["ChannelDiagnosticOut"][];
+            /** @description The machine_id of the one machine whose daemon runs this channel's adapter. Null means unbound, which runs nowhere. */
+            runs_on?: string | null;
+            /** @description Whether the bound machine is the one answering this request. It separates the two facts `running: false` collapses — a channel that failed to start here, and a channel that was never this machine's to start. */
+            runs_here?: boolean;
         };
         ChannelDiagnosticOut: {
             /** @description Stable identifier, so a UI can style or link the finding */

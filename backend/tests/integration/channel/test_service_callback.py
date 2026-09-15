@@ -50,6 +50,11 @@ class _Runtime:
     def tunnel_running(self, name: str) -> bool:
         return False
 
+    async def local_machine_id(self) -> str | None:
+        # No machine: this stub stands in for a runtime that was never given
+        # one, and the binding gate is skipped for exactly such a runtime.
+        return None
+
 
 def _seatalk_config(public_base_url: str | None) -> dict[str, Any]:
     cfg: dict[str, Any] = {

@@ -30,7 +30,8 @@ import { useUpdateChannel } from "@/lib/hooks/useChannels";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelDelivery } from "@/lib/api/channels";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
-import { DEFAULT_AGENT, DEFAULT_DELIVERY, planChannelEdit } from "./schema";
+import { planChannelEdit } from "./editChannel";
+import { DEFAULT_AGENT, DEFAULT_DELIVERY } from "./schema";
 
 function strField(config: Record<string, unknown>, key: string): string {
   const v = config[key];

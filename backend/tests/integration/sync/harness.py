@@ -104,11 +104,11 @@ def vault_kinds() -> dict[str, Kind]:
     credential, so deleting one exercises the orphaned-credential release that
     seeded the 2026-07-10 incident.
 
-    ``channel`` is here because a kind that never travels can only be tested
-    against a vault that has one: it is the single member of
-    :data:`coffer.application.sync.exporter.MACHINE_LOCAL_KINDS`, and both
-    halves of that rule — the export that withholds it and the import that
-    refuses its path — need a real row and a real document to act on.
+    ``channel`` is here because it is the kind whose travel is the interesting
+    case: it used to be withheld from the bundle entirely, and it now converges
+    like everything else, carrying inside its config the one machine whose
+    daemon runs its adapter. Testing that it travels — and that its binding
+    survives the trip untouched — needs a real row and a real document.
     """
     return {
         "mcp_server": Kind(

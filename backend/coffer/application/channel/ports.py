@@ -258,6 +258,15 @@ class ChannelPeerRepoPort(Protocol):
 
     async def upsert(self, peer: ChannelPeer) -> None: ...
 
+    async def delete_by_chat(self, resource_id: int, chat_id: str) -> None:
+        """Drop one chat's pairing, leaving the channel's other chats alone.
+
+        Un-pairing one chat, not deleting the channel — the channel's own
+        deletion takes every peer with it through the FK cascade. Exists for
+        the synced pairing area, where another machine's un-pair arrives as the
+        deletion of one document."""
+        ...
+
     async def set_active_conversation(
         self, resource_id: int, chat_id: str, conversation_id: str | None
     ) -> None: ...

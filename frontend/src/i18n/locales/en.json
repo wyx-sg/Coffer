@@ -1213,6 +1213,7 @@
       "type": "Type",
       "agent": "Default agent",
       "health": "Health",
+      "runsOn": "Runs on",
       "paired": "Paired"
     },
     "welcome": {
@@ -1259,6 +1260,7 @@
       "tunnelToken": "Cloudflare tunnel token",
       "tunnelTokenHint": "Optional. With a cloudflared named-tunnel connector token here, Coffer starts and keeps the tunnel running while the channel is enabled (cloudflared must be installed, and the tunnel's Cloudflare ingress must point at http://127.0.0.1:8787).",
       "created": "Channel {{name}} registered",
+      "machineUnknown": "Coffer could not read this machine's id, so the channel has no machine to run on. Try again in a moment.",
       "delivery": "Event delivery",
       "deliveryWebhook": "Webhook",
       "deliveryWebsocket": "WebSocket",
@@ -1300,6 +1302,21 @@
       "conversation": "Active conversation",
       "none": "No active conversation",
       "pendingPairing": "A pairing code is outstanding."
+    },
+    "machine": {
+      "title": "Runs on",
+      "pickerLabel": "Machine running {{name}}",
+      "thisMachine": "This machine",
+      "self": "{{name}} · this machine",
+      "unbound": "Not bound",
+      "unknown": "Unknown machine ({{id}})",
+      "runsHere": "This machine runs this channel's adapter.",
+      "runsElsewhere": "{{machine}} runs this channel's adapter — this machine does not.",
+      "unboundBody": "This channel is bound to no machine, so no daemon starts it and the bot never answers. Pick the machine that should answer it.",
+      "unknownBody": "This channel is bound to {{id}}, which no machine in the registry claims — it runs nowhere until it is bound to one that does.",
+      "handover": "Rebinding needs no restart. The machine losing the channel stops within a couple of seconds; the machine gaining it starts after the next sync round brings the change over. Rebinding away from the machine you are on hands over cleanly — binding a channel to this machine while another still holds it can leave both answering until that machine's next round.",
+      "notReach": "This is which machine runs the adapter. Reach, in the header, is which agents this channel may drive.",
+      "rebound": "{{name}} now runs on {{machine}}"
     },
     "pairing": {
       "title": "Pairing",
@@ -1508,7 +1525,8 @@
       "noAgents": "None",
       "retire": "Retire",
       "retireTitle": "Retire {{name}}?",
-      "retireBody": "Its descriptor is removed from the registry, and nothing else in the vault changes — no resource references a machine id, because reach is set on each machine rather than recorded against one.",
+      "retireBody": "Its descriptor is removed from the registry and nothing else is rewritten. Reach is set on each machine and names none, so it is untouched; a channel BOUND to this machine keeps naming it, and runs nowhere until you bind it to another.",
+      "retired": "{{name}} retired.",
       "derivedNote": "This machine's id is stored in a local file rather than derived from the host, so deleting ~/.coffer makes it come back as a new machine and this row has to be retired by hand."
     }
   }

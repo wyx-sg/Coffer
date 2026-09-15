@@ -130,10 +130,12 @@ resource's **reach**, and reach is machine-local.
    the single source of truth for what exists; reach is the local answer to what
    runs.
 
-   `channel` is the one kind that does not converge at all. A channel is an
-   inbound surface bound to one machine — its port, its tunnel, the webhook URL a
-   platform was told to call — so a channel arriving elsewhere is at best inert
-   and at worst a second machine answering the same conversation.
+   `channel` converges like every other kind, and answers "which machine runs
+   it" with a field of its own — `runs_on`, in its config (spec channels
+   FR-080). It is deliberately not a scope axis: reach is the LOCAL answer to
+   what runs here, which is why it never travels, while the machine that runs a
+   channel is one answer the machines share. A channel briefly did not converge
+   at all, for want of anywhere to say that.
 
 4. **Per-kind support and enforcement seams.** Each kind consults scope at its
    existing choke point, not at a new central gate:
@@ -338,5 +340,6 @@ resource's **reach**, and reach is machine-local.
   left to express, so `scope` is agents only again and migration `0076` strips
   the key — resolving each row against the machine id the daemon was actually
   using, and taking dormant whenever it cannot tell, so nothing widens. `channel`
-  stops converging at all (item 3). The machine **registry** is untouched: it
-  belongs to sync, not to permissions.
+  stopped converging at all along with it (item 3), and has since started again
+  — on a machine binding of its own rather than on an axis of `scope`. The
+  machine **registry** is untouched: it belongs to sync, not to permissions.

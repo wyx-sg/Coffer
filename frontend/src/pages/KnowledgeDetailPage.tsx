@@ -28,6 +28,7 @@ import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
+import { FileActions } from "@/components/FileActions";
 import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
@@ -36,7 +37,6 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { translateApiError } from "@/lib/api/errors";
 import { useResource } from "@/lib/hooks/useResources";
-import { FileActions } from "@/components/FileActions";
 import { KnowledgePreviewBody } from "@/components/knowledge/KnowledgePreviewBody";
 import { KnowledgeTreeLevel } from "@/components/knowledge/KnowledgeTreeLevel";
 import { useKnowledgeFile, useTidyCollection } from "@/lib/hooks/useKnowledge";
