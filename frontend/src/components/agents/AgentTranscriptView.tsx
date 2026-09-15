@@ -16,11 +16,13 @@
 // wire, so this component never has to decide what may be shown.
 import { useTranslation } from "react-i18next";
 
+import { turnDomId } from "@/components/agents/AgentTranscriptOutline";
+import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
 import { cn } from "@/lib/utils";
 
-function Turn({ message }: { message: TranscriptMessage }) {
+function Turn({ message, index }: { message: TranscriptMessage; index: number }) {
   const { t } = useTranslation();
   const isUser = message.role === "user";
   // Only the two roles a transcript actually uses get a translated label; an
@@ -32,7 +34,7 @@ function Turn({ message }: { message: TranscriptMessage }) {
       ? t("agents.conversationDetail.roleAssistant")
       : message.role;
   return (
-    <li className="space-y-1.5">
+    <li className="space-y-1.5 scroll-mt-2" id={turnDomId(index)}>
       <div className="flex items-baseline gap-2">
         <span
           className={cn("text-xs font-medium", isUser ? "text-primary" : "text-muted-foreground")}
@@ -77,13 +79,22 @@ export function AgentTranscriptView({ messages }: { messages: TranscriptMessage[
     );
   }
 
+  // A fixed frame the turns scroll inside, not a list the page grows around.
+  // A transcript runs to hundreds of turns; letting it set the page's height
+  // pushes the header, the actions and the pager off-screen and leaves the
+  // reader scrolling a document rather than reading a conversation. The frame
+  // is the same height every file pane on this surface uses, so the page is
+  // the same size whichever row was opened.
   return (
-    <ul className="space-y-4">
+    <ul
+      data-testid="transcript-turns"
+      className={cn("space-y-4 rounded-md border bg-background p-4", FILE_PANE_MAX_HEIGHT)}
+    >
       {messages.map((message, index) => (
         // Index-keyed on purpose: a turn has no id of its own, and its position
         // in the file IS its identity — the list is append-only and never
         // reordered, so the usual index-key hazard cannot arise here.
-        <Turn key={index} message={message} />
+        <Turn key={index} index={index} message={message} />
       ))}
     </ul>
   );

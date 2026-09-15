@@ -204,6 +204,30 @@ describe("ScopeControl", () => {
     expect(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox")).toBeChecked();
   });
 
+  test("a disabled resource is not also flagged for the scope underneath it", () => {
+    // Two rows both reading "Disabled" used to render in two colours, because
+    // one of them had a scope naming nobody this machine knows. "Disabled" is
+    // already the whole reason it reaches nobody, and the scope only starts
+    // mattering once it is switched back on — so the warning is noise the
+    // reader cannot act on, and an inconsistency in a column of identical
+    // labels.
+    seed({ scope: only([]) });
+    render(<ScopeControl kind="mcp_server" name="fs" enabled={false} />);
+
+    expect(trigger()).toHaveTextContent(/^disabled/i);
+    expect(trigger().className).not.toContain("status-warn");
+    expect(screen.queryByText(/not active here/i)).toBeNull();
+  });
+
+  test("an ENABLED resource reaching nobody here is still flagged", () => {
+    // The case the warning exists for: the button reads like a healthy scope
+    // while the resource reaches no agent on this machine.
+    seed({ scope: only(["nobody-here"]) });
+    render(<ScopeControl kind="mcp_server" name="fs" enabled />);
+
+    expect(trigger().className).toContain("status-warn");
+  });
+
   test("choosing Disabled disables the resource and leaves the scope alone", () => {
     seed({ scope: only(["claude"]) });
     render(<ScopeControl kind="mcp_server" name="fs" enabled />);

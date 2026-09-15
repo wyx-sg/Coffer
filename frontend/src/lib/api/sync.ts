@@ -19,10 +19,25 @@ import type { components } from "@/lib/api/generated/vault-sync";
 type Schemas = components["schemas"];
 
 /** Per-round change counts for one direction of the diff. */
+/** One document's fate in one round. */
+export interface DocChange {
+  path: string;
+  status: "added" | "modified" | "deleted";
+}
+
+/** One document's fate in one round. */
+export interface DocChange {
+  path: string;
+  status: "added" | "modified" | "deleted";
+}
+
 export interface DiffCounts {
   added: number;
   modified: number;
   deleted: number;
+  /** Every path this side of the round touched, sorted. The counts are what a
+   *  history row shows; this is what opening the row is for. */
+  changes: DocChange[];
 }
 
 /** One path the round could not apply here, with the reason why. */

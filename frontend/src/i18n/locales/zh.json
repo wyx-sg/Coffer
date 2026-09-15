@@ -370,7 +370,6 @@
     },
     "daemon": {
       "emptyState": "没有匹配的日志记录。",
-      "errorsOnly": "仅错误",
       "noMessage": "（无消息的日志记录）",
       "searchPlaceholder": "搜索日志记录",
       "table": {
@@ -378,6 +377,14 @@
         "level": "级别",
         "logger": "来源模块",
         "message": "消息"
+      },
+      "levelLabel": "日志级别",
+      "level": {
+        "all": "全部级别",
+        "debug": "Debug 及以上",
+        "info": "Info 及以上",
+        "warning": "警告与错误",
+        "error": "仅错误"
       }
     }
   },
@@ -546,7 +553,6 @@
         "loadingModels": "正在列出该接入地址的模型…",
         "retryFetch": "重试",
         "noModelsYet": "该接入地址没有返回任何模型。保持选择为空，它提供的所有模型就都可用。",
-        "clearSelection": "清除选择（不限制）",
         "modelId": "模型",
         "modelSearchPlaceholder": "搜索模型…",
         "modelOffered": "已提供",
@@ -912,7 +918,9 @@
       "turnTruncated": "这一轮内容过长，此处只显示开头——打开文件查看全文。",
       "turnRange": "第 {{from}}–{{to}} 轮，共 {{total}} 轮",
       "earlier": "更早的轮次",
-      "later": "更晚的轮次"
+      "later": "更晚的轮次",
+      "outline": "目录",
+      "outlineEmpty": "这一段里没有人的发言。"
     },
     "memoryStore": {
       "tree": "文件",
@@ -1435,7 +1443,16 @@
       "failures": "本机无法应用",
       "failure": "{{path}}——{{reason}}",
       "lockedRefs": "本机无法解密的凭据",
-      "lockedRefsHint": "本机金库拿到了它们的密文，却没有能打开它的主密钥。请从持有主密钥的那台机器导出，并在下方导入。"
+      "lockedRefsHint": "本机金库拿到了它们的密文，却没有能打开它的主密钥。请从持有主密钥的那台机器导出，并在下方导入。",
+      "applied": "应用到本机",
+      "appliedHint": "这一轮往本机金库里写了什么。",
+      "published": "发布到远端",
+      "publishedHint": "这一轮往共享树里写了什么。",
+      "change": {
+        "added": "新增 · {{path}}",
+        "modified": "修改 · {{path}}",
+        "deleted": "删除 · {{path}}"
+      }
     },
     "history": {
       "title": "历史",

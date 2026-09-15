@@ -217,9 +217,14 @@ async def test_run_publishes_the_vault_to_a_real_remote(client, fleet) -> None:
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ok"
-    assert body["applied"] == {"added": 0, "modified": 0, "deleted": 0}
+    # The counts, field by field: the diff also carries the paths behind them
+    # now, and a whole-object compare would break on every field added to it.
+    assert [body["applied"][k] for k in ("added", "modified", "deleted")] == [0, 0, 0]
+    assert body["applied"]["changes"] == []
     assert body["published"]["added"] >= 2  # the note and the resource
     assert body["published"]["deleted"] == 0
+    # …and names them, which is what the history row's tally raises.
+    assert any(c["path"].startswith("resources/") for c in body["published"]["changes"])
     assert body["commit"] is not None
     # The round reports the commit it reached; git resolves it to the branch tip.
     assert await a.mirror.resolve_revision(body["commit"]) == await a.mirror.head()

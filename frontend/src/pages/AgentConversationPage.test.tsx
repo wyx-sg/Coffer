@@ -10,7 +10,7 @@
 // covers the transport), so this asserts what the page asks for and shows.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AgentConversationPage } from "./AgentConversationPage";
@@ -96,7 +96,11 @@ describe("AgentConversationPage", () => {
     renderAt();
     expect(screen.getByRole("heading", { name: "Fix the login redirect bug" })).toBeInTheDocument();
     expect(screen.getByText("/home/u/repo")).toBeInTheDocument();
-    expect(screen.getByText("why is the redirect looping")).toBeInTheDocument();
+    // Scoped to the dialogue: the same prompt is also the outline's first
+    // entry, so an unscoped query now matches the index as well as the turn.
+    expect(
+      within(screen.getByTestId("transcript-turns")).getByText("why is the redirect looping"),
+    ).toBeInTheDocument();
     // The assistant's markdown is rendered, not shown with its asterisks.
     expect(screen.getByText("guard").tagName).toBe("STRONG");
   });

@@ -15,7 +15,7 @@ vi.mock("@/lib/hooks/useSync", () => ({ useSyncRuns: vi.fn() }));
 
 const { useSyncRuns } = await import("@/lib/hooks/useSync");
 
-const NO_COUNTS = { added: 0, modified: 0, deleted: 0 };
+const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
 
 function run(overrides: Partial<RunRecord> = {}): RunRecord {
   return {
@@ -72,8 +72,8 @@ describe("SyncHistoryTab", () => {
     // would hide both.
     seed([
       run({
-        applied: { added: 0, modified: 0, deleted: 0 },
-        published: { added: 322, modified: 0, deleted: 0 },
+        applied: { added: 0, modified: 0, deleted: 0, changes: [] },
+        published: { added: 322, modified: 0, deleted: 0, changes: [] },
       }),
     ]);
     render(<SyncHistoryTab enabled />);
@@ -98,9 +98,47 @@ describe("SyncHistoryTab", () => {
   });
 
   test("a join is marked, because the same counts mean something else on it", () => {
-    seed([run({ join: "new", published: { added: 322, modified: 0, deleted: 0 } })]);
+    seed([run({ join: "new", published: { added: 322, modified: 0, deleted: 0, changes: [] } })]);
     render(<SyncHistoryTab enabled />);
     expect(screen.getByText(/joined as new/i)).toBeInTheDocument();
+  });
+
+  test("opening a round names the documents it moved", () => {
+    // The row carries "+1 ~1"; this is the question that raises. Before, the
+    // detail skipped straight to the faults and told a round that changed two
+    // documents there was "nothing further to report" — while the paths sat in
+    // the stored payload the whole time.
+    seed([
+      run({
+        applied: {
+          added: 0,
+          modified: 1,
+          deleted: 0,
+          changes: [{ path: "knowledge/notes/a.md", status: "modified" }],
+        },
+        published: {
+          added: 1,
+          modified: 1,
+          deleted: 0,
+          changes: [
+            { path: "resources/channel/seatalk.yaml", status: "added" },
+            { path: "state/agent-plugins/codex.yaml", status: "modified" },
+          ],
+        },
+      }),
+    ]);
+    render(<SyncHistoryTab enabled />);
+
+    fireEvent.click(rows()[0]);
+    expect(screen.getByTestId("sync-run-applied")).toHaveTextContent("knowledge/notes/a.md");
+    expect(screen.getByTestId("sync-run-published")).toHaveTextContent(
+      "resources/channel/seatalk.yaml",
+    );
+    expect(screen.getByTestId("sync-run-published")).toHaveTextContent(
+      "state/agent-plugins/codex.yaml",
+    );
+    // …and it no longer claims there is nothing to say.
+    expect(screen.queryByText(/nothing further/i)).toBeNull();
   });
 
   test("opening a round shows what the row could not carry", () => {

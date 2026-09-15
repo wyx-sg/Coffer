@@ -51,7 +51,7 @@ def _is_within(candidate: pathlib.Path, root: pathlib.Path) -> bool:
     return candidate == root or root in candidate.parents
 
 
-def build_tree(store_dir: pathlib.Path) -> MemoryFileNode:
+def build_tree(store_dir: pathlib.Path, *, only: frozenset[str] | None = None) -> MemoryFileNode:
     """Build a recursive read-only tree of *store_dir*.
 
     The root node has ``path == ""`` and the directory's own name. Entries are
@@ -59,10 +59,19 @@ def build_tree(store_dir: pathlib.Path) -> MemoryFileNode:
     place in every store. A store directory that does not exist comes back as an
     empty root rather than an error: the agent may simply not have written to
     that project yet, and an empty tree says so more usefully than a 404.
+
+    ``only`` names the root entries that ARE the store, for a layout where the
+    directory holds more than the store. Codex is that case: its memory is the
+    one ``MEMORY.md`` under ``~/.codex/memories``, and the same directory holds
+    its automations, extensions, skills and a git checkout — none of it memory,
+    and none of it something a surface promising to show memory may list. A
+    per-project store has no such problem (the directory IS the store), so it
+    passes ``None`` and everything shows.
     """
     root = store_dir.resolve()
     node = MemoryFileNode(name=root.name, path="", type="dir")
-    node.children = _children(root, root, depth=0)
+    children = _children(root, root, depth=0)
+    node.children = [c for c in children if c.name in only] if only is not None else children
     return node
 
 

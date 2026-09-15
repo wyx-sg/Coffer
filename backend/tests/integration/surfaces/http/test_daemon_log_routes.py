@@ -100,6 +100,60 @@ async def test_errors_only_keeps_errors_and_unparseable_lines(monkeypatch, tmp_p
 
 
 @pytest.mark.asyncio
+async def test_a_level_floor_keeps_everything_at_or_above_it(monkeypatch, tmp_path) -> None:
+    """A floor, not an exact match.
+
+    "Warnings" means warnings AND the errors among them: a reader narrowing to
+    warnings is asking to stop reading info chatter, not to stop being told
+    about the failures that chatter was leading up to.
+    """
+    _write_log(
+        monkeypatch,
+        tmp_path,
+        [
+            _json_line("debug", "cache.miss"),
+            _json_line("info", "coffer.resource_created"),
+            _json_line("warning", "codex.stderr_relayed"),
+            _json_line("error", "mcp.upstream.spawn_failed"),
+        ],
+    )
+    async with _client() as c:
+        r = await c.get("/api/v1/daemon/logs", params={"level": "warning"})
+
+    assert [rec["event"] for rec in r.json()["records"]] == [
+        "mcp.upstream.spawn_failed",
+        "codex.stderr_relayed",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_level_floor_reads_an_upstreams_own_spelling(monkeypatch, tmp_path) -> None:
+    # cloudflared writes zerolog's three-letter levels into the same file; the
+    # floor has to mean the same thing for them as for structlog's own words.
+    _write_log(
+        monkeypatch,
+        tmp_path,
+        [
+            "2026-09-14T06:29:20Z INF Registered tunnel connection",
+            "2026-09-14T06:29:21Z WRN Retrying connection",
+        ],
+    )
+    async with _client() as c:
+        r = await c.get("/api/v1/daemon/logs", params={"level": "warning"})
+
+    assert [rec["event"] for rec in r.json()["records"]] == ["Retrying connection"]
+
+
+@pytest.mark.asyncio
+async def test_no_level_floor_filters_nothing(monkeypatch, tmp_path) -> None:
+    _write_log(monkeypatch, tmp_path, [_json_line("debug", "cache.miss")])
+    async with _client() as c:
+        r = await c.get("/api/v1/daemon/logs")
+
+    assert [rec["event"] for rec in r.json()["records"]] == ["cache.miss"]
+
+
+@pytest.mark.asyncio
 @pytest.mark.acceptance(spec="ui-shell", scenario="the daemon tab reads every writer in the log")
 async def test_errors_only_reads_every_writers_own_level(monkeypatch, tmp_path) -> None:
     """The log is not all structlog. An `INF` line from the cloudflared child

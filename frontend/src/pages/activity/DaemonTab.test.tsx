@@ -88,16 +88,30 @@ describe("DaemonTab", () => {
     expect(cells).toEqual(["—", "—", "—", "Traceback (most recent call last):"]);
   });
 
-  test("the errors-only switch narrows the fetch itself", async () => {
+  test("the level floor narrows the fetch itself", async () => {
+    // A floor, not a toggle: picking Warnings must ask the daemon for
+    // warnings AND the errors among them, not filter the page it already has
+    // — the tail it fetched may hold no warning at all.
     const get = mockLogs([RAISED]);
     render(wrap(<DaemonTab enabled />));
 
     await screen.findByText("sync_failed");
-    expect(lastQuery(get).errors_only).toBeUndefined();
+    expect(lastQuery(get).level).toBeUndefined();
 
-    fireEvent.click(screen.getByLabelText(/errors only/i));
+    // jsdom has no PointerEvent; open the Radix listbox from the keyboard.
+    fireEvent.keyDown(screen.getByRole("combobox", { name: /log level/i }), { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: /warnings and errors/i }));
 
-    await waitFor(() => expect(lastQuery(get).errors_only).toBe(true));
+    await waitFor(() => expect(lastQuery(get).level).toBe("warning"));
+  });
+
+  test("every level is the default and sends no floor at all", async () => {
+    const get = mockLogs([RAISED]);
+    render(wrap(<DaemonTab enabled />));
+
+    await screen.findByText("sync_failed");
+    expect(screen.getByRole("combobox", { name: /log level/i })).toHaveTextContent(/all levels/i);
+    expect(lastQuery(get).level).toBeUndefined();
   });
 
   test("the search matches the logger as well as the message", async () => {

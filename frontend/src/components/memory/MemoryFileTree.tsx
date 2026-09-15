@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
 import { translateApiError } from "@/lib/api/errors";
+import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
 import { MemoryFileViewer } from "@/components/memory/MemoryFileViewer";
 import type { MemoryFileNode } from "@/lib/api/memoryTypes";
 import { usePartitionFiles } from "@/lib/hooks/useMemory";
@@ -38,7 +39,7 @@ export function MemoryFileTree({ name }: { name: string }) {
         ) : tree.error ? (
           <p className="px-1 text-sm text-destructive">{translateApiError(t, tree.error)}</p>
         ) : tree.data ? (
-          <ul className="space-y-0.5">
+          <ul className={cn("space-y-0.5", FILE_PANE_MAX_HEIGHT)}>
             <TreeNode
               node={tree.data}
               depth={0}

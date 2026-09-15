@@ -106,6 +106,40 @@ def test_list_native_memory_codex_global_by_project(tmp_path, monkeypatch):
         assert items[0]["path"] == "/p/account-gateway"
 
 
+def test_codex_store_tree_holds_only_the_memory_document(tmp_path, monkeypatch):
+    """Codex's store is one file, and its directory holds a great deal else.
+
+    ``~/.codex/memories`` is also where Codex keeps its automations, its
+    extensions, its skills and a git checkout. Browsing the directory put all
+    of that on a page that claims to show memory; the store is the
+    ``MEMORY.md`` the layout names, and that is what the tree may list.
+    """
+    config_dir = tmp_path / "codex-config"
+    memories = config_dir / "memories"
+    (memories / ".git").mkdir(parents=True)
+    (memories / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (memories / "skills").mkdir()
+    (memories / "skills" / "unrelated.md").write_text("not memory\n", encoding="utf-8")
+    (memories / "xcrun_db").write_text("binary-ish\n", encoding="utf-8")
+    (memories / "MEMORY.md").write_text(
+        "# Task Group: gw\n\napplies_to: cwd=/p/gw; reuse_rule=x\n\n## Task 1: a, success\n",
+        encoding="utf-8",
+    )
+
+    app = _app(tmp_path, monkeypatch, 59834)
+    with _client(app) as c:
+        r = c.post(
+            "/api/v1/agents",
+            json={"type": "codex", "name": "cx", "config_dir": str(config_dir)},
+        )
+        assert r.status_code == 201, r.text
+
+        r = c.get("/api/v1/agents/cx/native-memory/files", params={"dir": str(memories)})
+        assert r.status_code == 200, r.text
+
+    assert [c["name"] for c in r.json()["root"]["children"]] == ["MEMORY.md"]
+
+
 def test_list_native_memory_empty_when_no_projects_dir(tmp_path, monkeypatch):
     config_dir = tmp_path / "cc-config"
     app = _app(tmp_path, monkeypatch, 59810)

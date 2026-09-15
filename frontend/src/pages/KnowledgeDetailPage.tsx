@@ -29,6 +29,8 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
+import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
+import { cn } from "@/lib/utils";
 import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
@@ -120,7 +122,7 @@ export function KnowledgeDetailPage() {
             placeholder={t("knowledge.detail.filterPlaceholder")}
             aria-label={t("knowledge.detail.filterPlaceholder")}
           />
-          <nav aria-label={t("knowledge.detail.treeLabel")}>
+          <nav aria-label={t("knowledge.detail.treeLabel")} className={FILE_PANE_MAX_HEIGHT}>
             <KnowledgeTreeLevel
               path={collection}
               depth={0}
@@ -153,7 +155,7 @@ export function KnowledgeDetailPage() {
                   file viewer. */}
               <KnowledgePreviewBody
                 text={file.data.body}
-                className="max-h-[70vh] overflow-auto p-4"
+                className={cn(FILE_PANE_MAX_HEIGHT, "p-4")}
               />
             </>
           )}

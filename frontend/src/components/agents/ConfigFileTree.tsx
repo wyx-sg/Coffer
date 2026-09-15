@@ -8,6 +8,7 @@
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react";
 
+import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
 import type { ConfigFileInfo } from "@/lib/api/agents";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,7 @@ export function ConfigFileTree({
   const { t } = useTranslation();
 
   return (
-    <ul className="space-y-0.5">
+    <ul className={cn("space-y-0.5", FILE_PANE_MAX_HEIGHT)}>
       {files.map((f) =>
         f.kind === "directory" ? (
           <li key={f.key}>

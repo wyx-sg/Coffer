@@ -28,11 +28,13 @@ from coffer.application.sync.machines import MachineRegistry, MachineView
 from coffer.application.sync.service import ConvergeService
 from coffer.domain.sync.backup import BackupRemote
 from coffer.domain.sync.convergence import ConvergeRun, RunRecord
+from coffer.domain.sync.diff import DiffSummary
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.sync_schemas import (
     AdoptIn,
     BreachOut,
     DiffCountsOut,
+    DocChangeOut,
     FailureOut,
     KeyFingerprintOut,
     KeyImportOut,
@@ -101,13 +103,26 @@ def _remote_or_none(remote: BackupRemote | None) -> SyncRemoteOut | None:
     return _remote_out(remote) if remote is not None else None
 
 
+def _diff_out(diff: DiffSummary) -> DiffCountsOut:
+    """A round's diff as both the tally and the paths behind it.
+
+    The counts are what the history row shows; the changes are what opening
+    the row is for. Sorted by ``DiffSummary.of`` already, so the order the
+    reader sees is stable between rounds.
+    """
+    return DiffCountsOut(
+        **diff.counts(),
+        changes=[DocChangeOut(path=c.path, status=c.status.value) for c in diff.changes],
+    )
+
+
 def _round_out(run: ConvergeRun) -> RoundOut:
     pending = run.pending
     return RoundOut(
         status=run.status.value,
         join=run.join.value if run.join else None,
-        applied=DiffCountsOut(**run.applied.counts()),
-        published=DiffCountsOut(**run.published.counts()),
+        applied=_diff_out(run.applied),
+        published=_diff_out(run.published),
         commit=run.commit,
         conflicts=list(run.conflicts),
         agent_resolved=list(run.agent_resolved),

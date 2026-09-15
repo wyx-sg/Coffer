@@ -642,13 +642,16 @@ components:
       type: object
       required:
       - status
-      - commit
-      - areas
+      - join
       - applied
-      - failures
-      - not_applicable
-      - pending
+      - published
+      - commit
       - conflicts
+      - agent_resolved
+      - failures
+      - locked_refs
+      - pending
+      - error
       description: One shape for every terminal state; `status` discriminates. The list fields are always
         present, populated or not, so a surface renders one component for a run, an adopt, a restore,
         a confirm and a rollback.
@@ -663,61 +666,86 @@ components:
           - awaiting_confirmation
           - push_failed
           - error
+        join:
+          type: string
+          nullable: true
+          enum:
+          - new
+          - returning
+          description: Set when this round joined a remote; null otherwise
+        applied:
+          $ref: '#/components/schemas/DiffCountsOut'
+          description: What the round wrote into this vault
+        published:
+          $ref: '#/components/schemas/DiffCountsOut'
+          description: What the round wrote into the remote
         commit:
           type: string
           nullable: true
           description: The pointer after the round; unchanged when the round did not absorb
-        areas:
+        conflicts:
           type: array
           items:
-            $ref: '#/components/schemas/AreaCountOut'
-        applied:
+            type: string
+          description: Paths git could not merge. A non-empty list aborts the round untouched
+        agent_resolved:
           type: array
           items:
-            $ref: '#/components/schemas/AppliedPathOut'
+            type: string
+          description: Paths an agent merged — reported whether or not the round succeeded
         failures:
           type: array
           items:
             $ref: '#/components/schemas/PathFailureOut'
           description: Per-path failures. They are reported and never abort the round
-        not_applicable:
-          type: array
-          items:
-            $ref: '#/components/schemas/PathFailureOut'
-          description: Paths that cannot apply on this machine at all — an agent whose config_dir does
-            not exist here. Preserved like a pending path, but not retried and not an error.
-        pending:
+        locked_refs:
           type: array
           items:
             type: string
-          description: The retry set after the round. The exporter must not delete these
-        conflicts:
-          type: array
-          items:
-            $ref: '#/components/schemas/ConflictOut'
-        confirmation:
-          allOf:
-          - $ref: '#/components/schemas/PendingConfirmationOut'
+          description: Credential refs whose ciphertext this machine holds without the key
+        pending:
+          $ref: '#/components/schemas/PendingConfirmationOut'
           nullable: true
-          description: Set when status is awaiting_confirmation
-        join:
-          allOf:
-          - $ref: '#/components/schemas/JoinOut'
-          nullable: true
-          description: Set when the round started without a pointer
-        worktree_path:
-          type: string
-          nullable: true
-          description: Named on a conflict, because that is where the user resolves it with their own
-            git tools.
+          description: Set when the deletion guard held the round for confirmation
         error:
           type: string
           nullable: true
-          description: Already redacted of the push credential
-        ran_at:
+    DiffCountsOut:
+      type: object
+      required:
+      - added
+      - modified
+      - deleted
+      - changes
+      description: What one side of a round moved — the tally a history row shows, and the paths behind
+        it that opening the row is for.
+      properties:
+        added:
+          type: integer
+        modified:
+          type: integer
+        deleted:
+          type: integer
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocChangeOut'
+          description: Every path this side touched, sorted by path
+    DocChangeOut:
+      type: object
+      required:
+      - path
+      - status
+      description: One document's fate in one round.
+      properties:
+        path:
           type: string
-          format: date-time
-          nullable: true
+        status:
+          type: string
+          enum:
+          - added
+          - modified
+          - deleted
     RestoreIn:
       type: object
       properties:

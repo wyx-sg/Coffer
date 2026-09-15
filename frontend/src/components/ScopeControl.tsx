@@ -128,12 +128,21 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
   // heard of reads as a perfectly healthy "1 agent" while reaching nobody; the
   // note is the only thing that says otherwise without opening the panel, and
   // it is what turns the button amber.
-  const note = isDormantHere(
-    scope,
-    (agentsData ?? []).map((a) => a.name),
-  )
-    ? t("scope.inactiveHereAgent")
-    : undefined;
+  //
+  // But NOT on a disabled resource. There the button already says "Disabled",
+  // which is the whole reason it reaches nobody; colouring it amber over the
+  // scope underneath answers a question the label just answered, with a second
+  // answer the reader cannot act on — turning the resource back on is the only
+  // move, and the scope only starts mattering once they do. Two rows both
+  // reading "Disabled" in two different colours is the symptom.
+  const note =
+    mode !== "disabled" &&
+    isDormantHere(
+      scope,
+      (agentsData ?? []).map((a) => a.name),
+    )
+      ? t("scope.inactiveHereAgent")
+      : undefined;
 
   return (
     <ReachControl

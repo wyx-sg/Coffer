@@ -347,16 +347,22 @@ describe("ChannelDetailPage", () => {
 });
 
 describe("ChannelDetailPage — the machine that runs the channel", () => {
-  /** The card's picker, by its accessible name. */
+  /** The picker, by its accessible name. It is a row of the status card: the
+   *  binding is the other half of that card's "Running" headline, not a
+   *  separate subject needing its own heading. */
   const picker = () => screen.getByRole("combobox", { name: /machine running st/i });
 
-  test("says plainly when this machine is the one running the adapter", () => {
+  test("the binding is a row of the status card, naming this machine", () => {
     stubResource();
     stubStatus({ runs_on: HERE, runs_here: true });
     stubPairing();
     renderPage();
 
-    expect(screen.getByText(/this machine runs this channel's adapter/i)).toBeInTheDocument();
+    // Next to the adapter's own state, because "Running" is only believable
+    // once you know which machine it is running on.
+    const card = screen.getByTestId("channel-status-card");
+    expect(within(card).getByText(/^runs on$/i)).toBeInTheDocument();
+    expect(within(card).getByRole("combobox", { name: /machine running st/i })).toBeInTheDocument();
     expect(picker()).toHaveTextContent(/Laptop · this machine/i);
   });
 
@@ -366,7 +372,9 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
     stubPairing();
     renderPage();
 
-    expect(screen.getByText(/Desktop runs this channel's adapter/i)).toBeInTheDocument();
+    // Bound elsewhere is somebody's choice, not a fault: the picker reports it
+    // and nothing raises an alarm.
+    expect(picker()).toHaveTextContent(/Desktop/i);
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -419,14 +427,19 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
     });
   });
 
-  test("states the handover timing and that this is not reach", () => {
+  test("the rebind menu states the handover timing and that this is not reach", () => {
     // Both are things the user cannot see and would otherwise meet as a bug:
     // a rebind that is not instant on the far side, and a reach control one
-    // header away that answers an entirely different question.
+    // row away that answers an entirely different question. They live in the
+    // menu now rather than in prose beside it — this is the moment the choice
+    // is actually made.
     stubResource();
     stubStatus();
     stubPairing();
     renderPage();
+
+    // jsdom has no PointerEvent; open the Radix listbox from the keyboard.
+    fireEvent.keyDown(picker(), { key: "ArrowDown" });
 
     expect(screen.getByText(/needs no restart/i)).toBeInTheDocument();
     expect(screen.getByText(/which agents this channel may drive/i)).toBeInTheDocument();

@@ -16,7 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 import coffer
 from coffer.application.audit_service import AuditService
-from coffer.application.log_reader import matches_level, parse_log_lines, tail_lines
+from coffer.application.log_reader import (
+    at_least,
+    matches_level,
+    parse_log_lines,
+    tail_lines,
+)
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.logging.files import log_dir
@@ -227,6 +232,11 @@ def _lift(record: dict[str, Any], key: str) -> str | None:
 async def list_daemon_logs(
     since: datetime | None = Query(default=None),  # noqa: B008
     errors_only: bool = Query(default=False),
+    #: Severity floor: everything at or above it survives. "Errors only" was
+    #: the only choice this surface offered, which made a warning — the level
+    #: most worth noticing before something breaks — visible only by reading
+    #: the whole file. ``errors_only`` stays for callers that already send it.
+    level: str = Query(default=""),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> DaemonLogListOut:
     """The tail of ``daemon.log``, newest-first — the same record ``coffer__diagnose``
@@ -249,7 +259,7 @@ async def list_daemon_logs(
     for record in reversed(parse_log_lines(tail_lines(log_dir() / "daemon.log"))):
         if len(records) >= limit:
             break
-        if not matches_level(record, errors_only):
+        if not matches_level(record, errors_only) or not at_least(record, level):
             continue
         at = str(record.get("timestamp", ""))
         # Cheap prefilter: ISO-8601 sorts lexically, so a string compare

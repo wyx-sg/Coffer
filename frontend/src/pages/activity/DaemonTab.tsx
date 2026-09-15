@@ -6,8 +6,13 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DataTable } from "@/components/DataTable";
 import { RawLog } from "@/components/RawLog";
 import { useDaemonLog } from "@/lib/hooks/useDaemonLog";
@@ -21,11 +26,17 @@ import type { components } from "@/lib/api/types";
 type DaemonLogRecord = components["schemas"]["DaemonLogRecordOut"];
 
 /** The daemon caps a log query at 500 lines of tail. */
+/** Radix forbids an empty option value, so "every level" travels as a word
+ *  here and becomes "" at the query. */
+const ALL_LEVELS = "all";
+const LEVEL_FLOORS = ["", "debug", "info", "warning", "error"] as const;
+
 const LIMIT = 500;
 
 interface DaemonFiltersState extends ActivityFilterState {
   /** Applied server-side — the route drops everything below error. */
-  errorsOnly: boolean;
+  /** Severity floor; "" is every level. */
+  level: string;
 }
 
 const DEFAULT_FILTERS: DaemonFiltersState = {
@@ -33,7 +44,7 @@ const DEFAULT_FILTERS: DaemonFiltersState = {
   timeRange: "all",
   from: "",
   to: "",
-  errorsOnly: false,
+  level: "",
 };
 
 /**
@@ -83,13 +94,13 @@ export function DaemonTab({ enabled }: Props) {
   // so computing it inline would mint a fresh `since` every render — and
   // `since` is in the useDaemonLog queryKey, so that would refetch the log on
   // every keystroke. Recompute only when the time filter changes.
-  const { timeRange, from, to, errorsOnly } = filters;
+  const { timeRange, from, to, level } = filters;
   const { since, until } = useMemo(
     () => resolveTimeWindow({ timeRange, from, to }),
     [timeRange, from, to],
   );
 
-  const { data, isLoading, error } = useDaemonLog({ since, errorsOnly, limit: LIMIT, enabled });
+  const { data, isLoading, error } = useDaemonLog({ since, level, limit: LIMIT, enabled });
 
   // The route applies `since` and `errors_only` server-side and returns the
   // tail newest-first; the custom-range upper bound and the free-text search
@@ -119,16 +130,25 @@ export function DaemonTab({ enabled }: Props) {
         onChange={setFilters}
         searchPlaceholder={t("activity.daemon.searchPlaceholder")}
       >
-        <div className="flex items-center gap-2">
-          <Switch
-            id="daemon-errors-only"
-            checked={filters.errorsOnly}
-            onCheckedChange={(v) => setFilters({ ...filters, errorsOnly: v })}
-          />
-          <Label htmlFor="daemon-errors-only" className="text-sm font-normal">
-            {t("activity.daemon.errorsOnly")}
-          </Label>
-        </div>
+        {/* A floor, not a toggle. "Errors only" hid the level most worth
+            noticing BEFORE something breaks — a warning — behind reading the
+            whole file, and offered no way to quiet the info chatter without
+            also hiding those warnings. */}
+        <Select
+          value={filters.level || ALL_LEVELS}
+          onValueChange={(v) => setFilters({ ...filters, level: v === ALL_LEVELS ? "" : v })}
+        >
+          <SelectTrigger className="w-[11rem]" aria-label={t("activity.daemon.levelLabel")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LEVEL_FLOORS.map((level) => (
+              <SelectItem key={level || "all"} value={level || ALL_LEVELS}>
+                {t(`activity.daemon.level.${level || "all"}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </ActivityFilters>
 
       {/* isLoading, not isPending: a disabled query stays "pending" forever,

@@ -26,10 +26,9 @@ import { ScopeControl } from "@/components/ScopeControl";
 import { ChannelCallbackCard } from "@/components/channel/ChannelCallbackCard";
 import {
   ChannelPairingCard,
-  ChannelStatusCard,
   ChannelTestMessageCard,
 } from "@/components/channel/ChannelDetailCards";
-import { ChannelMachineCard } from "@/components/channel/ChannelMachineCard";
+import { ChannelStatusCard } from "@/components/channel/ChannelStatusCard";
 import { EditChannelDialog } from "@/components/channel/EditChannelDialog";
 import { translateApiError } from "@/lib/api/errors";
 import {
@@ -128,11 +127,7 @@ export function ChannelDetailPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ChannelStatusCard status={status} />
-        {/* Next to the status card because it is that card's missing half:
-            "Stopped" is a fault on the bound machine and ordinary on every
-            other one, and only the binding says which this is. */}
-        <ChannelMachineCard name={name} config={resource.config} status={status} />
+        <ChannelStatusCard name={name} config={resource.config} status={status} />
         <ChannelPairingCard
           code={pairing.data}
           isPending={pairing.isPending}
