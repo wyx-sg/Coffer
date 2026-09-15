@@ -10,6 +10,11 @@ not a log line after a silent success.
 An empty agent list is the one thing both paths always accept: it is the
 vault-wide meaning of dormant (the channel is off), and off must not also mean
 frozen.
+
+The scopes here are written the way a scope is actually written — in agent
+RESOURCE names — while ``default_agent`` is an agent KEY. Nothing is expected to
+compare the two directly; the kind is given the registry's map, exactly as the
+composition root gives it one.
 """
 
 from __future__ import annotations
@@ -45,11 +50,13 @@ async def client(tmp_path) -> AsyncIterator[tuple[AsyncClient, ResourceService]]
         await conn.run_sync(Base.metadata.create_all)
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    # Both injections the composition root makes, so the config path's
-    # default_agent check is live too — the scope path's check needs none.
+    # All three injections the composition root makes, so both paths' checks
+    # are live — including the name→key map without which they would be
+    # comparing a resource name against an agent key.
     kind = make_channel_kind(
         agent_keys=lambda: ["claude_code", "codex"],
         scope_of=lambda ref: _scope_of(svc, ref),
+        agent_types=_agent_types,
     )
     svc = ResourceService(kinds={"channel": kind}, repo=SqlAlchemyResourceRepo(sm), audit=audit)
     await svc.register(
@@ -77,6 +84,15 @@ async def _scope_of(svc: ResourceService, ref: ResourceRef) -> Scope | None:
     return (await svc.get(ref)).scope
 
 
+#: Two registered agents, named the way a user names them — neither name is the
+#: agent key it maps to, which is the whole point.
+_TYPES = {"claude-code": "claude_code", "codex-cli": "codex"}
+
+
+async def _agent_types() -> dict[str, str]:
+    return _TYPES
+
+
 @pytest.mark.acceptance(
     spec="channels",
     scenario="reject narrowing a channel's scope past its default agent",
@@ -85,24 +101,40 @@ async def test_narrowing_past_the_default_agent_is_rejected_not_silently_accepte
     c, svc = client
     # The channel's default_agent is claude_code (the config default), so this
     # narrowing would leave it able to drive nothing.
-    r = await c.put(_SCOPE_URL, json={"scope": {"agents": ["codex"]}})
+    r = await c.put(_SCOPE_URL, json={"scope": {"agents": ["codex-cli"]}})
 
     assert r.status_code == 422, r.text
     assert r.json()["error"]["code"] == "SCOPE_INVALID"
     # Names both sides, so the owner can see the two ways out.
     message = r.json()["error"]["message"]
     assert "claude_code" in message
-    assert "codex" in message
+    assert "codex-cli" in message
     # Rejected BEFORE persistence: the reach the user narrowed away is intact.
     assert (await svc.get(ResourceRef("channel", "tg"))).scope is None
 
 
 async def test_a_scope_that_keeps_the_default_agent_is_accepted(client) -> None:
+    """Named as the reach control names it — the agent RESOURCE, not the key.
+
+    This is the narrowing a user can actually express, and the one the two
+    vocabularies used to refuse.
+    """
+    c, _svc = client
+    r = await c.put(_SCOPE_URL, json={"scope": {"agents": ["claude-code"]}})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["scope"] == {"agents": ["claude-code"]}
+
+
+async def test_a_scope_naming_the_agent_key_instead_is_refused(client) -> None:
+    """And the mirror: the agent key is not a resource name, so it narrows the
+    channel to a resource this vault does not hold — which drives nothing. It
+    reads as a narrowing past the default agent, because that is what it is."""
     c, _svc = client
     r = await c.put(_SCOPE_URL, json={"scope": {"agents": ["claude_code"]}})
 
-    assert r.status_code == 200, r.text
-    assert r.json()["scope"] == {"agents": ["claude_code"]}
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == "SCOPE_INVALID"
 
 
 async def test_the_dormant_scope_is_accepted(client) -> None:
@@ -149,7 +181,7 @@ async def test_the_config_path_still_rejects_a_default_agent_outside_the_scope(c
     """The other half of the invariant, unchanged: with a non-empty scope in
     place, an edit cannot re-bind the channel to an agent outside it."""
     c, _svc = client
-    assert (await c.put(_SCOPE_URL, json={"scope": {"agents": ["claude_code"]}})).status_code == 200
+    assert (await c.put(_SCOPE_URL, json={"scope": {"agents": ["claude-code"]}})).status_code == 200
 
     r = await c.patch(
         _CONFIG_URL,

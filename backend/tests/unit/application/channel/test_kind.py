@@ -14,6 +14,15 @@ from coffer.domain.scope import Scope
 
 _NOW = datetime(2026, 9, 13, tzinfo=UTC)
 
+#: The registry as both checks read it: agent RESOURCE names on the left, the
+#: agent KEYS a ``default_agent`` is written in on the right. Neither side is
+#: the other, which is the whole reason the map is injected.
+_TYPES = {"claude-code": "claude_code", "codex": "codex"}
+
+
+async def _agent_types() -> dict[str, str]:
+    return _TYPES
+
 
 def test_kind_named_channel_with_config_schema():
     kind = make_channel_kind()
@@ -119,7 +128,9 @@ def _update_validate(config: dict, agent_keys=lambda: ["claude_code", "codex"], 
     async def _scope_of(_ref):
         return scope
 
-    hook = make_channel_kind(agent_keys=agent_keys, scope_of=_scope_of).on_update_config
+    hook = make_channel_kind(
+        agent_keys=agent_keys, scope_of=_scope_of, agent_types=_agent_types
+    ).on_update_config
     assert hook is not None
     ref = ResourceRef(kind="channel", name="st")
     # Async because it reads the channel's scope off the row; ResourceService
@@ -216,7 +227,7 @@ def test_create_time_validation_needs_no_scope_reader():
 
 
 def _validate_scope(scope, config=None):
-    hook = make_channel_kind().validate_scope_for
+    hook = make_channel_kind(agent_types=_agent_types).validate_scope_for
     assert hook is not None
     resource = Resource(
         id=1,
@@ -228,13 +239,18 @@ def _validate_scope(scope, config=None):
         created_at=_NOW,
         updated_at=_NOW,
     )
-    hook(resource, scope)
+    # Async because it reads the registry's name→key map; ResourceService
+    # awaits an awaitable hook result.
+    asyncio.run(hook(resource, scope))
 
 
-def test_scope_hook_is_always_wired():
-    # It judges a proposed scope against the channel's own stored config, so
-    # unlike ``on_update_config`` it needs nothing injected and is never absent.
-    assert make_channel_kind().validate_scope_for is not None
+def test_scope_hook_is_wired_with_the_registry_it_compares_against():
+    # A scope names agent RESOURCES, a ``default_agent`` names an agent KEY:
+    # with no map between them there is no check to run, only a comparison of
+    # two vocabularies that reads every correct answer as wrong. Absent rather
+    # than wrong — the same convention ``on_update_config`` follows.
+    assert make_channel_kind(agent_types=_agent_types).validate_scope_for is not None
+    assert make_channel_kind().validate_scope_for is None
 
 
 @pytest.mark.acceptance(
@@ -255,7 +271,15 @@ def test_scope_rejection_names_the_proposed_scope_too():
 
 
 def test_scope_containing_the_default_agent_is_accepted():
-    _validate_scope(Scope(agents=["claude_code", "codex"]))
+    # Named as the reach control names them — the agent resources, not the keys.
+    _validate_scope(Scope(agents=["claude-code", "codex"]))
+
+
+def test_a_scope_naming_the_agent_key_instead_of_the_resource_is_refused():
+    # The mirror of the case above: `claude_code` is not a resource this vault
+    # holds, so a scope naming it narrows the channel to nothing.
+    with pytest.raises(ValueError, match="claude_code"):
+        _validate_scope(Scope(agents=["claude_code"]))
 
 
 def test_a_channel_with_an_explicit_default_agent_is_read_from_its_config():

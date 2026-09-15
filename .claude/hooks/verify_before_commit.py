@@ -8,6 +8,14 @@ silently. It never hard-blocks — `make verify` is slow, and a hook that traps
 every commit just trains people to bypass it — and it never breaks the agent: on
 any error or for any non-commit command it exits 0 with no decision.
 
+**It never asks in a mode whose whole point is not being asked.** A session in
+``bypassPermissions`` (or ``dontAsk``) has said, once and deliberately, that it
+does not want approval prompts; a hook that prompts anyway has overridden a
+choice the user made about their own session, and the only thing it teaches is
+that the setting does not work. In those modes the staleness is still worth
+KNOWING, so it is reported to the agent as a system message instead — the fact
+survives, the interruption does not.
+
 The freshness check targets the *working tree the commit runs in* (resolved from
 the command's cwd), not ``CLAUDE_PROJECT_DIR`` — which stays pinned to the main
 checkout even when the commit runs in a linked worktree. Checking the main
@@ -24,6 +32,12 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+
+#: Permission modes that mean "do not put a prompt in front of me". Read off
+#: the hook payload's ``permission_mode``; an older CLI that does not send the
+#: field reads as empty, which keeps the old behaviour rather than silently
+#: disarming the guard.
+_NO_PROMPT_MODES = frozenset({"bypassPermissions", "dontAsk"})
 
 # .claude/hooks/verify_before_commit.py -> repo root is parents[2]
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -94,16 +108,22 @@ def main() -> int:
     if fresh is None or fresh:
         return 0  # can't tell, or genuinely fresh -> don't get in the way
 
+    reason = (
+        "`make verify` has not passed since your last source change. "
+        "Run `make verify` before committing, or confirm to commit anyway."
+    )
+    if str(data.get("permission_mode") or "") in _NO_PROMPT_MODES:
+        # Say it to the agent, ask nothing of the user. The commit proceeds.
+        print(json.dumps({"systemMessage": reason}))
+        return 0
+
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PreToolUse",
                     "permissionDecision": "ask",
-                    "permissionDecisionReason": (
-                        "`make verify` has not passed since your last source change. "
-                        "Run `make verify` before committing, or confirm to commit anyway."
-                    ),
+                    "permissionDecisionReason": reason,
                 }
             }
         )

@@ -1806,6 +1806,15 @@ have.
   the switch to the other one is refused — whether it is typed or tapped from a
   card rendered before the scope was narrowed.
 
+### Scenario: a channel's scope names agent resources, not agent keys
+
+- **Given** a running channel whose default agent is registered as a resource
+  under its own name,
+- **When** the owner narrows the channel's scope to that resource name — the
+  only name the reach control offers,
+- **Then** the edit is accepted, the channel keeps running, and the scope
+  reaches `/agent` translated into the agent key that surface speaks.
+
 ### Scenario: a channel scoped to no agent is dormant
 
 - **Given** an enabled channel whose scope is set to the empty list,
@@ -2503,6 +2512,18 @@ decision it rests on is recorded in
     the listing, the selection card, and the validation of a chosen key
     (typed or tapped). They MUST read one narrowed set — a card that offers an
     agent the next check rejects is the specific failure this requires.
+  - **The two names an agent has.** A scope names agent **resources** —
+    whatever the owner called them — because that is what a reach picker can
+    offer and what the resource table holds. `default_agent`, `/agent` and the
+    turn router all speak the agent **key** the turn platform routes on. Every
+    comparison between the two MUST be made in ONE vocabulary, translated
+    through the agent registry. Comparing the strings directly refuses the only
+    narrowing a user is able to express, and accepts in its place a value the
+    reach picker must then render as an agent registered nowhere — so the rule
+    is not an implementation detail: it is the difference between a reach
+    control that works and one that offers nothing it will accept. Two agent
+    resources of the same type collapse to one key, and a scope naming a
+    resource this vault does not hold admits no agent at all.
   - **The invariant:** a channel's `default_agent` MUST be an agent the channel
     may drive — inside its scope whenever that scope is non-empty. It MUST
     be enforced on BOTH write paths, so the inconsistent state cannot be stored

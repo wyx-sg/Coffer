@@ -176,3 +176,48 @@ async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv
     await env.runtime.reconcile_once()
 
     assert env.runtime.is_running("tg") is True
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel's scope names agent resources, not agent keys"
+)
+async def test_narrowing_to_the_agents_resource_name_is_accepted(env: ChannelEnv) -> None:
+    """The bug this file could not see, because it never registered an agent ROW.
+
+    A scope names agent RESOURCES — ``claude-code``, whatever the owner called
+    it — and that is the only vocabulary the reach picker can offer. The
+    channel's ``default_agent`` is an agent KEY, ``claude_code``. Compared
+    directly, the only narrowing a user could make was refused, and the only
+    value accepted was one the picker then rendered as registered nowhere.
+    """
+    await env.register_agent_resource("claude-code", "claude_code")
+    await env.register_agent_resource("my-codex", "codex")
+    resource = await env.register_channel("tg")
+    await env.runtime.reconcile_once()
+    assert env.runtime.is_running("tg") is True
+
+    await env.resources.update_scope(resource.ref, Scope(agents=["claude-code"]), actor="test")
+    await env.runtime.reconcile_once()
+
+    assert env.runtime.is_running("tg") is True
+    # ...and the binding carries it in the vocabulary everything below the gate
+    # reads — `/agent`, the card, the routing of a chosen key.
+    binding = env.processor.binding("tg")
+    assert binding is not None
+    assert binding.agent_scope == Scope(agents=["claude_code"])
+
+
+async def test_narrowing_past_the_default_agent_is_still_refused_by_name(
+    env: ChannelEnv,
+) -> None:
+    """Translating the vocabularies must not soften the invariant: a scope that
+    genuinely excludes the channel's own agent is still refused, and the refusal
+    still names the agent it excluded."""
+    await env.register_agent_resource("claude-code", "claude_code")
+    await env.register_agent_resource("my-codex", "codex")
+    resource = await env.register_channel("tg")
+
+    with pytest.raises(ScopeInvalidError, match="claude_code"):
+        await env.resources.update_scope(resource.ref, Scope(agents=["my-codex"]), actor="test")
+
+    assert (await env.resources.get(resource.ref)).scope is None
