@@ -27,11 +27,16 @@ def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
 
 
-def _run(command: str, project_dir: Path) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: str, project_dir: Path, *, permission_mode: str | None = None
+) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project_dir)}
+    payload: dict[str, object] = {"tool_name": "Bash", "tool_input": {"command": command}}
+    if permission_mode is not None:
+        payload["permission_mode"] = permission_mode
     return subprocess.run(
         [sys.executable, str(_HOOK)],
-        input=json.dumps({"tool_name": "Bash", "tool_input": {"command": command}}),
+        input=json.dumps(payload),
         capture_output=True,
         text=True,
         cwd=str(project_dir),
@@ -56,10 +61,17 @@ def _stamp(repo: Path) -> None:
 
 
 def _decision(proc: subprocess.CompletedProcess[str]) -> str | None:
+    """The hook's permission decision, or ``None`` when it made none.
+
+    Output without a decision is not the same as no output: the hook may say
+    something to the agent (``systemMessage``) while leaving the call to the
+    normal flow.
+    """
     out = proc.stdout.strip()
     if not out:
         return None
-    return json.loads(out)["hookSpecificOutput"]["permissionDecision"]
+    payload = json.loads(out)
+    return (payload.get("hookSpecificOutput") or {}).get("permissionDecision")
 
 
 def test_silent_when_no_stamp_baseline(repo: Path) -> None:
@@ -77,6 +89,39 @@ def test_asks_when_source_changed_since_verify(repo: Path) -> None:
     (repo / "mod.py").write_text("x = 2  # changed after verify\n")
     proc = _run("git commit -am 'change'", repo)
     assert _decision(proc) == "ask"
+
+
+@pytest.mark.parametrize("mode", ["bypassPermissions", "dontAsk"])
+def test_never_prompts_in_a_mode_that_exists_not_to_prompt(repo: Path, mode: str) -> None:
+    """A session that turned prompts off does not get prompted.
+
+    Asking anyway overrides a choice the user made about their own session,
+    and the only thing it teaches is that the setting does not work.
+    """
+    _stamp(repo)
+    (repo / "mod.py").write_text("x = 2  # changed after verify\n")
+
+    proc = _run("git commit -am 'change'", repo, permission_mode=mode)
+
+    assert _decision(proc) is None
+    # The staleness is still worth knowing, so it reaches the agent instead.
+    assert "make verify" in json.loads(proc.stdout)["systemMessage"]
+
+
+def test_still_asks_in_the_default_mode(repo: Path) -> None:
+    _stamp(repo)
+    (repo / "mod.py").write_text("x = 2  # changed after verify\n")
+
+    assert _decision(_run("git commit -am 'c'", repo, permission_mode="default")) == "ask"
+
+
+def test_a_payload_without_the_mode_field_still_asks(repo: Path) -> None:
+    # An older CLI that does not send `permission_mode` must keep the guard,
+    # not silently disarm it.
+    _stamp(repo)
+    (repo / "mod.py").write_text("x = 2  # changed after verify\n")
+
+    assert _decision(_run("git commit -am 'c'", repo)) == "ask"
 
 
 def test_silent_when_fresh(repo: Path) -> None:
