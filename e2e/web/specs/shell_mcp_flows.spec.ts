@@ -316,19 +316,22 @@ acceptance(
       }
     });
 
-    // Paste a payload that is not valid JSON, then click Continue.
+    // Paste a payload that is not valid JSON. The panel validates as the
+    // user types: a readable parse error appears at once and Continue stays
+    // disabled, so there is nothing to click and nothing can reach the
+    // daemon.
     await page.locator("#json-input").fill("{invalid json");
-    await page.getByRole("button", { name: /continue/i }).click();
 
-    // The dialog stays open (heading still visible) and a readable
-    // error appears in the panel. We accept either the parse-error
-    // copy or a shape-mismatch hint — both satisfy the spec.
     await expect(
       page.getByRole("heading", { name: /Add MCP server/i }),
     ).toBeVisible();
+    await expect(page.getByRole("alert").first()).toContainText(
+      /invalid|parse|expected|JSON|mcpServers/i,
+      { timeout: 5_000 },
+    );
     await expect(
-      page.getByText(/invalid|parse|expected|JSON|mcpServers/i).first(),
-    ).toBeVisible({ timeout: 5_000 });
+      page.getByRole("button", { name: /continue/i }),
+    ).toBeDisabled();
 
     // The forbidden copy MUST NOT appear inside the dialog.
     await expect(page.getByText(/unexpected error/i)).toHaveCount(0);
