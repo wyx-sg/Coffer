@@ -10,30 +10,29 @@ never composed here. This module builds L0 and L1 and nothing else.
 Three things this module is deliberately narrow about:
 
 * **It never resolves an agent's scope or a cwd's partition from scratch.**
-  ``MemoryPort``/``OverridesPort`` below are the two narrow slices of
-  ``MemoryService``/``OverrideRepository`` this needs — visible partitions,
-  a partition's facts, every override at once — so a unit test can fake both
-  with no database at all, and the production composition root hands in the
-  real services unchanged (structural typing: neither Protocol is a base
-  class either has to inherit from).
-* **Overrides are applied once, up front.** ``application.memory.overrides.apply``
-  is what decides hidden/pinned/superseded — this module never reimplements
-  that judgement, only reads its result (FR-041, FR-042).
-* **The budget is spent in FR-051's stated preference order**: pinned facts
-  first, then ``global``'s personal facts, then the current project's most
-  recent — by filling L0 (the global side of that order) completely before
-  L1 ever gets a look at what is left. A tiny budget can therefore ship L0
-  alone with L1 entirely absent; it can never ship a half of L0.
+  ``MemoryPort`` below is the narrow slice of ``MemoryService`` this needs —
+  visible partitions, a partition's facts, the partition list — so a unit
+  test can fake it with no database at all, and the production composition
+  root hands in the real service unchanged (structural typing: the Protocol
+  is not a base class ``MemoryService`` has to inherit from).
+* **It reads the facts as aggregation and organise left them.** There is no
+  second judgement applied on top any more: the developer's hide/pin/
+  supersede/settle overrides are gone with the surface that recorded them, so
+  what a fact's own frontmatter says is what delivery says.
+* **The budget is spent in FR-051's stated preference order**: ``global``'s
+  personal facts, then the current project's most recent — by filling L0 (the
+  global side of that order) completely before L1 ever gets a look at what is
+  left. A tiny budget can therefore ship L0 alone with L1 entirely absent; it
+  can never ship a half of L0.
 """
 
 from __future__ import annotations
 
 import pathlib
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from coffer.application.memory.overrides import Override, apply
 from coffer.application.memory.service import PartitionSummary
 from coffer.domain.memory.budget import estimate_tokens
 from coffer.domain.memory.fact import Fact
@@ -69,14 +68,6 @@ class MemoryPort(Protocol):
     async def list_partitions(self) -> Sequence[PartitionSummary]: ...
 
 
-class OverridesPort(Protocol):
-    """Every developer decision at once — the shape ``overrides.apply``
-    wants, and the only one composing a context needs (never a single
-    lookup or a write)."""
-
-    async def all(self) -> Mapping[str, Override]: ...
-
-
 @dataclass(frozen=True)
 class ComposedContext:
     """What ``compose_context`` hands back: the text, which partition it
@@ -101,11 +92,10 @@ def _recency(fact: Fact) -> str:
     return max((origin.captured_at for origin in fact.origins), default="")
 
 
-def _ordered(facts: Iterable[Fact], pinned: frozenset[str]) -> tuple[Fact, ...]:
-    """Most recent first, then pinned facts moved to the front — a stable
-    sort twice over, so pinned facts keep their relative recency order too."""
-    by_recency = sorted(facts, key=_recency, reverse=True)
-    return tuple(sorted(by_recency, key=lambda f: 0 if f.key in pinned else 1))
+def _ordered(facts: Iterable[Fact]) -> tuple[Fact, ...]:
+    """Most recent first — the whole of FR-051's within-partition order now
+    that pinning is gone."""
+    return tuple(sorted(facts, key=_recency, reverse=True))
 
 
 def _fact_line(fact: Fact) -> str:
@@ -175,7 +165,6 @@ class _Budget:
 
 async def compose_context(
     memory: MemoryPort,
-    overrides: OverridesPort,
     *,
     agent: str | None,
     cwd: str,
@@ -192,13 +181,10 @@ async def compose_context(
     if project_partition != GLOBAL_PARTITION and project_partition in visible:
         project_facts = await memory.list_facts(project_partition, agent=agent)
 
-    applied = apply(list(global_facts) + list(project_facts), await overrides.all())
-    shown = {f.key: f for f in applied.visible()}
-    global_visible = _ordered(
-        (f for f in shown.values() if f.partition == GLOBAL_PARTITION), applied.pinned
-    )
+    shown = {f.key: f for f in list(global_facts) + list(project_facts)}
+    global_visible = _ordered(f for f in shown.values() if f.partition == GLOBAL_PARTITION)
     project_visible = (
-        _ordered((f for f in shown.values() if f.partition == project_partition), applied.pinned)
+        _ordered(f for f in shown.values() if f.partition == project_partition)
         if project_partition != GLOBAL_PARTITION
         else ()
     )
@@ -207,9 +193,7 @@ async def compose_context(
     lines: list[str] = ["## Coffer memory"]
     budget.spend(lines[0])
 
-    label = (
-        "Known about you (pinned first):" if global_visible else "No facts on file about you yet."
-    )
+    label = "Known about you:" if global_visible else "No facts on file about you yet."
     lines.append(label)
     budget.spend(label)
 
@@ -269,6 +253,5 @@ __all__ = [
     "LAYER_L1",
     "ComposedContext",
     "MemoryPort",
-    "OverridesPort",
     "compose_context",
 ]

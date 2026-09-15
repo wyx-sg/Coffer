@@ -55,13 +55,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 
 **独立测试**：聚合同一主题上结论相反、时间戳不同的两条事实；确认这一对被报告为一处冲突，且投递的摘要里带的是较新的那条。
 
-### 用户故事 5 — 开发者的判断活得比重建久（优先级 P1）
-
-开发者隐藏了一条从来就不对的事实，把一条一直要紧的置顶，又亲手裁定了一处冲突。然后源变了，一切被重新算过——而他的这三个决定依然有效。
-
-**独立测试**：三种覆盖项各记录一条，删掉整棵记忆树，重跑聚合，确认三条对重新生成出来的事实依然生效。
-
-### 用户故事 6 — 投递是有意装上的，而且看得见（优先级 P1）
+### 用户故事 5 — 投递是有意装上的，而且看得见（优先级 P1）
 
 会话开始时的投递要动 agent 自己的设置，所以 Coffer 绝不偷偷做。开发者从 Coffer 里把它装上，看得到它已装上，并且——这正是上次栽跟头的地方——看得到它上一次真正跑起来是什么时候。
 
@@ -76,6 +70,8 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 ### Scenario: the Codex profile becomes global facts
 
 ### Scenario: aggregation never modifies an agent's native memory files
+
+### Scenario: aggregation runs unattended, without anyone asking for it
 
 ### Scenario: an unchanged source file is skipped on the next sync
 
@@ -139,27 +135,20 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 
 - **FR-020**: 每条事实 MUST 是它所属 partition 下的一个 Markdown 文件，frontmatter 里带 `title`、`description`、`type`（`user` | `feedback` | `project`）、它被看到的那些来源、`captured_at`、源自身的时间戳（如果有的话），以及 `active` 或 `superseded` 的状态。
 - **FR-021**: 事实的正文 MUST 是源自己的原话，不是转述。归纳发生在派生的摘要里（FR-031）；事实本身要一直能被原样引回它的来源。
-- **FR-022**: 每条事实 MUST 带一个跨重算稳定的**来源键（origin key）**——由贡献它的 agent、原生文件、以及这条事实在文件里的锚点推出——因为开发者的决定就挂在它上面（FR-040）。两个 agent 贡献同一条事实 MUST 产出一条带两个来源的事实，而不是两条事实。
-- **FR-023**: `~/.coffer/memory/` 下的整棵树 MUST 是派生的：删掉它再重跑聚合 MUST 能重现它。它 MUST NOT 与同步远端收敛（spec [vault-sync](../vault-sync/spec.zh.md)）：它是从**这台**机器上装着的 agent 聚合出来的，送到另一台机器上去，送过去的事实会被那台机器自己的下一轮聚合重新算掉；而一台从未装过某个 agent 的机器，会看见那个 agent 的 partition 冒出来又消失。丢了这台机器就丢了这棵派生树，这是接受的——必须活下来的是它所派生自的那些源，以及附着在它上面的那些决定，后者由 FR-043 承载。
+- **FR-022**: 每条事实 MUST 带一个跨重算稳定的**来源键（origin key）**——由贡献它的 agent、原生文件、以及这条事实在文件里的锚点推出——因为跨重算时，两个 agent 的贡献就是靠它对上的。两个 agent 贡献同一条事实 MUST 产出一条带两个来源的事实，而不是两条事实。
+- **FR-023**: `~/.coffer/memory/` 下的整棵树 MUST 是派生的：删掉它再重跑聚合 MUST 能重现它。它 MUST NOT 与同步远端收敛（spec [vault-sync](../vault-sync/spec.zh.md)）：它是从**这台**机器上装着的 agent 聚合出来的，送到另一台机器上去，送过去的事实会被那台机器自己的下一轮聚合重新算掉；而一台从未装过某个 agent 的机器，会看见那个 agent 的 partition 冒出来又消失。丢了这台机器就丢了这棵派生树，这是接受的：它所派生自的源就是 agent 自己的文件，拿着那些文件的机器随时能重算出来。
 
 ### organise
 
 - **FR-030**: 聚合之后，MUST 对每个发生了变化的 partition 跑一次由内部连接驱动的 **organise** 过程：它跨 agent 合并重复，当后来的一条与先前的一条矛盾时把先前那条标记为已取代，把它拿不定的一对标为冲突，并写出该 partition 的摘要。
 - **FR-031**: organise MAY 放手改写派生的摘要，且 MUST NOT 归档先前的版本——知识层的 `.history/` 之所以存在，是因为知识是唯一的一份，而记忆不是。它 MUST NOT 编辑事实的正文（FR-021），也 MUST NOT 删除事实。
 - **FR-032**: 没有配置内部连接时，organise MUST 仍然**机械地**产出一份能用的摘要——事实按类型分组、新的在前、每条从它的 frontmatter 里取一行——只是不贡献任何合并、取代或冲突提议。它 MUST NOT 是一次空操作：一台没有内部模型的安装照样要拿到投递。
-- **FR-033**: organise 提出的取代或冲突 MUST 作为模型的判断记在事实上，在每一个 surface 上都与开发者裁定的（FR-041）区分得开。
-
-### 开发者的决定
-
-- **FR-040**: 开发者 MUST 能**隐藏**一条事实、**置顶**一条、把一条标记为**被另一条取代**，以及在一处冲突里**裁定**其中一方胜出。这些 MUST 与派生树分开存放，按来源键索引，放在本层新增的那唯一一张表里。
-- **FR-041**: 覆盖项 MUST 在每一次聚合与 organise 之后被重新施加，且 MUST 压过模型决定的任何东西。删掉记忆树、或者某个 partition 被改名，MUST NOT 让它们丢失。
-- **FR-042**: 被隐藏的事实 MUST 不出现在任何一次投递和任何一条检索结果里，同时在管理 surface 上仍然可见——也仍然可撤销。被置顶的事实 MUST 在摘要的预算里被优先（FR-051）。
-- **FR-043**: 覆盖决定 MUST 与同步远端收敛（spec [vault-sync](../vault-sync/spec.zh.md)），并且它们是这一层里唯一这样做的部分。它们与 FR-023 那棵树恰好在关键处相反：隐藏或置顶是**开发者做出的决定**，不是一次计算，因此没有任何一台机器的聚合过程能把它重现出来，每一台机器都必须被告知。它们以 origin key（FR-022）为键传播——那个键跨重新计算是稳定的，因此跨「各自独立重新计算」的多台机器也是稳定的——每条覆盖一个文档。origin key 里带有路径容不下的字符，所以文档名 MUST 由该键**推导**出来，而不能就是该键本身。
+- **FR-033**: organise 提出的取代或冲突 MUST 作为模型的判断记在事实自己身上。没有人去手工裁定它：冲突被摆出来，是因为两条事实确实相左，而解决它的是下一次对变更过的源所做的聚合。
 
 ### 投递
 
 - **FR-050**: 投递 MUST 恰好有三层。**L0**，始终给：开发者是谁、这个项目的记忆里有些什么、以及怎么要更多。**L1**，在预算装得下时给：该 partition 的摘要，每条事实一行。**L2**，按需给：`coffer__recall`。
-- **FR-051**: 组装出的载荷 MUST **受一个显式 token 预算约束**，当有事实被略去时它 MUST 说明略了多少条、以及怎么够到它们。置顶的事实，然后是 `global` 里讲人的事实，然后是当前项目里最新的那些，MUST 按这个顺序被优先。
+- **FR-051**: 组装出的载荷 MUST **受一个显式 token 预算约束**，当有事实被略去时它 MUST 说明略了多少条、以及怎么够到它们。`global` 里讲人的事实，然后是当前项目里最新的那些，MUST 按这个顺序被优先。
 - **FR-052**: `coffer__recall` MUST 接受一个词或短语，只覆盖调用方 agent 的 scope 允许的那些 partition，把命中的事实**整条**连同它们的来源返回。匹配 MUST 是 memory 自己的**大小写不敏感子串扫描**，作用于已经在手的那些事实——先看事实正文，正文不中再看它的 `title` 和 `description`——答案里 MUST NOT 有分数、MUST NOT 有模式、MUST NOT 有理由。它 MUST 完全不需要内部连接：recall 过去借用的是 spec [knowledge](../knowledge/spec.md) 那套带排序的检索，而那套引擎已随 Coffer 里其余所有 embedding 用法一起被有意移除，所以既没有什么可借，也没有什么可降级。这次扫描留在 memory 自己手里，而不去够 knowledge 的 ripgrep，因为在本层假定的语料规模下，事实本来就已经加载在内存里了。
 - **FR-053**: **由渠道驱动的一轮** MUST 通过 turn 平台本就在组装的 system-prompt 追加段拿到 L0 和 L1（spec [channels](../channels/spec.md)）。它 MUST NOT 需要 hook，因为那段上下文本来就在 Coffer 自己手里。
 - **FR-054**: 对开发者自己驱动的 agent，投递 MUST 走那个 agent 自己的 hook 机制，调用 Coffer 既有的 CLI。agent 有会话开始事件的，投递 MUST 用它；没有的——Codex，它的 hook 事件只有 `PreToolUse`、`PostToolUse`、`PreCompact`、`Stop` 和 `UserPromptSubmit`——投递 MUST 用它最早的那个每会话事件，并加一道**每会话只触发一次的守卫**，让摘要只到达一次而不是每条提示都来一遍。安装 MUST 是 Coffer surface 上的一次**显式动作**，带 marker 范围以便识别，可在不打扰 Coffer 没写过的条目的前提下移除，且是幂等的。Coffer MUST NOT 偷偷装上它，也 MUST NOT 写进任何属于 agent *记忆*的文件——hook 住在 agent 的设置里，那是另一回事，而且只在开发者明确指示时才会被写。
@@ -168,15 +157,15 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 ### Surface
 
 - **FR-060**: MCP 网关 MUST 恰好新增暴露一个内置工具，`coffer__recall`，且它的描述 MUST 告诉调用方匹配是字面的，好让 agent 给它一个有辨识度的词或短语，而不是一整句问题。MUST NOT 存在 `remember` 工具：本层的事实派生自 agent 自己的记忆，而 agent 要记下什么，就按它本来的方式记下来。
-- **FR-061**: `/api/v1/memory` 下的一族 REST API 与一个 `coffer memory` CLI 组 MUST 覆盖：列出 partition 与事实、展示某条事实连同它的来源与冲突、跑一次同步、跑一次 organise、组装会话上下文、施加与清除每一种覆盖项，以及为某个 agent 安装／查看／移除投递。
-- **FR-062**: Web UI MUST 以**表格**呈现 partition，且无论有没有 partition 都保持同一形态——尚无 partition 的安装 MUST 看到这张表自己的空行以及仍可点到的同步入口，而不是换成另一个页面——并 MUST 呈现单个 partition 的事实，把冲突作为待裁定的成对项摆出来，暴露那四种覆盖项。
-- **FR-064**: 逐 agent 的投递状态（含上一次触发时间，FR-055）MUST 呈现在**该 agent 自己的详情页**上，而不是 partition 列表页。投递写的是某一个 agent 的设置文件，因此它是逐 agent 的状态；已经限定到某个 agent 的页面 MUST NOT 再让读者选一次 agent。
+- **FR-061**: `/api/v1/memory` 下的一族 REST API 与一个 `coffer memory` CLI 组 MUST 覆盖：列出 partition 与事实、展示某条事实连同它的来源与冲突、浏览某个 partition 自己的目录并读出其中一个文件、跑一次同步、跑一次 organise、组装会话上下文，以及为某个 agent 安装／查看／移除投递。
+- **FR-062**: Web UI MUST 以**表格**呈现 partition，且无论有没有 partition 都保持同一形态——尚无 partition 的安装 MUST 看到这张表自己的空行以及仍可点到的同步入口，而不是换成另一个页面。单个 partition MUST 呈现为**它自己那个目录的文件树**，旁边配一个只读预览——与 skill 的 Files tab 是同一副两栏——并 MUST 在预览的那个文件上提供「在编辑器中打开」与「在文件管理器中显示」。它 MUST NOT 带任何逐条事实的操作：partition 就是一个装着派生 Markdown 的文件夹，浏览它的界面长得像文件夹，正是在把这件事说出来。
+- **FR-064**: 逐 agent 的投递状态 MUST 呈现在**该 agent 自己的详情页**上，而不是 partition 列表页。投递写的是某一个 agent 的设置文件，因此它是逐 agent 的状态；已经限定到某个 agent 的页面 MUST NOT 再让读者选一次 agent。那个界面只回答一个问题——装没装；触发作为事件在审计界面上读（FR-055、FR-065）。
 - **FR-065**: 本层 MUST NOT 自带审计界面。它的事件在各 kind 共用的全库审计界面上阅读；kind 维度的第二份拷贝属于重复界面，因此本层记录的每一种事件类型 MUST 在那里可读，而不是显示为原始事件码。
 - **FR-063**: 每一个生命周期动作——聚合、organise、投递的安装、移除或触发——MUST 记录一条带 actor 的审计事件。一次 recall MUST 记录照常的那行 `mcp_invocations`，且不记录任何关于它的查询或结果的东西。
 
 ### 约束
 
-- **FR-070**: 本层 MUST 恰好新增**一张**表，用来放开发者的覆盖项。事实、摘要和 partition 元数据都是文件，或既有的 Resource 行。
+- **FR-070**: 本层 MUST **不新增任何自己的表**。事实、摘要和 partition 元数据都是文件，或既有的 Resource 行；关于一个 partition 的其余任何东西，也没有哪一样值得放在这个 partition 之外。
 - **FR-071**: 文件内容 MUST 只能通过开发者配置的那个内部连接离开这台机器，且只用于 organise（FR-030）——与 spec [knowledge](../knowledge/spec.md) 允许的完全一致，没有配置时则完全不外发。recall MUST NOT 把任何东西发往任何地方：它读不出磁盘上那些事实之外。
 - **FR-072**: 读取 MUST 限定在已注册 agent 的配置目录下的那些记忆路径里。每一条由某个源的内容拼出的路径 MUST 通过穿越防护。
 - **FR-073**: 本层 MUST NOT 重新引入 transcript 蒸馏、journal lane、原生记忆投影，或逐 agent 的能力矩阵。两个 reader 就写成两个 reader；第三个 agent 出现才配得上一层抽象，在那之前不配。
@@ -184,7 +173,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 ## 成功标准
 
 - **SC-001**: 一个 agent 学到的事实，出现在为另一个 agent 组装的会话上下文里，而两个 agent 自己的记忆里没有任何文件发生过变化。
-- **SC-002**: 把 `~/.coffer/memory/` 整个删掉再重跑一次同步，每条事实都被重现，且开发者记录过的每一条覆盖项依然有效。
+- **SC-002**: 把 `~/.coffer/memory/` 整个删掉再重跑一次同步，每条事实都被重现。
 - **SC-003**: 在一个事实数量比预算所能容纳的多一个数量级的 partition 上，会话上下文仍停留在它规定的 token 预算之内，并说明它略去了什么。
 - **SC-004**: 一台没有配置内部连接的安装照样拿到 partition、事实、摘要、投递和 recall——缺的是合并和取代，而不是这个功能本身。recall 两种情况下都一样：它本来就不需要连接。
 - **SC-005**: surface 能对每个 agent 回答投递是否已装上；审计界面能回答该 agent 的 hook 上一次是什么时候触发的。

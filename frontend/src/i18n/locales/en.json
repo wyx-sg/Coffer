@@ -320,8 +320,6 @@
       "memory_delivery_installed": "Installed memory delivery into {{resource}}",
       "memory_delivery_removed": "Removed memory delivery from {{resource}}",
       "memory_organised": "Organised memory partition {{resource}}",
-      "memory_override_cleared": "Cleared an override on a memory fact",
-      "memory_override_set": "Set an override on a memory fact",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
       "provider_projection_refused": "Refused to project {{resource}} into an agent",
       "provider_switched": "Switched to provider {{resource}}",
@@ -644,6 +642,7 @@
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
     "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
     "MEMORY_FACT_NOT_FOUND": "That memory fact wasn't found",
+    "MEMORY_FILE_NOT_FOUND": "That file isn't in this partition",
     "MEMORY_NOT_FOUND": "Memory not found",
     "MEMORY_REJECTED": "The memory was rejected (empty or too long)",
     "MEMORY_STORE_MERGE_INVALID": "Those knowledge scopes cannot be merged",
@@ -1090,47 +1089,16 @@
       "removeDone": "Delivery removed.",
       "unsupported": "This agent has no hook event delivery can attach to."
     },
-    "factType": {
-      "user": "Preference",
-      "feedback": "Feedback",
-      "project": "Project"
-    },
-    "status": {
-      "proposedSupersede": "Superseded (proposed)",
-      "settledSupersede": "Superseded (settled)",
-      "conflicting": "Conflicting",
-      "hiddenBadge": "Hidden",
-      "pinnedBadge": "Pinned",
-      "proposedBadge": "Proposed"
-    },
-    "hide": "Hide",
-    "unhide": "Unhide",
-    "pin": "Pin",
-    "unpin": "Unpin",
-    "origins": {
-      "show": "Show origins",
-      "hide": "Hide origins",
-      "loadFailed": "Failed to load this fact's origins"
-    },
-    "supersede": {
-      "action": "Mark superseded by…",
-      "pickPlaceholder": "Pick the fact that replaces this one",
-      "apply": "Apply",
-      "clear": "Superseded by {{target}} — undo"
-    },
-    "conflicts": {
-      "title": "Conflicts to settle",
-      "subtitle": "Two facts disagree. Pick the one that is still true; the other is marked superseded.",
-      "keepThis": "Keep this one"
+    "files": {
+      "tree": "Files",
+      "selectFile": "Select a file to view.",
+      "binary": "Binary file ({{size}} bytes)",
+      "truncated": "Content truncated — showing the start of the file."
     },
     "detail": {
       "organise": "Organise",
       "organiseHint": "Merges duplicate facts, proposes supersessions and conflicts, and rewrites this partition's digest.",
-      "organiseDone": "Organise pass finished.",
-      "factsTitle": "Facts",
-      "filterPlaceholder": "Filter facts…",
-      "factsEmpty": "No facts in this partition yet.",
-      "noMatches": "No matches."
+      "organiseDone": "Organise pass finished."
     }
   },
   "chat": {

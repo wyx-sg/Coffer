@@ -1,9 +1,9 @@
 """Unit tests for composing the session-start context (application/memory/context.py).
 
-Every ``MemoryPort``/``OverridesPort`` here is a plain in-memory fake — no
-database, no filesystem — which is exactly what the two narrow Protocols in
-``context.py`` are for. No env pinning is needed either: this module never
-touches ``$COFFER_MEMORY_ROOT`` at all.
+The ``MemoryPort`` here is a plain in-memory fake — no database, no
+filesystem — which is exactly what the narrow Protocol in ``context.py`` is
+for. No env pinning is needed either: this module never touches
+``$COFFER_MEMORY_ROOT`` at all.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from coffer.application.memory.context import (
     ComposedContext,
     compose_context,
 )
-from coffer.application.memory.overrides import Override
 from coffer.application.memory.service import PartitionSummary
 from coffer.domain.memory.budget import estimate_tokens
 from coffer.domain.memory.fact import TYPE_PROJECT, TYPE_USER, Fact, Origin
@@ -74,14 +73,6 @@ class FakeMemory:
         return self._partitions
 
 
-class FakeOverrides:
-    def __init__(self, overrides: Mapping[str, Override] | None = None) -> None:
-        self._overrides = dict(overrides or {})
-
-    async def all(self) -> Mapping[str, Override]:
-        return self._overrides
-
-
 def _many_project_facts(n: int, *, partition: str = "myproj") -> list[Fact]:
     return [
         _fact(
@@ -111,9 +102,7 @@ async def test_composed_context_stays_within_its_token_budget() -> None:
         partitions=[PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=80)],
     )
     budget = 200
-    ctx = await compose_context(
-        memory, FakeOverrides(), agent=None, cwd="/repo/myproj", budget_tokens=budget
-    )
+    ctx = await compose_context(memory, agent=None, cwd="/repo/myproj", budget_tokens=budget)
     assert estimate_tokens(ctx.text) <= budget
     assert ctx.facts_included < len(facts)
 
@@ -128,50 +117,37 @@ async def test_composed_context_says_how_many_facts_it_left_out() -> None:
         facts={"myproj": facts},
         partitions=[PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=50)],
     )
-    ctx = await compose_context(
-        memory, FakeOverrides(), agent=None, cwd="/repo/myproj", budget_tokens=150
-    )
+    ctx = await compose_context(memory, agent=None, cwd="/repo/myproj", budget_tokens=150)
     assert ctx.facts_omitted > 0
     assert str(ctx.facts_omitted) in ctx.text
     assert "coffer__recall" in ctx.text
 
 
 # ---------------------------------------------------------------------------
-# overrides
+# preference order
 # ---------------------------------------------------------------------------
 
 
-async def test_a_hidden_fact_never_appears() -> None:
-    visible_fact = _fact(slug="keep", partition=GLOBAL_PARTITION, title="Keep This")
-    hidden_fact = _fact(slug="hide", partition=GLOBAL_PARTITION, title="Hide This Secret")
-    memory = FakeMemory(
-        visible=[GLOBAL_PARTITION], facts={GLOBAL_PARTITION: [visible_fact, hidden_fact]}
-    )
-    overrides = FakeOverrides({hidden_fact.key: Override(fact_key=hidden_fact.key, hidden=True)})
+async def test_the_budget_is_spent_on_the_most_recent_facts_first() -> None:
+    """FR-051's whole within-partition order, now that pinning is gone.
 
-    ctx = await compose_context(memory, overrides, agent=None, cwd="")
-
-    assert "Keep This" in ctx.text
-    assert "Hide This Secret" not in ctx.text
-
-
-async def test_a_pinned_fact_survives_trimming_that_drops_others() -> None:
+    Pinning used to sit in front of recency; the developer's overrides were
+    deleted with the per-fact surface, so recency is the only preference left
+    and a trim must take the oldest facts rather than an arbitrary set.
+    """
     facts = _many_project_facts(30)
-    oldest = facts[0]  # captured_at "2024-01-01" — last in recency order
-    second_oldest = facts[1]
+    newest = facts[-1]  # captured_at "2024-01-30" — first in recency order
+    oldest = facts[0]
     memory = FakeMemory(
         visible=[GLOBAL_PARTITION, "myproj"],
         facts={"myproj": facts},
         partitions=[PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=30)],
     )
-    overrides = FakeOverrides({oldest.key: Override(fact_key=oldest.key, pinned=True)})
 
-    ctx = await compose_context(
-        memory, overrides, agent=None, cwd="/repo/myproj", budget_tokens=140
-    )
+    ctx = await compose_context(memory, agent=None, cwd="/repo/myproj", budget_tokens=140)
 
-    assert oldest.title in ctx.text
-    assert second_oldest.title not in ctx.text
+    assert newest.title in ctx.text
+    assert oldest.title not in ctx.text
 
 
 # ---------------------------------------------------------------------------
@@ -190,9 +166,7 @@ async def test_an_unknown_cwd_yields_global_only() -> None:
         partitions=[PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=5)],
     )
 
-    ctx = await compose_context(
-        memory, FakeOverrides(), agent=None, cwd="/somewhere/totally/unrelated"
-    )
+    ctx = await compose_context(memory, agent=None, cwd="/somewhere/totally/unrelated")
 
     assert ctx.partition == GLOBAL_PARTITION
     assert ctx.layers == (LAYER_L0,)
@@ -208,9 +182,7 @@ async def test_cwd_under_a_registered_project_root_resolves_to_it() -> None:
         partitions=[PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=2)],
     )
 
-    ctx = await compose_context(
-        memory, FakeOverrides(), agent=None, cwd="/repo/myproj/backend/coffer"
-    )
+    ctx = await compose_context(memory, agent=None, cwd="/repo/myproj/backend/coffer")
 
     assert ctx.partition == "myproj"
 
@@ -228,9 +200,7 @@ async def test_l1_is_dropped_when_it_does_not_fit_and_l0_still_ships() -> None:
         partitions=[PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=20)],
     )
 
-    ctx = await compose_context(
-        memory, FakeOverrides(), agent=None, cwd="/repo/myproj", budget_tokens=55
-    )
+    ctx = await compose_context(memory, agent=None, cwd="/repo/myproj", budget_tokens=55)
 
     assert ctx.layers == (LAYER_L0,)
     assert ctx.facts_included == 0
@@ -249,7 +219,7 @@ async def test_l1_appears_when_the_budget_allows_it() -> None:
         partitions=[PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=3)],
     )
 
-    ctx = await compose_context(memory, FakeOverrides(), agent=None, cwd="/repo/myproj")
+    ctx = await compose_context(memory, agent=None, cwd="/repo/myproj")
 
     assert LAYER_L1 in ctx.layers
     assert ctx.facts_omitted == 0

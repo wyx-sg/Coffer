@@ -2,8 +2,8 @@
 
 Mirrors ``surfaces/http/knowledge/schemas.py``: every model here describes
 what a client is promised, kept deliberately separate from the domain values
-(``domain.memory.fact.Fact``, ``application.memory.overrides.Override``) they
-mirror so trimming a domain field never silently changes the wire contract.
+(``domain.memory.fact.Fact``, ``infrastructure.memory.files``) they mirror so
+trimming a domain field never silently changes the wire contract.
 """
 
 from __future__ import annotations
@@ -38,13 +38,10 @@ class FactSummaryOut(BaseModel):
     type: str
     status: str
     superseded_by: str
+    #: Keys of facts organise flagged this one as disagreeing with (FR-033).
+    #: Nothing settles a conflict any more, so this is the model's finding and
+    #: only ever that.
     conflicts_with: list[str]
-    proposed: bool
-    #: Whether the developer's own decision hides/pins this fact (FR-040) —
-    #: not reflected in the derived ``Fact`` itself, so the surface stamps it
-    #: on from the current overrides table before answering.
-    hidden: bool
-    pinned: bool
 
 
 class FactListOut(BaseModel):
@@ -82,34 +79,50 @@ class ComposedContextOut(BaseModel):
     layers: list[str]
 
 
-class OverrideOut(BaseModel):
-    fact_key: str
-    hidden: bool
-    pinned: bool
-    superseded_by: str
-    conflict_choice: str
+class FileNodeOut(BaseModel):
+    """One entry in a partition's own directory (FR-062).
 
-
-class OverrideListOut(BaseModel):
-    overrides: list[OverrideOut]
-
-
-class OverridePatch(BaseModel):
-    """A partial update to one fact's override (FR-040).
-
-    Every field defaults to "leave unchanged" — only fields explicitly given
-    are applied, so setting ``pinned`` never disturbs an existing ``hidden``
-    decision on the same fact.
+    Same shape as the skill kind's file tree so the two surfaces render
+    through one component on the frontend. ``path`` is POSIX and relative to
+    the partition directory (``""`` for the root); ``abs_path`` and
+    ``folder_abs_path`` are what the viewer's open-in-editor and
+    reveal-in-file-manager actions need, since a browser cannot resolve a path
+    on the user's own disk but the loopback daemon can.
     """
 
-    hidden: bool | None = None
-    pinned: bool | None = None
-    superseded_by: str | None = None
-    conflict_choice: str | None = None
+    name: str
+    path: str
+    abs_path: str
+    folder_abs_path: str
+    type: str
+    size: int | None = None
+    #: True on a directory whose descendants were clipped at the walk bound.
+    truncated: bool = False
+    children: list[FileNodeOut] = Field(default_factory=list)
 
 
-#: The four override fields a client may clear one at a time (FR-040).
-OVERRIDE_FIELDS = ("hidden", "pinned", "superseded_by", "conflict_choice")
+class FileTreeOut(BaseModel):
+    root: FileNodeOut
+
+
+class FileContentOut(BaseModel):
+    """One file's content, read-only.
+
+    No fingerprint, unlike the skill kind's equivalent: a fingerprint exists
+    to make a later write conditional, and this family has no write. The tree
+    under ``~/.coffer/memory/`` is derived (FR-023) — an edit here would be
+    overwritten by the next aggregation pass, so the surface does not offer
+    one.
+    """
+
+    path: str
+    abs_path: str
+    folder_abs_path: str
+    #: Empty when ``binary`` is true.
+    content: str
+    truncated: bool
+    binary: bool
+    size: int
 
 
 class DeliveryStatusOut(BaseModel):

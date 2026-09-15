@@ -1,10 +1,16 @@
 """What one remembered fact is, once it has been read out of an agent.
 
 Every value here is **derived**: it came out of some agent's own memory and can
-be produced again from it (spec memory FR-023). The one thing that is not
-derived is the developer's decision about a fact, and the whole reason
-:func:`fact_key` exists is to give those decisions something to hold onto
-across a recomputation that rewrites everything else.
+be produced again from it (spec memory FR-023). Nothing about a fact is stored
+anywhere else, which is what makes the whole tree disposable — delete it, run
+aggregation again, and the same facts come back.
+
+:func:`origin_key` survives that disposability having once carried the
+developer's hide/pin/supersede/settle decisions across a recomputation. Those
+decisions are gone (the partition surface is a file tree now, with no per-fact
+action to record), but the key stays: :attr:`Fact.key` is still how organise
+names one fact from inside another's frontmatter, and it still has to mean the
+same thing on the next pass.
 """
 
 from __future__ import annotations
@@ -89,20 +95,19 @@ class Fact:
     status: str = STATUS_ACTIVE
     #: The ``key`` of the fact that replaced this one, when one did.
     superseded_by: str = ""
-    #: Keys of facts this one disagrees with and that nothing has settled.
+    #: Keys of facts this one disagrees with. Organise flags the pair when it
+    #: cannot decide between them; nothing settles it afterwards, so the flag
+    #: stands until a later pass has grounds to withdraw it (FR-033).
     conflicts_with: tuple[str, ...] = field(default_factory=tuple)
-    #: True when a model proposed the supersession or conflict above, false
-    #: when the developer settled it. Every surface must be able to tell them
-    #: apart (FR-033).
-    proposed: bool = False
 
     @property
     def key(self) -> str:
-        """The identity the developer's decisions attach to (FR-022, FR-040).
+        """How one fact names another across a recomputation (FR-022).
 
         The smallest origin key wins, so a fact that gains a second origin on
         a later pass keeps the identity it had — a merge must not silently
-        move a decision off the fact it was made about.
+        move a ``superseded_by`` or ``conflicts_with`` reference off the fact
+        it was written about.
         """
         return min((o.key for o in self.origins), default=origin_key("", self.slug, ""))
 

@@ -11,7 +11,6 @@ degrade rather than error, per FR-032/FR-052). ``COFFER_MEMORY_ROOT``,
 from __future__ import annotations
 
 import pathlib
-import shutil
 
 import pytest
 from starlette.testclient import TestClient
@@ -111,7 +110,6 @@ def test_sync_then_list_partitions_and_facts(client, tmp_path) -> None:
 
     facts = client.get(f"/api/v1/memory/partitions/{project_partition['name']}/facts").json()
     assert facts["facts"][0]["title"] == "python-lockfile"
-    assert facts["facts"][0]["hidden"] is False
 
     detail = client.get(
         f"/api/v1/memory/partitions/{project_partition['name']}/facts/{facts['facts'][0]['slug']}"
@@ -278,117 +276,89 @@ def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
     assert not any(e["event_type"] == "memory_delivery_fired" for e in audit["entries"])
 
 
-# ----- overrides: apply/clear, and surviving a rebuild ---------------------
+# ----- the partition's own files -------------------------------------------
 
 
-def _sync_and_get_fact(client: TestClient, tmp_path: pathlib.Path) -> tuple[str, str, str]:
+def _synced_partition(client: TestClient, tmp_path: pathlib.Path) -> str:
+    """Sync one project's facts; return the partition they landed in."""
     project_root = tmp_path / "proj"
     if not project_root.is_dir():
         project_root.mkdir(parents=True)
         _write_cc_facts(tmp_path, project_root)
     _sync(client)
-    partition = next(
+    return next(
         p["name"]
         for p in client.get("/api/v1/memory/partitions").json()["partitions"]
         if p["name"] != "global"
     )
-    facts = client.get(f"/api/v1/memory/partitions/{partition}/facts").json()["facts"]
-    fact = next(f for f in facts if f["slug"] == "python-lockfile")
-    return partition, fact["slug"], fact["key"]
 
 
-def test_hide_then_unhide_round_trip(client, tmp_path) -> None:
+@pytest.mark.acceptance(
+    spec="memory", scenario="a partition's own directory is browsable as a file tree"
+)
+def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) -> None:
     _register_agent(client, "cc")
-    partition, _slug, key = _sync_and_get_fact(client, tmp_path)
+    partition = _synced_partition(client, tmp_path)
 
-    hidden = client.patch(f"/api/v1/memory/facts/{key}/override", json={"hidden": True}).json()
-    assert hidden["hidden"] is True
+    tree = client.get(f"/api/v1/memory/partitions/{partition}/files").json()["root"]
+    assert tree["path"] == ""
+    assert tree["abs_path"] == str(tmp_path / "memory" / partition)
+    names = {child["name"]: child for child in tree["children"]}
+    # A partition is a README naming its project root plus a facts/ folder;
+    # the digest only exists once organise has run, so it is not asserted here.
+    assert "README.md" in names
+    assert names["facts"]["type"] == "dir"
+    fact_files = {child["path"] for child in names["facts"]["children"]}
+    assert "facts/python-lockfile.md" in fact_files
 
-    facts = client.get(f"/api/v1/memory/partitions/{partition}/facts").json()["facts"]
-    assert next(f for f in facts if f["key"] == key)["hidden"] is True
-
-    audit = client.get("/api/v1/audit").json()
-    assert any(e["event_type"] == "memory_override_set" for e in audit["entries"])
-
-    unhidden = client.delete(
-        f"/api/v1/memory/facts/{key}/override", params={"field": "hidden"}
+    content = client.get(
+        f"/api/v1/memory/partitions/{partition}/files/content",
+        params={"path": "facts/python-lockfile.md"},
     ).json()
-    assert unhidden["hidden"] is False
-    audit2 = client.get("/api/v1/audit").json()
-    assert any(e["event_type"] == "memory_override_cleared" for e in audit2["entries"])
+    assert content["binary"] is False
+    assert content["truncated"] is False
+    assert "uv sync --frozen" in content["content"]
+    assert content["abs_path"].endswith("/facts/python-lockfile.md")
 
 
-def test_patch_override_only_touches_the_named_field(client, tmp_path) -> None:
+def test_partition_files_are_read_only(client, tmp_path) -> None:
+    """No write reaches this family. The tree is derived (FR-023), so an edit
+    would survive only until the next aggregation pass."""
     _register_agent(client, "cc")
-    _, _, key = _sync_and_get_fact(client, tmp_path)
+    partition = _synced_partition(client, tmp_path)
 
-    client.patch(f"/api/v1/memory/facts/{key}/override", json={"hidden": True})
-    result = client.patch(f"/api/v1/memory/facts/{key}/override", json={"pinned": True}).json()
-    assert result["hidden"] is True
-    assert result["pinned"] is True
+    r = client.put(
+        f"/api/v1/memory/partitions/{partition}/files/content",
+        json={"path": "facts/python-lockfile.md", "content": "rewritten"},
+    )
+    assert r.status_code == 405
 
 
-def test_supersede_and_settle_conflict_overrides(client, tmp_path) -> None:
+def test_partition_files_refuse_a_path_that_escapes_the_partition(client, tmp_path) -> None:
     _register_agent(client, "cc")
-    _, _, key = _sync_and_get_fact(client, tmp_path)
+    partition = _synced_partition(client, tmp_path)
 
-    superseded = client.patch(
-        f"/api/v1/memory/facts/{key}/override", json={"superseded_by": "some-other-key"}
-    ).json()
-    assert superseded["superseded_by"] == "some-other-key"
-    cleared = client.delete(
-        f"/api/v1/memory/facts/{key}/override", params={"field": "superseded_by"}
-    ).json()
-    assert cleared["superseded_by"] == ""
-
-    settled = client.patch(
-        f"/api/v1/memory/facts/{key}/override", json={"conflict_choice": key}
-    ).json()
-    assert settled["conflict_choice"] == key
+    r = client.get(
+        f"/api/v1/memory/partitions/{partition}/files/content",
+        params={"path": "../../../../etc/passwd"},
+    )
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "MEMORY_UNSAFE_PATH"
 
 
-def test_list_overrides_reports_every_decision(client, tmp_path) -> None:
+def test_partition_file_that_is_not_there_is_not_found(client, tmp_path) -> None:
     _register_agent(client, "cc")
-    _, _, key = _sync_and_get_fact(client, tmp_path)
-    client.patch(f"/api/v1/memory/facts/{key}/override", json={"pinned": True})
+    partition = _synced_partition(client, tmp_path)
 
-    overrides = client.get("/api/v1/memory/overrides").json()["overrides"]
-    assert any(o["fact_key"] == key and o["pinned"] for o in overrides)
-
-
-@pytest.mark.acceptance(spec="memory", scenario="a hidden fact stays hidden across a rebuild")
-def test_a_hidden_fact_stays_hidden_across_a_rebuild(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    partition, slug, key = _sync_and_get_fact(client, tmp_path)
-
-    client.patch(f"/api/v1/memory/facts/{key}/override", json={"hidden": True})
-
-    # Delete the ENTIRE derived tree and re-run aggregation from the agent's
-    # native memory, which is untouched — FR-023's own rebuild guarantee.
-    shutil.rmtree(tmp_path / "memory")
-    _sync(client)
-
-    facts = client.get(f"/api/v1/memory/partitions/{partition}/facts").json()["facts"]
-    rebuilt = next(f for f in facts if f["slug"] == slug)
-    assert rebuilt["key"] == key  # the origin key is stable across a rebuild
-    assert rebuilt["hidden"] is True
-
-    # And it is excluded from what a session would actually be handed.
-    context = client.post("/api/v1/memory/context", json={"cwd": str(tmp_path / "proj")}).json()
-    assert "python-lockfile" not in context["text"]
+    r = client.get(
+        f"/api/v1/memory/partitions/{partition}/files/content",
+        params={"path": "facts/no-such-fact.md"},
+    )
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "MEMORY_FILE_NOT_FOUND"
 
 
-@pytest.mark.acceptance(spec="memory", scenario="a pinned fact stays pinned across a rebuild")
-def test_a_pinned_fact_stays_pinned_across_a_rebuild(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    partition, slug, key = _sync_and_get_fact(client, tmp_path)
-
-    client.patch(f"/api/v1/memory/facts/{key}/override", json={"pinned": True})
-
-    shutil.rmtree(tmp_path / "memory")
-    _sync(client)
-
-    facts = client.get(f"/api/v1/memory/partitions/{partition}/facts").json()["facts"]
-    rebuilt = next(f for f in facts if f["slug"] == slug)
-    assert rebuilt["key"] == key
-    assert rebuilt["pinned"] is True
+def test_files_of_an_unknown_partition_are_not_found(client) -> None:
+    r = client.get("/api/v1/memory/partitions/does-not-exist/files")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"

@@ -1,8 +1,17 @@
 // frontend/src/pages/MemoryDetailPage.tsx
 //
-// Detail surface for ONE partition: its facts, conflicts as pairs to settle,
-// and the organise action. Reach (ScopeControl) lives in the header, exactly
-// as every other scoped Resource's detail page carries it.
+// Detail surface for ONE partition: the folder it is on disk, plus the two
+// acts that belong to the partition as a whole — where it reaches
+// (ScopeControl) and the organise pass.
+//
+// Everything a reader could once do to an individual fact — hide, pin, settle
+// a conflict, mark one superseded — is gone, along with the overrides that
+// backed it. Those decisions only ever described Coffer's own derived copy,
+// which aggregation rewrites from the agents' native memory on its own
+// schedule; a verdict recorded against something regenerated behind your back
+// is a promise the surface could not keep. What is left is the truth it can
+// keep: here are the files, this is what they say, open one if you want to
+// change it.
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
@@ -10,18 +19,10 @@ import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { translateApiError } from "@/lib/api/errors";
 import { useResource } from "@/lib/hooks/useResources";
-import { MemoryConflictsPanel } from "@/components/memory/MemoryConflictsPanel";
-import { MemoryFactList } from "@/components/memory/MemoryFactList";
-import {
-  useMemoryFacts,
-  useMemoryOverrides,
-  useMemoryPartitions,
-  useOrganisePartition,
-} from "@/lib/hooks/useMemory";
+import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
+import { useMemoryPartitions, useOrganisePartition } from "@/lib/hooks/useMemory";
 
 export function MemoryDetailPage() {
   const { t } = useTranslation();
@@ -34,8 +35,6 @@ export function MemoryDetailPage() {
   const resource = useResource("memory", partition);
   const partitions = useMemoryPartitions();
   const projectRoot = partitions.data?.find((p) => p.name === partition)?.project_root;
-  const facts = useMemoryFacts(partition);
-  const overrides = useMemoryOverrides();
   const organise = useOrganisePartition(partition);
 
   return (
@@ -70,28 +69,7 @@ export function MemoryDetailPage() {
         }
       />
 
-      {facts.isPending ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : facts.error ? (
-        <Card>
-          <CardContent className="py-8 text-center text-destructive">
-            {translateApiError(t, facts.error)}
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <MemoryConflictsPanel facts={facts.data ?? []} overrides={overrides.data ?? []} />
-          <MemoryFactList
-            partition={partition}
-            facts={facts.data ?? []}
-            overrides={overrides.data ?? []}
-          />
-        </>
-      )}
+      <MemoryFileTree name={partition} />
     </div>
   );
 }

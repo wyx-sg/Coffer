@@ -1,10 +1,12 @@
 // frontend/src/lib/api/memoryTypes.ts
 //
 // Wire types for the `memory` kind. Memory is Coffer's read-only aggregation
-// of the agents' own native memories, normalised into facts partitioned by
+// of the agents' own native memories, normalised into files partitioned by
 // project (plus `global`) — see docs/decisions/aggregate-agent-memory-never-write-it.md
-// and specs/memory/spec.md. Coffer never writes an agent's native memory; a
-// fact's ONLY non-derived state is the developer's own overrides (FR-040).
+// and specs/memory/spec.md. Coffer never writes an agent's native memory, and
+// the UI no longer writes Coffer's own copy either: a partition is shown as
+// what it literally is on disk, a folder under `~/.coffer/memory/`, so the
+// file types below carry no fingerprint and there is no write shape to send.
 //
 // There is no memory OpenAPI contract under `specs/*/contracts/` for
 // `npm run codegen` to read, so these are hand-written. Field names match
@@ -22,7 +24,41 @@ export interface PartitionListOut {
   partitions: PartitionOut[];
 }
 
-/** Where one fact came from: which agent, which native file, when. */
+/** One entry in a partition's own directory — the same node shape the skill
+ *  file tree reads, because it is the same kind of thing: a folder on disk. */
+export interface MemoryFileNode {
+  name: string;
+  /** POSIX path relative to the partition directory; `""` for the root. */
+  path: string;
+  /** Absolute on-disk path of this node (file viewers hand it to FileActions). */
+  abs_path?: string;
+  /** Absolute on-disk path of the containing folder. */
+  folder_abs_path?: string;
+  type: "file" | "dir";
+  size: number | null;
+  /** True on a dir whose children were clipped at the max tree depth. */
+  truncated: boolean;
+  children: MemoryFileNode[] | null;
+}
+
+export interface MemoryFileTreeOut {
+  root: MemoryFileNode;
+}
+
+/** One memory file's content. Read-only — no fingerprint, because nothing
+ *  here conditions a write. */
+export interface MemoryFileContentOut {
+  path: string;
+  /** Absolute on-disk path of the file (handed to FileActions). */
+  abs_path?: string;
+  /** Absolute on-disk path of the file's containing folder. */
+  folder_abs_path?: string;
+  content: string;
+  truncated: boolean;
+  binary: boolean;
+  size: number;
+}
+
 export interface OriginOut {
   agent: string;
   /** Absolute path of the agent's own native memory file. */
@@ -40,7 +76,7 @@ export type MemoryFactStatus = "active" | "superseded";
 
 /** One fact without its body/origins — the shape `list_facts` returns. */
 export interface FactSummaryOut {
-  /** Stable identity across recomputation (FR-022); what overrides key on. */
+  /** Stable identity across recomputation (FR-022). */
   key: string;
   /** Short, URL-safe identity within its partition — `GET .../facts/{slug}`. */
   slug: string;
@@ -53,13 +89,9 @@ export interface FactSummaryOut {
   superseded_by: string;
   /** Fact keys this one is flagged as disagreeing with. */
   conflicts_with: string[];
-  /** True when a supersession/conflict here is the model's finding rather
-   *  than something the developer settled (FR-033). */
+  /** A supersession or conflict here is always the model's finding (FR-033);
+   *  nothing settles one by hand any more. */
   proposed: boolean;
-  /** The developer's own decision, stamped on from the overrides table —
-   *  not a property of the derived fact itself. */
-  hidden: boolean;
-  pinned: boolean;
 }
 
 export interface FactListOut {
@@ -90,35 +122,9 @@ export interface OrganiseResultOut {
   model_used: boolean;
 }
 
-/** The developer's decisions about one fact (FR-040). Every field defaults
- *  to "no decision of this kind". */
-export interface OverrideOut {
-  fact_key: string;
-  hidden: boolean;
-  pinned: boolean;
-  /** Non-empty: the fact key the developer settled this one as superseded by. */
-  superseded_by: string;
-  /** Non-empty: the fact key the developer settled a conflict in favour of. */
-  conflict_choice: string;
-}
-
-export interface OverrideListOut {
-  overrides: OverrideOut[];
-}
-
-/** The one field a PATCH may set at a time — every other field is left as-is. */
-export type OverrideField = "hidden" | "pinned" | "superseded_by" | "conflict_choice";
-
-/** Partial update to one fact's override; only the named fields are applied. */
-export interface OverridePatch {
-  hidden?: boolean;
-  pinned?: boolean;
-  superseded_by?: string;
-  conflict_choice?: string;
-}
-
-/** Per-agent delivery state (FR-055) — the point of this feature: whether
- *  installed is not "success", `last_fired_at` is. */
+/** Per-agent delivery state — whether Coffer's hook is written into that
+ *  agent's settings. Whether it has fired is read from the audit log, one
+ *  entry per fire (FR-055), not from here. */
 export interface DeliveryStatusOut {
   agent: string;
   installed: boolean;

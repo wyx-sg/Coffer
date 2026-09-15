@@ -24,14 +24,16 @@ nothing for a tool to call.
 not delete either file: it enriches the surviving fact with the other's
 origins and marks the other fact ``superseded`` — the record other surfaces
 already understand — so both files remain on disk and only the derived
-metadata (status, ``superseded_by``, ``conflicts_with``, ``proposed``)
-changes. A fact's ``title``/``description``/``body`` are never touched here.
+metadata (status, ``superseded_by``, ``conflicts_with``) changes. A fact's
+``title``/``description``/``body`` are never touched here.
 
-**Everything the model proposes is a proposal (FR-033).** ``proposed=True``
-is set on every fact this pass mutates, so a surface can always tell a
-model's finding apart from a developer's own decision (``overrides.py``),
-which always wins on the next reapplication regardless of what this pass
-just wrote (FR-041).
+**Everything this pass writes is the model's finding, and nothing else is
+(FR-033).** Facts used to carry a ``proposed`` flag so a surface could tell a
+model's supersession apart from one the developer had settled by hand. The
+developer's side is gone — there is no per-fact action left to record — so
+every supersession and every conflict on a fact is now, unambiguously, this
+pass's own. A flag that can only ever be true says nothing, so it was
+removed with the decisions it used to contrast against.
 
 **Malformed model output degrades to nothing, never to an exception.** A
 model that answers in prose, returns invalid JSON, names a fact that does not
@@ -168,8 +170,8 @@ def _apply_duplicate(by_key: dict[str, Fact], valid: set[str], pair: Any, counts
         logger.warning("memory.organise.dropped_duplicate; unknown key in pair=%r", pair)
         return
     # The smaller key wins: `Fact.key` is already each fact's own smallest
-    # origin key, so the winner keeps the identity a developer's override may
-    # already be attached to (Fact.key's own docstring; mirrors
+    # origin key, so the winner keeps the identity other facts may already
+    # name it by (Fact.key's own docstring; mirrors
     # `aggregate._merge_group`'s base-selection rule for the same reason).
     winner_key, loser_key = sorted((key_a, key_b))
     winner, loser = by_key[winner_key], by_key[loser_key]
@@ -177,10 +179,8 @@ def _apply_duplicate(by_key: dict[str, Fact], valid: set[str], pair: Any, counts
         return  # already settled this pass or a prior one
     seen = {o.key for o in winner.origins}
     merged_origins = winner.origins + tuple(o for o in loser.origins if o.key not in seen)
-    by_key[winner_key] = replace(winner, origins=merged_origins, proposed=True)
-    by_key[loser_key] = replace(
-        loser, status=STATUS_SUPERSEDED, superseded_by=winner.key, proposed=True
-    )
+    by_key[winner_key] = replace(winner, origins=merged_origins)
+    by_key[loser_key] = replace(loser, status=STATUS_SUPERSEDED, superseded_by=winner.key)
     counts.merged += 1
 
 
@@ -199,9 +199,7 @@ def _apply_supersede(by_key: dict[str, Fact], valid: set[str], item: Any, counts
     newer = by_key[newer_key]
     if older.status == STATUS_SUPERSEDED:
         return
-    by_key[older_key] = replace(
-        older, status=STATUS_SUPERSEDED, superseded_by=newer.key, proposed=True
-    )
+    by_key[older_key] = replace(older, status=STATUS_SUPERSEDED, superseded_by=newer.key)
     counts.superseded += 1
 
 
@@ -218,9 +216,9 @@ def _apply_conflict(by_key: dict[str, Fact], valid: set[str], pair: Any, counts:
         return
     a, b = by_key[key_a], by_key[key_b]
     if key_b not in a.conflicts_with:
-        a = replace(a, conflicts_with=(*a.conflicts_with, key_b), proposed=True)
+        a = replace(a, conflicts_with=(*a.conflicts_with, key_b))
     if key_a not in b.conflicts_with:
-        b = replace(b, conflicts_with=(*b.conflicts_with, key_a), proposed=True)
+        b = replace(b, conflicts_with=(*b.conflicts_with, key_a))
     by_key[key_a], by_key[key_b] = a, b
     counts.conflicts += 1
 

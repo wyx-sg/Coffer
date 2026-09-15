@@ -13,12 +13,12 @@ step below compares against what a partition already holds before touching
 disk (the acceptance scenario "a second pass with nothing changed writes
 nothing" is exactly this check).
 
-The developer's own decisions (hide/pin/supersede/settle,
-``application/memory/overrides.py``) are deliberately NOT reapplied here.
-This service answers to the Aggregation section of the spec; overrides are
-FR-040/041's concern and belong to whatever composes delivery and recall on
-top of ``list_facts``/``list_partitions`` — reapplying them a second place
-would risk the two disagreeing about what "hidden" means.
+What this service hands back is therefore the whole truth about a fact:
+there is no second layer of developer decisions applied on top of it any
+more. Hide, pin, supersede-by-hand and settle-a-conflict were that layer, and
+they went with the per-fact surface that recorded them — so ``list_facts``
+means the same thing to delivery, to recall and to the partition's own file
+tree, which is exactly what having one answer buys.
 """
 
 from __future__ import annotations

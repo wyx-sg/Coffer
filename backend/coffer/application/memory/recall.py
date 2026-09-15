@@ -23,7 +23,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from coffer.application.memory.overrides import Override, apply
 from coffer.domain.memory.fact import Fact
 from coffer.infrastructure.memory import paths as memory_paths
 
@@ -41,13 +40,6 @@ class MemoryPort(Protocol):
     async def visible_partitions(self, agent: str | None) -> Sequence[str]: ...
 
     async def list_facts(self, partition: str, *, agent: str | None = None) -> Sequence[Fact]: ...
-
-
-class OverridesPort(Protocol):
-    """Every developer decision at once — the shape ``overrides.apply``
-    wants, and the only one recall needs (never a single lookup or a write)."""
-
-    async def all(self) -> Mapping[str, Override]: ...
 
 
 @dataclass(frozen=True)
@@ -76,22 +68,18 @@ def _relpath(fact: Fact) -> str:
 
 
 class RecallService:
-    def __init__(self, *, memory: MemoryPort, overrides: OverridesPort) -> None:
+    def __init__(self, *, memory: MemoryPort) -> None:
         self._memory = memory
-        self._overrides = overrides
 
     async def recall(
         self, query: str, *, agent: str | None = None, top_k: int = DEFAULT_TOP_K
     ) -> RecallOutcome:
         visible = await self._memory.visible_partitions(agent)
-        raw: dict[str, Fact] = {}
+        by_path: dict[str, Fact] = {}
         for partition in visible:
             for fact in await self._memory.list_facts(partition, agent=agent):
-                raw[_relpath(fact)] = fact
+                by_path[_relpath(fact)] = fact
 
-        applied = apply(list(raw.values()), await self._overrides.all())
-        shown_keys = {f.key for f in applied.visible()}
-        by_path = {path: fact for path, fact in raw.items() if fact.key in shown_keys}
         if not by_path or not query.strip():
             return RecallOutcome(facts=())
         return self._literal(query.strip(), by_path, top_k)
@@ -131,7 +119,6 @@ class RecallService:
 __all__ = [
     "DEFAULT_TOP_K",
     "MemoryPort",
-    "OverridesPort",
     "RecallOutcome",
     "RecallService",
     "RecalledFact",

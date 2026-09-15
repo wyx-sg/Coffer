@@ -2,7 +2,7 @@
 
 Mirrors ``knowledge_wiring.py`` + ``tidy_wiring.py`` combined: one service for
 the derived tree itself (``MemoryService``), the one table it adds
-(``OverrideRepository``), the L2 pull tool (``RecallService`` /
+the L2 pull tool (``RecallService`` /
 ``coffer__recall``), and the explicit-install delivery half
 (``DeliveryService``). The organise pass rides the same internal connection
 every other internal-LLM consumer in this layer uses; the model resolver below
@@ -19,7 +19,7 @@ the agents' own memories (see ``organise_worker.py``).
 
 Nothing here can fail to build: with no internal connection configured the
 model factory just resolves to ``None`` per call, and ``RecallService``/
-``MemoryService``/``DeliveryService``/``OverrideRepository`` need no internal
+``MemoryService``/``DeliveryService`` need no internal
 connection at all — recall is a literal scan over facts on disk (FR-032,
 FR-052).
 """
@@ -43,22 +43,17 @@ from coffer.application.memory.organise import OrganiseResult, organise_partitio
 from coffer.application.memory.organise_worker import OrganiseWorker
 from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
-from coffer.application.memory.sync_state import MemoryOverrideSyncState
 from coffer.domain.agent.config import AgentConfig
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
-from coffer.infrastructure.persistence.memory_overrides_repo import OverrideRepository
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
-    set_memory_override_repo,
     set_memory_service,
 )
 from coffer.surfaces.http.memory.organise_state import OrganiseRunner, set_organise_runner
-from coffer.surfaces.http.sync_contributions import SyncContributions
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from coffer.application.audit_service import AuditService
     from coffer.application.provider.service import ProviderService
@@ -98,7 +93,6 @@ class MemoryWiring:
     runner the background worker sweeps with."""
 
     service: MemoryService
-    override_repo: OverrideRepository
     delivery_service: DeliveryService
     organise: OrganiseRunner
 
@@ -110,9 +104,7 @@ def wire_memory_kind(
     builtin_tools: BuiltinToolRegistry,
     provider_service: ProviderService,
     credential_resolver: Callable[[str], str],
-    sm: async_sessionmaker[AsyncSession],
     agent_service: AgentService,
-    sync: SyncContributions,
 ) -> MemoryWiring:
     """Wire the ``memory`` kind into the app; return what it built."""
     service = MemoryService(
@@ -122,15 +114,12 @@ def wire_memory_kind(
     )
     set_memory_service(service)
 
-    override_repo = OverrideRepository(sm)
-    set_memory_override_repo(override_repo)
+    # Nothing in this layer syncs: the whole tree under ``~/.coffer/memory/``
+    # is derived from the agents installed on THIS machine and is rebuilt per
+    # machine (spec vault-sync "What does not sync"). The overrides that used
+    # to be the one exception are gone with the surface that recorded them.
 
-    # The developer's decisions are the one part of this layer that syncs — the
-    # derived tree is rebuilt per machine and must not (spec vault-sync
-    # "What does not sync").
-    sync.state_providers.append(MemoryOverrideSyncState(override_repo))
-
-    recall_service = RecallService(memory=service, overrides=override_repo)
+    recall_service = RecallService(memory=service)
     register_recall_tool(builtin_tools, recall_service=recall_service)
 
     delivery_service = DeliveryService(
@@ -151,7 +140,6 @@ def wire_memory_kind(
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
     return MemoryWiring(
         service=service,
-        override_repo=override_repo,
         delivery_service=delivery_service,
         organise=_organise,
     )

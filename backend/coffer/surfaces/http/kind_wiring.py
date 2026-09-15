@@ -83,9 +83,7 @@ async def wire_resource_kinds(
         builtin_tools,
         provider.service,
         credential_resolver,
-        sm,
         agent_skill.agent_service,
-        sync,
     )
 
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
