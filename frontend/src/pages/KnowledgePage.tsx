@@ -17,7 +17,7 @@ import { KnowledgeTable } from "@/components/knowledge/KnowledgeTable";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useKnowledgeCollections } from "@/kinds/knowledge/useKnowledge";
+import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
 import { translateApiError } from "@/lib/api/errors";
 
 export function KnowledgePage() {

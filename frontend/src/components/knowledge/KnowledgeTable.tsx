@@ -27,8 +27,8 @@ import { resourcesApi } from "@/lib/api/resources";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useKindReach } from "@/lib/hooks/useResources";
-import { collectionsKey } from "@/kinds/knowledge/useKnowledge";
-import type { CollectionOut } from "@/kinds/knowledge/types";
+import { knowledgeCollectionsKey, resourcesKey } from "@/lib/api/queryKeys";
+import type { CollectionOut } from "@/lib/api/knowledgeTypes";
 
 const KIND = "knowledge";
 
@@ -40,7 +40,7 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
   const reach = useKindReach(KIND);
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deletingName, setDeletingName] = useState<string | null>(null);
-  const bulk = useBulkMutate({ invalidate: [["resources"], collectionsKey()] });
+  const bulk = useBulkMutate({ invalidate: [resourcesKey, knowledgeCollectionsKey] });
 
   const columns: Column<CollectionOut>[] = [
     {
@@ -113,7 +113,7 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
             <>
               <BulkReachActions
                 rows={selectedRows.map((r) => ({ kind: KIND, name: r.name }))}
-                invalidate={[collectionsKey()]}
+                invalidate={[knowledgeCollectionsKey]}
                 onDone={clear}
               />
               <BulkDeleteButton
@@ -147,7 +147,7 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
           if (name === null) return;
           del.mutate(
             { kind: KIND, name },
-            { onSuccess: () => void qc.invalidateQueries({ queryKey: collectionsKey() }) },
+            { onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeCollectionsKey }) },
           );
         }}
       />

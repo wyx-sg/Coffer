@@ -104,3 +104,17 @@ class AgentPluginSyncState:
         nothing failed.
         """
         return []
+
+    async def delete_docs(self, rels: list[str]) -> None:
+        """Nothing left to drop: the inventory's only local store is the
+        working-tree document the applier has just removed.
+
+        Import keeps no copy and writes no agent config, so a deleted
+        ``<agent>`` document has no local counterpart — and Coffer has no
+        uninstall-by-sync path any more than it has an install one. What this
+        machine's agent actually holds is a fact about this machine, not a
+        decision the other side can take back; the next export republishes it
+        if it is still there. A rel that names no agent is ignored the same
+        way, since there is nothing it could have referred to either.
+        """
+        return None

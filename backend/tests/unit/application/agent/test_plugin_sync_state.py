@@ -134,3 +134,28 @@ async def test_import_writes_nothing_and_reports_nothing() -> None:
     errors = await state.import_docs([("codex", {"agent": "codex", "plugins": [{"id": "a@m"}]})])
     assert errors == []
     assert plugins.calls == []
+
+
+@pytest.mark.asyncio
+async def test_deleting_an_agents_doc_touches_no_agent_and_republishes_what_is_held() -> None:
+    """A deletion arriving from another machine cannot uninstall anything here:
+    Coffer has no uninstall-by-sync path any more than it has an install one.
+    The inventory is a fact about this machine, so the next export still
+    carries what the agent actually holds."""
+    by_agent = {"codex": _Listing(items=[_Plugin("a@m", "a", "m", True)], marketplaces=[])}
+    plugins = _Plugins(by_agent)
+    state = AgentPluginSyncState(_Resources(list(by_agent)), plugins)
+
+    await state.delete_docs(["codex"])
+    assert plugins.calls == []
+
+    docs, _owned = await state.export_docs()
+    assert [p for p, _ in docs] == ["codex"]
+
+
+@pytest.mark.asyncio
+async def test_deleting_an_unknown_agents_doc_is_ignored() -> None:
+    plugins = _Plugins({})
+    state = AgentPluginSyncState(_Resources([]), plugins)
+    await state.delete_docs(["no-such-agent"])
+    assert plugins.calls == []

@@ -3,6 +3,8 @@
 Wires the real route against the real ``AgentModelCatalogueService`` and the real
 on-disk discovery adapter (only the agent registry is faked), so the
 whole chain from HTTP down to the agent's own ``.claude.json`` is exercised.
+The agent service reaches the route the way the composition root hands it
+over: published as the chat kind's ``ModelCatalogPort``.
 
 Only the config-file source is wired here, deliberately: the other two sources
 read an installed CLI, which would make this test say different things on a
@@ -29,10 +31,9 @@ from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_agent_registry
-from coffer.surfaces.http.turn_dependencies import get_agent_model_catalogue
+from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
+from coffer.surfaces.http.chat.dependencies import get_agent_registry, get_model_catalog
 from tests.unit.chat.conftest import FakeAgentProvider
 
 _TOKEN = "test-token"
@@ -71,7 +72,7 @@ def _build_app(agents: _FakeAgents) -> FastAPI:
     err_handlers.register(app)
     app.include_router(agent_provider_router)
     app.dependency_overrides[get_agent_registry] = lambda: registry
-    app.dependency_overrides[get_agent_model_catalogue] = lambda: catalogue
+    app.dependency_overrides[get_model_catalog] = lambda: catalogue
     return app
 
 

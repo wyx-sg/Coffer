@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.infrastructure.skill.ssrf_guard import check_url, is_blocked_host
+from coffer.infrastructure.net.ssrf_guard import check_url, is_blocked_host
 
 
 @pytest.mark.parametrize(

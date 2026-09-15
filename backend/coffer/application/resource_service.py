@@ -13,6 +13,7 @@ credential-release step lives in `resource_delete_ops`.
 
 from __future__ import annotations
 
+import asyncio
 import builtins
 import inspect
 import logging
@@ -90,17 +91,21 @@ class ResourceService:
         self._audit = audit
         self._credentials = credentials
 
-    def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
+    async def _probe_credentials(self, kind_def: Kind, config: dict[str, Any]) -> None:
         """Raise CredentialMissing if any cited credential_ref is absent from the credential store.
 
         Called BEFORE persisting a Resource so a missing credential never
         leaves a partial row in the resources table. Skipped if no credential
         store is wired (back-compat for tests that don't need credential checks).
+
+        The store's ``get`` is a blocking SQLite read, so it runs in a worker
+        thread: on the loop it would stall every other request for as long as
+        the read (and any lock it waits on) takes.
         """
         if self._credentials is None:
             return
         for _key, ref in _extract_credential_refs(kind_def, config).items():
-            if self._credentials.get(ref) is None:
+            if await asyncio.to_thread(self._credentials.get, ref) is None:
                 raise CredentialMissing(ref)
 
     def _require_kind(self, kind: str) -> Kind:
@@ -166,7 +171,7 @@ class ResourceService:
         # Probe before any DB write — a missing credential must not leave a
         # half-created resource row behind. The spec's "credential missing"
         # edge case requires registration to fail naming the missing ref.
-        self._probe_credentials(kind_def, validated)
+        await self._probe_credentials(kind_def, validated)
         now = datetime.now(tz=UTC)
         created = await self._repo.create(
             Resource(
@@ -254,7 +259,7 @@ class ResourceService:
         validated = self._validate_config(kind_def, new_config)
         # Same register-time invariant: if the update introduces a credential
         # ref that does not exist in the credential store, fail before the DB write.
-        self._probe_credentials(kind_def, validated)
+        await self._probe_credentials(kind_def, validated)
         before = await self.get(ref)
         # Per-kind cross-version hook (e.g. ``knowledge_base``/``memory``
         # force a re-index/re-embed when chunk or embedding config changed).

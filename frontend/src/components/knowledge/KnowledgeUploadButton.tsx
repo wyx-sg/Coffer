@@ -16,7 +16,7 @@ import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { useUploadKnowledgeFile } from "@/kinds/knowledge/useKnowledge";
+import { useUploadKnowledgeFile } from "@/lib/hooks/useKnowledge";
 
 interface Props {
   collection: string;

@@ -1,13 +1,11 @@
 // components/chat/MessageThread.tsx
-// Scrollable list of messages + live streaming message.
+// Scrollable list of messages + echoed just-sent prompts + live streaming message.
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { chatApi } from "@/lib/api/chat";
-import { messagesKey } from "@/lib/hooks/useConversations";
+import { useMessageThread } from "@/lib/hooks/useMessageThread";
 import { isNearBottom } from "@/lib/chat/scroll";
-import type { LiveMessage } from "@/lib/hooks/useChatTurn";
-import type { Conversation } from "@/lib/api/chat";
+import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
+import type { Conversation, Message } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { MessageBubble } from "./MessageBubble";
@@ -20,6 +18,12 @@ import { translateApiError } from "@/lib/api/errors";
 interface Props {
   conversation: Conversation;
   liveMessage: LiveMessage | null;
+  /**
+   * Prompts sent from this client whose persisted rows have not landed yet.
+   * Rendered as user bubbles after the fetched messages; the turn hook owns
+   * when each one retires, so the thread never dedupes them itself.
+   */
+  pendingEchoes?: PendingEcho[];
   isStreaming: boolean;
   /** Error from the latest chat turn (network, credential, agent error, etc.) */
   turnError?: Error | null;
@@ -42,9 +46,25 @@ interface Props {
   restorePending?: boolean;
 }
 
+const NO_ECHOES: PendingEcho[] = [];
+
+/** Shape an echo as a user message so MessageBubble renders it like a row. */
+function echoAsMessage(echo: PendingEcho, conversationId: string): Message {
+  return {
+    id: echo.id,
+    conversation_id: conversationId,
+    seq: Number.MAX_SAFE_INTEGER,
+    role: "user",
+    content: [{ type: "text", text: echo.text }],
+    status: "complete",
+    created_at: new Date(echo.sentAt).toISOString(),
+  };
+}
+
 export function MessageThread({
   conversation,
   liveMessage,
+  pendingEchoes = NO_ECHOES,
   isStreaming,
   turnError,
   onClearTurnError,
@@ -78,39 +98,17 @@ export function MessageThread({
   // Transcript-wide Cmd/Ctrl+F over the rendered messages (shared find UX).
   const { find, inputRef, onKeyDown } = useDomFind(scrollRef);
 
-  const { data, isPending, error } = useQuery({
-    queryKey: messagesKey(conversation.id),
-    queryFn: async () => (await chatApi.listMessages(conversation.id)).messages,
-    // No polling: the persistent /events subscription drives the live turn and
-    // invalidates this query when the turn ends.
-  });
+  const { messages, isPending, error } = useMessageThread(conversation.id, liveMessage !== null);
+  const isEmpty = messages.length === 0 && pendingEchoes.length === 0 && !liveMessage;
 
-  // While the live bubble is shown, drop fetched streaming rows — a mid-turn
-  // refetch (e.g. window refocus) must not duplicate the in-progress reply.
-  const visibleMessages = liveMessage
-    ? (data ?? []).filter((m) => m.status !== "streaming")
-    : (data ?? []);
-
-  // Optimistic echo of the just-sent prompt: shown until a refetch delivers
-  // the persisted user message. Once the last fetched (non-streaming) row IS
-  // that user message, the fetched row wins and the echo is suppressed.
-  const echoText = liveMessage?.userText;
-  const lastVisible = visibleMessages[visibleMessages.length - 1];
-  const showEcho =
-    echoText !== undefined &&
-    !(
-      lastVisible?.role === "user" &&
-      lastVisible.content.some((b) => b.type === "text" && b.text === echoText)
-    );
-
-  // Auto-scroll to bottom when messages or live content changes — but only if
-  // the user is already near the bottom (followRef), so reading history during
-  // a stream isn't interrupted.
+  // Auto-scroll to bottom when messages, echoes or live content change — but
+  // only if the user is already near the bottom (followRef), so reading history
+  // during a stream isn't interrupted.
   useEffect(() => {
     if (followRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [data, liveMessage]);
+  }, [messages, pendingEchoes, liveMessage]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -139,29 +137,19 @@ export function MessageThread({
               {translateApiError(t, error)}
             </p>
           )}
-          {!isPending && !error && data?.length === 0 && !liveMessage && (
+          {!isPending && !error && isEmpty && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {t("chat.thread.empty")}
             </p>
           )}
 
           <div className="space-y-3">
-            {visibleMessages.map((msg) => (
+            {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            {showEcho && (
-              <MessageBubble
-                message={{
-                  id: "optimistic-user-echo",
-                  conversation_id: conversation.id,
-                  seq: Number.MAX_SAFE_INTEGER,
-                  role: "user",
-                  content: [{ type: "text", text: echoText }],
-                  status: "complete",
-                  created_at: "",
-                }}
-              />
-            )}
+            {pendingEchoes.map((echo) => (
+              <MessageBubble key={echo.id} message={echoAsMessage(echo, conversation.id)} />
+            ))}
             {liveMessage && <MessageBubble live={liveMessage} />}
           </div>
 

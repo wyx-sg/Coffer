@@ -22,8 +22,8 @@ from typing import Any, Protocol
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
+from coffer.domain.chat.errors import ConversationNotFound, UnknownAgent
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock
-from coffer.domain.errors import ConversationNotFound, UnknownAgent
 
 _TITLE_MAX_CHARS = 60
 _PLACEHOLDER_TITLE = "New conversation"
@@ -89,8 +89,11 @@ class MessageRepo(Protocol):
         """Delete a single message by id."""
         ...
 
-    async def list_by_conversation(self, conversation_id: str) -> list[Message]:
-        """Return messages ordered by ``seq`` ascending."""
+    async def list_by_conversation(
+        self, conversation_id: str, *, limit: int | None = None
+    ) -> list[Message]:
+        """Return messages ordered by ``seq`` ascending; ``limit`` keeps only
+        the most recent N (still oldest-first)."""
         ...
 
     async def next_seq(self, conversation_id: str) -> int:
@@ -352,10 +355,15 @@ class ChatService:
         """Delete a single message by id (used to discard a placeholder row)."""
         await self._messages.delete_message(message_id)
 
-    async def list_messages(self, conversation_id: str) -> list[Message]:
-        """Return messages for a conversation ordered by ``seq`` ascending."""
+    async def list_messages(
+        self, conversation_id: str, *, limit: int | None = None
+    ) -> list[Message]:
+        """Return messages for a conversation ordered by ``seq`` ascending.
+
+        ``limit`` returns only the most recent N (a turn's working history);
+        ``None`` returns everything (the message API)."""
         await self.get_conversation(conversation_id)  # existence check
-        return await self._messages.list_by_conversation(conversation_id)
+        return await self._messages.list_by_conversation(conversation_id, limit=limit)
 
 
 # ---------------------------------------------------------------------------

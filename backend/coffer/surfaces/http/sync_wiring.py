@@ -24,15 +24,14 @@ wrong base.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import hashlib
+import logging
 import pathlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
-from fastapi import FastAPI
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 import coffer
 from coffer.application.audit_service import AuditService
@@ -60,19 +59,27 @@ from coffer.application.sync.worker import ConvergeWorker
 from coffer.domain.sync.backup import DEFAULT_WORKTREE
 from coffer.domain.sync.diff import DeletionGuard
 from coffer.domain.sync.models import ExportSummary
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.daemon.config import write_machine_name
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
+from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.persistence.convergence_state_repo import SqlAlchemyConvergenceStateRepo
 from coffer.infrastructure.persistence.sync_remote_repo import SqlAlchemySyncRemoteRepo
 from coffer.infrastructure.sync.bundle import Bundle
-from coffer.infrastructure.sync.conflict_resolver import AgenticConflictResolver
+from coffer.infrastructure.sync.conflict_resolver import (
+    AgenticConflictResolver,
+    InternalModelPort,
+)
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_mirror import GitMirror
-from coffer.infrastructure.sync.identity import machine_name, resolve_identity
+from coffer.infrastructure.sync.identity import coffer_dir, machine_name, resolve_identity
 from coffer.infrastructure.sync.paths import knowledge_root, skills_root
 from coffer.surfaces.http.knowledge.tidy_state import set_vault_write_lock
+from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_routes import set_machine_registry, set_sync_service
+
+_log = logging.getLogger(__name__)
 
 
 class SyncWiring(NamedTuple):
@@ -101,14 +108,14 @@ def wire_sync(
     audit: AuditService,
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
-    sm: async_sessionmaker,  # type: ignore[type-arg]
-    credential_store: Any,
+    sm: async_sessionmaker[AsyncSession],
+    credential_store: EncryptedCredentialStore,
     *,
+    models: InternalModelPort,
+    credential_resolver: Callable[[str], str],
     state_providers: Sequence[SyncedStatePort] = (),
     import_gates: Sequence[ImportGate] = (),
     post_import_hooks: Sequence[PostImportHook] = (),
-    models: Any = None,
-    credential_resolver: Any = None,
 ) -> SyncWiring:
     cred_sync = CredentialSyncAdapter(db_path, master_key)
     home = str(pathlib.Path.home())
@@ -168,7 +175,7 @@ def wire_sync(
                 TreeApplier("knowledge/", worktree=worktree, live_root=knowledge_root()),
                 TreeApplier("skills/", worktree=worktree, live_root=skills_root()),
                 ResourceApplier(resource_svc, worktree=worktree, gates=gates, home=home),
-                StateApplier(providers, worktree=worktree),
+                StateApplier(providers, worktree=worktree, home=home),
                 CredentialApplier(cred_sync, worktree=worktree),
             ],
             arbiter=ConflictArbiter(resolver),
@@ -198,6 +205,11 @@ def wire_sync(
         credential_store=cred_sync,
         master_key=master_key,
         audit=audit,
+        # A working tree may not sit at, inside or above any of these: the
+        # round mirrors the first three *into* the tree and ``reset --hard``s
+        # it, and the last holds the database and the master key.
+        protected_roots=[knowledge_root(), skills_root(), memory_root()],
+        coffer_dir=coffer_dir(),
     )
     return SyncWiring(service=service, registry=registry, state=state)
 
@@ -217,18 +229,19 @@ def _worktree_of(mirror: GitMirrorPort) -> pathlib.Path:
 
 
 def start_sync(
-    app: FastAPI,
     resource_svc: ResourceService,
     audit: AuditService,
     db_path: pathlib.Path,
     master_key: MasterKeyManager,
-    sm: async_sessionmaker,  # type: ignore[type-arg]
-    credential_store: Any,
-    models: Any = None,
-    credential_resolver: Any = None,
+    sm: async_sessionmaker[AsyncSession],
+    credential_store: EncryptedCredentialStore,
+    contributions: SyncContributions,
+    *,
+    models: InternalModelPort,
+    credential_resolver: Callable[[str], str],
 ) -> SyncWiring:
-    """Wire convergence. Kind modules registered their shared-state providers
-    and import gates on ``app.state`` during composition, before this runs.
+    """Wire convergence over what the kinds contributed during composition
+    (their shared-state providers, import gates and post-import hooks).
 
     Returns the graph so the caller can start a worker over it — wiring and
     starting stay separate, because a test wants the graph without a timer.
@@ -240,17 +253,14 @@ def start_sync(
         master_key,
         sm,
         credential_store,
-        state_providers=tuple(getattr(app.state, "sync_state_providers", ()) or ()),
-        import_gates=tuple(getattr(app.state, "sync_import_gates", ()) or ()),
-        post_import_hooks=tuple(getattr(app.state, "sync_post_import_hooks", ()) or ()),
         models=models,
         credential_resolver=credential_resolver,
+        state_providers=tuple(contributions.state_providers),
+        import_gates=tuple(contributions.import_gates),
+        post_import_hooks=tuple(contributions.post_import_hooks),
     )
-    app.state.sync_service = wiring.service
-    app.state.machine_registry = wiring.registry
-    app.state.convergence_state = wiring.state
-    # The routes hold module-level singletons rather than reaching into
-    # app.state, matching every other surface in this package.
+    # The routes hold module-level singletons, matching every other surface
+    # in this package.
     set_sync_service(wiring.service)
     # The tidy pass — timer and button alike — takes the round's own lock.
     set_vault_write_lock(wiring.service.lock)
@@ -258,7 +268,9 @@ def start_sync(
     return wiring
 
 
-def start_converge_worker(app: FastAPI, wiring: SyncWiring, sm: Any) -> ConvergeWorker:
+def start_converge_worker(
+    wiring: SyncWiring, sm: async_sessionmaker[AsyncSession]
+) -> ConvergeWorker:
     """Start the timer that converges the vault, shaped like ``RetentionWorker``.
 
     No interval is passed: the worker re-reads the configured remote's interval
@@ -268,14 +280,15 @@ def start_converge_worker(app: FastAPI, wiring: SyncWiring, sm: Any) -> Converge
     """
     worker = ConvergeWorker(wiring.service, SqlAlchemySyncRemoteRepo(sm))
     worker.start()
-    app.state.converge_worker = worker
     return worker
 
 
-async def stop_converge_worker(app: FastAPI) -> None:
-    """Best-effort teardown, mirroring the retention worker's."""
-    worker: ConvergeWorker | None = getattr(app.state, "converge_worker", None)
-    if worker is None:
-        return
-    with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+async def stop_converge_worker(worker: ConvergeWorker) -> None:
+    """Best-effort teardown, mirroring the retention worker's: a round that
+    does not yield within the grace period is abandoned, and said so."""
+    try:
         await asyncio.wait_for(worker.stop(), timeout=2.0)
+    except TimeoutError:
+        _log.warning("sync.converge_worker.stop_timed_out", extra={"timeout_s": 2.0})
+    except asyncio.CancelledError:
+        _log.debug("sync.converge_worker.stop_cancelled")

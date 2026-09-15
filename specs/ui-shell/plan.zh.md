@@ -62,14 +62,13 @@ frontend/src/
 ├── App.tsx                                # 全局 providers (QueryClient、i18n) + RouterProvider
 ├── main.tsx                               # bootstrap 入口
 ├── router.tsx                             # createBrowserRouter 路由表
-├── kinds.ts                               # 组装入口：注册每个 kind 的 UI 模块
 ├── i18n/
 │   ├── index.ts                           # i18next 配置
 │   └── locales/{en,zh}.json               # 每种语言一份扁平词条
 ├── lib/
 │   ├── api/                               # 类型化 API 客户端 + 各资源模块 (resources、agents、skills、fs)
 │   ├── hooks/                             # TanStack Query hooks (useResources、useAudit、useAgents…)
-│   ├── components/                        # kindRegistry.ts + 共享 ResourceListView
+│   ├── components/                        # 共享 lib 组件（原本住在这里的 kind 注册表已于 2026-09-14 退役）
 │   ├── auth.ts                            # daemon token 加载（由 dev 插件读 ~/.coffer/daemon.json）
 │   ├── preferences.ts                     # 默认每页条数偏好 (General 设置)
 │   └── queryClient.ts / statusColors.ts / timeRange.ts / utils.ts
@@ -82,7 +81,6 @@ frontend/src/
 │   └── skills/                            # skill kind UI 组件 (spec skill-manager)
 ├── kinds/
 │   └── mcp/
-│       ├── index.tsx                      # MCP_KIND_UI 入口，由 kinds.ts 注册
 │       ├── McpServersTable.tsx / McpServerDetailPage.tsx / McpServerDetailTabs.tsx
 │       └── AddMcpServerDialog.tsx / CapabilityList.tsx / InvocationsTable.tsx / …
 └── pages/
@@ -99,17 +97,22 @@ frontend/
 └── components.json                        # shadcn 配置
 ```
 
-### 扩展点：kind 注册表
+### 扩展点：每个 kind 同一套布局（注册表已于 2026-09-14 退役）
 
-`frontend/src/lib/components/kindRegistry.ts` 暴露 `registerKindUI`；每个 kind
-在 `frontend/src/kinds/<kind>/` 下提供一个自包含的 UI 模块，其 `index.tsx`
-导出该 kind 的展示名、侧栏图标以及列表/详情组件。组装入口
-`frontend/src/kinds.ts` import 每个模块并注册；kind-agnostic 的
-`ResourcesPage` 通过查注册表来分派——共享代码里没有任何按 kind 分支的逻辑。
-新增一个 kind 时各自加一份模块，并在 `kinds.ts` 里加一行 import +
-`registerKindUI` 调用即可，其它共享文件不需改。
+本计划最初交付的是一个 per-kind UI 注册表：每个 kind 一次注册
+调用、`frontend/src/kinds/<kind>/` 下的自包含模块、一个逐个 import 并注册的
+组装入口，以及 kind-agnostic 的 `ResourcesPage` 借以分派的共享列表视图。它于
+2026-09-14 退役：只有三个 kind 曾经注册过，详情路由绕开了注册表、直接按
+`kind` 分派，共享列表视图没有任何调用方。取而代之的是一条约定而不是一套机制
+——每个 kind 用同一套布局：列表页在 `pages/`，kind 的组件、对话框与详情辅助件在
+`components/<kind>/`，hooks 在 `lib/hooks/`，API 模块与生成类型在 `lib/api/`
+（由每个 spec 的契约 codegen 到 `lib/api/generated/*.ts`），query key 在
+`lib/api/queryKeys.ts`，路由经 `router.tsx` 里的 `lazyPage()` 懒加载。
+`pages/ResourceDetailPage.tsx` 直接按 `kind` 分派。新增一个 kind 就在这些位置
+加自己的文件，别无其它；布局的权威表述见 `agents/frontend.md`。
 
-这是后端 `KindModule` 组合模式（[Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md)、[Layer-First Code Layout](../../docs/decisions/code-layout-layer-first.md)）在 UI 侧的镜像。
+后端同一天走了同一条路：它的组合模式现在是 `make_<kind>_kind()` 工厂加上每个
+kind 一个显式的 wiring 模块（[Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md)、[Layer-First Code Layout](../../docs/decisions/code-layout-layer-first.md)）。
 
 ### 视觉语言
 
@@ -165,7 +168,7 @@ Acceptance 审计、`make verify`、`make verify-e2e`、跨浏览器手动冒烟
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Tailwind + shadcn 取代裸 CSS                            | 视觉语言一致性是本 spec 的头号目标；ad-hoc CSS 恰是 US2 反对的"像脚手架"状态。                       | 裸 CSS 会让每个组件重新讨论 spacing / typography / color；shadcn 给我们一组被审计过的 Radix 基础件，又不带笨重的 UI 框架。         |
 | TanStack Query 取代原生 fetch                           | 审计 / 调用 / 能力表格都需要 stale-while-revalidate 和切换后自动 refetch；自己重造一遍只会做得更差。 | 原生 fetch 会让每个页面手摇 loading / error / refetch 状态。                                                                       |
-| Per-kind 注册表 (`kindRegistry.ts`)                     | 未来的 kind 接入时不动共享代码；与后端的 `KindModule` 模式镜像。                                     | 在 `ResourcesPage` 里写 `if (kind === "mcp_server") { … }` 分支，会随 kind 数线性膨胀，并在每个界面重新挑战 kind-agnostic 不变式。 |
+| Per-kind 注册表——已于 2026-09-14 退役                   | 退役原因：只有三个 kind 曾经注册过，详情路由绕开注册表、直接按 `kind` 分派，共享列表视图没有任何调用方。 | 改选：每个 kind 同一套布局（`pages/`、`components/<kind>/`、`lib/hooks/`、`lib/api/`），`ResourceDetailPage` 直接按 `kind` 分派——分支数就是 kind 数，也没有任何共享件需要被注册。 |
 | AddMcpServerDialog 中 register-first-then-credential 顺序 | 注册失败时避免遗留 orphan 凭据条目（实现阶段确定；见 spec scenario）。                              | credential-first 看起来对称，但注册失败时会留死的凭据条目；清理 orphan 比重试注册更难。                                            |
 
 ## Cross-Reference Index

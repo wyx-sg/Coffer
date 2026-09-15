@@ -56,7 +56,10 @@ class MasterKeyFileInvalid(CofferError):  # noqa: N818
 
 
 class BackupRemoteInvalid(CofferError):  # noqa: N818
-    """The backup remote's configuration cannot be used as given. Maps to 422."""
+    """The sync remote's configuration cannot be used as given. Maps to 422.
+
+    The code and message keep the ``backup`` wording: both are wire contract
+    and the surfaces already match on them."""
 
     code = "BACKUP_REMOTE_INVALID"
 

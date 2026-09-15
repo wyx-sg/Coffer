@@ -37,6 +37,7 @@ from coffer.application.memory.context import DEFAULT_BUDGET_TOKENS, compose_con
 from coffer.application.memory.overrides import Override
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.application.resource_service import ResourceService
+from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.fact import Fact
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.memory.store import FactNotFound
@@ -44,10 +45,12 @@ from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
+    get_resource_service,
+)
+from coffer.surfaces.http.memory.dependencies import (
     get_memory_delivery_service,
     get_memory_override_repo,
     get_memory_service,
-    get_resource_service,
 )
 from coffer.surfaces.http.memory.organise_state import get_organise_runner
 from coffer.surfaces.http.memory.schemas import (
@@ -74,9 +77,9 @@ router = APIRouter(
     dependencies=[Depends(require_token)],
 )
 
-_EVENT_ORGANISED = "memory_organised"
-_EVENT_OVERRIDE_SET = "memory_override_set"
-_EVENT_OVERRIDE_CLEARED = "memory_override_cleared"
+_EVENT_ORGANISED = AuditEventType.MEMORY_ORGANISED.value
+_EVENT_OVERRIDE_SET = AuditEventType.MEMORY_OVERRIDE_SET.value
+_EVENT_OVERRIDE_CLEARED = AuditEventType.MEMORY_OVERRIDE_CLEARED.value
 
 _actor = get_actor
 

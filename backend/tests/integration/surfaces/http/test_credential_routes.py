@@ -11,10 +11,10 @@ from coffer.domain.audit import AuditEntry
 from coffer.domain.resource import ResourceRef
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.dependencies import (
     get_audit_service,
-    get_credential_store,
     get_resource_service,
 )
 
@@ -340,3 +340,37 @@ async def test_empty_value_is_rejected() -> None:
         r = await c.post("/api/v1/credentials", json={"ref": "channel/st/signing", "value": ""})
         assert r.status_code == 422
     assert fake.store == {}
+
+
+@pytest.mark.asyncio
+async def test_get_and_exists_read_the_store_off_the_loop_thread() -> None:
+    """A store read opens its own SQLite connection and can wait on the write
+    lock; the routes must run it in a worker thread, not on the loop."""
+    import threading
+
+    loop_thread = threading.get_ident()
+
+    class _RecordingStore(_FakeCredentialStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.seen: list[int] = []
+
+        def get(self, ref: str) -> str | None:
+            self.seen.append(threading.get_ident())
+            return super().get(ref)
+
+        def exists(self, ref: str) -> bool:
+            self.seen.append(threading.get_ident())
+            return super().exists(ref)
+
+    fake = _RecordingStore()
+    fake.set("svc/key", "v")
+    app = _build_app(fake)
+    headers = {"X-Coffer-Token": "test-token"}
+    async with AsyncClient(transport=ASGITransport(app), base_url="http://t") as c:
+        got = await c.get("/api/v1/credentials/svc/key", headers=headers)
+        present = await c.get("/api/v1/credentials/svc/key/exists", headers=headers)
+    assert got.status_code == 200 and got.json()["value"] == "v"
+    assert present.status_code == 200
+    assert len(fake.seen) == 2
+    assert all(ident != loop_thread for ident in fake.seen)

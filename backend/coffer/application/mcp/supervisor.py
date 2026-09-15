@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -57,6 +58,28 @@ class UpstreamHealth(StrEnum):
 
 _RETRY_DELAYS_SECONDS = (1.0, 5.0, 30.0)
 _COOLDOWN_SECONDS = 60
+# How many upstreams one supervisor cold-starts at the same time. A listing
+# fan-out over N registered servers would otherwise open N subprocesses / N
+# HTTP initialize handshakes at once; a few slow ones then starve the rest of
+# CPU and file descriptors and push *every* spawn past its timeout.
+_DEFAULT_MAX_CONCURRENT_SPAWNS = 4
+_MAX_CONCURRENT_SPAWNS_ENV = "COFFER_MCP_MAX_CONCURRENT_SPAWNS"
+
+
+def _max_concurrent_spawns_from_env() -> int:
+    """Read ``COFFER_MCP_MAX_CONCURRENT_SPAWNS``; invalid or non-positive → default.
+
+    Same knob style as ``reaper_kwargs_from_env`` (CODE-022): env so a
+    deployment can tune it without a code change, silently ignored when it
+    does not parse.
+    """
+    value = _DEFAULT_MAX_CONCURRENT_SPAWNS
+    if raw := os.environ.get(_MAX_CONCURRENT_SPAWNS_ENV):
+        with suppress(ValueError):
+            parsed = int(raw)
+            if parsed > 0:
+                value = parsed
+    return value
 
 
 # Re-export the port under the legacy name so existing callers that imported
@@ -87,6 +110,7 @@ class SubprocessSupervisor:
         retry_delays: tuple[float, ...] = _RETRY_DELAYS_SECONDS,
         cooldown_seconds: int = _COOLDOWN_SECONDS,
         clock: Any = None,  # callable returning datetime; None → datetime.now(UTC)
+        max_concurrent_spawns: int | None = None,  # None → env knob, else default
     ) -> None:
         self._resources = resource_service
         self._credentials = credential_resolver
@@ -100,6 +124,18 @@ class SubprocessSupervisor:
         self._cooldown_seconds = cooldown_seconds
         self._entries: dict[str, _UpstreamEntry] = {}
         self._clock = clock or (lambda: datetime.now(tz=UTC))
+        if max_concurrent_spawns is None or max_concurrent_spawns <= 0:
+            max_concurrent_spawns = _max_concurrent_spawns_from_env()
+        self._max_concurrent_spawns = max_concurrent_spawns
+        # Bounds cold starts across DIFFERENT servers (spawn_lock is per
+        # server). Held only around build + spawn_and_initialize, never across
+        # a retry sleep or a cooldown, so a waiting-out server holds no slot.
+        self._spawn_slots = asyncio.Semaphore(max_concurrent_spawns)
+
+    @property
+    def max_concurrent_spawns(self) -> int:
+        """How many upstream cold starts this supervisor runs at once."""
+        return self._max_concurrent_spawns
 
     def _now(self) -> datetime:
         return self._clock()
@@ -169,12 +205,14 @@ class SubprocessSupervisor:
             # asyncio.CancelledError from shutdown) propagate so they surface
             # to the caller instead of silently burning the retry budget
             # (CODE-003). asyncio.CancelledError is BaseException-derived, so
-            # the `except Exception`-based clause below excludes it naturally.
+            # the `except Exception`-based clause below excludes it naturally
+            # — the ladder stops on the spot, no retry sleep, no cooldown.
             last_error: Exception | None = None
             for attempt_idx in range(len(self._retry_delays) + 1):
                 try:
-                    conn = await self._build_connection(server_name, config)
-                    await conn.spawn_and_initialize()
+                    async with self._spawn_slots:
+                        conn = await self._build_connection(server_name, config)
+                        await conn.spawn_and_initialize()
                     entry.connection = conn
                     entry.state = UpstreamHealth.HEALTHY
                     entry.consecutive_failures = 0

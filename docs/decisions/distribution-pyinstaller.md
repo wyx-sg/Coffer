@@ -72,9 +72,12 @@ Concrete choices:
 - **The daemon deploys its sibling binaries on a frozen start**
   (spec mcp-gateway FR-026). When `coffer-daemon` detects it is running from a
   frozen build, it idempotently copies its siblings — `coffer-mcp-shim`,
-  and `coffer-callback` — into `~/.coffer/bin/`, using an
-  atomic temp-copy-then-rename and a 3-signal staleness check (byte size,
-  mtime, version sentinel). This makes MCP clients able to resolve the
+  and `coffer-callback` — into `~/.coffer/bin/<version>/`, and flips the
+  public `~/.coffer/bin/<name>` symlinks onto that directory atomically,
+  using an atomic temp-copy-then-rename and a 2-signal staleness check
+  (byte size, version sentinel — not mtime). Nothing is overwritten in
+  place: the previous version's directory stays for a rollback (the two
+  newest are kept). This makes MCP clients able to resolve the
   `command: coffer-mcp-shim` config, and it keeps a `coffer-daemon`
   sibling next to the shim so the frozen shim's detect-or-spawn
   ([Detect-or-Spawn](daemon-detect-or-spawn.md)) finds a daemon to start
@@ -277,3 +280,12 @@ Rejected.
   the `xattr -dr com.apple.quarantine` step is now documented for the app as
   prominently as for the archive. Notarisation is now the single highest-value
   thing that account would buy.
+- **2026-09-14** — Versioned deploy directories. `deploy_frozen_sidecars`
+  used to overwrite `~/.coffer/bin/<name>` in place whenever size, mtime or
+  the version sentinel differed, so a bad build replaced the only copy and
+  a same-release reinstall (new mtime, same bytes) re-copied everything on
+  every start. Each build now lands in `~/.coffer/bin/<version>/`, the public
+  names are symlinks flipped atomically onto it, the previous version's
+  directory is kept (two newest survive), and mtime is no longer a
+  staleness signal. Rollback is pointing the links back by hand; the paths
+  every caller uses are unchanged.

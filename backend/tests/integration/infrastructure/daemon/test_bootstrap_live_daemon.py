@@ -33,8 +33,14 @@ def _write_daemon_json(home: Path, port: int) -> None:
 
 
 class _Resp:
-    def __init__(self, status_code: int) -> None:
+    def __init__(self, status_code: int, body: object = None) -> None:
         self.status_code = status_code
+        self._body = body
+
+    def json(self) -> object:
+        if isinstance(self._body, Exception):
+            raise self._body
+        return self._body if self._body is not None else {"version": "x", "port": 8123}
 
 
 def test_live_daemon_none_when_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -83,3 +89,50 @@ def test_live_daemon_none_when_connection_error(
 
     monkeypatch.setattr(bootstrap.httpx, "get", _boom)
     assert bootstrap.live_daemon() is None
+
+
+# --------------------------------------------------------------------------- #
+# probe_status — the body behind live_daemon, for callers that read it         #
+# --------------------------------------------------------------------------- #
+
+
+def _info(port: int = 8123) -> DaemonInfo:
+    return DaemonInfo(
+        version=1,
+        pid=4242,
+        port=port,
+        token="tok",
+        started_at=datetime.now(tz=UTC),
+        binary_path="/fake/coffer-daemon",
+    )
+
+
+def test_probe_status_returns_the_status_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        bootstrap.httpx, "get", lambda *a, **k: _Resp(200, {"version": "9.9.9", "port": 8123})
+    )
+    assert bootstrap.probe_status(_info()) == {"version": "9.9.9", "port": 8123}
+
+
+def test_probe_status_none_when_not_200(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(bootstrap.httpx, "get", lambda *a, **k: _Resp(503, {"version": "x"}))
+    assert bootstrap.probe_status(_info()) is None
+
+
+def test_probe_status_none_on_connection_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*a: object, **k: object) -> object:
+        raise httpx.ConnectError("refused")
+
+    monkeypatch.setattr(bootstrap.httpx, "get", _boom)
+    assert bootstrap.probe_status(_info()) is None
+
+
+def test_probe_status_treats_a_200_with_no_json_object_as_live_but_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Liveness never hinges on the payload: a 200 is a live daemon even when
+    the body is not a JSON object, and the caller gets nothing to compare."""
+    monkeypatch.setattr(bootstrap.httpx, "get", lambda *a, **k: _Resp(200, ValueError("bad")))
+    assert bootstrap.probe_status(_info()) == {}
+    monkeypatch.setattr(bootstrap.httpx, "get", lambda *a, **k: _Resp(200, ["not", "a", "dict"]))
+    assert bootstrap.probe_status(_info()) == {}

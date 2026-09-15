@@ -215,7 +215,9 @@ def test_spawn_daemon_invokes_popen(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         popen_kwargs["kwargs"] = kwargs
         return _FakeProc()
 
-    monkeypatch.setattr(cli_client.subprocess, "Popen", _fake_popen)
+    from coffer.infrastructure.daemon import spawn as daemon_spawn
+
+    monkeypatch.setattr(daemon_spawn.subprocess, "Popen", _fake_popen)
 
     proc = cli_client._spawn_daemon()
 
@@ -225,6 +227,12 @@ def test_spawn_daemon_invokes_popen(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert len(popen_kwargs["cmd"]) >= 1
     # Must redirect stdin to DEVNULL.
     assert popen_kwargs["kwargs"].get("stdin") == subprocess.DEVNULL
+    # Both output streams go to daemon.log so the daemon's own refusal is kept.
+    # (`daemon_log_path` honours COFFER_LOG_DIR, which the test conftest sets.)
+    log_path = daemon_spawn.daemon_log_path()
+    assert log_path.name == "daemon.log"
+    assert Path(popen_kwargs["kwargs"]["stderr"].name) == log_path
+    assert Path(popen_kwargs["kwargs"]["stdout"].name) == log_path
     # Must detach so the daemon outlives the launching CLI process.
     if cli_client.sys.platform == "win32":
         flags = popen_kwargs["kwargs"].get("creationflags", 0)
@@ -282,3 +290,66 @@ def test_render_http_error_connect_error_no_longer_says_start(
     from coffer.surfaces.cli._options import ExitCode
 
     assert exit_code == ExitCode.DAEMON_UNREACHABLE
+
+
+# --------------------------------------------------------------------------- #
+# version skew: attaching to another build warns on stderr, never refuses      #
+# --------------------------------------------------------------------------- #
+
+
+def test_client_or_exit_warns_when_the_daemon_is_another_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    _write_daemon_json(home, port=9876)
+    _live_from_file(monkeypatch)
+    monkeypatch.setattr(
+        cli_client,
+        "probe_status",
+        lambda info, timeout: {"version": "0.0.1-old", "executable": "/old/coffer-daemon"},
+    )
+
+    client, info = cli_client.client_or_exit()
+    client.close()
+
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "0.0.1-old" in err and "/old/coffer-daemon" in err
+    assert err.count("\n") == 1, "one line, not a lecture"
+    assert info.port == 9876, "skew is reported, the client is still returned"
+
+
+def test_client_or_exit_is_quiet_when_versions_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from coffer import __version__
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    _write_daemon_json(home, port=9876)
+    _live_from_file(monkeypatch)
+    monkeypatch.setattr(cli_client, "probe_status", lambda info, timeout: {"version": __version__})
+
+    client, _info = cli_client.client_or_exit()
+    client.close()
+
+    assert capsys.readouterr().err == ""
+
+
+def test_client_or_exit_is_quiet_when_the_skew_probe_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No status body → no verdict; the command's own error will say what's wrong."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    _write_daemon_json(home, port=9876)
+    _live_from_file(monkeypatch)
+    monkeypatch.setattr(cli_client, "probe_status", lambda info, timeout: None)
+
+    client, _info = cli_client.client_or_exit()
+    client.close()
+
+    assert capsys.readouterr().err == ""

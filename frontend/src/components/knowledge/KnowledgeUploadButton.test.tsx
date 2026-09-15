@@ -2,7 +2,7 @@
 //
 // Upload into the collection (and folder) in view (spec knowledge FR-061).
 // `useUploadKnowledgeFile` runs as a REAL react-query mutation against the
-// mocked wire layer (`@/kinds/knowledge/api`), so a successful call really
+// mocked wire layer (`@/lib/api/knowledge`), so a successful call really
 // does invalidate `["knowledge"]` — the mechanism a mounted tree query relies
 // on to refresh itself with no manual reload.
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -12,13 +12,13 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 import { KnowledgeUploadButton } from "./KnowledgeUploadButton";
 import { ToastProvider } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/errors";
-import { knowledgeKey } from "@/kinds/knowledge/useKnowledge";
+import { knowledgeKey } from "@/lib/hooks/useKnowledge";
 
-vi.mock("@/kinds/knowledge/api", () => ({
+vi.mock("@/lib/api/knowledge", () => ({
   uploadFile: vi.fn(),
 }));
 
-const { uploadFile } = await import("@/kinds/knowledge/api");
+const { uploadFile } = await import("@/lib/api/knowledge");
 const uploadFileMock = vi.mocked(uploadFile);
 
 afterEach(() => vi.clearAllMocks());

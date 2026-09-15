@@ -70,7 +70,6 @@ backend/coffer/
 │   ├── audit.py                          # AuditEntry, AuditEventType
 │   ├── retention.py                      # RetentionPolicy
 │   ├── errors.py                         # CofferError hierarchy
-│   ├── kind_module.py                    # KindModule frozen dataclass
 │   └── mcp/
 │       ├── server_config.py              # MCPServerConfig + transports
 │       ├── capability.py                 # MCPTool/Resource/Prompt + Preference + Invocation
@@ -86,7 +85,7 @@ backend/coffer/
 │       ├── gateway_handlers.py           # JSON-RPC 方法分派
 │       ├── gateway_aggregate_lists.py    # tools/resources/prompts 列表聚合
 │       ├── gateway_server_requests.py    # upstream→downstream 请求中继 (roots/sampling)
-│       ├── kind.py                       # MCP_KIND 组装 (KindModule wiring)
+│       ├── kind.py                       # make_mcp_kind() → 冻结的 Kind
 │       ├── supervisor.py                 # subprocess 生命周期
 │       ├── discovery.py                  # 能力实时发现 + 缓存
 │       └── credential_resolver.py        # 拉起时物化凭据引用
@@ -169,7 +168,7 @@ composition root 脚手架、Typer composition root 脚手架。尚无业务逻�
 
 ### Phase 2 — Foundational (kind-agnostic core)
 
-实现 Resource 框架（`Resource`、`Kind`、`KindModule`、`ResourceService`、
+实现 Resource 框架（`Resource`、`Kind`、`ResourceService`、
 `AuditService`）和 retention 框架（`PrunableRegistry`、`RetentionService`、
 `RetentionWorker`），以及 `/api/v1/resources/*`、`/api/v1/audit`、
 `/api/v1/retention/*`、`/api/v1/daemon/*` 路由 + 对应 Typer 子命令组 + 对应通用 UI

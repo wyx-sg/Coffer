@@ -5,6 +5,10 @@
 // request with one source of truth; each throws an ApiError on a non-2xx body.
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
+import type { components } from "@/lib/api/types";
+
+/** One row of the kind-agnostic resource list (`GET /resources`). */
+export type ResourceOut = components["schemas"]["ResourceOut"];
 
 export const resourcesApi = {
   enable: async (kind: string, name: string): Promise<void> => {

@@ -10,21 +10,14 @@ import {
   type ConversationCreate,
   type ConversationPatch,
 } from "@/lib/api/chat";
+import {
+  agentConfigKey,
+  archivedConversationsKey,
+  conversationKey,
+  conversationsKey as CONVERSATIONS_KEY,
+  messagesKey,
+} from "@/lib/api/queryKeys";
 import { useToast } from "@/components/ui/toast";
-
-export const CONVERSATIONS_KEY = ["conversations"] as const;
-
-export function conversationKey(id: string) {
-  return [...CONVERSATIONS_KEY, id] as const;
-}
-
-export function messagesKey(conversationId: string) {
-  return ["messages", conversationId] as const;
-}
-
-export function agentConfigKey(conversationId: string) {
-  return ["agent-config", conversationId] as const;
-}
 
 /** Shared onError → toast handler — a failed mutation must never be silent. */
 function useConversationToastError() {
@@ -37,8 +30,6 @@ function useConversationToastError() {
 // Queries
 // ---------------------------------------------------------------------------
 
-export const ARCHIVED_CONVERSATIONS_KEY = [...CONVERSATIONS_KEY, "archived"] as const;
-
 export function useConversations() {
   return useQuery({
     queryKey: CONVERSATIONS_KEY,
@@ -48,7 +39,7 @@ export function useConversations() {
 
 export function useArchivedConversations(enabled = true) {
   return useQuery({
-    queryKey: ARCHIVED_CONVERSATIONS_KEY,
+    queryKey: archivedConversationsKey,
     queryFn: async () => (await chatApi.listConversations(true)).conversations,
     enabled,
   });

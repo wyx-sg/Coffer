@@ -22,7 +22,7 @@ surfaces  →  application  →  domain
 
 ### domain/
 
-domain 层包含与 kind 无关的实体和协议，定义了 Coffer 在概念层面管理的内容。包括 `resource.py`（Resource 实体、`ResourceRef`、kind 协议接口）、`kind_module.py`（组装入口使用的 `KindModule` 载体）、`audit.py`（`AuditEvent` 值对象）、`errors.py`（标准错误层次结构），以及每种 kind 一个子目录、存放该 kind 值对象——`mcp/`（工具 schema、能力描述符、会话状态模型）、`agent/`、`skill/`、`channel/`、`knowledge/`、`chat/` 和 `sync/`。
+domain 层包含与 kind 无关的实体和协议，定义了 Coffer 在概念层面管理的内容。包括 `resource.py`（Resource 实体、`ResourceRef`，以及每个 kind 的工厂所返回的冻结 `Kind` 记录）、`audit.py`（`AuditEvent` 值对象）、`errors.py`（标准错误层次结构），以及每种 kind 一个子目录、存放该 kind 值对象——`mcp/`（工具 schema、能力描述符、会话状态模型）、`agent/`、`skill/`、`channel/`、`knowledge/`、`chat/` 和 `sync/`。
 
 ::: warning 绝对不变量
 `domain/` 不得从 `infrastructure/`、`surfaces/` 或任何外部 SDK import。代码中不出现 SQLAlchemy、FastAPI、`keyring`、`httpx`——这些内容在 domain 层中一概不存在。如果 domain 实体需要校验 URL，它使用 Python 标准库。如果它需要表示一个凭据，它持有的是字符串引用，而不是钥匙串句柄。
@@ -32,7 +32,7 @@ domain 层包含与 kind 无关的实体和协议，定义了 Coffer 在概念�
 
 ### application/
 
-application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它定义了实现 Coffer 用例的服务：`resource_service.py` 用于与 kind 无关的 CRUD（任意 kind 的资源创建/读取/更新/启用/禁用/删除），`audit_service.py` 用于记录生命周期事件，`retention_service.py` 用于后台日志清理工作进程，以及每种 kind 一个子目录——`application/mcp/`（会话管理、能力筛选、调用记录）、`application/agent/`、`application/skill/`、`application/channel/` 和 `application/knowledge/`。与 kind 并列的还有**并非 kind** 的跨层服务切片：`application/chat/`（渠道运行 agent 所依托的回合平台——`TurnOrchestrator` 与回合历史）、`application/sync/`（仓库导出与导入）、`application/credentials/`（共享的 `CredentialResolver`）和 `application/fs/`（文件系统浏览）。
+application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它定义了实现 Coffer 用例的服务：`resource_service.py` 用于与 kind 无关的 CRUD（任意 kind 的资源创建/读取/更新/启用/禁用/删除），`audit_service.py` 用于记录生命周期事件，`retention_service.py` 用于后台日志清理工作进程，以及每种 kind 一个子目录——`application/mcp/`（会话管理、能力筛选、调用记录）、`application/agent/`、`application/skill/`、`application/channel/` 和 `application/knowledge/`。与 kind 并列的还有**并非 kind** 的跨层服务切片：`application/chat/`（渠道运行 agent 所依托的回合平台——`TurnOrchestrator` 与回合状态）、`application/sync/`（仓库与用户自有 git 远端的收敛）、`application/credentials/`（共享的 `CredentialResolver`）和 `application/fs/`（文件系统浏览）。
 
 应用层服务通过构造函数参数接收其 infrastructure 依赖（repository、钥匙串适配器、上游客户端）——它们不自行实例化这些依赖。这就是依赖倒置模式：application 层通过 `domain/` 中的接口或协议类定义它需要什么，组装入口提供具体实现。
 
@@ -42,7 +42,7 @@ application 层使用 infrastructure 和 surfaces 来编排 domain 实体。它�
 
 ### infrastructure/
 
-infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、加密凭据存储与主密钥管理器（`infrastructure/credentials/`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端），以及每种 kind 的 I/O 模块：`infrastructure/agent/`（agent 配置文件存储）、`infrastructure/skill/`（主存储、来源拉取器、同步引擎）、`infrastructure/channel/`（Telegram/SeaTalk 传输、peer 仓库、渲染）、`infrastructure/knowledge/`（磁盘路径布局、frontmatter 解析、文件 I/O、文档转换器，以及 `ripgrep` 包装层）、以及 `infrastructure/chat/`（Claude Code 与 Codex 的 agent 驱动、网关工具 provider、回合持久化）。跨层的 `infrastructure/sync/` 切片（磁盘上的导出/导入包）并非 kind。
+infrastructure 层包含所有执行外部 I/O 的代码：SQLAlchemy ORM 模型与 Alembic 迁移（`infrastructure/persistence/`）、加密凭据存储与主密钥管理器（`infrastructure/credentials/`——整个代码库中唯一允许 import `keyring` 的地方）、daemon 发现工具类（`infrastructure/daemon/`），MCP 上游传输实现（`infrastructure/mcp/`——stdio 上游的子进程管理，以及 HTTP 传输上游的 HTTP 客户端），以及每种 kind 的 I/O 模块：`infrastructure/agent/`（agent 配置文件存储）、`infrastructure/skill/`（主存储、来源拉取器、同步引擎）、`infrastructure/channel/`（Telegram/SeaTalk 传输、peer 仓库、渲染）、`infrastructure/knowledge/`（磁盘路径布局、frontmatter 解析、文件 I/O、文档转换器，以及 `ripgrep` 包装层）、以及 `infrastructure/chat/`（Claude Code 与 Codex 的 agent 驱动、网关工具 provider、回合持久化）。跨层的 `infrastructure/sync/` 切片（仓库借以收敛的 git 镜像）并非 kind。与各 kind 并列的还有两个与 kind 无关的包：`infrastructure/net/`（每个出站 URL 都要经过的 SSRF 防护）和 `infrastructure/agent_files/`（读取 agent 自己磁盘上转录的读取器，由 agent 与 memory 两个 kind 共用）。
 
 infrastructure 在组装入口处注入到系统中，不被 domain 或 application 代码直接 import。应用层服务以注入依赖的方式接收 infrastructure 对象。这意味着可以将真实的 SQLAlchemy repository 替换为测试替身（内存字典或 SQLite `:memory:` 数据库），而无需更改任何 application 或 domain 代码。
 
@@ -52,7 +52,7 @@ infrastructure 在组装入口处注入到系统中，不被 domain 或 applicat
 
 surfaces 层将外部协议适配为应用层调用。它包含 FastAPI 应用（`surfaces/http/`）、Typer CLI（`surfaces/cli/`）、stdio shim 入口点（`surfaces/shim/`），以及 channel 回调监听器（`surfaces/callback/`——接收 SeaTalk webhook 的 `coffer-callback` 进程）。surfaces 是薄的：它们解析请求、调用应用层服务、格式化响应。它们不包含业务逻辑。
 
-两个组装入口——daemon HTTP 服务器的 `surfaces/http/app.py` 和 CLI 的 `surfaces/cli/main.py`——是四个层唯一交汇的地方。每种 kind 通过 `KindModule` dataclass 在组装入口处显式注册，该 dataclass 将 kind 的 domain 实体、application 服务、infrastructure 实现和 surface 路由/命令处理器捆绑在一起。没有全局 kind 注册表，没有 import 时的副作用。添加新 kind 意味着在每一层创建其子目录，并在组装入口处添加一个 `KindModule` 注册。
+两个组装入口——daemon HTTP 服务器的 `surfaces/http/app.py` 和 CLI 的 `surfaces/cli/main.py`——是四个层唯一交汇的地方。每种 kind 暴露一个工厂——`application/<kind>/kind.py` 里的 `make_<kind>_kind()`——返回一个冻结的 `Kind`（`domain/resource.py`）：只承载该 kind 的身份、配置 schema 与生命周期钩子，别无其它。装配由组装入口自己显式完成：`surfaces/http/app.py` 交给 `kind_wiring.py` 和各 kind 的 `*_wiring.py` 模块，每个模块构建该 kind 的 infrastructure 与服务、注册其路由器，并返回一个带类型的 dataclass（`AgentSkillWiring`、`ProviderWiring`、`KnowledgeWiring`、`MemoryWiring`、`McpWiring`、`KindWirings`、`ChatWiring`、`BackgroundWorkers`），由 `app.py` 显式传给下一步；各工厂返回的 `Kind` 记录填入 `app.state.kinds`。`surfaces/cli/main.py` 以同样方式挂载 Typer 命令组。路由处理器通过各 kind 自己的 FastAPI 依赖模块取到服务（`surfaces/http/{agent,workspace,skill,provider}_dependencies.py`、`surfaces/http/{chat,knowledge,memory,mcp}/dependencies.py`）；`surfaces/http/dependencies.py` 只保留与 kind 无关的 getter。没有全局 kind 注册表，没有 import 时的副作用。添加新 kind 意味着在每一层创建其子目录、写好它的工厂，并添加一个由组装入口调用的 wiring 模块。
 
 ## import 规则作为不变量
 
@@ -89,8 +89,7 @@ surfaces 层将外部协议适配为应用层调用。它包含 FastAPI 应用�
 ```
 backend/coffer/
 ├── domain/                       # 与 kind 无关的实体 + kind 协议
-│   ├── resource.py               # Resource、Kind、ResourceRef
-│   ├── kind_module.py            # KindModule 组装入口载体
+│   ├── resource.py               # Resource、Kind（每个工厂返回的冻结记录）、ResourceRef
 │   ├── audit.py
 │   ├── errors.py
 │   ├── mcp/                      # MCP 专用值对象
@@ -109,8 +108,9 @@ backend/coffer/
 │   ├── skill/                    # skill 服务 + make_skill_kind
 │   ├── channel/                  # 适配器协议、配对、inbound 运行时
 │   ├── knowledge/                # collection、条目、摄取 + 搜索服务
-│   ├── chat/                     # TurnOrchestrator、历史
-│   ├── sync/                     # 跨层——仓库导出 / 导入（非 kind）
+│   ├── chat/                     # TurnOrchestrator、回合状态
+│   ├── provider/                 # provider 端口、探查 + make_provider_kind
+│   ├── sync/                     # 跨层——仓库与 git 远端的收敛（非 kind）
 │   ├── credentials/              # 跨层——CredentialResolver（引用 → 密钥）
 │   └── fs/                       # 跨层——文件系统浏览服务
 ├── infrastructure/
@@ -122,11 +122,16 @@ backend/coffer/
 │   ├── channel/                  # telegram/seatalk 传输、peer 仓库、渲染
 │   ├── knowledge/                # 路径布局、frontmatter、文件存储、转换器、ripgrep
 │   ├── chat/                     # LangGraph agent、网关工具 provider、CLI agents
-│   ├── sync/                     # 跨层——导出包文件 IO（非 kind）
+│   ├── provider/                 # provider 探查器
+│   ├── net/                      # 与 kind 无关——出站 URL 的 SSRF 防护
+│   ├── agent_files/              # 与 kind 无关——读取 agent 自己转录的读取器（agent + memory）
+│   ├── sync/                     # 跨层——仓库借以收敛的 git 镜像（非 kind）
 │   └── credentials/              # 跨层——加密凭据存储 + 主密钥——唯一被允许 import `keyring` 的位置
 └── surfaces/
     ├── http/
-    │   ├── app.py                # 组装入口——装配所有 KindModule
+    │   ├── app.py                # 组装入口——装配每个 kind 的工厂与 wiring 模块
+    │   ├── kind_wiring.py        # + 各 kind 的 *_wiring.py——每个返回一个带类型的 dataclass，由 app.py 传下去
+    │   ├── dependencies.py       # 与 kind 无关的 getter；各 kind 的 *_dependencies.py 与其路由并列
     │   ├── resource_routes.py
     │   └── mcp/                  # MCP HTTP/SSE 路由和会话处理
     ├── cli/
@@ -139,7 +144,7 @@ backend/coffer/
 
 在每一层中，根目录文件与 kind 无关。kind 专用代码位于具名子目录下——`mcp/`、`agent/`、`skill/`、`channel/`、`knowledge/`、`chat/`——每种 kind 一个，并在 `domain/`、`application/`、`infrastructure/` 以及（当该 kind 有接口面时）`surfaces/` 中镜像。当新 kind 到来时，其目录出现在每一层，而不改动与 kind 无关的根目录文件。
 
-少数切片是**跨层而非 kind**：`application/sync/` + `infrastructure/sync/`（把仓库导出到一个目录、并把这样一个目录导入回来）、`application/credentials/` + `infrastructure/credentials/`（凭据解析与加密存储）以及 `application/fs/`（文件系统浏览）。它们遵循与 kind 相同的分层规则，但不注册为 `KindModule`——它们是跨 kind 复用的共享服务。
+少数切片是**跨层而非 kind**：`application/sync/` + `infrastructure/sync/`（仓库与用户自有 git 远端的双向收敛）、`application/credentials/` + `infrastructure/credentials/`（凭据解析与加密存储）以及 `application/fs/`（文件系统浏览）。它们遵循与 kind 相同的分层规则，但没有 `Kind` 工厂、也不进入 `app.state.kinds`——它们是跨 kind 复用的共享服务。
 
 ### 为何选择层优先而非功能优先（纵向切片）？
 
@@ -157,14 +162,14 @@ backend/coffer/
 
 ### 组装入口——无全局注册表
 
-`KindModule` dataclass 是让组装入口保持显式且无仪式感的关键。每种 kind 构造一个 `KindModule`，其中包含：
+让组装入口保持显式且无仪式感的是两件事。其一，每种 kind 的 `make_<kind>_kind()` 工厂返回一个冻结的 `Kind`——与 kind 无关的服务（`resource_service.py`、审计、保留、资源列表）消费的就是这条记录；它只承载 kind 的名字、配置 schema 与生命周期钩子。其二，每种 kind 在组装入口处有一个 wiring 模块（`kind_wiring.py` 加上 `surfaces/http/` 下各 kind 的 `*_wiring.py`），它：
 
-- 其 domain 实体和协议实现
-- 其应用层服务类（及其所需的注入点）
-- 其 infrastructure 实现（repository、传输层等）
-- 其 surface 贡献（HTTP 子路由器、CLI 子命令组）
+- 实例化其 infrastructure 实现（repository、传输层、存储）
+- 注入这些实现、构造其应用层服务
+- 注册其 HTTP 子路由器（在 `surfaces/cli/main.py` 里则是其 Typer 子命令组）
+- 返回一个带类型的 dataclass（`AgentSkillWiring`、`ProviderWiring`、`KnowledgeWiring`、`MemoryWiring`、`McpWiring`、`KindWirings`、`ChatWiring`、`BackgroundWorkers`），装着后续步骤需要的东西
 
-组装入口读取此列表，按依赖顺序实例化服务，并挂载路由和命令。没有任何 kind 是通过扫描目录「发现」的，没有 `__init__.py` 副作用注册它，从组装入口移除一个 kind 的 `KindModule` 会将该 kind 从系统中彻底移除。
+`app.py` 按依赖顺序调用它们，把每个结果显式传给下一步——从不经过一个无类型的中转——并用各工厂填充 `app.state.kinds`。没有任何 kind 是通过扫描目录「发现」的，没有 `__init__.py` 副作用注册它，删掉一个 kind 的工厂与 wiring 模块会将该 kind 从系统中彻底移除。
 
 ## Mermaid：允许的 import 方向
 

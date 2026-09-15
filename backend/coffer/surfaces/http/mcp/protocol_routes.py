@@ -18,7 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.domain.errors import CofferError
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_mcp_session_factory
+from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
 
 router = APIRouter(prefix="/mcp", tags=["mcp"], dependencies=[Depends(require_token)])
 _logger = logging.getLogger(__name__)

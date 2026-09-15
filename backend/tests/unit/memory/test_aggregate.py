@@ -636,3 +636,37 @@ async def test_visible_partitions_enforces_scope() -> None:
     assert await service.visible_partitions("codex") == []
     assert await service.list_facts("coffer", agent="codex") == ()
     assert len(await service.list_facts("coffer", agent="claude-code")) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_reader_crash_on_one_file_is_a_source_failure_not_an_aborted_pass() -> None:
+    """FR-005's isolation must hold for the failure a reader did not
+    anticipate: an ``AttributeError`` on one file is recorded against that
+    file, and the other agent's facts still land."""
+    resources = _FakeResources()
+    resources._rows[("agent", "claude-code")] = _agent_resource("claude-code", "claude_code", "/cc")
+    resources._rows[("agent", "codex")] = _agent_resource("codex", "codex", "/codex")
+    cc_reader = _FakeReader(agent_type="claude_code")
+    codex_reader = _FakeReader(agent_type="codex")
+
+    crashing = SourceFile(path="/cc/projects/coffer/memory/odd.md", digest="c1")
+    cc_reader.set_sources("/cc", [crashing])
+    cc_reader.set_content(crashing.path, AttributeError("'NoneType' object has no attribute 'get'"))
+
+    good = SourceFile(path="/codex/memories/MEMORY.md", digest="g1")
+    codex_reader.set_sources("/codex", [good])
+    codex_reader.set_content(
+        good.path, (_raw("Codex fact", "Codex body.", project_root="/home/dev/coffer"),)
+    )
+
+    service = _service(resources, {"claude_code": cc_reader, "codex": codex_reader})
+    result = await service.aggregate()
+
+    assert result.failures == (
+        SourceFailure(
+            agent="claude-code",
+            path=crashing.path,
+            reason="AttributeError: 'NoneType' object has no attribute 'get'",
+        ),
+    )
+    assert {f.title for f in store.list_facts("coffer")} == {"Codex fact"}

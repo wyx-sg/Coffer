@@ -12,9 +12,9 @@ from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Resource
+from coffer.surfaces.http.agent_dependencies import get_agent_service, get_auto_detect_service
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
-from coffer.surfaces.http.dependencies import get_agent_service, get_auto_detect_service
 
 router = APIRouter(
     prefix="/api/v1/agents",

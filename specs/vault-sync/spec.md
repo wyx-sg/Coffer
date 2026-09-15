@@ -26,6 +26,13 @@ anything.
 
 - **Knowledge** — the markdown files under `~/.coffer/knowledge/<collection>/`.
 - **Skills** — the master skill store under `~/.coffer/skills/`.
+
+  Both trees are mirrored as regular files. A symlink is skipped, not followed
+  — its target is not vault content, and a link to a file outside the vault
+  would otherwise be published — and anything under a nested `.git` directory
+  is skipped as another repository's internals. What was skipped is logged
+  once per round. In the other direction, a symlink the working tree holds is
+  refused rather than read into the vault.
 - **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`, `memory`,
   `provider` definitions (system of record is SQLite; serialized to text). A
   resource document is identity, description and config — what the resource
@@ -87,10 +94,23 @@ would be a different feature with a different shape (see `/activity`).
 - **Sync remote** — at most one git repository, owned by the user, that this
   vault converges with. Configured with a URL, a branch, a push credential
   reference, an interval, and whether credential ciphertext rides along.
-  Disabled until the user configures it.
+  Disabled until the user configures it. The URL and the branch become
+  arguments to `git`, so neither may begin with `-` (git would read it as an
+  option, and `--receive-pack=<cmd>` is a command), and the branch is held to
+  `git check-ref-format --branch`. Both are refused at the API and CLI and
+  again by the domain object; the adapter fences every positional argument
+  git lets it fence with `--` and pushes an explicit `refs/heads/` refspec.
 - **Working tree** — the directory the vault is serialized into, which is also
-  the git working tree. Default `~/.coffer/sync`. An existing repository there
-  is adopted with its history intact.
+  the git working tree. Default `~/.coffer/sync`. Every round mirrors the vault
+  *into* it and may `reset --hard` it, so it may not be at, inside or above
+  any vault directory (knowledge, skills, memory), nor at or above `~/.coffer`
+  itself; inside `~/.coffer` only the default location is accepted, and a
+  relative path is refused. An existing repository there is adopted with its
+  history intact — unless it has commits and an `origin` that is not the
+  configured remote and was not created by Coffer, in which case it is
+  someone's checkout of something else and is refused rather than repointed.
+  A tree Coffer made is marked in its local git config and can be repointed
+  when the remote's URL changes.
 - **Vault document** — the serialized form of one piece of vault state at one
   path in the working tree: a knowledge file, a skill file, a resource YAML, a
   state YAML, a credential blob, a machine descriptor.
@@ -318,6 +338,28 @@ other deletion does. After the diff is applied, each kind's post-import hook
 re-applies its machine-local side effects — native config projections, shims,
 skill deliveries — from current state.
 
+A state document reaches the tree only while there is a decision to carry, so
+its deletion is that decision being taken back, and each area honours it in its
+own terms:
+
+- **`state/memory-overrides/<digest>`** — the override whose fact key digests to
+  the document's name is cleared.
+- **`state/mcp-preferences/<server>`** — a document exists only while something
+  on that server is disabled, so its deletion re-enables every capability on
+  that server. The preference rows stay: enabled is their default, and their
+  seen-timestamps are this machine's own. A server not registered here is
+  ignored.
+- **`state/settings/internal-engine`** — the singleton is reset to its defaults
+  (no model, tidy off, no tidy owner). The defaults publish **no** document —
+  neither a machine that never chose nor one whose choice was taken back writes
+  one — which is what stops a fresh machine, which never persists a default it
+  already has, from deleting the document again every round.
+- **`state/agent-plugins/<agent>`** — nothing is dropped locally: the inventory
+  has no local store beyond the document itself, and Coffer has no
+  uninstall-by-sync path any more than it has an install one. What this
+  machine's agent holds is a fact about this machine, and the next export
+  republishes it if it is still there.
+
 Per-path failures are reported and never abort the round.
 
 ## Conflicts
@@ -356,10 +398,12 @@ guards are normative.
   vault's state immediately before the apply. Rollback is the same machinery run
   backwards — apply `M..L`. The most recent ten snapshots are kept.
 - **Circuit breaker, in both directions.** A round whose diff would delete more
-  than a configured share of documents — by default more than 20% of the
-  documents in an area, or more than 20 documents — does not proceed. It is
+  than 20% of the documents in an area, or 20 or more documents in one area,
+  does not proceed. The two thresholds are fixed, not configured. It is
   recorded as needing confirmation, the surfaces list what it would remove, and
-  the user accepts or rejects it.
+  the user accepts or rejects it. On the apply side the guard runs over
+  everything the round is about to apply — the incoming diff **and** the retry
+  set, since a held path the tree has since dropped is absorbed as a deletion.
 
   The guard applies to what the round would **apply to the vault** and, equally,
   to what the round's own export would **publish as a deletion**. The second
@@ -411,9 +455,10 @@ timestamps, machine-local fields stripped — so that an unchanged vault produce
 an unchanged tree. Determinism is what makes a round with nothing to say produce
 no commit, and what makes the history readable with the user's own git tools.
 
-Absolute paths under `$HOME` are stored against a `~` sentinel and expanded
-against each machine's home. Paths outside `$HOME` are stored verbatim and may
-fail to apply on another machine, which surfaces as a per-path failure.
+Absolute paths under `$HOME` are stored against a `${HOME}` sentinel and
+expanded against each machine's home — in resource documents and in state
+documents alike. Paths outside `$HOME` are stored verbatim and may fail to
+apply on another machine, which surfaces as a per-path failure.
 
 ## Credentials
 

@@ -5,6 +5,11 @@ The shim reports its launch cwd at the ``initialize`` handshake
 built-in tool calls whose input schema declares a ``cwd`` property (the memory
 tools). KB tools (no ``cwd`` property) are left untouched. The gateway never
 special-cases the memory kind — it dispatches generically off the schema.
+
+The agent identity is the exception to "opt in by schema": it is the basis of
+per-agent scope (spec mcp-gateway FR-020/FR-021), so every built-in call
+carries the SESSION's identity and never the client's — whatever the client
+put under ``agent`` is dropped before the tool sees the arguments.
 """
 
 from __future__ import annotations
@@ -137,3 +142,40 @@ def test_inject_session_context_without_session_cwd_injects_nothing():
         "coffer__recall", {"name": "coffer__recall", "arguments": {"query": "x"}}
     )
     assert "cwd" not in params["arguments"]
+
+
+def test_inject_session_context_overwrites_a_client_supplied_agent():
+    """A client naming another agent is asking for that agent's collections.
+    The handshake identity wins, on every tool, whether or not its schema
+    mentions ``agent`` — it is not a public property any more."""
+    reg, _ = _registry_with_cwd_tool()
+    session = _session_with(reg)
+    session._session_agent = "claude_code"
+    for tool in ("coffer__recall", "coffer__search_knowledge"):
+        params = session._inject_session_context(
+            tool, {"name": tool, "arguments": {"query": "x", "agent": "codex"}}
+        )
+        assert params["arguments"]["agent"] == "claude_code"
+
+
+def test_inject_session_context_strips_agent_when_the_session_reported_none():
+    """No handshake identity ⇒ no identity: the tool sees an unidentified
+    caller, not the one the client claimed to be."""
+    reg, _ = _registry_with_cwd_tool()
+    session = _session_with(reg)
+    session._session_agent = None
+    params = session._inject_session_context(
+        "coffer__recall", {"name": "coffer__recall", "arguments": {"query": "x", "agent": "codex"}}
+    )
+    assert "agent" not in params["arguments"]
+
+
+def test_inject_session_context_leaves_other_arguments_alone():
+    reg, _ = _registry_with_cwd_tool()
+    session = _session_with(reg)
+    session._session_agent = "claude_code"
+    params = session._inject_session_context(
+        "coffer__search_knowledge",
+        {"name": "coffer__search_knowledge", "arguments": {"kb": "k", "query": "x"}},
+    )
+    assert params["arguments"] == {"kb": "k", "query": "x", "agent": "claude_code"}

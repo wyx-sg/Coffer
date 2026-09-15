@@ -24,11 +24,13 @@
 // "Every agent" and "Only selected agents" are two writes per row (enable,
 // then PUT the scope), sequenced inside one fan-out unit so a row that fails to
 // enable is counted as failed rather than half-applied.
+import type { QueryKey } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { ReachControl, type ReachMode } from "@/components/reach/ReachControl";
 import { resourcesApi } from "@/lib/api/resources";
 import { scopeApi, type Scope } from "@/lib/api/scope";
+import { agentsKey, resourcesKey, scopeKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 /** The minimum a row must carry to be reachable: its resource identity. */
@@ -44,7 +46,7 @@ interface Props {
   supportsScope?: boolean;
   /** The kind's own list key, invalidated alongside ["resources"] and
    *  ["scope"] once the batch settles (e.g. ["skills"], ["providers"]). */
-  invalidate?: (readonly unknown[])[];
+  invalidate?: QueryKey[];
   /** Clears the table selection once the batch has settled. */
   onDone: () => void;
 }
@@ -52,7 +54,7 @@ interface Props {
 export function BulkReachActions({ rows, supportsScope = true, invalidate = [], onDone }: Props) {
   const { t } = useTranslation();
   const bulk = useBulkMutate({
-    invalidate: [["resources"], ["scope"], ["agents"], ...invalidate],
+    invalidate: [resourcesKey, scopeKey, agentsKey, ...invalidate],
   });
 
   const runAll = async (apply: (row: ReachTarget) => Promise<unknown>) => {

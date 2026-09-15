@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
+import { resourceKey, resourcesByKindKey } from "@/lib/api/queryKeys";
 import type { components } from "@/lib/api/types";
 import type { Scope } from "@/lib/hooks/useScope";
 
@@ -10,7 +11,7 @@ type ResourceOut = components["schemas"]["ResourceOut"];
 
 export function useResources(kind?: string) {
   return useQuery({
-    queryKey: ["resources", { kind }],
+    queryKey: resourcesByKindKey(kind),
     queryFn: async (): Promise<ResourceOut[]> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/resources", {
@@ -25,7 +26,7 @@ export function useResources(kind?: string) {
 
 export function useResource(kind: string, name: string) {
   return useQuery({
-    queryKey: ["resources", kind, name],
+    queryKey: resourceKey(kind, name),
     queryFn: async (): Promise<ResourceOut> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/resources/{kind}/{name}", {

@@ -9,6 +9,7 @@ persisted, logged, or copied into any structured event payload.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Protocol
 
 from coffer.domain.errors import CredentialMissing
@@ -42,3 +43,12 @@ class CredentialResolver:
                 raise CredentialMissing(ref)
             out[key] = value
         return out
+
+    async def materialize_async(self, refs: dict[str, str]) -> dict[str, str]:
+        """:meth:`materialize`, run in a worker thread.
+
+        The store read is a blocking SQLite call (or the OS keychain in legacy
+        setups); on the event loop it would stall every concurrent request for
+        as long as the read takes. Async consumers call this one.
+        """
+        return await asyncio.to_thread(self.materialize, refs)

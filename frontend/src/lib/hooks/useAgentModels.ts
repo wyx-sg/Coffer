@@ -9,13 +9,11 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { agentModelsApi, type AgentModel } from "@/lib/api/agentModels";
-
-/** Hierarchical key so a future per-agent invalidation catches the subtree. */
-export const agentModelsKey = (agentKey: string) => ["agent-models", agentKey] as const;
+import { agentProviderModelsKey } from "@/lib/api/queryKeys";
 
 export function useAgentModels(agentKey: string) {
   return useQuery<AgentModel[]>({
-    queryKey: agentModelsKey(agentKey),
+    queryKey: agentProviderModelsKey(agentKey),
     queryFn: async () => (await agentModelsApi.list(agentKey)).models,
     // The draft agent selector can render before an agent is chosen; an empty
     // key would 404 the endpoint.

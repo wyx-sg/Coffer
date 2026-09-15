@@ -1,7 +1,10 @@
-// frontend/src/lib/api/skills.ts — typed fetch helpers for /api/v1/skills/*
+// frontend/src/lib/api/skills.ts — request helpers for /api/v1/skills/*
+//
+// Wire types are hand-written here; the skill-manager contract also generates
+// into `generated/skill-manager.ts` (`npm run codegen`, `scripts/codegen.mjs`).
+// Transport via the shared `call` (agents/frontend.md §4).
 
-import { getCofferBaseUrl, getCofferToken } from "../auth";
-import { ApiError } from "./errors";
+import { call, enc } from "@/lib/api/call";
 import type { Scope } from "@/lib/hooks/useScope";
 
 export type SkillSourceType = "local_import";
@@ -93,48 +96,15 @@ export interface SkillFileContentOut {
   fingerprint: string;
 }
 
-async function call<T>(
-  method: "GET" | "POST" | "PUT" | "DELETE",
-  path: string,
-  body?: unknown,
-): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Coffer-Token": getCofferToken() ?? "",
-      "X-Coffer-Actor": "ui",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (r.status === 204) {
-    return undefined as unknown as T;
-  }
-  const data = await r.json().catch(() => null);
-  if (!r.ok) {
-    const err = data?.error;
-    throw new ApiError(
-      err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? `request failed: ${r.status}`,
-    );
-  }
-  return data as T;
-}
-
-// Skill names and file paths are interpolated into URL paths / query params;
-// encode them so a name/path with URL-significant characters can't malform or
-// misroute the request (defence in depth — the daemon also constrains names
-// server-side).
-const enc = encodeURIComponent;
-
 export const skillsApi = {
-  list: () => call<SkillListOut>("GET", "/skills"),
-  importLocal: (body: SkillImportRequest) => call<SkillOut>("POST", "/skills/import", body),
-  get: (name: string) => call<SkillOut>("GET", `/skills/${enc(name)}`),
-  remove: (name: string) => call<void>("DELETE", `/skills/${enc(name)}`),
-  filesTree: (name: string) => call<SkillFileTreeOut>("GET", `/skills/${enc(name)}/files`),
+  list: () => call<SkillListOut>("/skills"),
+  importLocal: (body: SkillImportRequest) =>
+    call<SkillOut>("/skills/import", { method: "POST", body }),
+  get: (name: string) => call<SkillOut>(`/skills/${enc(name)}`),
+  remove: (name: string) => call<void>(`/skills/${enc(name)}`, { method: "DELETE" }),
+  filesTree: (name: string) => call<SkillFileTreeOut>(`/skills/${enc(name)}/files`),
   fileContent: (name: string, path: string) =>
-    call<SkillFileContentOut>("GET", `/skills/${enc(name)}/files/content?path=${enc(path)}`),
+    call<SkillFileContentOut>(`/skills/${enc(name)}/files/content?path=${enc(path)}`),
   writeFileContent: (name: string, body: SkillFileWrite) =>
-    call<SkillFileContentOut>("PUT", `/skills/${enc(name)}/files/content`, body),
+    call<SkillFileContentOut>(`/skills/${enc(name)}/files/content`, { method: "PUT", body }),
 };

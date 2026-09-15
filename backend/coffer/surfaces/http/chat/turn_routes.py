@@ -28,13 +28,13 @@ from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.events import AgentEvent
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.chat.dependencies import get_chat_service, get_turn_orchestrator
 from coffer.surfaces.http.chat.schemas import (
     PendingQueueIn,
     PendingQueueOut,
     SendMessageAck,
     SendMessageRequest,
 )
-from coffer.surfaces.http.turn_dependencies import get_chat_service, get_turn_orchestrator
 
 _logger = logging.getLogger(__name__)
 

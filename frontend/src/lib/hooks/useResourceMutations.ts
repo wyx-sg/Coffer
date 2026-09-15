@@ -2,6 +2,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
+import { ownListKeyForKind, resourcesKey } from "@/lib/api/queryKeys";
 import { resourcesApi } from "@/lib/api/resources";
 import { useToast } from "@/components/ui/toast";
 
@@ -10,22 +11,14 @@ interface EnableDisableInput {
   name: string;
 }
 
-/** Some kinds are read through their OWN query key rather than the generic
- *  resource list — `useSkill` reads ["skills", name], `useProvider` reads
- *  ["providers", name]. Invalidating only ["resources"] leaves those surfaces
- *  rendering the pre-toggle state (the skill detail page's activation control
- *  would keep showing "enabled" after a successful disable), so a toggle
- *  refreshes the kind's own key too. */
-const KIND_QUERY_KEY: Record<string, string> = {
-  skill: "skills",
-  provider: "providers",
-  agent: "agents",
-};
-
+/** A kind-agnostic write refreshes the generic list AND the kind's own list
+ *  key, where it has one (`ownListKeyForKind`) — the skill detail page reads
+ *  `skillKey(name)`, not `resourcesKey`, and would otherwise keep rendering the
+ *  pre-toggle state. */
 function invalidateFor(qc: ReturnType<typeof useQueryClient>, kind: string): void {
-  void qc.invalidateQueries({ queryKey: ["resources"] });
-  const own = KIND_QUERY_KEY[kind];
-  if (own) void qc.invalidateQueries({ queryKey: [own] });
+  void qc.invalidateQueries({ queryKey: resourcesKey });
+  const own = ownListKeyForKind(kind);
+  if (own) void qc.invalidateQueries({ queryKey: own });
 }
 
 export function useEnableResource() {

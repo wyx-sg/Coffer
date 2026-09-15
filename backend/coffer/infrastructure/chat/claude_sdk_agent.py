@@ -29,6 +29,8 @@ from claude_agent_sdk import (
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    STREAM_ENDED,
+    STREAM_ENDED_MESSAGE,
     AgentEvent,
     TurnDone,
     TurnError,
@@ -374,13 +376,13 @@ class ClaudeSdkAgentAdapter:
                 await session.disconnect()
 
         if not state.terminal_emitted:
-            # The stream ended without a ResultMessage — synthesize a terminal
-            # so the orchestrator never hangs waiting for one.
-            yield TurnDone(
-                prompt_tokens=state.prompt_tokens,
-                completion_tokens=state.completion_tokens,
-                stop_reason="end_turn",
-            )
+            # The stream ended without a ResultMessage — the agent process went
+            # away mid-turn (crashed, was killed, lost its connection). That is
+            # a failure, not a finished answer: a ``TurnDone`` here would put a
+            # ✅ on a reply that may stop mid-sentence. Synthesize a terminal
+            # ERROR so the orchestrator never hangs and the outcome is honest;
+            # whatever text streamed before the cut is still delivered with it.
+            yield TurnError(code=STREAM_ENDED, message=STREAM_ENDED_MESSAGE)
 
 
 __all__ = [

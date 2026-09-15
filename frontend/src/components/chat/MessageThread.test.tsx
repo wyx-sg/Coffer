@@ -204,43 +204,58 @@ describe("MessageThread", () => {
 
   test("renders the just-sent user message echo while the reply streams", async () => {
     // P0-4: the prompt must be visible immediately, not only after the next
-    // messages fetch.
+    // messages fetch. The echo comes from the turn hook, not from the thread.
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
       isStreaming: true,
-      liveMessage: { userText: "my question", text: "replying", toolBlocks: [], streaming: true },
+      pendingEchoes: [{ id: "echo-1", text: "my question", sentAt: Date.now(), afterSeq: -1 }],
+      liveMessage: { text: "replying", toolBlocks: [], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("my question")).toBeInTheDocument());
     expect(screen.getByText("replying")).toBeInTheDocument();
+    // An echo is not the empty state.
+    expect(screen.queryByText(/no messages/i)).not.toBeInTheDocument();
   });
 
-  test("does not duplicate the echo once the persisted user message is fetched", async () => {
-    // A mid-turn refetch returns the persisted user row — the fetched row
-    // wins and the optimistic echo is suppressed.
+  test("renders every echo it is given after the fetched rows — the thread does no dedupe", async () => {
+    // Two identical consecutive prompts: the first is already persisted, the
+    // second is still an echo. Which echoes stand is the turn hook's call (it
+    // retires them by seq + time, see chatTurnEvents); the thread must render
+    // both rather than suppress the echo because its text already appears.
     chatApiMock.listMessages.mockResolvedValue({
       messages: [
-        makeMsg({ role: "user", content: [{ type: "text", text: "earlier question" }] }),
+        makeMsg({ role: "user", content: [{ type: "text", text: "again" }] }),
         makeMsg({
           id: "msg-2",
           seq: 2,
           role: "assistant",
-          content: [{ type: "text", text: "earlier answer" }],
+          content: [{ type: "text", text: "first answer" }],
         }),
-        makeMsg({
-          id: "msg-3",
-          seq: 3,
-          role: "user",
-          content: [{ type: "text", text: "my question" }],
-        }),
-        makeMsg({ id: "msg-4", seq: 4, role: "assistant", status: "streaming", content: [] }),
       ],
     });
     renderThread({
       isStreaming: true,
-      liveMessage: { userText: "my question", text: "", toolBlocks: [], streaming: true },
+      pendingEchoes: [{ id: "echo-2", text: "again", sentAt: Date.now(), afterSeq: 2 }],
+      liveMessage: { text: "", toolBlocks: [], streaming: true },
     });
-    await waitFor(() => expect(screen.getByText("earlier answer")).toBeInTheDocument());
-    expect(screen.getAllByText("my question")).toHaveLength(1);
+    await waitFor(() => expect(screen.getByText("first answer")).toBeInTheDocument());
+    expect(screen.getAllByText("again")).toHaveLength(2);
+    // Order: persisted rows, then the echo, then the live bubble.
+    const texts = screen.getAllByText(/again|first answer/).map((el) => el.textContent);
+    expect(texts).toEqual(["again", "first answer", "again"]);
+  });
+
+  test("renders multiple echoes in send order", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({
+      pendingEchoes: [
+        { id: "echo-1", text: "first send", sentAt: 1, afterSeq: -1 },
+        { id: "echo-2", text: "second send", sentAt: 2, afterSeq: -1 },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText("second send")).toBeInTheDocument());
+    const texts = screen.getAllByText(/send$/).map((el) => el.textContent);
+    expect(texts).toEqual(["first send", "second send"]);
   });
 
   test("readOnly hides the composer and shows a restore call-to-action", async () => {

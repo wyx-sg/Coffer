@@ -129,6 +129,10 @@ as console-script entry points — no separate deploy step. The daemon **auto-st
 time you run any `coffer` command or connect an MCP client — `coffer daemon start` exists for
 explicit control but is not a required setup step.
 
+**Prerequisites**: Python ≥ 3.12. [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) is
+recommended for fast knowledge search; without it Coffer falls back to a slower built-in search
+with the same results.
+
 ---
 
 ## Quickstart

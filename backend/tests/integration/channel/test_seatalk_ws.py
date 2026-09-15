@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from collections.abc import Iterator
 from typing import Any
 
@@ -209,6 +210,46 @@ async def test_a_kick_backs_off_a_flat_sixty_seconds(sdk: FakeSeaTalkSdk) -> Non
         # The owner has to be able to tell this apart from a network fault.
         assert "another process" in detail
         assert "another connection registered" in detail
+    finally:
+        await connector.stop()
+
+
+async def test_a_kick_signalled_from_another_thread_is_seen_by_the_supervisor(
+    sdk: FakeSeaTalkSdk,
+) -> None:
+    """The kick flag crosses threads: ``_on_kick`` runs wherever the SDK calls
+    it, the supervisor reads it on the event loop. Here the kick handler is
+    invoked from a thread that is neither the loop nor the listen thread, and
+    ``listen()`` then returns normally (no ``KickError``) — the supervisor must
+    still see the kick, its reason, and take the flat kick back-off."""
+    kick_threads: list[threading.Thread] = []
+
+    def _kicked_off_thread(client: Any) -> None:
+        env = client.sdk.Envelope(message="taken over from another machine")
+
+        def _signal() -> None:
+            kick_threads.append(threading.current_thread())
+            client.dispatcher.kick_handler(env)
+
+        thread = threading.Thread(target=_signal, name="seatalk-ws-test-kick")
+        thread.start()
+        thread.join()
+        # The socket goes away without the SDK raising: listen() just returns.
+
+    sdk.plan[:] = [_kicked_off_thread]
+    connector = _connector(sdk, _Recorder())
+    await connector.start()
+    try:
+        await wait_until(lambda: connector.backoffs, message="never backed off")
+        assert connector.backoffs == [60.0]  # the kick back-off, not the fault ladder
+        state, detail = connector.state()
+        assert state == "kicked"
+        assert detail is not None
+        assert "taken over from another machine" in detail
+        # The kick really was signalled from a third thread.
+        assert len(kick_threads) >= 1
+        assert kick_threads[0] is not threading.main_thread()
+        assert kick_threads[0] not in sdk.listen_threads
     finally:
         await connector.stop()
 

@@ -1,34 +1,17 @@
-// frontend/src/lib/api/internalEngine.ts — typed fetch for the single, global
-// internal-engine model selection (spec provider-switching amendment 2026-06-22b). The internal
+// frontend/src/lib/api/internalEngine.ts — the single, global internal-engine
+// model selection (spec provider-switching amendment 2026-06-22b). The internal
 // engine takes its endpoint + key from the `internal_default` connection but its
-// MODEL from this singleton.
-import { getCofferBaseUrl, getCofferToken } from "../auth";
-import { ApiError } from "./errors";
+// MODEL from this singleton. Wire type from the provider-switching contract;
+// transport via the shared `call` (agents/frontend.md §4).
+import { call } from "@/lib/api/call";
+import type { components } from "@/lib/api/generated/provider-switching";
 
-export interface InternalEngineConfig {
-  model: string | null;
-  updated_at: string | null;
-}
+export type InternalEngineConfig = components["schemas"]["InternalEngineConfigOut"];
 
-async function call<T>(method: "GET" | "PUT", body?: unknown): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}/internal-engine-config`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Coffer-Token": getCofferToken() ?? "",
-      "X-Coffer-Actor": "ui",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await r.json().catch(() => null);
-  if (!r.ok) {
-    const err = data?.error;
-    throw new ApiError(err?.code ?? "INTERNAL_ERROR", err?.message ?? `request failed: ${r.status}`);
-  }
-  return data as T;
-}
+const PATH = "/internal-engine-config";
 
 export const internalEngineApi = {
-  get: () => call<InternalEngineConfig>("GET"),
-  setModel: (model: string | null) => call<InternalEngineConfig>("PUT", { model }),
+  get: () => call<InternalEngineConfig>(PATH),
+  setModel: (model: string | null) =>
+    call<InternalEngineConfig>(PATH, { method: "PUT", body: { model } }),
 };

@@ -26,7 +26,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useMemoryPartitions, useSyncMemory } from "@/kinds/memory/useMemory";
+import { useMemoryPartitions, useSyncMemory } from "@/lib/hooks/useMemory";
 import { useResources } from "@/lib/hooks/useResources";
 import { translateApiError } from "@/lib/api/errors";
 

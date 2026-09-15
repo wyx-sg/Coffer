@@ -25,12 +25,12 @@ from coffer.domain.chat.events import AgentEvent, TextDelta
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
-from coffer.surfaces.http.chat.turn_routes import router as turn_router
-from coffer.surfaces.http.turn_dependencies import (
+from coffer.surfaces.http.chat.dependencies import (
     get_agent_registry,
     get_chat_service,
     get_turn_orchestrator,
 )
+from coffer.surfaces.http.chat.turn_routes import router as turn_router
 from tests.unit.chat.conftest import FakeAgentProvider, make_chat_services
 
 _TOKEN = "test-token"

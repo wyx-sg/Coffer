@@ -91,9 +91,11 @@ the answer to over-sending changes.
 - **Cross-surface advance.** The queue auto-advances after *any* turn on the
   conversation ends — including an IM-driven one — so a message queued from the
   browser behind a phone-started turn still runs when that turn completes. A
-  message arriving *from* IM mid-turn is held by the channel's own inbound
-  buffering instead, so the guarantee is "a web send is never rejected and runs in
-  order", not "IM and web share one queue object".
+  message arriving *from* IM mid-turn joins the same queue: IM and web share
+  one queue object per conversation, so the pending chips show a phone-sent
+  message, `/status` counts a web-sent one, and one FIFO orders them all. The
+  channel keeps only its renderer hook (attached when its message's turn
+  starts), never a buffer of its own.
 - **Queue state rides the bus.** A queue-changed event broadcasts the ordered
   pending items, so a second tab and the phone render the same rows.
 - **In-memory.** The queue is lost on a daemon restart, consistent with an

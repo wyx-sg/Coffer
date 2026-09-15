@@ -1,8 +1,15 @@
 """ConfigFileStore — filesystem adapter for agent config files.
 
 Implements `coffer.application.agent.config_file_service.ConfigFileStorePort`.
-All writes are atomic (temp file + ``os.replace``) and keep a ``<path>.bak``
-copy of the prior content so a bad edit is always recoverable.
+All writes are atomic (temp file + ``os.replace``) and keep the prior content
+as ``<path>.bak`` (rotating to ``.bak.1`` and ``.bak.2``, :data:`BACKUP_COPIES`
+in all) so a bad edit — or a run of them — is always recoverable.
+
+A write may carry the fingerprint of the content the caller read before
+deciding what to write. The store then refuses (``ConfigFileStale``) when the
+file no longer matches: these are the user's own config files, edited in their
+editor while Coffer projects into them, and a read → transform → write that
+ignored the change would silently discard their edit.
 """
 
 from __future__ import annotations
@@ -15,6 +22,16 @@ import tempfile
 from datetime import UTC, datetime
 
 from coffer.domain.agent.config_files import DirEntryInfo, FileStat
+from coffer.domain.workspace_errors import ConfigFileStale
+
+#: How many prior versions ``write_text_atomic`` / ``delete_with_backup`` keep:
+#: ``<path>.bak`` is the newest, ``.bak.1`` and ``.bak.2`` older.
+BACKUP_COPIES = 3
+
+
+def _backup_name(path: pathlib.Path, generation: int) -> pathlib.Path:
+    suffix = ".bak" if generation == 0 else f".bak.{generation}"
+    return path.with_name(path.name + suffix)
 
 
 class ConfigFileStore:
@@ -40,13 +57,39 @@ class ConfigFileStore:
             modified_at=datetime.fromtimestamp(st.st_mtime, tz=UTC),
         )
 
-    def write_text_atomic(self, path: pathlib.Path, text: str) -> None:
+    def _rotate_backups(self, path: pathlib.Path) -> None:
+        """Shift ``.bak`` → ``.bak.1`` → ``.bak.2`` and copy ``path`` to ``.bak``.
+
+        A copy, not a move, so the original stays in place until the atomic
+        replace that follows succeeds. The oldest generation falls off.
+        """
+        for generation in range(BACKUP_COPIES - 1, 0, -1):
+            newer = _backup_name(path, generation - 1)
+            if newer.exists():
+                os.replace(newer, _backup_name(path, generation))
+        shutil.copy2(path, _backup_name(path, 0))
+
+    def write_text_atomic(
+        self, path: pathlib.Path, text: str, *, expected_fingerprint: str | None = None
+    ) -> None:
+        """Atomically write ``text`` to ``path``, keeping backups of what was there.
+
+        With ``expected_fingerprint`` (the :meth:`fingerprint` of the content
+        the caller read — ``""`` for a file that did not exist), the write is
+        refused with :class:`ConfigFileStale` when the file has changed since:
+        an optimistic check that turns a lost update into a 409 the caller can
+        act on by re-reading. Without it the write is unconditional.
+        """
         path = pathlib.Path(path)
+        if expected_fingerprint is not None:
+            actual = self.fingerprint(self.read_text(path))
+            if actual != expected_fingerprint:
+                raise ConfigFileStale(str(path))
         path.parent.mkdir(parents=True, exist_ok=True)
         # Back up the prior version (copy, preserving the original until the
         # replace succeeds) so a bad edit is recoverable from <path>.bak.
         if path.exists():
-            shutil.copy2(path, path.with_name(path.name + ".bak"))
+            self._rotate_backups(path)
         # Write to a temp file in the same directory, then atomically replace.
         fd, tmp_name = tempfile.mkstemp(
             dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
@@ -91,11 +134,12 @@ class ConfigFileStore:
         return out
 
     def delete_with_backup(self, path: pathlib.Path) -> bool:
-        """Copy content to ``<path>.bak``, then remove the file. False if absent."""
+        """Copy content to ``<path>.bak`` (rotating older backups), then remove
+        the file. False if absent."""
         if not path.is_file():
             return False
         try:
-            shutil.copy2(path, path.with_name(path.name + ".bak"))
+            self._rotate_backups(path)
             path.unlink()
         except FileNotFoundError:
             # Vanished between the check and the copy/unlink — same outcome

@@ -18,7 +18,8 @@ from coffer.domain.audit import AuditEntry
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_audit_service, get_master_key_manager
+from coffer.surfaces.http.credential_composition import get_master_key_manager
+from coffer.surfaces.http.dependencies import get_audit_service
 from coffer.surfaces.http.settings_routes import router as settings_router
 
 

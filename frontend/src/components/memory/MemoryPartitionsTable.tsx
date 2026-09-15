@@ -18,8 +18,8 @@ import { useTranslation } from "react-i18next";
 import { DataTable, type Column } from "@/components/DataTable";
 import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
-import { memoryKey } from "@/kinds/memory/useMemory";
-import type { PartitionOut } from "@/kinds/memory/types";
+import { memoryKey } from "@/lib/api/queryKeys";
+import type { PartitionOut } from "@/lib/api/memoryTypes";
 import type { Scope } from "@/lib/hooks/useScope";
 
 export interface MemoryPartitionRow extends PartitionOut {

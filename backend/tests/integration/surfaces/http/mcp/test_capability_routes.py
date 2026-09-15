@@ -38,16 +38,18 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.dependencies import (
     get_audit_service,
-    get_capability_discovery,
-    get_credential_store,
-    get_health_repo,
-    get_invocation_repo,
-    get_preferences_repo,
     get_resource_service,
 )
 from coffer.surfaces.http.mcp.capability_routes import router as capability_router
+from coffer.surfaces.http.mcp.dependencies import (
+    get_capability_discovery,
+    get_health_repo,
+    get_invocation_repo,
+    get_preferences_repo,
+)
 from coffer.surfaces.http.mcp.server_test_routes import router as server_test_router
 from tests.fixtures.keyring import install_in_memory_keyring
 

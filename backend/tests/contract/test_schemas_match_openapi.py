@@ -54,7 +54,11 @@ def openapi_components() -> dict[str, Any]:
         ("RetentionPolicyListOut", "RetentionPolicyListOut", {"policies"}),
         ("RetentionPolicyUpdate", "RetentionPolicyUpdate", set()),  # retention_days nullable
         ("PruneResultOut", "PruneResultOut", {"tables"}),
-        ("DaemonStatusOut", "DaemonStatusOut", {"status", "version", "started_at", "port"}),
+        (
+            "DaemonStatusOut",
+            "DaemonStatusOut",
+            {"status", "version", "executable", "started_at", "port"},
+        ),
         ("TokenRotationOut", "TokenRotationOut", {"token"}),
         ("DaemonLogRecordOut", "DaemonLogRecordOut", {"record"}),
         ("DaemonLogListOut", "DaemonLogListOut", {"records"}),

@@ -5,7 +5,8 @@ Extracted from ``app.py`` to keep that composition root under the
 
 * :func:`wire_mcp_kind` — builds MCP repos, supervisors, discovery,
   per-session gateway factory and installs them on the FastAPI app +
-  dependency module. Supervisors get the concrete upstream factory
+  dependency module, returning them as :class:`McpWiring`. Supervisors get
+  the concrete upstream factory
   (:func:`coffer.infrastructure.mcp.factory.build_upstream`) injected here
   (CODE-005).
 * :func:`build_prunable_registry` — the retention registry for the
@@ -16,11 +17,12 @@ Extracted from ``app.py`` to keep that composition root under the
 
 from __future__ import annotations
 
-import contextlib
+import logging
 import os
-from typing import Any
+from dataclasses import dataclass
 
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
@@ -33,6 +35,7 @@ from coffer.application.mcp.sync_state import McpPreferenceSyncState
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.channel.media_retention import default_media_sweep
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
@@ -43,7 +46,8 @@ from coffer.infrastructure.persistence.retention import (
     PrunableRegistry,
     PrunableTable,
 )
-from coffer.surfaces.http.dependencies import (
+from coffer.surfaces.http.mcp.dependencies import (
+    McpSessionFactory,
     set_capability_discovery,
     set_health_repo,
     set_invocation_repo,
@@ -51,30 +55,41 @@ from coffer.surfaces.http.dependencies import (
     set_preferences_repo,
     set_supervisor,
 )
+from coffer.surfaces.http.sync_contributions import SyncContributions
+
+_log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class McpWiring:
+    """What the MCP kind hands back to the lifespan.
+
+    The supervisors are disposed at shutdown; the session factory builds the
+    chat platform's long-lived gateway session; the invocation repo is the
+    batched writer the lifespan starts and drains.
+    """
+
+    process_supervisor: SubprocessSupervisor
+    session_supervisors: dict[str, SubprocessSupervisor]
+    session_factory: McpSessionFactory
+    invocation_repo: MCPInvocationRepo
 
 
 def wire_mcp_kind(
     app: FastAPI,
     resource_svc: ResourceService,
     audit: AuditService,
-    sm: object,
-    credential_store: Any,
-    builtin_tools: BuiltinToolRegistry | None = None,
-) -> tuple[SubprocessSupervisor, dict[str, SubprocessSupervisor]]:
-    """Build and wire all MCP-specific plumbing into the app.
-
-    Returns (process_supervisor, session_supervisors) so the caller can
-    dispose them on shutdown.
-    """
+    sm: async_sessionmaker[AsyncSession],
+    credential_store: EncryptedCredentialStore,
+    builtin_tools: BuiltinToolRegistry,
+    sync: SyncContributions,
+) -> McpWiring:
+    """Build and wire all MCP-specific plumbing into the app."""
     # 1. Build the MCP-side repos
-    prefs_repo = MCPCapabilityPreferenceRepo(sm)  # type: ignore[arg-type]
-    providers = getattr(app.state, "sync_state_providers", None)
-    if providers is None:
-        providers = []
-        app.state.sync_state_providers = providers
-    providers.append(McpPreferenceSyncState(resource_svc, prefs_repo))
-    inv_repo = MCPInvocationRepo(sm)  # type: ignore[arg-type]
-    health_repo = MCPServerHealthRepo(sm)  # type: ignore[arg-type]
+    prefs_repo = MCPCapabilityPreferenceRepo(sm)
+    sync.state_providers.append(McpPreferenceSyncState(resource_svc, prefs_repo))
+    inv_repo = MCPInvocationRepo(sm)
+    health_repo = MCPServerHealthRepo(sm)
 
     # 2. Per-session supervisor registry (used for the on_delete hook + factory)
     session_supervisors: dict[str, SubprocessSupervisor] = {}
@@ -137,7 +152,12 @@ def wire_mcp_kind(
     set_invocation_repo(inv_repo)
     set_health_repo(health_repo)
     set_mcp_session_factory(mcp_session_factory)
-    return process_supervisor, session_supervisors
+    return McpWiring(
+        process_supervisor=process_supervisor,
+        session_supervisors=session_supervisors,
+        session_factory=mcp_session_factory,
+        invocation_repo=inv_repo,
+    )
 
 
 def build_prunable_registry() -> PrunableRegistry:
@@ -197,19 +217,32 @@ def build_prunable_registry() -> PrunableRegistry:
     return registry
 
 
-def build_retention_service(sm: Any, *, audit: AuditService) -> RetentionService:
+def build_retention_service(
+    sm: async_sessionmaker[AsyncSession], *, audit: AuditService
+) -> RetentionService:
     """Compose the ``RetentionService`` (registry + repo + audit) and bind the
     channel-media dir sweep (FR-033) at composition root, so the application
     layer never imports the infrastructure prune. The caller runs
     ``initialize_defaults`` and drives the worker cadence."""
     from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
+    from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 
+    registry = build_prunable_registry()
+    # The SQL allowlist is derived from these very registrations, so the two
+    # cannot drift apart by hand — a table registered here is sweepable, and
+    # nothing else is.
     return RetentionService(
-        registry=build_prunable_registry(),
-        repo=SqlAlchemyRetentionRepo(sm),
+        registry=registry,
+        repo=SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
         audit=audit,
         media_sweep=default_media_sweep,
     )
+
+
+_REAPER_ENV_KNOBS: dict[str, str] = {
+    "COFFER_MCP_SESSION_IDLE_S": "max_idle_seconds",
+    "COFFER_MCP_SESSION_REAPER_INTERVAL_S": "interval_seconds",
+}
 
 
 def reaper_kwargs_from_env() -> dict[str, float]:
@@ -217,13 +250,22 @@ def reaper_kwargs_from_env() -> dict[str, float]:
 
     CODE-022: knobs come from env so deployments can tune them without
     code changes; unset env falls back to ``start_session_reaper``'s
-    safe defaults. Invalid values are silently ignored.
+    safe defaults. A value that does not parse as a number is logged with
+    the raw text and falls back to the same default — an operator who
+    mistyped a knob must be told, not silently ignored.
     """
     reaper_kwargs: dict[str, float] = {}
-    if idle_env := os.environ.get("COFFER_MCP_SESSION_IDLE_S"):
-        with contextlib.suppress(ValueError):
-            reaper_kwargs["max_idle_seconds"] = float(idle_env)
-    if interval_env := os.environ.get("COFFER_MCP_SESSION_REAPER_INTERVAL_S"):
-        with contextlib.suppress(ValueError):
-            reaper_kwargs["interval_seconds"] = float(interval_env)
+    for env_name, kwarg in _REAPER_ENV_KNOBS.items():
+        raw = os.environ.get(env_name)
+        if not raw:
+            continue
+        try:
+            reaper_kwargs[kwarg] = float(raw)
+        except ValueError:
+            _log.warning(
+                "%s=%r is not a number; using the reaper's default for %s",
+                env_name,
+                raw,
+                kwarg,
+            )
     return reaper_kwargs

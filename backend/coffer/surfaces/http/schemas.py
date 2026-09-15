@@ -169,6 +169,9 @@ class UpstreamSummary(BaseModel):
 class DaemonStatusOut(BaseModel):
     status: Literal["starting", "ready", "draining"]
     version: str
+    #: The daemon process's ``sys.executable`` — the frozen binary or the
+    #: interpreter — so a caller reporting version skew can name the build.
+    executable: str
     started_at: datetime
     port: int
     upstream_summary: UpstreamSummary | None = None

@@ -96,7 +96,7 @@ describe("useUpdateCredentialSettings", () => {
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
     expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ["credential-settings"] }),
+      expect.objectContaining({ queryKey: ["settings", "credentials"] }),
     );
   });
 });

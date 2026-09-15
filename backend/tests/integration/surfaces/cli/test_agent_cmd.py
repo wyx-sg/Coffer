@@ -42,12 +42,12 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.agent_routes import router as agent_router
-from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import (
+from coffer.surfaces.http.agent_dependencies import (
     get_agent_service,
     get_auto_detect_service,
 )
+from coffer.surfaces.http.agent_routes import router as agent_router
+from coffer.surfaces.http.auth import set_active_token
 
 _runner = CliRunner()
 _TOKEN = "test-token-agent-cli"

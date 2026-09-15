@@ -16,6 +16,7 @@ import { ScopeControl } from "@/components/ScopeControl";
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import { skillsApi, type SkillOut } from "@/lib/api/skills";
+import { skillsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 /** Per-row reach control for the skill itself: enable/disable is only one of
@@ -67,7 +68,7 @@ export function SkillsBulkActions({ skills, onDone }: { skills: SkillOut[]; onDo
   const { t } = useTranslation();
   // allSettled fan-out: one failed remove never aborts the rest; the summary
   // toast reports the outcome and we always close + clear (never stuck).
-  const bulk = useBulkMutate({ invalidate: [["skills"]] });
+  const bulk = useBulkMutate({ invalidate: [skillsKey] });
 
   return (
     <>

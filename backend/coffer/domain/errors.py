@@ -247,13 +247,3 @@ from coffer.domain.kb_errors import (  # noqa: E402, I001
     EngineUnavailable as EngineUnavailable,
     GrepPatternInvalid as GrepPatternInvalid,
 )
-
-
-# agent chat (spec channels): re-exported from coffer.domain.chat.errors (split
-# for the file-size limit) so the coffer.domain.errors.X import paths keep working.
-from coffer.domain.chat.errors import (  # noqa: E402
-    AgentConfigRejected as AgentConfigRejected,
-    ConversationNotFound as ConversationNotFound,
-    TurnInProgress as TurnInProgress,
-    UnknownAgent as UnknownAgent,
-)

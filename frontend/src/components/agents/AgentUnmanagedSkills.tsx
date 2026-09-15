@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import type { UnmanagedSkillOut } from "@/lib/api/agents";
-import { translateApiError } from "@/lib/api/errors";
 import { useFsActions } from "@/lib/fsActions";
 import {
   useAdoptUnmanagedSkill,
@@ -131,7 +130,6 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
                     {
                       onSuccess: () =>
                         toast.success(t("agents.skillsTab.adoptSuccess", { name: s.name })),
-                      onError: (e) => toast.error(translateApiError(t, e)),
                     },
                   )
                 }
@@ -209,7 +207,6 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
                   { skill: deleteTarget.name, location: deleteTarget.location },
                   {
                     onSuccess: () => setDeleteTarget(null),
-                    onError: (e) => toast.error(translateApiError(t, e)),
                   },
                 );
               }}

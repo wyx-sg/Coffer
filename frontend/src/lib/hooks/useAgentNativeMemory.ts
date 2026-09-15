@@ -5,8 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { agentNativeMemoryApi } from "@/lib/api/agentNativeMemory";
-
-export const agentNativeMemoryKey = (name: string) => ["agents", name, "native-memory"] as const;
+import { agentNativeMemoryKey } from "@/lib/api/queryKeys";
 
 export function useAgentNativeMemory(name: string) {
   return useQuery({

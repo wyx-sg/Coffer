@@ -59,7 +59,9 @@ plan.
 - **Languages.** Python 3.12+ for backend, CLI, and any MCP shim;
   TypeScript 5.x for frontend. No other primary languages without a
   constitutional amendment.
-- **Architecture.** Layered: `surfaces → application → domain → infrastructure`.
+- **Architecture.** Layered: `surfaces → application → domain`;
+  `infrastructure` adapts to ports defined in `application` and is wired only
+  at the composition root.
   `domain/` may not import `infrastructure/`, `surfaces/`, or external SDKs.
   `application/` may not import `surfaces/`. Cross-cutting modules are
   extracted only after the second feature needs them. (Exception: the
@@ -110,7 +112,22 @@ Architectural Constraints, or to a Quality Gate requires:
 constitutional principles or constraints it affects, and explain why the
 change respects (or formally amends) them.
 
-**Version**: 0.6.0
+**Version**: 0.6.1
+
+> **0.6.1 amendment (editorial).** Reworded the layering line of the
+> Architecture constraint. Motivation: it wrote the layers as
+> `surfaces → application → domain → infrastructure`, which reads as `domain`
+> importing `infrastructure` — the one edge the very next sentence forbids, and
+> the opposite of what [`agents/stack.md`](../../agents/stack.md) states
+> ("`infrastructure` adapts to ports defined in `application`") and of what the
+> import-linter contracts enforce (Contract 3: `domain` imports nothing;
+> Contract 2b: `application` does not import `infrastructure`). Current
+> wording: "Layered: `surfaces → application → domain → infrastructure`."
+> Proposed wording: "Layered: `surfaces → application → domain`;
+> `infrastructure` adapts to ports defined in `application` and is wired only
+> at the composition root." Downstream impact: none — editorial; no import rule
+> changes, and the contracts already enforce the corrected direction. Decision
+> recorded by the project owner.
 
 > **0.6.0 amendment (spec vault-sync — bidirectional sync).** Replaced the
 > 0.5.0 *user-owned backup remote* exception with a *user-owned sync remote*

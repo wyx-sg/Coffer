@@ -18,14 +18,6 @@ from typing import Any
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.memory.recall import RecallService
 
-#: Duplicated rather than imported, matching ``builtin_search_tool``'s own
-#: choice: keeps the memory and knowledge kinds' tool modules from importing
-#: each other over one shared constant.
-_AGENT_PROPERTY = {
-    "type": "string",
-    "description": "Calling agent's identity (session-injected; omit it).",
-}
-
 _DESCRIPTION = (
     "Look up facts in Coffer's memory layer by a word or phrase, and get "
     "each one whole with where it came from — reaching past the "
@@ -43,6 +35,8 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
         query = args.get("query")
         if not isinstance(query, str) or not query.strip():
             raise ValueError("'query' must be a non-empty string")
+        # Written by the gateway from the session handshake, never by the
+        # caller — it is not in the schema below on purpose.
         agent = args.get("agent")
         outcome = await recall_service.recall(
             query.strip(),
@@ -79,7 +73,6 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
                             "The word or phrase to look for. Matched literally, case-insensitively."
                         ),
                     },
-                    "agent": _AGENT_PROPERTY,
                 },
                 "required": ["query"],
             },

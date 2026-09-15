@@ -5,7 +5,6 @@
 // dialog tool. Either way it hands back a real absolute path.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { ChevronUp, Folder, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { translateApiError } from "@/lib/api/errors";
 import { fsApi } from "@/lib/api/fs";
+import { useFsBrowse } from "@/lib/hooks/useFsBrowse";
 
 export function FolderPicker({
   value,
@@ -82,11 +82,7 @@ function FolderBrowserDialog({
     if (open) setPath(startPath ?? null);
   }, [open, startPath]);
 
-  const browse = useQuery({
-    queryKey: ["fs", "browse", path ?? "~"],
-    queryFn: () => fsApi.browse(path),
-    enabled: open,
-  });
+  const browse = useFsBrowse(path, { enabled: open });
   const data = browse.data;
 
   return (

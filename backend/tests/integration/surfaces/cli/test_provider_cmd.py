@@ -30,7 +30,8 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_provider_service, get_resource_service
+from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.provider_dependencies import get_provider_service
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 

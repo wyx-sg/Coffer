@@ -12,15 +12,15 @@ import { describe, expect, test, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 
 import { AgentMemoryDelivery } from "./AgentMemoryDelivery";
-import type { DeliveryStatusOut } from "@/kinds/memory/types";
+import type { DeliveryStatusOut } from "@/lib/api/memoryTypes";
 
-vi.mock("@/kinds/memory/useMemory", () => ({
+vi.mock("@/lib/hooks/useMemory", () => ({
   useMemoryDelivery: vi.fn(),
   useInstallDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useRemoveDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
-const { useMemoryDelivery } = await import("@/kinds/memory/useMemory");
+const { useMemoryDelivery } = await import("@/lib/hooks/useMemory");
 const deliveryMock = vi.mocked(useMemoryDelivery);
 
 function mockStatus(rows: DeliveryStatusOut[]) {

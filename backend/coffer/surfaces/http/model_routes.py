@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from coffer.application.providers.ports import ModelIntrospectionService
+from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.provider_dependencies import get_introspection_service
 from coffer.surfaces.http.provider_schemas import (
     DetectProtocolIn,
     DetectProtocolOut,
@@ -22,7 +23,6 @@ from coffer.surfaces.http.provider_schemas import (
     TestConnectionIn,
     TestResultOut,
 )
-from coffer.surfaces.http.turn_dependencies import get_introspection_service
 
 router = APIRouter(
     prefix="/api/v1/models",

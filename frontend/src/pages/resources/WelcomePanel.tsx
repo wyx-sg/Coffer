@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "@/components/ui/card";
-import { AddMcpServerDialog } from "@/kinds/mcp/AddMcpServerDialog";
+import { AddMcpServerDialog } from "@/components/mcp/AddMcpServerDialog";
 
 /**
  * First-run welcome card — shown on `/mcp-servers` when no resource is

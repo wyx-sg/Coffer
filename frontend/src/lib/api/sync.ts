@@ -1,8 +1,11 @@
 // frontend/src/lib/api/sync.ts — wire types + requests for /api/v1/sync/*
-// (spec vault-sync). Mirrors `backend/coffer/surfaces/http/sync_routes.py`,
-// which is the authoritative contract; these routes are outside the OpenAPI
-// document, so nothing checks the shapes at compile time and the field names
-// below must be kept in step by hand.
+// (spec vault-sync). Mirrors `backend/coffer/surfaces/http/sync_schemas.py`,
+// which is the authoritative contract. The vault-sync OpenAPI contract
+// (`generated/vault-sync.ts`) lags it — no `/sync/runs`, a different `RoundOut`
+// (`applied` as a path list, no `published`/`agent_resolved`/`locked_refs`),
+// `MachineOut.last_converged_at` where the backend sends `last_converged_on` —
+// so only the shapes the two agree on (the remote, a path failure) are aliased
+// to it; the rest stay hand-written and must be kept in step by hand.
 //
 // Nothing here ever carries the push credential or the master key into a
 // stored shape: a remote names its credential by REFERENCE, which the daemon
@@ -10,7 +13,10 @@
 // to render in a browser. The key routes are the one exception and they are
 // deliberately transient — the material crosses the loopback origin in a
 // request body and the page hands it straight to a download or a file input.
-import { call } from "@/lib/api/call";
+import { call, enc } from "@/lib/api/call";
+import type { components } from "@/lib/api/generated/vault-sync";
+
+type Schemas = components["schemas"];
 
 /** Per-round change counts for one direction of the diff. */
 export interface DiffCounts {
@@ -20,10 +26,7 @@ export interface DiffCounts {
 }
 
 /** One path the round could not apply here, with the reason why. */
-export interface RoundFailure {
-  path: string;
-  reason: string;
-}
+export type RoundFailure = Schemas["PathFailureOut"];
 
 /** One area whose deletion share tripped the circuit breaker. */
 export interface GuardBreach {
@@ -80,21 +83,10 @@ export interface SyncRunList {
 }
 
 /** The one remote this vault converges with. `credential_ref` is a NAME. */
-export interface SyncRemote {
-  url: string;
-  branch: string;
-  credential_ref: string | null;
-  include_credentials: boolean;
-  interval_seconds: number;
-  enabled: boolean;
-  worktree_path: string;
-}
+export type SyncRemote = Schemas["SyncRemoteOut"];
 
 /** `GET /sync/remote`. `configured: false` (remote null) is the fresh vault. */
-export interface SyncRemoteState {
-  configured: boolean;
-  remote: SyncRemote | null;
-}
+export type SyncRemoteState = Schemas["SyncRemoteStateOut"];
 
 /** `GET /sync/status` — the remote, its last round, and this machine's id. */
 export interface SyncStatus {
@@ -160,7 +152,7 @@ export const syncApi = {
   renameSelf: (name: string) =>
     call<Machine>("/sync/machines/self", { method: "PATCH", body: { name } }),
   retire: (machineId: string) =>
-    call<MachineRemoved>(`/sync/machines/${encodeURIComponent(machineId)}`, { method: "DELETE" }),
+    call<MachineRemoved>(`/sync/machines/${enc(machineId)}`, { method: "DELETE" }),
 
   keyFingerprint: () => call<{ fingerprint: string | null }>("/sync/key/fingerprint"),
   exportKey: () => call<{ material: string }>("/sync/key/export", { method: "POST" }),

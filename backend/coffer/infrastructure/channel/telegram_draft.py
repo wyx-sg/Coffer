@@ -25,22 +25,25 @@ import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from coffer.infrastructure.channel.live_text import LiveTextSurface
+from coffer.application.channel.turn_text import clip_stream_preview
+from coffer.infrastructure.channel.live_text import LIVE_KEEPALIVE_SECONDS, LiveTextSurface
 from coffer.infrastructure.channel.telegram_features import Feature
 
 __all__ = ["TelegramDraftLiveText", "new_draft_id"]
 
 Call = Callable[..., Awaitable[Any]]
 
-#: A draft is a 30-second preview, so it must be refreshed well inside that
-#: window or the user watches a frozen half-reply through a long tool run.
-_DRAFT_KEEPALIVE_SECONDS = 10.0
+#: A draft is a 30-second preview — the same window SeaTalk gives a stream — so
+#: it is refreshed on the one keep-alive cadence every live surface shares
+#: (``live_text.LIVE_KEEPALIVE_SECONDS``), well inside it, or the user watches
+#: a frozen half-reply through a long tool run.
 
 #: What one draft may carry: "0-4096 characters after entities parsing". A
 #: snapshot past it is refused, which would kill the surface mid-reply — so the
-#: TAIL is kept behind an ellipsis instead, the newest words being the ones
-#: worth watching. (Passing an empty text is NOT a way to clear a draft: the
-#: platform shows a "Thinking…" placeholder for it.)
+#: TAIL is kept behind an ellipsis instead — the renderer's own
+#: ``clip_stream_preview`` — the newest words being the ones worth watching.
+#: (Passing an empty text is NOT a way to clear a draft: the platform shows a
+#: "Thinking…" placeholder for it.)
 DRAFT_TEXT_LIMIT = 4096
 
 #: Deliberately not either of ``live_text``'s two intervals. It is not
@@ -85,7 +88,7 @@ class TelegramDraftLiveText(LiveTextSurface):
         now: Callable[[], float] | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {
-            "keepalive_seconds": _DRAFT_KEEPALIVE_SECONDS,
+            "keepalive_seconds": LIVE_KEEPALIVE_SECONDS,
             "min_interval": _DRAFT_UPDATE_INTERVAL,
         }
         if now is not None:
@@ -106,7 +109,7 @@ class TelegramDraftLiveText(LiveTextSurface):
         params: dict[str, Any] = {
             "chat_id": int(self._chat_id),
             "draft_id": self._draft_id,
-            "text": _clip_tail(text, DRAFT_TEXT_LIMIT),
+            "text": clip_stream_preview(text, DRAFT_TEXT_LIMIT),
             # FR-063: let the platform draw the stop control. Only safe to
             # advertise because the stopped_message_generation update is routed
             # to the same interrupt path /stop takes.
@@ -134,16 +137,3 @@ class TelegramDraftLiveText(LiveTextSurface):
         exactly the cleanup the edit-based surface had to do by hand.
         """
         return text
-
-
-def _clip_tail(text: str, limit: int) -> str:
-    """Keep the last ``limit`` characters of ``text`` behind a leading ellipsis.
-
-    A live snapshot is the whole reply so far, so it outgrows the draft's budget
-    on any long answer. Sending it anyway is refused and latches the surface
-    dead, which is the one thing a progress indicator must not do — and the tail
-    is what the reader is watching, not the head they have already seen.
-    """
-    if len(text) <= limit:
-        return text
-    return "…" + text[-(limit - 1) :]

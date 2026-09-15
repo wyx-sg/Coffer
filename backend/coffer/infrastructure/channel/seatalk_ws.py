@@ -200,7 +200,7 @@ class SeaTalkWebSocketConnector:
                 # A kick arrives BOTH ways: the dispatcher calls ``on_kick`` and
                 # then raises ``KickError`` out of ``listen()``. The backoff
                 # decision belongs here, where the connection has actually ended.
-                kicked = _is_kick(e) or self._kicked
+                kicked = _is_kick(e) or self._was_kicked()
                 if kicked:
                     self._set_state("kicked", self._kick_detail(e))
                 else:
@@ -229,7 +229,7 @@ class SeaTalkWebSocketConnector:
         # envelope trace outright and report a bad frame without its contents.
         dispatcher.on_envelope(None)
         dispatcher.on_invalid_frame(self._on_invalid_frame)
-        self._kicked = False
+        self._clear_kick()
         self._set_state("connecting", None)
         client = _require(sdk, "Client")(self._app_id, self._app_secret, dispatcher=dispatcher)
         await asyncio.to_thread(client.connect)
@@ -242,14 +242,36 @@ class SeaTalkWebSocketConnector:
         if error is not None:
             raise error
         # ``listen()`` returning without an error still means the socket is gone.
-        if self._kicked:
+        kicked = self._was_kicked()
+        if kicked:
             self._set_state("kicked", self._kick_detail(None))
         elif not self._stopping.is_set():
             self._set_state("error", "the SeaTalk connection closed")
-        return self._kicked
+        return kicked
+
+    # -- kick bookkeeping ----------------------------------------------------
+    #
+    # ``_on_kick`` runs on the SDK's listen thread; everything else here runs on
+    # the event loop. The two fields cross that boundary, so every read and
+    # write goes through the same lock that already guards ``_state``.
+
+    def _mark_kicked(self, reason: str) -> None:
+        with self._lock:
+            self._kicked = True
+            self._kick_reason = reason
+
+    def _clear_kick(self) -> None:
+        with self._lock:
+            self._kicked = False
+
+    def _was_kicked(self) -> bool:
+        with self._lock:
+            return self._kicked
 
     def _kick_detail(self, error: BaseException | None) -> str:
-        reason = str(error) if error is not None and str(error) else self._kick_reason
+        with self._lock:
+            recorded = self._kick_reason
+        reason = str(error) if error is not None and str(error) else recorded
         return (
             "another process holds this bot's single SeaTalk connection "
             f"and took it over ({reason}); retrying slowly so the two do not "
@@ -337,9 +359,8 @@ class SeaTalkWebSocketConnector:
         Only bookkeeping: the supervision loop owns the state transition and the
         60s backoff, because that is where the connection has ended.
         """
-        self._kicked = True
         message = str(getattr(envelope, "message", "") or "")
-        self._kick_reason = message or "no reason given"
+        self._mark_kicked(message or "no reason given")
 
     def _schedule_ingest(self, envelope: dict[str, Any]) -> None:
         task = asyncio.create_task(self._deliver(envelope))

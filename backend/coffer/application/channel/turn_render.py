@@ -327,9 +327,6 @@ class TurnRenderer:
         progress: _Progress,
     ) -> None:
         text = "".join(parts).strip()
-        if error is not None:
-            await self._deliver(progress, f"⚠️ {error.message} [{error.code}]")
-            return
         media_sent = 0
         if text:
             text, media_sent = await deliver_media(
@@ -339,6 +336,13 @@ class TurnRenderer:
                 thread_id=self.thread_id,
                 chat_kind=self.chat_kind,
             )
+        if error is not None:
+            # What the agent streamed before failing is still the user's — a
+            # stalled or dropped turn often has most of an answer in it. Deliver
+            # it, then say what went wrong, the way an interrupted turn does.
+            notice = f"⚠️ {error.message} [{error.code}]"
+            await self._deliver(progress, f"{text}\n\n{notice}" if text else notice)
+            return
         if stop_reason == "interrupted":
             await self._deliver(progress, f"{text}\n\n⏹ Stopped." if text else "⏹ Stopped.")
             return

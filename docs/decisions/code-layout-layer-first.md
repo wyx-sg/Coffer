@@ -54,8 +54,20 @@ backend/coffer/
     └── shim/                     # coffer-mcp-shim (MCP-only by nature)
 ```
 
-Each kind is registered at the composition root via an explicit `KindModule`
-dataclass — no global registry, no import side effects, no `kinds/` directory.
+Each kind's `make_<kind>_kind()` factory (`application/<kind>/kind.py`)
+returns a frozen `Kind` descriptor (`domain/resource.py`); the composition
+root — `surfaces/http/app.py`'s lifespan through per-kind `*_wiring.py`
+modules, and `surfaces/cli/main.py` — registers that `Kind` into the per-app
+`kinds` dict and mounts the kind's routers and CLI groups itself. Wiring is
+explicit: every `wire_*` step returns a small frozen dataclass of what it
+built and `app.py` passes those results forward as parameters (the sync
+registrations flow through one `SyncContributions` collector); no step
+discovers an earlier one through `app.state`. FastAPI dependency providers
+are split the same way: `surfaces/http/dependencies.py` holds only the
+kind-agnostic core (actor, resource, audit, retention, internal-engine
+config) and each kind publishes its own concretely-typed `set_*`/`get_*`
+pairs from its own module. No carrier object, no global registry, no import
+side effects, no `kinds/` directory.
 
 ## Consequences
 
@@ -72,8 +84,21 @@ dataclass — no global registry, no import side effects, no `kinds/` directory.
   vertical slice it would be `kinds/profile/domain/profile.py`).
 - Importlinter rules read naturally:
   - `domain → infrastructure | surfaces` forbidden
-  - `*/mcp → */<other_kind>` forbidden
+  - `*/<kind> → */<other_kind>` forbidden — one symmetric "Cross-kind imports
+    forbidden" contract per kind, covering all nine (mcp, agent, skill,
+    knowledge, channel, chat, provider, memory, sync). Two listed exceptions,
+    both about a kind's pure *domain vocabulary* rather than its services:
+    `provider` and `memory` may import `domain.agent` (acting on agents is
+    what those kinds are for), and `channel` may import `domain.chat`
+    (driving turns is what a channel is for). `domain.knowledge` /
+    `infrastructure.knowledge` remain the exempt substrate. Annotation-only
+    (`TYPE_CHECKING`) imports do not count. The one sanctioned
+    central-metadata exception is Alembic's `migrations/env.py`, which imports
+    every kind's ORM model module.
   - `domain/*` (kind-agnostic) → `domain/<kind>/*` forbidden
+  - Packages two kinds needed land at the layer root, kind-agnostic:
+    `infrastructure/net/` (SSRF guard), `infrastructure/agent_files/` (Claude
+    Code transcript parsing), `domain/connection.py` (`CODEX_ENV_KEY`).
 
 **Negative**
 

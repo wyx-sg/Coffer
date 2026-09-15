@@ -19,10 +19,10 @@ import sqlite3
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.domain.errors import AgentConfigRejected, UnknownAgent
+from coffer.domain.chat.errors import AgentConfigRejected, UnknownAgent
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.turn_dependencies import get_chat_service
+from coffer.surfaces.http.chat.dependencies import get_chat_service
 
 _TOKEN = "test-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}

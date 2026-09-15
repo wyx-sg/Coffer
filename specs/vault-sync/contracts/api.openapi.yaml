@@ -418,10 +418,15 @@ components:
       properties:
         url:
           type: string
-          description: A git repository the user owns
+          description: A git repository the user owns. Must not begin with `-` — git would read
+            it as an option.
+          pattern: ^[^-\s]\S*$
         branch:
           type: string
           default: main
+          description: Held to `git check-ref-format --branch`; in particular it must not begin
+            with `-`.
+          pattern: ^[^-\s~^:?*\[\\\x00-\x1f\x7f][^\s~^:?*\[\\\x00-\x1f\x7f]*$
         credential_ref:
           type: string
           nullable: true
@@ -442,6 +447,9 @@ components:
         worktree_path:
           type: string
           default: ~/.coffer/sync
+          minLength: 1
+          description: Refused when it would overlap the vault's own directories (knowledge,
+            skills, memory) or Coffer's own `~/.coffer` outside the default location.
     SyncRemoteOut:
       type: object
       required:

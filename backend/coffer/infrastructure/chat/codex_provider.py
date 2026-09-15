@@ -19,8 +19,8 @@ from typing import Any
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
-from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
-from coffer.domain.provider.projection import CODEX_ENV_KEY
+from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
+from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.infrastructure.chat.adapter_support import (
     MemoryContextComposer,
     ModelLister,

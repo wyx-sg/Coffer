@@ -28,7 +28,7 @@ Every vault asset — registered server configs, credential references, audit lo
 
 Replicating user state to a **vendor-controlled** cloud as a system of record requires a formal constitutional amendment — an explicit, recorded decision, not a silent configuration change.
 
-**Export and import need no exception (constitution v0.4.0).** Moving a vault to another of your machines is a plain **export to a local directory** and an **import of one back** (spec vault-sync). Because that is ordinary local file output under the user's control, it creates no second system of record and nothing reaches a vendor-controlled service — so it needs no exception to this principle. Constitution v0.4.0 therefore **removes** the v0.3.0 user-controlled-sync-medium exception along with the continuous git-based sync it was written for. Secrets travel as Fernet **ciphertext only**, and only when explicitly requested; the master key never enters an export and is bootstrapped onto each machine out-of-band. See [Vault Export and Import](/reference/adr/vault-sync).
+**One bounded exception: a sync remote you own (constitution v0.6.0).** Coffer may converge the vault with a git remote the user owns, so that the user's own machines hold one vault rather than several (spec vault-sync). Three conditions bound it: the remote is a **rendezvous, never a system of record** — every machine's local vault stays complete, so the remote can be deleted and rebuilt from any one of them; secrets travel as Fernet **ciphertext only** and the master key is bootstrapped onto each machine out-of-band; and the feature is **off by default**, enabled by the user against a repository they own. Convergence is bidirectional under git's own three-way merge, applies a diff against the last state this vault provably held, and stops to ask before an oversized deletion. A hosted endpoint Coffer itself operates stays outside the exception. See [Vault Sync](/reference/adr/vault-sync).
 
 ### II. Spec-as-Truth (Spec-Driven Development)
 
@@ -60,7 +60,7 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a cloud service.** There is no hosted Coffer, no SaaS plan, no account required. The daemon is a process on your machine.
 
-**Not a sync service.** Coffer does not keep two machines convergent. It exports the vault to a directory you name and imports one back (spec vault-sync); carrying that directory between machines — `scp`, a USB drive, your own git repo — is yours to do. Coffer ships no remote, no background replication and no hosted sync endpoint; offering one would require a constitutional amendment.
+**Not a hosted sync service.** Coffer converges your machines only through a git remote you own and configure (spec vault-sync); it ships no remote of its own and no hosted sync endpoint. Offering one would require a constitutional amendment.
 
 **Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the turn platform behind the channels drives your registered coding agents, which do invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
 

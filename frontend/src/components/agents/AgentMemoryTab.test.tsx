@@ -31,7 +31,7 @@ vi.mock("@/lib/hooks/useAgentNativeMemory", () => ({
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgentMcpStatus: vi.fn() }));
 // Section B's own network hooks. Delivery has its own suite
 // (AgentMemoryDelivery.test.tsx); here we only assert it is ON this tab.
-vi.mock("@/kinds/memory/useMemory", () => ({
+vi.mock("@/lib/hooks/useMemory", () => ({
   useMemoryDelivery: vi.fn(() => ({
     data: [
       {

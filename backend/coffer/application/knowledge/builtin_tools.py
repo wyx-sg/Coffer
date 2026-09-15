@@ -11,9 +11,10 @@ descriptions; ``grep`` finds *which line* once it knows where to look;
 words to grep for. The three are deliberately not modes of one tool — an agent
 picks by what it knows, not by a flag — and none of them takes a scope,
 because a call spans every collection the agent is authorized for (FR-012).
-That authorization is the only argument the layer resolves for itself,
-threaded in as ``agent`` by the gateway at session handshake, the same way
-``cwd`` reaches the tools that declare it.
+That authorization is the only argument the layer resolves for itself:
+the gateway writes the session's handshake identity into every call as
+``agent``, an argument no tool advertises and no caller can set (spec
+mcp-gateway FR-021).
 
 ``search`` never fails for want of an index: with no internal connection
 configured it answers literally and says so (FR-027), so an agent may always
@@ -39,14 +40,6 @@ _ANONYMOUS_ACTOR = "agent"
 
 Handler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
-#: Shared JSON-schema fragment for the session-injected caller identity. It is
-#: declared on every knowledge tool because every one of them is authorized
-#: per agent; the gateway fills it in and a caller never needs to.
-AGENT_PROPERTY = {
-    "type": "string",
-    "description": "Calling agent's identity (session-injected; omit it).",
-}
-
 
 def _text(value: Any) -> str:
     """A trimmed string, or empty for anything that is not usable text."""
@@ -63,8 +56,10 @@ def _required(args: dict[str, Any], name: str) -> str:
 def _agent(args: dict[str, Any]) -> str | None:
     """The session's agent identity, or ``None`` when it reported none.
 
-    ``None`` means "unidentified caller", which the service answers with the
-    collections scoped to every agent — not with all of them.
+    Set by the gateway, never by the caller: it is absent from every tool's
+    input schema and overwritten on every call. ``None`` means "unidentified
+    caller", which the service answers with the collections scoped to every
+    agent — not with all of them.
     """
     return _text(args.get("agent")) or None
 
@@ -212,7 +207,6 @@ def register_knowledge_builtin_tools(
                             "list of collections."
                         ),
                     },
-                    "agent": AGENT_PROPERTY,
                 },
             },
             handler=list_knowledge,
@@ -248,7 +242,6 @@ def register_knowledge_builtin_tools(
                         "minimum": 1,
                         "maximum": _MAX_MATCHES,
                     },
-                    "agent": AGENT_PROPERTY,
                 },
                 "required": ["pattern"],
             },
@@ -274,7 +267,6 @@ def register_knowledge_builtin_tools(
                             "'shopee/account/gateway.md'."
                         ),
                     },
-                    "agent": AGENT_PROPERTY,
                 },
                 "required": ["path"],
             },
@@ -319,7 +311,6 @@ def register_knowledge_builtin_tools(
                         "type": "string",
                         "description": "Existing file to replace, instead of 'directory'.",
                     },
-                    "agent": AGENT_PROPERTY,
                 },
                 "required": ["title", "description"],
             },
@@ -341,7 +332,6 @@ def register_knowledge_builtin_tools(
                         "type": "string",
                         "description": "File path relative to the knowledge root.",
                     },
-                    "agent": AGENT_PROPERTY,
                 },
                 "required": ["path"],
             },

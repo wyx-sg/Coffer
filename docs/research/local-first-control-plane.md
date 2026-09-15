@@ -156,7 +156,7 @@ Primary (project repos/docs):
 - **SSRF guard covers only Coffer's own outbound, not spawned upstreams.**
   `ssrf_guard.py` (`check_url` / `is_blocked_host`) is imported by exactly two
   callers — `skill/source_fetcher.py` (git-URL validation for skill fetching) and
-  `providers/provider_introspector.py` (provider URL introspection). Neither the
+  `provider/introspector.py` (provider URL introspection). Neither the
   MCP subprocess path nor the gateway applies it; spawned upstreams have
   unrestricted egress. `repo:backend/coffer/infrastructure/skill/ssrf_guard.py`
 - **ToolHive MCPRemoteProxy still in development.** Confirmed verbatim:

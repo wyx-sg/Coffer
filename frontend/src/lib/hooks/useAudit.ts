@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { auditListKey } from "@/lib/api/queryKeys";
 
 type AuditListOut = components["schemas"]["AuditListOut"];
 
@@ -19,7 +20,7 @@ interface UseAuditArgs {
 export function useAudit(args: UseAuditArgs) {
   const { kind, name, eventType, since, limit = 50, enabled = true } = args;
   return useQuery({
-    queryKey: ["audit", { kind, name, eventType, since, limit }],
+    queryKey: auditListKey({ kind, name, eventType, since, limit }),
     queryFn: async (): Promise<AuditListOut> => {
       const client = getApiClient();
       const query: Record<string, string | number> = { limit };

@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "codegen": "openapi-typescript ../specs/mcp-gateway/contracts/api.openapi.yaml -o src/lib/api/types.ts",
-    "lint": "eslint .",
+    "codegen": "node scripts/codegen.mjs",
+    "codegen:check": "node scripts/codegen-check.mjs",
+    "lint": "npm run codegen:check && eslint .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",

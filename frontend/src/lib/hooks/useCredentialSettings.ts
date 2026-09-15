@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { credentialSettingsKey } from "@/lib/api/queryKeys";
 
 type CredentialSettingsOut = components["schemas"]["CredentialSettingsOut"];
 type CredentialSettingsIn = components["schemas"]["CredentialSettingsIn"];
 
 export function useCredentialSettings() {
   return useQuery({
-    queryKey: ["credential-settings"],
+    queryKey: credentialSettingsKey,
     queryFn: async (): Promise<CredentialSettingsOut> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/settings/credentials");
@@ -31,7 +32,7 @@ export function useUpdateCredentialSettings() {
       return data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["credential-settings"] });
+      void qc.invalidateQueries({ queryKey: credentialSettingsKey });
     },
   });
 }

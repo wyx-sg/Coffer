@@ -14,13 +14,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { ResourcesPage } from "./ResourcesPage";
 import { ApiError } from "@/lib/api/errors";
-import type { ResourceOut } from "@/lib/components/kindRegistry";
+import type { ResourceOut } from "@/lib/api/resources";
 
 vi.mock("@/lib/hooks/useResources", () => ({ useResources: vi.fn() }));
-vi.mock("@/kinds/mcp/AddMcpServerDialog", () => ({
+vi.mock("@/components/mcp/AddMcpServerDialog", () => ({
   AddMcpServerDialog: () => <button>add mcp server</button>,
 }));
-vi.mock("@/kinds/mcp/McpServersTable", () => ({
+vi.mock("@/components/mcp/McpServersTable", () => ({
   McpServersTable: ({ resources }: { resources: ResourceOut[] }) => (
     <div data-testid="mcp-table">
       {resources.map((r) => (

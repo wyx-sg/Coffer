@@ -1,9 +1,10 @@
-"""Export/import result value objects (spec vault-sync).
+"""What one serialization of the vault reports (spec vault-sync).
 
-Both operations report the same three things the spec asks for: how much of
-each area moved, which individual resources could not be applied, and where
-the bundle is. Per-resource failures are *reported* rather than fatal, so they
-are part of a successful result, not an exception.
+Step 1 of a converge round writes the vault into the working tree and reports
+how much of each area it wrote and which individual resources it could not
+render. Per-resource failures are *reported* rather than fatal, so they are
+part of a successful result, not an exception — and the exporter protects
+their paths so a row it could not render is never published as a deletion.
 """
 
 from __future__ import annotations
@@ -30,17 +31,3 @@ class ExportSummary:
     failures: list[tuple[str, str]] = field(default_factory=list)
     #: Whether credential ciphertext was included (never the master key).
     credentials_included: bool = False
-
-
-@dataclass
-class ImportSummary:
-    """Outcome of applying a bundle."""
-
-    path: str
-    areas: list[AreaCount] = field(default_factory=list)
-    #: ``<kind>:<name>`` (or ``state/<area>/<doc>``) refs that could not be
-    #: applied on this machine, with the reason. Never fatal.
-    failures: list[tuple[str, str]] = field(default_factory=list)
-    #: Credential refs whose ciphertext cannot be decrypted here — the master
-    #: key has not been bootstrapped onto this machine yet.
-    locked_refs: list[str] = field(default_factory=list)

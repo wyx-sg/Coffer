@@ -10,13 +10,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from coffer.domain.sync.backup import (
+    BRANCH_PATTERN,
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
     DEFAULT_WORKTREE,
+    URL_PATTERN,
+    validate_branch,
+    validate_url,
 )
+from coffer.domain.sync.errors import BackupRemoteInvalid
 
 
 class DiffCountsOut(BaseModel):
@@ -103,17 +108,39 @@ class SyncRemoteIn(BaseModel):
 
     Every field but the URL carries the spec's default, so a ``PUT`` with a
     bare URL is a complete configuration rather than a half-set one.
+
+    The URL and the branch become arguments to ``git``. Neither may begin with
+    ``-`` — git would read it as an option, and ``--receive-pack=<cmd>`` is a
+    command — and the branch is held to ``git check-ref-format --branch``. The
+    ``pattern`` catches the shape at the wire; the validators run the domain's
+    full rule, so a bad name is a 422 here rather than a git error later.
     """
 
-    url: str
-    branch: str = DEFAULT_BRANCH
+    url: str = Field(pattern=URL_PATTERN)
+    branch: str = Field(default=DEFAULT_BRANCH, pattern=BRANCH_PATTERN)
     #: A name in the credential store — never the secret. The daemon resolves
     #: it at push time and nowhere else.
     credential_ref: str | None = None
     include_credentials: bool = False
-    interval_seconds: int = DEFAULT_INTERVAL_SECONDS
+    interval_seconds: int = Field(default=DEFAULT_INTERVAL_SECONDS, ge=1)
     enabled: bool = True
-    worktree_path: str = DEFAULT_WORKTREE
+    worktree_path: str = Field(default=DEFAULT_WORKTREE, min_length=1)
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, value: str) -> str:
+        try:
+            return validate_url(value)
+        except BackupRemoteInvalid as e:
+            raise ValueError(e.reason) from e
+
+    @field_validator("branch")
+    @classmethod
+    def _branch(cls, value: str) -> str:
+        try:
+            return validate_branch(value)
+        except BackupRemoteInvalid as e:
+            raise ValueError(e.reason) from e
 
 
 class SyncRemoteOut(BaseModel):

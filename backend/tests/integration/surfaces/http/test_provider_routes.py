@@ -568,7 +568,8 @@ async def test_a_second_internal_default_cannot_be_written_behind_the_service(
 async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
     from httpx import ASGITransport, AsyncClient
 
-    from coffer.surfaces.http.dependencies import get_audit_service, get_provider_service
+    from coffer.surfaces.http.dependencies import get_audit_service
+    from coffer.surfaces.http.provider_dependencies import get_provider_service
 
     app = _app(tmp_path, monkeypatch, 59880)
     set_active_token(TOKEN)

@@ -10,19 +10,26 @@ Turn lifecycle + pending queue (spec channels FR-050…FR-054)
 -------------------------------------
 Starting a turn is decoupled from consuming its events. Every turn's events are
 published to a per-conversation bus; any number of clients ``subscribe`` (the web
-``GET .../events`` stream). The web ``POST`` entry-point is ``enqueue_message``:
-it starts the turn when idle or appends to a per-conversation **pending queue**
-when a turn is running (the composer never locks). When a turn ends the queue
-auto-advances FIFO, unless an interrupt paused it. The pending list is broadcast
-as a ``QueueChanged`` event so every subscriber renders the same chips.
+``GET .../events`` stream). The one entry point for a message — from the web
+``POST`` and from a channel alike — is ``enqueue_message``: it starts the turn
+when idle or appends to the conversation's **pending queue** when a turn is
+running (the composer never locks, the bot never says "busy" for the tenth
+message). When a turn ends the queue auto-advances FIFO, unless an interrupt
+paused it. The pending list is broadcast as a ``QueueChanged`` event so every
+subscriber — the web tabs and the channel alike — renders the same chips.
 
-``start_turn`` is retained for the channel inbound seam: it starts a turn and
-returns a dedicated event queue ending in a ``None`` sentinel (what the channel
-renderer drains), while also publishing to the bus so the web observes a
-channel-driven turn live.
+A channel message rides the same queue with two extras: the attachments and
+title hint it persists into the user message, and an ``on_start`` sink that is
+handed a dedicated event queue (ending in ``None``) the moment its turn begins,
+which is what the channel renderer drains. The web observes the same turn on
+the bus.
 
-Per-conversation state (in-flight turn, bus, pending queue) is process-global and
-single-daemon by design; it lives in :mod:`turn_state`.
+``start_turn`` is the immediate-or-refuse seam (start now or raise
+``TurnInProgress``); it is what tests that need a turn *right now* use.
+
+Per-conversation state (bus, in-flight turn, pending queue) is process-global
+and single-daemon by design; it lives in :mod:`turn_state` and is released
+once a conversation is idle with nobody watching.
 """
 
 from __future__ import annotations
@@ -31,23 +38,29 @@ import asyncio
 import logging
 from collections.abc import Callable, Sequence
 
-from coffer.application.chat.bus import ConversationBus
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
-from coffer.application.chat.turn_runner import run_turn_task
+from coffer.application.chat.turn_runner import (
+    DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
+    run_turn_task,
+)
+from coffer.application.chat.turn_state import _STATES as _STATES
 from coffer.application.chat.turn_state import (
-    _ACTIVE_TURNS,
-    _BUSES,
-    _PENDING,
-    _ActiveTurn,
-    _PendingState,
+    ActiveTurn,
+    PendingMessage,
+    TurnSink,
+    TurnState,
+    evict_if_idle,
+    peek,
+    state_for,
 )
 from coffer.application.chat.turn_state import active_turns as active_turns
 from coffer.application.chat.turn_state import clear_active_turns as clear_active_turns
+from coffer.application.chat.turn_state import held_conversations as held_conversations
 from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.errors import TurnInProgress
 from coffer.domain.chat.events import AgentEvent, QueueChanged, TurnError
 from coffer.domain.chat.message import AttachmentBlock, Role, TextBlock
-from coffer.domain.errors import TurnInProgress
 
 log = logging.getLogger(__name__)
 
@@ -60,9 +73,13 @@ class TurnOrchestrator:
         *,
         chat_service: ChatService,
         registry: AgentProviderRegistry,
+        idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
     ) -> None:
         self._chat = chat_service
         self._registry = registry
+        # How long a turn may go without producing an event before the watchdog
+        # cancels it (``turn_runner``); ``None`` disables the watchdog.
+        self._idle_timeout = idle_timeout
         # Keep references to fire-and-forget advance tasks so they are not GC'd
         # mid-flight; each discards itself on completion.
         self._bg_tasks: set[asyncio.Task[None]] = set()
@@ -74,39 +91,60 @@ class TurnOrchestrator:
     def subscribe(self, conversation_id: str) -> asyncio.Queue[AgentEvent | None]:
         """Attach a live-events subscriber, replaying the in-flight turn + the
         current pending-queue snapshot so it catches up immediately."""
-        return self._bus_for(conversation_id).subscribe()
+        return state_for(conversation_id).bus.subscribe()
 
     def unsubscribe(self, conversation_id: str, queue: asyncio.Queue[AgentEvent | None]) -> None:
-        bus = _BUSES.get(conversation_id)
-        if bus is not None:
-            bus.unsubscribe(queue)
+        state = peek(conversation_id)
+        if state is not None:
+            state.bus.unsubscribe(queue)
+            evict_if_idle(conversation_id)
 
     def pending(self, conversation_id: str) -> list[str]:
         """The conversation's current ordered pending-message texts."""
-        state = _PENDING.get(conversation_id)
-        return list(state.queue) if state is not None else []
+        state = peek(conversation_id)
+        return [m.text for m in state.queue] if state is not None else []
 
     # ------------------------------------------------------------------
-    # Web entry points (POST .../messages, PUT .../pending)
+    # The entry point for a message — web POST .../messages and channels alike
     # ------------------------------------------------------------------
 
-    async def enqueue_message(self, conversation_id: str, user_text: str) -> bool:
+    async def enqueue_message(
+        self,
+        conversation_id: str,
+        user_text: str,
+        *,
+        attachments: Sequence[Attachment] = (),
+        title_hint: str | None = None,
+        on_start: TurnSink | None = None,
+    ) -> bool:
         """Start a turn for the message, or enqueue it behind the in-flight one.
 
         Returns ``True`` when the message was queued, ``False`` when its turn
         started immediately. Raises ``ConversationNotFound`` when the conversation
-        does not exist. The composer never locks — a message sent during a turn is
-        never rejected (spec channels FR-050).
+        does not exist. A message sent during a turn is never rejected (spec
+        channels FR-050) — from the web composer or from a channel.
+
+        ``attachments`` (channel media) are persisted into the user message as
+        references (FR-033) and ``title_hint`` names a conversation still under
+        its placeholder title (FR-048). ``on_start`` is a channel's renderer
+        hook: called with the turn's dedicated event queue (ending in ``None``)
+        the moment the turn begins — now, or when the queue reaches it.
         """
         await self._chat.get_conversation(conversation_id)  # raises ConversationNotFound -> 404
-        state = self._pending_for(conversation_id)
-        start_now = conversation_id not in _ACTIVE_TURNS and not state.paused and not state.queue
+        state = state_for(conversation_id)
+        message = PendingMessage(
+            text=user_text,
+            attachments=tuple(attachments),
+            title_hint=title_hint,
+            on_start=on_start,
+        )
+        start_now = state.active is None and not state.paused and not state.queue
         state.paused = False
         if start_now:
-            await self._begin_turn(conversation_id, user_text, primary_queue=None)
+            await self._begin_turn(conversation_id, message)
             self._broadcast_queue_changed(conversation_id)
             return False
-        state.queue.append(user_text)
+        state.queue.append(message)
         self._broadcast_queue_changed(conversation_id)
         # Unpaused above — drain the head if the conversation is now idle (e.g. a
         # plain send after an interrupt resumes the held queue).
@@ -116,17 +154,21 @@ class TurnOrchestrator:
     async def set_pending(self, conversation_id: str, texts: Sequence[str]) -> list[str]:
         """Replace the pending queue (resume / drop / reorder). Unpauses and
         starts the next turn when none is in flight. Returns the resulting queue.
+
+        A queued message whose text is unchanged keeps what it carried
+        (attachments, its channel renderer): reordering the queue from the web
+        must not turn a channel message into a web one.
         """
         await self._chat.get_conversation(conversation_id)  # raises ConversationNotFound -> 404
-        state = self._pending_for(conversation_id)
-        state.queue = list(texts)
+        state = state_for(conversation_id)
+        state.queue = _reconcile(state.queue, texts)
         state.paused = False
         self._broadcast_queue_changed(conversation_id)
         await self._maybe_advance(conversation_id)
         return self.pending(conversation_id)
 
     # ------------------------------------------------------------------
-    # Channel entry point (kept seam): start + return a drainable queue
+    # Immediate-or-refuse seam
     # ------------------------------------------------------------------
 
     async def start_turn(
@@ -137,27 +179,20 @@ class TurnOrchestrator:
         attachments: Sequence[Attachment] = (),
         title_hint: str | None = None,
     ) -> asyncio.Queue[AgentEvent | None]:
-        """Start a turn and return a dedicated event queue ending in ``None``.
+        """Start a turn NOW and return a dedicated event queue ending in ``None``.
 
-        Used by the channel inbound renderer. Raises ``TurnInProgress`` if a turn
-        is already active. The turn also publishes to the conversation bus, so the
-        web observes a channel-driven turn live. ``attachments`` (channel media)
-        are materialised by the agent adapter this turn only — never persisted.
-        ``title_hint`` names the part of ``user_text`` the human actually wrote,
-        for naming a conversation still under its placeholder title; the channel
-        supplies it because ``user_text`` also carries context blocks only the
-        channel knows the shape of.
+        Raises ``TurnInProgress`` if a turn is already active — the caller wanted
+        this turn and no other, not a place in the queue. The turn also publishes
+        to the conversation bus, so a web observer sees it live.
         """
-        if conversation_id in _ACTIVE_TURNS:
+        state = state_for(conversation_id)
+        if state.active is not None:
             raise TurnInProgress(conversation_id)
         primary: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
-        await self._begin_turn(
-            conversation_id,
-            user_text,
-            primary_queue=primary,
-            attachments=attachments,
-            title_hint=title_hint,
+        message = PendingMessage(
+            text=user_text, attachments=tuple(attachments), title_hint=title_hint
         )
+        await self._begin_turn(conversation_id, message, primary_queue=primary)
         return primary
 
     # ------------------------------------------------------------------
@@ -168,14 +203,15 @@ class TurnOrchestrator:
         """Stop a running turn (keeping its partial output) and pause the queue.
 
         A no-op when no turn is in flight. Pausing holds queued messages until the
-        owner resumes (any send / ``set_pending`` clears the pause).
+        owner resumes (any send / ``set_pending`` clears the pause) — FR-051.
         """
-        active = _ACTIVE_TURNS.get(conversation_id)
+        state = peek(conversation_id)
+        if state is None:
+            return
+        active = state.active
         if active is not None and active.task is not None and not active.task.done():
             active.interrupted = True
-            state = _PENDING.get(conversation_id)
-            if state is not None:
-                state.paused = True
+            state.paused = True
             active.task.cancel()
             log.debug("Interrupted turn for conversation %s", conversation_id)
 
@@ -183,18 +219,18 @@ class TurnOrchestrator:
         """Cancel and discard a running turn, drop the pending queue, and close the
         bus (used when the conversation is deleted).
 
-        Does NOT pop ``_ACTIVE_TURNS``; the task's ``finally`` performs an
-        ownership-checked removal so a racing start cannot have its fresh entry
-        evicted.
+        The whole state is dropped here; the task's ``finally`` release is
+        ownership-checked, so a racing start's fresh state is never evicted.
         """
-        active = _ACTIVE_TURNS.get(conversation_id)
+        state = _STATES.pop(conversation_id, None)
+        if state is None:
+            return
+        active = state.active
         if active is not None and active.task is not None and not active.task.done():
             active.task.cancel()
             log.debug("Cancelled turn for conversation %s", conversation_id)
-        _PENDING.pop(conversation_id, None)
-        bus = _BUSES.pop(conversation_id, None)
-        if bus is not None:
-            bus.close()
+        state.queue.clear()
+        state.bus.close()
 
     @staticmethod
     async def sweep_streaming_messages(message_repo: MessageRepo) -> int:
@@ -209,70 +245,66 @@ class TurnOrchestrator:
     # Internals
     # ------------------------------------------------------------------
 
-    def _bus_for(self, conversation_id: str) -> ConversationBus:
-        bus = _BUSES.get(conversation_id)
-        if bus is None:
-            bus = ConversationBus()
-            _BUSES[conversation_id] = bus
-        return bus
-
-    def _pending_for(self, conversation_id: str) -> _PendingState:
-        state = _PENDING.get(conversation_id)
-        if state is None:
-            state = _PendingState()
-            _PENDING[conversation_id] = state
-        return state
-
     def _broadcast_queue_changed(self, conversation_id: str) -> None:
-        self._bus_for(conversation_id).publish_queue_changed(
+        state_for(conversation_id).bus.publish_queue_changed(
             QueueChanged(pending=self.pending(conversation_id))
         )
 
     async def _maybe_advance(self, conversation_id: str) -> None:
-        """Start the next pending message if the conversation is idle + unpaused."""
-        state = _PENDING.get(conversation_id)
-        if state is None or conversation_id in _ACTIVE_TURNS or state.paused or not state.queue:
+        """Start the next pending message if the conversation is idle + unpaused;
+        release the conversation's state when there is nothing left to hold."""
+        state = peek(conversation_id)
+        if state is None:
             return
-        text = state.queue.pop(0)
+        if state.active is not None or state.paused or not state.queue:
+            evict_if_idle(conversation_id)
+            return
+        message = state.queue.pop(0)
         self._broadcast_queue_changed(conversation_id)
         try:
-            await self._begin_turn(conversation_id, text, primary_queue=None)
+            await self._begin_turn(conversation_id, message)
         except Exception:
             log.exception("auto-advance turn failed for conversation %s", conversation_id)
             # Re-insert the head and pause so the message is neither lost nor
             # retried in a spin; the owner resumes (send / set_pending) after
             # fixing the cause (FR-018a — a queued message must not vanish).
-            state.queue.insert(0, text)
+            state.queue.insert(0, message)
             state.paused = True
             self._broadcast_queue_changed(conversation_id)
-            self._bus_for(conversation_id).publish(
-                TurnError(code="INTERNAL_ERROR", message="failed to start queued turn")
-            )
+            error = TurnError(code="INTERNAL_ERROR", message="failed to start queued turn")
+            state.bus.publish(error)
+            if message.on_start is not None:
+                # A channel has no queue chips to look at: hand its renderer a
+                # stream that carries the failure and ends, so the chat hears it.
+                failed: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
+                failed.put_nowait(error)
+                failed.put_nowait(None)
+                message.on_start(failed)
 
     async def _begin_turn(
         self,
         conversation_id: str,
-        user_text: str,
+        message: PendingMessage,
         *,
-        primary_queue: asyncio.Queue[AgentEvent | None] | None,
-        attachments: Sequence[Attachment] = (),
-        title_hint: str | None = None,
+        primary_queue: asyncio.Queue[AgentEvent | None] | None = None,
     ) -> None:
         """Reserve the slot, build the adapter, persist the user message, spawn the
         turn task. Callers guarantee no turn is currently active.
 
-        ``attachments`` (channel media) are persisted INTO the user message as
+        Attachments (channel media) are persisted INTO the user message as
         ``AttachmentBlock`` references (path/mime/filename, no bytes) after the
         text — the single source of truth. The turn task re-materialises them for
         the adapter by reading them back from history (FR-033), so they survive a
-        daemon restart and are not threaded down as a separate param.
-        ``title_hint`` rides along to the persisted user message, where the
+        daemon restart and are not threaded down as a separate param. The title
+        hint rides along to the persisted user message, where the
         placeholder-title rule uses it instead of the raw text (FR-048)."""
-        bus = self._bus_for(conversation_id)
-        active = _ActiveTurn(bus=bus, primary_queue=primary_queue)
-        # Reserve synchronously — no ``await`` before this insert.
-        _ACTIVE_TURNS[conversation_id] = active
-        bus.begin_turn()
+        state = state_for(conversation_id)
+        if message.on_start is not None and primary_queue is None:
+            primary_queue = asyncio.Queue()
+        active = ActiveTurn(bus=state.bus, primary_queue=primary_queue)
+        # Reserve synchronously — no ``await`` before this assignment.
+        state.active = active
+        state.bus.begin_turn()
         try:
             conv = await self._chat.get_conversation(conversation_id)
             provider = self._registry.get(conv.agent_key)
@@ -281,19 +313,19 @@ class TurnOrchestrator:
                 conversation_id,
                 role=Role.USER,
                 content=[
-                    TextBlock(text=user_text),
+                    TextBlock(text=message.text),
                     *(
                         AttachmentBlock(path=a.path, mime=a.mime, filename=a.filename)
-                        for a in attachments
+                        for a in message.attachments
                     ),
                 ],
                 status="complete",
-                title_hint=title_hint,
+                title_hint=message.title_hint,
             )
         except BaseException:
             # Anything failed before the task spawned — release the reservation.
-            if _ACTIVE_TURNS.get(conversation_id) is active:
-                del _ACTIVE_TURNS[conversation_id]
+            if state.active is active:
+                state.active = None
             if primary_queue is not None:
                 primary_queue.put_nowait(None)
             raise
@@ -304,11 +336,15 @@ class TurnOrchestrator:
                 active=active,
                 adapter=adapter,
                 chat=self._chat,
+                idle_timeout=self._idle_timeout,
             ),
             name=f"turn:{conversation_id}",
         )
         active.task = task
         task.add_done_callback(self._advance_callback(conversation_id))
+        if message.on_start is not None and primary_queue is not None:
+            # After the task exists, so a renderer that stops the turn finds it.
+            message.on_start(primary_queue)
 
     def _advance_callback(self, conversation_id: str) -> Callable[[asyncio.Task[None]], None]:
         def _cb(_task: asyncio.Task[None]) -> None:
@@ -317,3 +353,28 @@ class TurnOrchestrator:
             advance.add_done_callback(self._bg_tasks.discard)
 
         return _cb
+
+
+def _reconcile(queue: list[PendingMessage], texts: Sequence[str]) -> list[PendingMessage]:
+    """The queue ``texts`` describes, reusing an existing entry for each text it
+    still contains (first unused match wins) so a reordered or partly-dropped
+    queue keeps every message's attachments and renderer."""
+    unused = list(queue)
+    result: list[PendingMessage] = []
+    for text in texts:
+        match = next((m for m in unused if m.text == text), None)
+        if match is not None:
+            unused.remove(match)
+            result.append(match)
+        else:
+            result.append(PendingMessage(text=text))
+    return result
+
+
+__all__ = [
+    "TurnOrchestrator",
+    "TurnState",
+    "active_turns",
+    "clear_active_turns",
+    "held_conversations",
+]

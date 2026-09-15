@@ -14,13 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ScopeControl } from "@/components/ScopeControl";
-import { ChannelCallbackCard } from "@/kinds/channel/ChannelCallbackCard";
+import { ChannelCallbackCard } from "@/components/channel/ChannelCallbackCard";
 import {
   ChannelPairingCard,
   ChannelStatusCard,
   ChannelTestMessageCard,
-} from "@/kinds/channel/ChannelDetailCards";
-import { EditChannelDialog } from "@/kinds/channel/EditChannelDialog";
+} from "@/components/channel/ChannelDetailCards";
+import { EditChannelDialog } from "@/components/channel/EditChannelDialog";
 import {
   useChannelStatus,
   useIssuePairingCode,

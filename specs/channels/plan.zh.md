@@ -21,7 +21,8 @@ SeaTalk 后来有了第二种入站传输（FR-071）：`delivery: "websocket"` 
 ## Technical Context
 
 - **进程内直接驱动平台** —— `ChatService.create_conversation`、
-  `TurnOrchestrator.start_turn`（把返回的队列消费到 `None` 哨兵）、
+  `TurnOrchestrator.enqueue_message`（其 `on_start` 钩子把该 turn 的事件队列交给
+  channel，消费到 `None` 哨兵）、
   `interrupt_turn`。channel 内核与聊天平台之间不走
   HTTP。
 - **不引入新 SDK。** Telegram 与 SeaTalk 都用 `httpx` 对固定 host

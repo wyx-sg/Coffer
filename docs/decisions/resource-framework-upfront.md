@@ -46,9 +46,11 @@ infrastructure module (such as logging, telemetry, or auth middleware).
 
 **Positive**
 
-- Future kinds plug in mechanically: write `<layer>/<new_kind>/`, register a
-  `KindModule` at the composition root — no schema migration, no audit rewiring,
-  no retention plumbing rework.
+- Future kinds plug in mechanically: write `<layer>/<new_kind>/`, have its
+  `make_<new_kind>_kind()` factory return a frozen `Kind`, and let the
+  composition root register that `Kind` and mount the kind's routers/CLI
+  groups through a per-kind wiring module — no schema migration, no audit
+  rewiring, no retention plumbing rework.
 - Audit, retention, and resource-list UI are kind-agnostic from day one.
 - The first refactor cost (extracting Resource from MCP-specific code on the
   arrival of the second kind) is avoided.

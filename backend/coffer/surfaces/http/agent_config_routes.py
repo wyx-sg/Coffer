@@ -22,12 +22,12 @@ from coffer.application.agent.config_file_service import (
 )
 from coffer.application.agent.mcp_service import AgentMcpService, McpInstallStatus
 from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor as _actor
-from coffer.surfaces.http.dependencies import (
+from coffer.surfaces.http.agent_dependencies import (
     get_agent_config_file_service,
     get_agent_mcp_service,
 )
+from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.dependencies import get_actor as _actor
 
 router = APIRouter(
     prefix="/api/v1/agents",

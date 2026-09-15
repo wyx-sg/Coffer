@@ -3,8 +3,9 @@
 > English: [architecture.md](./architecture.md)
 
 > 本文是对当前正在构建的系统的架构快照。每项选择背后的「为什么」记录
-> 在 `docs/decisions/ADR-*.md` 中。本文所描述的范围，由 `roadmap.md` 中
-> 处于活动状态的规范决定。
+> 在 `docs/decisions/*.md` 中。本文所描述的范围，由 `roadmap.md` 中
+> 处于活动状态的规范决定。`scripts/check_architecture_doc.py` 负责让下文的
+> 代码布局树与内置工具清单始终与代码树保持一致。
 
 ## 分层 (Layering)
 
@@ -67,19 +68,24 @@ markdown 文件就是任何东西的唯一副本：没有 `documents` 表，也�
 
 检索就是**目录加 ripgrep**。`list` 一次走一层——先是 collection，再是某个目录的
 子项，每个文件带上它的标题与描述——而目录是在调用时遍历目录树生成的，从不物化。
-`grep` 与 `search` 跑的是同一趟 ripgrep，覆盖调用方可读的每一个 collection，区别
+`grep` 与 `search` 跑的是同一趟字面匹配，覆盖调用方可读的每一个 collection，区别
 只在报什么：`grep` 报的是行，`search` 报的是这些行所在的文件，每篇带上它的标题与
-描述；`read` 返回整个文件。没有模式、没有排序、没有分块、没有分数。
+描述。这一趟在机器的 `PATH` 上有 `rg` 时走 ripgrep，没有时走一个语义完全一致的
+内置 Python 遍历——同样的文件、同样跳过隐藏项、每行一条正则、同样的上限与同样的
+截断标记（`infrastructure/knowledge/grep.py` 与 `grep_fallback.py`；daemon 只为
+兜底记一次日志）。`read` 返回整个文件。没有模式、没有排序、没有分块、没有分数。
 
 **Coffer 不做任何 embedding。** 架在可丢弃向量 sidecar 之上的带排序语义检索建成过、
 也上线过，随后被主动移除（2026-09-14）：`coffer__search` 与 memory 的
 `coffer__recall` 现在都是字面匹配，`~/.coffer/index` 目录、`/embeddings` 客户端，
 以及 embedding 设置的所有痕迹全部消失。代价是实打实的，也如实记在 ADR 里——用调用方
 自己的话提问，不再能找到一个有辨识度的短语找不到的东西。语义匹配落回「模型读目录」，
-只要目录塞得进上下文就成立——到几百篇文件都还从容。
+只要目录塞得进上下文就成立——到几百篇文件都还从容。字面检索是**占位**，不是裁决：
+知识与记忆的设计尚未定型，语义检索预期会在定型后回归
+（[产品范围已定](../../docs/decisions/product-scope-is-settled.zh.md)）。
 
-六个 MCP 工具：`coffer__list`、`coffer__grep`、`coffer__read`、`coffer__search`、
-`coffer__write`、`coffer__delete`。Coffer 还会通过既有的 skill 通道**投递一个知识 skill**
+知识层贡献了 daemon 十个内置工具中的六个（见[内置工具](#内置工具-builtin-tools)）。
+Coffer 还会通过既有的 skill 通道**投递一个知识 skill**
 （spec knowledge FR-042），因为这套设计背后的审计发现：只靠工具描述，agent 从不
 主动伸手够这一层——一个月里每一次知识调用都发生在语料被建起来的那一天。没有任何
 东西被注入会话，也不往任何 agent 自己的记忆里写
@@ -97,6 +103,25 @@ internal-engine 连接驱动，动手之前先把每个旧版本归档进隐藏�
 转换成 Markdown，落地为一个带 frontmatter 的普通文件，并把原件保留在 collection
 根目录下隐藏的 `.raw/` 里，供转换失败时重做。上传是面向人的界面，不是 agent 工具。
 
+## 内置工具 (Builtin tools)
+
+daemon 在一个进程内的 `BuiltinToolRegistry`（`application/builtin_tools.py`）里注册
+**十个**内置工具。每个工具由拥有它的切片以 `BuiltinTool(name=…)` 声明，以不带前缀的
+名字存放，由网关在列出时加上 `coffer__` 前缀。此外还有一个 `coffer__search_tools`
+是网关自己的：它在 `application/mcp/gateway_builtin.py` 里直接作答，不经过注册表。
+
+| 切片        | 工具                                                                                                      | 声明位置                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| knowledge   | `coffer__list`、`coffer__grep`、`coffer__read`、`coffer__search`、`coffer__write`、`coffer__delete`       | `application/knowledge/builtin_tools.py`、`builtin_search_tool.py`         |
+| memory      | `coffer__recall`                                                                                          | `application/memory/builtin_recall_tool.py`                                |
+| skill       | `coffer__list_skills`、`coffer__load_skill`                                                               | `application/skill/builtin_tools.py`                                       |
+| diagnostics | `coffer__diagnose`                                                                                        | `application/diagnostics.py`                                               |
+| gateway     | `coffer__search_tools`（[Tool Retrieval](../../docs/decisions/tool-retrieval-for-overload.zh.md)）        | `application/mcp/gateway_builtin.py`                                       |
+
+网关把会话握手时的身份作为 `agent` 参数穿入每一次内置工具调用，知识与记忆工具据此
+授权；没有任何工具对外宣告这个参数，客户端自己传的值会被覆盖（spec mcp-gateway
+FR-021）。
+
 ## 代码布局 (Code layout)
 
 按「层优先」组织，每一层内部再按 kind 划分子目录。见
@@ -104,54 +129,77 @@ internal-engine 连接驱动，动手之前先把每个旧版本归档进隐藏�
 
 ```
 backend/coffer/
-├── domain/                       # 与 kind 无关的实体 + kind 协议
+├── domain/                       # 与 kind 无关的实体 + kind 协议；不 import 任何东西
 │   ├── resource.py               # Resource、Kind、ResourceRef
-│   ├── kind_module.py            # KindModule 组装入口数据载体
-│   ├── audit.py
-│   ├── mcp/                      # MCP 特定的值对象
-│   ├── agent/                   # agent 特定的值对象 (config 等)
-│   ├── skill/                   # skill 特定的值对象
-│   ├── knowledge/               # 目录与文件的值对象、错误
-│   └── channel/                 # channel 配置、信封、seatalk 签名
+│   ├── scope.py                  # is_active(scope, agent)——唯一的生效范围判定
+│   ├── audit.py                  # 审计事件名 + 条目
+│   ├── errors.py                 # 全应用的错误基类 + 错误码
+│   ├── mcp/                      # MCP 特定的值对象、工具检索 + 分层
+│   ├── agent/                    # agent 特定的值对象 (config、facet、模型目录)
+│   ├── skill/                    # skill 特定的值对象
+│   ├── knowledge/                # 目录与文件的值对象、错误
+│   ├── channel/                  # channel 配置、信封、seatalk 签名
+│   ├── chat/                     # 会话、消息、附件、turn 事件
+│   ├── memory/                   # fact、partition、预算、投递、reader 协议
+│   ├── provider/                 # provider 配置、模态、投影规则
+│   └── sync/                     # manifest、模型、diff、收敛 + 机器规则
 ├── application/
-│   ├── resource_service.py       # 与 kind 无关的 CRUD；接受 kinds 字典
+│   ├── resource_service.py       # 与 kind 无关的 CRUD；读取 app.state.kinds
 │   ├── audit_service.py
-│   ├── retention_service.py
+│   ├── retention_service.py      # + retention_registry.py、retention_worker.py
+│   ├── builtin_tools.py          # BuiltinTool + BuiltinToolRegistry
+│   ├── diagnostics.py            # coffer__diagnose
 │   ├── credentials/              # 共享的 CredentialResolver (ref → secret)
-│   ├── mcp/                      # MCP 特定的应用层服务
-│   ├── agent/                   # agent 服务 + make_agent_kind
-│   ├── skill/                   # skill 服务 + make_skill_kind
-│   ├── knowledge/               # 一个服务、五个工具、tidy、skill 种子
-│   ├── channel/                 # adapter 协议、配对、入站、运行时
-│   └── fs/                      # 文件系统浏览服务
+│   ├── mcp/                      # 网关、supervisor、发现、search_tools + make_mcp_kind
+│   ├── agent/                    # agent 服务 + make_agent_kind
+│   ├── skill/                    # skill 服务、list_skills/load_skill + make_skill_kind
+│   ├── knowledge/                # 一个服务、六个工具、tidy、skill 种子 + make_knowledge_kind
+│   ├── channel/                  # adapter 协议、配对、入站、运行时 + make_channel_kind
+│   ├── chat/                     # turn 编排器、runner、状态、会话服务
+│   ├── memory/                   # 聚合、digest、投递、recall + make_memory_kind
+│   ├── provider/                 # provider 服务、投影、调谐 + make_provider_kind
+│   ├── sync/                     # 收敛轮次、导出器、应用器、worker、端口
+│   └── fs/                       # 文件系统浏览 / 选择 / 打开 / 编辑器服务
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (统一元数据)
 │   ├── credentials/              # 加密凭据存储 + 主密钥——唯一被允许 import `keyring` 的位置
-│   ├── daemon/                   # pid_lock、端口分配
+│   ├── daemon/                   # pid_lock、端口分配、子进程、版本偏斜
 │   ├── mcp/                      # 子进程、HTTP 上游客户端
-│   ├── agent/                   # agent 配置文件存储
-│   ├── skill/                   # 主存储、同步引擎
-│   ├── knowledge/               # 路径、文件树、frontmatter、ripgrep
-│   └── channel/                 # telegram/seatalk 传输（含 SeaTalk websocket connector 与由 operator 提供的 SDK 加载器）、cloudflared 监督、peer 仓储、渲染
+│   ├── net/                      # 出站 HTTP 的 SSRF 护栏
+│   ├── logging/                  # structlog 初始化、日志文件、eval 采集
+│   ├── llm/                      # LangChain 模型、补全、转写
+│   ├── agent/                    # agent 配置文件存储
+│   ├── agent_files/              # kind 无关的 agent 本地文件读取器（转录），agent 与 memory 共用
+│   ├── skill/                    # 主存储、同步引擎
+│   ├── knowledge/                # 路径、文件树、frontmatter、ripgrep + Python 兜底
+│   ├── channel/                  # telegram/seatalk 传输（含 SeaTalk websocket connector 与由 operator 提供的 SDK 加载器）、cloudflared 监督、peer 仓储、渲染
+│   ├── chat/                     # Claude SDK / Codex 适配器、持久化、文档抽取
+│   ├── memory/                   # 原生记忆 reader、存储、投递状态
+│   ├── provider/                 # provider 内省器
+│   └── sync/                     # git 镜像、树镜像、bundle、机器 id
 └── surfaces/
-    ├── http/                     # FastAPI app + 每个 kind 的子路由 (含 agent/skill/fs 路由)
+    ├── http/                     # FastAPI app、组装入口、每个 kind 的路由 + `*_wiring.py`
+    │   ├── chat/                 # 会话 + turn 路由
+    │   ├── knowledge/            # knowledge 路由
+    │   ├── mcp/                  # MCP 协议端点、capability + 调用日志路由
+    │   └── memory/               # memory 路由
     ├── cli/                      # Typer app + 每个 kind 的子命令组
     ├── shim/                     # coffer-mcp-shim 入口
     └── callback/                 # channel 回调监听器 (独立进程)
 ```
 
-组装入口 (`surfaces/http/app.py`、`surfaces/cli/main.py`) 显式地装配全部五个
+组装入口 (`surfaces/http/app.py`、`surfaces/cli/main.py`) 显式地装配全部七个
 kind——没有全局注册表，也不依赖 import 副作用。每个 kind 的
 `make_*_kind()` 工厂 (`make_mcp_kind`、`make_agent_kind`、`make_skill_kind`、
-`make_knowledge_kind`、`make_channel_kind`) 返回一个 frozen
-`Kind` (`domain/resource.py`)，组装入口直接把它填入每个 app 的
-`app.state.kinds` 字典 (`kind_name → Kind`)：`app_mcp_composition.py` 设置
-`"mcp_server"`，`agent_skill_wiring.py` 设置 `"agent"` 与 `"skill"`，
-`knowledge_wiring.py` 设置 `"knowledge"`，`channel_wiring.py` 设置
-`"channel"`。`ResourceService` 读取该字典做与 kind 无关的分发。
-一个 kind 贡献的 surface 层制品 (HTTP 路由、Typer 组) 由 `KindModule`
-dataclass (`domain/kind_module.py`) 承载，它通过 `Any` 类型字段引用它们，
-使 domain 层永不 import 它们。
+`make_knowledge_kind`、`make_channel_kind`、`make_provider_kind`、
+`make_memory_kind`) 返回一个 frozen `Kind` (`domain/resource.py`)，组装入口直接
+把它填入每个 app 的 `app.state.kinds` 字典 (`kind_name → Kind`)：
+`app_mcp_composition.py` 设置 `"mcp_server"`，`agent_skill_wiring.py` 设置
+`"agent"` 与 `"skill"`，`knowledge_wiring.py` 设置 `"knowledge"`，
+`channel_wiring.py` 设置 `"channel"`，`provider_wiring.py` 设置 `"provider"`，
+`memory_wiring.py` 设置 `"memory"`。`ResourceService` 读取该字典做与 kind 无关
+的分发。一个 kind 贡献的 surface 层制品 (HTTP 路由、Typer 组) 由这些 wiring
+模块自己注册；没有承载它们的载体对象，`domain/` 里也没有任何东西知道它们存在。
 
 FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块级全局
 单例的 `set_*` / `get_*` 函数对——组装入口在启动时对每个 `set_*` 调用一
@@ -167,8 +215,8 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 | Web UI                         | daemon                  | 构建好的前端，由 daemon 以静态文件形式在它自己的 loopback origin 上提供 —— 与 API 同源。daemon 把自己的实时 API token 注入到它提供的 `index.html` 中（`window.__COFFER_TOKEN__`，覆盖每条 SPA 路由，`no-store`），因此它提供的任何页面都已鉴权且不持久化任何东西；`coffer open` 只负责解析 daemon 当前的端口并在那里打开浏览器。随页面下发的 token 正是 loopback `Host` 校验成为强制项的原因（spec mcp-gateway FR-024 / FR-025 / FR-027，[由 daemon 把 token 放进它提供的页面里](../../docs/decisions/daemon-serves-the-token-in-the-page.zh.md)）。 |
 | 桌面外壳                        | `desktop/`（Tauri 2、Rust） | 同一份 `frontend/dist`，作为**本地 asset** 承载在一个带 Dock 图标和常驻托盘的原生窗口里 —— 所以 daemon 应答之前 UI 就已渲染，端口也永远不会出现在地址栏。因为没有人「供出」那份文档，FR-025 的注入够不到它：外壳在首次渲染前通过一条 IPC 命令把同样那两个全局变量交给页面，使它成为第二个凭据**供给者**而不是第二条代码路径。它还负责启动时的 detect-or-spawn（`daemon.json` 指出的活 daemon → 包内 → `~/.coffer/bin/` → `PATH`，存活探测在先，于是它接管而不是抢占）、一个托盘与离线横幅都能触达的限流重启、以及版本偏斜检查。除此之外它刻意什么都不管 —— 文件动作留在 daemon 的 HTTP 路由上，二进制部署留在 FR-026（spec mcp-gateway FR-029 – FR-032，[桌面壳回归](../../docs/decisions/desktop-shell-over-a-shared-frontend.zh.md)）。 |
 | MCP protocol                   | daemon                  | `/mcp` HTTP/SSE 端点，承载 MCP JSON-RPC。                                                                              |
-| CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。                                                                                       |
-| Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起。                                                      |
+| CLI (`coffer …`)               | 短生命周期子进程        | 通过 loopback HTTP 调用 daemon。每条命令都把 daemon 报告的 `version` 与自己的构建版本比对，偏斜时在 stderr 打印一行警告并指出 daemon 的 `executable`——只检测，从不拒绝（spec mcp-gateway FR-026，[Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.zh.md)）。 |
+| Stdio shim (`coffer-mcp-shim`) | 每个 MCP 客户端会话一份 | `stdin/stdout ↔ daemon HTTP/SSE` 转发器；检测 daemon，否则拉起，其状态探测带同样的版本偏斜警告。                       |
 | Callback listener              | daemon 拉起的子进程     | 只服务带签名的 channel webhook (`POST /seatalk/{channel}`)；loopback 端口，公网侧由一条隧道承接。仅为使用 **webhook** 投递的 SeaTalk channel 运行 (spec channels FR-071)。 |
 | 托管隧道 (`cloudflared`)       | daemon 拉起的子进程     | 每个记录了 Cloudflare connector token 的 webhook SeaTalk channel 一个；终结该 channel 的公网回调 URL，属主无需自己跑隧道。 |
 | SeaTalk websocket 连接         | daemon 内的线程         | 每个使用 **websocket** 投递的 SeaTalk channel 一条出网连接 —— 没有监听 socket，没有隧道，什么都不暴露；事件落在监听器转发去的同一道摄入接缝上 (spec channels FR-071/FR-072)。 |
@@ -178,6 +226,10 @@ FastAPI 依赖提供者 (`surfaces/http/dependencies.py`) 是一组基于模块�
 - **`coffer-daemon`** — 长生命周期的 FastAPI 服务，监听
   `127.0.0.1:<port>` —— 端口取用户在 `~/.coffer/daemon-config.json` 里固定的那个，
   未固定则取 8000–8009 中第一个空闲端口。持有全部状态；唯一的 SQLite 写入者。
+  `GET /api/v1/daemon/status` 报告它的 `version` 与 `executable`；冻结构建启动时把
+  同目录二进制部署进 `~/.coffer/bin/<version>/`，再把公开的 `~/.coffer/bin/<name>`
+  符号链接原子地切到该目录，并保留上一个版本的目录以便回滚（spec mcp-gateway
+  FR-026，[PyInstaller Distribution](../../docs/decisions/distribution-pyinstaller.zh.md)）。
 - **Stdio shim** — 短生命周期；其生命周期绑定到单个 MCP 客户端进程。
 - **Callback listener** — daemon 拉起的子进程，只在
   `127.0.0.1:<callback-port>` 上服务带签名的 channel 回调路径；在任何使用
@@ -204,7 +256,9 @@ shim 与监听器通过 `~/.coffer/daemon.json` 发现 daemon (PID + 端口 + to
   kind 都把各自的 ORM 模型挂到同一份 metadata 上)。迁移在 daemon 启动时执行
   (`upgrade head`)；若数据库当前 revision 不在运行版本的迁移树里 (由更新/分叉
   的版本创建)，启动会以 `DB_SCHEMA_TOO_NEW` 明确报错并快速失败，而非抛出晦涩的
-  Alembic 错误。
+  Alembic 错误。在 `upgrade head` 改动磁盘上的数据库之前，daemon 先把它（连同
+  `-wal`/`-shm` 伴生文件）复制为 `coffer.db.pre-<revision>`，只保留最新的三份
+  （`surfaces/http/migrations_runner.py`，spec mcp-gateway FR-026）。
 - JSON 字段以 `TEXT` 存储，在 application 层边界由 Pydantic 校验。
 - **知识层完全不拥有任何表。** 一个 collection 就是与 kind 无关的 `resources`
   表里的一行，和其它 Resource 一样，它的内容是文件。带索引的那一版用过的十一

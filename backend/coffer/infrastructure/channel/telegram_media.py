@@ -229,11 +229,24 @@ async def download_attachments(
         for label in _oversized(message)
     ]
     for file_id, mime, filename in media_specs(message):
+        # The file endpoint's URL carries the bot token, so this path never logs
+        # a traceback: an httpx error's message quotes the request URL, and a
+        # traceback would carry it into the daemon log. ``_download_file``
+        # already masks the platform's answer into a ChannelSendFailed whose
+        # text names only the method and status; anything else is reported by
+        # class alone.
         try:
-            data = await _download_file(client, call, file_base, file_id)
-        except Exception:
+            data = await _download_file(client, call, file_base, file_id, name)
+        except ChannelSendFailed as e:
             _logger.warning(
-                "telegram.media.download_failed", extra={"channel": name}, exc_info=True
+                "telegram.media.download_failed", extra={"channel": name, "detail": str(e)}
+            )
+            notes.append(f"[attachment '{filename}' could not be downloaded]")
+            continue
+        except Exception as e:
+            _logger.warning(
+                "telegram.media.download_failed",
+                extra={"channel": name, "detail": type(e).__name__},
             )
             notes.append(f"[attachment '{filename}' could not be downloaded]")
             continue
@@ -253,14 +266,31 @@ async def _download_file(
     call: Callable[..., Awaitable[Any]],
     file_base: str,
     file_id: str,
+    name: str,
 ) -> bytes | None:
-    """``getFile`` → download the bytes from the file endpoint."""
+    """``getFile`` → download the bytes from the file endpoint.
+
+    Every failure surfaces as ``ChannelSendFailed`` with the same masking as
+    ``telegram_transport.call``: the file URL embeds the bot token, and both an
+    httpx transport error and ``raise_for_status`` would quote that URL in
+    their message. A non-2xx answer is the platform's decision (``api_rejected``)
+    and names the status alone.
+    """
     info = await call("getFile", file_id=file_id)
     file_path = info.get("file_path") if isinstance(info, dict) else None
     if not file_path:
         return None
-    response = await client.get(f"{file_base}/{file_path}")
-    response.raise_for_status()
+    try:
+        response = await client.get(f"{file_base}/{file_path}")
+    except (httpx.HTTPError, httpx.InvalidURL) as e:
+        raise ChannelSendFailed(name, type(e).__name__) from e
+    if not response.is_success:
+        raise ChannelSendFailed(
+            name,
+            f"getFile download: {response.status_code}",
+            api_rejected=True,
+            status=response.status_code,
+        )
     return response.content
 
 

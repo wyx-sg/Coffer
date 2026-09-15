@@ -1,64 +1,31 @@
 // frontend/src/lib/api/agents-workspace.ts — wire types for the agent workspace
 // surfaces (MCP entries, plugins, unmanaged skills). Split out of agents.ts for
 // the file-size budget; re-exported there so existing import paths keep working.
+//
+// MCP entries and plugins are the agent-registry contract's generated schemas
+// under the names the hooks already import. Unmanaged skills stay hand-written:
+// they belong to the skill-manager contract, which does not generate (it
+// `$ref`s a schema it never defines — see `scripts/codegen.mjs`).
+import type { components } from "@/lib/api/generated/agent-registry";
 
-export interface McpEntryOut {
-  name: string;
-  source: string;
-  transport: "stdio" | "http";
-  command: string | null;
-  args: string[];
-  env_keys: string[];
-  secret_keys: string[];
-  url: string | null;
-  header_keys: string[];
-  enabled: boolean | null;
-  is_coffer: boolean;
-  matches_resource: string | null;
-}
+type Schemas = components["schemas"];
 
-export interface McpEntriesResponse {
-  items: McpEntryOut[];
-  parse_errors: { source: string; path: string; error: string }[];
-}
+export type McpEntryOut = Schemas["McpEntry"];
 
-export interface AdoptMcpEntryBody {
-  source?: string;
-  new_name?: string;
-  secrets?: Record<string, string>;
-}
+export type McpEntriesResponse = Schemas["McpEntriesOut"];
 
-export interface PluginOut {
-  id: string;
-  name: string;
-  marketplace: string;
-  enabled: boolean;
-  cache_present: boolean;
-  // Best-effort detail read from the plugin's install dir (Claude only today;
-  // null / empty otherwise).
-  version?: string | null;
-  description?: string | null;
-  author?: string | null;
-  homepage?: string | null;
-  skills?: string[];
-  commands?: string[];
-  mcp_servers?: string[];
-}
+export type AdoptMcpEntryBody = Schemas["McpEntryAdopt"];
 
-export interface MarketplaceOut {
-  name: string;
-  source_type: string | null;
-  source: string | null;
-}
+/** `version` … `mcp_servers`: best-effort detail read from the plugin's
+ * install dir (Claude only today; null / empty otherwise). */
+export type PluginOut = Schemas["Plugin"];
 
-export interface PluginsResponse {
-  items: PluginOut[];
-  marketplaces: MarketplaceOut[];
-  parse_errors: unknown[];
-  // Whether in-app uninstall is available for this agent now (capability +, for
-  // CLI-strategy agents like Claude, the agent's CLI being on PATH).
-  can_uninstall?: boolean;
-}
+export type MarketplaceOut = Schemas["Marketplace"];
+
+/** `can_uninstall`: whether in-app uninstall is available for this agent now
+ * (capability +, for CLI-strategy agents like Claude, the agent's CLI being on
+ * PATH). */
+export type PluginsResponse = Schemas["PluginsOut"];
 
 export interface UnmanagedSkillOut {
   name: string;

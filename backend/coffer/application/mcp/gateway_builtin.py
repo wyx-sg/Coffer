@@ -145,7 +145,12 @@ async def _log(
 #: input-schema property that declares the opt-in. Kept a fixed list rather
 #: than "everything the session knows" so a tool cannot acquire an injected
 #: argument by accident.
-SESSION_CONTEXT_PROPERTIES = ("cwd", "agent")
+SESSION_CONTEXT_PROPERTIES = ("cwd",)
+
+#: The argument that carries the session's agent identity into every built-in
+#: call. It is not part of any tool's public schema: the value is the
+#: gateway's to set, and a client that names one is asking to be someone else.
+AGENT_ARGUMENT = "agent"
 
 
 def inject_session_context(
@@ -158,31 +163,34 @@ def inject_session_context(
 ) -> dict[str, Any]:
     """Thread what the session knows about its caller into a built-in call.
 
-    Generic: a tool opts in by declaring a ``cwd`` or an ``agent`` property in
-    its input schema. The gateway never special-cases a kind (Contract 5/6) —
-    it only matches property names, so a new kind gets this for free and this
-    module stays free of any kind's vocabulary.
+    Two arguments, two rules. ``agent`` is the caller's identity and the basis
+    of per-agent scope (spec mcp-gateway FR-020/FR-021), so it is ALWAYS the
+    session's: whatever the client sent under that name is dropped, the
+    handshake's identity is written in its place, and when the session never
+    reported one the argument is absent — the tool then treats the caller as
+    unidentified rather than as whoever it claimed to be. ``cwd`` is context a
+    tool opts into by declaring the property in its input schema; a
+    client-supplied value is respected and a value the session never learned
+    is NOT invented, because the daemon's own cwd would scope an agent's work
+    to whatever project the daemon happens to run in.
 
-    A client-supplied value is left untouched, and a value the session never
-    learned is NOT invented. That silence matters in both directions: the
-    daemon's own cwd would scope an agent's work to whatever project the daemon
-    happens to run in, and a guessed agent identity would hand a caller the
-    collections of an agent it is not."""
+    Generic: the gateway never special-cases a kind (Contract 5/6) — it only
+    matches property names, so a new kind gets this for free and this module
+    stays free of any kind's vocabulary."""
     tool = builtin.get(prefixed_name)
     if tool is None:
         return params
-    props = tool.input_schema.get("properties", {})
-    if not isinstance(props, dict):
-        return params
-    session_values = {"cwd": session_cwd, "agent": session_agent}
-    declared = [p for p in SESSION_CONTEXT_PROPERTIES if p in props]
-    if not declared:
-        return params
     args = dict(params.get("arguments") or {})
-    for prop in declared:
-        value = session_values[prop]
-        if value and not args.get(prop):
-            args[prop] = value
+    args.pop(AGENT_ARGUMENT, None)
+    if session_agent:
+        args[AGENT_ARGUMENT] = session_agent
+    props = tool.input_schema.get("properties", {})
+    if isinstance(props, dict):
+        session_values = {"cwd": session_cwd}
+        for prop in SESSION_CONTEXT_PROPERTIES:
+            value = session_values[prop]
+            if prop in props and value and not args.get(prop):
+                args[prop] = value
     return {**params, "arguments": args}
 
 

@@ -25,10 +25,10 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CredentialInUse
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
-    get_credential_store,
     get_resource_service,
 )
 from coffer.surfaces.http.errors import error_response
@@ -82,7 +82,9 @@ async def secret_exists(
     so no audit event is recorded and a corrupt (undecryptable) row can't
     500 the probe; it still reports present.
     """
-    return CredentialExistsOut(present=store.exists(ref))
+    # to_thread: a store read opens its own SQLite connection and can wait on
+    # the write lock; on the loop that stalls every other request meanwhile.
+    return CredentialExistsOut(present=await asyncio.to_thread(store.exists, ref))
 
 
 @router.get("/{ref:path}", response_model=CredentialGetOut)
@@ -97,7 +99,7 @@ async def get_secret(
     Reading a value out is audited (ref only — the value never reaches the
     audit row), so explicit secret reads leave a trail. 404 when absent.
     """
-    value = store.get(ref)
+    value = await asyncio.to_thread(store.get, ref)
     if value is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     await audit.record(

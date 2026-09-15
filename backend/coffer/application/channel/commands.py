@@ -137,15 +137,19 @@ class ChannelCommands:
                 self, binding, peer, text, session, send, chat_kind=chat_kind, thread_id=thread_id
             )
         elif command == "/status":
-            running = session.drain_task is not None and not session.drain_task.done()
+            running = session.running_conversation_id is not None
             row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
-            conv = (row.active_conversation_id if row is not None else None) or "none yet"
+            bound = row.active_conversation_id if row is not None else None
+            conv = bound or "none yet"
             agent = effective_agent(binding, row.preferred_agent if row is not None else None)
+            # The queue is the conversation's own (FR-050) — the same one the
+            # web's pending chips show.
+            queued = len(self._turns.pending(bound)) if bound is not None else 0
             await send(
                 binding,
                 peer.chat_id,
                 f"Conversation: {conv}\nAgent: {agent}\n"
-                f"Turn running: {'yes' if running else 'no'}\nQueued: {len(session.queue)}",
+                f"Turn running: {'yes' if running else 'no'}\nQueued: {queued}",
                 chat_kind=chat_kind,
                 thread_id=thread_id,
             )

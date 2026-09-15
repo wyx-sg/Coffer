@@ -9,6 +9,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 
 import { listTranscripts, type TranscriptListParams } from "@/lib/api/agentTranscripts";
+import { agentTranscriptsKey } from "@/lib/api/queryKeys";
 
 /** Default page size for the transcript history list. */
 export const TRANSCRIPTS_PAGE_SIZE = 10;
@@ -17,22 +18,12 @@ export const TRANSCRIPTS_PAGE_SIZE = 10;
 export type TranscriptFilters = Omit<TranscriptListParams, "limit" | "offset">;
 
 // ---------------------------------------------------------------------------
-// Query key builder — hierarchical under ["agents", name] so a name-level
-// invalidation sweeps conversations too. Export so components can invalidate.
-// ---------------------------------------------------------------------------
-
-export const transcriptsKey = (name: string, params?: TranscriptListParams) =>
-  params
-    ? (["agents", name, "conversations", params] as const)
-    : (["agents", name, "conversations"] as const);
-
-// ---------------------------------------------------------------------------
 // Query: list one page of transcript sessions for an agent
 // ---------------------------------------------------------------------------
 
 export function useAgentTranscripts(name: string, params: TranscriptListParams = {}) {
   return useQuery({
-    queryKey: transcriptsKey(name, params),
+    queryKey: agentTranscriptsKey(name, params),
     queryFn: () => listTranscripts(name, params),
     // Keep the current page on screen while a new page/search key loads — no
     // blank flash on each keystroke or page step.

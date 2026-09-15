@@ -8,7 +8,7 @@ import pytest
 
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.manifest import SCHEMA_VERSION, Manifest
-from coffer.domain.sync.models import AreaCount, ExportSummary, ImportSummary
+from coffer.domain.sync.models import AreaCount, ExportSummary
 
 
 def test_manifest_defaults_to_current_schema_version() -> None:
@@ -51,12 +51,10 @@ def test_manifest_tolerates_a_missing_creation_time() -> None:
     assert Manifest.from_dict({"schema_version": 1}).created_at is None
 
 
-def test_summaries_start_empty() -> None:
+def test_export_summary_starts_empty() -> None:
     exported = ExportSummary(path="/tmp/b")
     assert exported.areas == [] and exported.failures == []
     assert exported.credentials_included is False
-    imported = ImportSummary(path="/tmp/b")
-    assert imported.areas == [] and imported.failures == [] and imported.locked_refs == []
 
 
 def test_area_count_is_a_value_object() -> None:

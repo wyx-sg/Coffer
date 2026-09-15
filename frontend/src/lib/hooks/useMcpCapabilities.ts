@@ -3,12 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
 export function useMcpCapabilities(serverName: string, enabled: boolean = true) {
   return useQuery({
-    queryKey: ["mcp", "capabilities", serverName],
+    queryKey: mcpCapabilitiesKey(serverName),
     queryFn: async (): Promise<CapabilityListOut> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/resources/mcp_server/{name}/capabilities", {

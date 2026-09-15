@@ -16,8 +16,9 @@ Coffer 的前端是 daemon 托管的 Web UI（`frontend/`）：生产环境构�
 
 - **React 18 + TypeScript 5**（strict）、**Vite** 构建、**React Router v6**。
 - **TanStack Query v5** 管所有服务端状态。不引入 Redux / Zustand / MobX。
-- 有 OpenAPI 契约的接口用 **openapi-fetch + openapi-typescript** 生成类型化客户端；
-  其余用一个共享的手写 helper（§4）。
+- **openapi-typescript** 从每个 spec 的 OpenAPI 契约生成 wire 类型；
+  **openapi-fetch** 是 mcp-gateway 路径的类型化客户端，其余全部走唯一一个共享的
+  手写 `call<T>()`（§4）。
 - 设计系统用 **shadcn/ui + Radix + Tailwind**（§6）。
 - 表单用 **react-hook-form + zod**，文案用 **i18next**，图标用 **lucide-react**。
 
@@ -29,18 +30,25 @@ Coffer 的前端是 daemon 托管的 Web UI（`frontend/`）：生产环境构�
 
 ```
 src/pages/XPage.tsx              — 列表/索引页；详情页用 XDetailPage.tsx
-src/components/x/                 — 功能组件（文件名 PascalCase）
+src/components/x/                 — 功能组件、对话框、表格（文件名 PascalCase）
 src/lib/hooks/useX.ts            — X 的所有 query + mutation（见 §3）
 src/lib/api/x.ts                 — /api/v1/x 的 wire 类型 + 请求函数
+src/lib/api/queryKeys.ts         — 全部 query key 构造函数（见 §3）
+src/lib/x/                       — 功能自有的纯 helper（解析器、过滤器）
 src/i18n/locales/{en,zh}.json    — 挂在顶层 "x" 键下
 ```
 
 - **数据获取写在 hook 文件里，绝不内联进组件。** 页面/组件调 `useX()`，不直接调
-  `useQuery`/`useMutation`。（`kinds/knowledge/useKnowledge.ts` 就是要照抄的
-  形态：该 kind 的每个 query 与 mutation 都在一个文件里，key 构造函数也从这里导出。）
-- **`src/kinds/<name>/` 只用于 kind 注册表的 UI 模块**（资源框架自动渲染的
-  `KindUIModule`）。新的普通功能用上面的 `pages` + `components` + `hooks` + `api`
-  布局，不要新建 `kinds/<name>/` 模块。
+  `useQuery`/`useMutation`。（`lib/hooks/useKnowledge.ts` 就是要照抄的形态：
+  该功能的每个 query 与 mutation 都在一个文件里。）
+- **所有功能都用这套布局，资源 kind 也不例外。** 没有按 kind 的注册表，也没有
+  `src/kinds/`：MCP、knowledge、memory、channel 的 UI 都是普通的 `pages/` +
+  `components/<kind>/` + `lib/hooks/useX.ts` + `lib/api/x.ts` 组合，
+  `router.tsx` 直接路由到它们的页面。
+- 页面按路由做代码分割（`router.tsx` 里的 `lazyPage()`）：用户落地的列表页是
+  即时加载，每个详情页以及会拉进编辑器 / 高亮器 / markdown 管线的界面都在首次
+  访问时才加载。新的重页面走 `lazyPage()`；它拉进的第三方图在
+  `vite.config.ts` 的 `manualChunks` 里命名。
 - UI 基础组件放 `src/components/ui/`（shadcn）。跨功能 helper 放 `src/lib/`。
 
 ## 3. 状态管理
@@ -63,6 +71,7 @@ API token 刻意不在这张表里：它读自 `window.__COFFER_TOKEN__`，由�
 
 ### Query key
 
+所有 key 都由 `src/lib/api/queryKeys.ts` 构造——一个模块，每个 query 一个构造函数，
 层级数组，第一段 = 功能名词。详情/子资源在父 key 上扩展，这样前缀失效能命中整棵子树：
 
 ```ts
@@ -71,32 +80,43 @@ API token 刻意不在这张表里：它读自 `window.__COFFER_TOKEN__`，由�
 ["agents", name, "config-files"] // 该 agent 的子资源
 ```
 
+- **调用处不写字面量 key 数组。** `queryKeys.ts` 之外出现 `queryKey: ["…"]` 是
+  ESLint 报错（`eslint.config.js` 里的 `no-restricted-syntax`）；hook 导入构造函数。
 - **不要用扁平连字符 key**（`["knowledge-documents", path]`）——它们无法作为一组失效。
-- 从 hook 文件导出 key 构造函数（`conversationKey(id)`、`messagesKey(id)`），
-  不要在调用处内联字符串数组。
+  横跨两个功能的 key（`["settings", "credentials"]`）挂在拥有该页面的功能之下。
+- hook 文件可以为自己的测试再导出它用到的构造函数；新代码直接从 `queryKeys.ts` 导入。
 
 ## 4. API 层
 
-`src/lib/api/` 下每个请求模块都经 `src/lib/auth.ts`（`getCofferBaseUrl`、
+每个请求都从两个模块之一发出，两者都经 `src/lib/auth.ts`（`getCofferBaseUrl`、
 `getCofferToken`）解析 base URL + token，并发送 `X-Coffer-Token` +
-`X-Coffer-Actor: "ui"`。**actor 永远是 `"ui"`**。
+`X-Coffer-Actor: "ui"`。**actor 永远是 `"ui"`**。`src` 里其他地方不调 `fetch`——
+唯一例外是 chat 的 SSE 流（见下）。
 
-存在两种请求风格，按「该 spec 是否提供了 OpenAPI 契约」来选：
-
-- **生成客户端**（`getApiClient()`，基于 `src/lib/api/client.ts` + 代码生成的
-  `types.ts`）——当接口在 OpenAPI spec 里时优先用，路径/响应全类型安全。
-- 否则用**共享手写 helper**。**目标态：唯一一个共享 `call<T>()`**（拼 URL + 处理
-  204 + `{error:{code,message}}` → `ApiError`）。今天 `call<T>()` 在 `api/chat.ts`、
-  `agents.ts`、`models.ts`、`skills.ts` 里各复制一份——你动到其中一个时，把它提到共享的
-  `src/lib/api/call.ts`，让模块 import 它。不要再加第五份拷贝。
+- **每份契约都生成类型。** `npm run codegen`（`frontend/scripts/codegen.mjs`）对每个
+  `specs/*/contracts/api.openapi.yaml` 跑 openapi-typescript，输出到
+  `src/lib/api/generated/<spec>.ts`——今天覆盖七份里的六份；`skill-manager` 等它的契约
+  定义了自己引用的 `ErrorOut` schema 后再加入（§9.1）；
+  `src/lib/api/types.ts` 再导出 mcp-gateway 那份，所以 `components["schemas"][…]`
+  继续可用。`npm run lint` 先跑 `codegen:check`，改了契约不重新生成会挂 CI；
+  绝不手改 `generated/`（prettier 已忽略它，4 空格缩进）。
+- **生成客户端**（`getApiClient()`，基于 `src/lib/api/client.ts`）用于 mcp-gateway
+  路径——路径/响应全类型安全。
+- **唯一一个手写 helper**——`src/lib/api/call.ts` 里的 `call<T>(path, { method, body })`
+  （拼 URL、请求头、204 → `undefined`、`{error:{code,message,details}}` → `ApiError`、
+  `FormData` body）。其余每个 `src/lib/api/x.ts` 都是基于 `call` 的请求函数加它的
+  wire 类型；契约对得上的类型直接别名到生成结果
+  （`export type Provider = components["schemas"]["ProviderOut"]`），只有契约比后端
+  实际返回更窄的地方才保留手写——并注释说明原因。不要再加第二个 helper。
 
 所有错误收敛到 `ApiError(code, message)`（`src/lib/api/errors.ts`）。用
 `translateApiError(t, error)` 展示——它把 `errors.<CODE>` i18n key 映射出来，
 服务端 message 作兜底。绝不直接显示裸错误字符串。
 
 流式（chat SSE）是唯一在 TanStack Query 之外的路径：`src/lib/chat/streamClient.ts`
-里一个类型化的 async-generator。wire 事件解析留在那里；在 hook（`useChatTurn`）里
-累积成视图状态，不要写进组件。
+里一个类型化的 async-generator。wire 事件解析留在那里；在 hook（`useChatTurn` +
+`lib/hooks/chatTurnEvents.ts` 里的 reducer）里累积成视图状态，不要写进组件——
+已发送 prompt 的乐观回显也在其中，这样线程只有一个事实来源。
 
 ## 5. Mutation 与缓存失效
 
@@ -105,12 +125,13 @@ API token 刻意不在这张表里：它读自 `window.__COFFER_TOKEN__`，由�
 ```ts
 return useMutation({
   mutationFn: (vars) => xApi.update(vars),
-  onSuccess: () => void qc.invalidateQueries({ queryKey: ["x"] }),
+  onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.x.all() }),
   onError: (e) => toast.error(translateApiError(t, e)),
 });
 ```
 
-- **`onError` → toast 是默认**，不是可选。（现有若干 hook 漏了它——那是缺口，不是先例。）
+- **`onError` → toast 是默认**，不是可选。唯一可以不加的是组件自己内联渲染失败的
+  hook（表单的错误行）——省略时要注释说明。
 - **乐观 `setQueryData`** 只用在延迟对用户可见、且结构易于就地修改的场景（如重命名、
   切模型）。之后仍要失效，让服务端保持权威。
 - **删除**先移除详情 + 子 key（`removeQueries`）再失效列表，避免过期详情页重新拉到 404。
@@ -156,5 +177,11 @@ return useMutation({
 
 你在这些附近工作时，往目标态迁移；不要扩大债务：
 
-1. **唯一 `call<T>()`** 放 `src/lib/api/call.ts`；四个手写 API 模块 import 它，不再各持一份。
-2. **每个可见失败的 mutation 都加 `onError` toast`**。
+1. **`specs/skill-manager/contracts/api.openapi.yaml` 没定义 `ErrorOut`**，所以
+   codegen 跳过了它，`src/lib/api/skills.ts` 仍是手写类型。把 schema 补进契约、把该
+   spec 加进 `frontend/scripts/codegen.mjs`，再把类型换成别名。同理，其余契约对不上的
+   手写 wire 类型（列在每个仍保留手写类型的 `src/lib/api/x.ts` 文件头注释里）：
+   后端是对的就修契约，然后换成生成的别名。
+2. **`statusColors.ts` / `ToolCallCard`** 仍在用裸调色板类（§6）。
+3. **`codemirror` 第三方 chunk（约 590 kB）** 是一个文件；若某个只需一种语言模式的
+   页面成了落地页，就把语言模式拆出去。

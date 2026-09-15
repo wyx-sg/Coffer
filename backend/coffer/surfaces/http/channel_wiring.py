@@ -2,8 +2,9 @@
 
 Wires the kind, the peer repo, the inbound processor (against the chat
 platform's service handles), the adapter factory, the callback-listener
-controller, the SeaTalk WebSocket controller, and the reconciling runtime. Must
-run AFTER ``wire_chat``.
+controller, the SeaTalk WebSocket controller, and the reconciling runtime. Runs
+AFTER ``wire_chat`` and ``wire_knowledge_kind``, whose results it takes as
+parameters.
 """
 
 from __future__ import annotations
@@ -34,25 +35,23 @@ from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.tunnel_spawn import TunnelController
-from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
-from coffer.surfaces.http.dependencies import get_ingest_service, get_knowledge_service
-from coffer.surfaces.http.turn_dependencies import (
-    get_agent_model_catalogue,
-    get_agent_registry,
-    get_chat_service,
-    get_turn_orchestrator,
-)
+from coffer.surfaces.http.chat_wiring import ChatWiring
+from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.resource_service import ResourceService
 
 
 def _daemon_info() -> tuple[str, str]:
+    """Resolved at call time BY DESIGN: the token and port are published by the
+    lifespan after this kind is wired (daemon.json is read later), and the
+    listener only asks on its first tick."""
     token = get_active_token()
     if token is None:
         raise RuntimeError("daemon token not published yet")
@@ -60,7 +59,11 @@ def _daemon_info() -> tuple[str, str]:
 
 
 async def _ingest_websocket_event(name: str, envelope: dict[str, Any]) -> None:
-    """Hand a websocket-delivered event to the same ingest the webhook route uses."""
+    """Hand a websocket-delivered event to the same ingest the webhook route uses.
+
+    Resolved at call time BY DESIGN: ``ChannelService`` is built at the end of
+    ``wire_channel_kind``, after the runtime this feeds, and the self-reference
+    cannot be handed in before it exists."""
     await get_channel_service().ingest_event(name, envelope)
 
 
@@ -68,8 +71,10 @@ def wire_channel_kind(
     app: FastAPI,
     resource_svc: ResourceService,
     audit: AuditService,
-    sm: async_sessionmaker,  # type: ignore[type-arg]
-    credential_store: Any = None,
+    sm: async_sessionmaker[AsyncSession],
+    credential_store: EncryptedCredentialStore,
+    chat: ChatWiring,
+    knowledge: KnowledgeWiring,
 ) -> ChannelRuntime:
     peers = ChannelPeerRepo(sm)
     threads = ChannelThreadConversationRepo(sm)
@@ -78,29 +83,24 @@ def wire_channel_kind(
         peers=peers,
         threads=threads,
         pairing=pairing,
-        conversations=get_chat_service(),
-        turns=get_turn_orchestrator(),
+        conversations=chat.chat_service,
+        turns=chat.orchestrator,
         audit=audit,
-        agents=get_agent_registry(),
+        agents=chat.registry,
         # The /model card offers the same catalogue as everything else; the
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
-        model_suggestions=get_agent_model_catalogue(),
+        model_suggestions=chat.model_catalogue,
         # `/save` (spec knowledge FR-036): both already satisfy the channel
         # core's Protocol shape structurally (``CollectionCatalogPort`` /
         # ``IngestPort``), so the knowledge kind's own services go in
         # directly — the channel core never imports the knowledge kind itself
-        # (import-linter contract 5f). Wiring order matters here: this runs
-        # after ``wire_knowledge_kind`` (see ``app.py``), so both are already
-        # registered.
-        collections=get_knowledge_service(),
-        ingest=get_ingest_service(),
+        # (import-linter contract 5f).
+        collections=knowledge.service,
+        ingest=knowledge.ingest_service,
     )
 
-    # Production injects the EncryptedCredentialStore; None (tests) falls back
-    # to the OS keychain adapter, which resolves nothing unless seeded.
-    store = credential_store if credential_store is not None else KeyringAdapter()
-    resolver = CredentialResolver(store)
+    resolver = CredentialResolver(credential_store)
 
     async def materialize(refs: dict[str, str]) -> dict[str, str]:
         # The store read is blocking (CODE-034) — never call it on the event loop.
@@ -145,7 +145,7 @@ def wire_channel_kind(
         # Validate a channel's default_agent against the live agent registry at
         # create/edit, so an unknown agent (e.g. the retired "builtin") is
         # rejected up front instead of failing silently on the first turn.
-        agent_keys=lambda: get_agent_registry().agent_keys(),
+        agent_keys=chat.registry.agent_keys,
         # ...and against the agents this channel may drive (ADR per-agent-resource-scope), so
         # an edit cannot bind it to an agent its scope excludes.
         scope_of=channel_scope,

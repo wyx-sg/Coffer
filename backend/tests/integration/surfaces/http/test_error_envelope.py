@@ -142,7 +142,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
     )
     from coffer.surfaces.http import errors as err_handlers
     from coffer.surfaces.http.auth import set_active_token as _set_token
-    from coffer.surfaces.http.dependencies import set_mcp_session_factory
+    from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
     from coffer.surfaces.http.mcp.protocol_routes import (
         _ACTIVE_SESSIONS,
         _LAST_ACTIVITY,

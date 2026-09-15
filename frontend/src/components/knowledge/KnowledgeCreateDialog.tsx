@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
-import { useCreateCollection } from "@/kinds/knowledge/useKnowledge";
+import { useCreateCollection } from "@/lib/hooks/useKnowledge";
 
 interface Props {
   open: boolean;

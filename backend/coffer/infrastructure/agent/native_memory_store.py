@@ -11,8 +11,8 @@ from __future__ import annotations
 import pathlib
 
 from coffer.domain.agent.native_memory import ScannedStore
-from coffer.infrastructure.agent.claude_code_transcripts import cwd_from_transcripts
 from coffer.infrastructure.agent.codex_memory_store import codex_stores
+from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
 
 _INDEX_FILE = "MEMORY.md"
 

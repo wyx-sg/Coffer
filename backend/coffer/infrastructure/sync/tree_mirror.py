@@ -6,10 +6,10 @@ is safe"): the working tree is what git three-way-merges, so a clear-and-rewrite
 makes "this vault never absorbed it" indistinguishable from "this vault deleted
 it", which is the 2026-07-10 mutual-deletion incident.
 
-``_mirror_tree`` converges a destination tree on a *source tree* — live→bundle
-on export and bundle→live on import. ``_converge_files`` converges a
-destination directory on an *in-memory* set of documents, for the areas an
-export serializes rather than copies (``resources/``, ``state/``,
+``_mirror_tree`` converges a destination tree on a *source tree* — the live
+knowledge and skill directories into the working tree. ``_converge_files``
+converges a destination directory on an *in-memory* set of documents, for the
+areas an export serializes rather than copies (``resources/``, ``state/``,
 ``credentials/``). Same diff, same deletion discipline, one implementation of
 each half.
 
@@ -17,53 +17,85 @@ Both accept ``protected``: destination-relative paths that MUST survive even
 though the source does not produce them. Those are the retry set — documents
 this vault failed to absorb — and deleting one would publish a deletion the
 user never made.
+
+Both walk with :func:`_tree_files`, which sees only **regular files that are
+not inside a ``.git`` directory**. A symlink is skipped without being followed:
+what it points at is not vault content, and a link to a file outside the vault
+would otherwise be copied into the working tree and pushed. A nested ``.git``
+is skipped because those are another repository's internals — git will not
+track them, and a working tree that contained them would confuse the merge.
 """
 
 from __future__ import annotations
 
+import os
 import pathlib
-import shutil
 from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
 
+_GIT_DIR = ".git"
 
-def _tree_files(root: pathlib.Path) -> dict[pathlib.Path, pathlib.Path]:
-    """rel-path -> absolute path for every file under ``root``.
 
-    Everything counts, hidden entries included: a knowledge scope keeps its
-    ingested originals in ``.raw/`` and the revisions a tidy pass replaced in
-    ``.history/``, and both are source of truth the other machine wants."""
+def _tree_files(
+    root: pathlib.Path, skipped: list[str] | None = None
+) -> dict[pathlib.Path, pathlib.Path]:
+    """rel-path -> absolute path for every regular file under ``root``.
+
+    Hidden entries count: a knowledge scope keeps its ingested originals in
+    ``.raw/`` and the revisions a tidy pass replaced in ``.history/``, and both
+    are source of truth the other machine wants. Symlinks (to files or to
+    directories) and anything named ``.git`` are left out and, when ``skipped``
+    is given, their root-relative POSIX paths are appended to it so the caller
+    can say so once."""
     if not root.exists():
         return {}
     out: dict[pathlib.Path, pathlib.Path] = {}
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        out[path.relative_to(root)] = path
+    _walk(root, root, out, skipped)
     return out
+
+
+def _walk(
+    root: pathlib.Path,
+    directory: pathlib.Path,
+    out: dict[pathlib.Path, pathlib.Path],
+    skipped: list[str] | None,
+) -> None:
+    with os.scandir(directory) as entries:
+        listing = sorted(entries, key=lambda e: e.name)
+    for entry in listing:
+        path = pathlib.Path(entry.path)
+        rel = path.relative_to(root)
+        if entry.name == _GIT_DIR or entry.is_symlink():
+            if skipped is not None:
+                skipped.append(rel.as_posix())
+            continue
+        if entry.is_dir(follow_symlinks=False):
+            _walk(root, path, out, skipped)
+        elif entry.is_file(follow_symlinks=False):
+            out[rel] = path
 
 
 def _mirror_tree(
     src: pathlib.Path,
     dst: pathlib.Path,
     *,
-    delete_missing: bool = True,
     protected: AbstractSet[str] = frozenset(),
-) -> None:
+) -> list[str]:
     """Converge ``dst`` on ``src`` by copying only changed files and deleting
     only files gone from ``src`` — never a blanket rmtree.
 
-    Used in both directions: live→bundle on export (``delete_missing=True``,
-    so a bundle rewritten in place stops carrying what the vault deleted) and
-    bundle→live on import (``delete_missing=False``: a bundle is a snapshot of
-    one machine, never an assertion about what should exist here).
+    Runs live→bundle on every serialization, so a bundle rewritten in place
+    stops carrying what the vault deleted. ``protected`` holds POSIX paths
+    relative to ``dst`` that survive the deletion pass regardless: those are
+    the held paths, which this vault has not absorbed and therefore has not
+    deleted either.
 
-    ``protected`` holds POSIX paths relative to ``dst`` that survive the
-    deletion pass regardless: on export those are the held paths, which this
-    vault has not absorbed and therefore has not deleted either.
+    Returns the ``src``-relative paths it skipped — symlinks and ``.git``
+    entries — so the caller can report them.
     """
     dst.mkdir(parents=True, exist_ok=True)
-    src_files = _tree_files(src)
+    skipped: list[str] = []
+    src_files = _tree_files(src, skipped)
     dst_files = _tree_files(dst)
     for rel, src_path in src_files.items():
         target = dst_files.get(rel)
@@ -71,13 +103,12 @@ def _mirror_tree(
             continue
         out = dst / rel
         out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src_path, out)
-    if not delete_missing:
-        return
+        out.write_bytes(src_path.read_bytes())
     for rel in dst_files.keys() - src_files.keys():
         if rel.as_posix() in protected:
             continue
         (dst / rel).unlink(missing_ok=True)
+    return skipped
 
 
 def _converge_files(

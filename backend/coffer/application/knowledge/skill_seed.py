@@ -25,11 +25,6 @@ _ASSET_DIR = pathlib.Path(__file__).parent / "skill_assets" / SKILL_NAME
 logger = logging.getLogger(__name__)
 
 
-def asset_dir() -> pathlib.Path:
-    """Where the bundled skill folder lives."""
-    return _ASSET_DIR
-
-
 async def seed_knowledge_skill(skill_service: Any, *, actor: str = "system") -> bool:
     """Import (or refresh) the bundled knowledge skill. Never raises.
 

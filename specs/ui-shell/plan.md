@@ -77,14 +77,13 @@ frontend/src/
 ├── App.tsx                                # global providers (QueryClient, i18n) + RouterProvider
 ├── main.tsx                               # bootstrap entry
 ├── router.tsx                             # createBrowserRouter route table
-├── kinds.ts                               # composition root: registers each kind's UI module
 ├── i18n/
 │   ├── index.ts                           # i18next config
 │   └── locales/{en,zh}.json               # one flat catalogue per language
 ├── lib/
 │   ├── api/                               # typed API client + per-resource modules (resources, agents, skills, fs)
 │   ├── hooks/                             # TanStack Query hooks (useResources, useAudit, useAgents, …)
-│   ├── components/                        # kindRegistry.ts + shared ResourceListView
+│   ├── components/                        # shared lib components (the kind registry that lived here was retired 2026-09-14)
 │   ├── auth.ts                            # daemon-token loader (reads ~/.coffer/daemon.json via dev plugin)
 │   ├── preferences.ts                     # default page-size preference (General settings)
 │   └── queryClient.ts / statusColors.ts / timeRange.ts / utils.ts
@@ -97,7 +96,6 @@ frontend/src/
 │   └── skills/                            # skill-kind UI components (spec skill-manager)
 ├── kinds/
 │   └── mcp/
-│       ├── index.tsx                      # MCP_KIND_UI entry registered via kinds.ts
 │       ├── McpServersTable.tsx / McpServerDetailPage.tsx / McpServerDetailTabs.tsx
 │       └── AddMcpServerDialog.tsx / CapabilityList.tsx / InvocationsTable.tsx / …
 └── pages/
@@ -114,20 +112,28 @@ frontend/
 └── components.json                        # shadcn config
 ```
 
-### Extension point: the kind registry
+### Extension point: one layout per kind (registry retired 2026-09-14)
 
-`frontend/src/lib/components/kindRegistry.ts` exposes `registerKindUI`; each
-kind ships a self-contained UI module under `frontend/src/kinds/<kind>/` whose
-`index.tsx` exports the kind's display label, sidebar icon, and list/detail
-components. The composition root `frontend/src/kinds.ts` imports each module
-and registers it; the kind-agnostic `ResourcesPage` dispatches by looking up
-the registry — no per-kind branches in shared code. A new kind adds its own
-module plus one import + `registerKindUI` call in `kinds.ts`; no other shared
-file changes.
+The plan originally shipped a per-kind UI registry: one registration call
+per kind, self-contained modules under `frontend/src/kinds/<kind>/`, a
+composition root that imported and registered each one, and a shared list
+view the kind-agnostic `ResourcesPage` dispatched through. It was retired on
+2026-09-14: only three kinds ever registered, the detail routes bypassed the
+registry and dispatched on `kind` directly, and the shared list view had no
+callers. What replaced it is a convention, not a mechanism — every kind uses
+the same layout: list pages in `pages/`, kind components, dialogs and detail
+helpers in `components/<kind>/`, hooks in `lib/hooks/`, API modules and
+generated types in `lib/api/` (codegen from every spec's contract into
+`lib/api/generated/*.ts`), query keys in `lib/api/queryKeys.ts`, and routes
+added lazily via `lazyPage()` in `router.tsx`. `pages/ResourceDetailPage.tsx`
+dispatches on `kind` directly. A new kind adds its own files in those places
+and nothing else; `agents/frontend.md` is the canonical statement of the
+layout.
 
-This is the UI mirror of the backend's `KindModule` composition pattern
-established in [Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md)
-and [Layer-First Code Layout](../../docs/decisions/code-layout-layer-first.md).
+The backend went the same way the same day: its composition pattern is now a
+`make_<kind>_kind()` factory plus one explicit wiring module per kind
+([Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md),
+[Layer-First Code Layout](../../docs/decisions/code-layout-layer-first.md)).
 
 ### Visual language
 
@@ -215,7 +221,7 @@ smoke, language QA pass.
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tailwind + shadcn over plain CSS                            | Visual language consistency is the headline goal of this spec; ad-hoc CSS is exactly the "feels like a scaffold" state US2 fights.               | Plain CSS would re-litigate spacing / typography / colour for every component; shadcn gives us audited Radix primitives without a heavyweight UI framework.                  |
 | TanStack Query over raw fetch                               | The audit / invocation / capability tables all need stale-while-revalidate and refetch-on-toggle; rolling our own would re-implement that badly. | Plain fetch would force every page to hand-roll loading / error / refetch state.                                                                                             |
-| Per-kind registry (`kindRegistry.ts`)                       | Future kinds plug in without touching shared code; mirrors the backend's `KindModule` pattern.                                                   | Per-kind `if (kind === "mcp_server") { … }` branches inside `ResourcesPage` would grow linearly with kind count and re-litigate the kind-agnostic invariant on every screen. |
+| Per-kind registry — retired 2026-09-14                      | Retired: only three kinds ever registered, the detail routes bypassed the registry and dispatched on `kind` directly, and the shared list view had no callers. | Chosen instead: one layout per kind (`pages/`, `components/<kind>/`, `lib/hooks/`, `lib/api/`) with `ResourceDetailPage` dispatching on `kind` directly — the branch count is the kind count, and nothing shared has to be registered with. |
 | Register-first-then-credential ordering in AddMcpServerDialog | Avoids orphan credential entries when registration fails (chosen at impl time; see spec scenario).                                               | Credential-first ordering looked symmetric but leaves dead credential entries on registration failure — orphan cleanup is harder than re-trying registration.                |
 
 ## Cross-Reference Index

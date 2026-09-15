@@ -23,11 +23,8 @@ from fastapi import APIRouter, Depends
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import (
-    get_actor,
-    get_audit_service,
-    get_master_key_manager,
-)
+from coffer.surfaces.http.credential_composition import get_master_key_manager
+from coffer.surfaces.http.dependencies import get_actor, get_audit_service
 from coffer.surfaces.http.schemas import CredentialSettingsIn, CredentialSettingsOut
 
 router = APIRouter(

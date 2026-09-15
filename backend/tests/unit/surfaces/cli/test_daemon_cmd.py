@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 import typer
 
+from coffer.infrastructure.daemon import spawn as _spawn
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli import daemon_cmd
 
@@ -68,7 +69,7 @@ def test_daemon_start_writes_pid_and_echoes(
         daemon_json.write_text(json.dumps({"port": 9999, "token": "t", "pid": 4242, "version": 1}))
         return _FakeProc()
 
-    monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(_spawn.subprocess, "Popen", _fake_popen)
 
     daemon_cmd.start()
     out = capsys.readouterr().out
@@ -88,7 +89,7 @@ def test_daemon_start_short_circuits_when_a_live_daemon_answers(
     def _bad_popen(*args: Any, **kwargs: Any) -> None:
         raise AssertionError("Popen must not be invoked when daemon already running")
 
-    monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _bad_popen)
+    monkeypatch.setattr(_spawn.subprocess, "Popen", _bad_popen)
 
     with pytest.raises(typer.Exit) as excinfo:
         daemon_cmd.start()
@@ -124,7 +125,7 @@ def test_daemon_start_respawns_over_stale_daemon_json(
         daemon_json.write_text(json.dumps({"port": 9998, "token": "t2", "pid": 7777, "version": 1}))
         return _FakeProc()
 
-    monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(_spawn.subprocess, "Popen", _fake_popen)
 
     daemon_cmd.start()
     assert spawned["popen"] is True, "stale daemon.json must trigger a respawn"
@@ -148,7 +149,7 @@ def test_daemon_start_fails_when_child_never_writes_daemon_json(
     def _fake_popen(cmd: list[str], **kwargs: Any) -> _FakeProc:
         return _FakeProc()
 
-    monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(_spawn.subprocess, "Popen", _fake_popen)
     # Short-circuit the wait loop.
     monkeypatch.setattr(daemon_cmd, "_wait_for_daemon_json", lambda path, timeout: False)
 

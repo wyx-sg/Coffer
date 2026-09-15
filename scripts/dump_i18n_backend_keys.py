@@ -7,7 +7,11 @@ test diffs against ``locales/{en,zh}.json``. Re-run this whenever a new
 ``CofferError`` subclass or ``AuditEventType`` value lands so the fixture — and
 therefore the locale-coverage guard — stays in sync:
 
-    ./.venv/bin/python scripts/dump_i18n_backend_keys.py
+    PYTHONPATH=backend ./.venv/bin/python scripts/dump_i18n_backend_keys.py
+
+``make lint`` runs it with ``--check``, which regenerates in memory and fails
+on any difference from the checked-in fixture, so a new code or event cannot
+land without its fixture entry (and therefore its en/zh translation).
 
 It is intentionally generated rather than hand-maintained: the source of truth
 is the Python enums, and a stale fixture would let untranslated codes ship
@@ -27,6 +31,7 @@ import importlib
 import inspect
 import json
 import pkgutil
+import sys
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -66,9 +71,36 @@ def build() -> dict[str, list[str]]:
     return {"errorCodes": _error_codes(), "auditEvents": _audit_events()}
 
 
+def _render(payload: dict[str, list[str]]) -> str:
+    return json.dumps(payload, indent=2, ensure_ascii=True) + "\n"
+
+
+def check() -> int:
+    """Exit 1 when the checked-in fixture differs from what the backend says now."""
+    expected = _render(build())
+    actual = _FIXTURE.read_text() if _FIXTURE.exists() else ""
+    if expected == actual:
+        print(f"{_FIXTURE.relative_to(_REPO_ROOT)} is up to date")
+        return 0
+    want = set(json.loads(expected)["errorCodes"]) | set(json.loads(expected)["auditEvents"])
+    have: set[str] = set()
+    if actual:
+        got = json.loads(actual)
+        have = set(got.get("errorCodes", [])) | set(got.get("auditEvents", []))
+    print(f"{_FIXTURE.relative_to(_REPO_ROOT)} is stale; regenerate it with:")
+    print("    PYTHONPATH=backend ./.venv/bin/python scripts/dump_i18n_backend_keys.py")
+    for key in sorted(want - have):
+        print(f"  + {key}")
+    for key in sorted(have - want):
+        print(f"  - {key}")
+    return 1
+
+
 def main() -> None:
+    if "--check" in sys.argv[1:]:
+        sys.exit(check())
     payload = build()
-    _FIXTURE.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n")
+    _FIXTURE.write_text(_render(payload))
     print(
         f"wrote {len(payload['errorCodes'])} error codes + "
         f"{len(payload['auditEvents'])} audit events to {_FIXTURE}"

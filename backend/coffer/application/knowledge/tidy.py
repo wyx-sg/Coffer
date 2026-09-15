@@ -29,7 +29,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable, Sequence
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
@@ -40,8 +40,12 @@ from coffer.application.knowledge.tidy_tools import (
     file_count,
 )
 from coffer.domain.audit import AuditEventType
-from coffer.domain.provider.config import ResolvedConnection
 from coffer.domain.resource import ResourceRef
+
+if TYPE_CHECKING:
+    # Annotation-only: the provider kind's vocabulary is named, never used at
+    # run time, so the cross-kind import stays out of the module graph.
+    from coffer.domain.provider.config import ResolvedConnection
 
 logger = logging.getLogger(__name__)
 

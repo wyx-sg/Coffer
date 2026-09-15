@@ -289,3 +289,16 @@ goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
   The concurrency test was corrected to drive a real bound-but-not-serving
   socket (and tie lock-release to *serving*) instead of treating
   "`daemon.json` exists" as liveness, which had masked the window.
+- **2026-09-14** — Two gaps between what this ADR said and what ran. (1) The
+  shim spawned the daemon with `stderr=DEVNULL`, so the daemon's own refusal
+  (a squatted fixed port, printed to stderr before `exit 2`) was discarded and
+  the shim could only report "did not come up within 10s"; every spawner —
+  CLI auto-spawn, `coffer daemon start`, shim — now goes through one
+  `spawn_detached_daemon` in `infrastructure/daemon/spawn.py` that appends
+  both streams to `~/.coffer/logs/daemon.log`, where "check daemon.log"
+  already points. (2) The version-skew check above was only ever done by
+  `coffer daemon status`; every CLI command (via `client_or_exit`) and the
+  shim (on its status probe) now compare the daemon's `version` with their own
+  build and print a one-line WARNING to stderr on mismatch — never refuse.
+  `/daemon/status` additionally reports the daemon's `executable` so the
+  warning can say which build answered.

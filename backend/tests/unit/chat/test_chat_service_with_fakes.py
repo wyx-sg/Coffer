@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 import pytest
 
 from coffer.application.chat.service import ChatService
+from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound, UnknownAgent
 from coffer.domain.chat.message import Role, TextBlock, ToolUseBlock
-from coffer.domain.errors import AgentConfigRejected, ConversationNotFound, UnknownAgent
 
 from .conftest import (
     FakeAgentProvider,

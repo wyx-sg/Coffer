@@ -51,7 +51,7 @@ from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_routes import router as daemon_router
 from coffer.surfaces.http.daemon_routes import set_port
-from coffer.surfaces.http.dependencies import set_mcp_session_factory
+from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_router
 from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
 from tests.fixtures.keyring import install_in_memory_keyring
@@ -410,3 +410,33 @@ async def test_ensure_daemon_returns_info_when_daemon_present(
     assert result.port == info.port
     # Daemon was already up — no spawn should have been attempted
     assert spawned == [], "_spawn_daemon must not be called when daemon is already reachable"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_daemon_reports_skew_from_a_live_status(
+    running_daemon: tuple, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Against a real daemon of THIS build there is no skew — and with the
+    shim's own version pinned to another build, the very same probe produces
+    the warning. (The fixture's daemon runs in this process, so the shim side
+    is pinned through ``caller_version`` rather than ``coffer.__version__``,
+    which would move both ends at once.)"""
+    import functools
+
+    from coffer.infrastructure.daemon.version_skew import skew_warning
+    from coffer.surfaces.shim import bootstrap as shim_main
+
+    home, _port, _token = running_daemon
+    monkeypatch.setenv("HOME", str(home))
+
+    info = await shim_main._wait_for_daemon(timeout=5.0)
+    assert info is not None
+    assert capsys.readouterr().err == ""
+
+    monkeypatch.setattr(
+        shim_main, "skew_warning", functools.partial(skew_warning, caller_version="0.0.1-shim")
+    )
+    info = await shim_main._wait_for_daemon(timeout=5.0)
+    assert info is not None
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "0.0.1-shim" in err

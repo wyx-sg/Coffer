@@ -13,7 +13,6 @@ import asyncio
 import contextlib
 import logging
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -22,7 +21,8 @@ from typing import Any
 import httpx
 
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.infrastructure.daemon.spawn import daemon_spawn_command
+from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
+from coffer.infrastructure.daemon.version_skew import skew_warning
 from coffer.surfaces.cli._client import discover
 
 _logger = logging.getLogger("coffer.shim")
@@ -96,6 +96,7 @@ async def _wait_for_daemon(timeout: float) -> DaemonInfo | None:
                 ) as c:
                     r = await c.get("/daemon/status")
                     if r.status_code == 200:
+                        _warn_if_version_skew(r)
                         return info
             except Exception:
                 pass
@@ -103,27 +104,35 @@ async def _wait_for_daemon(timeout: float) -> DaemonInfo | None:
     return None
 
 
+def _warn_if_version_skew(response: httpx.Response) -> None:
+    """One line on stderr (and in the shim log) when the daemon that answered
+    is a different build than this shim — a stale daemon from a previous
+    install that detect-or-spawn quietly reused. Detection only: the MCP
+    client keeps its session; the user restarts the daemon when they choose.
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        return
+    message = skew_warning(body if isinstance(body, dict) else None, caller="coffer-mcp-shim")
+    if message is not None:
+        _logger.warning("shim.daemon_version_skew %s", message)
+        sys.stderr.write(message + "\n")
+
+
 def _spawn_daemon() -> None:
     """Best-effort detached spawn of the coffer-daemon binary.
 
-    Uses ``daemon_spawn_command()`` (ADR daemon-detect-or-spawn) so the correct binary is chosen
-    whether the shim is running from source (dev/pip) or as a frozen
-    PyInstaller bundle co-located with ``coffer-daemon``.
+    The shared :func:`spawn_detached_daemon` (ADR daemon-detect-or-spawn)
+    picks the right binary whether the shim runs from source or as a frozen
+    bundle beside ``coffer-daemon``, and sends the daemon's stdio to
+    ``daemon.log`` — so a daemon that refuses to start (its fixed port is
+    taken) leaves its reason where "check daemon.log" points, instead of the
+    ``DEVNULL`` this used to pass that reduced every refusal to "did not come
+    up within 10s".
     """
-    cmd = daemon_spawn_command()
     try:
-        kwargs: dict[str, object] = {
-            "stdout": subprocess.DEVNULL,
-            "stderr": subprocess.DEVNULL,
-            "stdin": subprocess.DEVNULL,
-        }
-        if sys.platform == "win32":
-            kwargs["creationflags"] = (
-                subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
-            )
-        else:
-            kwargs["start_new_session"] = True
-        subprocess.Popen(cmd, **kwargs)  # type: ignore[call-overload]
+        spawn_detached_daemon()
     except OSError as e:
         _logger.exception("shim.spawn_daemon_failed")
         sys.stderr.write(f"coffer-mcp-shim: failed to spawn daemon: {e}\n")
@@ -138,7 +147,8 @@ async def _ensure_daemon() -> DaemonInfo:
     info = await _wait_for_daemon(timeout=_DAEMON_BOOT_TIMEOUT)
     if info is None:
         sys.stderr.write(
-            f"coffer-mcp-shim: daemon did not come up within {_DAEMON_BOOT_TIMEOUT}s\n"
+            f"coffer-mcp-shim: daemon did not come up within {_DAEMON_BOOT_TIMEOUT}s; "
+            "check ~/.coffer/logs/daemon.log\n"
         )
         sys.exit(3)
     return info

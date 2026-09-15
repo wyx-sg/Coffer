@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -33,17 +33,18 @@ from coffer.application.sync.ports import (
 )
 from coffer.application.sync.service_history import HistoryMixin
 from coffer.application.sync.service_machines import MachinesMixin
+from coffer.application.sync.service_remote import RemoteMixin
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
 from coffer.domain.sync.backup import BackupRemote
 from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus, PendingConfirmation
-from coffer.domain.sync.errors import BackupRemoteInvalid, MasterKeyFileInvalid
+from coffer.domain.sync.errors import MasterKeyFileInvalid
 
 #: Materialised for the length of one push and never written anywhere.
 _TOKEN_KEY = "token"
 
 
-class ConvergeService(MachinesMixin, HistoryMixin):
+class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
     """Configure the remote, run a round, resolve a held one."""
 
     def __init__(
@@ -60,6 +61,8 @@ class ConvergeService(MachinesMixin, HistoryMixin):
         master_key: MasterKeyPort,
         audit: AuditService,
         lock: asyncio.Lock | None = None,
+        protected_roots: Sequence[Path] = (),
+        coffer_dir: Path | None = None,
     ) -> None:
         self._remotes = remotes
         self._state = state
@@ -75,6 +78,11 @@ class ConvergeService(MachinesMixin, HistoryMixin):
         self._audit = audit
         # Shared with the tidy worker, which is why it is injectable.
         self._lock = lock or asyncio.Lock()
+        # The live directories a working tree may not overlap: the mirrored
+        # roots and Coffer's own directory. Empty means "no check", which is
+        # only right for a test that pins every root under ``tmp_path``.
+        self._protected_roots = [Path(r).expanduser() for r in protected_roots]
+        self._coffer_dir = Path(coffer_dir).expanduser() if coffer_dir is not None else None
 
     @property
     def lock(self) -> asyncio.Lock:
@@ -200,49 +208,6 @@ class ConvergeService(MachinesMixin, HistoryMixin):
             AuditEventType.SYNC_ROLLED_BACK.value, actor="user", details={"to": target[:12]}
         )
         return run
-
-    # --- remote configuration -----------------------------------------------
-
-    async def get_remote(self) -> BackupRemote | None:
-        return await self._remotes.get()
-
-    async def set_remote(self, remote: BackupRemote) -> BackupRemote:
-        """Store the remote, having first proved it is reachable.
-
-        A remote that cannot be reached is rejected at the front door rather
-        than discovered by a worker tick an hour later: the user is here now,
-        with the URL and the credential in front of them, and that is the only
-        moment the fix is cheap.
-        """
-        mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
-        try:
-            await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
-            await mirror.fetch(token=await self._token(remote))
-        except CofferError as e:
-            raise BackupRemoteInvalid(_redact(str(e), None)) from e
-        await self._remotes.set(remote)
-        return remote
-
-    async def clear_remote(self) -> bool:
-        """Forget the remote. Idempotent, and it leaves the vault alone.
-
-        The pointer goes with it: a remote configured again later must run the
-        join detection rather than assume the old base still means anything.
-        """
-        if await self._remotes.get() is None:
-            return False
-        await self._remotes.clear()
-        await self._state.set_pending(None)
-        # The pointer and the held paths go with it. Both describe a position
-        # in one remote's history; kept across a clear, they would let a later
-        # `adopt` skip the join detection entirely — the route-around that
-        # detection exists to prevent.
-        await self._state.clear_pointer()
-        await self._state.clear_holds()
-        return True
-
-    async def last_run(self) -> ConvergeRun | None:
-        return await self._remotes.last_run()
 
     async def restore(self, *, at: str | None = None) -> ConvergeRun:
         """Bring the vault to an earlier point in the remote's history.

@@ -1,6 +1,7 @@
 // frontend/src/lib/hooks/useMcpServerStatus.ts
 import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
+import { mcpRunnerKey, mcpStatusKey } from "@/lib/api/queryKeys";
 
 export type McpServerStatus = "healthy" | "failing";
 
@@ -11,7 +12,7 @@ export type McpServerStatus = "healthy" | "failing";
  */
 export function useMcpServerStatus(serverName: string) {
   return useQuery({
-    queryKey: ["mcp", "status", serverName],
+    queryKey: mcpStatusKey(serverName),
     queryFn: async (): Promise<McpServerStatus | null> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/resources/mcp_server/{name}/status", {
@@ -29,7 +30,7 @@ export function useMcpServerStatus(serverName: string) {
  * software on the user's machine. */
 export function useMcpServerRunner(serverName: string) {
   return useQuery({
-    queryKey: ["mcp", "runner", serverName],
+    queryKey: mcpRunnerKey(serverName),
     queryFn: async () => {
       const client = getApiClient();
       const { data, error } = await client.GET("/resources/mcp_server/{name}/status", {

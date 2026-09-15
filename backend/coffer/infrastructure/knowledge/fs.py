@@ -67,27 +67,6 @@ def count_files(directory: pathlib.Path) -> int:
     return total
 
 
-def iter_files(collection: str) -> tuple[str, ...]:
-    """Every content file in ``collection``, as knowledge-root-relative paths.
-
-    The same walk ``count_files`` does, returning what it counted. Ranked
-    retrieval needs the names rather than the number, and it must be the *same*
-    walk: a file the catalogue skips — a `README.md`, anything under a hidden
-    directory — must be a file the index never holds either, or a search would
-    answer with something no other surface admits exists.
-    """
-    directory = paths.collection_dir(collection)
-    if not directory.is_dir():
-        return ()
-    found: list[str] = []
-    for root, dirnames, filenames in os.walk(directory):
-        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
-        for name in filenames:
-            if _is_content(name):
-                found.append(paths.relative_of(pathlib.Path(root) / name))
-    return tuple(sorted(found))
-
-
 def readme_description(collection: str) -> str:
     """A collection's one-line description: its README's first paragraph.
 
@@ -188,9 +167,28 @@ def read_file(relpath: str) -> KnowledgeFile:
 
 
 def _atomic_write(path: pathlib.Path, text: str) -> None:
+    """Write ``text`` to ``path`` through a sibling temp file and one rename.
+
+    The guard is re-run here, on the parent that exists by now, because this
+    is the last step before bytes land: ``resolve`` checked the path when the
+    caller named it, and nothing between then and now may have redirected the
+    directory out of the root. The temp file is opened ``O_NOFOLLOW`` and
+    ``O_EXCL`` so a planted symlink under its name cannot carry the bytes
+    elsewhere, and the final rename never follows a link (FR-006).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    paths.assert_inside_root(path, paths.relative_of(path))
     tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(text, encoding="utf-8")
+    if tmp.is_symlink() or tmp.exists():
+        tmp.unlink()
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(tmp, flags, 0o644)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     tmp.replace(path)
 
 

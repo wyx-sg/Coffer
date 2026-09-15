@@ -38,8 +38,8 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
-from coffer.surfaces.http.dependencies import set_provider_service
-from coffer.surfaces.http.wiring import _ActiveProviderModels
+from coffer.surfaces.http.chat_wiring import _ActiveProviderModels
+from coffer.surfaces.http.provider_dependencies import set_provider_service
 
 _NOW = dt.datetime(2026, 9, 11, tzinfo=dt.UTC)
 

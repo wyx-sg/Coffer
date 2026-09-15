@@ -11,14 +11,14 @@ import { MemoryRouter } from "react-router-dom";
 
 import { ChannelsPage } from "./ChannelsPage";
 import { ApiError } from "@/lib/api/errors";
-import type { ResourceOut } from "@/lib/components/kindRegistry";
+import type { ResourceOut } from "@/lib/api/resources";
 
 vi.mock("@/lib/hooks/useChannels", () => ({ useChannels: vi.fn() }));
-vi.mock("@/kinds/channel/AddChannelDialog", () => ({
+vi.mock("@/components/channel/AddChannelDialog", () => ({
   AddChannelDialog: ({ open }: { open: boolean }) =>
     open ? <div data-testid="add-dialog" /> : null,
 }));
-vi.mock("@/kinds/channel/ChannelsTable", () => ({
+vi.mock("@/components/channel/ChannelsTable", () => ({
   ChannelsTable: ({ items }: { items: ResourceOut[] }) => (
     <div data-testid="channels-table">
       {items.map((r) => (

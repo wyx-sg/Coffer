@@ -157,4 +157,11 @@ make verify          # lint + 类型检查 + 单元 + 集成 + 契约 + acceptan
 但**不是**必要的安装步骤。
 :::
 
+### 前置条件
+
+- **Python ≥ 3.12**，从源码安装时需要（发布的二进制自带运行时）。
+- **[ripgrep](https://github.com/BurntSushi/ripgrep)**（`rg`）—— 推荐，各种安装路径都适用。
+  Coffer 的知识检索（`coffer__grep`、`coffer__search`）在 `PATH` 上有 `rg` 时会用它；没有时
+  Coffer 退回到较慢的内置检索，结果相同，并在守护进程日志里提示一次。
+
 完整的从源码安装流程请参阅[快速上手](/zh/guide/getting-started)。

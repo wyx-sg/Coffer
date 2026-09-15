@@ -19,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { agentsApi, type PluginOut } from "@/lib/api/agents";
+import { agentPluginsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 export function AgentPluginsBulkActions({
@@ -34,8 +35,8 @@ export function AgentPluginsBulkActions({
 }) {
   const { t } = useTranslation();
   const [confirmUninstall, setConfirmUninstall] = useState(false);
-  const toggle = useBulkMutate({ invalidate: [["agents", agentName, "plugins"]] });
-  const uninstall = useBulkMutate({ invalidate: [["agents", agentName, "plugins"]] });
+  const toggle = useBulkMutate({ invalidate: [agentPluginsKey(agentName)] });
+  const uninstall = useBulkMutate({ invalidate: [agentPluginsKey(agentName)] });
 
   const setAll = async (enabled: boolean) => {
     await toggle.run(rows, (p) => agentsApi.togglePlugin(agentName, p.id, enabled));

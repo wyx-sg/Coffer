@@ -28,15 +28,17 @@ from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
-    get_capability_discovery,
-    get_health_repo,
-    get_invocation_repo,
-    get_preferences_repo,
     get_resource_service,
 )
 from coffer.surfaces.http.mcp.capability_views import (
     cached_capability_list,
     live_capability_list,
+)
+from coffer.surfaces.http.mcp.dependencies import (
+    get_capability_discovery,
+    get_health_repo,
+    get_invocation_repo,
+    get_preferences_repo,
 )
 from coffer.surfaces.http.schemas import (
     CapabilityKeyBody,

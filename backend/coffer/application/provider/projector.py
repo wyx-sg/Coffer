@@ -39,7 +39,10 @@ from coffer.domain.resource import Resource
 
 class ProjectionConfigStore(_Protocol):
     def read_text(self, path: pathlib.Path) -> str | None: ...
-    def write_text_atomic(self, path: pathlib.Path, text: str) -> None: ...
+    def write_text_atomic(
+        self, path: pathlib.Path, text: str, *, expected_fingerprint: str | None = None
+    ) -> None: ...
+    def fingerprint(self, text: str | None) -> str: ...
     # Needed only for the Codex model catalogue: de-projection must REMOVE the
     # file, not blank it, or Codex keeps reading a catalogue that no longer
     # describes anything. ``delete_with_backup`` already existed on the store for
@@ -102,7 +105,8 @@ class ProviderProjector:
     ) -> None:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
-        text = self._config_store.read_text(spec.path) or ""
+        current = self._config_store.read_text(spec.path)
+        text = current or ""
         # Model comes solely from the per-agent binding (spec provider-switching E3/E4) — the
         # connection no longer carries one. An unbound agent projects no model so
         # it runs on its OWN default model.
@@ -116,7 +120,7 @@ class ProviderProjector:
                 fast_model=agent_cfg.fast_model,
                 api_key_helper=anthropic_api_key_helper(name),
             )
-            self._write_if_changed(spec.path, text, new_text)
+            self._write_if_changed(spec.path, current, new_text)
             return
 
         # Codex additionally gets a model catalogue so its OWN picker lists the
@@ -132,7 +136,7 @@ class ProviderProjector:
         catalog = codex_model_catalog_json(cfg.model_ids(Modality.TEXT))
         if catalog is not None:
             self._write_if_changed(
-                catalog_path, self._config_store.read_text(catalog_path) or "", catalog
+                catalog_path, self._config_store.read_text(catalog_path), catalog
             )
         new_text = apply_codex_provider(
             text,
@@ -142,7 +146,7 @@ class ProviderProjector:
             display_name=f"Coffer ({name})",
             catalog_path=catalog_path if catalog is not None else None,
         )
-        self._write_if_changed(spec.path, text, new_text)
+        self._write_if_changed(spec.path, current, new_text)
         if catalog is None:
             # The curated set was cleared since the last projection: the pointer
             # is already gone from config.toml, so retire the file too rather than
@@ -152,27 +156,39 @@ class ProviderProjector:
     def _deproject(self, agent: Resource, config_key: str, agent_type: AgentType) -> None:
         agent_cfg = AgentConfig.model_validate(agent.config)
         spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
-        text = self._config_store.read_text(spec.path) or ""
+        current = self._config_store.read_text(spec.path)
+        text = current or ""
         if not text.strip():
             return  # nothing was ever projected
         if agent_type is AgentType.CLAUDE_CODE:
             new_text = remove_anthropic_settings(text)
-            self._write_if_changed(spec.path, text, new_text)
+            self._write_if_changed(spec.path, current, new_text)
             return
         new_text = remove_codex_provider(text)
-        self._write_if_changed(spec.path, text, new_text)
+        self._write_if_changed(spec.path, current, new_text)
         # `remove_codex_provider` has dropped the pointer (iff it was ours), so the
         # file is now unreferenced — delete it so Codex's built-in model list is
         # what its picker shows again. Absent is a no-op.
         self._config_store.delete_with_backup(codex_model_catalog_path(spec.path.parent))
 
-    def _write_if_changed(self, path: pathlib.Path, current: str, new: str) -> None:
-        """Write only a real change. The boot sweep re-derives the projection on
-        every start, and touching an agent's config file when nothing differs
-        would churn its mtime — and hide, in any file audit, the one case that
-        matters: a projection that had actually gone missing."""
-        if new != current:
-            self._config_store.write_text_atomic(path, new)
+    def _write_if_changed(self, path: pathlib.Path, current: str | None, new: str) -> None:
+        """Write only a real change, and only over the content that was read.
+
+        The boot sweep re-derives the projection on every start, and touching
+        an agent's config file when nothing differs would churn its mtime — and
+        hide, in any file audit, the one case that matters: a projection that
+        had actually gone missing.
+
+        ``current`` is what :meth:`read_text` returned (``None`` for an absent
+        file); its fingerprint travels with the write so the store refuses
+        (``ConfigFileStale``, a 409) if the user's editor changed the file in
+        between — this is THEIR settings file, and a projection that overwrote
+        an edit they had just saved would lose it silently.
+        """
+        if new != (current or ""):
+            self._config_store.write_text_atomic(
+                path, new, expected_fingerprint=self._config_store.fingerprint(current)
+            )
 
 
 __all__ = ["ProjectionConfigStore", "ProviderProjector"]

@@ -266,7 +266,7 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
 
     Each of these is a real lazy importer in the codebase:
       * markitdown  — infrastructure/chat/document_extract.py (spec channels FR-030)
-      * openai      — infrastructure/providers/*
+      * openai      — infrastructure/provider/*
       * langgraph / langchain — infrastructure/llm/*, infrastructure/chat/*
 
     The knowledge layer declares nothing here: it is a directory of markdown
@@ -635,3 +635,99 @@ def test_desktop_and_backend_versions_are_the_same_string() -> None:
         f"desktop/tauri.conf.json is {tauri_version} but backend/pyproject.toml is "
         f"{backend_version} — the .dmg would be named for the wrong version"
     )
+    # The frontend's package.json is the fourth copy: the SPA the daemon serves
+    # is built from it, and a bump that misses it ships a UI labelled with the
+    # previous release.
+    frontend_version = _version(
+        _REPO / "frontend" / "package.json", r'^  "version"\s*:\s*"([^"]+)"'
+    )
+    assert frontend_version == backend_version, (
+        f"frontend/package.json is {frontend_version} but backend/pyproject.toml is "
+        f"{backend_version} — run scripts/bump_version.py to move them together"
+    )
+
+
+_BUMP_TARGETS = (
+    "backend/pyproject.toml",
+    "frontend/package.json",
+    "frontend/package-lock.json",
+    "desktop/Cargo.toml",
+    "desktop/Cargo.lock",
+    "desktop/tauri.conf.json",
+)
+
+
+def _copy_version_files(dest: Path) -> None:
+    for rel in _BUMP_TARGETS:
+        target = dest / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((_REPO / rel).read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _run_bump(root: Path, version: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(_REPO / "scripts" / "bump_version.py"), version, "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_bump_version_moves_every_copy_together(tmp_path: Path) -> None:
+    """`scripts/bump_version.py` rewrites all five files, and only the version
+    anchors in them — the dependency pins that also say `version` are untouched."""
+    _copy_version_files(tmp_path)
+    before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}
+
+    result = _run_bump(tmp_path, "9.8.7")
+    assert result.returncode == 0, result.stderr
+
+    patterns = {
+        "backend/pyproject.toml": r'^version = "9\.8\.7"$',
+        "frontend/package.json": r'^  "version": "9\.8\.7",$',
+        "frontend/package-lock.json": r'^  "version": "9\.8\.7",$',
+        "desktop/Cargo.toml": r'^version = "9\.8\.7"$',
+        "desktop/Cargo.lock": r'^name = "coffer-desktop"\nversion = "9\.8\.7"$',
+        "desktop/tauri.conf.json": r'^  "version": "9\.8\.7",$',
+    }
+    for rel, pattern in patterns.items():
+        after = (tmp_path / rel).read_text(encoding="utf-8")
+        assert re.search(pattern, after, re.MULTILINE), f"{rel} not bumped:\n{after[:400]}"
+        # Exactly the version anchors changed: the diff is a handful of lines,
+        # never a reformatted file or a dependency's own version line.
+        changed = [
+            (a, b)
+            for a, b in zip(before[rel].splitlines(), after.splitlines(), strict=True)
+            if a != b
+        ]
+        assert 1 <= len(changed) <= 2, f"{rel}: unexpected lines changed: {changed}"
+        assert all("9.8.7" in b for _, b in changed), changed
+    # The lockfile's root package entry moved too (its second copy of the version).
+    lock = (tmp_path / "frontend/package-lock.json").read_text(encoding="utf-8")
+    assert lock.count('"version": "9.8.7"') == 2
+
+
+def test_bump_version_rejects_a_malformed_version_and_writes_nothing(tmp_path: Path) -> None:
+    _copy_version_files(tmp_path)
+    before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}
+
+    result = _run_bump(tmp_path, "not-a-version")
+
+    assert result.returncode != 0
+    assert "not a version" in result.stderr
+    assert {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS} == before
+
+
+def test_bump_version_leaves_all_files_untouched_when_one_anchor_is_missing(
+    tmp_path: Path,
+) -> None:
+    """All-or-nothing: a file whose anchor moved must not leave the others bumped."""
+    _copy_version_files(tmp_path)
+    (tmp_path / "desktop/Cargo.lock").write_text("# no package entries\n", encoding="utf-8")
+    before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}
+
+    result = _run_bump(tmp_path, "9.8.7")
+
+    assert result.returncode != 0
+    assert "Cargo.lock" in result.stderr
+    assert {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS} == before

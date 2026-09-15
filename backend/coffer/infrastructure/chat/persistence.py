@@ -28,6 +28,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
+from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.message import (
     ContentBlock,
     Message,
@@ -35,7 +36,6 @@ from coffer.domain.chat.message import (
     block_from_dict,
     block_to_dict,
 )
-from coffer.domain.errors import ConversationNotFound
 from coffer.infrastructure.persistence.base import Base
 
 # ---------------------------------------------------------------------------
@@ -339,16 +339,22 @@ class MessageRepo:
             await session.execute(stmt)
             await session.commit()
 
-    async def list_by_conversation(self, conversation_id: str) -> list[Message]:
-        """Return messages ordered by ``seq`` ascending."""
+    async def list_by_conversation(
+        self, conversation_id: str, *, limit: int | None = None
+    ) -> list[Message]:
+        """Messages in ``seq`` order; ``limit`` keeps only the most recent N (still
+        oldest-first) — a turn needs the conversation's tail, not every row."""
+        stmt = select(MessageModel).where(MessageModel.conversation_id == conversation_id)
+        if limit is not None:
+            # Newest N first, then flipped back to seq order below.
+            stmt = stmt.order_by(MessageModel.seq.desc()).limit(limit)
+        else:
+            stmt = stmt.order_by(MessageModel.seq.asc())
         async with self._sm() as session:
-            stmt = (
-                select(MessageModel)
-                .where(MessageModel.conversation_id == conversation_id)
-                .order_by(MessageModel.seq.asc())
-            )
-            rows = (await session.execute(stmt)).scalars().all()
-            return [self._to_domain(r) for r in rows]
+            rows = list((await session.execute(stmt)).scalars().all())
+        if limit is not None:
+            rows.reverse()
+        return [self._to_domain(r) for r in rows]
 
     async def next_seq(self, conversation_id: str) -> int:
         """Return the next sequence number for the given conversation.

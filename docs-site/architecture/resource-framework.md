@@ -92,9 +92,9 @@ For `mcp_server` specifically, there is a parallel capability-level state: each 
 
 ## Kind registration at the composition root
 
-The framework uses no global registry and no import side effects. Each kind is wired in explicitly at the composition root via a `KindModule` dataclass. The composition roots are `surfaces/http/app.py` (FastAPI wiring) and `surfaces/cli/main.py` (Typer wiring).
+The framework uses no global registry and no import side effects. Each kind exposes a factory — `make_<kind>_kind()` in `application/<kind>/kind.py` — that returns a frozen `Kind`, and the composition root wires the kind in explicitly: one `*_wiring.py` module per kind builds its services, registers its routers and returns a typed dataclass the root passes forward. The composition roots are `surfaces/http/app.py` (FastAPI wiring) and `surfaces/cli/main.py` (Typer wiring).
 
-Adding a new kind is mechanical: create the kind's subdirectories in each layer (`domain/<kind>/`, `application/<kind>/`, `infrastructure/<kind>/`, `surfaces/http/<kind>/`, `surfaces/cli/<kind>/`), implement the kind-specific logic, and register a `KindModule` at the composition root. The audit, retention, and resource-list surfaces are inherited automatically.
+Adding a new kind is mechanical: create the kind's subdirectories in each layer (`domain/<kind>/`, `application/<kind>/`, `infrastructure/<kind>/`, `surfaces/http/<kind>/`, `surfaces/cli/<kind>/`), implement the kind-specific logic, write its `make_<kind>_kind()` factory, and add one wiring module the composition root calls. The audit, retention, and resource-list surfaces are inherited automatically.
 
 ## Why "everything is a resource kind" (ADR everything-is-a-resource-kind)
 

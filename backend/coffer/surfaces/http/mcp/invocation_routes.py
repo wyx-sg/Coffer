@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_invocation_repo
+from coffer.surfaces.http.mcp.dependencies import get_invocation_repo
 from coffer.surfaces.http.schemas import InvocationListOut, InvocationOut
 
 router = APIRouter(

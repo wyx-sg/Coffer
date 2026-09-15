@@ -4,7 +4,7 @@
 // ScopeControl the mcp-servers/skills lists render per row (spec memory
 // FR-062/FR-014) — ONE button whose label states the partition's reach,
 // opening a panel where the states are the choices. ScopeControl's own hooks
-// are mocked, mirroring `kinds/mcp/McpServersTable.test.tsx` — this suite only
+// are mocked, mirroring `components/mcp/McpServersTable.test.tsx` — this suite only
 // exercises the table.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";

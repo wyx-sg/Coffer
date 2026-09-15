@@ -21,8 +21,10 @@ import pytest
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    STREAM_ENDED_MESSAGE,
     TextDelta,
     TurnDone,
+    TurnError,
     TurnStarted,
 )
 from coffer.domain.chat.message import Message, Role, TextBlock
@@ -379,8 +381,6 @@ async def test_adapter_empty_prompt_is_rejected():
     adapter = _adapter(factory)
     events = await _collect(adapter, [])
     assert len(events) == 1
-    from coffer.domain.chat.events import TurnError
-
     assert isinstance(events[0], TurnError)
     assert events[0].code == "empty_prompt"
 
@@ -497,8 +497,13 @@ async def test_cancel_interrupts_and_closes_and_persists_thread():
 
 
 @pytest.mark.asyncio
-async def test_stream_end_without_terminal_synthesizes_turn_done():
-    # The peer closes its stream without a turn/completed.
+@pytest.mark.acceptance(
+    spec="channels", scenario="an agent stream that ends without a terminal is a turn error"
+)
+async def test_stream_end_without_terminal_is_a_stream_ended_error():
+    # The peer closes its stream without a turn/completed: codex went away
+    # mid-turn. That is an error, not a finished answer — and the text that
+    # streamed before the cut still arrives ahead of it.
     server = FakeCodexAppServer(
         frames=[
             _Frame(
@@ -522,8 +527,10 @@ async def test_stream_end_without_terminal_synthesizes_turn_done():
                 server.server_to_client.close()
 
     await asyncio.wait_for(drive(), timeout=5)
-    terminals = [e for e in out if isinstance(e, TurnDone)]
-    assert len(terminals) == 1
+    terminals = [e for e in out if isinstance(e, (TurnDone, TurnError))]
+    assert terminals == [TurnError(code="stream_ended", message=STREAM_ENDED_MESSAGE)]
+    assert [e.text for e in out if isinstance(e, TextDelta)] == ["hi"]
+    assert out[-1] == terminals[0]
 
 
 @pytest.mark.asyncio
@@ -566,7 +573,7 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
         # "Task destroyed but pending" warnings have a chance to surface.
         await asyncio.sleep(0)
 
-    terminals = [e for e in out if isinstance(e, TurnDone)]
+    terminals = [e for e in out if isinstance(e, (TurnDone, TurnError))]
     assert len(terminals) == 1
 
     pending_warnings = [

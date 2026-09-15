@@ -1,9 +1,17 @@
-// frontend/src/lib/api/providers.ts — typed fetch helpers for /api/v1/providers/*
-// Hand-written wire types matching specs/provider-switching/contracts/api.openapi.yaml
-// and backend/coffer/surfaces/http/provider_schemas.py.
+// frontend/src/lib/api/providers.ts — request helpers for /api/v1/providers/*
+//
+// The enums and the activate/deactivate answers are the provider-switching
+// contract's generated schemas (`generated/provider-switching.ts`). The
+// connection shapes themselves stay hand-written, because the contract lags
+// the backend (`provider_schemas.py`): it omits `enabled` and `description` on
+// the read side, `description` on create/patch, and `protocol` on patch, and
+// marks `ProviderModel.modality` optional where the UI relies on it being set.
+// Transport via the shared `call` (agents/frontend.md §4).
 
-import { getCofferBaseUrl, getCofferToken } from "../auth";
-import { ApiError } from "./errors";
+import { call } from "@/lib/api/call";
+import type { components } from "@/lib/api/generated/provider-switching";
+
+type Schemas = components["schemas"];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -11,7 +19,7 @@ import { ApiError } from "./errors";
 
 // A connection's detected upstream protocol. `unknown` ⇒ the probe was
 // inconclusive (the connection is offered to every agent; the user decides).
-export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
+export type Protocol = Schemas["Protocol"];
 
 // The agent types a connection may project into. Decoupled from `protocol`: the
 // user routes any endpoint to any agent (e.g. an openai gateway → Claude Code).
@@ -19,7 +27,7 @@ export type Protocol = "anthropic" | "openai" | "ollama" | "unknown";
 // framework per-agent scope (ADR per-agent-resource-scope), so it appears only on
 // the read side (`Provider.compatible_agents`) and is changed through
 // `PUT /resources/provider/{name}/scope` (see `lib/api/scope.ts`).
-export type AgentType = "claude_code" | "codex";
+export type AgentType = Schemas["AgentType"];
 
 /**
  * What KIND of model a curated entry names (provider-switching FR-029). One
@@ -28,7 +36,7 @@ export type AgentType = "claude_code" | "codex";
  * needs instead of being handed every id: a chat dropdown takes `text`. This
  * says what the ENDPOINT serves; Coffer itself embeds nothing.
  */
-export type Modality = "text" | "embedding" | "image" | "video" | "audio";
+export type Modality = Schemas["Modality"];
 
 /** The five values, in the order the connection editor lists them. */
 export const MODALITIES: readonly Modality[] = [
@@ -120,18 +128,9 @@ export interface ProviderPatch {
   description?: string | null;
 }
 
-export interface ActivateOut {
-  activated: string;
-  protocol: Protocol;
-  projected: string[];
-  skipped: string[];
-}
+export type ActivateOut = Schemas["ActivateOut"];
 
-export interface DeactivateOut {
-  protocol: Protocol;
-  deprojected: string[];
-  previous: string | null;
-}
+export type DeactivateOut = Schemas["DeactivateOut"];
 
 /** True only for anthropic/openai/unknown connections — ollama has no key. */
 export function wireNeedsCredential(wire: Protocol): boolean {
@@ -139,68 +138,37 @@ export function wireNeedsCredential(wire: Protocol): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Internal fetch helper
-// ---------------------------------------------------------------------------
-
-async function call<T>(
-  method: "GET" | "POST" | "PATCH" | "DELETE",
-  path: string,
-  body?: unknown,
-): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Coffer-Token": getCofferToken() ?? "",
-      "X-Coffer-Actor": "ui",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (r.status === 204) {
-    return undefined as unknown as T;
-  }
-  const data = await r.json().catch(() => null);
-  if (!r.ok) {
-    const err = data?.error;
-    throw new ApiError(
-      err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? `request failed: ${r.status}`,
-    );
-  }
-  return data as T;
-}
-
-// ---------------------------------------------------------------------------
 // API object
 // ---------------------------------------------------------------------------
 
 export const providersApi = {
-  list: () => call<ProviderListOut>("GET", "/providers"),
+  list: () => call<ProviderListOut>("/providers"),
 
-  get: (name: string) => call<Provider>("GET", `/providers/${name}`),
+  get: (name: string) => call<Provider>(`/providers/${name}`),
 
-  create: (body: ProviderCreate) => call<Provider>("POST", "/providers", body),
+  create: (body: ProviderCreate) => call<Provider>("/providers", { method: "POST", body }),
 
   update: (name: string, body: ProviderPatch) =>
-    call<Provider>("PATCH", `/providers/${name}`, body),
+    call<Provider>(`/providers/${name}`, { method: "PATCH", body }),
 
   /** Rename a connection. Its own route rather than a PATCH field because a
    * name is a label rather than one of the connection's settings, and a name
    * already in use is a 409 rather than a merge. Nothing else moves: the vault
    * entry and the audit trail both hang off the resource's stable id. */
   rename: (name: string, newName: string) =>
-    call<Provider>("POST", `/providers/${name}/rename`, { new_name: newName }),
+    call<Provider>(`/providers/${name}/rename`, { method: "POST", body: { new_name: newName } }),
 
-  remove: (name: string) => call<void>("DELETE", `/providers/${name}`),
+  remove: (name: string) => call<void>(`/providers/${name}`, { method: "DELETE" }),
 
-  activate: (name: string) => call<ActivateOut>("POST", `/providers/${name}/activate`),
+  activate: (name: string) => call<ActivateOut>(`/providers/${name}/activate`, { method: "POST" }),
 
   /** Switch a wire's agent(s) back to their own built-in login: remove Coffer's
    * projection and clear the active connection. Idempotent. */
-  useBuiltin: (wire: Protocol) => call<DeactivateOut>("POST", `/providers/use-builtin/${wire}`),
+  useBuiltin: (wire: Protocol) =>
+    call<DeactivateOut>(`/providers/use-builtin/${wire}`, { method: "POST" }),
 
   /** Make this connection Coffer's internal-engine default (clears the flag on
    * all others). Returns the updated connection. */
   setInternalDefault: (name: string) =>
-    call<Provider>("POST", `/providers/${name}/internal-default`),
+    call<Provider>(`/providers/${name}/internal-default`, { method: "POST" }),
 };

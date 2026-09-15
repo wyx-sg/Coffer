@@ -21,6 +21,7 @@ nothing here can reach the developer's real ``~/.coffer``.
 
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import time
@@ -42,6 +43,7 @@ from coffer.domain.scope import Scope
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.fernet_time import is_fresher
 from coffer.domain.sync.machine import MachineDescriptor
+from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.models import ExportSummary
 from tests.integration.sync.harness import (
     MACHINE_A,
@@ -159,8 +161,7 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
     summary = await vault.exporter.export(vault.bundle, with_credentials=False)
     root = pathlib.Path(vault.bundle.path)
 
-    manifest = vault.bundle.read_manifest()
-    assert manifest is not None
+    manifest = Manifest.from_dict(json.loads((root / "manifest.json").read_text("utf-8")))
     assert manifest.schema_version == 1
     # A converge export writes no creation time: a restamped timestamp would
     # stage a change on every round.
@@ -452,6 +453,22 @@ async def test_tree_applier_also_carries_the_skill_store(vault: VaultMachine) ->
     await applier.remove("skills/demo/SKILL.md")
     assert not vault.has_skill_files("demo")
     assert not (vault.skills_root / "demo").exists()
+
+
+async def test_tree_applier_refuses_a_symlink_in_the_working_tree(vault: VaultMachine) -> None:
+    """A link committed on another machine points at something on *this* one.
+    Following it would read that file into the vault, so it is refused."""
+    applier = TreeApplier("knowledge/", worktree=vault.worktree, live_root=vault.knowledge_root)
+    outside = vault.root / "outside.txt"
+    outside.write_text("not vault content\n", encoding="utf-8")
+    (vault.worktree / "knowledge" / "notes").mkdir(parents=True)
+    (vault.worktree / "knowledge" / "notes" / "link.md").symlink_to(outside)
+
+    with pytest.raises(SyncSerializationError) as refused:
+        await applier.upsert("knowledge/notes/link.md")
+
+    assert "symlink" in str(refused.value)
+    assert vault.knowledge_paths() == set()
 
 
 async def test_tree_applier_refuses_a_path_that_is_not_a_file(vault: VaultMachine) -> None:
@@ -756,6 +773,26 @@ async def test_state_applier_routes_to_the_provider_that_claims_the_area(
 
     await applier.remove("state/peers/peer-1.yaml")
     assert vault.state_provider.docs == {"team/alpha": {"paired": False}}
+
+
+async def test_state_docs_carry_home_as_a_sentinel_both_ways(vault: VaultMachine) -> None:
+    """spec vault-sync ``## Determinism and path portability``: the ``${HOME}``
+    rule is one rule for every serialized document, state areas included."""
+    home = str(vault.home)
+    vault.state_provider.docs["peer-1"] = {"log": f"{home}/logs/peer-1.log", "paired": True}
+
+    await vault.exporter.export(vault.bundle, with_credentials=False)
+    written = _doc(vault.worktree / "state" / "peers" / "peer-1.yaml")
+    assert written == {"log": "${HOME}/logs/peer-1.log", "paired": True}
+
+    # The other machine's home is different, and the sentinel expands to it.
+    other_home = str(vault.root / "elsewhere")
+    applier = StateApplier([vault.state_provider], worktree=vault.worktree, home=other_home)
+    await applier.upsert("state/peers/peer-1.yaml")
+    assert vault.state_provider.docs["peer-1"] == {
+        "log": f"{other_home}/logs/peer-1.log",
+        "paired": True,
+    }
 
 
 async def test_state_applier_skips_an_area_no_module_claims(vault: VaultMachine) -> None:

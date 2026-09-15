@@ -123,6 +123,9 @@ make verify          # sanity-check the install
 `PATH` 上 —— 无需单独部署。守护进程会在你首次运行任何 `coffer` 命令或连接 MCP 客户端时**自动启动** ——
 `coffer daemon start` 可用于显式控制，但并非必要的安装步骤。
 
+**前置条件**：Python ≥ 3.12。推荐安装 [ripgrep](https://github.com/BurntSushi/ripgrep)（`rg`）
+以获得快速的知识检索；没有它时 Coffer 会退回到较慢的内置检索，结果相同。
+
 ---
 
 ## 快速上手

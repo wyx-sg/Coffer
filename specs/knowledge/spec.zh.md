@@ -161,7 +161,7 @@ agent 手里有一个有辨识度的词或短语，它要的是这个词句出�
 
 - **FR-010**: 一个 **collection** 是知识根目录下的一个顶层子目录，同时是一个 `knowledge` Resource。它 MUST 由人通过 REST/CLI/UI 有意创建，MUST NOT 由读取、写入或 agent 的工作目录自动创建。
 - **FR-011**: 系统 MUST NOT 从 agent 的 cwd 推导任何边界。MUST NOT 存在 `global` scope、`project-<ULID>` 命名、git 根解析，以及 scope 到项目根的映射表。
-- **FR-012**: collection MUST 支持 Resource 框架的 **per-agent scope**：一个 agent 只能看见、grep、读取和写入为它激活的 collection。agent 的调用 MUST 覆盖它被授权的**每一个** collection——MUST NOT 存在把已授权 collection 排除在默认之外的规则。
+- **FR-012**: collection MUST 支持 Resource 框架的 **per-agent scope**：一个 agent 只能看见、grep、读取和写入为它激活的 collection。agent 的调用 MUST 覆盖它被授权的**每一个** collection——MUST NOT 存在把已授权 collection 排除在默认之外的规则。一次调用据以授权的身份 MUST 是会话握手上报的身份（spec [mcp-gateway](../mcp-gateway/spec.md) FR-021），由网关以 `agent` 参数写进调用，任何工具的 input schema 都不公开这个参数；客户端在这个名字下自行传入的值 MUST 被丢弃，绝不采信。
 - **FR-013**: collection 的一句话描述 MUST 取自其目录下 `README.md` 的首段，没有该文件时为空。它 MUST NOT 存在数据库里。
 - **FR-014**: per-agent 授权仅在 MCP 工具面执行，系统 MUST 如实描述这一点：它防的是误召回，不是有意的文件系统访问。
 
@@ -169,7 +169,7 @@ agent 手里有一个有辨识度的词或短语，它要的是这个词句出�
 
 - **FR-020**: 目录 MUST 在调用时通过遍历目录、读取 frontmatter **即时生成**。系统 MUST NOT 把它物化成文件或表。
 - **FR-021**: `list` MUST **一次走一层**：不带路径时返回调用方可见的每个 collection，各带 README 描述与文件数；带路径时返回该目录的直接子目录和文件，每个文件带 `title` 和 `description`。
-- **FR-022**: `grep` MUST 对调用方可见的 collection 的文件运行 ripgrep，支持字面或正则、递归匹配，返回文件、行号与命中行。命中数 MUST 有上限，响应 MUST 标记是否被截断。
+- **FR-022**: `grep` MUST 对调用方可见的 collection 的文件运行 ripgrep，支持字面或正则、递归匹配，返回文件、行号与命中行。命中数 MUST 有上限，响应 MUST 标记是否被截断。ripgrep 是优先项而不是硬性要求：`PATH` 上没有 `rg` 的机器上，同一次搜索 MUST 改由内置的 Python 遍历完成，走同样的文件、同样的语义——跳过隐藏项、逐行正则、同样的上限与同样的截断标记——调用方除了速度看不出任何差别，守护进程 MUST 把这次回退记一次日志。
 - **FR-023**: `read` MUST 按路径返回文件全文。MUST NOT 有分块、段落粒度或 `top_k`。
 - **FR-024**: `search` MUST 以一次文本查询**出现在哪些文件里**作答，每个文件附上它的路径、`title`、`description` 和命中的行，文件数与每个文件的命中行数都 MUST 有上限。它 MUST 使用 `grep` 所用的同一个匹配器——正则、大小写敏感——作用于同一批文件；两个工具只在「报什么」上不同，`grep` 按行报，`search` 按文件报。MUST NOT 有分数、MUST NOT 有排序、MUST NOT 有标题段落，任何 surface 上 MUST NOT 存在检索*模式*，也 MUST NOT 存在第二条得出答案的路径。既然匹配是字面的，`search` MUST 在调用方读得到的地方把这一点说清楚：工具自己的描述 MUST 告诉 agent 给它一个有辨识度的词或确切短语，而不是一句用自己的话措辞的问题。
 - **FR-028**: 一个文件 MUST 在落地的那一刻就可搜，没有任何重建索引步骤——不是因为有一条新鲜度规则让索引跟得上磁盘，而是因为根本没有索引需要跟。`search` 在调用时直接读文件，所以编辑器、渠道、`write` 或 `git` 写下的文件，下一次调用就能找到。
@@ -214,7 +214,7 @@ agent 手里有一个有辨识度的词或短语，它要的是这个词句出�
 
 ### 约束
 
-- **FR-080**: 本层 MUST NOT 带**任何向量库或 embedding 模型依赖**：`sqlite-vec`、`fastembed`、mem0、chroma、LlamaIndex MUST NOT 出现在依赖集中，任何地方也 MUST NOT 计算、获取或存放向量。search 就是 ripgrep，本机安装为了 `grep` 本来就有它。`markitdown` 在渠道的转换器之外，同时成为本层的转换器；importlinter 契约 MUST 恰好只允许这两个消费者，不再有别的。
+- **FR-080**: 本层 MUST NOT 带**任何向量库或 embedding 模型依赖**：`sqlite-vec`、`fastembed`、mem0、chroma、LlamaIndex MUST NOT 出现在依赖集中，任何地方也 MUST NOT 计算、获取或存放向量。search 就是 ripgrep——机器上有它就用它，没有就走 FR-022 的内置字面遍历——两者都不是索引。`markitdown` 在渠道的转换器之外，同时成为本层的转换器；importlinter 契约 MUST 恰好只允许这两个消费者，不再有别的。
 - **FR-081**: 知识层 MUST NOT 向 `coffer.db` 新增任何表，也 MUST NOT 在知识根目录之外建自己的目录。一个 collection 就是 kind 无关的 `resources` 表里的一行，和其它 Resource 一样；本层持有的其余一切都是人打得开的文件。
 
 ## 成功标准

@@ -1,15 +1,21 @@
 // frontend/src/lib/hooks/useDaemon.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { useDaemonOutOfDate, useDaemonStatus } from "./useDaemon";
+import { useDaemonOutOfDate, useDaemonStatus, useRestartDaemon } from "./useDaemon";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 // The skew check is a Tauri IPC call; stub it so these run in either host.
-vi.mock("@/lib/tauri", () => ({ daemonVersionMatches: vi.fn() }));
-const { daemonVersionMatches } = await import("@/lib/tauri");
+vi.mock("@/lib/tauri", () => ({
+  daemonVersionMatches: vi.fn(),
+  restartDaemon: vi.fn(),
+  connectToShellDaemon: vi.fn(),
+}));
+const { daemonVersionMatches, restartDaemon, connectToShellDaemon } = await import("@/lib/tauri");
 const daemonVersionMatchesMock = vi.mocked(daemonVersionMatches);
+const restartDaemonMock = vi.mocked(restartDaemon);
+const connectToShellDaemonMock = vi.mocked(connectToShellDaemon);
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -79,5 +85,46 @@ describe("useDaemonOutOfDate", () => {
     const { result } = renderHook(() => useDaemonOutOfDate("0.1.1"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBe(false);
+  });
+});
+
+describe("useRestartDaemon", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  test("restarts, re-handshakes, then refetches the whole cache in that order", async () => {
+    restartDaemonMock.mockResolvedValue({ pid: 1, started: true } as never);
+    connectToShellDaemonMock.mockResolvedValue(undefined);
+    const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useRestartDaemon(), {
+      wrapper: ({ children }: PropsWithChildren) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync();
+    });
+
+    expect(restartDaemonMock).toHaveBeenCalledOnce();
+    expect(connectToShellDaemonMock).toHaveBeenCalledOnce();
+    await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
+    expect(connectToShellDaemonMock.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateSpy.mock.invocationCallOrder[0],
+    );
+  });
+
+  test("a failed re-handshake is reported as its own error, not a failed restart", async () => {
+    restartDaemonMock.mockResolvedValue({ pid: 1, started: true } as never);
+    connectToShellDaemonMock.mockRejectedValue(new Error("did not become ready"));
+    const { result } = renderHook(() => useRestartDaemon(), { wrapper: wrapper() });
+
+    await act(async () => {
+      await result.current.mutateAsync().catch(() => undefined);
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toMatch(/did not become ready/);
+    expect(result.current.error?.message).toMatch(/restarted, but/i);
   });
 });

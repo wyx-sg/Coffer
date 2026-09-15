@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { mcpInvocationsKey } from "@/lib/api/queryKeys";
 
 type InvocationListOut = components["schemas"]["InvocationListOut"];
 
@@ -24,7 +25,7 @@ export function useMcpInvocations({
   enabled = true,
 }: UseMcpInvocationsArgs) {
   return useQuery({
-    queryKey: ["mcp", "invocations", serverName, { limit, status, since }],
+    queryKey: mcpInvocationsKey(serverName, { limit, status, since }),
     queryFn: async (): Promise<InvocationListOut> => {
       const client = getApiClient();
       const query: Record<string, string | number> = { limit };

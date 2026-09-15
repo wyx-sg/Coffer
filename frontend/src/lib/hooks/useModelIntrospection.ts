@@ -2,11 +2,12 @@
 //
 // Provider introspection (specs channels and knowledge): list a provider's models + test a
 // connection, so the model forms offer a fetched dropdown (with manual
-// fallback) and a Test button — DevPilot-style. Hand-written fetch.
+// fallback) and a Test button — DevPilot-style. Requests go through the shared
+// `call` (agents/frontend.md §4).
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
-import { ApiError } from "@/lib/api/errors";
+import { call } from "@/lib/api/call";
+import { endpointModelsKey } from "@/lib/api/queryKeys";
 import type { ProviderModel } from "@/lib/api/providers";
 
 export interface ProviderProbe {
@@ -24,31 +25,7 @@ export interface TestResult {
   detail?: Record<string, unknown>;
 }
 
-function headers(): HeadersInit {
-  return {
-    "X-Coffer-Token": getCofferToken() ?? "",
-    "X-Coffer-Actor": "ui",
-    "Content-Type": "application/json",
-  };
-}
-
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, {
-    method: "POST",
-    headers: headers(),
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) {
-    const data = (await r.json().catch(() => null)) as {
-      error?: { code?: string; message?: string };
-    } | null;
-    throw new ApiError(
-      data?.error?.code ?? "INTERNAL_ERROR",
-      data?.error?.message ?? `request failed: ${r.status}`,
-    );
-  }
-  return (await r.json()) as T;
-}
+const post = <T>(path: string, body: unknown) => call<T>(path, { method: "POST", body });
 
 /** What an endpoint reports it serves. Each id carries the modality Coffer
  *  INFERRED from its name (provider-switching FR-030) — a pre-fill for the
@@ -84,9 +61,9 @@ export function useListProviderModels() {
  *  changes when the ENDPOINT changes, not when our curation does.
  *
  *  `retry: false` because a wrong key or an unreachable endpoint is a real
- *  answer the user must see, not a blip worth three silent attempts. */
-export const endpointModelsKey = (name: string) => ["endpointModels", name] as const;
-
+ *  answer the user must see, not a blip worth three silent attempts.
+ *
+ *  `endpointModelsKey` lives in `lib/api/queryKeys.ts` with every other key. */
 export function useEndpointModels(name: string, probe: ProviderProbe) {
   return useQuery({
     queryKey: endpointModelsKey(name),

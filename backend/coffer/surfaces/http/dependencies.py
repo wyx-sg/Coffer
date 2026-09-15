@@ -1,10 +1,29 @@
-"""FastAPI dependency providers — composition root sets these at startup."""
+"""Kind-agnostic FastAPI dependency providers.
+
+Each ``set_*`` / ``get_*`` pair is a module-global singleton: the composition
+root (``app.py``'s lifespan) calls the setter once at startup, routes name the
+getter as a ``Depends()`` target, and a getter called before its setter raises
+rather than hand a route a ``None`` it will dereference later. Tests override
+the same setters.
+
+Only the kind-agnostic core lives here (Contract 6). Every kind publishes its
+own services from its own module, typed concretely, so nothing in this file
+needs ``Any`` and nothing here can pull a kind into the core:
+
+- ``surfaces.http.mcp.dependencies``       — the MCP kind
+- ``surfaces.http.agent_dependencies``     — the agent kind (with
+  ``workspace_dependencies`` for the agent-workspace facets)
+- ``surfaces.http.skill_dependencies``     — the skill kind
+- ``surfaces.http.knowledge.dependencies`` — the knowledge kind
+- ``surfaces.http.memory.dependencies``    — the memory kind
+- ``surfaces.http.chat.dependencies``      — the turn platform (chat)
+- ``surfaces.http.provider_dependencies``  — the provider kind
+- ``surfaces.http.credential_composition`` — the credential store + master key
+"""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
-from typing import Any
 
 from fastapi import Header, HTTPException, status
 
@@ -12,26 +31,6 @@ from coffer.application.audit_service import AuditService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
-
-# Turn-platform singletons re-exported so the long-standing import paths work.
-from coffer.surfaces.http.turn_dependencies import (
-    get_agent_registry as get_agent_registry,
-)
-from coffer.surfaces.http.turn_dependencies import (
-    get_chat_service as get_chat_service,
-)
-from coffer.surfaces.http.turn_dependencies import (
-    get_turn_orchestrator as get_turn_orchestrator,
-)
-from coffer.surfaces.http.turn_dependencies import (
-    set_agent_registry as set_agent_registry,
-)
-from coffer.surfaces.http.turn_dependencies import (
-    set_chat_service as set_chat_service,
-)
-from coffer.surfaces.http.turn_dependencies import (
-    set_turn_orchestrator as set_turn_orchestrator,
-)
 
 # X-Coffer-Actor: any short bounded identifier (canonical "cli"/"api"/"ui"/
 # "system"; prefixed ones like "e2e-mcp" allowed). Absence defaults to "api".
@@ -66,6 +65,12 @@ def get_resource_service() -> ResourceService:
     """FastAPI Depends() target."""
     if _resource_service is None:
         raise RuntimeError("resource service not initialised")
+    return _resource_service
+
+
+def get_resource_service_optional() -> ResourceService | None:
+    """The resource service if initialised, else ``None`` — for ``/daemon/status``,
+    which must answer during startup before the composition root has run."""
     return _resource_service
 
 
@@ -115,254 +120,3 @@ def get_internal_engine_config_service() -> InternalEngineConfigService:
     if _internal_engine_config_service is None:
         raise RuntimeError("internal engine config service not initialised")
     return _internal_engine_config_service
-
-
-# Factory (session_id: str) -> <MCPGatewaySession>; typed Callable[[str], Any] to
-# keep it out of kind-agnostic surfaces (Contract 6; enforced at mcp.protocol_routes).
-_mcp_session_factory: Callable[[str], Any] | None = None
-
-
-def set_mcp_session_factory(factory: Callable[[str], Any]) -> None:
-    """Called by the composition root once on startup."""
-    global _mcp_session_factory
-    _mcp_session_factory = factory
-
-
-def get_mcp_session_factory() -> Callable[[str], Any]:
-    """FastAPI Depends() target."""
-    if _mcp_session_factory is None:
-        raise RuntimeError("MCP session factory not initialised")
-    return _mcp_session_factory
-
-
-# --- MCP kind-specific dependency providers (typed Any per Contract 6;
-# concrete types enforced at the mcp.* route call sites) ---
-_capability_discovery: Any | None = None
-_supervisor: Any | None = None
-_preferences_repo: Any | None = None
-_invocation_repo: Any | None = None
-_health_repo: Any | None = None
-
-
-def set_capability_discovery(discovery: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _capability_discovery
-    _capability_discovery = discovery
-
-
-def get_capability_discovery() -> Any:
-    """FastAPI Depends() target — actual type is CapabilityDiscovery."""
-    if _capability_discovery is None:
-        raise RuntimeError("capability discovery not initialised")
-    return _capability_discovery
-
-
-def set_supervisor(supervisor: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _supervisor
-    _supervisor = supervisor
-
-
-def get_supervisor() -> Any:
-    """FastAPI Depends() target — actual type is SubprocessSupervisor."""
-    if _supervisor is None:
-        raise RuntimeError("supervisor not initialised")
-    return _supervisor
-
-
-def set_preferences_repo(repo: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _preferences_repo
-    _preferences_repo = repo
-
-
-def get_preferences_repo() -> Any:
-    """FastAPI Depends() target — actual type is MCPCapabilityPreferenceRepo."""
-    if _preferences_repo is None:
-        raise RuntimeError("preferences repo not initialised")
-    return _preferences_repo
-
-
-def set_invocation_repo(repo: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _invocation_repo
-    _invocation_repo = repo
-
-
-def get_invocation_repo_optional() -> Any | None:
-    """Buffered invocation repo (None if no MCP kind wired); lets the app
-    lifespan start()/stop() the writer (CODE-DI)."""
-    return _invocation_repo
-
-
-def get_invocation_repo() -> Any:
-    """FastAPI Depends() target — actual type is MCPInvocationRepo."""
-    repo = get_invocation_repo_optional()
-    if repo is None:
-        raise RuntimeError("invocation repo not initialised")
-    return repo
-
-
-def set_health_repo(repo: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _health_repo
-    _health_repo = repo
-
-
-def get_health_repo() -> Any:
-    """FastAPI Depends() target — actual type is MCPServerHealthRepo."""
-    if _health_repo is None:
-        raise RuntimeError("health repo not initialised")
-    return _health_repo
-
-
-# Credential-store DI singletons re-exported from credential_composition (split
-# for the file-size limit) so their import paths keep working.
-from coffer.surfaces.http.credential_composition import (  # noqa: E402, I001
-    get_credential_store as get_credential_store,
-    get_master_key_manager as get_master_key_manager,
-    set_credential_store as set_credential_store,
-    set_master_key_manager as set_master_key_manager,
-)
-
-# --- Agent kind-specific dependency providers (spec agent-registry) ---
-# Split into dependencies_agent for the file-size budget; re-exported here so the
-# existing `from ...dependencies import get_agent_service` paths keep working.
-from coffer.surfaces.http.dependencies_agent import (  # noqa: E402
-    get_agent_config_file_service as get_agent_config_file_service,
-    get_agent_mcp_service as get_agent_mcp_service,
-    get_agent_service as get_agent_service,
-    get_auto_detect_service as get_auto_detect_service,
-    get_fs_browse_service as get_fs_browse_service,
-    get_provider_service as get_provider_service,
-    set_agent_config_file_service as set_agent_config_file_service,
-    set_agent_mcp_service as set_agent_mcp_service,
-    set_agent_service as set_agent_service,
-    set_auto_detect_service as set_auto_detect_service,
-    set_provider_service as set_provider_service,
-)
-
-
-# --- Skill kind (spec skill-manager) ---
-
-_skill_service: Any | None = None
-
-
-def set_skill_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _skill_service
-    _skill_service = svc
-
-
-def get_skill_service() -> Any:
-    """FastAPI Depends() target — actual type is SkillService."""
-    if _skill_service is None:
-        raise RuntimeError("skill service not initialised")
-    return _skill_service
-
-
-# --- knowledge kind ---
-# One provider, because there is one service: the pre-merge ``kb`` and ``memory``
-# services were the same object seen from two angles.
-
-_knowledge_service: Any | None = None
-
-
-def set_knowledge_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _knowledge_service
-    _knowledge_service = svc
-
-
-def get_knowledge_service() -> Any:
-    """FastAPI Depends() target — actual type is KnowledgeService."""
-    if _knowledge_service is None:
-        raise RuntimeError("knowledge service not initialised")
-    return _knowledge_service
-
-
-_search_service: Any | None = None
-
-
-def set_search_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _search_service
-    _search_service = svc
-
-
-def get_search_service() -> Any:
-    """FastAPI Depends() target — actual type is SearchService."""
-    if _search_service is None:
-        raise RuntimeError("search service not initialised")
-    return _search_service
-
-
-_ingest_service: Any | None = None
-
-
-def set_ingest_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _ingest_service
-    _ingest_service = svc
-
-
-def get_ingest_service() -> Any:
-    """FastAPI Depends() target — actual type is IngestService."""
-    if _ingest_service is None:
-        raise RuntimeError("ingest service not initialised")
-    return _ingest_service
-
-
-# --- memory kind ---
-
-_memory_service: Any | None = None
-
-
-def set_memory_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _memory_service
-    _memory_service = svc
-
-
-def get_memory_service() -> Any:
-    """FastAPI Depends() target — actual type is MemoryService."""
-    if _memory_service is None:
-        raise RuntimeError("memory service not initialised")
-    return _memory_service
-
-
-_memory_override_repo: Any | None = None
-
-
-def set_memory_override_repo(repo: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _memory_override_repo
-    _memory_override_repo = repo
-
-
-def get_memory_override_repo() -> Any:
-    """FastAPI Depends() target — actual type is OverrideRepository."""
-    if _memory_override_repo is None:
-        raise RuntimeError("memory override repo not initialised")
-    return _memory_override_repo
-
-
-_memory_delivery_service: Any | None = None
-
-
-def set_memory_delivery_service(svc: Any) -> None:
-    """Called by the composition root once on startup."""
-    global _memory_delivery_service
-    _memory_delivery_service = svc
-
-
-def get_memory_delivery_service() -> Any:
-    """FastAPI Depends() target — actual type is DeliveryService."""
-    if _memory_delivery_service is None:
-        raise RuntimeError("memory delivery service not initialised")
-    return _memory_delivery_service
-
-
-# More providers split out for the file-size budget: knowledge.tidy_state
-# (imported there directly by the composition roots, NOT re-exported here so
-# kind-agnostic core stays clean) and chat.dependencies (re-exported at top).
