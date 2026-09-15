@@ -1056,11 +1056,6 @@
       "button": "上传",
       "uploading": "正在上传…",
       "success": "已上传「{{title}}」。"
-    },
-    "search": {
-      "placeholder": "搜索本集合…",
-      "button": "搜索",
-      "noResults": "没有匹配的结果。"
     }
   },
   "memory": {

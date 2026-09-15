@@ -16,11 +16,9 @@ import {
   getFile,
   getTree,
   listCollections,
-  search,
   tidyCollection,
   uploadFile,
 } from "@/lib/api/knowledge";
-import type { SearchOut } from "@/lib/api/knowledgeTypes";
 import {
   knowledgeCollectionsKey,
   knowledgeFileKey,
@@ -119,20 +117,6 @@ export function useUploadKnowledgeFile() {
     mutationFn: (vars: { collection: string; directory?: string | null; file: File }) =>
       uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/**
- * Literal search over one collection. Modelled as a mutation rather than a
- * query: it runs when the user submits, not whenever its inputs change, and
- * the answer is never cached — the files it searched may have changed since.
- */
-export function useKnowledgeSearch() {
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation<SearchOut, unknown, { query: string; collection?: string | null }>({
-    mutationFn: (vars) => search(vars.query, vars.collection),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

@@ -1056,11 +1056,6 @@
       "button": "Upload",
       "uploading": "Uploading…",
       "success": "Uploaded “{{title}}”."
-    },
-    "search": {
-      "placeholder": "Search this collection…",
-      "button": "Search",
-      "noResults": "No results for this search."
     }
   },
   "memory": {

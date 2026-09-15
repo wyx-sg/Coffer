@@ -16,10 +16,9 @@ vi.mock("@/lib/hooks/useKnowledge", () => ({
   useKnowledgeTree: vi.fn(),
   useKnowledgeFile: vi.fn(),
   useTidyCollection: vi.fn(),
-  // Mounted transitively via KnowledgeUploadButton / KnowledgeSearchPanel;
+  // Mounted transitively via KnowledgeUploadButton;
   // this suite only exercises the tree + preview, so both get an inert default.
   useUploadKnowledgeFile: vi.fn(),
-  useKnowledgeSearch: vi.fn(),
 }));
 
 const {
@@ -27,24 +26,17 @@ const {
   useKnowledgeFile,
   useTidyCollection,
   useUploadKnowledgeFile,
-  useKnowledgeSearch,
 } = await import("@/lib/hooks/useKnowledge");
 const treeMock = vi.mocked(useKnowledgeTree);
 const fileMock = vi.mocked(useKnowledgeFile);
 const tidyMock = vi.mocked(useTidyCollection);
 const uploadMock = vi.mocked(useUploadKnowledgeFile);
-const searchMock = vi.mocked(useKnowledgeSearch);
 
 function stubInertDefaults() {
   uploadMock.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof useUploadKnowledgeFile>);
-  searchMock.mockReturnValue({
-    mutate: vi.fn(),
-    data: undefined,
-    isPending: false,
-  } as unknown as ReturnType<typeof useKnowledgeSearch>);
 }
 
 function renderPage() {
