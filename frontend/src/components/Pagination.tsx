@@ -1,3 +1,6 @@
+// frontend/src/components/Pagination.tsx
+// Shared pager for DataTable / DataCardGrid: summary, per-page selector, and
+// icon-sized prev/next buttons named for assistive tech via t().
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";

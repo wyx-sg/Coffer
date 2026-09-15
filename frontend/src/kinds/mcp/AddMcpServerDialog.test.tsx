@@ -19,10 +19,7 @@ function wrap() {
       <MemoryRouter initialEntries={["/mcp-servers"]}>
         <Routes>
           <Route path="/mcp-servers" element={<AddMcpServerDialog />} />
-          <Route
-            path="/mcp-servers/mcp_server/:name"
-            element={<div data-testid="detail-page">detail</div>}
-          />
+          <Route path="/mcp-servers/:name" element={<div data-testid="detail-page">detail</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>

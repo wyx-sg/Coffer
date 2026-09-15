@@ -141,7 +141,9 @@ beforeEach(() => {
 describe("AgentOverviewTab", () => {
   test("shows the agent type and config directory", () => {
     render(<AgentOverviewTab agent={agent} />);
-    expect(screen.getByText("claude_code")).toBeInTheDocument();
+    // The type reads as a product name, never the registry key.
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+    expect(screen.queryByText("claude_code")).not.toBeInTheDocument();
     expect(screen.getByText("/home/me/.claude")).toBeInTheDocument();
   });
 

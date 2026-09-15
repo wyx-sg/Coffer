@@ -25,6 +25,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConnectionsTable } from "@/components/settings/ConnectionsTable";
 import { ProviderForm } from "@/components/settings/ProviderForm";
+import { ProviderWelcomePanel } from "@/components/settings/ProviderWelcomePanel";
 import { useProviders, useCreateProvider } from "@/lib/hooks/useProviders";
 import { translateApiError } from "@/lib/api/errors";
 
@@ -34,27 +35,16 @@ export function ModelProvidersPage() {
   const createProvider = useCreateProvider();
 
   const [adding, setAdding] = useState(false);
+  const hasItems = providers.length > 0;
 
   const closeAdd = () => {
     setAdding(false);
     createProvider.reset();
   };
 
-  if (isPending) {
-    return (
-      <Card>
-        <CardContent className="py-6">{t("common.loading")}</CardContent>
-      </Card>
-    );
-  }
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="py-6 text-destructive">{translateApiError(t, error)}</CardContent>
-      </Card>
-    );
-  }
-
+  // The header stays mounted through loading and error — the page never goes
+  // blank — and the Add action moves into the welcome panel while the library
+  // is empty, so the one obvious next step is stated exactly once.
   return (
     <div className="space-y-6">
       <PageHeader
@@ -62,14 +52,26 @@ export function ModelProvidersPage() {
         title={t("settings.connections.title")}
         subtitle={t("settings.connections.subtitle")}
         actions={
-          <Button onClick={() => setAdding(true)}>
-            <Plus className="mr-1.5 size-4" />
-            {t("settings.connections.add")}
-          </Button>
+          hasItems ? (
+            <Button onClick={() => setAdding(true)}>
+              <Plus className="mr-1.5 size-4" />
+              {t("settings.connections.add")}
+            </Button>
+          ) : null
         }
       />
 
-      <ConnectionsTable providers={providers} />
+      {error ? (
+        <Card className="border-destructive/40">
+          <CardContent className="py-6 text-sm text-destructive">
+            {translateApiError(t, error)}
+          </CardContent>
+        </Card>
+      ) : !isPending && !hasItems ? (
+        <ProviderWelcomePanel onAdd={() => setAdding(true)} />
+      ) : (
+        <ConnectionsTable providers={providers} isLoading={isPending} />
+      )}
 
       <Dialog open={adding} onOpenChange={(open) => !open && closeAdd()}>
         <DialogContent className="max-w-md">

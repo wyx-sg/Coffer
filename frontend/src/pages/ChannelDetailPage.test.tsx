@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { ChannelDetailPage } from "./ChannelDetailPage";
 import { acceptance } from "@/test/acceptance";
+import { ApiError } from "@/lib/api/errors";
 import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
 
 vi.mock("@/lib/hooks/useResources", () => ({ useResource: vi.fn() }));
@@ -238,7 +239,11 @@ describe("ChannelDetailPage", () => {
     stubPairing();
     renderPage();
 
-    expect(screen.getByRole("button", { name: /send test message/i })).toBeDisabled();
+    // Card title, field label and button each say their own thing — "Send
+    // test message" no longer appears three times over.
+    expect(screen.getByText("Test delivery")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^message$/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^send$/i })).toBeDisabled();
   });
 
   test("sending a test message calls notify with the typed text", () => {
@@ -254,9 +259,41 @@ describe("ChannelDetailPage", () => {
     stubPairing();
     renderPage();
 
-    fireEvent.change(screen.getByLabelText(/test message/i), { target: { value: "ping" } });
-    fireEvent.click(screen.getByRole("button", { name: /send test message/i }));
+    fireEvent.change(screen.getByLabelText(/^message$/i), { target: { value: "ping" } });
+    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
     expect(notify.mutate).toHaveBeenCalledWith("ping");
+  });
+
+  test("the header carries the platform chip, a back link, and a stopped adapter reads as attention", () => {
+    stubResource();
+    stubStatus({ running: false });
+    stubPairing();
+    renderPage();
+
+    expect(screen.getByRole("heading", { name: "st" })).toBeInTheDocument();
+    expect(screen.getByText("SeaTalk")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to channels/i })).toHaveAttribute(
+      "href",
+      "/channels",
+    );
+    // The same warn tone the list's health badge uses for a stopped adapter —
+    // not the brand colour, not muted.
+    expect(screen.getByText("Stopped")).toHaveClass("text-status-warn");
+  });
+
+  test("a missing channel shows the shared empty state with the translated error", () => {
+    useResourceMock.mockReturnValue({
+      data: undefined,
+      isPending: false,
+      error: new ApiError("RESOURCE_NOT_FOUND", "raw server text"),
+    } as unknown as ReturnType<typeof useResource>);
+    stubStatus();
+    stubPairing();
+    renderPage();
+
+    expect(screen.getAllByText(/not found/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText("raw server text")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: /back to channels/i }).length).toBeGreaterThan(0);
   });
 });
 

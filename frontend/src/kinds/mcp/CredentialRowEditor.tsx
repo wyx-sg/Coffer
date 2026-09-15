@@ -50,7 +50,7 @@ export function CredentialRowEditor({ creds, onUpdate, onRemove, onAdd }: Props)
               value={row.value}
               onChange={(e) => onUpdate(idx, { value: e.target.value })}
               placeholder={
-                row.originalRef ? t("mcp.edit.credentialKeep") : t("mcp.edit.credentialNew")
+                row.originalRef ? t("common.secretKeepBlank") : t("mcp.edit.credentialNew")
               }
             />
             <Button

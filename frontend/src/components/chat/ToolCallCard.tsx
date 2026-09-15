@@ -38,7 +38,7 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
         </span>
         <span
           className={cn(
-            "rounded px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide",
+            "rounded-sm px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide",
             !hasResult
               ? "bg-muted text-muted-foreground"
               : isError

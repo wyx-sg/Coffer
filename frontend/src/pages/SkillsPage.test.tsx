@@ -2,7 +2,7 @@
 //
 // Carries the acceptance marker for spec scenario "desktop and CLI cover
 // every operation" — the desktop surface that the skill-manager spec §US 6
-// requires. The page now mirrors AgentsPage: PageHeader + welcome/loading/
+// requires. The page now mirrors AgentsPage: PageHeader + welcome/skeleton/
 // error/grid, with the Add action opening a dialog. (Verification moved to
 // per-row + bulk actions inside SkillsTable, covered by SkillsTable.test.tsx.)
 
@@ -50,11 +50,7 @@ const SAMPLE: SkillOut[] = [
   },
 ];
 
-function stubHooks(opts: {
-  data?: SkillOut[];
-  isPending?: boolean;
-  error?: unknown;
-}) {
+function stubHooks(opts: { data?: SkillOut[]; isPending?: boolean; error?: unknown }) {
   useSkillsMock.mockReturnValue({
     data: opts.data,
     isPending: opts.isPending ?? false,
@@ -86,10 +82,14 @@ acceptance("skill-manager", "desktop and CLI cover every operation", async () =>
 describe("SkillsPage", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("renders the loading state when the query is pending", () => {
+  test("keeps the header up over skeleton rows while the query is pending", () => {
     stubHooks({ isPending: true });
     render(<SkillsPage />, { wrapper: wrap(null) });
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    // No bare "Loading…" card: the title is already there over a busy table.
+    expect(screen.getByRole("heading", { name: /skills/i })).toBeInTheDocument();
+    expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getAllByTestId("skeleton-row").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
   });
 
   test("renders the welcome panel when no skills exist", () => {

@@ -1,5 +1,8 @@
 // components/chat/ConversationListItem.tsx
-// Single entry in the history column with inline rename and delete actions.
+// Single entry in the history column: the title is the button that opens the
+// thread; rename / archive / restore / delete sit beside it as their own
+// buttons (a row that is itself a control cannot contain controls). Renaming
+// swaps the title for an inline input with Save / Cancel.
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Trash2, Check, X, Archive, ArchiveRestore } from "lucide-react";
@@ -18,6 +21,9 @@ interface Props {
   /** Restore action (archived view). When present, replaces archive + rename. */
   onRestore?: () => void;
 }
+
+const ACTION_CLS =
+  "size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100";
 
 export function ConversationListItem({
   conversation,
@@ -50,7 +56,7 @@ export function ConversationListItem({
 
   if (renaming) {
     return (
-      <div className="flex items-center gap-1 rounded-md bg-primary/5 px-2 py-1.5">
+      <li className="flex items-center gap-1 rounded-md bg-primary/5 px-2 py-1.5">
         <input
           ref={inputRef}
           value={draft}
@@ -59,95 +65,101 @@ export function ConversationListItem({
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") cancelRename();
           }}
-          className="flex-1 bg-transparent text-sm outline-none"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none"
           aria-label={t("chat.history.renameAria")}
         />
-        <Button variant="ghost" size="sm" className="size-6 p-0" onClick={commitRename}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="size-6 p-0"
+          onClick={commitRename}
+          aria-label={t("common.save")}
+        >
           <Check className="size-3.5" />
         </Button>
-        <Button variant="ghost" size="sm" className="size-6 p-0" onClick={cancelRename}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="size-6 p-0"
+          onClick={cancelRename}
+          aria-label={t("common.cancel")}
+        >
           <X className="size-3.5" />
         </Button>
-      </div>
+      </li>
     );
   }
 
   return (
-    <div
+    <li
       className={cn(
-        "group flex cursor-pointer items-center gap-1 rounded-md px-2 py-1.5 text-sm transition-colors",
+        "group flex items-center gap-1 rounded-md pr-1 text-sm transition-colors",
         isActive
           ? "bg-primary/10 text-primary"
           : "text-foreground/80 hover:bg-secondary hover:text-foreground",
       )}
-      role="option"
-      aria-selected={isActive}
-      onClick={onSelect}
-      onKeyDown={(e) => e.key === "Enter" && onSelect()}
-      tabIndex={0}
     >
-      <span className="flex-1 truncate">{conversation.title}</span>
+      <button
+        type="button"
+        className="min-w-0 flex-1 truncate px-2 py-1.5 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        onClick={onSelect}
+        aria-current={isActive ? "true" : undefined}
+      >
+        {conversation.title}
+      </button>
       {conversation.channel_binding != null && (
-        <span className="shrink-0 rounded-full border border-transparent bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground">
+        <span className="shrink-0 rounded-xl border border-transparent bg-secondary px-1.5 py-0.5 text-xs font-medium text-secondary-foreground">
           {t("chat.history.viaChannel", { channel: conversation.channel_binding.channel })}
         </span>
       )}
-      {onRestore ? (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-          onClick={(e) => {
-            e.stopPropagation();
-            onRestore();
-          }}
-          aria-label={t("chat.history.restore")}
-        >
-          <ArchiveRestore className="size-3" />
-        </Button>
-      ) : (
-        <>
+      <span className="flex shrink-0 items-center">
+        {onRestore ? (
           <Button
             variant="ghost"
             size="sm"
-            className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              setDraft(conversation.title);
-              setRenaming(true);
-            }}
-            aria-label={t("chat.history.rename")}
+            className={ACTION_CLS}
+            onClick={onRestore}
+            aria-label={t("chat.history.restore")}
           >
-            <Pencil className="size-3" />
+            <ArchiveRestore className="size-3" />
           </Button>
-          {onArchive && (
+        ) : (
+          <>
             <Button
               variant="ghost"
               size="sm"
-              className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                onArchive();
+              className={ACTION_CLS}
+              onClick={() => {
+                setDraft(conversation.title);
+                setRenaming(true);
               }}
-              aria-label={t("chat.history.archive")}
+              aria-label={t("chat.history.rename")}
             >
-              <Archive className="size-3" />
+              <Pencil className="size-3" />
             </Button>
-          )}
-        </>
-      )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="size-5 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100 hover:text-destructive"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        aria-label={t("chat.history.delete")}
-      >
-        <Trash2 className="size-3" />
-      </Button>
-    </div>
+            {onArchive && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={ACTION_CLS}
+                onClick={onArchive}
+                aria-label={t("chat.history.archive")}
+              >
+                <Archive className="size-3" />
+              </Button>
+            )}
+          </>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(ACTION_CLS, "hover:text-destructive")}
+          onClick={onDelete}
+          aria-label={t("chat.history.delete")}
+        >
+          <Trash2 className="size-3" />
+        </Button>
+      </span>
+    </li>
   );
 }

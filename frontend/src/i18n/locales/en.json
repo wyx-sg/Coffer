@@ -18,6 +18,7 @@
     "revealFailed": "Couldn't reveal the file."
   },
   "common": {
+    "close": "Close",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -33,9 +34,17 @@
     "clear": "Clear",
     "rawLog": "Raw log",
     "done": "Done",
+    "saved": "Saved",
     "moreActions": "More actions",
     "showPassword": "Show",
     "hidePassword": "Hide",
+    "dateTimeFormatHint": "YYYY-MM-DD HH:mm:ss",
+    "secretKeepBlank": "Leave blank to keep the current value",
+    "discardChanges": {
+      "title": "Discard unsaved changes?",
+      "body": "Your edits to this file will be lost.",
+      "confirm": "Discard"
+    },
     "bulk": {
       "selected": "{{count}} selected",
       "selectAll": "Select all",
@@ -53,7 +62,10 @@
         "allFailed": "{{count}} failed"
       }
     },
-    "backTo": "Back to {{label}}"
+    "copy": "Copy",
+    "copied": "Copied",
+    "backTo": "Back to {{label}}",
+    "emptyValue": "—"
   },
   "files": {
     "conflict": "This file changed on disk since you opened it, so the save was refused. Your edits are still here — copy them somewhere safe, then reload to take the version on disk.",
@@ -63,6 +75,7 @@
     "readOnlyMissing": "Not created yet — read-only"
   },
   "nav": {
+    "skipToContent": "Skip to content",
     "aria": {
       "primary": "Primary navigation"
     },
@@ -108,12 +121,8 @@
         "body": "The vault binds 127.0.0.1; nothing leaves your machine without an explicit surface."
       }
     },
-    "search": "Search name",
-    "statusFilter": "Status",
     "status": {
-      "all": "All",
-      "enabled": "Enabled",
-      "disabled": "Disabled"
+      "all": "All"
     },
     "noMatches": "No servers match your search.",
     "cols": {
@@ -121,7 +130,8 @@
       "transport": "Transport",
       "health": "Health",
       "description": "Description",
-      "status": "Status"
+      "status": "Status",
+      "reach": "Reach"
     }
   },
   "mcp": {
@@ -141,7 +151,7 @@
       "deleteServer": "Delete server",
       "testConnection": "Test connection",
       "testing": "Testing…",
-      "testFailure": "FAIL ({{latency}} ms): {{error}}",
+      "testFailure": "Failed ({{latency}} ms): {{error}}",
       "refresh": "Refresh capabilities",
       "backToResources": "Back to MCP servers",
       "tabs": {
@@ -164,9 +174,9 @@
       "edit": "Edit"
     },
     "capabilities": {
-      "emptyTool": "No tools discovered from this upstream yet.",
-      "emptyResource": "No resources discovered from this upstream yet.",
-      "emptyPrompt": "No prompts discovered from this upstream yet.",
+      "emptyTool": "No tools discovered from this upstream yet — run Refresh capabilities to query it again.",
+      "emptyResource": "No resources discovered from this upstream yet — run Refresh capabilities to query it again.",
+      "emptyPrompt": "No prompts discovered from this upstream yet — run Refresh capabilities to query it again.",
       "loadError": "Couldn't load capabilities from this upstream — it may be unreachable. Try Test connection, then Refresh capabilities.",
       "noMatches": "No capabilities match your search.",
       "searchPlaceholder": "Search by name",
@@ -182,7 +192,6 @@
     "invocations": {
       "empty": "No invocations yet.",
       "noMatches": "No invocations match your filters.",
-      "loading": "Loading invocations…",
       "searchPlaceholder": "Search invocations",
       "filterSearch": "Search",
       "filterStatus": "Status",
@@ -202,9 +211,12 @@
       }
     },
     "health": {
-      "healthy": "healthy",
-      "unknown": "unknown",
-      "failing": "failing"
+      "healthy": "Healthy",
+      "unknown": "Unknown",
+      "failing": "Failing"
+    },
+    "add": {
+      "invalidJson": "That isn't valid JSON: {{detail}}"
     },
     "import": {
       "jsonLabel": "MCP server JSON",
@@ -236,7 +248,6 @@
       "noCredentials": "No credentials.",
       "addCredential": "Add credential",
       "removeCredential": "Remove credential",
-      "credentialKeep": "Leave blank to keep",
       "credentialNew": "Secret value",
       "credentialHint": "Credential values are encrypted into Coffer's local database. Removing a credential deletes its stored entry.",
       "errRenameNeedsValue": "Re-enter the secret value for \"{{name}}\" to rename it."
@@ -251,17 +262,27 @@
       "idleHint": "Before an unused connection closes. 60–86400, default 600."
     }
   },
+  "timeRange": {
+    "from": "From",
+    "to": "To",
+    "apply": "Apply",
+    "1h": "Last 1 hour",
+    "6h": "Last 6 hours",
+    "24h": "Last 24 hours",
+    "7d": "Last 7 days",
+    "30d": "Last 30 days",
+    "all": "All time",
+    "custom": "Custom range…"
+  },
   "audit": {
     "filter": {
       "actor": "Actor",
       "all": "All",
-      "from": "From",
-      "to": "To",
       "search": "Search",
       "searchPlaceholder": "Search activity"
     },
     "actor": {
-      "ui": "User",
+      "ui": "You (web UI)",
       "cli": "CLI",
       "api": "API",
       "system": "Coffer",
@@ -269,16 +290,6 @@
       "agent": "Agent",
       "channel": "Channel"
     },
-    "timeRange": {
-      "1h": "Last 1 hour",
-      "6h": "Last 6 hours",
-      "24h": "Last 24 hours",
-      "7d": "Last 7 days",
-      "30d": "Last 30 days",
-      "all": "All time",
-      "custom": "Custom range…"
-    },
-    "applyRange": "Apply",
     "activity": {
       "agent_config_file_deleted": "Deleted {{resource}} config ({{key}})",
       "agent_config_file_written": "Edited {{resource}} config ({{key}})",
@@ -314,7 +325,7 @@
       "resource_disabled": "Disabled {{resource}}",
       "resource_enabled": "Enabled {{resource}}",
       "resource_renamed": "Renamed to {{resource}}",
-      "resource_scope_updated": "Updated scope for {{resource}}",
+      "resource_scope_updated": "Updated reach for {{resource}}",
       "resource_updated": "Reconfigured {{resource}}",
       "retention_updated": "Updated a data-retention policy",
       "skill_adopted": "Adopted skill {{resource}}",
@@ -372,30 +383,39 @@
     "subtitle": "Your data and app preferences.",
     "tabs": {
       "general": "General",
-      "engine": "Engine",
+      "engine": "Coffer's model",
       "data": "Data",
       "security": "Security",
       "about": "About"
     },
     "general": {
-      "title": "Display",
+      "title": "Preferences",
       "pageSize": "Default rows per page",
       "pageSizeHelp": "The initial page size for every table.",
       "preferredEditor": "Preferred editor",
       "preferredEditorHelp": "The editor Coffer opens managed files with. Pick a detected editor, or type any app name / launch command. Empty uses the system default.",
       "preferredEditorSystemDefault": "System default",
-      "preferredEditorChoose": "Choose editor"
+      "preferredEditorCustom": "Custom…",
+      "preferredEditorCustomCommand": "Custom editor command",
+      "preferredEditorCustomPlaceholder": "e.g. zed or /Applications/Zed.app"
     },
     "retention": {
       "title": "Data retention",
       "keepForever": "Keep forever",
-      "days": "Retention (days)",
-      "lastPruned": "Last pruned: {{when}} ({{rows}} rows)",
-      "never": "never",
+      "days": "Keep for (days)",
+      "minDays": "Minimum is 1 day",
+      "lastPruned": "Last pruned: {{when}} — {{rows}} rows removed",
+      "neverPruned": "Not pruned yet",
+      "shortenTitle": "Shorten retention to {{days}} days?",
+      "shortenBody": "The next prune will delete older rows.",
+      "shortenConfirm": "Shorten",
       "pruneAll": "Clear expired data now",
       "pruning": "Pruning…",
       "pruneDescription": "Apply the current retention policies immediately.",
-      "pruneResult": "Pruned {{summary}}",
+      "pruneConfirmTitle": "Clear expired data now?",
+      "pruneConfirmBody": "Rows older than each policy's retention window are deleted permanently.",
+      "pruneRow": "Removed {{rows}} rows from {{name}}",
+      "pruneNothing": "Nothing to clear",
       "policy": {
         "audit_log": {
           "name": "Audit log",
@@ -421,9 +441,12 @@
     },
     "about": {
       "title": "About Coffer",
+      "copyDiagnostics": "Copy diagnostics",
       "fields": {
         "name": "Name",
         "version": "Version",
+        "port": "Daemon port",
+        "startedAt": "Daemon started",
         "license": "License",
         "source": "Source"
       }
@@ -434,34 +457,21 @@
         "description": "Secrets are always encrypted into Coffer's local database. This controls where the encryption master key lives.",
         "fileNote": "Master key: file beside the database (no keychain prompts).",
         "keychainNote": "Master key: OS keychain (may prompt once per daemon start).",
-        "toggle": "Store master key in OS keychain"
+        "toggle": "Store master key in OS keychain",
+        "confirmKeychain": {
+          "title": "Move the master key to the OS keychain?",
+          "body": "Coffer re-stores the key; macOS may ask you to allow access on each daemon start."
+        },
+        "confirmFile": {
+          "title": "Move the master key to a file beside the database?",
+          "body": "Coffer re-stores the key in a file next to its database; keychain prompts stop."
+        },
+        "confirmMove": "Move key",
+        "syncLink": "Export or import the key on the Sync page"
       }
     },
     "models": {
-      "title": "Models",
-      "subtitle": "Coffer's internal model — powers tool/knowledge retrieval and the knowledge organizer.",
-      "add": "Add model",
-      "addTitle": "Add model",
-      "editTitle": "Edit model",
-      "deleteTitle": "Delete model?",
-      "deleteConfirm": "Delete model \"{{name}}\"? This cannot be undone.",
-      "empty": "No models configured yet. Add one to start chatting.",
-      "default": "Default",
-      "displayName": "Display name",
-      "displayNamePlaceholder": "e.g. Claude 3.5 Sonnet",
-      "provider": "Provider",
-      "modelId": "Model ID",
-      "modelIdPlaceholder": "e.g. claude-3-5-sonnet-20241022",
-      "modelIdPlaceholderEmbedding": "e.g. text-embedding-3-small",
-      "credentialRef": "Credential reference",
-      "credentialRefPlaceholder": "e.g. ANTHROPIC_API_KEY",
-      "baseUrl": "Base URL",
-      "baseUrlPlaceholder": "e.g. http://localhost:11434",
-      "setDefault": "Set as default",
-      "llmTitle": "Coffer's internal model",
-      "fetchModels": "Fetch models",
-      "testConnection": "Test connection",
-      "fetchedCount": "{{count}} models fetched — pick one or type your own"
+      "testConnection": "Test connection"
     },
     "connections": {
       "title": "Model providers",
@@ -469,14 +479,38 @@
       "add": "Add model provider",
       "addTitle": "Add model provider",
       "editTitle": "Edit model provider",
-      "secretKeepBlank": "Leave blank to keep the current key",
       "empty": "No model providers yet.",
       "switch": "Switch",
       "active": "Active",
-      "compatibleAgents": "Compatible agents",
+      "activeHint": "This provider powers Coffer's own model (Settings → Coffer's model).",
       "reachHint": "Which agents this provider reaches is set with the reach control — on the provider's row in the list, or on its own page.",
-      "agentClaudeCode": "Claude Code",
-      "agentCodex": "Codex",
+      "protocols": {
+        "anthropic": "Anthropic",
+        "openai": "OpenAI-compatible",
+        "ollama": "Ollama",
+        "unknown": "Unknown"
+      },
+      "errors": {
+        "nameRequired": "Enter a name",
+        "baseUrl": "Enter a full URL, e.g. https://api.openai.com/v1",
+        "secretRequired": "Enter the API key"
+      },
+      "welcome": {
+        "title": "Bring your own model endpoint",
+        "body": "A model provider is a vendor endpoint plus its API key. Add one and every agent Coffer manages can run on it — the key is stored once, in Coffer's credential store.",
+        "featureShare": {
+          "title": "One key, every agent",
+          "body": "Store the endpoint and key once; Coffer projects it into each agent's own configuration."
+        },
+        "featureCurate": {
+          "title": "Curate the model list",
+          "body": "Pick which of the endpoint's models are offered, and what kind each one is."
+        },
+        "featureEngine": {
+          "title": "Powers Coffer too",
+          "body": "The same provider can run Coffer's own model for memory organisation."
+        }
+      },
       "deleteTitle": "Delete model provider",
       "deleteConfirm": "Delete model provider \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",
@@ -526,8 +560,8 @@
       }
     },
     "internalEngine": {
-      "title": "Internal engine",
-      "subtitle": "The model provider and model Coffer's own LLM engine (memory organizer / reorg) runs on. The provider supplies the endpoint + key; the model is chosen separately here.",
+      "title": "Coffer's model",
+      "subtitle": "The provider and model Coffer uses for its own passes, such as organising memory.",
       "connection": "Model provider",
       "connectionPlaceholder": "Select a model provider",
       "model": "Model",
@@ -552,17 +586,17 @@
     "title": "Page not found",
     "subtitle": "No route matches {{path}}.",
     "bodyTitle": "You might have followed a stale link",
-    "body": "If you typed the URL by hand, double-check it. Otherwise jump back to the resources list — every Coffer page is reachable from the sidebar.",
-    "cta": "Back to resources"
+    "body": "If you typed the URL by hand, double-check it. Otherwise head back home — every Coffer page is reachable from the sidebar.",
+    "cta": "Back to home"
   },
   "errors": {
     "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered.",
     "AGENT_CONFIG_PARSE_ERROR": "The agent's config file couldn't be parsed",
     "AGENT_CONFIG_REJECTED": "The agent configuration was rejected",
-    "BACKUP_REMOTE_INVALID": "That backup remote cannot be used as given — check the URL, the branch, and that the interval is a positive number of seconds.",
+    "BACKUP_REMOTE_INVALID": "That remote can't be used — check the URL, the branch, and that the interval is a positive number of seconds.",
     "BAD_REQUEST": "The request was rejected as malformed.",
-    "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet",
-    "CHANNEL_NOT_RUNNING": "The channel adapter is not running",
+    "CHANNEL_NOT_PAIRED": "This channel has no paired peer yet — generate a pairing code and send it to the bot",
+    "CHANNEL_NOT_RUNNING": "The channel adapter is not running — enable the channel to start it",
     "CHANNEL_SEND_FAILED": "Delivery to the IM platform failed",
     "CONFIG_FILE_FORMAT_INVALID": "The content isn't valid for this file's format. The file was left unchanged.",
     "CONFIG_FILE_NOT_ALLOWED": "That config file isn't allowed for this agent",
@@ -570,8 +604,8 @@
     "CONFIG_INVALID": "Configuration is invalid",
     "CONVERSATION_NOT_FOUND": "Conversation not found",
     "CREDENTIAL_IN_USE": "This credential is still referenced by other resources. Detach them before deleting it.",
-    "CREDENTIAL_LOCKED": "The OS keychain is locked",
-    "CREDENTIAL_MISSING": "Required credential is missing from the credential store",
+    "CREDENTIAL_LOCKED": "The OS keychain is locked — unlock it and retry",
+    "CREDENTIAL_MISSING": "Required credential is missing from the credential store — store it again on the resource's edit page",
     "CREDENTIAL_UNREADABLE": "Stored credential could not be decrypted with the current master key",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
@@ -581,7 +615,7 @@
     "FS_PATH_NOT_BROWSABLE": "That path can't be browsed",
     "FS_PATH_NOT_OPENABLE": "That path cannot be opened on this machine",
     "GENERIC_CREATE_NOT_ALLOWED": "This kind can't be created directly",
-    "GIT_MIRROR_FAILED": "Git could not complete that backup operation. The commit is safe locally; check the remote URL, the branch, and the push credential.",
+    "GIT_MIRROR_FAILED": "Git couldn't push. Your changes are committed locally; check the remote URL, branch and push credential.",
     "GREP_PATTERN_INVALID": "Invalid grep pattern",
     "HOST_NOT_LOOPBACK": "Coffer only answers requests addressed to its own loopback address.",
     "INGEST_REJECTED": "The document was rejected during ingestion",
@@ -597,7 +631,7 @@
     "KNOWLEDGE_PATH_UNSAFE": "That path is outside the knowledge collection",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "This file is too large to upload. The limit is 20 MB.",
     "MASTER_KEY_FILE_INVALID": "That is not a valid master key",
-    "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets",
+    "MASTER_KEY_MISSING": "The master key is missing — Coffer can't decrypt stored secrets. Import it on the Sync page.",
     "MCP_ENTRY_NOT_FOUND": "MCP entry not found",
     "MCP_ENTRY_PROTECTED": "This MCP entry is protected and can't be changed",
     "MCP_ENTRY_SOURCE_AMBIGUOUS": "The MCP entry's source is ambiguous — specify which one",
@@ -612,7 +646,7 @@
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NOT_FOUND": "Not found.",
-    "NO_ACTIVE_PROVIDER": "No model provider is active",
+    "NO_ACTIVE_PROVIDER": "No model provider is active — add one on the Model providers page",
     "PLUGIN_NOT_FOUND": "Plugin not found",
     "PLUGIN_TOGGLE_UNSUPPORTED": "This plugin can't be enabled or disabled here",
     "PLUGIN_UNINSTALL_FAILED": "Uninstall failed",
@@ -622,13 +656,13 @@
     "RECONVERSION_BLOCKED": "Reindexing is already in progress",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "RESOURCE_NOT_FOUND": "Resource not found",
-    "SCOPE_INVALID": "That scope isn't valid for this resource kind",
+    "SCOPE_INVALID": "That reach isn't valid for this resource kind",
     "SCOPE_UNRESOLVED": "The memory scope couldn't be resolved",
     "SHIM_NOT_FOUND": "Couldn't find the coffer-mcp-shim binary. Install Coffer so the shim is on PATH, or set COFFER_MCP_SHIM_PATH.",
-    "SKILL_DIR_NOT_WRITABLE": "The skills directory isn't writable",
+    "SKILL_DIR_NOT_WRITABLE": "The skills directory isn't writable — check its permissions",
     "SKILL_FILE_STALE": "The skill file changed on disk since you loaded it. Reload and retry.",
     "SKILL_INVALID": "The skill is invalid",
-    "SKILL_OUT_OF_SCOPE": "This skill isn't in scope for this agent on this machine",
+    "SKILL_OUT_OF_SCOPE": "This skill's reach doesn't include this agent on this machine",
     "SYNC_APPLIER_MISSING": "Nothing in this vault knows how to apply that path",
     "SYNC_BUNDLE_INVALID": "That folder is not a Coffer export bundle",
     "SYNC_BUNDLE_TOO_NEW": "That bundle was written by a newer Coffer; upgrade before importing",
@@ -638,7 +672,7 @@
     "SYNC_NOTHING_TO_ROLL_BACK": "There is no round to roll back to",
     "SYNC_SERIALIZATION_INVALID": "That bundle's contents could not be read",
     "TARGET_CONFLICT": "A skill already exists at the target location",
-    "TOOL_DISABLED": "This capability is disabled",
+    "TOOL_DISABLED": "This capability is disabled — enable it on the server's page",
     "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
     "UNAUTHENTICATED": "This page was opened by an earlier Coffer. Reload the page — it picks up the running one. If that does not help, restart Coffer.",
     "UNKNOWN_AGENT": "Unknown agent",
@@ -646,8 +680,8 @@
     "UNKNOWN_PRUNABLE_TABLE": "Unknown retention table",
     "UNMANAGED_SKILL_INVALID": "That skill folder isn't a valid skill",
     "UNMANAGED_SKILL_NOT_FOUND": "Unmanaged skill not found",
-    "UPSTREAM_TIMEOUT": "Upstream server did not respond in time",
-    "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable"
+    "UPSTREAM_TIMEOUT": "Upstream server did not respond in time — retry, or raise its request timeout",
+    "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection"
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -668,8 +702,6 @@
     "register": "Register",
     "addManual": "Add manually",
     "detectedHeading": "Detected agents",
-    "managedSectionTitle": "Managed agents",
-    "noManagedAgents": "No coding agents registered yet. Use Add agent to detect and register Claude Code or Codex.",
     "namePlaceholder": "Leave blank to use the default for this type",
     "folderPicker": {
       "browse": "Browse…",
@@ -680,15 +712,12 @@
       "emptyDir": "No subfolders here."
     },
     "detectDialog": {
-      "title": "Detect agents",
-      "subtitle": "Looking for AI agents in the usual install locations.",
       "scanning": "Scanning…",
       "found": "Found these agents — choose which to add:",
       "addSelected": "Add selected ({{n}})",
       "complete": "Added:",
       "empty": "No new agents found — they may already be added."
     },
-    "empty": "No agents registered yet.",
     "loadFailed": "Failed to load agents.",
     "removeConfirm": "Remove agent {{name}}?",
     "removeConfirmBody": "It stays installed on your machine — you can detect and add it again anytime.",
@@ -703,26 +732,15 @@
       "builtinModelsHint": "On the built-in login there is no model to bind here — it is chosen per conversation, with /model <id> in a chat channel.",
       "builtin": "Use built-in (agent's own login)",
       "none": "No compatible provider",
-      "empty": "No provider for this agent yet.",
       "confirm": "Confirm switch",
-      "testFirst": "Test the connection first — confirm is enabled once it passes",
-      "manage": "Manage them on the Model providers page",
-      "customModel": "Custom…",
-      "customLabel": "Custom model id",
-      "customPlaceholder": "Enter a model id"
+      "testFirst": "Test the provider first — Confirm is enabled once the test passes",
+      "manage": "Manage them on the Model providers page"
     },
-    "status": "Status",
     "searchPlaceholder": "Search agents…",
-    "allTypes": "All types",
     "noMatches": "No agents match your search.",
     "deleteAria": "Delete {{name}}",
     "detail": {
-      "back": "Back to agents",
-      "tabs": {
-        "overview": "Overview",
-        "config": "Config files",
-        "mcp": "Coffer MCP"
-      }
+      "back": "Back to agents"
     },
     "workspace": {
       "overview": "Overview",
@@ -765,7 +783,8 @@
         "bundledSkills": "Bundled skills",
         "bundledCommands": "Bundled commands",
         "bundledMcp": "Bundled MCP servers",
-        "noDetail": "No additional detail for this plugin."
+        "noDetail": "No additional detail for this plugin.",
+        "uninstallConfirmTitle": "Uninstall {{name}}?"
       }
     },
     "agentOwn": "Agent's own (not via Coffer)",
@@ -800,23 +819,12 @@
     "save": "Save",
     "description": "Description",
     "descriptionPlaceholder": "Optional notes",
-    "manage": "Manage",
     "config": {
-      "title": "Manage {{name}}",
       "files": "Config files",
       "none": "No config files found.",
       "notCreated": "not created",
       "editorLabel": "Contents of {{key}}",
       "selectFile": "Select a file to view.",
-      "save": "Save",
-      "savedWithBackup": "Saved (a .bak of the previous version was kept).",
-      "newFile": "New file",
-      "newFilePlaceholder": "notes/today.md",
-      "invalidChildName": "Name must end with .md, must not contain \"..\", and must not start with \"/\".",
-      "deleteChild": "Delete",
-      "deleteChildConfirm": "Delete {{relpath}}? The file is removed from disk.",
-      "staleBanner": "File changed on disk — reload",
-      "reload": "Reload",
       "memoryBlockNotice": "This file contains a legacy Coffer memory block (the native-projection feature was removed) — it is no longer used and is safe to delete.",
       "directoryHint": "This is a directory — select a file inside it, or create a new one.",
       "emptyDir": "No files yet.",
@@ -836,7 +844,13 @@
       "notInstalled": "Not installed",
       "install": "Install Coffer MCP",
       "uninstall": "Uninstall Coffer MCP",
-      "installedStatus": "Coffer MCP installed"
+      "checking": "Checking…",
+      "installedToast": "Coffer MCP installed",
+      "uninstalledToast": "Coffer MCP uninstalled",
+      "uninstallConfirm": {
+        "title": "Uninstall Coffer MCP?",
+        "body": "The agent will no longer reach Coffer's knowledge, skills and MCP servers through the gateway. You can reinstall it anytime."
+      }
     },
     "welcome": {
       "title": "Manage your local AI agents",
@@ -858,7 +872,7 @@
     "bulkInstallMcp": "Install Coffer MCP",
     "cofferManaged": "Managed by Coffer",
     "skillsTab": {
-      "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its agent scope.",
+      "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its reach.",
       "openSkillsPage": "Open the Skills page",
       "unmanagedTitle": "Unmanaged skills",
       "adopt": "Adopt",
@@ -875,9 +889,17 @@
       "unmanagedNoMatch": "No unmanaged skills match your search."
     },
     "mcpTab": {
-      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here.",
-      "empty": "No enabled MCP servers in Coffer to expose."
-    }
+      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here."
+    },
+    "cols": {
+      "health": "Availability"
+    },
+    "health": {
+      "available": "Available",
+      "missing": "Not found"
+    },
+    "noneDetected": "No agents were detected on this machine. Add one manually below.",
+    "removeConfirmTitle": "Remove {{name}}?"
   },
   "skills": {
     "degradedBadge": "Copied",
@@ -899,7 +921,7 @@
     "deleteAria": "Delete {{name}}",
     "removeConfirmTitle": "Remove skill {{name}}?",
     "removeConfirmBody": "This deletes the master folder and all per-agent links.",
-    "importConflictTitle": "A skill named «{{name}}» already exists. Replace it?",
+    "importConflictTitle": "A skill named “{{name}}” already exists. Replace it?",
     "importReplace": "Replace",
     "card": {
       "noBindings": "No agents bound"
@@ -950,19 +972,20 @@
         "title": "Delivered to your agents",
         "body": "Enable a skill per agent — Coffer links it into each agent's skills directory."
       },
-      "featureDrift": {
-        "title": "Drift detection",
-        "body": "Verify that every enabled binding still matches its on-disk link."
+      "featureReach": {
+        "title": "Choose which agents get each skill",
+        "body": "Every skill has a reach — every agent, or only the ones you pick. Out of reach it stays in the library, just not delivered."
       }
     }
   },
   "knowledge": {
     "title": "Knowledge",
-    "subtitle": "Markdown files the agents and you both edit — one folder per collection, read with coffer__list and coffer__grep. A collection exists because you made one, and only the agents you authorize can see it.",
+    "subtitle": "Markdown files you and your agents both edit — one folder per collection. Agents read them through Coffer's tools; only the agents you allow can see a collection.",
     "add": "New collection",
     "empty": "No collections yet. Make one, then drop a markdown file into its folder — or let an agent write the first one.",
     "loadFailed": "Failed to load collections",
     "searchPlaceholder": "Search collections…",
+    "noMatches": "No collections match your search.",
     "cols": {
       "name": "Name",
       "description": "Description",
@@ -972,25 +995,27 @@
       "noMatches": "No matches.",
       "filterPlaceholder": "Filter by name…",
       "tidy": "Tidy",
+      "tidyHint": "Rebuilds each collection's index file from the Markdown on disk.",
       "tidyDone": "Tidy pass finished.",
+      "searchTitle": "Search contents",
       "emptyFolder": "Nothing here yet",
       "selectAFile": "Select a file to read it",
       "treeLabel": "Files in this collection"
     },
     "welcome": {
       "title": "One place for everything your agents know",
-      "body": "A global scope, one per project, plus any collection you make — holding both the notes agents write and the documents you upload. Everything stays on your machine as plain Markdown.",
+      "body": "A collection is a folder of Markdown — the notes your agents write and the files you add, side by side. Make one, then let agents read it.",
       "featureEntries": {
         "title": "What agents write",
-        "body": "Agents store and recall what they learn across sessions, through Coffer's built-in MCP tools."
+        "body": "Agents store notes through Coffer's MCP tools, and read them back in the next session."
       },
       "featureDocuments": {
-        "title": "What you ingest",
-        "body": "Upload a file of any format; Coffer converts it to Markdown and indexes it for search."
+        "title": "What you add",
+        "body": "Drop Markdown files into a collection; Coffer serves them as they are."
       },
       "featureLocal": {
         "title": "Local-first",
-        "body": "Everything is plain Markdown on your machine; the index rebuilds from the files."
+        "body": "Everything is plain Markdown on your machine — search is a literal grep, nothing is indexed."
       }
     },
     "create": {
@@ -1018,19 +1043,18 @@
   "memory": {
     "title": "Memory",
     "subtitle": "What your agents already learned, read from their own memory — Claude Code's per-project notes and Codex's task groups — normalised into facts by project, plus one global partition for what is about you rather than any project. Coffer never writes back into an agent's own memory.",
-    "sync": "Sync",
-    "syncing": "Syncing…",
-    "syncDone": "Synced {{count}} facts across {{partitions}} partitions.",
+    "readFromAgents": "Read from agents",
+    "reading": "Reading…",
+    "syncDone": "Read {{count}} facts across {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
-    "empty": "No partitions yet. Sync to read what your registered agents already know.",
+    "empty": "No partitions yet. Read from agents to import what they already know.",
     "searchPlaceholder": "Search partitions…",
     "cols": {
       "name": "Partition",
       "project": "Project",
       "global": "Global — about you, not one project",
-      "facts": "Facts",
-      "reach": "Reach"
+      "facts": "Facts"
     },
     "delivery": {
       "title": "Delivery",
@@ -1085,6 +1109,7 @@
     },
     "detail": {
       "organise": "Organise",
+      "organiseHint": "Merges duplicate facts, proposes supersessions and conflicts, and rewrites this partition's digest.",
       "organiseDone": "Organise pass finished.",
       "factsTitle": "Facts",
       "filterPlaceholder": "Filter facts…",
@@ -1095,25 +1120,13 @@
   "chat": {
     "title": "Chat",
     "thinking": "Thinking…",
-    "emptyState": {
-      "title": "No connection configured",
-      "body": "Add an LLM connection before you can start chatting.",
-      "cta": "Go to Settings → LLM Connections"
-    },
     "message": {
       "failed": "This response did not complete.",
       "tokens": "{{prompt}} in · {{completion}} out"
     },
-    "modelBar": {
-      "model": "Model",
-      "noModel": "No model",
-      "noModels": "No models configured",
-      "selectAria": "Select model"
-    },
     "history": {
-      "title": "Conversations",
       "new": "New chat",
-      "empty": "No conversations yet",
+      "empty": "No conversations yet — start a new chat",
       "search": "Search conversations",
       "noMatches": "No matching conversations",
       "ariaLabel": "Conversation history",
@@ -1124,9 +1137,6 @@
       "expand": "Expand history",
       "restore": "Restore",
       "archive": "Archive",
-      "viewArchived": "View archived",
-      "backToActive": "Back to active",
-      "archivedTitle": "Archived",
       "archivedEmpty": "No archived conversations",
       "filterLabel": "Filter conversations",
       "filterActive": "Active",
@@ -1135,7 +1145,6 @@
     },
     "thread": {
       "empty": "Send a message to start the conversation.",
-      "selectOrCreate": "Select a conversation or start a new one.",
       "notFoundTitle": "Conversation not found",
       "notFoundBody": "It may have been deleted, or the link may be stale.",
       "notFoundCta": "Start a new chat"
@@ -1169,12 +1178,7 @@
     },
     "newConversation": {
       "agent": "Agent",
-      "model": "Model",
-      "noModels": "No models yet — add a connection in Settings → LLM Connections first.",
-      "unavailable": "unavailable",
-      "workdir": "Working directory",
-      "workdirPlaceholder": "/path/to/your/project",
-      "recent": "Recent directories"
+      "unavailable": "unavailable"
     },
     "modelPicker": {
       "label": "Agent model",
@@ -1188,12 +1192,8 @@
     },
     "draft": {
       "guide": "Message {{agent}} to start a new conversation.",
-      "workdirNeeded": "Enter a working directory above to start chatting with {{agent}}.",
       "noAgentTitle": "No managed agent available",
-      "noAgentBody": "Chat talks to a Coffer-managed agent. Install or configure Claude Code or Codex, then register it under Agents.",
-      "noConnectionTitle": "No connection configured",
-      "noConnectionBody": "This agent has no active LLM connection. Add one to start chatting.",
-      "noConnectionCta": "Go to Settings → LLM Connections"
+      "noAgentBody": "Chat talks to a Coffer-managed agent. Install or configure Claude Code or Codex, then register it under Agents."
     },
     "delete": {
       "title": "Delete this conversation?",
@@ -1203,6 +1203,11 @@
       "title": "Archive this conversation?",
       "body": "It will be moved to the archive. You can restore it anytime.",
       "confirm": "Archive"
+    },
+    "jumpToLatest": "Jump to latest",
+    "attachment": "Attachment",
+    "errors": {
+      "agentNotLoggedIn": "Claude Code isn't logged in on this machine. Run `claude` in a terminal and complete /login, then retry."
     }
   },
   "channels": {
@@ -1224,7 +1229,6 @@
       "type": "Type",
       "agent": "Default agent",
       "health": "Health",
-      "state": "State",
       "paired": "Paired"
     },
     "welcome": {
@@ -1248,12 +1252,24 @@
       "subtitle": "Secrets are stored in Coffer's credential store; the channel config only carries references.",
       "type": "Type",
       "name": "Name",
+      "namePlaceholder": "e.g. my-telegram",
+      "publicBaseUrlPlaceholder": "https://tunnel.example.com",
       "botToken": "Bot token",
       "appId": "App ID",
       "appSecret": "App secret",
       "signingSecret": "Signing secret",
+      "errors": {
+        "name": "Enter a name",
+        "nameFormat": "Letters, digits, dash and underscore only",
+        "nameTooLong": "At most 64 characters",
+        "botToken": "Enter the bot token",
+        "appId": "Enter the App ID",
+        "appSecret": "Enter the App secret",
+        "signingSecret": "Enter the signing secret",
+        "websocketField": "Not used with WebSocket delivery — clear it or switch to Webhook"
+      },
       "telegramHint": "The token BotFather gave you for the bot.",
-      "seatalkHint": "App ID, App Secret, and Signing Secret from the SeaTalk Open Platform app.",
+      "seatalkHint": "App ID, App secret and Signing secret from the SeaTalk Open Platform app.",
       "publicBaseUrl": "Public callback URL (base URL)",
       "publicBaseUrlHint": "Optional. Your tunnel's public address (e.g. https://xxx.trycloudflare.com). Coffer composes the full callback URL from it for you to register on the SeaTalk Open Platform.",
       "tunnelToken": "Cloudflare tunnel token",
@@ -1274,16 +1290,16 @@
       "newBotToken": "New bot token",
       "newAppSecret": "New app secret",
       "newSigningSecret": "New signing secret",
-      "rotatePlaceholder": "Leave blank to keep current",
       "rotateHint": "Stored in Coffer's credential store; the existing reference is reused.",
       "save": "Save changes",
       "saved": "Channel {{name}} updated",
       "signingSecretRequired": "Webhook delivery verifies every request's signature — enter the signing secret from SeaTalk's Developer Portal."
     },
     "test": {
-      "send": "Send test message",
+      "send": "Send",
       "sending": "Sending…",
-      "title": "Send test message",
+      "title": "Test delivery",
+      "messageLabel": "Message",
       "subtitle": "Push a one-off message to the paired peer to confirm delivery works.",
       "placeholder": "Test message from Coffer",
       "sent": "Test message sent",
@@ -1318,6 +1334,8 @@
       "copied": "Copied",
       "test": "Test reachability",
       "testing": "Testing…",
+      "testOk": "Reachable",
+      "testFailed": "Not reachable",
       "setBaseUrlHint": "Set your tunnel's public base URL in Edit, and the full callback URL to register on SeaTalk will appear here.",
       "endpoint": "Local listener",
       "listener": "Listener",
@@ -1340,7 +1358,7 @@
     "bulkDeleteConfirm": "Delete {{count}} channels? Their adapters stop and their pairings are removed."
   },
   "scope": {
-    "subtitle": "Where this is active: which agents can reach it. Out of scope it stays registered, just not exposed or delivered.",
+    "subtitle": "Where this is active: which agents can reach it. Out of reach it stays registered, just not exposed or delivered.",
     "machineLocal": "Reach is set on this machine only — it is not synced, so each machine you use sets its own.",
     "choicesLabel": "Reach",
     "setReach": "Set reach…",
@@ -1352,7 +1370,7 @@
     "dormant": "No agent selected — dormant. This stays registered but reaches nobody until at least one agent is selected.",
     "noAgents": "No agents registered yet.",
     "unknownAgent": "Not registered here",
-    "inactiveHereAgent": "Inactive here — its scope names no agent registered on this machine.",
+    "inactiveHereAgent": "Inactive here — its reach names no agent registered on this machine.",
     "bulkReach": "Reach for the selected"
   },
   "sync": {
@@ -1378,7 +1396,13 @@
       "enabled": "Converge automatically",
       "url": "Repository URL",
       "branch": "Branch",
-      "interval": "Every (seconds)",
+      "interval": "Interval (seconds)",
+      "save": "Save remote",
+      "enabledHint": "Save the remote first.",
+      "errors": {
+        "url": "Enter a git remote URL (https://… or git@…)",
+        "interval": "Interval must be at least 60 seconds"
+      },
       "credentialRef": "Push credential",
       "credentialRefHint": "The name of an entry in Coffer's credential store — not the secret itself. The daemon resolves it when it pushes, so the credential never reaches this page, the repository's git config, or any error text.",
       "includeCredentials": "Include credentials",
@@ -1388,10 +1412,10 @@
       "converging": "Converging…",
       "notConfigured": "No remote configured yet. Name a repository above and this vault starts converging with it."
     },
+    "toast": {
+      "roundDone": "Round finished: {{status}} (+{{added}} ~{{modified}} −{{deleted}})"
+    },
     "round": {
-      "title": "Last round",
-      "none": "No round has run yet.",
-      "status": "Last round: {{status}}",
       "statusLabel": {
         "ok": "converged",
         "no_change": "nothing changed",
@@ -1405,10 +1429,6 @@
         "new": "Joined as a new machine — everything the remote held was added, and everything this vault held was kept.",
         "returning": "Rejoined as a returning machine — its base was recovered from its own descriptor, so nothing deleted while it was away came back."
       },
-      "applied": "Applied here",
-      "published": "Published to the remote",
-      "counts": "{{added}} added · {{modified}} changed · {{deleted}} deleted",
-      "commit": "Commit {{commit}}",
       "agentResolved": "Merged for you by an agent",
       "agentResolvedHint": "An internal model resolved the conflict on these paths in the working tree. Worth reading if they are your own notes.",
       "failures": "Could not be applied here",
@@ -1420,7 +1440,7 @@
       "title": "History",
       "description": "Every converge round this machine has run, newest first. The rounds that changed nothing are listed too — they are what shows the vault was still converging.",
       "searchPlaceholder": "Search rounds…",
-      "empty": "No round has run yet.",
+      "empty": "No round has run yet. Save a remote, then Converge now to start one.",
       "nothingFurther": "This round reported nothing further.",
       "ran": "Ran {{from}} → {{to}}",
       "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
@@ -1457,6 +1477,7 @@
       "paths": "Paths",
       "raisedAt": "Held {{when}}",
       "rebuild": "Rebuild from remote",
+      "rebuildTitle": "Rebuild this vault from the remote?",
       "rebuildConfirm": "This replaces this machine's vault with the remote's and discards anything only this machine has. Use it when this machine's files are genuinely gone. Continue?",
       "rebuilding": "Rebuilding…",
       "reinstallWarning": "If this machine was just reinstalled, or restored from a backup, the honest answer is Reject: the documents are missing here, not deleted, and confirming would take the other machines down with it.",
@@ -1472,6 +1493,8 @@
       "fingerprintHint": "Matching fingerprints on two machines mean they hold the same key.",
       "export": "Export key",
       "import": "Import key",
+      "importConfirmTitle": "Replace this machine's master key?",
+      "importConfirmBody": "Credentials stored with the current key stay readable only if the new key is the same one.",
       "exported": "Key downloaded as {{name}}",
       "imported": "Key imported — this machine now decrypts the credentials it syncs.",
       "importedLocked": "Key imported, but {{count}} credential reference still cannot be decrypted with it.",
@@ -1492,7 +1515,6 @@
         "actions": ""
       },
       "thisMachine": "This machine",
-      "rename": "Rename this machine",
       "renameLabel": "Machine name",
       "lastConvergedHint": "A day, not a moment: a machine that is running but idle deliberately does not stamp every round.",
       "never": "Never",
@@ -1503,7 +1525,6 @@
       "retire": "Retire",
       "retireTitle": "Retire {{name}}?",
       "retireBody": "Its descriptor is removed from the registry, and nothing else in the vault changes — no resource references a machine id, because reach is set on each machine rather than recorded against one.",
-      "retired": "{{name}} retired.",
       "derivedNote": "This machine's id is stored in a local file rather than derived from the host, so deleting ~/.coffer makes it come back as a new machine and this row has to be retired by hand."
     }
   }

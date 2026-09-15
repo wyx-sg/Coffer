@@ -1,3 +1,4 @@
+// src/components/DaemonOfflineBanner.tsx — floating banner when the daemon is offline, not ready, or out of date.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -82,12 +83,12 @@ export function DaemonOfflineBanner() {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
       <Alert
-        variant="destructive"
-        className="pointer-events-auto w-full max-w-xl border-status-warn/40 bg-card text-foreground shadow-lg"
+        variant="warning"
+        className="pointer-events-auto w-full max-w-xl shadow-lg"
         data-testid="daemon-banner"
         data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
       >
-        <AlertCircle className="size-4 text-status-warn" />
+        <AlertCircle className="size-4" />
         <AlertTitle className="font-serif text-base">
           {isStale
             ? t("daemon.offline.outOfDateTitle")
@@ -102,7 +103,6 @@ export function DaemonOfflineBanner() {
               : isAuthGap
                 ? t("daemon.offline.notReadyBody")
                 : t("daemon.offline.body")}
-            {!isStale && !isAuthGap && error instanceof Error ? ` (${error.message})` : null}
           </p>
           {isTauri() ? (
             <div className="space-y-2">
@@ -130,7 +130,7 @@ export function DaemonOfflineBanner() {
                   actually bring it back; the 30s status poll clears the banner. */}
               <p className="text-xs text-foreground/60">
                 {t("daemon.offline.webRestartHint")}{" "}
-                <code className="rounded bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>
+                <code className="rounded-sm bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>
               </p>
             </div>
           )}

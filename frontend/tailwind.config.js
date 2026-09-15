@@ -50,6 +50,11 @@ export default {
           warn: "hsl(var(--status-warn))",
           err: "hsl(var(--status-err))",
         },
+        // Find-in-preview match colours; RGB channels so `/opacity` works.
+        highlight: {
+          DEFAULT: "rgb(var(--highlight) / <alpha-value>)",
+          active: "rgb(var(--highlight-active) / <alpha-value>)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

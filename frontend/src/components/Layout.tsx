@@ -1,125 +1,37 @@
+// src/components/Layout.tsx — the app shell: sidebar rail + scrolling main region.
+//
+// The rail is always present. At md+ it can expand to a labelled 64-wide
+// sidebar (the choice persists in localStorage); below md it is always the
+// 16-wide icon rail, so narrow viewports keep their navigation. Collapsed rows
+// get a tooltip and the language switcher folds into a globe popover.
 import { useState } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Bot,
-  Boxes,
-  Brain,
-  MessageSquare,
-  Library,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Radio,
-  RefreshCw,
-  Server,
-  ScrollText,
-  Settings as SettingsIcon,
-  Sparkles,
-  type LucideIcon,
-} from "lucide-react";
+import { Boxes, Globe, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
+import { SidebarNav } from "./SidebarNav";
 
 const COLLAPSE_KEY = "coffer.nav.collapsed";
-
-interface NavItem {
-  to: string;
-  labelKey: string;
-  icon: LucideIcon;
-  /** Match the path exactly (no prefix match) when deciding active state. */
-  end?: boolean;
-}
-
-interface NavGroup {
-  labelKey: string;
-  items: NavItem[];
-}
-
-/**
- * Sidebar navigation — a role-based information architecture (ADR everything-is-a-resource-kind):
- *
- * - **Agents** — the consumers: the agents you use (Claude Code, Codex), and
- *   Chat with them. Agents are NOT vault assets, so they are not under
- *   Resources.
- * - **Resources** — the assets agents draw on, one entry per resource kind
- *   that has a list UI: MCP servers, skills, knowledge, model providers, and
- *   channels. A channel is a credentialed transport the vault owns, so it
- *   belongs here rather than beside the agents that happen to answer on it.
- * - **System** — cross-cutting tooling: Activity (the three records Coffer
- *   keeps, a tab and a table each) and Settings. Observability (system health
- *   / metrics) is a reserved future surface and is not Activity: a record of
- *   what happened is not a measurement of how the system is doing.
- *
- * Sidebar policy (ADR everything-is-a-resource-kind): show only what ships today — no "soon"
- * placeholders, and no entry outliving its feature. The sidebar collapses to
- * an icon-only rail; the choice persists in localStorage.
- */
-const NAV_GROUPS: NavGroup[] = [
-  {
-    labelKey: "nav.group.agents",
-    items: [
-      // Agents first: the agents are the subject, and a chat is one thing you
-      // do with one of them.
-      { to: "/agents", labelKey: "nav.agents", icon: Bot, end: true },
-      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
-    ],
-  },
-  {
-    // One entry per resource kind with a list UI — mcp_server, skill,
-    // knowledge, memory, provider, channel. Keeping that one-to-one is the
-    // whole rule; Model providers and Channels were the two that had drifted
-    // out of it.
-    labelKey: "nav.group.resources",
-    items: [
-      { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server, end: true },
-      { to: "/skills", labelKey: "nav.skills", icon: Sparkles, end: true },
-      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, end: true },
-      { to: "/memory", labelKey: "nav.memory", icon: Brain, end: true },
-      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes, end: true },
-      { to: "/channels", labelKey: "nav.channels", icon: Radio, end: true },
-    ],
-  },
-  {
-    labelKey: "nav.group.system",
-    items: [
-      { to: "/activity", labelKey: "nav.activity", icon: ScrollText, end: true },
-      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, end: true },
-      { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
-    ],
-  },
-];
-
-function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
-  const { t } = useTranslation();
-  const label = t(item.labelKey);
-  return (
-    <NavLink
-      to={item.to}
-      end={item.end}
-      title={collapsed ? label : undefined}
-      className={({ isActive }) =>
-        cn(
-          "flex items-center rounded-md py-2 font-medium transition-colors",
-          collapsed ? "justify-center px-2" : "gap-2.5 px-3",
-          isActive
-            ? "bg-primary/10 text-primary"
-            : "text-foreground/80 hover:bg-secondary hover:text-foreground",
-        )
-      }
-    >
-      <item.icon className="size-4 shrink-0" strokeWidth={1.75} />
-      {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
-    </NavLink>
-  );
-}
+// Tailwind's `md` breakpoint — the width at which the sidebar may expand.
+const MD_QUERY = "(min-width: 768px)";
 
 export function Layout() {
   const { t } = useTranslation();
-  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSE_KEY) === "1");
+  const [collapsedPref, setCollapsedPref] = useState(
+    () => localStorage.getItem(COLLAPSE_KEY) === "1",
+  );
+  // Where matchMedia is unavailable (jsdom) treat the viewport as md+.
+  const isMd = useMediaQuery(MD_QUERY, true);
+  const collapsed = collapsedPref || !isMd;
 
   const toggleCollapsed = () => {
-    setCollapsed((prev) => {
+    setCollapsedPref((prev) => {
       const next = !prev;
       localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
       return next;
@@ -127,81 +39,97 @@ export function Layout() {
   };
 
   return (
-    // h-screen + overflow-hidden pins the app to the viewport; the sidebar
-    // and the main content each own an independent scroll region.
-    <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      {/* Floats over the whole app (fixed, top-centered) — rendered at the root
-          so it overlays the sidebar too and never shifts page content. */}
-      <DaemonOfflineBanner />
-      <aside
-        className={cn(
-          "hidden shrink-0 flex-col border-r border-border bg-card/50 transition-[width] duration-200 md:flex",
-          collapsed ? "w-16" : "w-64",
-        )}
-        aria-label={t("nav.aria.primary")}
-      >
-        <div
-          className={cn(
-            "flex h-16 items-center border-b border-border",
-            collapsed ? "justify-center px-2" : "justify-between px-5",
-          )}
+    <TooltipProvider delayDuration={300}>
+      {/* h-screen + overflow-hidden pins the app to the viewport; the sidebar
+          and the main content each own an independent scroll region. */}
+      <div className="flex h-screen overflow-hidden bg-background text-foreground">
+        {/* First focusable element: lets keyboard users jump past the rail. */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring"
         >
-          {!collapsed ? (
-            <Link to="/" className="flex items-center gap-2 text-base font-serif tracking-tight">
+          {t("nav.skipToContent")}
+        </a>
+        {/* Floats over the whole app (fixed, top-centered) — rendered at the root
+            so it overlays the sidebar too and never shifts page content. */}
+        <DaemonOfflineBanner />
+        <aside
+          className={cn(
+            "flex shrink-0 flex-col border-r border-border bg-card/50 transition-[width] duration-200",
+            collapsed ? "w-16" : "w-64",
+          )}
+          aria-label={t("nav.aria.primary")}
+        >
+          <div
+            className={cn(
+              "flex h-16 items-center border-b border-border",
+              collapsed ? "flex-col justify-center gap-1 px-2" : "justify-between px-5",
+            )}
+          >
+            <Link
+              to="/"
+              className="flex items-center gap-2 text-base font-serif tracking-tight"
+              aria-label={collapsed ? "Coffer" : undefined}
+            >
               <span
                 className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm"
                 aria-hidden
               >
                 <Boxes className="size-4" strokeWidth={2.25} />
               </span>
-              <span className="text-foreground">Coffer</span>
+              {!collapsed ? <span className="text-foreground">Coffer</span> : null}
             </Link>
-          ) : null}
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            aria-label={t(collapsed ? "nav.expand" : "nav.collapse")}
-            title={t(collapsed ? "nav.expand" : "nav.collapse")}
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            {/* Expanding is only possible at md+; narrower viewports are
+                always the icon rail, so the toggle is hidden there. */}
+            {isMd ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={toggleCollapsed}
+                aria-label={t(collapsed ? "nav.expand" : "nav.collapse")}
+                className={cn("shrink-0 text-muted-foreground", collapsed && "h-6 w-6")}
+              >
+                {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+              </Button>
+            ) : null}
+          </div>
+
+          <SidebarNav collapsed={collapsed} />
+
+          <div
+            className={cn("border-t border-border", collapsed ? "flex justify-center p-2" : "p-3")}
           >
             {collapsed ? (
-              <PanelLeftOpen className="size-4" />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("nav.language")}
+                    className="text-muted-foreground"
+                  >
+                    <Globe />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent side="right" align="end" className="w-auto p-3">
+                  <LanguageSwitcher />
+                </PopoverContent>
+              </Popover>
             ) : (
-              <PanelLeftClose className="size-4" />
+              <LanguageSwitcher />
             )}
-          </button>
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-3 py-3 text-sm">
-          {NAV_GROUPS.map((group, i) => (
-            <div key={group.labelKey || group.items[0]?.to} className="mb-1">
-              {collapsed ? (
-                i > 0 ? (
-                  <div className="mx-1 my-2 border-t border-border" />
-                ) : null
-              ) : group.labelKey ? (
-                <div className="nav-group-label">{t(group.labelKey)}</div>
-              ) : null}
-              {group.items.map((item) => (
-                <NavRow key={item.to} item={item} collapsed={collapsed} />
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        {!collapsed ? (
-          <div className="border-t border-border p-3">
-            <LanguageSwitcher />
           </div>
-        ) : null}
-      </aside>
-      <main className="flex-1 overflow-y-auto">
-        {/* Full-width — the content tracks the sidebar, so collapsing it
-            genuinely widens the working area. */}
-        <div className="w-full px-6 py-10 md:px-10">
-          <Outlet />
-        </div>
-      </main>
-    </div>
+        </aside>
+        <main id="main" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
+          {/* Full-width — the content tracks the sidebar, so collapsing it
+              genuinely widens the working area. */}
+          <div className="w-full px-6 py-10 md:px-10">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }

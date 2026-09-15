@@ -228,7 +228,7 @@ describe("McpServersTable", () => {
 
     // …while the row itself still navigates.
     fireEvent.click(screen.getByText("Local filesystem access"));
-    expect(navigateMock).toHaveBeenCalledWith("/mcp-servers/mcp_server/files");
+    expect(navigateMock).toHaveBeenCalledWith("/mcp-servers/files");
   });
 
   test("the status filter narrows the rows by reach", () => {

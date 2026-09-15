@@ -4,12 +4,14 @@
 // and the organise action. Reach (ScopeControl) lives in the header, exactly
 // as every other scoped Resource's detail page carries it.
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 
+import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { translateApiError } from "@/lib/api/errors";
 import { useResource } from "@/lib/hooks/useResources";
 import { MemoryConflictsPanel } from "./MemoryConflictsPanel";
@@ -24,7 +26,6 @@ import {
 export function MemoryDetailPage() {
   const { t } = useTranslation();
   const partition = useParams<{ name: string }>().name ?? "";
-  const navigate = useNavigate();
 
   // `enabled` is a generic Resource field (not on the dedicated partitions
   // endpoint), so ScopeControl's required prop comes from the single-resource
@@ -39,44 +40,35 @@ export function MemoryDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* The way back to the list, as every other detail page carries it. A
-          partition is reached by clicking a row, so leaving it must not depend
-          on the browser's own back button. */}
-      <div className="-ml-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/memory")}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="mr-1.5 size-4" />
-          {t("common.backTo", { label: t("nav.memory") })}
-        </Button>
-      </div>
-
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">{partition}</h1>
-          {projectRoot ? (
-            <p className="font-mono text-xs text-muted-foreground">{projectRoot}</p>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ScopeControl kind="memory" name={partition} enabled={resource.data?.enabled ?? true} />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => organise.mutate()}
-            disabled={organise.isPending}
-          >
-            <RefreshCw
-              className={organise.isPending ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"}
-            />
-            {t("memory.detail.organise")}
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        back={{ to: "/memory", label: t("common.backTo", { label: t("nav.memory") }) }}
+        title={partition}
+        subtitle={projectRoot ? <span className="font-mono text-xs">{projectRoot}</span> : null}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ScopeControl kind="memory" name={partition} enabled={resource.data?.enabled ?? true} />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => organise.mutate()}
+                  disabled={organise.isPending}
+                >
+                  <RefreshCw
+                    className={
+                      organise.isPending ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"
+                    }
+                  />
+                  {t("memory.detail.organise")}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("memory.detail.organiseHint")}</TooltipContent>
+            </Tooltip>
+          </div>
+        }
+      />
 
       {facts.isPending ? (
         <Card>

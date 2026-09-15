@@ -86,35 +86,31 @@ describe("EngineSettings", () => {
   test("/settings/engine renders the internal-engine card and nothing else", async () => {
     apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
     renderPage();
-    expect(await screen.findByText("Internal engine")).toBeInTheDocument();
+    expect(await screen.findByText("Coffer's model")).toBeInTheDocument();
     // The embedding card went with vector retrieval: there is no index left
     // for an embedding model to feed (ADR knowledge-is-plain-files).
     expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
   });
 
-  acceptance(
-    "provider-switching",
-    "set a connection as the internal engine default",
-    async () => {
-      apiMock.list.mockResolvedValue({
-        providers: [
-          makeProvider({ name: "a", internal_default: false }),
-          makeProvider({ name: "b", internal_default: false }),
-        ],
-      });
-      apiMock.setInternalDefault.mockResolvedValue(
-        makeProvider({ name: "b", internal_default: true }),
-      );
+  acceptance("provider-switching", "set a connection as the internal engine default", async () => {
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({ name: "a", internal_default: false }),
+        makeProvider({ name: "b", internal_default: false }),
+      ],
+    });
+    apiMock.setInternalDefault.mockResolvedValue(
+      makeProvider({ name: "b", internal_default: true }),
+    );
 
-      renderPage();
-      await screen.findByText("Internal engine");
+    renderPage();
+    await screen.findByText("Coffer's model");
 
-      // the internal-engine section's connection dropdown sets "b" as the default
-      openSelect(/^model provider$/i);
-      fireEvent.click(screen.getByRole("option", { name: "b" }));
-      await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("b"));
-    },
-  );
+    // the internal-engine section's connection dropdown sets "b" as the default
+    openSelect(/^model provider$/i);
+    fireEvent.click(screen.getByRole("option", { name: "b" }));
+    await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("b"));
+  });
 
   acceptance(
     "provider-switching",
@@ -134,7 +130,9 @@ describe("EngineSettings", () => {
 
       renderPage();
       // The connection dropdown shows A as the current internal default.
-      expect(await screen.findByRole("combobox", { name: /^model provider$/i })).toHaveTextContent("A");
+      expect(await screen.findByRole("combobox", { name: /^model provider$/i })).toHaveTextContent(
+        "A",
+      );
       // Selecting B clears A on the backend (single-internal-default invariant).
       openSelect(/^model provider$/i);
       fireEvent.click(screen.getByRole("option", { name: "B" }));

@@ -12,7 +12,9 @@
 //            hidden `<a download>`, so the file lands wherever the browser puts
 //            downloads.
 //   Import → a hidden `<input type="file">`; its change handler reads
-//            `file.text()` and POSTs the material.
+//            `file.text()`, asks the user to confirm — a different key makes
+//            every credential stored under the current one unreadable — and
+//            only then POSTs the material.
 //
 // The browser hands us contents directly, so no absolute path has to survive a
 // round-trip through the daemon, and the key is never written into the synced
@@ -22,6 +24,7 @@ import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useExportMasterKey, useImportMasterKey, useKeyFingerprint } from "@/lib/hooks/useSync";
 
 const DEFAULT_KEY_NAME = "coffer-master.key";
@@ -46,6 +49,9 @@ export function SyncMasterKeyCard() {
   const [exported, setExported] = useState<string | null>(null);
   const [imported, setImported] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  // Key material read from the picked file, held while the confirmation is
+  // open. Never persisted anywhere on the page; cleared as soon as it closes.
+  const [pendingMaterial, setPendingMaterial] = useState<string | null>(null);
   const importKey = useImportMasterKey();
   const exportKey = useExportMasterKey();
   const fingerprint = useKeyFingerprint();
@@ -74,6 +80,13 @@ export function SyncMasterKeyCard() {
       setLocalError(t("sync.key.fileEmpty"));
       return;
     }
+    setPendingMaterial(material);
+  };
+
+  const confirmImport = () => {
+    const material = pendingMaterial;
+    setPendingMaterial(null);
+    if (!material) return;
     importKey.mutate(material, {
       // A key that still leaves references locked is the interesting case: it
       // means the ciphertext came from a THIRD machine holding another key.
@@ -146,6 +159,18 @@ export function SyncMasterKeyCard() {
           </p>
         ) : null}
       </CardContent>
+
+      <ConfirmDialog
+        open={pendingMaterial !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingMaterial(null);
+        }}
+        title={t("sync.key.importConfirmTitle")}
+        description={t("sync.key.importConfirmBody")}
+        confirmLabel={t("sync.key.import")}
+        pending={importKey.isPending}
+        onConfirm={confirmImport}
+      />
     </Card>
   );
 }

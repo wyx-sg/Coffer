@@ -132,17 +132,11 @@ export function DaemonTab({ enabled }: Props) {
       </ActivityFilters>
 
       {/* isLoading, not isPending: a disabled query stays "pending" forever,
-          which would leave a tab that has never been opened stuck on the
-          loading card the moment it is. An error renders here, inside this
-          tab — an older daemon with no /daemon/logs route 404s, and that must
-          not blank the two records it does still serve. */}
-      {isLoading ? (
-        <Card className="paper-card">
-          <CardContent className="py-10 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+          which would leave a tab that has never been opened stuck on skeleton
+          rows the moment it is. An error renders here, inside this tab — an
+          older daemon with no /daemon/logs route 404s, and that must not
+          blank the two records it does still serve. */}
+      {error ? (
         <Card className="paper-card border-destructive/40">
           <CardContent className="py-4 text-destructive">{translateApiError(t, error)}</CardContent>
         </Card>
@@ -151,6 +145,7 @@ export function DaemonTab({ enabled }: Props) {
           rows={rows}
           columns={daemonColumns(t)}
           rowKey={(row) => row.id}
+          isLoading={isLoading}
           getRowDetail={(row) => (
             <div className="px-4 py-3">
               {/* The parsed structlog line itself, not the envelope the route

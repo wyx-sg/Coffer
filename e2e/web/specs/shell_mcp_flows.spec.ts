@@ -95,10 +95,9 @@ acceptance(
       await page.getByRole("button", { name: /continue/i }).click();
       await page.getByRole("button", { name: /import/i }).click();
 
-      await expect(page).toHaveURL(
-        new RegExp(`/mcp-servers/mcp_server/${name}`),
-        { timeout: 15_000 },
-      );
+      await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}`), {
+        timeout: 15_000,
+      });
       // The redesigned detail page surfaces the server name as a level-1
       // heading inside the new layout.
       await expect(page.getByRole("heading", { name })).toBeVisible();
@@ -125,7 +124,7 @@ acceptance(
     const name = generateUniqueName("e2e002tog");
     try {
       await registerFakeServer(name);
-      await page.goto(`/mcp-servers/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/${name}`);
       // Tabs row uses the new design tokens but the role + tab names are
       // unchanged (spec ui-shell explicitly requires backwards-compatible
       // selectors here).
@@ -172,7 +171,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/mcp-servers/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/${name}`);
       await page.getByRole("tab", { name: "Resources" }).click();
 
       // The resource row appears with its URI and is enabled by default
@@ -219,7 +218,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/mcp-servers/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/${name}`);
       await page.getByRole("tab", { name: "Prompts" }).click();
 
       // The prompt row appears and is enabled by default
@@ -269,10 +268,9 @@ acceptance(
       await page.getByRole("button", { name: /import/i }).click();
 
       // Import navigates to the detail page
-      await expect(page).toHaveURL(
-        new RegExp(`/mcp-servers/mcp_server/${name}`),
-        { timeout: 15_000 },
-      );
+      await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}`), {
+        timeout: 15_000,
+      });
 
       // Navigate back to the list — the server card must appear there
       await page.goto("/mcp-servers");
@@ -357,7 +355,7 @@ acceptance(
       // Two distinct tools so the search can filter one out
       await registerFakeServer(name, ["--tools", "alpha_tool", "beta_tool"]);
 
-      await page.goto(`/mcp-servers/mcp_server/${name}`);
+      await page.goto(`/mcp-servers/${name}`);
       await page.getByRole("tab", { name: "Tools" }).click();
 
       // Both tools visible initially

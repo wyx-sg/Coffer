@@ -13,16 +13,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { translateApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 import { CredentialRowEditor, type CredRow } from "./CredentialRowEditor";
 import { ServerTimeoutFields } from "./ServerTimeoutFields";
 import { timeoutsOf, type Timeouts } from "./serverTimeouts";
-import {
-  configWithoutOwnControls,
-  credentialRefsOf,
-  saveMcpServerEdit,
-} from "./editMcpServerSave";
+import { configWithoutOwnControls, credentialRefsOf, saveMcpServerEdit } from "./editMcpServerSave";
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
@@ -63,8 +60,7 @@ export function EditMcpServerDialog({ resource }: Props) {
   }
 
   const save = useMutation({
-    mutationFn: () =>
-      saveMcpServerEdit({ resource, description, configText, creds, timeouts, t }),
+    mutationFn: () => saveMcpServerEdit({ resource, description, configText, creds, timeouts, t }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["resources"] });
       setOpen(false);
@@ -110,11 +106,11 @@ export function EditMcpServerDialog({ resource }: Props) {
 
           <div className="space-y-1.5">
             <Label htmlFor="edit-config">{t("mcp.edit.config")}</Label>
-            <textarea
+            <Textarea
               id="edit-config"
               value={configText}
               onChange={(e) => setConfigText(e.target.value)}
-              className="h-56 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+              className="h-56 font-mono text-xs"
             />
             <p className="text-xs text-muted-foreground">{t("mcp.edit.configHint")}</p>
           </div>

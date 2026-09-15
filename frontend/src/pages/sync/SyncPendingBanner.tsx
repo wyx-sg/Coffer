@@ -15,11 +15,13 @@
 //             answer — REBUILD — because for a machine whose files really are
 //             gone, confirm spreads the loss and reject refuses the same round
 //             forever.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PendingConfirmation } from "@/lib/api/sync";
 import { useConfirmRound, useRebuildFromRemote, useRejectRound } from "@/lib/hooks/useSync";
 import { formatDateTime } from "@/lib/utils";
@@ -33,6 +35,7 @@ export function SyncPendingBanner({ pending }: { pending: PendingConfirmation })
   const confirm = useConfirmRound();
   const reject = useRejectRound();
   const rebuild = useRebuildFromRemote();
+  const [confirmRebuild, setConfirmRebuild] = useState(false);
   const busy = confirm.isPending || reject.isPending || rebuild.isPending;
   const publishes = pending.direction === "publish";
   const shown = pending.paths.slice(0, MAX_PATHS);
@@ -102,18 +105,25 @@ export function SyncPendingBanner({ pending }: { pending: PendingConfirmation })
               own files are gone, and it makes no sense in the other direction.
               It discards local-only documents, so it asks first. */}
           {publishes ? (
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => {
-                if (window.confirm(t("sync.pending.rebuildConfirm"))) rebuild.mutate();
-              }}
-            >
+            <Button variant="ghost" disabled={busy} onClick={() => setConfirmRebuild(true)}>
               {rebuild.isPending ? t("sync.pending.rebuilding") : t("sync.pending.rebuild")}
             </Button>
           ) : null}
         </div>
       </AlertDescription>
+
+      <ConfirmDialog
+        open={confirmRebuild}
+        onOpenChange={setConfirmRebuild}
+        title={t("sync.pending.rebuildTitle")}
+        description={t("sync.pending.rebuildConfirm")}
+        confirmLabel={t("sync.pending.rebuild")}
+        pending={busy}
+        onConfirm={() => {
+          setConfirmRebuild(false);
+          rebuild.mutate();
+        }}
+      />
     </Alert>
   );
 }

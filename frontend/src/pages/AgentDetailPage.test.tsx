@@ -13,6 +13,10 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   // Stubs for the (lazily-mounted) Config files + MCP surfaces.
   useAgentConfigFiles: vi.fn(() => ({ data: [], isPending: false, error: null })),
   useAgentConfigFile: vi.fn(() => ({ data: undefined, isPending: false })),
+  useAgentConfigChild: vi.fn(() => ({ data: undefined, isPending: false })),
+  useAgentPlugins: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
+  useTogglePlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUninstallPlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
 }));
@@ -37,11 +41,11 @@ function mockAgentLoaded() {
   } as unknown as ReturnType<typeof hooks.useAgent>);
 }
 
-function renderAt() {
+function renderAt(path = "/agents/cur") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/agents/cur"]}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/agents/:name" element={<AgentDetailPage />} />
           <Route path="/agents" element={<div>agents list</div>} />
@@ -52,6 +56,46 @@ function renderAt() {
 }
 
 afterEach(() => vi.clearAllMocks());
+
+describe("AgentDetailPage header and tab routing", () => {
+  test("header shows a back link, the type as a product name, and actions ordered MCP · Edit · Delete", () => {
+    mockAgentLoaded();
+    renderAt();
+    expect(screen.getByRole("link", { name: /back to agents/i })).toHaveAttribute(
+      "href",
+      "/agents",
+    );
+    // Product name in the header chip (and again on the overview), never the key.
+    expect(screen.getAllByText("Codex").length).toBeGreaterThan(0);
+    expect(screen.queryByText("codex")).not.toBeInTheDocument();
+    const names = screen
+      .getAllByRole("button")
+      .map((b) => b.textContent?.trim() ?? "")
+      .filter((n) => /coffer mcp|^edit$|^delete$/i.test(n));
+    expect(names).toEqual(["Install Coffer MCP", "Edit", "Delete"]);
+  });
+
+  test("?tab= opens that tab and clicking a tab writes it to the URL", () => {
+    mockAgentLoaded();
+    renderAt("/agents/cur?tab=plugins");
+    expect(screen.getByRole("tab", { name: /^plugins$/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    // Radix tabs activate on mousedown.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /config files/i }));
+    expect(screen.getByRole("tab", { name: /config files/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  test("an unknown ?tab= falls back to the overview", () => {
+    mockAgentLoaded();
+    renderAt("/agents/cur?tab=nope");
+    expect(screen.getByRole("tab", { name: /overview/i })).toHaveAttribute("aria-selected", "true");
+  });
+});
 
 describe("AgentDetailPage", () => {
   test("renders the header, all seven workspace tabs, and the overview by default", () => {

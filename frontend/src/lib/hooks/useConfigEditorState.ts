@@ -5,6 +5,11 @@
 // right pane, and the draft/save state for the selected file — the last of
 // which it delegates to the shared useFileDraft, since the skill master-file
 // editor needs exactly the same behaviour.
+//
+// Changing the selection replaces the loaded content, which drops the draft
+// (useFileDraft). So while the draft is dirty a selection is not applied
+// directly: it is parked as `pendingSelection` for the component to confirm
+// with the user, then applied (or dropped) through the two resolvers below.
 import { useState } from "react";
 
 import type { ConfigFileInfo } from "@/lib/api/agents";
@@ -33,6 +38,8 @@ export function useConfigEditorState(name: string) {
   // config key `selectedKey` (relpath within that directory).
   const [selectedChild, setSelectedChild] = useState<string | null>(null);
   const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
+  // A selection change held back because the draft is dirty; `null` = none.
+  const [pendingSelection, setPendingSelection] = useState<(() => void) | null>(null);
 
   const selectedInfo = (files.data ?? []).find((f) => f.key === selectedKey);
   const isDirSelected = !selectedChild && selectedInfo?.kind === "directory";
@@ -71,20 +78,45 @@ export function useConfigEditorState(name: string) {
     reload: () => activeQuery.refetch(),
   });
 
+  // Apply a selection now, or park it while unsaved edits are on screen.
+  function guarded(apply: () => void) {
+    if (draft.dirty) setPendingSelection(() => apply);
+    else apply();
+  }
+
   function selectFile(key: string) {
-    setSelectedKey(key);
-    setSelectedChild(null);
+    guarded(() => {
+      setSelectedKey(key);
+      setSelectedChild(null);
+    });
   }
 
   function selectDirectory(key: string) {
-    setSelectedKey(key);
-    setSelectedChild(null);
-    setExpandedDirs((prev) => ({ ...prev, [key]: !prev[key] }));
+    guarded(() => {
+      setSelectedKey(key);
+      setSelectedChild(null);
+      setExpandedDirs((prev) => ({ ...prev, [key]: !prev[key] }));
+    });
   }
 
   function selectChild(key: string, relpath: string) {
-    setSelectedKey(key);
-    setSelectedChild(relpath);
+    guarded(() => {
+      setSelectedKey(key);
+      setSelectedChild(relpath);
+    });
+  }
+
+  /** The user chose to drop the draft: apply the parked selection. */
+  function confirmPendingSelection() {
+    const apply = pendingSelection;
+    setPendingSelection(null);
+    if (!apply) return;
+    draft.cancel();
+    apply();
+  }
+
+  function cancelPendingSelection() {
+    setPendingSelection(null);
   }
 
   return {
@@ -103,5 +135,9 @@ export function useConfigEditorState(name: string) {
     memoryBlock,
     readOnlyMissing,
     draft,
+    /** True while a selection waits on the discard-changes confirmation. */
+    hasPendingSelection: pendingSelection !== null,
+    confirmPendingSelection,
+    cancelPendingSelection,
   };
 }

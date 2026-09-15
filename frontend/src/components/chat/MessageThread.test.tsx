@@ -272,6 +272,65 @@ describe("MessageThread", () => {
     expect(screen.queryByRole("combobox", { name: /select.*model/i })).not.toBeInTheDocument();
   });
 
+  test("a failed turn shows the error banner and never a 'Thinking…' bubble beside it", async () => {
+    // A mid-turn stream drop leaves the live bubble streaming and a persisted
+    // empty placeholder; with the error set, neither may keep "thinking".
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        makeMsg({ role: "user", content: [{ type: "text", text: "my question" }] }),
+        makeMsg({ id: "msg-2", seq: 2, role: "assistant", status: "streaming", content: [] }),
+      ],
+    });
+    renderThread({
+      liveMessage: { userText: "my question", text: "", toolBlocks: [], streaming: true },
+      turnError: new Error("provider failed"),
+    });
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/provider failed/i));
+    expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
+    // The failed user text stays on screen.
+    expect(screen.getByText("my question")).toBeInTheDocument();
+  });
+
+  test("Retry on a failed turn re-sends the failed message", async () => {
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "try again" }] })],
+    });
+    const onSend = vi.fn();
+    const onClearTurnError = vi.fn();
+    renderThread({ turnError: new Error("boom"), onSend, onClearTurnError });
+    // Retry appears once the failed prompt is on screen (it is what gets re-sent).
+    await waitFor(() => expect(screen.getByText("try again")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(onClearTurnError).toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalledWith("try again");
+  });
+
+  test("a not-logged-in agent error maps to actionable copy", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({ turnError: new Error("claude: Not logged in · run /login") });
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/isn't logged in on this machine/i),
+    );
+  });
+
+  test("scrolling away from the bottom shows a Jump-to-latest pill that re-attaches", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [makeMsg({})] });
+    const { container } = renderThread();
+    await waitFor(() => expect(screen.getByText("Hello")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).not.toBeInTheDocument();
+
+    const scroller = container.querySelector("[tabindex='0']") as HTMLElement;
+    Object.defineProperty(scroller, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(scroller, "clientHeight", { configurable: true, value: 300 });
+    scroller.scrollTop = 0;
+    fireEvent.scroll(scroller);
+    const pill = await screen.findByRole("button", { name: /jump to latest/i });
+    fireEvent.click(pill);
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /jump to latest/i })).not.toBeInTheDocument(),
+    );
+  });
+
   acceptance("channels", "second message queues during a streaming turn", async () => {
     // Fire-and-return + persistent subscription: while a reply streams the
     // composer stays usable, and a message sent mid-turn shows up as a queued

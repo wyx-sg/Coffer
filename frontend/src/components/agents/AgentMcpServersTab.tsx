@@ -33,14 +33,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
 import type { McpEntryOut } from "@/lib/api/agents";
 import { useAgentMcpEntries, useRemoveMcpEntry } from "@/lib/hooks/useAgents";
@@ -188,39 +181,23 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
         />
       )}
 
-      <Dialog
+      <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("common.delete")}: {deleteTarget?.name}
-            </DialogTitle>
-            <DialogDescription>{t("agents.workspace.mcp.deleteConfirm")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={removeEntry.isPending}
-              onClick={() => {
-                if (!deleteTarget) return;
-                removeEntry.mutate(
-                  { entry: deleteTarget.name, source: deleteTarget.source },
-                  { onSuccess: () => setDeleteTarget(null) },
-                );
-              }}
-            >
-              {t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={t("agents.removeConfirmTitle", { name: deleteTarget?.name ?? "" })}
+        description={t("agents.workspace.mcp.deleteConfirm")}
+        confirmLabel={removeEntry.isPending ? t("common.deleting") : t("common.delete")}
+        pending={removeEntry.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          removeEntry.mutate(
+            { entry: deleteTarget.name, source: deleteTarget.source },
+            { onSuccess: () => setDeleteTarget(null) },
+          );
+        }}
+      />
     </div>
   );
 }

@@ -2,13 +2,15 @@
 // Read-only "what this connection is" card on the connection detail page.
 // Editing goes through the header's Edit dialog (ProviderForm), so nothing here
 // is an input. The API key is NEVER rendered — only whether one is stored, which
-// is all `credential_ref` tells us.
+// is all `credential_ref` tells us. Which agents the connection reaches is not a
+// row here either: that is the header's reach control, stated once.
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AGENT_LABEL_KEY } from "@/components/settings/connectionPresets";
+import { PROTOCOL_LABEL_KEY } from "@/components/settings/connectionPresets";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Provider } from "@/lib/api/providers";
+import { formatDateTime } from "@/lib/utils";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -21,7 +23,6 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 export function ProviderConfigCard({ provider }: { provider: Provider }) {
   const { t } = useTranslation();
-  const agents = provider.compatible_agents ?? [];
 
   return (
     <Card>
@@ -35,7 +36,9 @@ export function ProviderConfigCard({ provider }: { provider: Provider }) {
           <Row label={t("settings.connections.baseUrl")}>
             <span className="font-mono text-xs">{provider.base_url}</span>
           </Row>
-          <Row label={t("settings.connections.wireFormat")}>{provider.protocol}</Row>
+          <Row label={t("settings.connections.wireFormat")}>
+            {t(PROTOCOL_LABEL_KEY[provider.protocol])}
+          </Row>
           <Row label={t("settings.connections.secret")}>
             {provider.credential_ref ? (
               <span>{t("settings.connections.detail.keyStored")}</span>
@@ -45,34 +48,18 @@ export function ProviderConfigCard({ provider }: { provider: Provider }) {
               </span>
             )}
           </Row>
-          <Row label={t("settings.connections.compatibleAgents")}>
-            {agents.length === 0 ? (
-              <span className="text-muted-foreground">—</span>
-            ) : (
-              <div className="flex flex-wrap gap-1">
-                {agents.map((a) => (
-                  <span
-                    key={a}
-                    className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-                  >
-                    {t(AGENT_LABEL_KEY[a])}
-                  </span>
-                ))}
-              </div>
-            )}
-          </Row>
           <Row label={t("resources.cols.description")}>
             {provider.description ? (
               provider.description
             ) : (
-              <span className="text-muted-foreground">—</span>
+              <span className="text-muted-foreground">{t("common.emptyValue")}</span>
             )}
           </Row>
           <Row label={t("settings.connections.detail.created")}>
-            {new Date(provider.created_at).toLocaleString()}
+            {formatDateTime(provider.created_at)}
           </Row>
           <Row label={t("settings.connections.detail.updated")}>
-            {new Date(provider.updated_at).toLocaleString()}
+            {formatDateTime(provider.updated_at)}
           </Row>
         </dl>
       </CardContent>

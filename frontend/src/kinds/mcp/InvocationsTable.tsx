@@ -120,15 +120,8 @@ export function InvocationsTable({ serverName, enabled = true }: Props) {
     return r;
   }, [invocations, until, q, crossServerScope]);
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="py-8 text-center text-muted-foreground">
-          {t("mcp.invocations.loading")}
-        </CardContent>
-      </Card>
-    );
-  }
+  // Loading renders as skeleton rows inside the table below, under the filter
+  // bar; only an error replaces the table.
   if (error) {
     return (
       <Card>
@@ -201,6 +194,7 @@ export function InvocationsTable({ serverName, enabled = true }: Props) {
         rows={rows}
         columns={columns}
         rowKey={(inv) => inv._id}
+        isLoading={isLoading}
         getRowDetail={(inv) => (
           <div className="px-4 py-3">
             {/* Strip the synthetic _id so the raw log shows the daemon's record verbatim. */}

@@ -1,5 +1,5 @@
 // frontend/src/pages/SkillsPage.tsx — spec skill-manager surface.
-// Mirrors AgentsPage: PageHeader + welcome/loading/error/grid; the Add-skill
+// Mirrors AgentsPage: PageHeader + welcome/error/table (skeleton rows while loading); the Add-skill
 // header action appears only once skills exist — the empty state's welcome
 // panel carries the Add call-to-action instead. Verification moved to per-row
 // and bulk actions inside SkillsTable.
@@ -39,13 +39,9 @@ export function SkillsPage() {
 
       <SkillAddDialog open={showAdd} onOpenChange={setShowAdd} onCreated={() => void refetch()} />
 
-      {isPending ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+      {/* The header stays mounted through loading — the table renders skeleton
+          rows under it rather than the page swapping to a loading card. */}
+      {error ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-destructive">{t("skills.loadFailed")}</CardTitle>
@@ -54,10 +50,10 @@ export function SkillsPage() {
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
           </CardContent>
         </Card>
-      ) : (skills ?? []).length === 0 ? (
+      ) : !isPending && !hasSkills ? (
         <SkillWelcomePanel onAddSkill={() => setShowAdd(true)} />
       ) : (
-        <SkillsTable skills={skills ?? []} />
+        <SkillsTable skills={skills ?? []} isLoading={isPending} />
       )}
     </div>
   );

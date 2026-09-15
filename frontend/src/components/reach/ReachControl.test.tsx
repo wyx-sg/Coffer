@@ -236,16 +236,15 @@ describe("the panel says reach is machine-local", () => {
     expect(screen.getByTestId("reach-machine-local")).toHaveTextContent(/not synced/i);
   });
 
-  test("the button carries it as a tooltip, for a reader who never opens it", () => {
+  test("the button carries no tooltip for it: the line is visible text in the panel", () => {
     seed();
     mount("everywhere");
-    expect(trigger()).toHaveAttribute("title", expect.stringMatching(/this machine/i));
+    expect(trigger()).not.toHaveAttribute("title");
   });
 
-  test("a dormancy note outranks it on the button", () => {
-    // Two things want that one tooltip. The note is about THIS resource and is
-    // the more urgent, so it wins; the standing fact is still one click away
-    // inside the panel.
+  test("a dormancy note is the one thing the button does carry", () => {
+    // The note is about THIS resource and is the more urgent; the standing
+    // fact is one click away inside the panel.
     seed();
     mount("restricted", { initialScope: only(["claude"]), note: "Inactive here" });
     expect(trigger()).toHaveAttribute("title", "Inactive here");
@@ -448,12 +447,27 @@ describe("the panel stages the choice, then commits once on close", () => {
     expect(trigger().className).not.toContain("status-warn");
   });
 
-  test("the bulk mount is labelled, so it is distinguishable from a row's", () => {
+  test("the bulk mount is labelled on the button, so it is distinguishable from a row's", () => {
     seed();
     mount(null, { testId: "bulk-reach-control", ariaLabel: "Reach for the selected" });
-    expect(screen.getByTestId("bulk-reach-control")).toHaveAttribute(
-      "aria-label",
-      "Reach for the selected",
-    );
+    expect(trigger("bulk-reach-control")).toHaveAccessibleName("Reach for the selected");
+  });
+
+  test("Done commits the staged agent list and closes, exactly once", () => {
+    // "Only selected agents" is the one choice that leaves the panel open, so
+    // it carries its own way out; Done is the same commit closing performs.
+    seed();
+    const h = mount("everywhere");
+    openPanel();
+    expect(screen.queryByRole("button", { name: /^done$/i })).not.toBeInTheDocument();
+    fireEvent.click(choice(/only selected/i));
+    fireEvent.click(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
+    expect(h.onRestricted).toHaveBeenCalledTimes(1);
+    expect(h.onRestricted).toHaveBeenCalledWith(only(["codex"]));
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    // Closing again (already closed) must not write a second time.
+    closePanel();
+    expect(h.onRestricted).toHaveBeenCalledTimes(1);
   });
 });

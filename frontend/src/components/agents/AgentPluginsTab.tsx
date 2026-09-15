@@ -15,14 +15,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut, PluginOut } from "@/lib/api/agents";
@@ -167,41 +160,25 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
         )}
       </Card>
 
-      <Dialog
+      <ConfirmDialog
         open={uninstallTarget !== null}
         onOpenChange={(open) => {
           if (!open) setUninstallTarget(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("agents.workspace.pluginsTab.uninstall")}: {uninstallTarget?.name}
-            </DialogTitle>
-            <DialogDescription>
-              {t("agents.workspace.pluginsTab.uninstallConfirm")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setUninstallTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={uninstall.isPending}
-              onClick={() => {
-                if (!uninstallTarget) return;
-                uninstall.mutate(
-                  { id: uninstallTarget.id },
-                  { onSuccess: () => setUninstallTarget(null) },
-                );
-              }}
-            >
-              {t("agents.workspace.pluginsTab.uninstall")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={t("agents.workspace.pluginsTab.uninstallConfirmTitle", {
+          name: uninstallTarget?.name ?? "",
+        })}
+        description={t("agents.workspace.pluginsTab.uninstallConfirm")}
+        confirmLabel={t("agents.workspace.pluginsTab.uninstall")}
+        pending={uninstall.isPending}
+        onConfirm={() => {
+          if (!uninstallTarget) return;
+          uninstall.mutate(
+            { id: uninstallTarget.id },
+            { onSuccess: () => setUninstallTarget(null) },
+          );
+        }}
+      />
     </div>
   );
 }

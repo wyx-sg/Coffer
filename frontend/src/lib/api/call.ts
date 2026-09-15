@@ -6,7 +6,7 @@
 // the `{error:{code,message}}` envelope unwrapped into an `ApiError`.
 //
 // It exists so a module needing a hand-written client does not copy the helper
-// a fifth time. `api/chat.ts`, `agents.ts`, `models.ts` and `skills.ts` still
+// a fifth time. `api/chat.ts`, `agents.ts`, `providers.ts`, `skills.ts` and `channels.ts` still
 // own their own copies; migrate one when you touch it.
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import { ApiError } from "@/lib/api/errors";

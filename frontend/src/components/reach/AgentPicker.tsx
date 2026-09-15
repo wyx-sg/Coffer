@@ -33,7 +33,7 @@ interface Props {
 }
 
 const WARNING_CLASS =
-  "rounded border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn";
+  "rounded-md border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn";
 
 export function AgentPicker({ registered, selected, dormant, busy, onToggle, className }: Props) {
   const { t } = useTranslation();

@@ -11,7 +11,7 @@ import { translateApiError } from "@/lib/api/errors";
 
 /**
  * The MCP servers surface (nav: "MCP servers"; route /mcp-servers). Empty →
- * a welcome card; otherwise the shared DataTable (search / filter / pagination
+ * a welcome card; loading → skeleton rows; otherwise the shared DataTable (search / filter / pagination
  * + row multi-select bulk actions), with a row click opening the server's
  * detail page.
  *
@@ -36,15 +36,9 @@ export function ResourcesPage() {
         actions={hasResources ? <AddMcpServerDialog /> : null}
       />
 
-      {!hasResources && !isPending && !error ? <WelcomePanel /> : null}
-
-      {isPending ? (
-        <Card className="paper-card">
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+      {/* The header stays mounted through loading — the table renders skeleton
+          rows under it rather than the page swapping to a loading card. */}
+      {error ? (
         <Card className="paper-card border-destructive/40">
           <CardHeader>
             <CardTitle className="font-serif text-destructive">
@@ -55,9 +49,11 @@ export function ResourcesPage() {
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
           </CardContent>
         </Card>
-      ) : hasResources ? (
-        <McpServersTable resources={visible} />
-      ) : null}
+      ) : !isPending && !hasResources ? (
+        <WelcomePanel />
+      ) : (
+        <McpServersTable resources={visible} isLoading={isPending} />
+      )}
     </div>
   );
 }

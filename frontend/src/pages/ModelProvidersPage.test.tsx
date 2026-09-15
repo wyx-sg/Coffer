@@ -128,13 +128,19 @@ describe("ModelProvidersPage", () => {
 
       renderPage();
 
-      // lists the connections with their compatible-agent chips
+      // lists the connections; which agents each one reaches is the reach
+      // column's control (there is no separate compatible-agents column
+      // repeating it in words)…
       expect(await screen.findByText("official")).toBeInTheDocument();
       expect(screen.getByText("agnes")).toBeInTheDocument();
-      expect(screen.getByText("Claude Code")).toBeInTheDocument();
-      expect(screen.getByText("Codex")).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: "Reach" })).toBeInTheDocument();
+      expect(screen.queryByText("Compatible agents")).not.toBeInTheDocument();
+      expect(screen.queryByText("Claude Code")).not.toBeInTheDocument();
       // …and their endpoints, in the base_url column.
       expect(screen.getAllByText("https://gw/anthropic").length).toBeGreaterThan(0);
+      // The Active pill marks the connection Coffer's own engine runs on.
+      expect(within(rowFor("official")).getByText("Active")).toBeInTheDocument();
+      expect(within(rowFor("agnes")).queryByText("Active")).not.toBeInTheDocument();
 
       // No per-row "Switch" — activation is per-agent, on the Agent Overview tab.
       expect(screen.queryByRole("button", { name: "Switch" })).not.toBeInTheDocument();
@@ -152,9 +158,12 @@ describe("ModelProvidersPage", () => {
     // same label as the form's preset picker.
     const form = within(screen.getByRole("dialog"));
     fireEvent.change(form.getByLabelText("Name"), { target: { value: "myconn" } });
-    // Pick the "Custom" provider → a protocol picker appears.
-    fireEvent.change(form.getByLabelText("Vendor"), { target: { value: "custom" } });
-    fireEvent.change(form.getByLabelText("Protocol"), { target: { value: "openai" } });
+    // Pick the "Custom" provider → a protocol picker appears, labelled by
+    // what each wire is rather than its enum value.
+    fireEvent.click(form.getByLabelText("Vendor"));
+    fireEvent.click(screen.getByRole("option", { name: "Custom" }));
+    fireEvent.click(form.getByLabelText("Protocol"));
+    fireEvent.click(screen.getByRole("option", { name: "OpenAI-compatible" }));
     fireEvent.change(form.getByLabelText("Base URL"), { target: { value: "https://gw/v1" } });
     fireEvent.change(form.getByLabelText("API key"), { target: { value: "sk-x" } });
     // No agent checkboxes here: the dialog does not decide reach.
@@ -193,7 +202,8 @@ describe("ModelProvidersPage", () => {
     const form = within(screen.getByRole("dialog"));
     fireEvent.change(form.getByLabelText("Name"), { target: { value: "local-llm" } });
     // The Ollama preset fills the protocol + endpoint and is keyless.
-    fireEvent.change(form.getByLabelText("Vendor"), { target: { value: "ollama" } });
+    fireEvent.click(form.getByLabelText("Vendor"));
+    fireEvent.click(screen.getByRole("option", { name: "Ollama" }));
     expect(form.queryByLabelText("API key")).not.toBeInTheDocument();
 
     fireEvent.click(form.getByRole("button", { name: "Save" }));
@@ -208,6 +218,23 @@ describe("ModelProvidersPage", () => {
     // NEITHER secret_value nor credential_ref is sent for ollama.
     expect(body.secret_value).toBeUndefined();
     expect(body.credential_ref).toBeUndefined();
+  });
+
+  test("the header stays up while the list loads, and an empty library shows the welcome panel", async () => {
+    let resolve: (v: { providers: Provider[] }) => void = () => {};
+    apiMock.list.mockReturnValue(new Promise((r) => (resolve = r)));
+    renderPage();
+    // Loading: the page title is already there over skeleton rows, never a
+    // blank page or a bare "Loading…" card.
+    expect(screen.getByRole("heading", { name: "Model providers" })).toBeInTheDocument();
+    expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
+
+    resolve({ providers: [] });
+    // Empty: the welcome panel carries the single Add call-to-action, so the
+    // header's own Add button steps aside rather than stating it twice.
+    expect(await screen.findByText("Bring your own model endpoint")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Add model provider/i })).toHaveLength(1);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
   test("holds only the connection library — no engine or embedding card", async () => {
@@ -269,9 +296,9 @@ describe("ModelProvidersPage", () => {
     expect(screen.queryByText("official")).not.toBeInTheDocument();
 
     selectFilter("Vendor", "All vendors");
-    // The status filter tracks the status COLUMN, which is reach now: an
-    // enabled connection with no scope reads as "Every agent".
-    selectFilter("Status", "Every agent");
+    // The reach filter tracks the reach COLUMN: an enabled connection with no
+    // scope reads as "Every agent".
+    selectFilter("Reach", "Every agent");
     expect(screen.getByText("official")).toBeInTheDocument();
     expect(screen.queryByText("agnes")).not.toBeInTheDocument();
   });

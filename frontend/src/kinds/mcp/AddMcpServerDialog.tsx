@@ -1,3 +1,4 @@
+// frontend/src/kinds/mcp/AddMcpServerDialog.tsx
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -87,6 +88,14 @@ async function rollbackResource(name: string): Promise<void> {
   }
 }
 
+/** A batch that partly failed: the servers that did register stay; the
+ * dialog lists every one that did not, one line each. */
+class BatchImportError extends Error {
+  constructor(readonly failed: string[]) {
+    super(failed.join("; "));
+  }
+}
+
 /**
  * "Add MCP server" modal — paste the standard `mcpServers` JSON, review
  * which env values are secrets, and import a batch. Each server is
@@ -98,7 +107,7 @@ export function AddMcpServerDialog() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverErrors, setServerErrors] = useState<string[]>([]);
   // Names already registered in a prior attempt of THIS import session, so a
   // retry after a partial failure re-attempts only the servers that failed
   // instead of re-POSTing the created ones (which would 409 "already exists").
@@ -135,9 +144,7 @@ export function AddMcpServerDialog() {
           failed.push(`${srv.name}: ${translateApiError(t, e)}`);
         }
       }
-      // A partial failure keeps the servers that did register; the
-      // summary names every one that failed.
-      if (failed.length > 0) throw new Error(failed.join("; "));
+      if (failed.length > 0) throw new BatchImportError(failed);
       return created;
     },
     onSettled: () => {
@@ -146,11 +153,15 @@ export function AddMcpServerDialog() {
     onSuccess: (created) => {
       setOpen(false);
       if (created.length === 1) {
-        navigate(`/mcp-servers/mcp_server/${created[0]}`);
+        navigate(`/mcp-servers/${encodeURIComponent(created[0])}`);
       }
     },
     onError: (err: unknown) => {
-      setServerError(err instanceof Error ? err.message : String(err));
+      setServerErrors(
+        err instanceof BatchImportError
+          ? err.failed
+          : [err instanceof Error ? err.message : String(err)],
+      );
     },
   });
 
@@ -160,7 +171,7 @@ export function AddMcpServerDialog() {
       onOpenChange={(next) => {
         setOpen(next);
         if (next) createdRef.current = new Set();
-        else setServerError(null);
+        else setServerErrors([]);
       }}
     >
       <DialogTrigger asChild>
@@ -173,17 +184,19 @@ export function AddMcpServerDialog() {
           <DialogTitle>{t("mcp.server.addTitle")}</DialogTitle>
           <DialogDescription>{t("mcp.server.addSubtitle")}</DialogDescription>
         </DialogHeader>
-        {serverError ? (
-          <div
-            className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        {serverErrors.length > 0 ? (
+          <ul
+            className="list-inside list-disc space-y-1 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
             role="alert"
           >
-            {serverError}
-          </div>
+            {serverErrors.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
         ) : null}
         <JsonImportPanel
           onImport={(servers) => {
-            setServerError(null);
+            setServerErrors([]);
             importBatch.mutate(servers);
           }}
           importing={importBatch.isPending}

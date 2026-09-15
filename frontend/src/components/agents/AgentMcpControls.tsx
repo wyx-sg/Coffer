@@ -1,56 +1,65 @@
 // frontend/src/components/agents/AgentMcpControls.tsx — spec agent-registry v2.
-// Compact Coffer-MCP install control: an "Install Coffer MCP" button when not
-// installed, and a plain "Coffer MCP installed" status (no uninstall action)
-// once installed. Plus a status badge for at-a-glance use elsewhere. Both read
-// the (auto-detected) install status from the agent's MCP config.
+// Compact Coffer-MCP install control for the detail-page header: an "Install
+// Coffer MCP" button when not installed, an "Uninstall Coffer MCP" button
+// (behind a confirm — it cuts the agent off from the gateway) once installed.
+// Either outcome is confirmed with a toast; failures toast from the hook. Plus
+// a status badge for at-a-glance use in the agents table. Both read the
+// (auto-detected) install status from the agent's MCP config.
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plug, Unplug } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { translateApiError } from "@/lib/api/errors";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast";
 import { useAgentMcpInstall, useAgentMcpStatus } from "@/lib/hooks/useAgents";
 
-/**
- * Coffer-MCP control. When not installed: an "Install Coffer MCP" button; when
- * installed: an "Uninstall Coffer MCP" button (icon+text, matching the other
- * header actions). Mutation failures (e.g. the shim binary cannot be resolved)
- * are surfaced inline so a click never looks like a silent no-op.
- */
 export function AgentMcpButton({ name }: { name: string }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const status = useAgentMcpStatus(name);
   const mutate = useAgentMcpInstall(name);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const installed = status.data?.installed ?? false;
 
+  const run = (install: boolean) =>
+    mutate.mutate(install, {
+      onSuccess: () => {
+        setConfirmOpen(false);
+        toast.success(t(install ? "agents.mcp.installedToast" : "agents.mcp.uninstalledToast"));
+      },
+    });
+
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <>
       {installed ? (
         <Button
           variant="outline"
           size="sm"
           disabled={mutate.isPending}
-          onClick={() => mutate.mutate(false)}
+          onClick={() => setConfirmOpen(true)}
         >
           <Unplug className="mr-1.5 size-3.5" />
           {mutate.isPending ? t("common.saving") : t("agents.mcp.uninstall")}
         </Button>
       ) : (
-        <Button
-          size="sm"
-          disabled={mutate.isPending || status.isPending}
-          onClick={() => mutate.mutate(true)}
-        >
+        <Button size="sm" disabled={mutate.isPending || status.isPending} onClick={() => run(true)}>
           <Plug className="mr-1.5 size-3.5" />
           {mutate.isPending ? t("common.saving") : t("agents.mcp.install")}
         </Button>
       )}
-      {mutate.error ? (
-        <p className="max-w-xs text-right text-xs text-destructive">
-          {translateApiError(t, mutate.error)}
-        </p>
-      ) : null}
-    </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={t("agents.mcp.uninstallConfirm.title")}
+        description={t("agents.mcp.uninstallConfirm.body")}
+        confirmLabel={mutate.isPending ? t("common.saving") : t("agents.mcp.uninstall")}
+        pending={mutate.isPending}
+        onConfirm={() => run(false)}
+      />
+    </>
   );
 }
 
@@ -59,7 +68,7 @@ export function AgentMcpStatusBadge({ name }: { name: string }) {
   const { t } = useTranslation();
   const status = useAgentMcpStatus(name);
   if (status.isPending) {
-    return <span className="text-xs text-muted-foreground">…</span>;
+    return <Skeleton className="h-5 w-20" aria-label={t("agents.mcp.checking")} />;
   }
   const installed = status.data?.installed ?? false;
   return (

@@ -30,7 +30,11 @@ Semantic tokens (defined in `tailwind.config.js` `theme.extend.colors`):
 - `border`, `input`, `ring` — surface borders, form input borders, focus
   ring.
 - `status.ok` / `status.warn` / `status.err` — health pills (used by the
-  resource list and the daemon-offline banner).
+  resource list and the daemon-offline banner). Components reach them only
+  through `frontend/src/lib/statusColors.ts`.
+- `highlight` / `highlight-active` — the row / item that a search or a
+  selection is pointing at, and the one currently active; the only tokens for
+  "this is the one you are looking at".
 
 Pick from the semantic name, not the underlying hue. Adding a new
 semantic token is preferred over hard-coding hex / hsl values inside a
@@ -66,14 +70,22 @@ single root variable retunes the whole UI. Use `rounded-lg` for cards,
 - Build screens from shadcn primitives in `frontend/src/components/ui/`
   rather than inventing new wrappers per page.
 - Empty / loading / error states are first-class — never let a screen
-  render with no content while data resolves. Give each surface its own
-  empty/loading/error treatment (e.g. `components/chat/ChatEmptyState.tsx`);
-  there is no shared `EmptyState` primitive yet — factor one out when a
-  second feature needs the same shape.
+  render with no content while data resolves. `components/EmptyState.tsx` is
+  the shared empty-state primitive (icon, title, description, action) — use
+  it for every list / not-found / zero-result screen. Loading keeps the
+  surface's real shape with `components/ui/skeleton.tsx`: a `DataTable` given
+  `isLoading` renders skeleton rows under its mounted header, and a detail
+  page renders a `Skeleton` title rather than a blank or a "Loading…" card.
+- A non-fatal caution (a config that works but is unusual, a reach that
+  names no agent) is the `warning` variant of `Alert` — status-warn border
+  and icon on a card background — not a destructive alert and not a toast.
 - Status surfaces (daemon offline, capability disabled, tool-call health)
   use the `status.*` tokens; do not pick raw `green/amber/emerald` palette
   classes. Type sizes come from the built-in scale (`text-sm`/`text-xs`/…),
   never per-component `text-[Npx]`.
+- The sidebar is always present. At `md` and above it expands to a labelled
+  rail and can be collapsed; below `md` it is the icon-only rail, so a narrow
+  viewport keeps its navigation rather than losing it behind a drawer.
 
 ## When in doubt
 

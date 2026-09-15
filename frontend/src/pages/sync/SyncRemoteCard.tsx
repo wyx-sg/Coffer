@@ -1,30 +1,41 @@
 // frontend/src/pages/sync/SyncRemoteCard.tsx — Sync → Status → Remote
-// (spec vault-sync). The one git repository this vault converges with: enable
-// it, name the repository and branch, say how often, say whether credential
-// ciphertext rides along, and run a round now.
+// (spec vault-sync). The one git repository this vault converges with: name
+// the repository and branch, say how often, say whether credential
+// ciphertext rides along, save it, and run a round now.
 //
-// Every edit auto-saves, so there is no Save button — the shape every other
-// configuration surface in Coffer uses.
+// An explicit form rather than field-by-field auto-save: a half-typed URL is
+// not a remote the daemon should be handed, so the draft is checked
+// client-side and Save stays disabled until it is both changed and valid.
+// The one exception is "Converge automatically", which flips the stored
+// remote on and off the moment it moves — and only once a remote is stored,
+// because before that there is nothing for it to switch.
 //
 // Nothing here ever holds the push credential. The form's credential field is
 // a *reference* — a name in Coffer's credential store — which the daemon
 // resolves at push time and nowhere else; that is why this card can render a
 // fully configured remote in a browser with nothing to redact.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/components/ui/toast";
 import type { SyncStatus } from "@/lib/api/sync";
 import { useRunConverge, useSaveSyncRemote } from "@/lib/hooks/useSync";
-import { SyncRemoteFields, type FormState } from "./SyncRemoteFields";
-
-/** The spec's defaults, so an unconfigured card opens on them rather than blank. */
-const DEFAULT_BRANCH = "main";
-const DEFAULT_INTERVAL_SECONDS = 3600;
+import { SyncRemoteFields } from "./SyncRemoteFields";
+import {
+  DEFAULT_BRANCH,
+  DEFAULT_INTERVAL_SECONDS,
+  isDirty,
+  validateRemote,
+  type FormState,
+} from "./syncRemoteForm";
 
 export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const save = useSaveSyncRemote();
   const run = useRunConverge();
 
@@ -39,80 +50,49 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
   const savedEnabled = saved?.enabled ?? true;
   const worktreePath = saved?.worktree_path ?? null;
 
-  const [form, setForm] = useState<FormState>({
-    url: savedUrl,
-    branch: savedBranch,
-    credentialRef: savedCredentialRef,
-    includeCredentials: savedIncludeCredentials,
-    intervalSeconds: savedInterval,
-    enabled: savedEnabled,
-  });
-
-  // Re-sync once the daemon's answer lands (and after every auto-save
-  // round-trip); without this the form keeps whatever the first render saw.
-  useEffect(() => {
-    setForm({
+  const savedForm = useMemo<FormState>(
+    () => ({
       url: savedUrl,
       branch: savedBranch,
       credentialRef: savedCredentialRef,
       includeCredentials: savedIncludeCredentials,
       intervalSeconds: savedInterval,
-      enabled: savedEnabled,
-    });
-  }, [
-    savedUrl,
-    savedBranch,
-    savedCredentialRef,
-    savedIncludeCredentials,
-    savedInterval,
-    savedEnabled,
-  ]);
+    }),
+    [savedUrl, savedBranch, savedCredentialRef, savedIncludeCredentials, savedInterval],
+  );
+  const [form, setForm] = useState<FormState>(savedForm);
+
+  // Re-sync once the daemon's answer lands (and after every save round-trip);
+  // without this the form keeps whatever the first render saw.
+  useEffect(() => setForm(savedForm), [savedForm]);
 
   const busy = save.isPending;
+  const errors = validateRemote(form);
+  const dirty = isDirty(form, savedForm);
+  // Field errors only once the user has changed something — an untouched
+  // empty form is not a mistake yet.
+  const shownErrors = dirty ? errors : {};
+  const canSave = dirty && !errors.url && !errors.interval && !busy;
 
   /**
-   * Persist the whole remote. A blank URL is not a configuration the daemon
-   * will take, so an empty form simply does not save — the user is still
-   * typing their repository in.
-   *
-   * `worktree_path` rides along unchanged when the daemon already has one:
-   * this card does not offer it, and omitting it would silently reset an
-   * adopted working tree to the default.
+   * Persist the whole remote. `worktree_path` rides along unchanged when the
+   * daemon already has one: this card does not offer it, and omitting it
+   * would silently reset an adopted working tree to the default. A remote
+   * saved for the first time starts enabled — the switch takes over after.
    */
-  const persist = (next: FormState) => {
-    if (!next.url.trim()) return;
-    save.mutate({
-      url: next.url.trim(),
-      branch: next.branch.trim() || DEFAULT_BRANCH,
-      credential_ref: next.credentialRef.trim() || null,
-      include_credentials: next.includeCredentials,
-      interval_seconds: next.intervalSeconds,
-      enabled: next.enabled,
-      ...(worktreePath ? { worktree_path: worktreePath } : {}),
-    });
-  };
-
-  // Switches persist the moment they move; text and number fields persist when
-  // the user finishes with them (blur or Enter), and only when the value
-  // actually differs — no write per keystroke, no round-trip on a no-op blur.
-  const toggle = (field: "enabled" | "includeCredentials") => (checked: boolean) => {
-    const next = { ...form, [field]: checked };
-    setForm(next);
-    persist(next);
-  };
-
-  const commit = () => {
-    const changed =
-      form.url.trim() !== savedUrl ||
-      form.branch.trim() !== savedBranch ||
-      form.credentialRef.trim() !== savedCredentialRef ||
-      form.intervalSeconds !== savedInterval;
-    if (changed) persist(form);
-  };
-
-  const blurOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") e.currentTarget.blur();
-  };
+  const persist = (next: FormState, enabled: boolean) =>
+    save.mutate(
+      {
+        url: next.url.trim(),
+        branch: next.branch.trim() || DEFAULT_BRANCH,
+        credential_ref: next.credentialRef.trim() || null,
+        include_credentials: next.includeCredentials,
+        interval_seconds: next.intervalSeconds,
+        enabled,
+        ...(worktreePath ? { worktree_path: worktreePath } : {}),
+      },
+      { onSuccess: () => toast.success(t("common.saved")) },
+    );
 
   return (
     <Card>
@@ -122,29 +102,51 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{t("sync.remote.description")}</p>
 
-        <SyncRemoteFields
-          form={form}
-          setForm={setForm}
-          busy={busy}
-          commit={commit}
-          blurOnEnter={blurOnEnter}
-          toggle={toggle}
-        />
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="secondary"
-            onClick={() => run.mutate()}
-            disabled={busy || run.isPending || !saved}
-          >
-            {run.isPending ? t("sync.remote.converging") : t("sync.remote.convergeNow")}
-          </Button>
-          {worktreePath ? (
-            <span className="text-xs text-muted-foreground">
-              {t("sync.remote.worktree", { path: worktreePath })}
-            </span>
-          ) : null}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label htmlFor="sync-enabled">{t("sync.remote.enabled")}</Label>
+            {!saved ? (
+              <p className="text-xs text-muted-foreground">{t("sync.remote.enabledHint")}</p>
+            ) : null}
+          </div>
+          {/* Flips the STORED remote, never the draft: unsaved edits stay
+              unsaved, and the switch is inert until there is a remote. */}
+          <Switch
+            id="sync-enabled"
+            checked={saved ? savedEnabled : false}
+            disabled={busy || !saved}
+            onCheckedChange={(checked) => persist(savedForm, checked)}
+          />
         </div>
+
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (canSave) persist(form, savedEnabled);
+          }}
+        >
+          <SyncRemoteFields form={form} setForm={setForm} errors={shownErrors} busy={busy} />
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={!canSave}>
+              {busy ? t("common.saving") : t("sync.remote.save")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => run.mutate()}
+              disabled={busy || run.isPending || !saved}
+            >
+              {run.isPending ? t("sync.remote.converging") : t("sync.remote.convergeNow")}
+            </Button>
+            {worktreePath ? (
+              <span className="text-xs text-muted-foreground">
+                {t("sync.remote.worktree", { path: worktreePath })}
+              </span>
+            ) : null}
+          </div>
+        </form>
 
         {!saved ? (
           <p className="text-xs text-muted-foreground">{t("sync.remote.notConfigured")}</p>

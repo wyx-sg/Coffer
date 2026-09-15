@@ -10,11 +10,8 @@
 //   ○ Disabled     ● Every agent     ○ Only selected agents
 //                                          [✓] claude-code   [ ] codex
 //
-// It used to be three buttons side by side — Disabled / Everywhere /
-// Restricted… — in every row. Two of them said the same thing ("everywhere" is
-// "restricted with every agent ticked"), so the group spent three controls on
-// two states and still made the reader compare all three to learn which was
-// live. One button states the answer; the panel is where it is changed.
+// One button states the answer; the panel is where it is changed (the older
+// three-buttons-per-row design spent three controls on two states).
 //
 // Three surfaces render this exact choice and must never drift apart:
 // ScopeControl (one resource, in a row or a detail header), BulkReachActions
@@ -55,6 +52,7 @@ import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AgentPicker } from "@/components/reach/AgentPicker";
+import { ReachChoice } from "@/components/reach/ReachChoice";
 import { liveMode, reachLabel, type ReachMode } from "@/components/reach/reachState";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -69,7 +67,7 @@ export type { ReachMode };
 const RESTRICTED_START: Scope = { agents: [] };
 
 const WARNING_CLASS =
-  "rounded border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn";
+  "rounded-md border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn";
 
 interface Props {
   /** The live state the button reports; `null` marks "no single state" — the
@@ -91,7 +89,7 @@ interface Props {
   /** Fired once, on panel close, with the whole staged scope. */
   onRestricted: (scope: Scope) => void;
   testId?: string;
-  /** Names the control for assistive tech; the bulk bar sets it so the
+  /** Names the button for assistive tech; the bulk bar sets it so the
    *  selection-wide control is distinguishable from the per-row ones. */
   ariaLabel?: string;
 }
@@ -163,26 +161,11 @@ export function ReachControl({
   };
 
   const choiceRow = (value: ReachMode, text: string, onPick: () => void) => (
-    <label className="flex w-full cursor-pointer items-center gap-2 text-sm">
-      <input
-        type="radio"
-        name={group}
-        className="size-4 cursor-pointer accent-primary align-middle"
-        checked={picked === value}
-        disabled={busy}
-        // `onClick`, not `onChange`: re-picking the live choice is a real
-        // gesture (it is how a user confirms and closes) and an already-checked
-        // radio fires no change. Keyboard activation clicks too, so nothing is
-        // lost; `readOnly` only tells React the missing `onChange` is meant.
-        readOnly
-        onClick={onPick}
-      />
-      <span>{text}</span>
-    </label>
+    <ReachChoice group={group} checked={picked === value} disabled={busy} {...{ text, onPick }} />
   );
 
   return (
-    <div className="inline-flex" data-testid={testId} aria-label={ariaLabel}>
+    <div className="inline-flex" data-testid={testId}>
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <Button
@@ -190,11 +173,13 @@ export function ReachControl({
             size="sm"
             variant="outline"
             disabled={busy}
-            // The note is about THIS resource and outranks the standing fact
-            // for the tooltip. It colours the button too: one button carrying
-            // the whole answer would otherwise read "2 agents" — perfectly
-            // healthy-looking — while reaching nobody on this machine.
-            title={note ?? t("scope.machineLocal")}
+            aria-label={ariaLabel}
+            // The note is about THIS resource: it colours the button (one
+            // button carrying the whole answer would otherwise read "2 agents"
+            // — perfectly healthy-looking — while reaching nobody on this
+            // machine) and is the one thing worth a tooltip on it; the
+            // standing machine-local fact is visible text inside the panel.
+            title={note}
             className={cn("gap-1.5 font-normal", note && "text-status-warn")}
           >
             {reachLabel(t, live, supportsScope, initialScope)}
@@ -234,6 +219,20 @@ export function ReachControl({
                   busy={busy}
                   onToggle={toggle}
                 />
+                {/* The one choice that stays open needs an explicit way out:
+                    Done commits the staged list exactly as closing does. */}
+                {picked === "restricted" ? (
+                  <div className="flex justify-end pl-6">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => finish("restricted", staged)}
+                    >
+                      {t("common.done")}
+                    </Button>
+                  </div>
+                ) : null}
               </>
             ) : (
               // Two states only, and "enabled" is the everywhere intent under

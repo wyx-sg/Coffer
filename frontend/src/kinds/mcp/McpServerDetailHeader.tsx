@@ -1,9 +1,13 @@
 // frontend/src/kinds/mcp/McpServerDetailHeader.tsx
+//
+// The server's detail header: the shared PageHeader with the health badge
+// beside the name, the description beneath, and the actions in the fixed
+// detail-page order — reach, test, edit, delete.
 import { useTranslation } from "react-i18next";
-import { Activity } from "lucide-react";
+import { Activity, Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
 import { HealthBadge, type HealthState } from "./HealthBadge";
 import { EditMcpServerDialog } from "./EditMcpServerDialog";
 import type { components } from "@/lib/api/types";
@@ -19,6 +23,9 @@ interface TestResult {
 
 interface Props {
   resource: ResourceOut;
+  /** Where "← back" leads; the list by default, or the agent page that sent
+   *  the reader here. */
+  back: { to: string; label: string };
   healthState: HealthState;
   testResult: TestResult | null;
   isTestPending: boolean;
@@ -28,6 +35,7 @@ interface Props {
 
 export function McpServerDetailHeader({
   resource,
+  back,
   healthState,
   testResult,
   isTestPending,
@@ -37,18 +45,19 @@ export function McpServerDetailHeader({
   const { t } = useTranslation();
 
   return (
-    <header className="space-y-2">
-      {/* Title + actions stay on one row; the description always sits below
-          (never wraps the action cluster down). */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl tracking-tight">{resource.name}</h1>
-          <HealthBadge
-            state={healthState}
-            latencyMs={testResult?.ok ? testResult.latency_ms : undefined}
-          />
-        </div>
+    <PageHeader
+      back={back}
+      title={resource.name}
+      subtitle={resource.description || undefined}
+      badges={
+        <HealthBadge
+          state={healthState}
+          latencyMs={testResult?.ok ? testResult.latency_ms : undefined}
+        />
+      }
+      actions={
         <div className="flex flex-wrap items-center gap-2">
+          <ScopeControl kind="mcp_server" name={resource.name} enabled={resource.enabled} />
           <Button size="sm" variant="outline" onClick={onTestConnection} disabled={isTestPending}>
             <Activity className="mr-1.5 size-3.5" />
             {isTestPending ? t("mcp.server.testing") : t("mcp.server.testConnection")}
@@ -63,12 +72,8 @@ export function McpServerDetailHeader({
           >
             <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
           </Button>
-          <ScopeControl kind="mcp_server" name={resource.name} enabled={resource.enabled} />
         </div>
-      </div>
-      {resource.description ? (
-        <p className="max-w-prose text-sm text-muted-foreground">{resource.description}</p>
-      ) : null}
-    </header>
+      }
+    />
   );
 }

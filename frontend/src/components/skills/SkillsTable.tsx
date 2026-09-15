@@ -2,11 +2,11 @@
 //
 // The skills list rendered via the shared DataTable (mirrors AgentTable): rows
 // navigate to the skill detail page on click, search covers name + description,
-// a status filter narrows by reach, each row carries the three-state
-// ScopeControl and a Delete icon+text action (the delete opens a styled
-// confirmation dialog — no window.confirm). Multi-select adds a bulk bar
-// carrying that same three-state reach control over the whole selection, plus
-// Delete. The per-row + bulk action UI lives in SkillsTableActions.tsx.
+// a reach filter narrows by reach, each row carries the three-state
+// ScopeControl and a Delete icon+text action (the delete opens the shared
+// ConfirmDialog — no window.confirm). Multi-select adds a bulk bar carrying
+// that same three-state reach control over the whole selection, plus Delete.
+// The per-row + bulk action UI lives in SkillsTableActions.tsx.
 //
 // The name cell also carries the copy_fallback "Copied" chip (FR-012): when a
 // delivery had to fall back to a copy, the UI must say so, and this list is the
@@ -16,26 +16,26 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
+import { DataTable, type Column } from "@/components/DataTable";
 import {
   SkillRowActions,
   SkillStatusCell,
   SkillsBulkActions,
 } from "@/components/skills/SkillsTableActions";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { SkillOut } from "@/lib/api/skills";
 import { useRemoveSkill } from "@/lib/hooks/useSkills";
+import { reachFilter } from "@/lib/reachFilter";
 
-export function SkillsTable({ skills }: { skills: SkillOut[] }) {
+export function SkillsTable({
+  skills,
+  isLoading = false,
+}: {
+  skills: SkillOut[];
+  /** Skeleton rows while the list resolves — the page keeps its header up. */
+  isLoading?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const remove = useRemoveSkill();
@@ -53,7 +53,7 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
             <Badge
               variant="outline"
               data-testid="skill-degraded-badge"
-              className="border-amber-500/50 text-amber-600 dark:text-amber-400"
+              className="border-status-warn/40 text-status-warn"
               title={t("skills.degradedTooltip")}
             >
               {t("skills.degradedBadge")}
@@ -77,8 +77,8 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
         ),
     },
     {
-      key: "status",
-      header: t("resources.cols.status"),
+      key: "reach",
+      header: t("resources.cols.reach"),
       className: "text-right",
       cell: (s) => <SkillStatusCell skill={s} />,
     },
@@ -97,28 +97,15 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
   ];
 
   // Source filter intentionally hidden alongside the source column (see above).
-  // The status filter follows the status column: since the column stopped being
-  // on/off, "enabled" alone would no longer name a state the user can see, so
-  // the filter offers the control's own three — disabled beats scope, and an
-  // enabled skill is either unscoped (everywhere) or restricted.
-  const filters: FilterDef<SkillOut>[] = [
-    {
-      key: "status",
-      label: t("resources.cols.status"),
-      allLabel: t("resources.status.all"),
-      accessor: (s) => (!s.enabled ? "disabled" : s.scope === null ? "every" : "selected"),
-      options: [
-        { value: "disabled", label: t("common.disabled") },
-        { value: "every", label: t("scope.everywhere") },
-        { value: "selected", label: t("scope.restricted") },
-      ],
-    },
-  ];
+  // The reach filter follows the reach column — the same three states every
+  // scoped-resource list offers.
+  const filters = [reachFilter(t, (s: SkillOut) => ({ enabled: s.enabled, scope: s.scope }))];
 
   return (
     <>
       <DataTable
         rows={skills}
+        isLoading={isLoading}
         columns={columns}
         rowKey={(s) => s.name}
         search={{
@@ -139,32 +126,21 @@ export function SkillsTable({ skills }: { skills: SkillOut[] }) {
         emptyMessage={t("skills.noMatches")}
       />
 
-      <Dialog open={deletingName !== null} onOpenChange={(o) => !o && setDeletingName(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("skills.removeConfirmTitle", { name: deletingName ?? "" })}
-            </DialogTitle>
-            <DialogDescription>{t("skills.removeConfirmBody")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeletingName(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => {
-                if (deletingName) {
-                  remove.mutate(deletingName, { onSuccess: () => setDeletingName(null) });
-                }
-              }}
-            >
-              {remove.isPending ? t("common.deleting") : t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deletingName !== null}
+        onOpenChange={(o) => !o && setDeletingName(null)}
+        title={t("skills.removeConfirmTitle", { name: deletingName ?? "" })}
+        description={t("skills.removeConfirmBody")}
+        confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
+        pending={remove.isPending}
+        onConfirm={() => {
+          // Close only on success; the hook toasts a failure and the dialog
+          // stays up so the reader can retry or cancel.
+          if (deletingName) {
+            remove.mutate(deletingName, { onSuccess: () => setDeletingName(null) });
+          }
+        }}
+      />
     </>
   );
 }

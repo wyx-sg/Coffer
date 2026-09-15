@@ -18,14 +18,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 // Reuse the table's FilterDef so a surface can share one filter definition
 // between its table and card views without redeclaring it.
-import type { FilterDef } from "@/components/DataTable";
+import { skeletonCount, type FilterDef, type ListLoading } from "@/components/DataTable.types";
 
 export type { FilterDef };
 
-interface Props<T> {
+interface Props<T> extends ListLoading {
   rows: T[];
   rowKey: (row: T) => string;
   /** Renders the body of one card. */
@@ -52,6 +53,7 @@ export function DataCardGrid<T>({
   pageSize,
   emptyMessage,
   onCardClick,
+  isLoading = false,
 }: Props<T>) {
   const [query, setQuery] = useState("");
   const [filterVals, setFilterVals] = useState<Record<string, string>>({});
@@ -123,8 +125,22 @@ export function DataCardGrid<T>({
         </div>
       ) : null}
 
-      {pageRows.length === 0 ? (
-        <div className="rounded-md border bg-card py-10 text-center text-muted-foreground">
+      {isLoading && pageRows.length === 0 ? (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-busy>
+          {Array.from({ length: skeletonCount(size) }, (_, i) => (
+            <div
+              key={`skeleton-${i}`}
+              data-testid="skeleton-card"
+              className="space-y-3 rounded-lg border bg-card p-5"
+            >
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          ))}
+        </div>
+      ) : pageRows.length === 0 ? (
+        <div className="rounded-md border bg-card py-10 text-center text-sm text-muted-foreground">
           {emptyMessage}
         </div>
       ) : (
@@ -137,7 +153,9 @@ export function DataCardGrid<T>({
                   key={key}
                   role="button"
                   tabIndex={0}
-                  className={cn("cursor-pointer focus-visible:outline-none")}
+                  className={cn(
+                    "cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  )}
                   onClick={() => onCardClick(row)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {

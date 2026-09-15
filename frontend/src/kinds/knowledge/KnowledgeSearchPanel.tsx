@@ -35,6 +35,11 @@ export function KnowledgeSearchPanel({ collection, onSelectPath }: Props) {
 
   return (
     <div className="space-y-2 rounded-md border p-2">
+      {/* Named, because the name filter sits right under it: this one reads
+          the files' contents, that one only their titles. */}
+      <h2 className="px-1 text-xs font-medium text-muted-foreground">
+        {t("knowledge.detail.searchTitle")}
+      </h2>
       <form
         className="flex items-center gap-2"
         onSubmit={(e) => {

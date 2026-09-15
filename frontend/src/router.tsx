@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { LegacyScopeRedirect } from "./components/LegacyScopeRedirect";
+import { LegacyMcpServerRedirect } from "./kinds/mcp/LegacyMcpServerRedirect";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
 import { ChatPage } from "./pages/ChatPage";
@@ -39,9 +40,12 @@ export const routes: RouteObject[] = [
       { path: "chat", element: <ChatPage /> },
       { path: "chat/:id", element: <ChatPage /> },
       { path: "mcp-servers", element: <ResourcesPage /> },
-      { path: "mcp-servers/:kind/:name", element: <ResourceDetailPage /> },
-      // Legacy route — this surface used to live at /resources. Keep old
-      // bookmarks and links working by redirecting to the renamed path.
+      { path: "mcp-servers/:name", element: <ResourceDetailPage /> },
+      // Legacy routes — this surface used to live at /resources, and the
+      // detail page carried a kind segment that only ever said `mcp_server`.
+      // Keep old bookmarks and links working by redirecting to the renamed
+      // paths.
+      { path: "mcp-servers/mcp_server/:name", element: <LegacyMcpServerRedirect /> },
       { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
       { path: "agents/:name", element: <AgentDetailPage /> },
@@ -50,7 +54,7 @@ export const routes: RouteObject[] = [
       { path: "skills", element: <SkillsPage /> },
       { path: "skills/:name", element: <SkillDetailPage /> },
       { path: "knowledge", element: <KnowledgePage /> },
-      { path: "knowledge/:scope", element: <KnowledgeDetailPage /> },
+      { path: "knowledge/:name", element: <KnowledgeDetailPage /> },
       { path: "memory", element: <MemoryPage /> },
       { path: "memory/:name", element: <MemoryDetailPage /> },
       { path: "sync", element: <SyncPage /> },
