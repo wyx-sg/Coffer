@@ -823,7 +823,11 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
         registered = fake_telegram.calls_for("setMyCommands")
         assert len(registered) == 1
         names = {entry["command"] for entry in registered[0]["commands"]}
-        assert names == {"new", "agent", "model", "stop", "status", "save", "help"}
+        # Spelled out rather than read from the roster: a test that asserts the
+        # menu matches the list the menu is built from would pass however wrong
+        # both are. This list is the independent statement of what a user can
+        # type, and adding a command means adding it here on purpose.
+        assert names == {"new", "agent", "model", "effort", "stop", "status", "save", "help"}
         assert fake_telegram.calls_for("setChatMenuButton")[0]["menu_button"] == {
             "type": "commands"
         }

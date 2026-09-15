@@ -11,7 +11,7 @@ silence. ``deliver_card`` reports whether the card landed so the caller can fall
 back to the plain-text answer it already has.
 
 Why the rewrite half exists: before it, tapping a card switched the agent (or
-model) and posted a confirmation, but left the card itself untouched — still
+the model, or its effort) and posted a confirmation, but left the card itself untouched — still
 showing the old choice ticked and still offering the option the user had just
 taken. Tapping it again was a no-op the card actively invited. SeaTalk's Update
 Message and Telegram's ``editMessageText`` both let the card be rewritten in
@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from coffer.application.channel import document_save
+from coffer.application.channel import document_save, effort_switch
 from coffer.application.channel.agent_routing import (
     effective_agent,
     routable_choices,
@@ -40,6 +40,7 @@ from coffer.application.channel.selection_cards import (
     SelectionCard,
     agent_card,
     collection_card,
+    effort_card,
     is_page_turn,
     model_card,
     parse_page_turn,
@@ -102,7 +103,8 @@ async def dispatch_card_tap(
     """Route one owner-gated tap: a page turn, or a choice.
 
     The page question is asked FIRST and answered exhaustively. A navigation
-    value never reaches ``apply_agent``/``apply_model``/``apply_save_collection``,
+    value never reaches ``apply_agent``/``apply_model``/``apply_effort``/
+    ``apply_save_collection``,
     and a value that merely looks like navigation (``page:`` with a kind or
     index we do not render) is dropped rather than falling through to the code
     path that applies a choice.
@@ -144,6 +146,13 @@ async def dispatch_card_tap(
     elif kind == "model" and value:
         await commands.apply_model(
             binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
+        )
+    elif kind == "effort" and value:
+        # Straight into ``effort_switch`` (no forwarding method on
+        # ``commands``, unlike apply_agent/apply_model) — that file's size
+        # budget, exactly as the ``collection`` branch below does.
+        await effort_switch.apply_effort(
+            commands, binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
         )
     elif kind == "collection" and value:
         # A save is one-shot, not a toggle: nothing to re-tick, so skip the
@@ -310,11 +319,17 @@ async def _current_card(
         # check `/save` itself makes (spec knowledge FR-036).
         visible = await commands._collections.visible_collections(agent_key)
         return collection_card(choices=visible, page=page) if visible else None
-    if kind != "model":
+    if kind not in ("model", "effort"):
         return None
     conversation_id = await ensure_conversation(
         commands._conversations, commands._threads, binding, peer, thread_id
     )
     cfg = await commands._conversations.get_agent_config(conversation_id)
+    if kind == "effort":
+        # Asked against the model in effect, not the agent: the levels belong to
+        # the model, so a card refreshed after a model switch offers that
+        # model's menu rather than the one the old model had.
+        levels = await commands._model_suggestions.efforts(agent_key, cfg.model)
+        return effort_card(current=cfg.effort, levels=levels, page=page) if levels else None
     picks = await commands._model_suggestions.suggest(agent_key)
     return model_card(current=cfg.model, picks=picks, page=page)

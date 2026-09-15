@@ -25,16 +25,22 @@ export function useChatController() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  // Draft top-bar selection (the agent + optional model) before the conversation
-  // exists; null until the user touches a selector — the defaults are derived
-  // below. `model` is the agent's own per-conversation model (agent_config.model,
-  // the builtin-agent-is-internal-capability and provider-switching ADRs);
-  // null inherits the active provider profile's default.
+  // Draft top-bar selection (the agent + optional model + optional effort) before
+  // the conversation exists; null until the user touches a selector — the
+  // defaults are derived below. `model` is the agent's own per-conversation model
+  // (agent_config.model, the builtin-agent-is-internal-capability and
+  // provider-switching ADRs); null inherits the active provider profile's
+  // default. `effort` is the reasoning level that model runs at — its own field
+  // beside the model, not part of its name — and it is carried here rather than
+  // set after the fact because the FIRST turn is the one a user most wants to
+  // pitch, and by the time the conversation exists that turn is already running.
   // There is no per-turn working-directory choice anymore: a turn runs in the
   // Coffer-managed workspace (~/.coffer/workspace) by default.
-  const [draftConfig, setDraftConfig] = useState<{ agentKey: string; model: string | null } | null>(
-    null,
-  );
+  const [draftConfig, setDraftConfig] = useState<{
+    agentKey: string;
+    model: string | null;
+    effort: string | null;
+  } | null>(null);
   // After creating from the draft, the first message is sent once the turn hook
   // re-binds to the new conversation id (see effect below).
   const [pendingFirst, setPendingFirst] = useState<{ convId: string; text: string } | null>(null);
@@ -85,10 +91,14 @@ export function useChatController() {
   // defaults to the first available one; when none is available the draft
   // surface shows an install/configure empty state instead.
   const firstAvailableAgent = agents.find((a) => a.available)?.agent_key ?? null;
-  const effectiveDraft = draftConfig ?? { agentKey: firstAvailableAgent ?? "", model: null };
+  const effectiveDraft = draftConfig ?? {
+    agentKey: firstAvailableAgent ?? "",
+    model: null,
+    effort: null,
+  };
 
   const startDraft = () => {
-    setDraftConfig({ agentKey: effectiveDraft.agentKey, model: effectiveDraft.model });
+    setDraftConfig({ ...effectiveDraft });
     navigate("/chat");
   };
 
@@ -100,9 +110,11 @@ export function useChatController() {
   const sendDraft = (text: string) => {
     // No per-turn working directory: send an empty agent_config and let the
     // backend default the cwd to the Coffer-managed workspace. Carry the chosen
-    // model through only when set — an unset model inherits the global default.
+    // model and effort through only when set — unset inherits, respectively, the
+    // global default and the agent's own level.
     const agent_config: Record<string, unknown> = {};
     if (effectiveDraft.model) agent_config.model = effectiveDraft.model;
+    if (effectiveDraft.effort) agent_config.effort = effectiveDraft.effort;
     createConv.mutate(
       {
         agent_key: effectiveDraft.agentKey,
@@ -156,11 +168,16 @@ export function useChatController() {
     // True when no Coffer-managed agent (claude_code / codex) is available, so
     // the draft surface shows an install/configure empty state instead.
     noManagedAgent: !firstAvailableAgent,
-    // Changing the agent clears any draft model override (different agent → its
-    // own model namespace and default).
-    setDraftAgent: (agentKey: string) => setDraftConfig({ agentKey, model: null }),
-    setDraftModel: (model: string | null) =>
-      setDraftConfig({ agentKey: effectiveDraft.agentKey, model }),
+    // Changing the agent clears any draft model AND effort override (different
+    // agent → its own model namespace, its own default, and its own set of
+    // levels — a level carried over could name something the new agent has
+    // never heard of).
+    setDraftAgent: (agentKey: string) => setDraftConfig({ agentKey, model: null, effort: null }),
+    // Changing the model keeps the effort: the picker keeps a level it no longer
+    // offers selectable rather than silently dropping it, so the trigger never
+    // misreports what the first turn will run at.
+    setDraftModel: (model: string | null) => setDraftConfig({ ...effectiveDraft, model }),
+    setDraftEffort: (effort: string | null) => setDraftConfig({ ...effectiveDraft, effort }),
     startDraft,
     selectConversation,
     sendDraft,

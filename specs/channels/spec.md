@@ -338,7 +338,12 @@ clean success sends no completion summary while a failed turn does.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
   paired chat. `/stop` and `/new` take effect even while a turn is running;
   other messages join the conversation's pending queue (FR-050 — the one the
-  web shows; the channel refuses past 10 waiting) and run in order.
+  web shows; the channel refuses past 10 waiting) and run in order. These are
+  the commands that need nothing of the conversation; the ones that configure
+  the conversation the chat is bound to — `/agent`, `/model`, `/effort` — are
+  specified in FR-013 and FR-017, and `/save` in spec knowledge FR-036. All of
+  them live on one roster (FR-065), so none of the lists derived from it can go
+  stale.
 - **FR-008**: A notify entry point (REST + CLI) delivers arbitrary text to a
   channel's paired peer, independent of any conversation.
 - **FR-009**: The SeaTalk callback listener is a separate process serving only
@@ -420,6 +425,26 @@ status / notify`.
   No surface refuses an id: a channel binds an agent and nothing more, so
   whatever the bound CLI accepts, `/model` can reach. With no suggestions it
   falls back to the text report.
+
+  **`/effort` is the other half of that choice.** For an agent whose models take
+  a reasoning level — Codex on `turn/start`, Claude Code as the CLI's
+  `--effort` — the model id is not the whole decision, and the level is not part
+  of the model NAME, so it is its own command rather than an argument to
+  `/model` (the same reason the web Chat page renders a second picker beside the
+  model picker rather than folding levels into it, FR-078). It behaves exactly
+  as `/model` does: no argument reports the level in effect and renders the
+  choices as a selection card where the transport `supports_buttons`, an
+  argument applies it to the next turn of the SAME conversation, a tap takes the
+  same path as the text, and Coffer validates nothing — the level reaches the
+  agent verbatim, so one it cannot run fails at the CLI where every other
+  unusable choice does. The levels offered are those of the model the
+  conversation is actually ON, read from the same catalogue `/model` offers, so
+  a level menu never describes a model the conversation is not running. An agent
+  whose model reports no levels has nothing to choose between: `/effort` says so
+  in one line rather than rendering an empty card. Like `/model`, there is no
+  clearing form — a reserved word meaning "unset" would be a level name Coffer
+  invented in a namespace it does not own — and `/new` is the way back to the
+  agent's own default, since a fresh conversation carries no overrides at all.
 - **FR-018**: On a transport that declares the `supports_buttons` capability,
   the core MAY render a command's choice list as an **interactive selection
   card** (Telegram inline keyboard, SeaTalk interactive message). A button tap
@@ -465,12 +490,16 @@ status / notify`.
   **rewrites the same message** at the next window through the same
   `supports_card_update` path an applied choice uses. One rule serves both
   cards — `/agent`'s two choices are under the bound and render with no
-  navigation chrome at all.
+  navigation chrome at all, and `/effort`'s handful of levels likewise.
 
   A navigation payload lives in its own callback namespace (`page:<kind>:<index>`),
-  disjoint from the `agent:` / `model:` values a choice carries and fixed-size
+  disjoint from the `agent:` / `model:` / `effort:` values a choice carries and fixed-size
   well inside the 64-byte callback budget. The separation is what guarantees the
-  invariant: **a page turn changes nothing.** It re-reads what is in effect and
+  invariant: **a page turn changes nothing.** The set of kinds that namespace
+  admits is closed and explicit, so adding a card that ticks a current choice
+  (`/effort`'s is the third) means adding its kind there too; a `page:` value
+  naming a kind Coffer does not render is dropped, not applied. It re-reads what
+  is in effect and
   re-renders; it can never be mistaken for a choice, and a malformed navigation
   value is dropped rather than allowed to fall through to the switch. Because the
   page in view may not hold the option in effect, the card's body always names
@@ -2190,7 +2219,14 @@ API server a user reaches is not guaranteed to be new enough.
   ephemeral messages), Coffer uses it for those; the agent's actual reply is
   always an ordinary message the group can see. This is the group-noise half of
   FR-024: that requirement stops the bot from *acting* on everything, this one
-  stops it from *saying* everything out loud.
+  stops it from *saying* everything out loud. Every command declares which side
+  of that line it falls on, on the same roster FR-065 registers the menu from:
+  `/new` and `/stop` change state the whole room shares and stay visible, while
+  the ones that answer the asker — `/agent`, `/model`, `/effort`, `/status`,
+  `/help` — are delivered privately where the transport can. A command added
+  without that declaration defaults to private, which is the safe way round but
+  still a decision the roster states rather than one a new command inherits by
+  accident.
   **Selection cards are deliberately excluded.** A card is the one surface that
   must be *rewritten* after it is used (FR-018), and a privately-delivered
   message is rewritten through a different address space — Telegram edits an
@@ -2206,7 +2242,10 @@ API server a user reaches is not guaranteed to be new enough.
   opening the bot for the first time sees what it is and what it accepts
   instead of an empty chat. The registered menu MUST list every command the
   channel actually handles — a command the help text offers but the menu omits
-  is a drift bug, not a design choice. Copy the owner already wrote, and the
+  is a drift bug, not a design choice. This is enforced structurally rather than
+  by review: the menu, the help text and the per-command privacy flag (FR-064)
+  are all rendered from one roster, so adding a command (`/effort` is the most
+  recent) is one entry plus its handler, with no second list to forget. Copy the owner already wrote, and the
   bot's name, are their branding decision and MUST NOT be overwritten.
 - **FR-066**: Pairing is one tap. Where the platform supports a parameterised
   start link, the pairing code (FR-005) is issued as a link that carries it, so
@@ -2318,10 +2357,18 @@ decision it rests on is recorded in
   the turn emitted them, and a card whose result has not arrived yet reads as
   still running.
 - **FR-078**: The page MUST let the owner read and set the conversation's agent
-  configuration — which agent it runs on and which model that agent is put on —
-  over `GET|PATCH .../agent-config`, persisting the model while preserving the
-  conversation's working directory and upstream session id, and reverting to the
-  agent's own default when it is cleared. A missing Coffer LLM connection MUST
+  configuration — which agent it runs on, which model that agent is put on, and
+  how hard that model thinks — over `GET|PATCH .../agent-config`, persisting
+  both while preserving the conversation's working directory and upstream
+  session id, and reverting to the agent's own default when either is cleared; a
+  body that mentions one leaves the other where it was. The reasoning level is a
+  SECOND control beside the model picker, not a variant of it: the agents take
+  it as their own field rather than as part of the model name, and it renders
+  only when the chosen model reports levels — nothing to choose between means no
+  control at all, not a disabled or empty one. Both controls MUST be offered on
+  the **draft** surface as well as in an open conversation, because the first
+  turn is the one a user most wants to pitch, and by the time the conversation
+  exists that turn is already running. A missing Coffer LLM connection MUST
   NOT block the page: with none configured the draft surface still accepts a
   message and the turn runs on the agent's own built-in model and login, because
   a Coffer connection is an optional override, not a prerequisite (see the

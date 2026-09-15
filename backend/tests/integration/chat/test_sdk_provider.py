@@ -215,6 +215,49 @@ async def test_init_conversation_persists_model_and_adapter_passes_it(tmp_path) 
     await engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_init_conversation_persists_effort_and_adapter_passes_it(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The reasoning level travels the same road the model does. Claude Code
+    takes it as its own option (the SDK renders it as ``--effort``), so it must
+    survive creation and reach ``ClaudeAgentOptions`` — a draft that chose one
+    is choosing it for the FIRST turn, which is the one already running by the
+    time anything could set it afterwards."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, captured = _make_factory(_simple_messages())
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+
+    await provider.init_conversation(
+        conv.id, {"cwd": str(tmp_path), "model": "opus", "effort": "xhigh"}
+    )
+    stored = await repo.get_agent_config(conv.id)
+    assert stored.effort == "xhigh"
+
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+    assert captured[0].effort == "xhigh"
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_no_effort_chosen_sends_none_so_the_cli_keeps_its_own(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """Unset must be OMITTED rather than sent as a guess: the CLI then runs at
+    whatever its own config says, which is where Coffer started."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, captured = _make_factory(_simple_messages())
+    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory)
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    assert captured[0].effort is None
+
+    await engine.dispose()
+
+
 # ---------------------------------------------------------------------------
 # build_adapter
 # ---------------------------------------------------------------------------

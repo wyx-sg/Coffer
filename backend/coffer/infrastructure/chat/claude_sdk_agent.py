@@ -232,6 +232,10 @@ class ClaudeSdkAgentAdapter:
             resume=resume,
             permission_mode="bypassPermissions",
             model=self._extra.get("model"),
+            # The reasoning level: Claude's own field beside the model, not part
+            # of its name; the SDK passes it to the CLI as ``--effort``. Unset →
+            # omitted, so the CLI keeps whatever its own config says.
+            effort=self._extra.get("effort") or None,
             # Without this the SDK only yields whole ``AssistantMessage``s, so the
             # entire reply arrives as one delta at the end of the turn and a chat
             # channel's live surface has nothing to grow. With it the reply's text

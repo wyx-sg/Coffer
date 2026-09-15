@@ -330,12 +330,25 @@ class AgentCatalogPort(Protocol):
 
 
 class ModelSuggestionPort(Protocol):
-    """Best-effort model quick-picks for a managed agent's ``/model`` selection
-    card: the active provider profile's ``model`` (and ``fast_model``) for the
-    agent's wire (ADR provider-switching), mirroring the web model picker. Empty when there is
-    no active profile — the card then offers only the free-text path."""
+    """Best-effort quick-picks for a managed agent's ``/model`` and ``/effort``
+    selection cards, mirroring the web pickers the two sit beside.
+
+    Two questions, because the choice has two halves and only the first is
+    always asked: WHICH model the agent runs, and — for an agent whose models
+    take one — how hard that model thinks. Empty answers are ordinary: no
+    catalogue to offer means the card falls back to the free-text path, and no
+    levels means the agent has no such setting and `/effort` says so rather than
+    rendering an empty card."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...
+
+    async def efforts(self, agent_key: str, model: str | None) -> list[str]:
+        """The levels ``model`` can be run at, in the agent's own order.
+
+        ``model`` is ``None`` when the conversation pins none — the agent then
+        runs a default it never names, and the implementation stands the head of
+        its catalogue in for it, exactly as the web picker does."""
+        ...
 
 
 class ContextFetchPort(Protocol):

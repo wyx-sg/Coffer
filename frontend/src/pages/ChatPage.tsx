@@ -145,6 +145,8 @@ export function ChatPage() {
             onAgentChange={c.setDraftAgent}
             modelValue={c.effectiveDraft.model}
             onModelChange={c.setDraftModel}
+            effortValue={c.effectiveDraft.effort}
+            onEffortChange={c.setDraftEffort}
             onSend={c.sendDraft}
             creating={c.creating}
           />

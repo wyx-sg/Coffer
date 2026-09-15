@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
 import { Composer } from "./Composer";
+import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
 
 interface Props {
@@ -29,6 +30,9 @@ interface Props {
   /** The chosen per-conversation model for the new conversation (null = default). */
   modelValue?: string | null;
   onModelChange?: (model: string | null) => void;
+  /** The reasoning level that model runs at (null = the agent's own default). */
+  effortValue?: string | null;
+  onEffortChange?: (effort: string | null) => void;
   onSend: (text: string) => void;
   /** True while the create-then-send round-trip is in flight. */
   creating?: boolean;
@@ -41,6 +45,8 @@ export function DraftThread({
   onAgentChange,
   modelValue = null,
   onModelChange,
+  effortValue = null,
+  onEffortChange,
   onSend,
   creating = false,
 }: Props) {
@@ -101,6 +107,18 @@ export function DraftThread({
           agentKey={agentKey}
           value={modelValue}
           onCommit={(model) => onModelChange?.(model)}
+        />
+        {/* And how hard that model thinks, arranged exactly as in the open
+            conversation's AgentModelBar. Same self-hiding rule: an agent whose
+            models report no levels renders nothing here, so the draft bar looks
+            untouched for it. It belongs on the DRAFT and not only after the
+            fact because the first turn is the one a user most wants to pitch —
+            by the time the conversation exists, that turn is already running. */}
+        <EffortPicker
+          agentKey={agentKey}
+          model={modelValue}
+          value={effortValue}
+          onCommit={(effort) => onEffortChange?.(effort)}
         />
       </div>
 
