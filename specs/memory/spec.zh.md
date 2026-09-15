@@ -27,7 +27,7 @@ spec [knowledge](../knowledge/spec.md) 存的是用户或 agent **写下的关�
 
 ## 这一层不重蹈的覆辙
 
-Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏**（2026-09-09 移除）读会话 transcript 写一份 journal；本层根本不读 transcript——Claude Code 和 Codex 各自都在蒸馏自己的，而且比 Coffer 当时做得好得多，本层就从它们的产出起步。**会话上下文注入**（2026-09-10 移除）是一个能用的 hook，但它在维护者自己的机器上一次都没被装上过；投递这次回来，是正面处理了那次失败：安装是一次显式的动作，有看得见的结果，而且这一层会记录注入到底有没有发生（FR-055）。
+Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏**（2026-09-09 移除）读会话 transcript 写一份 journal；本层根本不读 transcript——Claude Code 和 Codex 各自都在蒸馏自己的，而且比 Coffer 当时做得好得多，本层就从它们的产出起步。**会话上下文注入**（2026-09-10 移除）是一个能用的 hook，但它在维护者自己的机器上一次都没被装上过；投递这次回来，是正面处理了那次失败：安装是一次显式的动作，有看得见的结果，而且每一次触发都记进审计日志，于是「装上了」和「在跑」是两个可以分别回答的问题（FR-055）。
 
 ## 用户场景与测试
 
@@ -115,7 +115,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 
 ### Scenario: hook installation is marker-scoped and removable
 
-### Scenario: hook status reports never-fired until an injection happens
+### Scenario: every hook fire is recorded in the audit log
 
 ### Scenario: an agent whose native memory shape is unreadable degrades loudly
 
@@ -167,7 +167,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 - **FR-052**: `coffer__recall` MUST 接受一个词或短语，只覆盖调用方 agent 的 scope 允许的那些 partition，把命中的事实**整条**连同它们的来源返回。匹配 MUST 是 memory 自己的**大小写不敏感子串扫描**，作用于已经在手的那些事实——先看事实正文，正文不中再看它的 `title` 和 `description`——答案里 MUST NOT 有分数、MUST NOT 有模式、MUST NOT 有理由。它 MUST 完全不需要内部连接：recall 过去借用的是 spec [knowledge](../knowledge/spec.md) 那套带排序的检索，而那套引擎已随 Coffer 里其余所有 embedding 用法一起被有意移除，所以既没有什么可借，也没有什么可降级。这次扫描留在 memory 自己手里，而不去够 knowledge 的 ripgrep，因为在本层假定的语料规模下，事实本来就已经加载在内存里了。
 - **FR-053**: **由渠道驱动的一轮** MUST 通过 turn 平台本就在组装的 system-prompt 追加段拿到 L0 和 L1（spec [channels](../channels/spec.md)）。它 MUST NOT 需要 hook，因为那段上下文本来就在 Coffer 自己手里。
 - **FR-054**: 对开发者自己驱动的 agent，投递 MUST 走那个 agent 自己的 hook 机制，调用 Coffer 既有的 CLI。agent 有会话开始事件的，投递 MUST 用它；没有的——Codex，它的 hook 事件只有 `PreToolUse`、`PostToolUse`、`PreCompact`、`Stop` 和 `UserPromptSubmit`——投递 MUST 用它最早的那个每会话事件，并加一道**每会话只触发一次的守卫**，让摘要只到达一次而不是每条提示都来一遍。安装 MUST 是 Coffer surface 上的一次**显式动作**，带 marker 范围以便识别，可在不打扰 Coffer 没写过的条目的前提下移除，且是幂等的。Coffer MUST NOT 偷偷装上它，也 MUST NOT 写进任何属于 agent *记忆*的文件——hook 住在 agent 的设置里，那是另一回事，而且只在开发者明确指示时才会被写。
-- **FR-055**: Coffer MUST 逐 agent 报告投递是否已装上、以及**它上一次真正触发是什么时候**，在还没触发过之前报告从未触发。这正是被移除的那层注入所缺的检查：它发了版，从没被装上，而两个月里没有任何东西说过一句。
+- **FR-055**: Coffer MUST 为**每一次投递触发记一条审计事件**，好让「注入到底有没有在发生」事后可查。这正是被移除的那层注入所缺的检查：它发了版，从没被装上，而两个月里没有任何东西说过一句。触发是事件，不是 agent 的属性：逐 agent 的投递状态 MUST 只报告是否已安装，MUST NOT 带上一次触发时间、也 MUST NOT 因为还没触发过就告警——一分钟前刚装上的 hook 本来就从没触发过，为这件事报警等于对自己的正常状态喊狼来了。
 
 ### Surface
 
@@ -176,7 +176,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 - **FR-062**: Web UI MUST 以**表格**呈现 partition，且无论有没有 partition 都保持同一形态——尚无 partition 的安装 MUST 看到这张表自己的空行以及仍可点到的同步入口，而不是换成另一个页面——并 MUST 呈现单个 partition 的事实，把冲突作为待裁定的成对项摆出来，暴露那四种覆盖项。
 - **FR-064**: 逐 agent 的投递状态（含上一次触发时间，FR-055）MUST 呈现在**该 agent 自己的详情页**上，而不是 partition 列表页。投递写的是某一个 agent 的设置文件，因此它是逐 agent 的状态；已经限定到某个 agent 的页面 MUST NOT 再让读者选一次 agent。
 - **FR-065**: 本层 MUST NOT 自带审计界面。它的事件在各 kind 共用的全库审计界面上阅读；kind 维度的第二份拷贝属于重复界面，因此本层记录的每一种事件类型 MUST 在那里可读，而不是显示为原始事件码。
-- **FR-063**: 每一个生命周期动作——聚合、organise、每一种覆盖项、投递的安装或移除——MUST 记录一条带 actor 的审计事件。一次 recall MUST 记录照常的那行 `mcp_invocations`，且不记录任何关于它的查询或结果的东西。
+- **FR-063**: 每一个生命周期动作——聚合、organise、投递的安装、移除或触发——MUST 记录一条带 actor 的审计事件。一次 recall MUST 记录照常的那行 `mcp_invocations`，且不记录任何关于它的查询或结果的东西。
 
 ### 约束
 
@@ -191,7 +191,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 - **SC-002**: 把 `~/.coffer/memory/` 整个删掉再重跑一次同步，每条事实都被重现，且开发者记录过的每一条覆盖项依然有效。
 - **SC-003**: 在一个事实数量比预算所能容纳的多一个数量级的 partition 上，会话上下文仍停留在它规定的 token 预算之内，并说明它略去了什么。
 - **SC-004**: 一台没有配置内部连接的安装照样拿到 partition、事实、摘要、投递和 recall——缺的是合并和取代，而不是这个功能本身。recall 两种情况下都一样：它本来就不需要连接。
-- **SC-005**: surface 能对每个 agent 回答：投递是否已装上、以及它上一次是什么时候触发的。
+- **SC-005**: surface 能对每个 agent 回答投递是否已装上；审计界面能回答该 agent 的 hook 上一次是什么时候触发的。
 - **SC-006**: 某一个 agent 的原生记忆格式错乱或无法识别，不影响另一个 agent 的聚合，也不影响所有先前聚合出的事实。
 
 ## 假设

@@ -118,6 +118,7 @@
     "master_key_imported",
     "master_key_relocated",
     "memory_aggregated",
+    "memory_delivery_fired",
     "memory_delivery_installed",
     "memory_delivery_removed",
     "memory_organised",

@@ -247,7 +247,6 @@ def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
 
     status = client.get("/api/v1/memory/delivery", params={"agent": "cc"}).json()
     assert status["delivery"][0]["installed"] is False
-    assert status["delivery"][0]["last_fired_at"] == ""
 
     installed = client.post("/api/v1/memory/delivery/cc/install").json()
     assert installed["installed"] is True
@@ -262,28 +261,27 @@ def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
     )
     assert r.status_code == 200, r.text
 
-    status2 = client.get("/api/v1/memory/delivery", params={"agent": "cc"}).json()
-    assert status2["delivery"][0]["last_fired_at"] != ""
+    audit2 = client.get("/api/v1/audit").json()
+    assert any(e["event_type"] == "memory_delivery_fired" for e in audit2["entries"])
 
     removed = client.delete("/api/v1/memory/delivery/cc").json()
     assert removed["installed"] is False
 
 
-def test_context_without_record_fired_does_not_stamp_delivery(client) -> None:
+def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
     _register_agent(client, "cc")
     client.post("/api/v1/memory/delivery/cc/install")
 
     client.post("/api/v1/memory/context", json={"agent": "cc", "cwd": "/tmp"})
 
-    status = client.get("/api/v1/memory/delivery", params={"agent": "cc"}).json()
-    assert status["delivery"][0]["last_fired_at"] == ""
+    audit = client.get("/api/v1/audit").json()
+    assert not any(e["event_type"] == "memory_delivery_fired" for e in audit["entries"])
 
 
 # ----- overrides: apply/clear, and surviving a rebuild ---------------------
 
 
 def _sync_and_get_fact(client: TestClient, tmp_path: pathlib.Path) -> tuple[str, str, str]:
-    """Sync one project fact; return (partition, slug, fact_key)."""
     project_root = tmp_path / "proj"
     if not project_root.is_dir():
         project_root.mkdir(parents=True)

@@ -11,13 +11,13 @@
 // Because the agent is fixed by the page, there is no picker here: the query
 // is `GET /memory/delivery?agent=<name>`, which answers for that one agent.
 //
-// The signal is NOT "installed". The removed injection layer shipped a working
-// hook that was never once installed, and nothing said so for two months — so
-// an installed hook that has never fired renders as a warning, not a success,
-// until `last_fired_at` is non-empty (FR-055).
+// This card answers one question — is the hook written into that agent's
+// settings or not. Whether it has actually fired is a stream of events, not a
+// property of the agent, so it is read where every other stream of events is
+// read: the Activity page's audit log, one entry per fire (FR-055).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
 import type { DeliveryStatusOut } from "@/lib/api/memoryTypes";
 import { useInstallDelivery, useMemoryDelivery, useRemoveDelivery } from "@/lib/hooks/useMemory";
-import { formatDateTime } from "@/lib/utils";
 
 function DeliveryState({ status }: { status: DeliveryStatusOut }) {
   const { t } = useTranslation();
@@ -34,7 +33,6 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
   const remove = useRemoveDelivery();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
-  const neverFired = status.installed && !status.last_fired_at;
   const busy = install.isPending || remove.isPending;
 
   return (
@@ -45,21 +43,10 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
       <div className="min-w-0 space-y-1">
         <div className="flex items-center gap-2">
           {status.installed ? (
-            neverFired ? (
-              <Badge
-                variant="outline"
-                className="gap-1 border-status-warn/40 bg-status-warn/10 text-status-warn"
-                data-testid={`memory-delivery-warning-${status.agent}`}
-              >
-                <AlertTriangle className="size-3" aria-hidden />
-                {t("memory.delivery.neverFired")}
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="gap-1 bg-status-ok/10 text-status-ok">
-                <CheckCircle2 className="size-3" aria-hidden />
-                {t("memory.delivery.installed")}
-              </Badge>
-            )
+            <Badge variant="outline" className="gap-1 bg-status-ok/10 text-status-ok">
+              <CheckCircle2 className="size-3" aria-hidden />
+              {t("memory.delivery.installed")}
+            </Badge>
           ) : (
             <Badge variant="outline" className="text-muted-foreground">
               {t("memory.delivery.notInstalled")}
@@ -68,12 +55,7 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
         </div>
         <p className="text-xs text-muted-foreground">
           {status.installed
-            ? neverFired
-              ? t("memory.delivery.neverFiredHint", { event: status.event })
-              : t("memory.delivery.lastFiredAt", {
-                  event: status.event,
-                  time: formatDateTime(status.last_fired_at),
-                })
+            ? t("memory.delivery.installedHint", { event: status.event })
             : t("memory.delivery.notInstalledHint")}
         </p>
       </div>

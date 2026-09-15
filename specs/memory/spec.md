@@ -27,7 +27,7 @@ Spec [knowledge](../knowledge/spec.md) holds what the user or an agent **wrote d
 
 ## What this does not repeat
 
-Coffer has built two halves of a memory loop before and removed both. **Transcript distillation** (removed 2026-09-09) read session transcripts and wrote a journal; this layer does not read a transcript at all — Claude Code and Codex each already distil their own, far better than Coffer did, and this layer starts from their output. **Session-context injection** (removed 2026-09-10) was a working hook that had never once been installed on the maintainer's machine; delivery returns here with the failure addressed head-on: installation is an explicit act with a visible outcome, and the layer records whether injection actually happens (FR-055).
+Coffer has built two halves of a memory loop before and removed both. **Transcript distillation** (removed 2026-09-09) read session transcripts and wrote a journal; this layer does not read a transcript at all — Claude Code and Codex each already distil their own, far better than Coffer did, and this layer starts from their output. **Session-context injection** (removed 2026-09-10) was a working hook that had never once been installed on the maintainer's machine; delivery returns here with the failure addressed head-on: installation is an explicit act with a visible outcome, and every fire is recorded in the audit log, so "it is installed" and "it is running" are separately answerable (FR-055).
 
 ## User Scenarios & Testing
 
@@ -115,7 +115,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 ### Scenario: hook installation is marker-scoped and removable
 
-### Scenario: hook status reports never-fired until an injection happens
+### Scenario: every hook fire is recorded in the audit log
 
 ### Scenario: an agent whose native memory shape is unreadable degrades loudly
 
@@ -167,7 +167,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-052**: `coffer__recall` MUST take a word or phrase, span only the partitions the calling agent's scope allows, and return the matching facts **whole**, with their origins. Matching MUST be memory's own **case-insensitive substring scan** over the facts already in hand — a fact's body first, and failing that its title and description — with no score, no mode and no reason in the answer. It MUST need no internal connection at all: recall used to borrow spec [knowledge](../knowledge/spec.md)'s ranked retrieval, and that engine was deliberately removed along with every other use of embeddings in Coffer, so there is nothing left for recall to borrow and nothing for it to degrade from. The scan stays memory's own rather than reaching for knowledge's ripgrep, because at the corpus size this layer assumes the facts are already loaded.
 - **FR-053**: A **channel-driven turn** MUST receive L0 and L1 through the system-prompt append the turn platform already composes (spec [channels](../channels/spec.md)). It MUST NOT require a hook, since Coffer owns that context itself.
 - **FR-054**: For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it. Where it has none — Codex, whose only hook events are `PreToolUse`, `PostToolUse`, `PreCompact`, `Stop` and `UserPromptSubmit` — delivery MUST use its earliest per-session event with a **once-per-session guard**, so the digest arrives once rather than on every prompt. Installation MUST be an **explicit act** on Coffer's surface, marker-scoped so it can be identified, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing and is only ever written on the developer's instruction.
-- **FR-055**: Coffer MUST report, per agent, whether delivery is installed and **when it last actually fired**, reporting never-fired until one does. This is the check the removed injection layer lacked: it shipped, was never installed, and nothing said so for two months.
+- **FR-055**: Coffer MUST record **an audit event for every delivery fire**, so that whether injection is actually happening is answerable after the fact. This is the check the removed injection layer lacked: it shipped, was never installed, and nothing said so for two months. A fire is an event, not a property of the agent: the per-agent delivery status MUST report installation only, and MUST NOT carry a last-fired timestamp or warn about the absence of one — a hook installed a minute ago has legitimately never fired, and a surface that flags that is crying wolf on its own normal state.
 
 ### Surfaces
 
@@ -176,7 +176,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-062**: The web UI MUST present partitions **as a table**, in the same shape whether or not any exist — an installation with no partitions yet MUST get that table's own empty row and a reachable sync, not a different page — and MUST present one partition's facts, surface conflicts as pairs to settle, and expose the four overrides.
 - **FR-064**: Per-agent delivery state, including last-fired (FR-055), MUST be presented on **that agent's own detail page**, not on the partitions surface. Delivery writes one agent's settings file, so it is per-agent state; a surface that is already scoped to an agent MUST NOT make the reader pick one again.
 - **FR-065**: This layer MUST NOT carry an audit surface of its own. Its events are read on the vault-wide audit surface, which every kind shares; a kind-scoped second copy is a duplicate surface, and every event type this layer records MUST therefore be legible there rather than shown as a raw event code.
-- **FR-063**: Every lifecycle act — aggregation, organise, each override, delivery installed or removed — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
+- **FR-063**: Every lifecycle act — aggregation, organise, delivery installed, removed or fired — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
 
 ### Constraints
 
@@ -191,7 +191,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **SC-002**: Deleting `~/.coffer/memory/` entirely and re-running a sync reproduces every fact, and every override the developer had recorded is still in force.
 - **SC-003**: The session context stays inside its stated token budget on a partition with an order of magnitude more facts than the budget admits, and names what it omitted.
 - **SC-004**: An installation with no internal connection configured still gets partitions, facts, a digest, delivery and recall — with merging and supersession absent rather than the feature absent. Recall is unaffected either way: it never needed a connection.
-- **SC-005**: The surface can answer, for each agent, whether delivery is installed and when it last fired.
+- **SC-005**: The surface can answer, for each agent, whether delivery is installed; and the audit surface can answer when that agent's hook last fired.
 - **SC-006**: A malformed or unrecognised native memory in one agent leaves the other agent's aggregation, and all previously aggregated facts, intact.
 
 ## Assumptions

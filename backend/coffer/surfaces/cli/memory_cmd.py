@@ -284,7 +284,7 @@ def delivery_status(
     agent: str = typer.Option("", "--agent", help="Restrict to one agent"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Show per-agent delivery installation state and last-fired time (FR-055)."""
+    """Show per-agent delivery installation state (FR-054)."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/memory/delivery", params={"agent": agent} if agent else None)
@@ -296,10 +296,9 @@ def delivery_status(
     table = Table(title="Memory delivery")
     table.add_column("agent")
     table.add_column("installed")
-    table.add_column("last fired")
     table.add_column("command")
     for d in data["delivery"]:
-        table.add_row(d["agent"], str(d["installed"]), d["last_fired_at"] or "never", d["command"])
+        table.add_row(d["agent"], str(d["installed"]), d["command"])
     _console.print(table)
 
 

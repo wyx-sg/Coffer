@@ -55,6 +55,7 @@ class AuditEventType(StrEnum):
     KNOWLEDGE_TIDIED = "knowledge_tidied"
     # spec memory
     MEMORY_AGGREGATED = "memory_aggregated"
+    MEMORY_DELIVERY_FIRED = "memory_delivery_fired"
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_ORGANISED = "memory_organised"

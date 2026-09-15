@@ -22,11 +22,11 @@ FR-054).
 
 The previous session-context injection layer shipped, was never installed on
 the maintainer's own machine, and nothing said so for two months (spec memory
-FR-055, the ADR's "Delivery is a push ... installed on purpose"). The fix
-lives here as data, not process: `DeliveryStatus.last_fired_at` is `""` until
-`DeliveryService.record_fired()` is actually called by whatever serves the
-context, so "installed" and "has ever run" are two different, both-visible
-facts.
+FR-055, the ADR's "Delivery is a push ... installed on purpose"). The fix is
+that a fire is *recorded*: `DeliveryService.record_fired()`, called by
+whatever serves the context, writes one audit entry per fire. So "installed"
+and "has ever run" stay two different facts, read in the two places each
+belongs — this status for the first, the audit log for the second.
 """
 
 from __future__ import annotations
@@ -101,17 +101,19 @@ def hook_command(agent_key: str) -> str:
 
 @dataclass(frozen=True)
 class DeliveryStatus:
-    """Whether Coffer's hook is installed for one agent, and — the point of
-    the exercise (FR-055) — whether it has ever actually fired."""
+    """Whether Coffer's hook is installed for one agent.
+
+    Deliberately *only* that. Whether the hook has fired is not a property of
+    the agent but a stream of events, and it is reported as one: an audit
+    entry per fire (FR-055), read on the Activity surface beside every other
+    thing that happened.
+    """
 
     agent: str
     installed: bool
     #: What is installed, when `installed`; otherwise what `install()` would
     #: write, so a caller can show it before acting.
     command: str
-    #: ISO-8601 UTC timestamp of the last recorded fire, or `""` when it has
-    #: never happened (FR-055's "report never-fired until one does").
-    last_fired_at: str
     #: The hook event this agent's adapter installs on (`"SessionStart"`,
     #: `"UserPromptSubmit"`, ...).
     event: str

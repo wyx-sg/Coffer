@@ -9,8 +9,9 @@
 //      there. Knowledge is a different layer with its own page and its own tab
 //      pointer — this one must not send the user there.
 //   B. Delivery — whether Coffer's session-start hook is installed in THIS
-//      agent's own settings, and when it last actually fired (spec memory
-//      FR-054/FR-055). The only section here that writes anything, and the only
+//      agent's own settings (spec memory FR-054/FR-055; whether it has fired is
+//      read as events on the Activity page, not guessed at here). The only
+//      section here that writes anything, and the only
 //      one that is per-agent rather than per-partition: a hook lives in one
 //      agent's settings file, so it belongs on that agent's page rather than on
 //      the Memory resource page, where it used to render as a list of agents.
@@ -96,8 +97,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
         />
       </Card>
 
-      {/* Delivery: this agent's own session-start hook — installed, and whether
-          it has ever actually fired. */}
+      {/* Delivery: whether this agent's own session-start hook is installed. */}
       <AgentMemoryDelivery agentName={agent.name} />
 
       <Card className="space-y-3 p-4">

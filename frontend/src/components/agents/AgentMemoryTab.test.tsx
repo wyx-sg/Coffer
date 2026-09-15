@@ -38,7 +38,6 @@ vi.mock("@/lib/hooks/useMemory", () => ({
         agent: "claude",
         installed: true,
         command: "coffer memory context --agent claude",
-        last_fired_at: "2026-09-12T10:00:00Z",
         event: "SessionStart",
       },
     ],
@@ -139,17 +138,18 @@ describe("AgentMemoryTab", () => {
     expect(screen.getByText("Coffer")).toBeInTheDocument();
   });
 
-  test("delivery for this agent renders on the tab, with its last-fired state", () => {
+  test("delivery for this agent renders on the tab", () => {
     // Delivery installs a hook into THIS agent's settings file, so it belongs
-    // here rather than on the Memory resource page — and FR-055's whole point
-    // is that the surface says when it last actually fired, not just that it
-    // is installed.
+    // here rather than on the Memory resource page. It says whether the hook
+    // is installed and nothing else — whether it has fired is read as events
+    // on the Activity page (FR-055).
     stubMcp(true);
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
 
     const delivery = within(screen.getByTestId("memory-delivery-claude"));
-    expect(delivery.getByText(/last fired/i)).toBeInTheDocument();
+    expect(delivery.getByText(/installed/i)).toBeInTheDocument();
+    expect(delivery.queryByText(/last fired/i)).toBeNull();
   });
 
   test("renders the agent's native per-project memory stores as a table", () => {

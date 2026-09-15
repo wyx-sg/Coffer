@@ -116,7 +116,6 @@ class DeliveryStatusOut(BaseModel):
     agent: str
     installed: bool
     command: str
-    last_fired_at: str
     event: str
 
 
@@ -139,5 +138,5 @@ class ContextQuery(BaseModel):
     budget_tokens: int | None = None
     #: Whether serving this payload counts as a real delivery (FR-055).
     #: The installed hook always sets this; a management-surface preview
-    #: should not, so it never fabricates a "last fired" timestamp.
+    #: should not, so it never records a fire that did not happen.
     record_fired: bool = False

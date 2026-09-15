@@ -124,8 +124,6 @@ export interface DeliveryStatusOut {
   installed: boolean;
   /** Coffer's own CLI invocation the hook runs. */
   command: string;
-  /** Empty string: installed (or not) but never actually fired. */
-  last_fired_at: string;
   /** The hook event delivery is attached to (e.g. `SessionStart`). */
   event: string;
 }

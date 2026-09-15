@@ -142,7 +142,6 @@ def _delivery_out(s: Any) -> DeliveryStatusOut:
         agent=s.agent,
         installed=s.installed,
         command=s.command,
-        last_fired_at=s.last_fired_at,
         event=s.event,
     )
 

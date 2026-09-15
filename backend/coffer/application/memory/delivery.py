@@ -24,8 +24,8 @@ marker and the pure text transform) through one `DeliveryAdapter` per agent
 type in `coffer.infrastructure.memory.delivery` — which event, which config
 key, and, for Codex, the once-per-session guard. `record_fired` is the other
 half of FR-055: it is called by whatever actually serves the context (the
-`coffer memory context` CLI), never by this service itself, so
-`last_fired_at` reflects a real fire and nothing else.
+`coffer memory context` CLI), never by this service itself, so each audited
+fire is a real one.
 """
 
 from __future__ import annotations
@@ -46,7 +46,6 @@ from coffer.domain.memory.delivery import (
     MalformedDeliveryConfig,
 )
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.infrastructure.memory import delivery_state
 from coffer.infrastructure.memory.delivery import CLAUDE_CODE_ADAPTER, CODEX_ADAPTER
 
 #: One adapter per agent type Coffer knows how to deliver into (spec memory
@@ -135,7 +134,6 @@ class DeliveryService:
             agent=name,
             installed=command is not None,
             command=command or adapter.command_for(name),
-            last_fired_at=delivery_state.last_fired_at(name),
             event=adapter.event,
         )
 
@@ -200,7 +198,12 @@ class DeliveryService:
         """Record that `agent`'s hook just fired (spec memory FR-055).
 
         Called by whatever actually serves the context — never by
-        `install()`, `status()`, or anything else in this class — so
-        `last_fired_at` reflects a real fire and nothing else.
+        `install()`, `status()`, or anything else in this class — so every
+        audited fire is a real one. The actor is the agent: nobody clicked
+        anything, the hook ran because that agent started a session.
         """
-        delivery_state.record_fired(agent)
+        await self._audit.record(
+            AuditEventType.MEMORY_DELIVERY_FIRED.value,
+            ref=ResourceRef("agent", agent),
+            actor=agent,
+        )
