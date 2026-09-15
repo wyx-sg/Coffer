@@ -2548,6 +2548,14 @@ decision it rests on is recorded in
   - A binding naming a machine no longer in the registry MUST be reported as a
     fault on the channel, distinctly from a channel that is merely bound
     elsewhere. Both run nowhere here; only one of them is somebody's mistake.
+  - A `runs_on` that **cannot be a machine id** MUST NOT be honoured as a
+    binding. A channel's configuration is a bag the system has written other
+    things into before — the retired machine axis put ULIDs under this very
+    key — so a value of the wrong shape names no machine that has ever existed
+    and is a fossil, not a decision. Coffer MUST bind such a channel to this
+    machine, the answer it would have given had the key been absent. This is
+    the one case where an existing value is overwritten, and it is the one case
+    where leaving it would silently stop a working bot on upgrade.
   - Rebinding MUST converge without a restart and without a command that reaches
     another machine. The losing machine MUST stop its adapter within one
     reconcile tick of seeing the change; the gaining machine MUST start one
