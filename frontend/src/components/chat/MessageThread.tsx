@@ -1,13 +1,23 @@
 // components/chat/MessageThread.tsx
-// Scrollable list of messages + echoed just-sent prompts + live streaming message.
-import { useEffect, useRef } from "react";
+// Scrollable list of messages + echoed just-sent prompts + live streaming
+// message. Follows the stream only while the user sits at the bottom (a "Jump
+// to latest" pill brings them back — useFollowScroll), restarts at the bottom
+// whenever another conversation opens, and on a failed turn swaps the
+// in-progress bubble for the error banner with a Retry that re-sends the
+// message that failed. Which persisted rows render is decided by
+// useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { ArrowDown } from "lucide-react";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
-import { isNearBottom } from "@/lib/chat/scroll";
+import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
+import { describeTurnError } from "@/lib/chat/turnErrors";
+import { retryTextFor } from "@/lib/chat/threadView";
 import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
 import type { Conversation, Message } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
+import { ChatErrorBanner } from "./ChatErrorBanner";
 import { MessageBubble } from "./MessageBubble";
 import { Composer, type ComposerHandle } from "./Composer";
 import { PendingQueue } from "./PendingQueue";
@@ -91,24 +101,25 @@ export function MessageThread({
     onSetPending?.(pending.filter((_, i) => i !== idx));
     composerRef.current?.setText(text);
   };
-  // Follow the stream only while the user is at the bottom; if they scroll up
-  // to read history, new tokens must not yank them back down. Seeded true so
-  // the first render lands at the latest message.
-  const followRef = useRef(true);
   // Transcript-wide Cmd/Ctrl+F over the rendered messages (shared find UX).
   const { find, inputRef, onKeyDown } = useDomFind(scrollRef);
 
-  const { messages, isPending, error } = useMessageThread(conversation.id, liveMessage !== null);
+  const { messages, isPending, error } = useMessageThread(conversation.id, liveMessage, turnError);
   const isEmpty = messages.length === 0 && pendingEchoes.length === 0 && !liveMessage;
+  // A failed turn is never "thinking": freeze the live bubble so only the
+  // banner reports the state, and keep whatever text already streamed.
+  const liveForRender =
+    turnError && liveMessage ? { ...liveMessage, streaming: false } : liveMessage;
+  // Retry re-sends the newest echo, else the last persisted user message.
+  const retryText = retryTextFor(messages, pendingEchoes[pendingEchoes.length - 1]?.text);
 
-  // Auto-scroll to bottom when messages, echoes or live content change — but
-  // only if the user is already near the bottom (followRef), so reading history
-  // during a stream isn't interrupted.
-  useEffect(() => {
-    if (followRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, pendingEchoes, liveMessage]);
+  const scroll = useFollowScroll({
+    scrollRef,
+    bottomRef,
+    resetKey: conversation.id,
+    isStreaming,
+    contentVersion: [messages, pendingEchoes, liveMessage],
+  });
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -123,9 +134,7 @@ export function MessageThread({
         <div
           ref={scrollRef}
           tabIndex={0}
-          onScroll={() => {
-            if (scrollRef.current) followRef.current = isNearBottom(scrollRef.current);
-          }}
+          onScroll={scroll.onScroll}
           onKeyDown={onKeyDown}
           className="flex-1 overflow-y-auto px-4 py-4 outline-none"
         >
@@ -150,11 +159,23 @@ export function MessageThread({
             {pendingEchoes.map((echo) => (
               <MessageBubble key={echo.id} message={echoAsMessage(echo, conversation.id)} />
             ))}
-            {liveMessage && <MessageBubble live={liveMessage} />}
+            {liveForRender && <MessageBubble live={liveForRender} />}
           </div>
 
           <div ref={bottomRef} />
         </div>
+        {!scroll.following && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-xl shadow-md"
+            onClick={scroll.jumpToLatest}
+          >
+            <ArrowDown className="mr-1 size-3.5" aria-hidden />
+            {t("chat.jumpToLatest")}
+          </Button>
+        )}
         {find.open ? (
           <FindWidget
             ref={inputRef}
@@ -171,21 +192,20 @@ export function MessageThread({
         ) : null}
       </div>
 
-      {/* C1: Dismissible error banner for turn/streaming failures. */}
       {turnError && (
-        <div className="flex items-start gap-2 border-t border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
-          <span className="flex-1">{translateApiError(t, turnError)}</span>
-          {onClearTurnError && (
-            <button
-              type="button"
-              className="shrink-0 font-medium underline-offset-2 hover:underline"
-              onClick={onClearTurnError}
-              aria-label={t("common.dismiss")}
-            >
-              {t("common.dismiss")}
-            </button>
-          )}
-        </div>
+        <ChatErrorBanner
+          className="border-t"
+          message={describeTurnError(t, turnError)}
+          onDismiss={onClearTurnError}
+          onRetry={
+            retryText && !readOnly
+              ? () => {
+                  onClearTurnError?.();
+                  onSend(retryText);
+                }
+              : undefined
+          }
+        />
       )}
 
       {readOnly ? (

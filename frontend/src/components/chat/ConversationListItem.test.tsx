@@ -3,7 +3,7 @@
 // "via {channel}" chip derived from channel_binding (ADR
 // chat-single-owner-live-mirror).
 import { describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import { ConversationListItem } from "./ConversationListItem";
 import type { Conversation } from "@/lib/api/chat";
@@ -17,18 +17,49 @@ const base: Conversation = {
   updated_at: "2026-01-01T00:00:00Z",
 };
 
-function renderItem(conversation: Conversation) {
+function renderItem(
+  conversation: Conversation,
+  handlers: Partial<{ onSelect: () => void; onRename: (t: string) => void }> = {},
+) {
   render(
-    <ConversationListItem
-      conversation={conversation}
-      isActive={false}
-      onSelect={vi.fn()}
-      onRename={vi.fn()}
-      onDelete={vi.fn()}
-      onArchive={vi.fn()}
-    />,
+    <ul>
+      <ConversationListItem
+        conversation={conversation}
+        isActive={false}
+        onSelect={handlers.onSelect ?? vi.fn()}
+        onRename={handlers.onRename ?? vi.fn()}
+        onDelete={vi.fn()}
+        onArchive={vi.fn()}
+      />
+    </ul>,
   );
 }
+
+describe("ConversationListItem structure", () => {
+  test("is a list item whose title is a button; the actions are separate buttons", () => {
+    const onSelect = vi.fn();
+    renderItem(base, { onSelect });
+    const item = screen.getByRole("listitem");
+    expect(item.getAttribute("role")).toBeNull();
+    expect(item.getAttribute("aria-selected")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Deploy plan" }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    for (const name of [/rename/i, /archive/i, /delete/i]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+
+  test("renaming offers labelled Save and Cancel controls", () => {
+    const onRename = vi.fn();
+    renderItem(base, { onRename });
+    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
+    const input = screen.getByRole("textbox", { name: /rename conversation/i });
+    fireEvent.change(input, { target: { value: "New title" } });
+    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(onRename).toHaveBeenCalledWith("New title");
+  });
+});
 
 describe("ConversationListItem channel badge", () => {
   test("renders a via-channel chip from channel_binding", () => {

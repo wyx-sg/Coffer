@@ -14,21 +14,23 @@
 // detail page: which agents this collection is exposed to is a property of the
 // collection, not of the file open in the pane.
 //
+// The open file lives in the URL (`?file=`), so a reload or a shared link opens
+// the same file — addressable state belongs to the router (agents/frontend.md).
+//
 // The filter box narrows the tree by title/filename as you type, entirely
-// client-side. Server-side retrieval has its own surfaces — `coffer__grep` for
-// agents, `coffer knowledge grep` for the CLI — and duplicating it here would
-// be a second search with different rules.
+// client-side; the search panel above it is the other thing — a backend pass
+// over the files' contents.
 import { useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
 import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
+import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { translateApiError } from "@/lib/api/errors";
 import { useResource } from "@/lib/hooks/useResources";
 import { KnowledgePreviewBody } from "@/components/knowledge/KnowledgePreviewBody";
@@ -38,11 +40,19 @@ import { useKnowledgeFile, useTidyCollection } from "@/lib/hooks/useKnowledge";
 
 export function KnowledgeDetailPage() {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const navigate = useNavigate();
-  const collection = useParams<{ scope: string }>().scope ?? "";
+  const collection = useParams<{ name: string }>().name ?? "";
+  const [params, setParams] = useSearchParams();
+  const selected = params.get("file");
+  const setSelected = (path: string | null) =>
+    setParams(
+      (prev) => {
+        if (path) prev.set("file", path);
+        else prev.delete("file");
+        return prev;
+      },
+      { replace: true },
+    );
 
-  const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
 
   const file = useKnowledgeFile(selected);
@@ -61,51 +71,38 @@ export function KnowledgeDetailPage() {
     return parent === collection ? null : parent.slice(collection.length + 1);
   }, [selected, collection]);
 
-  const onTidy = () =>
-    tidy.mutate(undefined, {
-      onSuccess: () => toast.success(t("knowledge.detail.tidyDone")),
-      onError: (e) => toast.error(translateApiError(t, e)),
-    });
-
   return (
-    <div className="space-y-6 p-6">
-      {/* The way back to the list, as every other detail page carries it. A
-          collection is reached by clicking a row, so leaving it must not
-          depend on the browser's own back button. */}
-      <div className="-ml-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/knowledge")}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="mr-1.5 size-4" />
-          {t("common.backTo", { label: t("nav.knowledge") })}
-        </Button>
-      </div>
-
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">{collection}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Reach sits in the header, exactly as every other kind's detail
-              page carries it; passing no `scope` lets it fetch its own. */}
-          <ScopeControl
-            kind="knowledge"
-            name={collection}
-            enabled={resource.data?.enabled ?? true}
-          />
-          <KnowledgeUploadButton collection={collection} directory={uploadDirectory} />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onTidy}
-            disabled={tidy.isPending}
-          >
-            {t("knowledge.detail.tidy")}
-          </Button>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        back={{ to: "/knowledge", label: t("common.backTo", { label: t("nav.knowledge") }) }}
+        title={collection}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Reach sits in the header, exactly as every other kind's detail
+                page carries it; passing no `scope` lets it fetch its own. */}
+            <ScopeControl
+              kind="knowledge"
+              name={collection}
+              enabled={resource.data?.enabled ?? true}
+            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => tidy.mutate()}
+                  disabled={tidy.isPending}
+                >
+                  {t("knowledge.detail.tidy")}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("knowledge.detail.tidyHint")}</TooltipContent>
+            </Tooltip>
+            <KnowledgeUploadButton collection={collection} directory={uploadDirectory} />
+          </div>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(16rem,22rem)_1fr]">
         <div className="space-y-2">
@@ -129,9 +126,7 @@ export function KnowledgeDetailPage() {
 
         <section className="min-w-0 rounded-md border">
           {selected === null ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              {t("knowledge.detail.selectAFile")}
-            </p>
+            <p className="p-6 text-sm text-muted-foreground">{t("knowledge.detail.selectAFile")}</p>
           ) : file.isPending ? (
             <p className="p-6 text-sm text-muted-foreground">{t("common.loading")}</p>
           ) : file.error ? (

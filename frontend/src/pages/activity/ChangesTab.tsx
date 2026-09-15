@@ -131,16 +131,10 @@ export function ChangesTab({ enabled }: Props) {
       </ActivityFilters>
 
       {/* isLoading, not isPending: a disabled query stays "pending" forever,
-          which would leave a tab that has never been opened stuck on the
-          loading card the moment it is. An error renders here, inside this
-          tab — a failing /audit must not blank the other two records. */}
-      {isLoading ? (
-        <Card className="paper-card">
-          <CardContent className="py-10 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+          which would leave a tab that has never been opened stuck on skeleton
+          rows the moment it is. An error renders here, inside this tab — a
+          failing /audit must not blank the other two records. */}
+      {error ? (
         <Card className="paper-card border-destructive/40">
           <CardContent className="py-4 text-destructive">{translateApiError(t, error)}</CardContent>
         </Card>
@@ -149,6 +143,7 @@ export function ChangesTab({ enabled }: Props) {
           rows={rows}
           columns={columns}
           rowKey={(e) => String(e.id)}
+          isLoading={isLoading}
           getRowDetail={(e) => (
             <div className="px-4 py-3">
               <RawLog record={e} />

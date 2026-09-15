@@ -9,9 +9,10 @@
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
-import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
+import { DataTable, type Column } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import type { ResourceOut } from "@/lib/api/resources";
+import { reachFilter } from "@/lib/reachFilter";
 import {
   McpServersBulkActions,
   ServerDeleteCell,
@@ -27,7 +28,14 @@ function transportType(r: ResourceOut): string {
   return "unknown";
 }
 
-export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
+export function McpServersTable({
+  resources,
+  isLoading = false,
+}: {
+  resources: ResourceOut[];
+  /** Skeleton rows while the list resolves — the page keeps its header up. */
+  isLoading?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -61,8 +69,8 @@ export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
       ),
     },
     {
-      key: "status",
-      header: t("resources.cols.status"),
+      key: "reach",
+      header: t("resources.cols.reach"),
       className: "whitespace-nowrap text-right",
       cell: (r) => <ServerStatusCell resource={r} />,
     },
@@ -74,29 +82,14 @@ export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
     },
   ];
 
-  // The status filter tracks the status column: now that the column shows reach
-  // rather than on/off, a bare "enabled" would no longer match anything the
-  // user can see, so the filter offers the control's own three states —
-  // disabled beats scope, and an enabled server is either unscoped
-  // (everywhere) or restricted.
-  const filters: FilterDef<ResourceOut>[] = [
-    {
-      key: "status",
-      label: t("resources.cols.status"),
-      allLabel: t("resources.status.all"),
-      accessor: (r) =>
-        !r.enabled ? "disabled" : (r.scope ?? null) === null ? "every" : "selected",
-      options: [
-        { value: "disabled", label: t("common.disabled") },
-        { value: "every", label: t("scope.everywhere") },
-        { value: "selected", label: t("scope.restricted") },
-      ],
-    },
-  ];
+  // The reach filter tracks the reach column: the control's own three states,
+  // shared with every other scoped-resource list.
+  const filters = [reachFilter(t, (r: ResourceOut) => ({ enabled: r.enabled, scope: r.scope }))];
 
   return (
     <DataTable
       rows={resources}
+      isLoading={isLoading}
       columns={columns}
       rowKey={(r) => r.name}
       search={{
@@ -104,7 +97,7 @@ export function McpServersTable({ resources }: { resources: ResourceOut[] }) {
         placeholder: t("mcp.table.search"),
       }}
       filters={filters}
-      onRowClick={(r) => navigate(`/mcp-servers/mcp_server/${r.name}`)}
+      onRowClick={(r) => navigate(`/mcp-servers/${encodeURIComponent(r.name)}`)}
       selection={{
         ariaSelectAll: t("common.bulk.selectAll"),
         ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,

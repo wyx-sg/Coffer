@@ -11,6 +11,8 @@
 // /model; all the built-in branch carries is one line saying where the choice
 // actually happens.
 import { useTranslation } from "react-i18next";
+
+import { agentTypeLabel } from "@/lib/agents/display";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -35,7 +37,7 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
       <CardContent className="space-y-6 py-6">
         <dl className="grid grid-cols-[10rem_1fr] gap-y-3 text-sm">
           <dt className="text-muted-foreground">{t("agents.type")}</dt>
-          <dd>{agent.type}</dd>
+          <dd>{agentTypeLabel(agent.type)}</dd>
           <dt className="text-muted-foreground">{t("agents.configDir")}</dt>
           <dd className="font-mono text-xs">{agent.config_dir}</dd>
         </dl>
@@ -146,7 +148,7 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
               <span
                 role="status"
                 className={`flex items-center gap-1 text-xs ${
-                  c.testResult.ok ? "text-green-600" : "text-destructive"
+                  c.testResult.ok ? "text-status-ok" : "text-destructive"
                 }`}
               >
                 {c.testResult.ok ? (

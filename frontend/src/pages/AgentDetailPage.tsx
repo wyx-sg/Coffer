@@ -1,12 +1,12 @@
 // frontend/src/pages/AgentDetailPage.tsx — spec agent-registry.
-// Per-agent detail page: a back link, a header with the Coffer-MCP install
-// button + edit + delete, and seven tabs — Overview, Skills, MCP servers,
-// Plugins, Memory, Conversations and Config files. Of those, only Plugins acts
-// on the agent (enable / disable / uninstall); Memory and Conversations are
-// read-only views of what the agent keeps on disk, with open / reveal.
-// Editing opens a modal dialog (AgentEditForm). Agents have no enable/disable concept.
+// Per-agent detail page: the shared PageHeader (back link, type chip, and the
+// [Install/Uninstall Coffer MCP][Edit][Delete] actions) over seven tabs —
+// Overview, Skills, MCP servers, Plugins, Memory, Conversations and Config
+// files. The active tab lives in the URL (?tab=) so a refresh or a shared link
+// reopens the same one. Leaving the Config files tab with an unsaved draft asks
+// first: switching tabs unmounts the editor and would drop the edits.
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 
@@ -20,20 +20,48 @@ import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
 import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
+import { agentTypeLabel } from "@/lib/agents/display";
 import { useAgent } from "@/lib/hooks/useAgents";
+
+const TABS = ["overview", "skills", "mcpServers", "plugins", "memory", "conversations", "config"];
+const DEFAULT_TAB = "overview";
 
 export function AgentDetailPage() {
   const { t } = useTranslation();
   const { name = "" } = useParams<{ name: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: agent, isPending, error, refetch } = useAgent(name);
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [configDirty, setConfigDirty] = useState(false);
+  const [pendingTab, setPendingTab] = useState<string | null>(null);
+
+  const requested = searchParams.get("tab");
+  const tab = requested && TABS.includes(requested) ? requested : DEFAULT_TAB;
+  const setTab = (next: string) => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next === DEFAULT_TAB) p.delete("tab");
+        else p.set("tab", next);
+        return p;
+      },
+      { replace: true },
+    );
+  };
+  const requestTab = (next: string) => {
+    if (next === tab) return;
+    if (configDirty) setPendingTab(next);
+    else setTab(next);
+  };
 
   if (isPending) {
     return (
@@ -65,22 +93,12 @@ export function AgentDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => navigate("/agents")}
-        className="-ml-2 text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="mr-1.5 size-4" /> {t("agents.detail.back")}
-      </Button>
-
-      <div className="space-y-2">
-        {/* Title + actions on one row; the description sits below the title. */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h1 className="font-serif text-3xl tracking-tight">{agent.name}</h1>
-            <Badge variant="secondary">{agent.type}</Badge>
-          </div>
+      <PageHeader
+        back={{ to: "/agents", label: t("agents.detail.back") }}
+        title={agent.name}
+        badges={<Badge variant="secondary">{agentTypeLabel(agent.type)}</Badge>}
+        subtitle={agent.description ?? undefined}
+        actions={
           <div className="flex items-center gap-2">
             <AgentMcpButton name={name} />
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -95,11 +113,8 @@ export function AgentDetailPage() {
               <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
             </Button>
           </div>
-        </div>
-        {agent.description ? (
-          <p className="max-w-prose text-sm text-muted-foreground">{agent.description}</p>
-        ) : null}
-      </div>
+        }
+      />
 
       {editing ? (
         <AgentEditForm
@@ -112,7 +127,7 @@ export function AgentDetailPage() {
         />
       ) : null}
 
-      <Tabs defaultValue="overview">
+      <Tabs value={tab} onValueChange={requestTab}>
         <TabsList>
           <TabsTrigger value="overview">{t("agents.workspace.overview")}</TabsTrigger>
           <TabsTrigger value="skills">{t("agents.workspace.skills")}</TabsTrigger>
@@ -122,35 +137,41 @@ export function AgentDetailPage() {
           <TabsTrigger value="conversations">{t("agents.workspace.conversations")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
         </TabsList>
-
         <TabsContent value="overview" className="pt-6">
           <AgentOverviewTab agent={agent} />
         </TabsContent>
-
         <TabsContent value="skills" className="pt-6">
           <AgentSkillsTab agent={agent} />
         </TabsContent>
-
         <TabsContent value="mcpServers" className="pt-6">
           <AgentMcpServersTab agentName={name} />
         </TabsContent>
-
         <TabsContent value="plugins" className="pt-6">
           <AgentPluginsTab agent={agent} />
         </TabsContent>
-
         <TabsContent value="memory" className="pt-6">
           <AgentMemoryTab agent={agent} />
         </TabsContent>
-
         <TabsContent value="conversations" className="pt-6">
           <AgentConversationsTab name={name} />
         </TabsContent>
-
         <TabsContent value="config" className="pt-6">
-          <AgentConfigFilesEditor name={name} />
+          <AgentConfigFilesEditor name={name} onDirtyChange={setConfigDirty} />
         </TabsContent>
       </Tabs>
+
+      <ConfirmDialog
+        open={pendingTab !== null}
+        onOpenChange={(o) => !o && setPendingTab(null)}
+        title={t("common.discardChanges.title")}
+        description={t("common.discardChanges.body")}
+        confirmLabel={t("common.discardChanges.confirm")}
+        onConfirm={() => {
+          if (pendingTab) setTab(pendingTab);
+          setPendingTab(null);
+          setConfigDirty(false);
+        }}
+      />
 
       <AgentDeleteDialog
         name={name}

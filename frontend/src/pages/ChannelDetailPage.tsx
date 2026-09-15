@@ -1,18 +1,21 @@
 // frontend/src/pages/ChannelDetailPage.tsx — one channel's operating surface
-// (spec channels, User Stories 2 + 8): edit / reach / delete in the header
-// (mirrors McpServerDetailPage), a live status card (adapter, paired peer),
-// the pairing-code generator, a send-test-message card wired to the notify
-// capability, and — for SeaTalk — the callback endpoint to point a tunnel at.
-// Status auto-refreshes while the page is open.
+// (spec channels, User Stories 2 + 8): the shared PageHeader with the platform
+// chip beside the name and reach / edit / delete as its actions (mirrors
+// McpServerDetailPage), a live status card (adapter, paired peer), the
+// pairing-code generator, a test-delivery card wired to the notify capability,
+// and — for SeaTalk — the callback endpoint to point a tunnel at. Status
+// auto-refreshes while the page is open.
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Radio, Trash2 } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ScopeControl } from "@/components/ScopeControl";
 import { ChannelCallbackCard } from "@/components/channel/ChannelCallbackCard";
 import {
@@ -21,6 +24,7 @@ import {
   ChannelTestMessageCard,
 } from "@/components/channel/ChannelDetailCards";
 import { EditChannelDialog } from "@/components/channel/EditChannelDialog";
+import { translateApiError } from "@/lib/api/errors";
 import {
   useChannelStatus,
   useIssuePairingCode,
@@ -44,33 +48,37 @@ export function ChannelDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
+  const back = { to: "/channels", label: t("channels.backToChannels") };
+
   if (isPending) {
     return (
-      <Card className="paper-card">
-        <CardContent className="py-12 text-center text-muted-foreground">
-          {t("common.loading")}
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <PageHeader back={back} title={<Skeleton className="h-8 w-48" />} />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      </div>
     );
   }
   if (error || !resource) {
     return (
-      <Card className="paper-card border-destructive/40">
-        <CardHeader>
-          <CardTitle className="font-serif text-destructive">
-            {t("errors.RESOURCE_NOT_FOUND")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-foreground/80">
-            {error instanceof Error ? error.message : t("errors.RESOURCE_NOT_FOUND")}
-          </p>
-          <Button variant="link" onClick={() => navigate("/channels")}>
-            <ArrowLeft className="mr-1 size-4" />
-            {t("channels.backToChannels")}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <PageHeader back={back} title={name} />
+        <EmptyState
+          icon={Radio}
+          title={t("errors.RESOURCE_NOT_FOUND")}
+          description={error ? translateApiError(t, error) : undefined}
+          action={
+            <Button asChild variant="outline">
+              <Link to="/channels">
+                <ArrowLeft className="mr-1.5 size-4" aria-hidden />
+                {t("channels.backToChannels")}
+              </Link>
+            </Button>
+          }
+        />
+      </div>
     );
   }
 
@@ -79,46 +87,38 @@ export function ChannelDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="-ml-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/channels")}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="mr-1.5 size-4" /> {t("channels.backToChannels")}
-        </Button>
-      </div>
-
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl tracking-tight">{resource.name}</h1>
+      <PageHeader
+        back={back}
+        title={resource.name}
+        badges={
           <Badge variant="secondary">{t(`channels.types.${channelType}`, channelType)}</Badge>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setEditOpen(true)}
-            aria-label={t("channels.edit.title")}
-          >
-            <Pencil className="mr-1.5 size-3.5" /> {t("common.edit")}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDeleteOpen(true)}
-            aria-label={t("channels.deleteTitle")}
-            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
-          </Button>
-          {/* The same reach control the list row and every other kind's detail
-              page carries; it fetches its own scope, since this page renders
-              one resource. */}
-          <ScopeControl kind={CHANNEL_KIND} name={name} enabled={resource.enabled} />
-        </div>
-      </header>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {/* The same reach control the list row and every other kind's
+                detail page carries; it fetches its own scope, since this page
+                renders one resource. */}
+            <ScopeControl kind={CHANNEL_KIND} name={name} enabled={resource.enabled} />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditOpen(true)}
+              aria-label={t("channels.edit.title")}
+            >
+              <Pencil className="mr-1.5 size-3.5" /> {t("common.edit")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDeleteOpen(true)}
+              aria-label={t("channels.deleteTitle")}
+              className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
+            </Button>
+          </div>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ChannelStatusCard status={status} />

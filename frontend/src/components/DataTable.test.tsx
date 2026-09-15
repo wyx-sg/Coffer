@@ -72,9 +72,103 @@ describe("DataTable", () => {
     expect(onRowClick).toHaveBeenCalledWith(ROWS[1]);
   });
 
+  test("a clickable row is keyboard-operable: focusable, Enter/Space fire onRowClick", () => {
+    const onRowClick = vi.fn();
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        onRowClick={onRowClick}
+        emptyMessage="none"
+      />,
+    );
+    const row = screen.getByText("beta").closest("tr")!;
+    expect(row).toHaveAttribute("tabindex", "0");
+    expect(row.className).toContain("focus-visible:ring-2");
+    fireEvent.keyDown(row, { key: "Enter" });
+    fireEvent.keyDown(row, { key: " " });
+    fireEvent.keyDown(row, { key: "a" });
+    expect(onRowClick).toHaveBeenCalledTimes(2);
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[1]);
+  });
+
+  test("rows without an action are not focusable", () => {
+    render(<DataTable rows={ROWS} columns={COLS} rowKey={(r) => r.id} emptyMessage="none" />);
+    expect(screen.getByText("beta").closest("tr")).not.toHaveAttribute("tabindex");
+  });
+
+  test("a key pressed on an interactive child does not trigger the row action", () => {
+    const onRowClick = vi.fn();
+    const cols: Column<Row>[] = [
+      { key: "name", header: "Name", cell: (r) => <button type="button">act-{r.name}</button> },
+    ];
+    render(
+      <DataTable
+        rows={ROWS}
+        columns={cols}
+        rowKey={(r) => r.id}
+        onRowClick={onRowClick}
+        emptyMessage="none"
+      />,
+    );
+    fireEvent.keyDown(screen.getByText("act-alpha"), { key: "Enter" });
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
   test("shows the empty message when there are no rows", () => {
     render(<DataTable rows={[]} columns={COLS} rowKey={(r) => r.id} emptyMessage="nothing here" />);
     expect(screen.getByText("nothing here")).toBeInTheDocument();
+  });
+
+  test("renders the optional empty action under the message", () => {
+    render(
+      <DataTable
+        rows={[]}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        emptyMessage="nothing here"
+        emptyAction={<button type="button">create one</button>}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "create one" })).toBeInTheDocument();
+  });
+
+  test("isLoading renders skeleton rows capped at 5, never the empty message", () => {
+    render(
+      <DataTable
+        rows={[]}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        pageSize={50}
+        isLoading
+        emptyMessage="nothing here"
+      />,
+    );
+    expect(screen.getAllByTestId("skeleton-row")).toHaveLength(5);
+    expect(screen.queryByText("nothing here")).not.toBeInTheDocument();
+  });
+
+  test("isLoading follows a smaller page size", () => {
+    render(
+      <DataTable
+        rows={[]}
+        columns={COLS}
+        rowKey={(r) => r.id}
+        pageSize={2}
+        isLoading
+        emptyMessage="nothing here"
+      />,
+    );
+    expect(screen.getAllByTestId("skeleton-row")).toHaveLength(2);
+  });
+
+  test("isLoading with rows already present keeps showing the rows", () => {
+    render(
+      <DataTable rows={ROWS} columns={COLS} rowKey={(r) => r.id} isLoading emptyMessage="none" />,
+    );
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.queryByTestId("skeleton-row")).not.toBeInTheDocument();
   });
 
   test("follows the global default page size and updates live when it changes", () => {
@@ -230,11 +324,17 @@ describe("DataTable", () => {
     );
     // Detail is hidden until the row is clicked.
     expect(screen.queryByText("detail-for-alpha")).not.toBeInTheDocument();
+    const row = screen.getByText("alpha").closest("tr")!;
+    expect(row).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(screen.getByText("alpha"));
     expect(screen.getByText("detail-for-alpha")).toBeInTheDocument();
+    expect(row).toHaveAttribute("aria-expanded", "true");
     // Clicking again collapses it.
     fireEvent.click(screen.getByText("alpha"));
     expect(screen.queryByText("detail-for-alpha")).not.toBeInTheDocument();
+    // The keyboard does the same.
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(screen.getByText("detail-for-alpha")).toBeInTheDocument();
   });
 
   test("header checkbox selects the current page; banner escalates to select-all", () => {

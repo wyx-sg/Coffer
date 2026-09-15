@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 
@@ -126,6 +127,7 @@ const VARIANT_CLS: Record<ToastVariant, string> = {
 };
 
 function Toaster({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
+  const { t } = useTranslation();
   if (toasts.length === 0) return null;
   return (
     <div
@@ -148,8 +150,8 @@ function Toaster({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: n
             <button
               type="button"
               onClick={() => onDismiss(tn.id)}
-              className="-mr-1 -mt-1 rounded p-1 text-muted-foreground transition-colors hover:text-foreground"
-              aria-label="Dismiss"
+              className="-mr-1 -mt-1 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={t("common.dismiss")}
             >
               <X className="size-3.5" />
             </button>

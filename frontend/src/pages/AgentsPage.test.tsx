@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 import { AgentsPage } from "./AgentsPage";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/hooks/useAgents", () => ({
@@ -23,6 +24,13 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+// The table's availability column reads the provider registry.
+vi.mock("@/lib/hooks/useAgentProviders", () => ({
+  useAgentProviders: vi.fn(() => ({
+    data: [{ agent_key: "codex", display_name: "Codex", available: true }],
+    isPending: false,
+  })),
+}));
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentsMock = vi.mocked(hooks.useAgents);
 const useAgentCandidatesMock = vi.mocked(hooks.useAgentCandidates);
@@ -33,7 +41,9 @@ function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>
-      <MemoryRouter>{children ?? ui}</MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter>{children ?? ui}</MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
@@ -96,11 +106,14 @@ acceptance("agent-registry", "desktop app agents page", async () => {
 describe("AgentsPage", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("renders the loading state when the query is pending", () => {
+  test("keeps the header up over skeleton rows while the query is pending", () => {
     stubHooks({ isPending: true });
     render(<AgentsPage />, { wrapper: wrap(null) });
-    // The card body shows the loading copy.
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    // No bare "Loading…" card: the title is already there over a busy table.
+    expect(screen.getByRole("heading", { name: /agents/i })).toBeInTheDocument();
+    expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getAllByTestId("skeleton-row").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
   });
 
   test("renders the welcome panel when no agents exist", () => {

@@ -29,7 +29,7 @@ export function FolderPickerField({
       <input
         id={inputId}
         aria-label={ariaLabel}
-        className="block w-full rounded border bg-muted px-2 py-1 font-mono text-xs"
+        className="block w-full rounded-md border bg-muted px-2 py-1 font-mono text-xs"
         placeholder={placeholder}
         value={value ?? ""}
         readOnly

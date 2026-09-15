@@ -1,3 +1,8 @@
+// frontend/src/components/TimeRangePicker.tsx
+// Time-range filter shared by the Activity tabs and the MCP invocations table:
+// quick presets, a calendar for picking a custom From–To window, and editable
+// text fields for typing an exact date and time. Its copy lives under the
+// `timeRange.*` i18n namespace, which nothing else consumes.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarDays, ChevronDown } from "lucide-react";
@@ -28,9 +33,9 @@ const fmt = formatLocalDateTime;
 const parse = parseLocalDate;
 
 /**
- * Time-range filter: quick presets, a calendar for picking a custom
- * From–To window, and editable text fields for typing an exact date and
- * time. Styled to match the project's Select controls.
+ * Styled to match the project's Select controls. The panel is three columns
+ * (presets · calendar · typed bounds) from the `sm` breakpoint and stacks to
+ * one column below it, so it never forces the page to scroll sideways.
  */
 export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
   const { t } = useTranslation();
@@ -42,13 +47,14 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
   const toDate = parse(draftTo);
   const fromInvalid = draftFrom.trim() !== "" && !fromDate;
   const toInvalid = draftTo.trim() !== "" && !toDate;
+  const formatHint = t("common.dateTimeFormatHint");
 
   const triggerLabel =
     timeRange === "custom"
       ? from && to
         ? `${from} → ${to}`
-        : t("audit.timeRange.custom")
-      : t(`audit.timeRange.${timeRange}`);
+        : t("timeRange.custom")
+      : t(`timeRange.${timeRange}`);
 
   function handleOpenChange(next: boolean) {
     // Re-seed the draft from the committed value whenever we open.
@@ -107,9 +113,9 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
           <ChevronDown className="size-4 shrink-0 opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <div className="flex">
-          <div className="flex w-32 flex-col gap-0.5 border-r border-border p-2">
+      <PopoverContent className="w-auto max-w-[calc(100vw-2rem)] p-0" align="start">
+        <div className="grid grid-cols-1 sm:grid-cols-[auto_auto_auto]">
+          <div className="flex flex-col gap-0.5 border-b border-border p-2 sm:border-b-0 sm:border-r">
             {TIME_PRESETS.map((p) => (
               <button
                 key={p}
@@ -125,7 +131,7 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
                     : "text-foreground/80 hover:bg-secondary",
                 )}
               >
-                {t(`audit.timeRange.${p}`)}
+                {t(`timeRange.${p}`)}
               </button>
             ))}
           </div>
@@ -138,33 +144,34 @@ export function TimeRangePicker({ timeRange, from, to, onChange }: Props) {
               onSelect={pickRange}
             />
           </div>
-          <div className="flex w-56 flex-col gap-3 border-l border-border p-3">
+          <div className="flex flex-col gap-3 border-t border-border p-3 sm:w-56 sm:border-l sm:border-t-0">
             <div className="space-y-1">
-              <Label htmlFor="tr-from">{t("audit.filter.from")}</Label>
+              <Label htmlFor="tr-from">{t("timeRange.from")}</Label>
               <Input
                 id="tr-from"
                 value={draftFrom}
-                placeholder="2026-05-12 09:00:00"
+                placeholder={formatHint}
                 onChange={(e) => setDraftFrom(e.target.value)}
                 className={cn(fromInvalid && "border-destructive")}
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="tr-to">{t("audit.filter.to")}</Label>
+              <Label htmlFor="tr-to">{t("timeRange.to")}</Label>
               <Input
                 id="tr-to"
                 value={draftTo}
-                placeholder="2026-05-22 18:00:00"
+                placeholder={formatHint}
                 onChange={(e) => setDraftTo(e.target.value)}
                 className={cn(toInvalid && "border-destructive")}
               />
             </div>
+            <p className="text-xs text-muted-foreground">{formatHint}</p>
             <Button
               size="sm"
               onClick={applyCustom}
               disabled={fromInvalid || toInvalid || bothEmpty}
             >
-              {t("audit.applyRange")}
+              {t("timeRange.apply")}
             </Button>
           </div>
         </div>

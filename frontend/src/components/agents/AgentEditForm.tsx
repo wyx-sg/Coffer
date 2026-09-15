@@ -15,8 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { AgentOut, AgentPatch } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
+import { agentTypeLabel } from "@/lib/agents/display";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
 
 export function AgentEditForm(props: {
@@ -70,47 +73,42 @@ export function AgentEditForm(props: {
           <DialogDescription>{t("agents.editSubtitle")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
-          <label className="block text-sm">
-            {t("agents.name")}
-            <input
-              className="mt-1 block w-full rounded border bg-muted px-2 py-1"
-              value={props.agent.name}
-              disabled
-              readOnly
-            />
-          </label>
-          <label className="block text-sm">
-            {t("agents.type")}
-            <input
-              className="mt-1 block w-full rounded border bg-muted px-2 py-1"
-              value={props.agent.type}
-              disabled
-              readOnly
-            />
-          </label>
-          <div className="block text-sm">
-            <span>{t("agents.configDirOverride")}</span>
-            <div className="mt-1">
-              <FolderPickerField
-                ariaLabel={t("agents.configDirOverride")}
-                placeholder={t("agents.configDirPlaceholder")}
-                value={configDir || null}
-                onChange={(p) => setConfigDir(p ?? "")}
-                clearable
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-edit-name">{t("agents.name")}</Label>
+            <Input id="agent-edit-name" value={props.agent.name} disabled readOnly />
           </div>
-          <label className="block text-sm">
-            {t("agents.description")}
-            <input
-              className="mt-1 block w-full rounded border bg-background px-2 py-1"
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-edit-type">{t("agents.type")}</Label>
+            <Input
+              id="agent-edit-type"
+              value={agentTypeLabel(props.agent.type)}
+              disabled
+              readOnly
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("agents.configDirOverride")}</Label>
+            <FolderPickerField
+              ariaLabel={t("agents.configDirOverride")}
+              placeholder={t("agents.configDirPlaceholder")}
+              value={configDir || null}
+              onChange={(p) => setConfigDir(p ?? "")}
+              clearable
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-edit-description">{t("agents.description")}</Label>
+            <Input
+              id="agent-edit-description"
               placeholder={t("agents.descriptionPlaceholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
-          </label>
+          </div>
           {patch.error ? (
-            <p className="text-sm text-destructive">{translateApiError(t, patch.error)}</p>
+            <p role="alert" className="text-sm text-destructive">
+              {translateApiError(t, patch.error)}
+            </p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={props.onClose}>

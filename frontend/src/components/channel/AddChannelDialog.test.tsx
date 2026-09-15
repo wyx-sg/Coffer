@@ -90,7 +90,28 @@ describe("AddChannelDialog", () => {
     // app_secret + signing_secret intentionally left blank.
     submit();
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    // One translated message under each missing field — never zod's own
+    // "String must contain…", and no toast for a validation miss.
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.map((a) => a.textContent)).toEqual([
+      "Enter the App secret",
+      "Enter the signing secret",
+    ]);
+    expect(screen.queryByText(/must contain/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/app secret/i)).toHaveAttribute("aria-invalid", "true");
+    expect(api.POST).not.toHaveBeenCalled();
+  });
+
+  test("a malformed name is refused under the name field", async () => {
+    const api = installApi(mockApiClient());
+    renderDialog();
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "my bot!" } });
+    fireEvent.change(screen.getByLabelText(/bot token/i), { target: { value: "123:abc" } });
+    submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Letters, digits, dash and underscore only",
+    );
     expect(api.POST).not.toHaveBeenCalled();
   });
 

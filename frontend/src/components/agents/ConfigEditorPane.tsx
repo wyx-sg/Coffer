@@ -55,7 +55,7 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
       {props.filePath ? <FileActions filePath={props.filePath} /> : null}
 
       {props.memoryBlock ? (
-        <div className="flex items-center gap-1.5 rounded border border-sky-500/50 bg-sky-500/10 px-2 py-1.5 text-xs text-sky-700">
+        <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground">
           <Info className="size-3.5 shrink-0" />
           {t("agents.config.memoryBlockNotice")}
         </div>

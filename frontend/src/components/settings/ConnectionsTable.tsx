@@ -16,22 +16,30 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check } from "lucide-react";
 
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
+import { ActiveProviderBadge } from "@/components/settings/ActiveProviderBadge";
 import {
   ConnectionRowActions,
   ConnectionStatusCell,
   ConnectionsBulkActions,
   PROVIDER_KIND,
 } from "@/components/settings/ConnectionsTableActions";
-import { AGENT_LABEL_KEY, PRESETS, vendorOf } from "@/components/settings/connectionPresets";
+import { PRESETS, vendorOf } from "@/components/settings/connectionPresets";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { Provider } from "@/lib/api/providers";
 import { useDeleteProvider } from "@/lib/hooks/useProviders";
 import { useKindReach } from "@/lib/hooks/useResources";
+import { reachFilter } from "@/lib/reachFilter";
 
-export function ConnectionsTable({ providers }: { providers: Provider[] }) {
+export function ConnectionsTable({
+  providers,
+  isLoading = false,
+}: {
+  providers: Provider[];
+  /** Skeleton rows while the list resolves — the page keeps its header up. */
+  isLoading?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const del = useDeleteProvider();
@@ -53,12 +61,7 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
       cell: (p) => (
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{p.name}</span>
-          {p.is_active ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-              <Check className="size-3" />
-              {t("settings.connections.active")}
-            </span>
-          ) : null}
+          {p.is_active ? <ActiveProviderBadge /> : null}
         </div>
       ),
     },
@@ -79,28 +82,11 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
       cell: (p) => <span className="line-clamp-1 max-w-xs font-mono text-xs">{p.base_url}</span>,
     },
     {
-      key: "compatible_agents",
-      header: t("settings.connections.compatibleAgents"),
-      cell: (p) => (
-        <div className="flex flex-wrap gap-1">
-          {(p.compatible_agents ?? []).length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
-            (p.compatible_agents ?? []).map((a) => (
-              <span
-                key={a}
-                className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-              >
-                {t(AGENT_LABEL_KEY[a])}
-              </span>
-            ))
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "status",
-      header: t("resources.cols.status"),
+      // The column IS the reach control, so it is named for what it shows.
+      // Which agents the provider projects into is that same reach, so there is
+      // no separate compatible-agents column repeating it in words.
+      key: "reach",
+      header: t("resources.cols.reach"),
       className: "whitespace-nowrap text-right",
       cell: (p) => <ConnectionStatusCell provider={p} reach={reach.get(p.name)} />,
     },
@@ -128,20 +114,9 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
       // options from them keeps the filter in step with the add-connection form.
       options: PRESETS.map((p) => ({ value: p.id, label: vendorLabel(p.id, p.label) })),
     },
-    {
-      // Tracks the status column: now that it shows reach rather than on/off, a
-      // bare "enabled" would no longer name a state the user can see.
-      key: "status",
-      label: t("resources.cols.status"),
-      allLabel: t("resources.status.all"),
-      accessor: (p) =>
-        !p.enabled ? "disabled" : (reach.get(p.name)?.scope ?? null) === null ? "every" : "selected",
-      options: [
-        { value: "disabled", label: t("common.disabled") },
-        { value: "every", label: t("scope.everywhere") },
-        { value: "selected", label: t("scope.restricted") },
-      ],
-    },
+    // The one reach filter every scoped list offers; `scope` is merged in from
+    // the kind-wide reach query rather than carried on the provider row.
+    reachFilter(t, (p) => ({ enabled: p.enabled, scope: reach.get(p.name)?.scope })),
   ];
 
   return (
@@ -150,6 +125,7 @@ export function ConnectionsTable({ providers }: { providers: Provider[] }) {
         rows={providers}
         columns={columns}
         rowKey={(p) => p.name}
+        isLoading={isLoading}
         search={{
           accessor: (p) => `${p.name} ${p.base_url} ${p.description ?? ""}`,
           placeholder: t("settings.connections.searchPlaceholder"),

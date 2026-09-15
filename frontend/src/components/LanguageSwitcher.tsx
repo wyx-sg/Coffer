@@ -1,3 +1,4 @@
+// src/components/LanguageSwitcher.tsx — the app's single language control (EN / 中 button group).
 import { useTranslation } from "react-i18next";
 import { Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,7 +35,7 @@ export function LanguageSwitcher() {
               aria-pressed={active}
               onClick={() => void i18n.changeLanguage(lang.code)}
               className={cn(
-                "px-2 py-1 text-[11px] font-medium leading-none transition-colors",
+                "px-2 py-1 text-xs font-medium leading-none transition-colors",
                 idx > 0 ? "border-l border-border" : "",
                 active ? "bg-secondary text-foreground" : "bg-card hover:bg-secondary/60",
               )}

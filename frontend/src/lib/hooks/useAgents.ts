@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import { useToast } from "@/components/ui/toast";
 import {
   agentsApi,
   type AdoptMcpEntryBody,
@@ -23,7 +24,6 @@ import {
   resourcesByKindKey,
   skillsKey,
 } from "@/lib/api/queryKeys";
-import { useToast } from "@/components/ui/toast";
 
 /** Shared onError → toast handler — a failed mutation must never be silent.
  *  Mutations whose consumer already renders the translated error inline
@@ -50,6 +50,9 @@ export function useAgent(name: string) {
   });
 }
 
+// No onError toast on register / patch: the add dialog and the edit form each
+// render the failure inline next to the field it concerns (e.g. the 409 for an
+// already-registered config dir), so a toast would double-surface it.
 export function useRegisterAgent() {
   const qc = useQueryClient();
   return useMutation({
@@ -75,7 +78,8 @@ export function useRemoveAgent() {
   const onError = useAgentToastError();
   return useMutation({
     mutationFn: (name: string) => agentsApi.remove(name),
-    onSuccess: () => {
+    onSuccess: (_data, name) => {
+      qc.removeQueries({ queryKey: agentKey(name) });
       qc.invalidateQueries({ queryKey: agentsKey });
     },
     onError,
@@ -121,12 +125,14 @@ export function useAgentMcpStatus(name: string) {
 
 export function useAgentMcpInstall(name: string) {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: (install: boolean) =>
       install ? agentsApi.mcpInstall(name) : agentsApi.mcpUninstall(name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: agentMcpInstallKey(name) });
     },
+    onError,
   });
 }
 
@@ -153,6 +159,8 @@ export function useRemoveMcpEntry(agentName: string) {
   });
 }
 
+// No onError toast: the adopt dialog shows the failure inline, where the
+// name-conflict / secret hints it carries are actionable.
 export function useAdoptMcpEntry(agentName: string) {
   const qc = useQueryClient();
   return useMutation({

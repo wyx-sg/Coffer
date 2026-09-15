@@ -21,13 +21,21 @@ import { ScopeControl } from "@/components/ScopeControl";
 import { memoryKey } from "@/lib/api/queryKeys";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import type { Scope } from "@/lib/hooks/useScope";
+import { reachFilter } from "@/lib/reachFilter";
 
 export interface MemoryPartitionRow extends PartitionOut {
   enabled: boolean;
   scope: Scope | null;
 }
 
-export function MemoryPartitionsTable({ rows }: { rows: MemoryPartitionRow[] }) {
+export function MemoryPartitionsTable({
+  rows,
+  isLoading = false,
+}: {
+  rows: MemoryPartitionRow[];
+  /** Skeleton rows while the list resolves — the page keeps its header up. */
+  isLoading?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -55,7 +63,7 @@ export function MemoryPartitionsTable({ rows }: { rows: MemoryPartitionRow[] }) 
     },
     {
       key: "reach",
-      header: t("memory.cols.reach"),
+      header: t("resources.cols.reach"),
       className: "whitespace-nowrap text-right",
       cell: (r) => (
         <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
@@ -68,6 +76,7 @@ export function MemoryPartitionsTable({ rows }: { rows: MemoryPartitionRow[] }) 
   return (
     <DataTable
       rows={rows}
+      isLoading={isLoading}
       columns={columns}
       rowKey={(r) => r.name}
       onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.name)}`)}
@@ -75,6 +84,7 @@ export function MemoryPartitionsTable({ rows }: { rows: MemoryPartitionRow[] }) 
         accessor: (r) => `${r.name} ${r.project_root}`,
         placeholder: t("memory.searchPlaceholder"),
       }}
+      filters={[reachFilter(t, (r: MemoryPartitionRow) => r)]}
       // No bulk delete: a partition is aggregated from the agents' own
       // memories, never user-created, so there is nothing here to remove — the
       // selection bar carries reach alone.

@@ -68,7 +68,7 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
     return (
       <div className="space-y-2">
         {header}
-        <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+        <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
           {t("skills.files.binary", { size: content.data.size })}
         </div>
       </div>
@@ -101,7 +101,7 @@ export function SkillFileViewer({ name, path }: { name: string; path: string }) 
             (both axes) — same as the knowledge-base doc viewer, so it never
             exceeds the window and adapts to the window size. */}
         {isMarkdown(path) ? (
-          <FindableMarkdown className="max-h-[60vh] overflow-auto rounded border bg-background p-3">
+          <FindableMarkdown className="max-h-[60vh] overflow-auto rounded-md border bg-background p-3">
             {text}
           </FindableMarkdown>
         ) : (

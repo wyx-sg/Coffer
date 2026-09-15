@@ -71,7 +71,7 @@ export function ConversationList({
                     if (!selected) onToggleView();
                   }}
                   className={cn(
-                    "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                    "rounded-sm px-2.5 py-1 text-xs font-medium transition-colors",
                     selected
                       ? "bg-background text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground",
@@ -108,11 +108,7 @@ export function ConversationList({
         )}
       </div>
 
-      <div
-        className="flex-1 overflow-y-auto px-2 py-2"
-        role="listbox"
-        aria-label={t("chat.history.ariaLabel")}
-      >
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {loading && (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
             {t("common.loading")}
@@ -128,18 +124,22 @@ export function ConversationList({
             {t("chat.history.noMatches")}
           </p>
         )}
-        {filtered.map((conv) => (
-          <ConversationListItem
-            key={conv.id}
-            conversation={conv}
-            isActive={conv.id === activeId}
-            onSelect={() => onSelect(conv.id)}
-            onRename={(title) => onRename(conv.id, title)}
-            onDelete={() => onDelete(conv.id)}
-            onArchive={archivedView ? undefined : () => onArchive(conv.id)}
-            onRestore={archivedView ? () => onRestore(conv.id) : undefined}
-          />
-        ))}
+        {filtered.length > 0 && (
+          <ul className="space-y-0.5" aria-label={t("chat.history.ariaLabel")}>
+            {filtered.map((conv) => (
+              <ConversationListItem
+                key={conv.id}
+                conversation={conv}
+                isActive={conv.id === activeId}
+                onSelect={() => onSelect(conv.id)}
+                onRename={(title) => onRename(conv.id, title)}
+                onDelete={() => onDelete(conv.id)}
+                onArchive={archivedView ? undefined : () => onArchive(conv.id)}
+                onRestore={archivedView ? () => onRestore(conv.id) : undefined}
+              />
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

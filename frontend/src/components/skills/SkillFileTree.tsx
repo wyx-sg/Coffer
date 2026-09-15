@@ -48,7 +48,7 @@ export function SkillFileTree({ name }: { name: string }) {
         {selectedPath ? (
           <SkillFileViewer name={name} path={selectedPath} />
         ) : (
-          <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("skills.files.selectFile")}
           </div>
         )}

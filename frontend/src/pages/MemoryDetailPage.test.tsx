@@ -8,6 +8,7 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryDetailPage } from "./MemoryDetailPage";
 import type { FactSummaryOut } from "@/lib/api/memoryTypes";
 
@@ -60,14 +61,18 @@ const FACTS: FactSummaryOut[] = [
 function renderPage() {
   // ScopeControl reads the machine registry to build its pick-list (scope's
   // machine axis, spec vault-sync), so the page needs a query client.
+  // The header's Organise button carries a tooltip, which Layout's provider
+  // normally hosts; the page is rendered bare here, so mount one.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/memory/coffer"]}>
-        <Routes>
-          <Route path="/memory/:name" element={<MemoryDetailPage />} />
-        </Routes>
-      </MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter initialEntries={["/memory/coffer"]}>
+          <Routes>
+            <Route path="/memory/:name" element={<MemoryDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -99,6 +104,6 @@ describe("MemoryDetailPage", () => {
 
     renderPage();
 
-    expect(screen.getByRole("button", { name: /back to memory/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to memory/i })).toBeInTheDocument();
   });
 });

@@ -104,6 +104,20 @@ describe("Composer", () => {
     expect(onStop).toHaveBeenCalled();
   });
 
+  test("Stop replaces Send in place while streaming — one button, beside the input", () => {
+    render(<Composer onSend={vi.fn()} streaming onStop={vi.fn()} />);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
+    const stop = screen.getByRole("button", { name: /stop/i });
+    // Same slot as Send: a sibling of the textarea, not a row underneath it.
+    expect(stop.parentElement).toBe(screen.getByRole("textbox").parentElement);
+  });
+
+  test("without an onStop handler, streaming keeps the Send button", () => {
+    render(<Composer onSend={vi.fn()} streaming />);
+    expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
+  });
+
   test("no Stop button when not streaming", () => {
     render(<Composer onSend={vi.fn()} onStop={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /stop/i })).not.toBeInTheDocument();

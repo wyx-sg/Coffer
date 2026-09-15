@@ -5,7 +5,7 @@
 // kind registry — the latter silently broadened as `memory`/`knowledge_base`
 // registered their own UIs, leaking those stores into this list. We mock the
 // data hook + the two heavy MCP children so the test asserts ResourcesPage's
-// own branching (loading / error / empty-welcome / populated) and, crucially,
+// own branching (skeleton / error / empty-welcome / populated) and, crucially,
 // that it requests only mcp_server resources.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -21,8 +21,14 @@ vi.mock("@/components/mcp/AddMcpServerDialog", () => ({
   AddMcpServerDialog: () => <button>add mcp server</button>,
 }));
 vi.mock("@/components/mcp/McpServersTable", () => ({
-  McpServersTable: ({ resources }: { resources: ResourceOut[] }) => (
-    <div data-testid="mcp-table">
+  McpServersTable: ({
+    resources,
+    isLoading,
+  }: {
+    resources: ResourceOut[];
+    isLoading?: boolean;
+  }) => (
+    <div data-testid="mcp-table" data-loading={isLoading ? "true" : "false"}>
       {resources.map((r) => (
         <span key={r.name}>{r.name}</span>
       ))}
@@ -65,11 +71,13 @@ describe("ResourcesPage", () => {
     expect(useResourcesMock).toHaveBeenCalledWith("mcp_server");
   });
 
-  test("shows the loading card while the query is pending", () => {
+  test("keeps the header up and hands the table isLoading while the query is pending", () => {
     stubQuery({ isPending: true });
     render(wrap(<ResourcesPage />));
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
-    expect(screen.queryByTestId("mcp-table")).not.toBeInTheDocument();
+    // No bare "Loading…" card: the title stays mounted over a loading table.
+    expect(screen.getByRole("heading", { name: /mcp servers/i })).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-table")).toHaveAttribute("data-loading", "true");
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
   });
 
   test("shows the error card with the translated message when the query errors", () => {

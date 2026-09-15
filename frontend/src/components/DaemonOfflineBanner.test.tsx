@@ -47,7 +47,8 @@ describe("DaemonOfflineBanner", () => {
     useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
     render(wrap(<DaemonOfflineBanner />));
     expect(screen.getByText(/Daemon offline/i)).toBeInTheDocument();
-    expect(screen.getByText(/ECONNREFUSED/)).toBeInTheDocument();
+    // The raw transport error is not user copy — only the translated body shows.
+    expect(screen.queryByText(/ECONNREFUSED/)).not.toBeInTheDocument();
   });
 
   test("surfaces an out-of-date banner while the daemon is still answering", () => {

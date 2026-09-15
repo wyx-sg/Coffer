@@ -23,11 +23,16 @@ function wrap(route = "/settings/data") {
 }
 
 describe("SettingsLayout", () => {
-  test("renders the Engine, Data, Security, and About tabs but not App / Daemon", () => {
+  test("renders the Coffer's model, Data, Security, and About tabs but not App / Daemon", () => {
     render(wrap());
-    // Engine holds Coffer's own internal-LLM + embedding config — internal
-    // configuration, so Settings rather than the model-provider resource page.
-    expect(screen.getByRole("link", { name: /Engine/ })).toBeInTheDocument();
+    // "Coffer's model" holds the provider + model Coffer's own passes run on —
+    // internal configuration, so Settings rather than the model-provider
+    // resource page. The route path stays /settings/engine.
+    expect(screen.getByRole("link", { name: /Coffer's model/ })).toHaveAttribute(
+      "href",
+      "/settings/engine",
+    );
+    expect(screen.queryByRole("link", { name: /^Engine$/ })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Data/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Security/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /About/ })).toBeInTheDocument();

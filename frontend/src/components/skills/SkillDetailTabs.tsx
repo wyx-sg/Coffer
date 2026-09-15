@@ -1,7 +1,8 @@
 // frontend/src/components/skills/SkillDetailTabs.tsx
 // Overview tab body for SkillDetailPage (extracted to keep the page file under
-// the size limit). Overview is a read-only metadata view. Per-agent skill
-// binding lives on the agent page, not here.
+// the size limit). Overview is a read-only metadata view, opening with the
+// skill's description — long-form copy belongs here, not in the page header.
+// Per-agent skill binding lives on the agent page, not here.
 import { useTranslation } from "react-i18next";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,8 +13,11 @@ export function SkillOverview({ skill }: { skill: SkillOut }) {
   const { t } = useTranslation();
   return (
     <Card>
-      <CardContent className="py-6">
-        <dl className="grid grid-cols-[12rem_1fr] gap-y-3 text-sm">
+      <CardContent className="space-y-4 py-6">
+        {skill.description ? (
+          <p className="max-w-prose text-sm text-muted-foreground">{skill.description}</p>
+        ) : null}
+        <dl className="grid gap-y-3 text-sm sm:grid-cols-[12rem_1fr]">
           <dt className="text-muted-foreground">{t("skills.source")}</dt>
           <dd className="font-mono text-xs">{skill.source.original_path}</dd>
 

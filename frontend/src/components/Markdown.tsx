@@ -3,19 +3,25 @@
 // .md file is shown rendered rather than raw (KB document preview, etc.). The
 // project has no @tailwindcss/typography plugin, so element styles are applied
 // via per-tag component overrides to stay consistent with the app's tokens.
+//
+// Headings are demoted one level (markdown `#` renders as <h2>): the renderer
+// always sits under a page that already owns the <h1>, so a document's own
+// title must never become a second one. `#`→h2 … `#####`/`######`→h6.
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 
 const components: Components = {
   h1: (props) => (
-    <h1 className="mb-3 mt-5 font-serif text-2xl tracking-tight first:mt-0" {...props} />
+    <h2 className="mb-3 mt-5 font-serif text-2xl tracking-tight first:mt-0" {...props} />
   ),
   h2: (props) => (
-    <h2 className="mb-2 mt-5 font-serif text-xl tracking-tight first:mt-0" {...props} />
+    <h3 className="mb-2 mt-5 font-serif text-xl tracking-tight first:mt-0" {...props} />
   ),
-  h3: (props) => <h3 className="mb-2 mt-4 text-lg font-medium first:mt-0" {...props} />,
-  h4: (props) => <h4 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
+  h3: (props) => <h4 className="mb-2 mt-4 text-lg font-medium first:mt-0" {...props} />,
+  h4: (props) => <h5 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
+  h5: (props) => <h6 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
+  h6: (props) => <h6 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
   p: (props) => <p className="my-2.5 leading-relaxed" {...props} />,
   ul: (props) => <ul className="my-2.5 list-disc space-y-1 pl-6" {...props} />,
   ol: (props) => <ol className="my-2.5 list-decimal space-y-1 pl-6" {...props} />,
@@ -35,7 +41,7 @@ const components: Components = {
   code: ({ className, children, ...props }) => {
     const inline = !String(className ?? "").includes("language-");
     return inline ? (
-      <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-[0.85em]" {...props}>
+      <code className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-sm" {...props}>
         {children}
       </code>
     ) : (
@@ -62,7 +68,7 @@ const components: Components = {
     />
   ),
   td: (props) => <td className="border border-border px-3 py-1.5 align-top" {...props} />,
-  img: (props) => <img className="my-3 max-w-full rounded" {...props} />,
+  img: (props) => <img className="my-3 max-w-full rounded-md" {...props} />,
 };
 
 export function Markdown({ children }: { children: string }) {

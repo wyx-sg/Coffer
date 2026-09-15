@@ -1,11 +1,13 @@
 // frontend/src/pages/McpServerDetailPage.tsx
 import { useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Server } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { translateApiError } from "@/lib/api/errors";
 import { useResource } from "@/lib/hooks/useResources";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
@@ -25,8 +27,11 @@ export function McpServerDetailPage() {
   const { name = "" } = useParams<{ name: string }>();
   const navigate = useNavigate();
   // When navigated here from an agent's MCP servers tab, location.state carries
-  // a return target so we can offer a "back to <agent>" button.
+  // a return target, so "← back" leads to that agent rather than the list.
   const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
+  const back = backState?.backTo
+    ? { to: backState.backTo, label: t("common.backTo", { label: backState.backLabel ?? "" }) }
+    : { to: "/mcp-servers", label: t("mcp.server.backToResources") };
   const qc = useQueryClient();
   const { data: resource, isPending, error } = useResource("mcp_server", name);
   const {
@@ -70,52 +75,32 @@ export function McpServerDetailPage() {
     );
   }
   if (error || !resource) {
+    // The translated error is the title when it says more than "not found";
+    // a plain not-found is not repeated as its own description.
+    const title = t("errors.RESOURCE_NOT_FOUND");
+    const message = error ? translateApiError(t, error) : null;
     return (
-      <Card className="paper-card border-destructive/40">
-        <CardHeader>
-          <CardTitle className="font-serif text-destructive">
-            {t("errors.RESOURCE_NOT_FOUND")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-foreground/80">
-            {error instanceof Error ? error.message : t("errors.RESOURCE_NOT_FOUND")}
-          </p>
-          <Button variant="link" onClick={() => navigate("/mcp-servers")}>
-            <ArrowLeft className="mr-1 size-4" />
-            {t("mcp.server.backToResources")}
+      <EmptyState
+        icon={Server}
+        title={title}
+        description={message && message !== title ? message : undefined}
+        action={
+          <Button variant="outline" asChild>
+            <Link to="/mcp-servers">
+              <ArrowLeft className="mr-1 size-4" />
+              {t("mcp.server.backToResources")}
+            </Link>
           </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="-ml-2 flex flex-wrap items-center gap-1">
-        {backState?.backTo ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(backState.backTo!)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="mr-1.5 size-4" />
-            {t("common.backTo", { label: backState.backLabel ?? "" })}
-          </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/mcp-servers")}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="mr-1.5 size-4" /> {t("mcp.server.backToResources")}
-        </Button>
-      </div>
-
       <McpServerDetailHeader
         resource={resource}
+        back={back}
         healthState={healthState}
         testResult={testResult}
         isTestPending={runTest.isPending}
@@ -124,7 +109,10 @@ export function McpServerDetailPage() {
       />
 
       {testResult && !testResult.ok ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-2.5 text-sm text-destructive">
+        <div
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-2.5 text-sm text-destructive"
+          role="alert"
+        >
           {t("mcp.server.testFailure", {
             latency: testResult.latency_ms,
             error: testResult.error_message,
@@ -147,7 +135,11 @@ export function McpServerDetailPage() {
         name={name}
         open={deleteOpen}
         isPending={del.isPending}
-        onOpenChange={setDeleteOpen}
+        error={del.error}
+        onOpenChange={(o) => {
+          setDeleteOpen(o);
+          if (!o) del.reset();
+        }}
         onConfirm={handleDelete}
       />
     </div>

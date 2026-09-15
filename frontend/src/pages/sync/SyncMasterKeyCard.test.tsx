@@ -6,7 +6,7 @@
 // POSTs the material. Neither path names a host path, so there is no native
 // dialog to mock and no typed-path fallback to reveal.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { ApiError } from "@/lib/api/errors";
 import { SyncMasterKeyCard } from "./SyncMasterKeyCard";
@@ -86,6 +86,16 @@ function keyFile(content: string, name = "coffer-master.key"): File {
   return file;
 }
 
+/** Pick a key file, then confirm the replacement the dialog asks about. */
+async function importFile(content: string) {
+  fireEvent.change(screen.getByLabelText(/import key/i), {
+    target: { files: [keyFile(content)] },
+  });
+  const dialog = await screen.findByRole("dialog");
+  expect(dialog).toHaveTextContent(/replace this machine's master key\?/i);
+  fireEvent.click(within(dialog).getByRole("button", { name: /import key/i }));
+}
+
 describe("SyncMasterKeyCard", () => {
   test("shows no typed-path field — the browser never needs a host path", () => {
     stub();
@@ -113,19 +123,31 @@ describe("SyncMasterKeyCard", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(/coffer-master\.key/);
   });
 
-  test("import reads the picked file's contents and posts the material", async () => {
+  test("import reads the picked file's contents, confirms, then posts the material", async () => {
     stub();
     render(<SyncMasterKeyCard />);
 
-    fireEvent.change(screen.getByLabelText(/import key/i), {
-      target: { files: [keyFile("  FERNET-KEY-MATERIAL\n")] },
-    });
+    await importFile("  FERNET-KEY-MATERIAL\n");
 
     // The material is trimmed; no path is ever passed.
     await waitFor(() =>
       expect(importMutate).toHaveBeenCalledWith("FERNET-KEY-MATERIAL", expect.anything()),
     );
     expect(await screen.findByRole("status")).toBeInTheDocument();
+  });
+
+  test("cancelling the confirmation posts nothing", async () => {
+    stub();
+    render(<SyncMasterKeyCard />);
+
+    fireEvent.change(screen.getByLabelText(/import key/i), {
+      target: { files: [keyFile("FERNET-KEY-MATERIAL")] },
+    });
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(importMutate).not.toHaveBeenCalled();
   });
 
   test("clicking Import key opens the file input rather than mutating", () => {
@@ -168,9 +190,7 @@ describe("SyncMasterKeyCard", () => {
     stub({ importError: new ApiError("MASTER_KEY_FILE_INVALID", "not a valid Fernet key") });
     render(<SyncMasterKeyCard />);
 
-    fireEvent.change(screen.getByLabelText(/import key/i), {
-      target: { files: [keyFile("BAD-KEY")] },
-    });
+    await importFile("BAD-KEY");
 
     await waitFor(() => expect(importMutate).toHaveBeenCalled());
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -193,9 +213,7 @@ describe("SyncMasterKeyCard", () => {
     );
     render(<SyncMasterKeyCard />);
 
-    fireEvent.change(screen.getByLabelText(/import key/i), {
-      target: { files: [keyFile("FERNET-KEY-MATERIAL")] },
-    });
+    await importFile("FERNET-KEY-MATERIAL");
 
     expect(await screen.findByRole("status")).toHaveTextContent(/2 credential/i);
   });

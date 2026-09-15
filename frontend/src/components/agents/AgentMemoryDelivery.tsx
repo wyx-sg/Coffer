@@ -26,6 +26,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
 import type { DeliveryStatusOut } from "@/lib/api/memoryTypes";
 import { useInstallDelivery, useMemoryDelivery, useRemoveDelivery } from "@/lib/hooks/useMemory";
+import { formatDateTime } from "@/lib/utils";
 
 function DeliveryState({ status }: { status: DeliveryStatusOut }) {
   const { t } = useTranslation();
@@ -71,7 +72,7 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
               ? t("memory.delivery.neverFiredHint", { event: status.event })
               : t("memory.delivery.lastFiredAt", {
                   event: status.event,
-                  time: new Date(status.last_fired_at).toLocaleString(),
+                  time: formatDateTime(status.last_fired_at),
                 })
             : t("memory.delivery.notInstalledHint")}
         </p>

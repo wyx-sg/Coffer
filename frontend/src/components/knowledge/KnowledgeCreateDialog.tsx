@@ -19,8 +19,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/toast";
-import { translateApiError } from "@/lib/api/errors";
 import { useCreateCollection } from "@/lib/hooks/useKnowledge";
 
 interface Props {
@@ -31,7 +29,7 @@ interface Props {
 
 export function KnowledgeCreateDialog({ open, onOpenChange, onCreated }: Props) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  // The hook toasts a failure itself; the dialog only reacts to success.
   const create = useCreateCollection();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -46,7 +44,6 @@ export function KnowledgeCreateDialog({ open, onOpenChange, onCreated }: Props) 
           onOpenChange(false);
           onCreated?.();
         },
-        onError: (e) => toast.error(translateApiError(t, e)),
       },
     );
   };
@@ -64,7 +61,7 @@ export function KnowledgeCreateDialog({ open, onOpenChange, onCreated }: Props) 
               id="knowledge-collection-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="shopee"
+              placeholder="team-notes"
             />
           </div>
           <div className="space-y-1.5">

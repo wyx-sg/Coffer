@@ -2,7 +2,10 @@
 //
 // Lists partitions: `global` plus one per project, aggregated read-only from
 // the agents' own native memories (ADR aggregate-agent-memory-never-write-it)
-// — nothing here is user-created, so Sync (not "Add") is the header action.
+// — nothing here is user-created, so "Read from agents" (not "Add") is the
+// header action. It is not called Sync: that name belongs to the vault-sync
+// page, and this action reads the agents' native memory rather than converging
+// anything with a remote.
 //
 // One table, always — the same shape whether the vault holds a hundred
 // partitions or none, exactly like every other list page. An empty vault gets
@@ -57,18 +60,14 @@ export function MemoryPage() {
         actions={
           <Button onClick={() => sync.mutate()} disabled={sync.isPending}>
             <RefreshCw className={sync.isPending ? "mr-1 size-4 animate-spin" : "mr-1 size-4"} />
-            {sync.isPending ? t("memory.syncing") : t("memory.sync")}
+            {sync.isPending ? t("memory.reading") : t("memory.readFromAgents")}
           </Button>
         }
       />
 
-      {isPending ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+      {/* The header stays mounted through loading — the table renders skeleton
+          rows under it rather than the page swapping to a loading card. */}
+      {error ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-destructive">{t("memory.loadFailed")}</CardTitle>
@@ -81,7 +80,7 @@ export function MemoryPage() {
         // No zero-row branch: DataTable renders its header and its own empty
         // row, so "no partitions yet" is a line inside the table rather than
         // a card standing where the table would be.
-        <MemoryPartitionsTable rows={rows} />
+        <MemoryPartitionsTable rows={rows} isLoading={isPending} />
       )}
     </div>
   );

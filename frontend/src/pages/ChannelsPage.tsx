@@ -1,5 +1,5 @@
 // frontend/src/pages/ChannelsPage.tsx — spec channels surface.
-// Mirrors KnowledgeBasesPage: PageHeader + welcome/loading/error/table; the
+// Mirrors KnowledgePage: PageHeader + welcome/error/table (skeleton rows while loading); the
 // Add-channel header action appears only once channels exist — the empty
 // state's welcome panel carries the Add call-to-action instead. Registration
 // happens in a modal dialog (AddChannelDialog).
@@ -39,13 +39,9 @@ export function ChannelsPage() {
 
       <AddChannelDialog open={showAdd} onOpenChange={setShowAdd} />
 
-      {isPending ? (
-        <Card className="paper-card">
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+      {/* The header stays mounted through loading — the table renders skeleton
+          rows under it rather than the page swapping to a loading card. */}
+      {error ? (
         <Card className="paper-card border-destructive/40">
           <CardHeader>
             <CardTitle className="font-serif text-destructive">
@@ -56,10 +52,10 @@ export function ChannelsPage() {
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
           </CardContent>
         </Card>
-      ) : !hasItems ? (
+      ) : !isPending && !hasItems ? (
         <ChannelWelcomePanel onAdd={() => setShowAdd(true)} />
       ) : (
-        <ChannelsTable items={items ?? []} />
+        <ChannelsTable items={items ?? []} isLoading={isPending} />
       )}
     </div>
   );

@@ -8,8 +8,10 @@ const alertVariants = cva(
     variants: {
       variant: {
         default: "bg-background text-foreground",
-        destructive:
-          "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
+        destructive: "border-destructive/50 text-destructive [&>svg]:text-destructive",
+        // Attention without alarm (daemon offline / out of date): a warn-tinted
+        // border and icon on the normal card surface, body text stays ink.
+        warning: "border-status-warn/40 bg-card text-foreground [&>svg]:text-status-warn",
       },
     },
     defaultVariants: {

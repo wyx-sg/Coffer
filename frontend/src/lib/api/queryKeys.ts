@@ -74,7 +74,6 @@ export const mcpKey = ["mcp"] as const;
 export const mcpCapabilitiesKey = (serverName: string) =>
   ["mcp", "capabilities", serverName] as const;
 export const mcpStatusKey = (serverName: string) => ["mcp", "status", serverName] as const;
-export const mcpRunnerKey = (serverName: string) => ["mcp", "runner", serverName] as const;
 export const mcpInvocationsKey = (serverName: string, filters: Record<string, unknown>) =>
   ["mcp", "invocations", serverName, filters] as const;
 /** The gateway-wide invocation log (every server) — the Activity page. */

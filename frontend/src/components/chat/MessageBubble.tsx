@@ -1,5 +1,8 @@
 // components/chat/MessageBubble.tsx
 // Renders a single chat message (user or assistant) including tool call cards.
+// Memoised: a streaming turn re-renders the thread per token, and every
+// already-persisted bubble keeps the same `message` reference across those.
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/useChatTurn";
@@ -31,7 +34,7 @@ function attachmentBlocks(blocks: ContentBlock[]): ContentBlock[] {
   return blocks.filter((b) => b.type === "attachment");
 }
 
-export function MessageBubble({ message, live }: Props) {
+function MessageBubbleImpl({ message, live }: Props) {
   const { t } = useTranslation();
   const isUser = message ? message.role === "user" : false;
   const isLive = live !== undefined;
@@ -42,18 +45,18 @@ export function MessageBubble({ message, live }: Props) {
     return (
       <div className="flex flex-col items-end gap-1">
         {text && (
-          <div className="max-w-[75%] whitespace-pre-wrap break-words rounded-2xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
+          <div className="w-fit max-w-3xl whitespace-pre-wrap break-words rounded-xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
             {text}
           </div>
         )}
         {attachments.map((a, i) => (
           <div
             key={`${a.filename ?? "file"}-${i}`}
-            className="flex max-w-[75%] items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
+            className="flex w-fit max-w-3xl items-center gap-1.5 rounded-xl bg-muted px-3 py-1 text-xs text-muted-foreground"
             title={a.mime ?? undefined}
           >
             <span aria-hidden="true">📎</span>
-            <span className="truncate">{a.filename ?? "attachment"}</span>
+            <span className="truncate">{a.filename ?? t("chat.attachment")}</span>
             {a.mime && <span className="opacity-70">· {a.mime}</span>}
           </div>
         ))}
@@ -75,12 +78,12 @@ export function MessageBubble({ message, live }: Props) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[85%] space-y-1">
+      <div className="w-fit max-w-3xl space-y-1">
         {pairs.map((p) => (
           <ToolCallCard key={p.use.tool_use_id} toolUse={p.use} toolResult={p.result} />
         ))}
         {text && (
-          <div className="rounded-2xl rounded-tl-sm bg-card px-4 py-2.5 text-sm text-foreground shadow-sm">
+          <div className="rounded-xl rounded-tl-sm bg-card px-4 py-2.5 text-sm text-foreground shadow-sm">
             <MarkdownContent content={text} />
           </div>
         )}
@@ -102,3 +105,5 @@ export function MessageBubble({ message, live }: Props) {
     </div>
   );
 }
+
+export const MessageBubble = memo(MessageBubbleImpl);

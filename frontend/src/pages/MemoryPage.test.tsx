@@ -80,12 +80,14 @@ describe("MemoryPage", () => {
     expect(within(table).getByText(/no partitions yet/i)).toBeInTheDocument();
   });
 
-  test("the sync affordance stays reachable from the empty state", () => {
-    // Sync is the only way to populate the page, so losing it with the
-    // empty-state card would have been a dead end.
+  test("the read-from-agents affordance stays reachable from the empty state", () => {
+    // Reading the agents' memory is the only way to populate the page, so
+    // losing it with the empty-state card would have been a dead end. It is
+    // not called Sync — that name is the vault-sync page's.
     stubPartitions([]);
     renderPage();
-    expect(screen.getByRole("button", { name: /^sync$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /read from agents/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^sync$/i })).toBeNull();
   });
 
   test("partitions render as rows of that same table", () => {

@@ -50,6 +50,13 @@ src/i18n/locales/{en,zh}.json    — 挂在顶层 "x" 键下
   访问时才加载。新的重页面走 `lazyPage()`；它拉进的第三方图在
   `vite.config.ts` 的 `manualChunks` 里命名。
 - UI 基础组件放 `src/components/ui/`（shadcn）。跨功能 helper 放 `src/lib/`。
+  已有三个——直接复用，不要再推导一遍：
+  - `lib/reachFilter.ts` — 每个带 scope 的列表共用的那一个「Reach」过滤器
+    （MCP servers、skills、knowledge、memory、providers）。
+  - `lib/agents/display.ts` — agent wire 值的人类可读形式（registry key → 产品名、
+    绝对路径 → 相对 home 的路径），表格、添加表单、详情头共用。
+  - `lib/chat/turnErrors.ts` — 一次 chat 失败的文案：从错误形状到可操作文本的纯映射，
+    不依赖组件即可单测。
 
 ## 3. 状态管理
 
@@ -59,15 +66,21 @@ src/i18n/locales/{en,zh}.json    — 挂在顶层 "x" 键下
 | 临时 UI 状态（展开/折叠、草稿输入） | 组件内本地 `useState` |
 | 需跨刷新存活的用户偏好 | `localStorage`，经 `src/lib/preferences.ts` |
 | **可寻址**的应用状态（当前打开哪个会话/资源） | **URL**（路由参数），不是 `useState` |
+| 页面级 tab / 当前选中的文件 | **URL search param**（`?tab=`、`?file=`），经 `useSearchParams` |
 
 API token 刻意不在这张表里：它读自 `window.__COFFER_TOKEN__`，由提供该页面的一方
 注入（`src/lib/auth.ts`）。持久化它会让它活得比铸造它的 daemon 更久。
 
 最后一行很关键：任何用户期望在刷新、深链、后退后仍存在的东西，必须是路由参数
 （`/chat/:id`、`/agents/:name`），而非本地状态。「当前选中哪一项」是导航，不是 UI 状态。
+往下一层也一样：页面停在哪个 tab、树里打开了哪个文件，是用 `useSearchParams` 读的
+`?tab=` / `?file=` search param，这样链接能直接落到某个 tab，刷新也回到原处。
+详情页（Agent、Skill、Provider、MCP server、Knowledge）、Sync 与 Activity 全部遵循；
+默认 tab 就是「没有该参数」，绝不写成 `?tab=overview`。
 
 没有全局 store。跨组件的服务端数据通过 query 缓存共享（同一 query key → 同一份数据），
-不经 Context。唯二的 Context provider 是 `QueryClientProvider` 和 `ToastProvider`。
+不经 Context。仅有的 Context provider 是 `QueryClientProvider`、`ToastProvider`，以及
+`Layout` 为 Tooltip 基础件挂载一次的 `TooltipProvider`。
 
 ### Query key
 
@@ -138,17 +151,33 @@ return useMutation({
 - 批量/表格操作走 `src/lib/hooks/useBulkMutate.ts`（一条汇总 toast + 一次失效爆发），
   绝不逐行 toast。
 - `qc.invalidateQueries(...)` 前缀 `void`（即发即忘）。
+- **删除确认用 `ConfirmDialog`**（`components/ui/confirm-dialog.tsx`，绝不用
+  `window.confirm`）。对话框只在 mutation 的 `onSuccess` 里关闭，mutation 进行中传入
+  `pending`——删除失败时对话框带着错误留在原地，而不是像成功了一样消失。
 
 ## 6. 组件与设计系统
 
 - **从 `src/components/ui/` 基础组件搭起**（shadcn：`Button`、`Dialog`、`Select`、
-  `Textarea`…）。基础组件已覆盖的控件不要手搓。
+  `Textarea`、`Tooltip`、`DropdownMenu`、`Skeleton`、`ConfirmDialog`…）。基础组件已覆盖的
+  控件不要手搓——`Tooltip` 能用的地方不写原生 `title=`，`Skeleton` 能用的地方不自造闪烁块。
+- **基础组件之上的共享界面**，各处用法一致：
+  - `PageHeader` 是唯一的页头，列表页与详情页同用：`icon`（列表页）、`back`（详情页）、
+    标题旁的 `badges`、右侧的 `actions`。详情页的 action 顺序固定：reach → test/refresh →
+    edit → delete。
+  - `DataTable` 是唯一的列表表格。传 `isLoading`，让页头留在骨架行之上（绝不在表格位置
+    放一张「加载中…」卡片）；传 `emptyAction` 放空态文案下方的行动按钮。reach 列的表头
+    key 在每张表里都是 `resources.cols.reach`。
+  - `EmptyState` 是共享的「这里还什么都没有」卡片（icon、标题、描述、行动）。
+  - `Button` 的图标尺寸是 `icon-sm` / `icon-md`（加默认的 `icon`）；从中选，不要手动给
+    图标按钮定尺寸。
+- **日期一律经 `formatDateTime`**（`src/lib/utils`）——绝不裸调 `toLocaleString`，
+  让每个时间戳读起来一致。
 - **只用命名导出。** `export function Foo()`。无 default export。
 - **文件头注释**：第一行 `// src/path` + 一行用途。
 - 条件类名用 **`cn()`**（`src/lib/utils`）。除有文档说明的主题桥接外，不用内联 `style`。
 - **只用语义 token**（`text-muted-foreground`、`bg-card`、`border-border`）。
-  健康/状态表面用 `status.ok|warn|err` token——**不要**用裸 `green/amber/emerald`
-  调色板类。（`statusColors.ts`、`ToolCallCard`、`ApprovalCard` 现在绕过了——动到就修。）
+  健康/状态颜色只来自 `src/lib/statusColors.ts`——它把 tone 映射到 `status.ok|warn|err`
+  token；组件自己绝不挑状态类名，`src` 里也不出现裸 `green/amber/emerald` 调色板类。
 - **只用 type scale**——`text-sm`/`text-xs`/…，绝不 `text-[11px]`。圆角用规定集合
   （卡片 `rounded-lg`、控件 `rounded-md`、chip `rounded-sm`）。见
   [`visual-language.md`](./visual-language.md)。

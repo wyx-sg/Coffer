@@ -4,8 +4,10 @@
 // — "everything here is derived ... show its origins"), and exposes the
 // hide/pin/supersede overrides (spec memory FR-040).
 import { describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryFactCard } from "./MemoryFactCard";
 import type { FactOut, FactSummaryOut } from "@/lib/api/memoryTypes";
 
@@ -19,6 +21,10 @@ vi.mock("@/lib/hooks/useMemory", () => ({
 }));
 
 const { useMemoryFact } = await import("@/lib/hooks/useMemory");
+
+// The card's icon buttons use the Tooltip primitive, whose provider Layout
+// mounts in the app; supply one here.
+const render = (ui: ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
 const factDetailMock = vi.mocked(useMemoryFact);
 
 const FACT: FactSummaryOut = {

@@ -80,6 +80,15 @@ async function rollbackResource(name: string): Promise<void> {
   }
 }
 
+/** A batch that partly failed: the servers that did register stay; the
+ * dialog lists every one that did not, one line each. */
+export class BatchImportError extends Error {
+  constructor(readonly failed: string[]) {
+    super(failed.join("; "));
+    this.name = "BatchImportError";
+  }
+}
+
 export interface ImportMcpServersArgs {
   servers: ParsedServer[];
   /** Names already registered by a prior attempt of THIS import session, so a
@@ -94,8 +103,8 @@ export interface ImportMcpServersArgs {
  * Import a batch. Each server is registered before its secrets are written
  * to the encrypted credential store, so a failed registration leaves nothing
  * orphaned; a failed secret write rolls the registration back. Resolves with
- * the names created; rejects with one Error naming every server that failed
- * (the ones that did register stay registered).
+ * the names created; rejects with a BatchImportError naming every server that
+ * failed (the ones that did register stay registered).
  */
 export async function importMcpServers({
   servers,
@@ -129,6 +138,6 @@ export async function importMcpServers({
       failed.push(`${srv.name}: ${translateApiError(t, e)}`);
     }
   }
-  if (failed.length > 0) throw new Error(failed.join("; "));
+  if (failed.length > 0) throw new BatchImportError(failed);
   return done;
 }

@@ -1,13 +1,28 @@
-import { useState } from "react";
+// frontend/src/components/mcp/JsonImportPanel.tsx
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { parseMcpJson, type ParsedServer } from "./jsonImport";
 
 interface Props {
   onImport: (servers: ParsedServer[]) => void;
   importing: boolean;
+}
+
+/** The parser's own message for text that is not JSON at all, or `null` when
+ * it parses (or is still empty). Checked as the user types, so Continue is
+ * only live for text that can be continued with. */
+function jsonSyntaxError(text: string): string | null {
+  if (!text.trim()) return null;
+  try {
+    JSON.parse(text);
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
 }
 
 /**
@@ -20,6 +35,7 @@ export function JsonImportPanel({ onImport, importing }: Props) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [servers, setServers] = useState<ParsedServer[] | null>(null);
+  const syntaxError = useMemo(() => jsonSyntaxError(text), [text]);
 
   function handleParse() {
     const result = parseMcpJson(text);
@@ -47,20 +63,31 @@ export function JsonImportPanel({ onImport, importing }: Props) {
   }
 
   if (servers === null) {
+    // A syntax error is shown as the user types; a shape error (valid JSON,
+    // but no server in it) only once they ask to continue.
+    const shown = syntaxError ? t("mcp.add.invalidJson", { detail: syntaxError }) : error;
     return (
       <div className="space-y-3">
         <Label htmlFor="json-input">{t("mcp.import.jsonLabel")}</Label>
-        <textarea
+        <Textarea
           id="json-input"
-          className="h-56 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+          className="h-56 font-mono text-xs"
           placeholder={t("mcp.import.jsonPlaceholder")}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setError(null);
+          }}
+          aria-invalid={shown ? true : undefined}
         />
         <p className="text-xs text-muted-foreground">{t("mcp.import.jsonHelp")}</p>
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {shown ? (
+          <p className="text-sm text-destructive" role="alert">
+            {shown}
+          </p>
+        ) : null}
         <div className="flex justify-end">
-          <Button onClick={handleParse} disabled={!text.trim()}>
+          <Button onClick={handleParse} disabled={!text.trim() || syntaxError !== null}>
             {t("mcp.import.parse")}
           </Button>
         </div>

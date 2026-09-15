@@ -1,3 +1,8 @@
+// frontend/src/components/agents/AgentTable.tsx — the agents list.
+// One row per registered coding agent (Claude Code / Codex): product-name
+// type, home-relative config dir (full path in a tooltip), whether the agent's
+// CLI is actually on this machine (from the turn platform's provider registry),
+// delivered Coffer skills, Coffer MCP status, and a delete action.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -7,28 +12,33 @@ import { AgentMcpStatusBadge } from "@/components/agents/AgentMcpControls";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AgentOut } from "@/lib/api/agents";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
+import { cn } from "@/lib/utils";
 
 // Managed coding agents only (Claude Code / Codex), keeping this table's
 // columns uniform.
 type Row = AgentOut;
 
-export function AgentTable({ agents }: { agents: AgentOut[] }) {
+export function AgentTable({
+  agents,
+  isLoading = false,
+}: {
+  agents: AgentOut[];
+  /** Skeleton rows while the list resolves — the page keeps its header up. */
+  isLoading?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const remove = useRemoveAgent();
   const skills = useSkills();
+  const providers = useAgentProviders();
 
   const rows: Row[] = agents;
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
@@ -48,6 +58,13 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
     return counts;
   }, [skills.data]);
 
+  // Availability by agent type: the provider registry says whether the CLI is
+  // on PATH, which is what decides if a chat turn can actually run.
+  const availability = useMemo(
+    () => new Map((providers.data ?? []).map((p) => [p.agent_key, p.available])),
+    [providers.data],
+  );
+
   const columns: Column<Row>[] = [
     {
       key: "name",
@@ -58,18 +75,54 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
     {
       key: "type",
       header: t("agents.type"),
-      cell: (a) => <span className="text-muted-foreground">{a.type}</span>,
+      className: "whitespace-nowrap",
+      cell: (a) => <span className="text-muted-foreground">{agentTypeLabel(a.type)}</span>,
+    },
+    {
+      key: "health",
+      header: t("agents.cols.health"),
+      className: "whitespace-nowrap",
+      cell: (a) => {
+        if (providers.isPending) return <Skeleton className="h-5 w-20" />;
+        const available = availability.get(a.type);
+        if (available === undefined) {
+          return <span className="text-muted-foreground">{t("common.emptyValue")}</span>;
+        }
+        return (
+          <span
+            className={cn(
+              "inline-flex items-center rounded-sm px-1.5 py-0.5 text-xs font-medium",
+              available ? "bg-status-ok/15 text-status-ok" : "bg-status-err/15 text-status-err",
+            )}
+          >
+            {available ? t("agents.health.available") : t("agents.health.missing")}
+          </span>
+        );
+      },
     },
     {
       key: "config_dir",
       header: t("agents.configDir"),
-      cell: (a) => <span className="font-mono text-xs">{a.config_dir}</span>,
+      cell: (a) => (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="block max-w-44 truncate font-mono text-xs">
+              {abbreviateHomePath(a.config_dir)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <span className="font-mono">{a.config_dir}</span>
+          </TooltipContent>
+        </Tooltip>
+      ),
     },
     {
       key: "description",
       header: t("agents.description"),
       cell: (a) => (
-        <span className="line-clamp-1 max-w-xs text-muted-foreground">{a.description || "—"}</span>
+        <span className="line-clamp-1 max-w-48 text-muted-foreground">
+          {a.description || t("common.emptyValue")}
+        </span>
       ),
     },
     {
@@ -102,10 +155,11 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
     <>
       <DataTable
         rows={rows}
+        isLoading={isLoading}
         columns={columns}
         rowKey={(a) => a.name}
         search={{
-          accessor: (a) => `${a.name} ${a.type} ${a.config_dir}`,
+          accessor: (a) => `${a.name} ${agentTypeLabel(a.type)} ${a.config_dir}`,
           placeholder: t("agents.searchPlaceholder"),
         }}
         onRowClick={(a) => navigate(`/agents/${a.name}`)}
@@ -121,30 +175,19 @@ export function AgentTable({ agents }: { agents: AgentOut[] }) {
         emptyMessage={t("agents.noMatches")}
       />
 
-      <Dialog open={deletingName !== null} onOpenChange={(o) => !o && setDeletingName(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("agents.removeConfirm", { name: deletingName ?? "" })}</DialogTitle>
-            <DialogDescription>{t("agents.removeConfirmBody")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeletingName(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => {
-                if (deletingName) {
-                  remove.mutate(deletingName, { onSuccess: () => setDeletingName(null) });
-                }
-              }}
-            >
-              {remove.isPending ? t("common.deleting") : t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deletingName !== null}
+        onOpenChange={(o) => !o && setDeletingName(null)}
+        title={t("agents.removeConfirm", { name: deletingName ?? "" })}
+        description={t("agents.removeConfirmBody")}
+        confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (deletingName) {
+            remove.mutate(deletingName, { onSuccess: () => setDeletingName(null) });
+          }
+        }}
+      />
     </>
   );
 }

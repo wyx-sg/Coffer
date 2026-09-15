@@ -5,9 +5,10 @@
 // rather than the typed `getApiClient` used elsewhere.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
+import { ToastProvider } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/errors";
 import {
   useAdoptMcpEntry,
@@ -20,9 +21,11 @@ import {
   useAgentMcpInstall,
   useAgentMcpStatus,
   useAgents,
+  useDeleteUnmanagedSkill,
   usePatchAgent,
   useRegisterAgent,
   useRemoveAgent,
+  useRemoveMcpEntry,
   useTogglePlugin,
   useUninstallPlugin,
 } from "./useAgents";
@@ -380,6 +383,50 @@ describe("useAdoptUnmanagedSkill", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/agents\/my-agent\/unmanaged-skills\/my-skill\/adopt$/);
     expect((init as RequestInit).method).toBe("POST");
+  });
+});
+
+describe("mutation failures are never silent", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  // Renders inside a real ToastProvider so the hook's onError lands as a
+  // visible alert, not the no-op fallback.
+  function toastWrapper() {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    return ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>
+        <ToastProvider>{children}</ToastProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  test.each([
+    ["useRemoveAgent", () => useRemoveAgent(), "cur"],
+    ["useAgentMcpInstall", () => useAgentMcpInstall("cur"), true],
+    ["useUninstallPlugin", () => useUninstallPlugin("cur"), { id: "p1" }],
+    ["useTogglePlugin", () => useTogglePlugin("cur"), { id: "p1", enabled: true }],
+    ["useRemoveMcpEntry", () => useRemoveMcpEntry("cur"), { entry: "e" }],
+    [
+      "useDeleteUnmanagedSkill",
+      () => useDeleteUnmanagedSkill("cur"),
+      { skill: "s", location: "l" },
+    ],
+    ["useAdoptUnmanagedSkill", () => useAdoptUnmanagedSkill("cur"), { skill: "s", location: "l" }],
+  ])("%s toasts the server message when the request fails", async (_name, useHook, vars) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        // An unknown code, so the toast falls back to the envelope message.
+        jsonResponse(500, { error: { code: "TEST_ONLY_FAILURE", message: "shim missing" } }),
+      ),
+    );
+    const { result } = renderHook(() => useHook() as { mutate: (v: unknown) => void }, {
+      wrapper: toastWrapper(),
+    });
+    act(() => result.current.mutate(vars));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/shim missing/i));
   });
 });
 

@@ -9,6 +9,8 @@ import { MessageSquareOff, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useChatController } from "@/lib/hooks/useChatController";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { ChatErrorBanner } from "@/components/chat/ChatErrorBanner";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { DraftThread } from "@/components/chat/DraftThread";
@@ -17,10 +19,20 @@ import { cn } from "@/lib/utils";
 
 export function ChatPage() {
   const { t } = useTranslation();
-  const [historyOpen, setHistoryOpen] = useState(true);
   const c = useChatController();
+  // The conversation list is open by default on a desktop-width viewport and
+  // collapsed below `md`, where two panes would leave the thread unreadable;
+  // the toggle overrides that for the session.
+  const isDesktop = useMediaQuery("(min-width: 768px)", true);
+  const [historyPref, setHistoryPref] = useState<boolean | null>(null);
+  const historyOpen = historyPref ?? isDesktop;
 
   return (
+    // Full-bleed: Layout's main region pads every page (px-6 py-10 md:px-10)
+    // and its inner wrapper has no height, so a plain h-full root cannot fill
+    // the viewport. The negative margins cancel that padding and h-screen
+    // gives the two panes their own scroll regions — the one page that is a
+    // workspace rather than a document.
     <div className="relative -mx-6 -my-10 flex h-screen overflow-hidden md:-mx-10">
       {/* Conversation-list column */}
       <div
@@ -37,7 +49,7 @@ export function ChatPage() {
             variant="ghost"
             size="sm"
             className="size-7 p-0"
-            onClick={() => setHistoryOpen(false)}
+            onClick={() => setHistoryPref(false)}
             aria-label={t("chat.history.collapse")}
           >
             <PanelLeftClose className="size-4" />
@@ -66,13 +78,21 @@ export function ChatPage() {
               variant="ghost"
               size="sm"
               className="size-7 p-0"
-              onClick={() => setHistoryOpen(true)}
+              onClick={() => setHistoryPref(true)}
               aria-label={t("chat.history.expand")}
             >
               <PanelLeftOpen className="size-4" />
             </Button>
           </div>
         )}
+
+        {c.createError ? (
+          <ChatErrorBanner
+            className="border-b"
+            message={translateApiError(t, c.createError)}
+            onDismiss={c.resetCreateError}
+          />
+        ) : null}
 
         {c.activeConv ? (
           <MessageThread
@@ -130,22 +150,6 @@ export function ChatPage() {
           />
         )}
       </div>
-
-      {c.createError ? (
-        <div
-          role="alert"
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive shadow-md"
-        >
-          <span className="flex-1">{translateApiError(t, c.createError)}</span>
-          <button
-            type="button"
-            className="ml-3 font-medium underline-offset-2 hover:underline"
-            onClick={c.resetCreateError}
-          >
-            {t("common.dismiss")}
-          </button>
-        </div>
-      ) : null}
 
       <ConfirmDialog
         open={c.deletingId !== null}

@@ -90,6 +90,38 @@ describe("DataCardGrid", () => {
     expect(onCardClick).toHaveBeenCalledWith(ROWS[1]);
   });
 
+  test("a clickable card shows a visible focus ring and answers Enter", () => {
+    const onCardClick = vi.fn();
+    render(
+      <DataCardGrid
+        rows={ROWS}
+        rowKey={(r) => r.id}
+        renderCard={renderCard}
+        onCardClick={onCardClick}
+        emptyMessage="none"
+      />,
+    );
+    const card = screen.getByText("beta").closest('[role="button"]')!;
+    expect(card.className).toContain("focus-visible:ring-2");
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(onCardClick).toHaveBeenCalledWith(ROWS[1]);
+  });
+
+  test("isLoading renders skeleton cards capped at 5 instead of the empty message", () => {
+    render(
+      <DataCardGrid
+        rows={[]}
+        rowKey={(r) => r.id}
+        renderCard={renderCard}
+        pageSize={50}
+        isLoading
+        emptyMessage="nothing here"
+      />,
+    );
+    expect(screen.getAllByTestId("skeleton-card")).toHaveLength(5);
+    expect(screen.queryByText("nothing here")).not.toBeInTheDocument();
+  });
+
   test("an inner button click does NOT fire onCardClick", () => {
     const onCardClick = vi.fn();
     const onInner = vi.fn();

@@ -31,8 +31,8 @@ export function SkillWelcomePanel({ onAddSkill }: { onAddSkill: () => void }) {
             body={t("skills.welcome.featureDeliver.body")}
           />
           <WelcomeFeature
-            title={t("skills.welcome.featureDrift.title")}
-            body={t("skills.welcome.featureDrift.body")}
+            title={t("skills.welcome.featureReach.title")}
+            body={t("skills.welcome.featureReach.body")}
           />
         </ul>
       </CardContent>

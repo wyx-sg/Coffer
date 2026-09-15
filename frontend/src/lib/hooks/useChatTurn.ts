@@ -174,9 +174,14 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
           const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
           setError(wrapped);
           setIsStreaming(false);
+          // Drop the bubble (and the echoes its refetch settled) once the reply
+          // is committed; otherwise keep what streamed but stop it "thinking" —
+          // the error banner owns the state.
           if (await replyHasLanded()) {
             setLiveMessage(null);
             setEchoes([]);
+          } else {
+            setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : prev));
           }
           return;
         }

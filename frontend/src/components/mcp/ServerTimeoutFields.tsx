@@ -35,7 +35,7 @@ export function ServerTimeoutFields({ value, onChange, idPrefix }: Props) {
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium">{t("mcp.timeouts.legend")}</legend>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {fields.map((f) => (
           <div key={f.key} className="space-y-1.5">
             <Label htmlFor={`${idPrefix}-${f.key}`} className="text-xs">
@@ -53,7 +53,7 @@ export function ServerTimeoutFields({ value, onChange, idPrefix }: Props) {
                 onChange({ ...value, [f.key]: Number.isFinite(n) ? n : value[f.key] });
               }}
             />
-            <p className="text-[11px] text-muted-foreground">{t(f.hintKey)}</p>
+            <p className="text-xs text-muted-foreground">{t(f.hintKey)}</p>
           </div>
         ))}
       </div>

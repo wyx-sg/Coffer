@@ -7,6 +7,7 @@ import type { PropsWithChildren } from "react";
 import { useMessageThread } from "./useMessageThread";
 import { messagesKey } from "@/lib/api/queryKeys";
 import type { Message } from "@/lib/api/chat";
+import type { LiveMessage } from "@/lib/hooks/chatTurnEvents";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: { listMessages: vi.fn() },
@@ -26,6 +27,8 @@ const row = (overrides: Partial<Message>): Message => ({
   ...overrides,
 });
 
+const LIVE: LiveMessage = { text: "", toolBlocks: [], streaming: true };
+
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: PropsWithChildren) => (
@@ -42,7 +45,7 @@ describe("useMessageThread", () => {
   test("fetches the conversation's messages under the shared messages key", async () => {
     listMessages.mockResolvedValue({ messages: [row({})] });
     const { qc, wrapper } = makeWrapper();
-    const { result } = renderHook(() => useMessageThread("conv-1", false), { wrapper });
+    const { result } = renderHook(() => useMessageThread("conv-1", null), { wrapper });
 
     expect(result.current.isPending).toBe(true);
     await waitFor(() => expect(result.current.messages).toHaveLength(1));
@@ -56,22 +59,45 @@ describe("useMessageThread", () => {
     });
     const { wrapper } = makeWrapper();
     const { result, rerender } = renderHook(
-      ({ live }: { live: boolean }) => useMessageThread("conv-1", live),
-      { wrapper, initialProps: { live: true } },
+      ({ live }: { live: LiveMessage | null }) => useMessageThread("conv-1", live),
+      { wrapper, initialProps: { live: LIVE as LiveMessage | null } },
     );
 
     await waitFor(() => expect(result.current.messages).toHaveLength(1));
     expect(result.current.messages[0].id).toBe("m1");
 
     // No live bubble → the placeholder renders as the server-side in-progress row.
-    rerender({ live: false });
+    rerender({ live: null });
     expect(result.current.messages).toHaveLength(2);
+  });
+
+  test("after a failed turn drops an empty streaming placeholder, never streamed text", async () => {
+    listMessages.mockResolvedValue({
+      messages: [
+        row({}),
+        row({ id: "m2", seq: 2, role: "assistant", status: "streaming", content: [] }),
+        row({
+          id: "m3",
+          seq: 3,
+          role: "assistant",
+          status: "streaming",
+          content: [{ type: "text", text: "so far" }],
+        }),
+      ],
+    });
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useMessageThread("conv-1", null, new Error("boom")), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.messages).toHaveLength(2));
+    expect(result.current.messages.map((m) => m.id)).toEqual(["m1", "m3"]);
   });
 
   test("surfaces a fetch failure as error with an empty list", async () => {
     listMessages.mockRejectedValue(new Error("boom"));
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(() => useMessageThread("conv-1", false), { wrapper });
+    const { result } = renderHook(() => useMessageThread("conv-1", null), { wrapper });
 
     await waitFor(() => expect(result.current.error).toBeInstanceOf(Error));
     expect(result.current.messages).toEqual([]);

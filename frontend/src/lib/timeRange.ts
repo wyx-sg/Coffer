@@ -5,7 +5,7 @@
 // plus a custom From–To window, so the preset table, the local-datetime
 // parsing, and the since/until resolution live here once.
 
-/** Rolling-window presets — keys map to `audit.timeRange.*` i18n. */
+/** Rolling-window presets — keys map to `timeRange.*` i18n. */
 export const TIME_PRESETS = ["1h", "6h", "24h", "7d", "30d", "all"] as const;
 
 const RANGE_MS: Record<string, number> = {

@@ -3,14 +3,17 @@
 // (discovery + confirm: nothing is registered silently) and lists installed-
 // but-unregistered agents as a checklist, default all ticked. Below that, an
 // "Add manually" disclosure (AgentManualAddForm) reveals the manual form. Both
-// paths register via useRegisterAgent; after a successful add the dialog shows
-// the result list and offers Done.
+// paths register via one useRegisterAgent here; the footer is a single
+// right-aligned row — Cancel plus whichever primary action applies (Add
+// selected for the checklist, Register while the manual form is open). After a
+// successful add the dialog shows the result list and offers Done.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 
 import { AgentManualAddForm } from "@/components/agents/AgentManualAddForm";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -19,17 +22,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import type { AgentCreate } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentCandidates, useRegisterAgent } from "@/lib/hooks/useAgents";
+
+const MANUAL_FORM_ID = "agent-manual-add-form";
 
 export function AgentAddDialog({
   open,
   onOpenChange,
   onCreated,
+  hasRegisteredAgents = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: () => void;
+  /** True when the registry already holds agents — changes the "nothing
+   *  detected" copy from "they may already be added" to a first-run prompt. */
+  hasRegisteredAgents?: boolean;
 }) {
   const { t } = useTranslation();
   const candidates = useAgentCandidates(open);
@@ -37,6 +47,7 @@ export function AgentAddDialog({
 
   // Which candidate types are ticked (default: all). Keyed by agent type.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [manualOpen, setManualOpen] = useState(false);
   // Once the user confirms an add (either path), we switch to a result view.
   const [added, setAdded] = useState<string[] | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -48,6 +59,7 @@ export function AgentAddDialog({
   const submittingRef = useRef(false);
 
   const list = candidates.data ?? [];
+  const busy = submitting || register.isPending;
 
   // Default-select every candidate as it loads.
   useEffect(() => {
@@ -61,6 +73,7 @@ export function AgentAddDialog({
     if (!open) {
       setAdded(null);
       setErrorMsg(null);
+      setManualOpen(false);
     }
   }, [open]);
 
@@ -94,6 +107,13 @@ export function AgentAddDialog({
       setSubmitting(false);
       onCreated(); // refresh the agents list (and the candidate set) either way
     }
+  };
+
+  // Manual path: a rejection propagates to the form, which shows it inline.
+  const addManual = async (body: AgentCreate) => {
+    await register.mutateAsync(body);
+    setAdded([body.name || body.type]);
+    onCreated();
   };
 
   return (
@@ -148,7 +168,7 @@ export function AgentAddDialog({
                 </div>
               ) : list.length === 0 ? (
                 <p className="py-2 text-sm text-muted-foreground">
-                  {t("agents.detectDialog.empty")}
+                  {hasRegisteredAgents ? t("agents.detectDialog.empty") : t("agents.noneDetected")}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -157,8 +177,7 @@ export function AgentAddDialog({
                     {list.map((c) => (
                       <li key={c.type}>
                         <label className="flex cursor-pointer items-center gap-3 rounded-md border bg-card/60 px-3 py-2 text-sm">
-                          <input
-                            type="checkbox"
+                          <Checkbox
                             checked={selected.has(c.type)}
                             onChange={() => toggle(c.type)}
                           />
@@ -172,25 +191,16 @@ export function AgentAddDialog({
                       </li>
                     ))}
                   </ul>
-                  <Button
-                    type="button"
-                    onClick={addSelected}
-                    disabled={submitting || register.isPending || selected.size === 0}
-                  >
-                    {submitting || register.isPending
-                      ? t("common.saving")
-                      : t("agents.detectDialog.addSelected", { n: selected.size })}
-                  </Button>
                 </div>
               )}
             </section>
 
-            {/* Manual-add disclosure + form. */}
+            {/* Manual-add disclosure + form; its submit button sits in the footer. */}
             <AgentManualAddForm
-              onAdded={(name) => {
-                setAdded([name]);
-                onCreated();
-              }}
+              open={manualOpen}
+              onToggle={() => setManualOpen((v) => !v)}
+              formId={MANUAL_FORM_ID}
+              onSubmit={addManual}
             />
           </div>
         )}
@@ -199,9 +209,22 @@ export function AgentAddDialog({
           {added ? (
             <Button onClick={() => onOpenChange(false)}>{t("common.done")}</Button>
           ) : (
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              {t("common.cancel")}
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                {t("common.cancel")}
+              </Button>
+              {manualOpen ? (
+                <Button type="submit" form={MANUAL_FORM_ID} disabled={busy}>
+                  {busy ? t("common.saving") : t("agents.register")}
+                </Button>
+              ) : list.length > 0 ? (
+                <Button type="button" onClick={addSelected} disabled={busy || selected.size === 0}>
+                  {busy
+                    ? t("common.saving")
+                    : t("agents.detectDialog.addSelected", { n: selected.size })}
+                </Button>
+              ) : null}
+            </>
           )}
         </DialogFooter>
       </DialogContent>
