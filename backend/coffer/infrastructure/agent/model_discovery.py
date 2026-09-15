@@ -28,6 +28,7 @@ from typing import Any
 
 from coffer.application.agent.model_catalogue import ModelDiscoveryPort
 from coffer.domain.agent.model_catalogue import AgentModel
+from coffer.infrastructure.agent.claude_effort import claude_effort_levels
 
 _log = logging.getLogger(__name__)
 
@@ -111,6 +112,12 @@ class NativeConfigModelDiscovery:
             id=value,
             label=label if isinstance(label, str) else "",
             description=description if isinstance(description, str) else "",
+            # The same levels every other Claude Code entry carries: the cache
+            # describes extra MODELS, and the reasoning level is the runtime's
+            # option rather than any model's property (``claude_effort``). An
+            # entry from here that reported none would make the picker blink out
+            # the moment one of these options was chosen.
+            efforts=claude_effort_levels(),
         )
 
     # --- codex ---------------------------------------------------------------

@@ -3,10 +3,13 @@
 // The registration flow's ordering contract (mirrors AddMcpServerDialog's
 // test): secrets are written to the credential store BEFORE the resource is
 // registered (registration probes the refs), and a failed registration rolls
-// the just-written secrets back so nothing orphaned stays behind. Channels
-// carry no activation scope (ADR per-agent-resource-scope) and no machine affinity, so registration
-// is the whole flow — there is no follow-up bind.
-import { afterEach, describe, expect, test, vi } from "vitest";
+// the just-written secrets back so nothing orphaned stays behind.
+//
+// Registration is still the whole flow — there is no follow-up bind request —
+// but the config it writes now names a machine: `runs_on` is this machine's
+// id, read off `GET /sync/status`, so a channel created here is answered here
+// instead of sitting unbound and never starting.
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -16,9 +19,23 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
+// The dialog binds the new channel to this machine, so it reads the sync
+// status. Stubbed rather than served, since nothing else here needs a daemon.
+vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
+const { useSyncStatus } = await import("@/lib/hooks/useSync");
+const useSyncStatusMock = vi.mocked(useSyncStatus);
+
+/** This machine's id, as the daemon reports it. */
+const HERE = "machine-here";
+
+function stubMachineId(machineId: string | null) {
+  useSyncStatusMock.mockReturnValue({
+    data: machineId === null ? undefined : { machine_id: machineId },
+  } as unknown as ReturnType<typeof useSyncStatus>);
+}
 
 function installApi(api: ApiClientMock) {
   getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
@@ -47,6 +64,7 @@ function submit() {
   fireEvent.click(screen.getByRole("button", { name: /^add channel$/i }));
 }
 
+beforeEach(() => stubMachineId(HERE));
 afterEach(() => vi.clearAllMocks());
 
 acceptance("channels", "register a telegram channel", async () => {
@@ -72,6 +90,7 @@ acceptance("channels", "register a telegram channel", async () => {
           channel_type: "telegram",
           bot_token_ref: "channel/tg/bot-token",
           default_agent: "claude_code",
+          runs_on: HERE,
         },
       },
     },
@@ -143,6 +162,7 @@ describe("AddChannelDialog", () => {
           app_secret_ref: "channel/st/app-secret",
           signing_secret_ref: "channel/st/signing-secret",
           default_agent: "claude_code",
+          runs_on: HERE,
         },
       },
     });
@@ -204,6 +224,7 @@ describe("AddChannelDialog", () => {
             app_id: "app-1",
             app_secret_ref: "channel/st/app-secret",
             default_agent: "claude_code",
+            runs_on: HERE,
           },
         },
       });
@@ -221,6 +242,19 @@ describe("AddChannelDialog", () => {
       await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
       expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
     });
+  });
+
+  test("writes nothing at all while this machine's id is unknown", async () => {
+    // Registering anyway would create a channel bound to nobody — a bot that
+    // never answers on any machine — so the form says why and stays open.
+    stubMachineId(null);
+    const api = installApi(mockApiClient());
+    renderDialog();
+    fillTelegram();
+    submit();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/machine's id/i);
+    expect(api.POST).not.toHaveBeenCalled();
   });
 
   test("rolls back the written secrets when registration fails", async () => {

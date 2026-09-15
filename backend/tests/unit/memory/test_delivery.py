@@ -211,12 +211,8 @@ def test_non_object_json_raises() -> None:
 
 
 def test_delivery_status_is_frozen_and_comparable() -> None:
-    a = DeliveryStatus(
-        agent="cc", installed=True, command="X", last_fired_at="", event="SessionStart"
-    )
-    b = DeliveryStatus(
-        agent="cc", installed=True, command="X", last_fired_at="", event="SessionStart"
-    )
+    a = DeliveryStatus(agent="cc", installed=True, command="X", event="SessionStart")
+    b = DeliveryStatus(agent="cc", installed=True, command="X", event="SessionStart")
     assert a == b
     with pytest.raises(AttributeError):
         a.installed = False  # type: ignore[misc]

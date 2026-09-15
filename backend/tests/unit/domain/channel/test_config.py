@@ -277,6 +277,7 @@ def test_root_model_round_trips_flat_dict():
         "default_agent_config": None,
         "require_mention": True,
         "ignore_other_mentions": False,
+        "runs_on": None,
     }
 
 
@@ -292,7 +293,21 @@ def test_root_model_round_trips_seatalk_dict():
         "tunnel_token_ref": None,
         "require_mention": True,
         "ignore_other_mentions": False,
+        "runs_on": None,
     }
+
+
+def test_the_binding_is_an_ordinary_config_field():
+    """``runs_on`` travels inside the config, so it must survive a round trip.
+
+    The whole design rests on this: the binding is carried by the resource
+    DOCUMENT, which is identity plus description plus config, and a field that
+    did not survive validation would be a binding that quietly reset itself
+    every time another machine applied the document.
+    """
+    parsed = parse_channel_config({**TELEGRAM_CONFIG, "runs_on": "a1b2c3d4e5f60718"})
+    assert parsed.runs_on == "a1b2c3d4e5f60718"
+    assert parse_channel_config(TELEGRAM_CONFIG).runs_on is None
 
 
 def test_root_model_applies_raw_secret_rejection():

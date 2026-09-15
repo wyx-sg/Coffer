@@ -9,16 +9,19 @@ task-grouped store (``memories/MEMORY.md``, see :class:`CodexGlobalLayout` and
 ``codex_memory``); the other supported agents have no known native memory layout
 and expose nothing here.
 
-This module is pure value-level logic: the per-type layout table and a lossy
-slug decoder. The on-disk ``memory_dir`` is the real identity of a store; the
-decoded label/path are best-effort display sugar only. The surface is read-only
-— Coffer lists these stores so the user can open them, and never writes them.
+This module is pure value-level logic: the per-type layout table, the rule for
+whether a directory IS one of these stores, a lossy slug decoder, and the value
+shapes a store's contents take. The on-disk ``memory_dir`` is the real identity
+of a store; the decoded label/path are best-effort display sugar only. The
+surface is read-only — Coffer lists these stores, shows what is in them, and
+never writes them.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import NamedTuple
 
 from coffer.domain.agent.types import AgentType
@@ -82,6 +85,40 @@ def native_memory_layout_for(
     if agent_type is AgentType.CODEX:
         return CodexGlobalLayout(memory_subdir="memories", index_file="MEMORY.md")
     return None
+
+
+def is_native_memory_dir(
+    layout: NativeMemoryLayout | CodexGlobalLayout | None,
+    config_dir: Path,
+    candidate: Path,
+) -> bool:
+    """Whether *candidate* is a store directory this layout would have listed.
+
+    The rule that lets a store's folder be browsed without letting an arbitrary
+    directory be. The scan (:meth:`FileNativeMemoryScanner.scan`) walks the
+    layout to *find* stores; this states the same shape as a predicate so a
+    ``memory_dir`` coming back from a client can be checked against it for a few
+    microseconds instead of by re-running a scan that takes seconds.
+
+    Deliberately exact rather than "somewhere under the config dir": a store is
+    ``<projects>/<slug>/<memory>`` for the per-project layout and the single
+    ``<memories>`` directory for Codex's global one. Anything else in the
+    agent's config dir — its transcripts, its settings, its plugin cache — is
+    not a memory store and must not be readable through a surface that only
+    claims to show memory.
+
+    *candidate* and *config_dir* are expected to be resolved already, so a
+    symlink pointing out of the config dir fails here rather than being
+    followed.
+    """
+    if layout is None:
+        return False
+    if isinstance(layout, CodexGlobalLayout):
+        return candidate == config_dir / layout.memory_subdir
+    return (
+        candidate.name == layout.memory_subdir
+        and candidate.parent.parent == config_dir / layout.projects_subdir
+    )
 
 
 def decode_project_slug(slug: str) -> tuple[str, str | None]:
@@ -193,6 +230,43 @@ def resolve_project_slug(
         return decode_project_slug(slug)
     label = resolved.rsplit("/", 1)[-1] or resolved
     return (label, resolved)
+
+
+@dataclass
+class MemoryFileNode:
+    """One entry in a native-memory store's directory tree.
+
+    ``path`` is POSIX and relative to the store directory (``""`` for the root
+    node), so nothing in a tree hands a caller an absolute path it could then
+    ask to read — the store directory is supplied separately and checked once.
+    ``size`` is the file's byte size (``None`` for directories) and
+    ``truncated`` marks a directory whose descendants were clipped at the walk
+    depth bound.
+    """
+
+    name: str
+    path: str
+    type: str  # "file" | "dir"
+    size: int | None = None
+    children: list[MemoryFileNode] = field(default_factory=list)
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
+class MemoryFileContent:
+    """One file from a native-memory store, as a read-only preview shows it.
+
+    No fingerprint, unlike the skill file viewer's equivalent: a fingerprint
+    exists to make a later write conditional, and there is no write here. The
+    agent owns these files and rewrites them on its own schedule; the honest way
+    to change one is to open it in a real editor, which the surface offers.
+    """
+
+    path: str
+    content: str  # empty when ``binary``
+    truncated: bool
+    binary: bool
+    size: int
 
 
 @dataclass(frozen=True)

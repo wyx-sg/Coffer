@@ -15,12 +15,10 @@ import type {
   DeliveryStatusListOut,
   DeliveryStatusOut,
   FactListOut,
+  MemoryFileContentOut,
+  MemoryFileTreeOut,
   FactOut,
   OrganiseResultOut,
-  OverrideField,
-  OverrideListOut,
-  OverrideOut,
-  OverridePatch,
   PartitionListOut,
 } from "./memoryTypes";
 
@@ -59,30 +57,22 @@ export function organise(partition: string): Promise<OrganiseResultOut> {
   });
 }
 
-// --- overrides (FR-040) ------------------------------------------------------
+// --- a partition's own files (FR-062) ----------------------------------------
 
-export function listOverrides(): Promise<OverrideListOut> {
-  return call<OverrideListOut>(`${ROOT}/overrides`);
+/** The partition directory as a tree — what the detail page browses. */
+export function listPartitionFiles(partition: string): Promise<MemoryFileTreeOut> {
+  return call<MemoryFileTreeOut>(`${ROOT}/partitions/${enc(partition)}/files`);
 }
 
-/** Set one or more of the four override fields on a fact. Fields not named
- * are left untouched — never send `false`/`""` here to clear one, that is
- * what `clearOverrideField` is for (mirrors the backend's PATCH semantics). */
-export function patchOverride(factKey: string, patch: OverridePatch): Promise<OverrideOut> {
-  return call<OverrideOut>(`${ROOT}/facts/${enc(factKey)}/override`, {
-    method: "PATCH",
-    body: patch,
-  });
+/** One file out of that directory, read-only. */
+export function readPartitionFile(
+  partition: string,
+  path: string,
+): Promise<MemoryFileContentOut> {
+  return call<MemoryFileContentOut>(
+    `${ROOT}/partitions/${enc(partition)}/files/content?path=${enc(path)}`,
+  );
 }
-
-/** Clear one override field back to "no decision", leaving the other three
- * untouched. */
-export function clearOverrideField(factKey: string, field: OverrideField): Promise<OverrideOut> {
-  return call<OverrideOut>(`${ROOT}/facts/${enc(factKey)}/override?field=${enc(field)}`, {
-    method: "DELETE",
-  });
-}
-
 // --- delivery (FR-054/FR-055) ------------------------------------------------
 
 /** Every agent delivery can be installed for, and whether it is. Omit

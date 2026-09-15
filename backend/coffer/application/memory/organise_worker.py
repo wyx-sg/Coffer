@@ -8,7 +8,7 @@ every partition again regardless.
 Unlike ``TidyWorker`` — off unless the operator switches it on, because it
 rewrites a human's own files with no diff to approve — this worker MAY
 default to on. Organise only ever rewrites the derived tree under
-``~/.coffer/memory/`` (a digest, and a fact's own status/``proposed``
+``~/.coffer/memory/`` (a digest, and a fact's own status/supersession/conflict
 metadata; never a body, never a delete — ``organise.py``'s module docstring),
 and that tree is disposable by construction: a bad pass costs nothing worse
 than the next sync recomputing it. There is no unattended-rewrite risk here

@@ -1,16 +1,25 @@
 // frontend/src/components/knowledge/KnowledgeTreeLevel.tsx
 //
-// ONE level of the knowledge catalogue, and the recursion that walks it. Each
-// expanded directory mounts another level, which fetches its own listing — the
-// catalogue descends a level per request (FR-021), so nothing loads a subtree
-// the user has not opened.
+// ONE level of the knowledge catalogue, and the recursion that walks it. The
+// rows are deliberately the same rows the skill Files tab draws
+// (`SkillFileTree`): chevron, folder / open-folder or file icon, one truncated
+// line, a depth-proportional indent instead of a rail, and the selected file
+// tinted `bg-primary/10`. Two file browsers that behave the same should look
+// the same, so a reader who has opened one has already learned the other.
+//
+// What is NOT copied is the fetch. A skill's whole folder arrives in a single
+// response, so that tree can afford to open its first two levels on mount. The
+// catalogue descends a level per request (FR-021), so each expanded directory
+// mounts another level and fetches its own listing — and directories therefore
+// start CLOSED: pre-opening them would fire one request per child folder for a
+// subtree nobody has asked to see.
 //
 // The filter narrows FILES only. A directory's children are not loaded until it
 // is expanded, so hiding a directory whose name doesn't match would hide
 // matches the user cannot see yet; directories therefore always stay visible.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { translateApiError } from "@/lib/api/errors";
@@ -20,13 +29,18 @@ import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
 interface Props {
   /** Directory to list, relative to the knowledge root (`shopee/account`). */
   path: string;
-  /** Nesting depth; drives the indent rail only (0 = the collection root). */
+  /** Nesting depth; drives the indent only (0 = the collection root). */
   depth: number;
   /** Relative path of the file being previewed, if it is at this level. */
   selectedPath: string | null;
   /** Client-side filename filter, applied to this level's files. */
   filter: string;
   onSelect: (path: string) => void;
+}
+
+/** Row indent, matching `SkillFileTree`'s: 0.75rem a level, 0.25rem of gutter. */
+function indentOf(depth: number): { paddingLeft: string } {
+  return { paddingLeft: `${depth * 0.75 + 0.25}rem` };
 }
 
 export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect }: Props) {
@@ -36,19 +50,23 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect
 
   if (error) {
     return (
-      <p className="px-1 text-sm text-destructive" role="alert">
+      <p style={indentOf(depth)} className="py-1.5 text-sm text-destructive" role="alert">
         {translateApiError(t, error)}
       </p>
     );
   }
   if (isPending) {
-    return <p className="px-1 text-sm text-muted-foreground">{t("common.loading")}</p>;
+    return (
+      <p style={indentOf(depth)} className="py-1.5 text-sm text-muted-foreground">
+        {t("common.loading")}
+      </p>
+    );
   }
 
   const files = data.files.filter((f) => matchesFilter(filter, f.title, f.path));
   if (data.directories.length === 0 && files.length === 0) {
     return (
-      <p className="px-1 text-sm text-muted-foreground">
+      <p style={indentOf(depth)} className="py-1.5 text-sm text-muted-foreground">
         {filter.trim() ? t("knowledge.detail.noMatches") : t("knowledge.detail.emptyFolder")}
       </p>
     );
@@ -60,7 +78,7 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect
     );
 
   return (
-    <ul className={cn("space-y-0.5", depth > 0 && "ml-2 border-l border-border/60 pl-2")}>
+    <ul className="space-y-0.5">
       {data.directories.map((dir) => {
         const open = expanded.includes(dir.path);
         return (
@@ -69,18 +87,20 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect
               type="button"
               onClick={() => toggle(dir.path)}
               aria-expanded={open}
-              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-secondary hover:text-foreground"
+              style={indentOf(depth)}
+              className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors hover:bg-secondary hover:text-foreground"
             >
               {open ? (
                 <ChevronDown className="size-3.5 shrink-0 opacity-70" />
               ) : (
                 <ChevronRight className="size-3.5 shrink-0 opacity-70" />
               )}
-              <Folder className="size-4 shrink-0 opacity-70" />
-              <span className="min-w-0 flex-1 truncate">{dir.name}</span>
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {dir.file_count}
-              </span>
+              {open ? (
+                <FolderOpen className="size-4 shrink-0 opacity-70" />
+              ) : (
+                <Folder className="size-4 shrink-0 opacity-70" />
+              )}
+              <span className="truncate">{dir.name}</span>
             </button>
             {open ? (
               <KnowledgeTreeLevel
@@ -100,22 +120,22 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect
           <button
             type="button"
             onClick={() => onSelect(file.path)}
+            style={indentOf(depth)}
             className={cn(
-              "flex w-full items-start gap-1.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+              "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors",
               selectedPath === file.path
                 ? "bg-primary/10 text-primary"
                 : "hover:bg-secondary hover:text-foreground",
             )}
           >
-            <FileText className="mt-0.5 size-4 shrink-0 opacity-70" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate">{file.title}</span>
-              {file.description ? (
-                <span className="block truncate text-xs text-muted-foreground">
-                  {file.description}
-                </span>
-              ) : null}
-            </span>
+            {/* The chevron's width, kept as blank space so file rows line up
+                with the folder rows beside them — `SkillFileTree` does the
+                same. */}
+            <span className="size-3.5 shrink-0" />
+            <FileText className="size-4 shrink-0 opacity-70" />
+            {/* The frontmatter title, not the slug: it is what the file calls
+                itself, and the slug is on the viewer's path line anyway. */}
+            <span className="truncate">{file.title}</span>
           </button>
         </li>
       ))}

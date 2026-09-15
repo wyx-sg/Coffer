@@ -14,7 +14,8 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent: str = "claude_code"  # chat provider key; must name a registered agent
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating (FR-035)
-│   └── ignore_other_mentions: bool = False # group gating (FR-035)
+│   ├── ignore_other_mentions: bool = False # group gating (FR-035)
+│   └── runs_on: str | None = None          # machine_id that runs the adapter (FR-080)
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -54,6 +55,26 @@ Validation rules:
   off every stored channel config in one direction only, with no load-time shim
   (house rule) — `_CommonChannelFields` forbids extra keys, so a row still
   carrying them would fail to validate on load.
+- `runs_on` is the `machine_id` of the one machine whose daemon starts this
+  channel's adapter (FR-080). It lives in `config_json` and not in a column of
+  its own because it must TRAVEL: config is what a resource document carries
+  between machines, while the row's `enabled` / `scope_json` carry reach, which
+  deliberately stays home. `None` is unbound and runs nowhere — never "runs
+  here", which a document naming nobody would mean on every machine at once.
+  Migration `20260914_0079_bind_channels_to_this_machine.py` writes this
+  machine's cached id into every pre-existing channel config, so a channel that
+  was running before the field existed keeps running after it: until that
+  revision a channel never left the machine it was registered on, so "this
+  machine" is the true answer rather than a safe guess. Data-only and one
+  direction, with no load-time shim (house rule); a vault whose machine id
+  cannot be read is left unbound, which the surfaces show plainly rather than
+  papering over with an invented id.
+- A channel bound to a machine OTHER than this one is exempt from the
+  `default_agent` registry check on both write paths. That check asks whether
+  the channel will be able to drive anything when it starts, and a channel this
+  machine never starts has no answer to give; without the exemption a converged
+  channel whose owner machine has an agent this one lacks would be refused at
+  the registry door every round.
 - `delivery` decides which of the SeaTalk fields are legal, and one
   `model_validator(mode="after")` holds the whole rule so the allowed and the
   forbidden combination can never drift apart (FR-071):
@@ -112,6 +133,14 @@ and creates a fresh conversation.
 `sender_id` / `preferred_agent` are nullable so a peer paired before this
 revision degrades gracefully: a null sender id means the chat-id-only gate,
 a null agent preference means the channel default.
+
+The table is **partly synced**, and the seam runs through the row rather than
+around it (spec vault-sync, `state/channel-peers/**`). `chat_id`, `sender_id`,
+`display_name` and `preferred_agent` are facts about the platform, so they
+travel with the channel — a channel that moved to another machine without them
+would make the owner re-pair from their phone every time. `active_conversation_id`
+is a soft reference into THIS machine's conversations, which do not sync, so it
+never leaves and an incoming pairing keeps whatever pointer is already here.
 
 Migrations: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
 `20260614_0022_channel_peer_differentiation.py` adds the two nullable

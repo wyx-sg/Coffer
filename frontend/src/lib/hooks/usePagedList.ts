@@ -11,17 +11,24 @@ import { useEffect, useState } from "react";
 // request per keystroke.
 const FILTER_DEBOUNCE_MS = 300;
 
+// Hold a value back until the user stops changing it. Extracted so a surface
+// that pages through DataTable rather than usePagedList (Conversations) can
+// debounce its own search box against the same constant.
+export function useDebouncedValue<T>(value: T, delayMs: number = FILTER_DEBOUNCE_MS): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), delayMs);
+    return () => clearTimeout(id);
+  }, [value, delayMs]);
+  return settled;
+}
+
 export function usePagedList(defaultPageSize: number) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [filter, setFilter] = useState("");
-  const [filterApplied, setFilterApplied] = useState("");
-
-  // Debounce the filter before it becomes the query input.
-  useEffect(() => {
-    const id = setTimeout(() => setFilterApplied(filter), FILTER_DEBOUNCE_MS);
-    return () => clearTimeout(id);
-  }, [filter]);
+  // Debounced before it becomes the query input.
+  const filterApplied = useDebouncedValue(filter);
 
   // A new filter or page size can shrink the result set: jump back to page 1.
   useEffect(() => {

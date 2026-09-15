@@ -20,7 +20,6 @@ import type {
   CollectionOut,
   FileOut,
   IngestedDocumentOut,
-  SearchOut,
   TidyOut,
   TreeOut,
 } from "./knowledgeTypes";
@@ -78,21 +77,6 @@ export function deleteFile(path: string): Promise<void> {
  */
 export function tidyCollection(name: string): Promise<TidyOut> {
   return call<TidyOut>(`${ROOT}/collections/${enc(name)}/tidy`, { method: "POST" });
-}
-
-// --- search -------------------------------------------------------------------
-
-/**
- * Find the files a word or phrase appears in, across the files the caller may
- * see. `collection` narrows to one; omitted, every visible collection is
- * searched. Matching is literal — there is no ranking and no retrieval mode
- * (FR-024).
- */
-export function search(query: string, collection?: string | null): Promise<SearchOut> {
-  return call<SearchOut>(`${ROOT}/search`, {
-    method: "POST",
-    body: { query, collection: collection ?? null },
-  });
 }
 
 // --- ingestion ----------------------------------------------------------------

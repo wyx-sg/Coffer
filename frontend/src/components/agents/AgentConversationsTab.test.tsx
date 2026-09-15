@@ -2,16 +2,19 @@
 //
 // The "Conversations" tab renders transcript sessions for a registered agent
 // through the shared DataTable — title, project, counts, start + last-activity
-// times — with a search box, sortable headers, page-based (server) pagination,
-// and a per-row "⋯" menu of file actions. The tab is read-only: nothing in it
-// writes. We mock the hook module (per agents/frontend.md §8) and the file
-// actions (covered by their own test) so the component renders deterministically
-// without network or toast.
+// times — with a search box, sortable headers and page-based (server)
+// pagination. The tab is read-only: nothing in it writes. Clicking a row opens
+// that conversation's own page, which is where the open / reveal actions moved
+// to from the old per-row "⋯" menu, so what this suite pins about a row is the
+// URL it navigates to — keyed by source_path, because session_id repeats across
+// subagent sidechain files. We mock the hook module (per agents/frontend.md §8)
+// and useNavigate so the component renders deterministically without network.
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { AgentConversationsTab } from "./AgentConversationsTab";
 import type { TranscriptListParams } from "@/lib/api/agentTranscripts";
 
@@ -25,20 +28,27 @@ vi.mock("@/lib/hooks/useAgentTranscripts", () => ({
   useAgentTranscripts: vi.fn(),
 }));
 
-// The row's file actions pull in toast + preferences; they have their own test.
-// Here we stub the useFileActionItems hook the row uses so the source path can
-// be asserted as wired through without driving the real fs actions.
-const openItem = { key: "open", label: "Open in editor", onClick: vi.fn() };
-vi.mock("@/lib/fileActionItems", () => ({
-  useFileActionItems: vi.fn(() => [openItem]),
+const navigateMock = vi.fn();
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-router-dom")>()),
+  useNavigate: () => navigateMock,
 }));
 
 const hooks = await import("@/lib/hooks/useAgentTranscripts");
-const fa = await import("@/lib/fileActionItems");
 
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter>{children}</MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+/** The path + parsed query of the last navigation the table performed. */
+function lastNavigation(): { path: string; params: URLSearchParams } {
+  const [path, query] = (navigateMock.mock.calls.at(-1)?.[0] as string).split("?");
+  return { path, params: new URLSearchParams(query) };
 }
 
 const SESSION = {
@@ -64,10 +74,15 @@ function stubTranscripts(
   } as unknown as ReturnType<typeof hooks.useAgentTranscripts>);
 }
 
+/** Every params object the component has passed to the transcripts hook. */
+function queries(): TranscriptListParams[] {
+  return vi.mocked(hooks.useAgentTranscripts).mock.calls.map((c) => c[1] ?? {});
+}
+
 /** Last (name, params) the component passed to the transcripts hook. */
 function lastParams(): TranscriptListParams {
-  const calls = vi.mocked(hooks.useAgentTranscripts).mock.calls;
-  return calls[calls.length - 1]?.[1] ?? {};
+  const all = queries();
+  return all[all.length - 1] ?? {};
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -79,16 +94,26 @@ describe("AgentConversationsTab", () => {
     expect(screen.getByText("Fix the login redirect bug")).toBeInTheDocument();
     expect(screen.getByText("/home/u/repo")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
-    // source_path is wired into the row's file actions (folded into the ⋯ menu).
-    expect(vi.mocked(fa.useFileActionItems)).toHaveBeenCalledWith(SESSION.source_path);
   });
 
-  test("offers open/reveal through the row's ⋯ menu and nothing that writes", () => {
+  test("clicking a row opens that conversation's page, addressed by its file", () => {
     stubTranscripts();
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
-    const menu = screen.getByRole("button", { name: /more actions/i });
-    fireEvent.click(menu);
-    expect(screen.getByText("Open in editor")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Fix the login redirect bug"));
+
+    const { path, params } = lastNavigation();
+    expect(path).toBe("/agents/codex/conversations");
+    expect(params.get("path")).toBe(SESSION.source_path);
+  });
+
+  test("the table carries no per-row menu and nothing that writes", () => {
+    // Open / reveal moved to the conversation's own page — a list of a thousand
+    // sessions is for finding one, not for acting on each.
+    stubTranscripts();
+    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    expect(screen.queryByRole("button", { name: /more actions/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/open in editor/i)).not.toBeInTheDocument();
     // Read-only surface: no checkboxes (bulk select) anywhere in the table.
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   });
@@ -118,11 +143,31 @@ describe("AgentConversationsTab", () => {
     expect(lastParams().offset).toBe(0);
   });
 
-  test("typing in search forwards the query to the hook", () => {
+  test("typing in search forwards the query to the hook, once it settles", async () => {
     stubTranscripts();
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "alpha" } });
-    expect(lastParams().q).toBe("alpha");
+    await waitFor(() => expect(lastParams().q).toBe("alpha"));
+  });
+
+  test("a burst of keystrokes queries once, for the value the user stopped on", async () => {
+    // On a cold reader one query is one full transcript parse, so a request per
+    // keystroke is the difference between a pause and five of them.
+    stubTranscripts();
+    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    const box = screen.getByRole("textbox");
+    for (const value of ["a", "al", "alp", "alph", "alpha"]) {
+      fireEvent.change(box, { target: { value } });
+    }
+    // Every render so far still asks for the unfiltered list…
+    expect(queries().every((p) => p.q === undefined)).toBe(true);
+    await waitFor(() => expect(lastParams().q).toBe("alpha"));
+    // …and no intermediate prefix was ever asked for.
+    expect(
+      queries()
+        .filter((p) => p.q !== undefined)
+        .every((p) => p.q === "alpha"),
+    ).toBe(true);
   });
 
   test("default sort is last_activity desc; clicking 'Started' header sorts by started_at", () => {
@@ -143,12 +188,21 @@ describe("AgentConversationsTab", () => {
   });
 
   test("keys rows by source_path so duplicate session_ids stay distinct rows", () => {
-    // Two rows share a session_id (subagent sidechain) but have distinct files.
-    const dup = { ...SESSION, source_path: "/home/u/.codex/sessions/2026/06/rollout-s1b.jsonl" };
+    // Two rows share a session_id (subagent sidechain) but have distinct files,
+    // so both the row key and the page each row opens must be the FILE.
+    const dup = {
+      ...SESSION,
+      title: "Sidechain of the same session",
+      source_path: "/home/u/.codex/sessions/2026/06/rollout-s1b.jsonl",
+    };
     stubTranscripts([SESSION, dup]);
     render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
-    expect(screen.getAllByRole("button", { name: /more actions/i })).toHaveLength(2);
-    expect(vi.mocked(fa.useFileActionItems)).toHaveBeenCalledWith(dup.source_path);
+
+    fireEvent.click(screen.getByText("Fix the login redirect bug"));
+    expect(lastNavigation().params.get("path")).toBe(SESSION.source_path);
+
+    fireEvent.click(screen.getByText("Sidechain of the same session"));
+    expect(lastNavigation().params.get("path")).toBe(dup.source_path);
   });
 
   test("stepping to the next page advances the offset by the page size", () => {
@@ -159,7 +213,7 @@ describe("AgentConversationsTab", () => {
     expect(lastParams().offset).toBe(limit);
   });
 
-  test("searching from a later page goes back to the first one", () => {
+  test("searching from a later page goes back to the first one", async () => {
     // Otherwise the stale offset outruns the narrower result set and the table
     // reads "no conversations" while matches exist.
     stubTranscripts([SESSION], { total: 250 });
@@ -168,7 +222,8 @@ describe("AgentConversationsTab", () => {
     expect(lastParams().offset).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "alpha" } });
-    expect(lastParams().q).toBe("alpha");
+    expect(lastParams().offset).toBe(0); // the page resets on the keystroke…
+    await waitFor(() => expect(lastParams().q).toBe("alpha")); // …the query waits
     expect(lastParams().offset).toBe(0);
   });
 });

@@ -59,6 +59,19 @@ export const routes: RouteObject[] = [
         path: "agents/:name",
         element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
       },
+      // Detail pages reached by clicking a row on the agent's Memory /
+      // Conversations tabs. Each identifies its subject by a search param (the
+      // store's `dir`, the session's `path`) rather than a path segment,
+      // because both identities are absolute filesystem paths — a path segment
+      // would have to survive encoding its own separators.
+      {
+        path: "agents/:name/conversations",
+        element: lazyPage(() => import("./pages/AgentConversationPage"), "AgentConversationPage"),
+      },
+      {
+        path: "agents/:name/memory",
+        element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
+      },
       { path: "channels", element: <ChannelsPage /> },
       {
         path: "channels/:name",

@@ -91,6 +91,15 @@ class ChannelStatus:
     # FR-041/FR-060: contradictions between the configuration and what the
     # platform actually permits. Empty is the healthy case.
     diagnostics: tuple[ChannelDiagnostic, ...] = ()
+    # The machine this channel is bound to, and whether that machine is this
+    # one (spec channels ``## Where a channel runs``). Both, because ``running``
+    # alone cannot tell "stopped" from "not mine to start", and those two need
+    # opposite reactions from the user: one is a fault to chase, the other is
+    # the system working. ``runs_on`` is the raw id — resolving it to a machine
+    # NAME needs the registry, which lives in the sync module's working tree,
+    # so the surface that has it does the resolving and the CLI prints the id.
+    runs_on: str | None = None
+    runs_here: bool = False
 
 
 class ChannelService:
@@ -144,15 +153,50 @@ class ChannelService:
         username = getattr(self._runtime.adapter(name), "identity", None)
         return start_link(getattr(username, "username", None) or "", code)
 
-    def _diagnostics(self, name: str, resource: Resource) -> tuple[ChannelDiagnostic, ...]:
-        """What is configured here that the platform will not actually honour.
+    def _diagnostics(
+        self, name: str, resource: Resource, *, runs_on: str | None, runs_here: bool
+    ) -> tuple[ChannelDiagnostic, ...]:
+        """Everything about this channel that reads as configured and is not.
 
-        FR-060: a Telegram bot runs with privacy mode ON by default, which
+        Two findings, and what they have in common is the failure mode: the
+        channel looks right in Coffer and produces silence in the chat, which is
+        the one case where saying nothing is worse than any amount of noise.
+
+        An UNBOUND channel runs on no machine at all, because no machine can
+        read "nobody in particular" as "me". It is reported here rather than
+        left to each surface because it needs nothing but the row itself to
+        detect. The neighbouring case — a binding naming a machine that is no
+        longer in the registry — deliberately is NOT here: answering it needs
+        the registry, which this module cannot reach, and a guess would be
+        worse than the surface's own join.
+
+        ``runs_here`` is what keeps that finding honest rather than merely
+        literal. A runtime with no machine of its own answers ``True`` to every
+        channel, binding gate included, so on such a runtime "unbound" costs
+        nothing and reporting it would be describing a rule that is not in
+        force.
+        """
+        findings: list[ChannelDiagnostic] = []
+        if resource.enabled and runs_on is None and not runs_here:
+            findings.append(
+                ChannelDiagnostic(
+                    code="channel_not_bound",
+                    message=(
+                        "This channel is not bound to a machine, so no daemon starts its "
+                        "adapter. Bind it to the machine that should answer this bot — a "
+                        "channel names one machine precisely so two never answer at once."
+                    ),
+                )
+            )
+        return (*findings, *self._privacy_mode_diagnostics(name, resource))
+
+    def _privacy_mode_diagnostics(
+        self, name: str, resource: Resource
+    ) -> tuple[ChannelDiagnostic, ...]:
+        """FR-060: a Telegram bot runs with privacy mode ON by default, which
         withholds ordinary group messages from it entirely. A channel told to
         act on unaddressed group messages under that setting looks correct in
-        Coffer and does nothing in the chat — the one failure mode where saying
-        nothing is worse than any amount of noise.
-        """
+        Coffer and does nothing in the chat."""
         adapter = self._runtime.adapter(name)
         identity = getattr(adapter, "identity", None)
         if identity is None or getattr(identity, "reads_all_group_messages", None) is not False:
@@ -179,8 +223,15 @@ class ChannelService:
         callback: CallbackInfo | None = None
         if channel_type == "seatalk":
             callback = self._callback_info(name, resource)
+        raw_binding = resource.config.get("runs_on")
+        runs_on = raw_binding if isinstance(raw_binding, str) and raw_binding else None
+        # Asked of the runtime rather than resolved here: the runtime is what
+        # acts on the answer, so a surface that derived its own could contradict
+        # the thing it is reporting on.
+        local = await self._runtime.local_machine_id()
+        runs_here = local is None or runs_on == local
         return ChannelStatus(
-            diagnostics=self._diagnostics(name, resource),
+            diagnostics=self._diagnostics(name, resource, runs_on=runs_on, runs_here=runs_here),
             name=name,
             channel_type=channel_type,
             enabled=resource.enabled,
@@ -188,6 +239,11 @@ class ChannelService:
             pending_pairing=self._pairing.pending(name),
             peer=peer,
             callback=callback,
+            runs_on=runs_on,
+            # A runtime with no machine of its own is not bound anywhere else
+            # either, so it treats every channel as local — the same reading its
+            # gate takes.
+            runs_here=runs_here,
         )
 
     def _callback_info(self, name: str, resource: Resource) -> CallbackInfo:

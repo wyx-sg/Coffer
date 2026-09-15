@@ -179,21 +179,14 @@ forbidden_modules = ["coffer.surfaces"]
 # a port would be ceremony. So the application MAY import these substrate
 # modules, but no other infrastructure.
 #
-# Second exception: ``coffer.application.memory.overrides`` (spec memory
-# FR-070) composes ``MemoryOverrideModel`` from
-# ``coffer.infrastructure.persistence.models`` directly, the same
-# ``sqlite_insert(...).on_conflict_do_update(...)`` idiom every other repo in
-# this codebase uses. One key plus four decision columns has no query
-# complexity a port/adapter pair would earn its keep abstracting away — the
-# same reasoning as the knowledge exception above, applied to the memory
-# layer's one table instead of a file substrate.
-#
-# Third exception: the rest of ``coffer.application.memory`` (``service.py``,
+# Second exception: ``coffer.application.memory`` (``service.py``,
 # ``aggregate.py``) composes ``coffer.infrastructure.memory`` — the fact-file
 # store, its path layout, its source-digest cache, and the two reader
 # adapters — directly, the same substrate reasoning as knowledge above: there
 # is no engine behind a port, only file I/O and two format parsers, and this
-# is the whole layer's one consumer of them.
+# is the whole layer's one consumer of them. The memory layer holds no table
+# at all now that the developer's overrides are gone, so there is no
+# persistence exception beside it.
 [[tool.importlinter.contracts]]
 name = "Application does not import infrastructure"
 type = "forbidden"
@@ -334,7 +327,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -407,7 +399,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -480,7 +471,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -557,7 +547,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -630,7 +619,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -709,7 +697,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -782,7 +769,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -809,7 +795,6 @@ source_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
 ]
@@ -946,7 +931,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
 ]
@@ -1040,7 +1024,6 @@ forbidden_modules = [
     "coffer.domain.memory",
     "coffer.application.memory",
     "coffer.infrastructure.memory",
-    "coffer.infrastructure.persistence.memory_overrides_repo",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
     "coffer.domain.sync",
@@ -1139,9 +1122,12 @@ forbidden_modules = [
     "langchain_ollama",
 ]
 
-# Contract 9b: the Claude Agent SDK confined to infrastructure/chat, which is
-# where agent adapters live. Everything else — including infrastructure/llm —
-# must not import it.
+# Contract 9b: the Claude Agent SDK confined to the two places that speak to
+# Claude Code's own runtime — infrastructure/chat, where the agent adapters
+# live, and infrastructure/agent, which interrogates the installed agent for its
+# catalogue and reads the SDK's own ``EffortLevel`` there rather than writing the
+# levels down. Both are deliberately absent from the source list below;
+# everything else — including infrastructure/llm — must not import it.
 [[tool.importlinter.contracts]]
 name = "Claude Agent SDK confined to infrastructure/chat"
 type = "forbidden"

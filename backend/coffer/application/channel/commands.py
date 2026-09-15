@@ -1,13 +1,18 @@
-"""Slash-command handling for channels: /help /new /agent /model /stop /status
-/save.
+"""Slash-command handling for channels: /help /new /agent /model /effort /stop
+/status /save.
 
 The router owns the structural switch (/agent → a fresh conversation, sticky on
 the peer) and the parametric switch (/model → next turn, same conversation).
 Conversation creation is delegated to ``conversation_ops`` so the inbound
 turn-driver and this router agree on how a channel conversation is born.
-``/save`` (spec knowledge FR-036) and ``/model`` both live in their own
-sibling module (``document_save``/``model_switch``) for this file's size
-budget — ``handle`` below still dispatches every command from one place.
+``/save`` (spec knowledge FR-036), ``/model`` and ``/effort`` each live in their
+own sibling module (``document_save``/``model_switch``/``effort_switch``) for
+this file's size budget — ``handle`` below still dispatches every command from
+one place.
+
+``/effort`` is the second half of ``/model``: a model's reasoning level, taken
+by the agents as their own field rather than as part of the model name, so it
+gets its own command exactly as the web gives it its own picker.
 """
 
 from __future__ import annotations
@@ -15,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Protocol
 
-from coffer.application.channel import document_save, model_switch
+from coffer.application.channel import document_save, effort_switch, model_switch
 from coffer.application.channel.agent_routing import (
     effective_agent,
     routable_choices,
@@ -127,6 +132,13 @@ class ChannelCommands:
         elif command == "/model":
             await self._cmd_model(
                 binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
+            )
+        elif command == "/effort":
+            # Dispatched straight into its module (like ``/save``) rather than
+            # through a method here: this file's size budget, and nothing in
+            # between would do anything but forward.
+            await effort_switch.cmd_effort(
+                self, binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
             )
         elif command == "/stop":
             await self.interrupt(

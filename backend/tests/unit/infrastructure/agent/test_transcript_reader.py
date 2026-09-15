@@ -1,7 +1,9 @@
-"""Unit tests for FileTranscriptReader search/filter/sort + the mtime cache.
+"""Unit tests for FileTranscriptReader search/filter/sort + the summary cache.
 
 Every test builds its own transcript tree under ``tmp_path``; the reader is
-never pointed at a real ``~/.claude`` or ``~/.codex``.
+never pointed at a real ``~/.claude`` or ``~/.codex``, and the root conftest
+pins ``$COFFER_AGENT_STATE_ROOT`` per test so the sidecar it writes is this
+test's own.
 """
 
 from __future__ import annotations
@@ -13,7 +15,25 @@ from pathlib import Path
 import pytest
 
 from coffer.domain.agent.transcripts import UnsupportedAgentTypeError
+from coffer.infrastructure.agent import paths
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
+
+
+def _counting_reader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[FileTranscriptReader, dict[str, int]]:
+    """A reader whose ``_parse_file`` calls are counted — how every cache test
+    here tells "served from the cache" apart from "parsed again"."""
+    r = FileTranscriptReader()
+    calls = {"n": 0}
+    orig = r._parse_file
+
+    def counting(agent_type_value: str, path: Path):  # type: ignore[no-untyped-def]
+        calls["n"] += 1
+        return orig(agent_type_value, path)
+
+    monkeypatch.setattr(r, "_parse_file", counting)
+    return r, calls
 
 
 def _codex_session(
@@ -248,15 +268,7 @@ def test_unreadable_file_is_skipped_not_fatal(tmp_path: Path) -> None:
 
 def test_cache_reparses_only_changed_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     d = _make_codex_tree(tmp_path)
-    r = FileTranscriptReader()
-    calls = {"n": 0}
-    orig = r._parse_file
-
-    def counting(agent_type_value: str, path: Path):  # type: ignore[no-untyped-def]
-        calls["n"] += 1
-        return orig(agent_type_value, path)
-
-    monkeypatch.setattr(r, "_parse_file", counting)
+    r, calls = _counting_reader(monkeypatch)
 
     r.search_session_summaries(
         agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
@@ -277,6 +289,32 @@ def test_cache_reparses_only_changed_files(tmp_path: Path, monkeypatch: pytest.M
     assert calls["n"] == 4  # only the changed file re-parsed
 
 
+def test_cache_reparses_when_size_changes_under_the_same_mtime(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Size is half the stamp because mtime alone has a filesystem's timestamp
+    granularity underneath it, and appending to a live transcript is exactly the
+    write that can land inside one tick."""
+    d = _make_codex_tree(tmp_path)
+    r, calls = _counting_reader(monkeypatch)
+    r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    assert calls["n"] == 3
+
+    p = d / "rollout-b.jsonl"
+    before = p.stat()
+    with p.open("a", encoding="utf-8") as fh:
+        fh.write("\n" + json.dumps({"timestamp": "2026-05-02T04:00:00Z", "type": "turn_context"}))
+    os.utime(p, (before.st_atime, before.st_mtime))  # pin mtime; only size moved
+    assert p.stat().st_mtime == before.st_mtime
+
+    r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    assert calls["n"] == 4
+
+
 def test_cache_prunes_entries_for_deleted_files(tmp_path: Path) -> None:
     d = _make_codex_tree(tmp_path)
     r = FileTranscriptReader()
@@ -290,3 +328,123 @@ def test_cache_prunes_entries_for_deleted_files(tmp_path: Path) -> None:
     )
     assert total == 2
     assert len(r._cache) == 2  # the deleted file's entry is gone, not leaked
+    # …and the sidecar it was written back to does not leak it either.
+    assert len(json.loads(paths.transcript_summaries_path().read_text())) == 2
+
+
+# ---------------------------------------------------------------------------
+# The sidecar: the cache that survives a daemon restart
+# ---------------------------------------------------------------------------
+
+
+def test_sidecar_survives_a_restart(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A second reader is what a restarted daemon has. It must parse nothing."""
+    _make_codex_tree(tmp_path)
+    first, first_calls = _counting_reader(monkeypatch)
+    _, before = first.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    assert first_calls["n"] == 3
+
+    second, second_calls = _counting_reader(monkeypatch)
+    total, after = second.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    assert second_calls["n"] == 0
+    assert total == 3
+    assert after == before  # every summary field round-tripped, not just the ids
+
+
+def test_second_pass_that_changed_nothing_does_not_rewrite_the_sidecar(tmp_path: Path) -> None:
+    _make_codex_tree(tmp_path)
+    r = FileTranscriptReader()
+    r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    sidecar = paths.transcript_summaries_path()
+    stamp = sidecar.stat().st_mtime_ns
+    os.utime(sidecar, ns=(stamp - 10**9, stamp - 10**9))  # detectably older
+    r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    assert sidecar.stat().st_mtime_ns == stamp - 10**9
+
+
+def test_missing_sidecar_still_lists_correctly(tmp_path: Path) -> None:
+    _make_codex_tree(tmp_path)
+    baseline = FileTranscriptReader().search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    paths.transcript_summaries_path().unlink()
+    assert (
+        FileTranscriptReader().search_session_summaries(
+            agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        )
+        == baseline
+    )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "",  # empty — a truncated write, or a file someone touched
+        "{ not json at all",  # corrupt
+        "[1, 2, 3]",  # valid JSON, wrong shape
+        '{"/gone.jsonl": {"mtime": "yesterday"}}',  # right shape, unusable entry
+    ],
+)
+def test_unusable_sidecar_still_lists_correctly(tmp_path: Path, content: str) -> None:
+    """Never a wrong answer, only a slower one — the sidecar is disposable."""
+    _make_codex_tree(tmp_path)
+    baseline = FileTranscriptReader().search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    paths.transcript_summaries_path().write_text(content, encoding="utf-8")
+    assert (
+        FileTranscriptReader().search_session_summaries(
+            agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+        )
+        == baseline
+    )
+
+
+def test_sidecar_entry_is_dropped_when_the_file_changed_since(tmp_path: Path) -> None:
+    """A stale stamp must re-parse, or a restart would serve yesterday's summary."""
+    d = _make_codex_tree(tmp_path)
+    FileTranscriptReader().search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    _codex_session(
+        d / "rollout-b.jsonl",
+        sid="b",
+        cwd="/proj/beta",
+        ts_start="2026-05-02T00:00:00Z",
+        ts_end="2026-05-02T02:00:00Z",
+        user_text="rewritten beta prompt",
+    )
+    _, page = FileTranscriptReader().search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    assert {s.session_id: s.title for s in page}["b"] == "rewritten beta prompt"
+
+
+def test_sidecar_keeps_another_agent_root_untouched(tmp_path: Path) -> None:
+    """One agent's pass must not prune the other's entries out of the shared file."""
+    _make_codex_tree(tmp_path)
+    other = tmp_path / "other"
+    (other / "sessions").mkdir(parents=True)
+    _codex_session(
+        other / "sessions" / "rollout-z.jsonl",
+        sid="z",
+        cwd="/proj/zeta",
+        ts_start="2026-05-04T00:00:00Z",
+        ts_end="2026-05-04T01:00:00Z",
+        user_text="zeta work",
+    )
+    r = FileTranscriptReader()
+    r.search_session_summaries(agent_type_value="codex", config_dir=str(other), limit=100, offset=0)
+    r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    stored = json.loads(paths.transcript_summaries_path().read_text())
+    assert len(stored) == 4  # three here, one under the other root

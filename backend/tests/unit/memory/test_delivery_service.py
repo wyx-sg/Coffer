@@ -22,7 +22,6 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.delivery import MARKER, MalformedDeliveryConfig
 from coffer.domain.resource import Resource
-from coffer.infrastructure.memory import delivery_state
 
 pytestmark = pytest.mark.asyncio
 
@@ -292,25 +291,23 @@ async def test_status_with_no_agent_reports_every_registered_agent(
 
 
 # ---------------------------------------------------------------------------
-# last_fired_at: never fired, then reflects record_fired (FR-055)
+# record_fired: one audit entry per real fire (FR-055)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="hook status reports never-fired until an injection happens"
-)
-async def test_last_fired_at_is_empty_until_record_fired_then_reflects_it(
-    svc: DeliveryService,
+@pytest.mark.acceptance(spec="memory", scenario="every hook fire is recorded in the audit log")
+async def test_record_fired_writes_one_audit_entry_naming_the_agent(
+    svc: DeliveryService, audit: AuditService
 ) -> None:
-    (before,) = await svc.status("cc")
-    assert before.last_fired_at == ""
+    repo: FakeAuditRepo = audit._repo  # type: ignore[attr-defined]
 
     await svc.record_fired("cc")
 
-    (after,) = await svc.status("cc")
-    assert after.last_fired_at != ""
-    # Round-trips through the exact same store record_fired writes.
-    assert after.last_fired_at == delivery_state.last_fired_at("cc")
+    fires = [e for e in repo.entries if e.event_type == AuditEventType.MEMORY_DELIVERY_FIRED.value]
+    assert len(fires) == 1
+    assert fires[0].resource_name == "cc"
+    # Nobody clicked anything: the agent whose session started is the actor.
+    assert fires[0].actor == "cc"
 
 
 async def test_record_fired_does_not_affect_installed_state(svc: DeliveryService) -> None:
@@ -319,10 +316,17 @@ async def test_record_fired_does_not_affect_installed_state(svc: DeliveryService
     assert status.installed is False
 
 
-async def test_record_fired_never_called_by_install_or_status(svc: DeliveryService) -> None:
+async def test_neither_install_nor_status_records_a_fire(
+    svc: DeliveryService, audit: AuditService
+) -> None:
+    repo: FakeAuditRepo = audit._repo  # type: ignore[attr-defined]
+
     await svc.install("cc", actor="tester")
     await svc.status("cc")
-    assert delivery_state.last_fired_at("cc") == ""
+
+    assert not [
+        e for e in repo.entries if e.event_type == AuditEventType.MEMORY_DELIVERY_FIRED.value
+    ]
 
 
 # ---------------------------------------------------------------------------

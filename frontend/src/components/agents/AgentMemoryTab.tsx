@@ -9,39 +9,33 @@
 //      there. Knowledge is a different layer with its own page and its own tab
 //      pointer — this one must not send the user there.
 //   B. Delivery — whether Coffer's session-start hook is installed in THIS
-//      agent's own settings, and when it last actually fired (spec memory
-//      FR-054/FR-055). The only section here that writes anything, and the only
+//      agent's own settings (spec memory FR-054/FR-055; whether it has fired is
+//      read as events on the Activity page, not guessed at here). The only
+//      section here that writes anything, and the only
 //      one that is per-agent rather than per-partition: a hook lives in one
 //      agent's settings file, so it belongs on that agent's page rather than on
 //      the Memory resource page, where it used to render as a list of agents.
 //   C. The agent's own memory — the coding agent's OWN native per-project memory
 //      stores (e.g. Claude Code's ~/.claude/projects/<project>/memory/), shown
-//      read-only as a table of (project, path, item count) with open / reveal
-//      row actions. This is NOT Coffer knowledge and NOT the CLAUDE.md
-//      instructions file; it is the agent's native memory, surfaced so the user
-//      can find and open it. Coffer never writes it.
+//      read-only as a table of (project, path, item count). A store is a
+//      DIRECTORY, so clicking a row opens its own page: a file tree and a
+//      read-only preview, where the open / reveal actions live. The table has no
+//      per-row menu — a list of stores is for picking one, and what you can do
+//      to the one you picked belongs where its contents are visible. This is NOT
+//      Coffer knowledge and NOT the CLAUDE.md instructions file; it is the
+//      agent's native memory, surfaced so the user can read and open it. Coffer
+//      never writes it.
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { CofferGatewayRow } from "@/components/agents/AgentManagedLink";
 import { AgentMemoryDelivery } from "@/components/agents/AgentMemoryDelivery";
 import { DataTable, type Column } from "@/components/DataTable";
-import { RowActions } from "@/components/RowActions";
 import { Card } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut } from "@/lib/api/agents";
 import type { NativeMemoryStore } from "@/lib/api/agentNativeMemory";
-import { useFileActionItems } from "@/lib/fileActionItems";
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
-
-/** Row actions: open the store's directory in the user's editor, or reveal it in
- * the file manager. Both go through the daemon; the row itself does nothing
- * else, because this surface is read-only. */
-function NativeMemoryRowActions({ store }: { store: NativeMemoryStore }) {
-  const { t } = useTranslation();
-  const fileItems = useFileActionItems(store.memory_dir);
-  return <RowActions items={fileItems} menuAriaLabel={t("common.moreActions")} />;
-}
 
 export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
@@ -73,12 +67,6 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
       className: "whitespace-nowrap tabular-nums text-right",
       cell: (s) => <span className="text-muted-foreground">{s.item_count}</span>,
     },
-    {
-      key: "actions",
-      header: "",
-      className: "text-right",
-      cell: (s) => <NativeMemoryRowActions store={s} />,
-    },
   ];
 
   return (
@@ -96,8 +84,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
         />
       </Card>
 
-      {/* Delivery: this agent's own session-start hook — installed, and whether
-          it has ever actually fired. */}
+      {/* Delivery: whether this agent's own session-start hook is installed. */}
       <AgentMemoryDelivery agentName={agent.name} />
 
       <Card className="space-y-3 p-4">
@@ -116,6 +103,17 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
             columns={columns}
             // Codex rows share one memory_dir, so key by the routed project too.
             rowKey={(s) => `${s.memory_dir}::${s.path ?? s.project}`}
+            // The store's identity is its directory, so that is what the page
+            // is addressed by; the label rides along only so the heading can
+            // say "api" rather than a forty-character slug path.
+            onRowClick={(s) =>
+              navigate(
+                `/agents/${encodeURIComponent(agent.name)}/memory?${new URLSearchParams({
+                  dir: s.memory_dir,
+                  project: s.path ?? s.project,
+                })}`,
+              )
+            }
             search={{
               accessor: (s) => `${s.project} ${s.path ?? ""} ${s.memory_dir}`,
               placeholder: t("agents.memoryTab.searchPlaceholder"),

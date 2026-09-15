@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.resource import Resource
+from coffer.infrastructure.agent.claude_effort import claude_effort_levels
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
@@ -146,9 +147,12 @@ def test_discovered_models_from_the_agents_own_config(tmp_path: pathlib.Path) ->
             "id": "claude-fable-5-1[1m]",
             "label": "Fable",
             "description": "Fable 5.1 · Most capable",
-            # Claude Code takes no reasoning level of its own, and the wire says
-            # so rather than inventing one for it.
-            "efforts": [],
+            # Claude Code's reasoning levels come from the SDK that will run the
+            # turn, not from a list written down here — asserted against that
+            # same source so an SDK release adding a level is not a test failure.
+            "efforts": list(claude_effort_levels()),
+            # None on purpose: the SDK exposes no machine-readable default, and
+            # a picker naming the wrong one is worse than one naming none.
             "default_effort": None,
         }
     ]

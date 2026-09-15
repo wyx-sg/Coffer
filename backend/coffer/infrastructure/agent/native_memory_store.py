@@ -3,14 +3,21 @@
 Implements
 ``coffer.application.agent.native_memory_service.NativeMemoryScanPort``.
 Read-only: it enumerates ``<projects_root>/<slug>/<memory_subdir>`` directories
-and counts the memory entries inside each, never writing anything.
+and counts the memory entries inside each, and — for one store the caller has
+already proved is the agent's — hands back its tree and its files (delegated to
+``native_memory_files``). It never writes anything.
 """
 
 from __future__ import annotations
 
 import pathlib
 
-from coffer.domain.agent.native_memory import ScannedStore
+from coffer.domain.agent.native_memory import (
+    MemoryFileContent,
+    MemoryFileNode,
+    ScannedStore,
+)
+from coffer.infrastructure.agent import native_memory_files
 from coffer.infrastructure.agent.codex_memory_store import codex_stores
 from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
 
@@ -103,3 +110,15 @@ class FileNativeMemoryScanner:
         """Return a :class:`ScannedStore` per distinct routed cwd in Codex's
         single global task-grouped store (``memories_dir/<index_file>``)."""
         return codex_stores(memories_dir, index_file)
+
+    def build_tree(self, store_dir: pathlib.Path) -> MemoryFileNode:
+        """One store's directory as a read-only tree (see ``native_memory_files``).
+
+        The caller has already established that ``store_dir`` is one of this
+        agent's stores; this adapter's only remaining job is the walk.
+        """
+        return native_memory_files.build_tree(store_dir)
+
+    def read_file(self, store_dir: pathlib.Path, relpath: str) -> MemoryFileContent:
+        """One file inside a store, capped and containment-checked."""
+        return native_memory_files.read_file(store_dir, relpath)

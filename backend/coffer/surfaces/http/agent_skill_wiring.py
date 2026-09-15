@@ -75,6 +75,11 @@ class AgentSkillWiring:
     agent_service: AgentService
     skill_service: SkillService
     boot_heal: SkillDriftBootHeal
+    #: The one reader the Conversations listing uses. Handed back rather than
+    #: kept here, because the boot-time warm pass must warm THIS instance — a
+    #: second one would fill a second cache and leave the listing's as cold as
+    #: it found it.
+    transcript_reader: FileTranscriptReader
 
 
 class _BootHeal(Protocol):
@@ -204,8 +209,9 @@ def wire_agent_and_skill_kinds(
     # Read-only browse over the agent's own conversation transcripts. The reader
     # is a singleton on purpose: its mtime-aware cache is what keeps listing an
     # agent with thousands of past sessions responsive.
+    transcript_reader = FileTranscriptReader()
     agent_transcript_svc = AgentTranscriptService(
-        reader=FileTranscriptReader(),
+        reader=transcript_reader,
         agent_service=agent_svc,
     )
 
@@ -277,6 +283,7 @@ def wire_agent_and_skill_kinds(
         agent_service=agent_svc,
         skill_service=skill_svc,
         boot_heal=SkillDriftBootHeal(skill_service=skill_svc),
+        transcript_reader=transcript_reader,
     )
 
 

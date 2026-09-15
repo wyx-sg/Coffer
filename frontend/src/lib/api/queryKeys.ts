@@ -46,6 +46,11 @@ export const agentTranscriptsKey = <P extends object>(name: string, params?: P) 
   params
     ? (["agents", name, "conversations", params] as const)
     : (["agents", name, "conversations"] as const);
+/** One session's body, keyed by its FILE: `session_id` repeats across the
+ *  sidechain files a single conversation can leave behind, so the path is the
+ *  only thing that names exactly one of them. */
+export const agentTranscriptSessionKey = (name: string, sourcePath: string, offset: number) =>
+  ["agents", name, "conversations", "session", sourcePath, offset] as const;
 
 // ---------------------------------------------------------------------------
 // agentProviders — the turn platform's agent registry (/agent-providers)
@@ -159,7 +164,7 @@ export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
 
 // ---------------------------------------------------------------------------
-// memory — partitions, facts, overrides, delivery
+// memory — partitions, facts, files, delivery
 // ---------------------------------------------------------------------------
 
 export const memoryKey = ["memory"] as const;
@@ -167,7 +172,12 @@ export const memoryPartitionsKey = ["memory", "partitions"] as const;
 export const memoryFactsKey = (partition: string) => ["memory", "facts", partition] as const;
 export const memoryFactKey = (partition: string, slug: string) =>
   ["memory", "facts", partition, slug] as const;
-export const memoryOverridesKey = ["memory", "overrides"] as const;
+/** A partition's own directory, and one file in it — the tree the detail page
+ *  browses (spec memory FR-062). */
+export const memoryPartitionFilesKey = (partition: string) =>
+  ["memory", "partitions", partition, "files"] as const;
+export const memoryPartitionFileKey = (partition: string, path: string) =>
+  ["memory", "partitions", partition, "files", "content", path] as const;
 export const memoryDeliveryKey = ["memory", "delivery"] as const;
 export const memoryAgentDeliveryKey = (agent: string) => ["memory", "delivery", agent] as const;
 

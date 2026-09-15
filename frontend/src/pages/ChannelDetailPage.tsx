@@ -1,10 +1,16 @@
 // frontend/src/pages/ChannelDetailPage.tsx — one channel's operating surface
 // (spec channels, User Stories 2 + 8): the shared PageHeader with the platform
 // chip beside the name and reach / edit / delete as its actions (mirrors
-// McpServerDetailPage), a live status card (adapter, paired peer), the
-// pairing-code generator, a test-delivery card wired to the notify capability,
-// and — for SeaTalk — the callback endpoint to point a tunnel at. Status
-// auto-refreshes while the page is open.
+// McpServerDetailPage), a live status card (adapter, paired peer), the machine
+// card (which machine runs this channel's adapter), the pairing-code
+// generator, a test-delivery card wired to the notify capability, and — for
+// SeaTalk — the callback endpoint to point a tunnel at. Status auto-refreshes
+// while the page is open.
+//
+// The header's reach control and the machine card look adjacent and are not:
+// reach is which AGENTS this channel may drive, the machine card is which
+// MACHINE runs its adapter. The card says so, because a page carrying both is
+// exactly where the two get confused.
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -23,6 +29,7 @@ import {
   ChannelStatusCard,
   ChannelTestMessageCard,
 } from "@/components/channel/ChannelDetailCards";
+import { ChannelMachineCard } from "@/components/channel/ChannelMachineCard";
 import { EditChannelDialog } from "@/components/channel/EditChannelDialog";
 import { translateApiError } from "@/lib/api/errors";
 import {
@@ -122,6 +129,10 @@ export function ChannelDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ChannelStatusCard status={status} />
+        {/* Next to the status card because it is that card's missing half:
+            "Stopped" is a fault on the bound machine and ordinary on every
+            other one, and only the binding says which this is. */}
+        <ChannelMachineCard name={name} config={resource.config} status={status} />
         <ChannelPairingCard
           code={pairing.data}
           isPending={pairing.isPending}

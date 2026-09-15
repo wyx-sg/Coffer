@@ -196,3 +196,32 @@ pairing). It stays disabled until the channel is paired.
   old binding is replaced.
 - **Delete** the channel to remove everything; past conversations stay in Chat
   history until the retention policy prunes them.
+
+## Moving a channel to another machine
+
+If your vault converges with a sync remote, a channel shows up on every machine
+— and runs on exactly one of them, the one named in its **Runs on** column.
+Registering a channel binds it to the machine you registered it from, so this
+only comes up when you want to move one.
+
+```bash
+coffer channel bind my-telegram              # run it here
+coffer channel bind my-telegram <machine-id> # run it there (coffer sync machines lists them)
+```
+
+or pick the machine in the **Runs on** column, or on the channel's page.
+
+No restart. The machine giving the channel up stops within a couple of seconds;
+the machine taking it over starts after the next sync round brings the change
+across. Do the rebind **from the machine that currently runs the channel** and
+the handover has no overlap — bind a channel to the machine you are sitting at
+while another still holds it and both may answer until that machine's next
+round.
+
+Two things to know:
+
+- A channel bound to a machine that has been retired runs nowhere, and says so.
+  Bind it to a live one.
+- **Runs on** is not **Reach**. Reach says which agents a channel may drive and
+  is set separately on each machine; the binding says which machine runs the
+  adapter, and is the same everywhere.

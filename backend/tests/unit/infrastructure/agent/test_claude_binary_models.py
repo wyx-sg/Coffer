@@ -112,6 +112,22 @@ async def test_each_alias_is_labelled_with_the_model_it_is_today(
     assert models["haiku"].label == "Haiku 3.5"
 
 
+async def test_every_alias_carries_the_runtimes_reasoning_levels(
+    discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
+) -> None:
+    """The bundle has no per-model effort table, and it would mean nothing if it
+    did: Claude takes the level as an option on the session, so the menu is the
+    runtime's and every entry reports the same one."""
+    from coffer.infrastructure.agent.claude_effort import claude_effort_levels
+
+    _bundle(tmp_path / "claude")
+
+    models = await discovery.discover(agent_key="claude_code", config_dir=None)
+
+    assert {m.efforts for m in models} == {claude_effort_levels()}
+    assert all(m.default_effort is None for m in models)
+
+
 async def test_the_per_provider_deployments_are_not_aliases(
     discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
 ) -> None:

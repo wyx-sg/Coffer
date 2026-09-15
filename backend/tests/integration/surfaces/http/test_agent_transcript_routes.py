@@ -1,4 +1,4 @@
-"""HTTP coverage for GET /api/v1/agents/{name}/transcripts.
+"""HTTP coverage for GET /api/v1/agents/{name}/transcripts and .../session.
 
 HOME is redirected at ``tmp_path``, so the registered agent's config dir — and
 every transcript the reader walks — lives inside the test's own temp tree. The
@@ -13,6 +13,7 @@ import pathlib
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.infrastructure.agent import paths
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -219,3 +220,134 @@ def test_requires_a_token(tmp_path: pathlib.Path, monkeypatch) -> None:
     with TestClient(app) as anon:
         r = anon.get("/api/v1/agents/cx/transcripts")
     assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# The boot-time warm pass (FR-047) — the first visit must not be the slow one
+# ---------------------------------------------------------------------------
+
+
+def test_warm_pass_fills_the_sidecar_and_audits_nothing(
+    client: TestClient, tmp_path: pathlib.Path
+) -> None:
+    """The worker is wired into the lifespan, warms the reader the listing uses,
+    and stays a cache pass: FR-011 lets no workspace listing audit, this one
+    included."""
+    _register_codex_with_transcripts(client, tmp_path)
+    sidecar = paths.transcript_summaries_path()
+    assert not sidecar.exists()  # startup ran before the agent existed
+    before = len(client.get("/api/v1/audit").json()["entries"])
+
+    worker = client.app.state.background_workers.warm_worker  # type: ignore[attr-defined]
+    client.portal.call(worker.run_once)  # type: ignore[union-attr]
+
+    stored = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert len(stored) == 3
+    assert all("message_count" in entry for entry in stored.values())
+    assert len(client.get("/api/v1/audit").json()["entries"]) == before
+
+    # The listing is served from what the warm pass parsed — same reader, one cache.
+    body = client.get("/api/v1/agents/cx/transcripts").json()
+    assert [s["session_id"] for s in body["sessions"]] == ["a", "c", "b"]
+
+
+# ---------------------------------------------------------------------------
+# Reading ONE session — the first surface that puts a transcript body on the wire
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="read one of the agent's conversations",
+)
+def test_reads_one_session_as_turns(client: TestClient, tmp_path: pathlib.Path) -> None:
+    """The summary the row showed, plus the turns that row deliberately omitted."""
+    sessions = _register_codex_with_transcripts(client, tmp_path)
+    path = str(sessions / "rollout-a.jsonl")
+
+    r = client.get("/api/v1/agents/cx/transcripts/session", params={"path": path})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["session_id"] == "a"
+    assert body["title"] == "fix the alpha login bug"
+    assert body["project_path"] == "/proj/alpha"
+    assert body["source_path"] == path
+    assert [(m["role"], m["text"]) for m in body["messages"]] == [
+        ("user", "fix the alpha login bug"),
+        ("assistant", "ok"),
+    ]
+    # The window and the whole are separate numbers, so "200 of 812" is sayable.
+    assert body["message_count"] == 2
+    assert body["offset"] == 0
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="read one of the agent's conversations",
+)
+def test_session_read_scrubs_secrets_and_bounds_the_window(
+    client: TestClient, tmp_path: pathlib.Path
+) -> None:
+    """A prompt is exactly where a pasted key would be, and a file is huge."""
+    sessions = _register_codex_with_transcripts(client, tmp_path)
+    _write_codex_session(
+        sessions,
+        sid="s",
+        cwd="/proj/secret",
+        ts_start="2026-05-04T00:00:00Z",
+        ts_end="2026-05-04T00:01:00Z",
+        user_text="deploy with sk-abcdefghijklmnopqrstuvwx please",
+    )
+    path = str(sessions / "rollout-s.jsonl")
+
+    body = client.get(
+        "/api/v1/agents/cx/transcripts/session", params={"path": path, "limit": 1}
+    ).json()
+    assert "sk-abcdefghijklmnopqrstuvwx" not in body["messages"][0]["text"]
+    assert "[redacted]" in body["messages"][0]["text"]
+    # limit=1 returns the first turn only, while the count still says there are 2.
+    assert len(body["messages"]) == 1
+    assert body["message_count"] == 2
+
+    # …and offset walks the rest of them.
+    rest = client.get(
+        "/api/v1/agents/cx/transcripts/session", params={"path": path, "offset": 1}
+    ).json()
+    assert [m["role"] for m in rest["messages"]] == ["assistant"]
+    assert rest["offset"] == 1
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="read one of the agent's conversations",
+)
+def test_session_read_refuses_a_path_outside_the_agents_transcripts(
+    client: TestClient, tmp_path: pathlib.Path
+) -> None:
+    """The listing's source_path is the only authority the caller has."""
+    _register_codex_with_transcripts(client, tmp_path)
+    outsider = tmp_path / "elsewhere.jsonl"
+    outsider.write_text('{"type": "message", "role": "user", "content": "hi"}\n', encoding="utf-8")
+
+    r = client.get("/api/v1/agents/cx/transcripts/session", params={"path": str(outsider)})
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "NOT_FOUND"
+
+    # A file that WOULD be contained but is gone gives the same answer, so the
+    # difference cannot be used to probe what exists outside the sessions dir.
+    missing = client.get(
+        "/api/v1/agents/cx/transcripts/session",
+        params={"path": str(tmp_path / ".codex" / "sessions" / "nope.jsonl")},
+    )
+    assert missing.status_code == 404
+
+
+def test_session_read_emits_no_audit_event(client: TestClient, tmp_path: pathlib.Path) -> None:
+    """FR-011: a workspace listing does not audit, nor does reading one of its rows."""
+    sessions = _register_codex_with_transcripts(client, tmp_path)
+    before = len(client.get("/api/v1/audit").json()["entries"])
+    client.get(
+        "/api/v1/agents/cx/transcripts/session",
+        params={"path": str(sessions / "rollout-a.jsonl")},
+    )
+    assert len(client.get("/api/v1/audit").json()["entries"]) == before

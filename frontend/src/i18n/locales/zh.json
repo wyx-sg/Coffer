@@ -316,11 +316,10 @@
       "master_key_imported": "导入了一把主密钥",
       "master_key_relocated": "主密钥存储位置已变更",
       "memory_aggregated": "从各 Agent 自己的记忆库同步了记忆",
+      "memory_delivery_fired": "{{resource}} 的记忆投递 hook 已触发",
       "memory_delivery_installed": "已为 {{resource}} 安装记忆投递",
       "memory_delivery_removed": "已移除 {{resource}} 的记忆投递",
       "memory_organised": "整理了记忆分区 {{resource}}",
-      "memory_override_cleared": "清除了一条记忆事实上的覆盖",
-      "memory_override_set": "为一条记忆事实设置了覆盖",
       "provider_internal_default_set": "把 {{resource}} 设为内部引擎的默认模型提供商",
       "provider_projection_refused": "拒绝把 {{resource}} 投射到 Agent",
       "provider_switched": "切换到了模型提供商 {{resource}}",
@@ -643,6 +642,7 @@
     "MEMORY_DELIVERY_CONFIG_INVALID": "该 Agent 的设置文件不是 Coffer 可以编辑的格式",
     "MEMORY_DELIVERY_UNSUPPORTED": "该 Agent 类型没有记忆投递钩子",
     "MEMORY_FACT_NOT_FOUND": "未找到该记忆条目",
+    "MEMORY_FILE_NOT_FOUND": "该分区里没有这个文件",
     "MEMORY_NOT_FOUND": "未找到记忆",
     "MEMORY_REJECTED": "记忆被拒绝（为空或过长）",
     "MEMORY_STORE_MERGE_INVALID": "这些知识作用域无法合并",
@@ -903,7 +903,25 @@
       "missing": "未检测到"
     },
     "noneDetected": "本机没有检测到 Agent，可在下方手动添加。",
-    "removeConfirmTitle": "移除 {{name}}？"
+    "removeConfirmTitle": "移除 {{name}}？",
+    "conversationDetail": {
+      "loadFailed": "无法加载这段对话。",
+      "roleUser": "你",
+      "roleAssistant": "Agent",
+      "noTurns": "这份记录中没有对话轮次。",
+      "turnTruncated": "这一轮内容过长，此处只显示开头——打开文件查看全文。",
+      "turnRange": "第 {{from}}–{{to}} 轮，共 {{total}} 轮",
+      "earlier": "更早的轮次",
+      "later": "更晚的轮次"
+    },
+    "memoryStore": {
+      "tree": "文件",
+      "selectFile": "选择一个文件查看。",
+      "binary": "二进制文件（{{size}} 字节）",
+      "truncated": "内容已截断——只显示文件开头。",
+      "readOnlyHint": "这些文件归 Agent 所有，它会自行改写；要修改请在编辑器中打开。",
+      "missingDir": "没有指定记忆存储——请从该 Agent 的「记忆」标签页进入。"
+    }
   },
   "skills": {
     "degradedBadge": "已复制",
@@ -1037,16 +1055,11 @@
       "button": "上传",
       "uploading": "正在上传…",
       "success": "已上传「{{title}}」。"
-    },
-    "search": {
-      "placeholder": "搜索本集合…",
-      "button": "搜索",
-      "noResults": "没有匹配的结果。"
     }
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），按项目归一化为一组事实，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。",
+    "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），按项目归一化为一组事实，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。它会自己定时重读；按钮只是让它立刻跑一次。",
     "readFromAgents": "读取 Agent 记忆",
     "reading": "读取中…",
     "syncDone": "已读取 {{partitions}} 个分区，共 {{count}} 条事实。",
@@ -1062,13 +1075,11 @@
     },
     "delivery": {
       "title": "投递",
-      "subtitle": "写在该 Agent 自己设置里的 Coffer 会话开始钩子。「已安装」不是信号，「最近一次触发」才是。",
+      "subtitle": "写在该 Agent 自己设置里的 Coffer 会话开始钩子。",
       "loadFailed": "加载投递状态失败",
       "installed": "已安装",
       "notInstalled": "未安装",
-      "neverFired": "已安装——从未触发",
-      "neverFiredHint": "{{event}} 钩子已安装，但尚未运行过。用这个 Agent 开始（或重启）一次会话，确认它会触发。",
-      "lastFiredAt": "{{event}} 最近一次触发于 {{time}}。",
+      "installedHint": "Coffer 的 {{event}} 钩子已写入该 Agent 的设置。每一次触发都会记在活动页面。",
       "notInstalledHint": "安装 Coffer 的钩子，以在会话开始时投递一份有预算限制的摘要。",
       "install": "安装",
       "remove": "移除",
@@ -1078,47 +1089,16 @@
       "removeDone": "投递已移除。",
       "unsupported": "该 Agent 没有可供投递挂载的钩子事件。"
     },
-    "factType": {
-      "user": "偏好",
-      "feedback": "反馈",
-      "project": "项目"
-    },
-    "status": {
-      "proposedSupersede": "已被取代（模型提议）",
-      "settledSupersede": "已被取代（已确认）",
-      "conflicting": "存在冲突",
-      "hiddenBadge": "已隐藏",
-      "pinnedBadge": "已置顶",
-      "proposedBadge": "模型提议"
-    },
-    "hide": "隐藏",
-    "unhide": "取消隐藏",
-    "pin": "置顶",
-    "unpin": "取消置顶",
-    "origins": {
-      "show": "查看来源",
-      "hide": "收起来源",
-      "loadFailed": "加载该事实的来源失败"
-    },
-    "supersede": {
-      "action": "标记为被…取代",
-      "pickPlaceholder": "选择取代这条事实的那一条",
-      "apply": "应用",
-      "clear": "已被 {{target}} 取代——撤销"
-    },
-    "conflicts": {
-      "title": "待处理的冲突",
-      "subtitle": "两条事实相互矛盾。选择仍然为真的一条，另一条会被标记为已取代。",
-      "keepThis": "保留这一条"
+    "files": {
+      "tree": "文件",
+      "selectFile": "选择一个文件查看。",
+      "binary": "二进制文件（{{size}} 字节）",
+      "truncated": "内容已截断——只显示文件开头。"
     },
     "detail": {
       "organise": "整理",
       "organiseHint": "合并重复的事实，提议取代与冲突关系，并重写该分区的摘要。",
-      "organiseDone": "整理已完成。",
-      "factsTitle": "事实",
-      "filterPlaceholder": "筛选事实…",
-      "factsEmpty": "该分区暂无事实。",
-      "noMatches": "没有匹配项。"
+      "organiseDone": "整理已完成。"
     }
   },
   "chat": {
@@ -1233,6 +1213,7 @@
       "type": "类型",
       "agent": "默认 Agent",
       "health": "健康",
+      "runsOn": "运行机器",
       "paired": "配对"
     },
     "welcome": {
@@ -1279,6 +1260,7 @@
       "tunnelToken": "Cloudflare 隧道 token",
       "tunnelTokenHint": "可选。填入 cloudflared 命名隧道的连接器 token 后，消息渠道启用时 Coffer 会自动起并维持隧道（需先装 cloudflared，并在 Cloudflare 控制台把该隧道指向 http://127.0.0.1:8787）。",
       "created": "消息渠道 {{name}} 已注册",
+      "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
       "delivery": "事件投递方式",
       "deliveryWebhook": "Webhook",
       "deliveryWebsocket": "WebSocket",
@@ -1320,6 +1302,21 @@
       "conversation": "活跃会话",
       "none": "暂无活跃会话",
       "pendingPairing": "有一个配对码尚未使用。"
+    },
+    "machine": {
+      "title": "运行机器",
+      "pickerLabel": "运行 {{name}} 的机器",
+      "thisMachine": "本机",
+      "self": "{{name}} · 本机",
+      "unbound": "未绑定",
+      "unknown": "未知机器（{{id}}）",
+      "runsHere": "这个消息渠道的适配器由本机运行。",
+      "runsElsewhere": "这个消息渠道的适配器由 {{machine}} 运行，不在本机。",
+      "unboundBody": "这个消息渠道没有绑定任何机器，因此没有任何守护进程会启动它，机器人永远不会回话。请选择一台应该负责应答的机器。",
+      "unknownBody": "这个消息渠道绑定在 {{id}} 上，而注册表里没有任何机器认领这个 id——在重新绑定到一台真实存在的机器之前，它不会在任何地方运行。",
+      "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把变更带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
+      "notReach": "这里决定的是「哪台机器运行适配器」。页头的生效范围决定的是「这个渠道可以驱动哪些 agent」。",
+      "rebound": "{{name}} 现在运行在 {{machine}} 上"
     },
     "pairing": {
       "title": "配对",
@@ -1528,7 +1525,8 @@
       "noAgents": "无",
       "retire": "下线",
       "retireTitle": "下线 {{name}}？",
-      "retireBody": "它的描述文件会从注册表里移除，金库里的其他任何东西都不会变——没有任何资源引用机器 id，因为生效范围是在每台机器上各自设置的，而不是记在某台机器名下。",
+      "retireBody": "它的描述文件会从注册表里移除，其他任何东西都不会被改写。生效范围是在每台机器上各自设置的，并不指名任何机器，因此不受影响；而绑定在这台机器上的消息渠道仍然指名着它，在你把它重新绑到另一台机器之前不会在任何地方运行。",
+      "retired": "{{name}} 已退役。",
       "derivedNote": "本机的 id 保存在本地文件里，而不是从宿主机派生的，所以删掉 ~/.coffer 之后它会以一台新机器的身份重新出现，这一行需要手动下线。"
     }
   }

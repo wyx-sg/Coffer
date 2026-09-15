@@ -316,11 +316,10 @@
       "master_key_imported": "Imported a master key",
       "master_key_relocated": "Master key storage changed",
       "memory_aggregated": "Synced memory from the agents' own stores",
+      "memory_delivery_fired": "Memory delivery hook fired for {{resource}}",
       "memory_delivery_installed": "Installed memory delivery into {{resource}}",
       "memory_delivery_removed": "Removed memory delivery from {{resource}}",
       "memory_organised": "Organised memory partition {{resource}}",
-      "memory_override_cleared": "Cleared an override on a memory fact",
-      "memory_override_set": "Set an override on a memory fact",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
       "provider_projection_refused": "Refused to project {{resource}} into an agent",
       "provider_switched": "Switched to provider {{resource}}",
@@ -643,6 +642,7 @@
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
     "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
     "MEMORY_FACT_NOT_FOUND": "That memory fact wasn't found",
+    "MEMORY_FILE_NOT_FOUND": "That file isn't in this partition",
     "MEMORY_NOT_FOUND": "Memory not found",
     "MEMORY_REJECTED": "The memory was rejected (empty or too long)",
     "MEMORY_STORE_MERGE_INVALID": "Those knowledge scopes cannot be merged",
@@ -903,7 +903,25 @@
       "missing": "Not found"
     },
     "noneDetected": "No agents were detected on this machine. Add one manually below.",
-    "removeConfirmTitle": "Remove {{name}}?"
+    "removeConfirmTitle": "Remove {{name}}?",
+    "conversationDetail": {
+      "loadFailed": "Couldn't load this conversation.",
+      "roleUser": "You",
+      "roleAssistant": "Agent",
+      "noTurns": "This transcript has no conversational turns.",
+      "turnTruncated": "This turn was too long to show in full — open the file to read the rest.",
+      "turnRange": "Turns {{from}}–{{to}} of {{total}}",
+      "earlier": "Earlier turns",
+      "later": "Later turns"
+    },
+    "memoryStore": {
+      "tree": "Files",
+      "selectFile": "Select a file to view.",
+      "binary": "Binary file ({{size}} bytes)",
+      "truncated": "Content truncated — showing the start of the file.",
+      "readOnlyHint": "The agent owns these files and rewrites them; open one in your editor to change it.",
+      "missingDir": "No memory store was named — open one from the agent's Memory tab."
+    }
   },
   "skills": {
     "degradedBadge": "Copied",
@@ -1037,16 +1055,11 @@
       "button": "Upload",
       "uploading": "Uploading…",
       "success": "Uploaded “{{title}}”."
-    },
-    "search": {
-      "placeholder": "Search this collection…",
-      "button": "Search",
-      "noResults": "No results for this search."
     }
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents already learned, read from their own memory — Claude Code's per-project notes and Codex's task groups — normalised into facts by project, plus one global partition for what is about you rather than any project. Coffer never writes back into an agent's own memory.",
+    "subtitle": "What your agents already learned, read from their own memory — Claude Code's per-project notes and Codex's task groups — normalised into facts by project, plus one global partition for what is about you rather than any project. Coffer never writes back into an agent's own memory. It re-reads them on its own; the button just does it now.",
     "readFromAgents": "Read from agents",
     "reading": "Reading…",
     "syncDone": "Read {{count}} facts across {{partitions}} partitions.",
@@ -1062,13 +1075,11 @@
     },
     "delivery": {
       "title": "Delivery",
-      "subtitle": "Coffer's session-start hook in this agent's own settings. Installed is not the signal — last fired is.",
+      "subtitle": "Coffer's session-start hook in this agent's own settings.",
       "loadFailed": "Failed to load delivery status",
       "installed": "Installed",
       "notInstalled": "Not installed",
-      "neverFired": "Installed — never fired",
-      "neverFiredHint": "The {{event}} hook is installed but has not run yet. Start (or restart) a session with this agent to confirm it fires.",
-      "lastFiredAt": "{{event}} last fired {{time}}.",
+      "installedHint": "Coffer's {{event}} hook is written into this agent's settings. Every time it fires is recorded on the Activity page.",
       "notInstalledHint": "Install Coffer's hook to deliver a budgeted digest at session start.",
       "install": "Install",
       "remove": "Remove",
@@ -1078,47 +1089,16 @@
       "removeDone": "Delivery removed.",
       "unsupported": "This agent has no hook event delivery can attach to."
     },
-    "factType": {
-      "user": "Preference",
-      "feedback": "Feedback",
-      "project": "Project"
-    },
-    "status": {
-      "proposedSupersede": "Superseded (proposed)",
-      "settledSupersede": "Superseded (settled)",
-      "conflicting": "Conflicting",
-      "hiddenBadge": "Hidden",
-      "pinnedBadge": "Pinned",
-      "proposedBadge": "Proposed"
-    },
-    "hide": "Hide",
-    "unhide": "Unhide",
-    "pin": "Pin",
-    "unpin": "Unpin",
-    "origins": {
-      "show": "Show origins",
-      "hide": "Hide origins",
-      "loadFailed": "Failed to load this fact's origins"
-    },
-    "supersede": {
-      "action": "Mark superseded by…",
-      "pickPlaceholder": "Pick the fact that replaces this one",
-      "apply": "Apply",
-      "clear": "Superseded by {{target}} — undo"
-    },
-    "conflicts": {
-      "title": "Conflicts to settle",
-      "subtitle": "Two facts disagree. Pick the one that is still true; the other is marked superseded.",
-      "keepThis": "Keep this one"
+    "files": {
+      "tree": "Files",
+      "selectFile": "Select a file to view.",
+      "binary": "Binary file ({{size}} bytes)",
+      "truncated": "Content truncated — showing the start of the file."
     },
     "detail": {
       "organise": "Organise",
       "organiseHint": "Merges duplicate facts, proposes supersessions and conflicts, and rewrites this partition's digest.",
-      "organiseDone": "Organise pass finished.",
-      "factsTitle": "Facts",
-      "filterPlaceholder": "Filter facts…",
-      "factsEmpty": "No facts in this partition yet.",
-      "noMatches": "No matches."
+      "organiseDone": "Organise pass finished."
     }
   },
   "chat": {
@@ -1233,6 +1213,7 @@
       "type": "Type",
       "agent": "Default agent",
       "health": "Health",
+      "runsOn": "Runs on",
       "paired": "Paired"
     },
     "welcome": {
@@ -1279,6 +1260,7 @@
       "tunnelToken": "Cloudflare tunnel token",
       "tunnelTokenHint": "Optional. With a cloudflared named-tunnel connector token here, Coffer starts and keeps the tunnel running while the channel is enabled (cloudflared must be installed, and the tunnel's Cloudflare ingress must point at http://127.0.0.1:8787).",
       "created": "Channel {{name}} registered",
+      "machineUnknown": "Coffer could not read this machine's id, so the channel has no machine to run on. Try again in a moment.",
       "delivery": "Event delivery",
       "deliveryWebhook": "Webhook",
       "deliveryWebsocket": "WebSocket",
@@ -1320,6 +1302,21 @@
       "conversation": "Active conversation",
       "none": "No active conversation",
       "pendingPairing": "A pairing code is outstanding."
+    },
+    "machine": {
+      "title": "Runs on",
+      "pickerLabel": "Machine running {{name}}",
+      "thisMachine": "This machine",
+      "self": "{{name}} · this machine",
+      "unbound": "Not bound",
+      "unknown": "Unknown machine ({{id}})",
+      "runsHere": "This machine runs this channel's adapter.",
+      "runsElsewhere": "{{machine}} runs this channel's adapter — this machine does not.",
+      "unboundBody": "This channel is bound to no machine, so no daemon starts it and the bot never answers. Pick the machine that should answer it.",
+      "unknownBody": "This channel is bound to {{id}}, which no machine in the registry claims — it runs nowhere until it is bound to one that does.",
+      "handover": "Rebinding needs no restart. The machine losing the channel stops within a couple of seconds; the machine gaining it starts after the next sync round brings the change over. Rebinding away from the machine you are on hands over cleanly — binding a channel to this machine while another still holds it can leave both answering until that machine's next round.",
+      "notReach": "This is which machine runs the adapter. Reach, in the header, is which agents this channel may drive.",
+      "rebound": "{{name}} now runs on {{machine}}"
     },
     "pairing": {
       "title": "Pairing",
@@ -1528,7 +1525,8 @@
       "noAgents": "None",
       "retire": "Retire",
       "retireTitle": "Retire {{name}}?",
-      "retireBody": "Its descriptor is removed from the registry, and nothing else in the vault changes — no resource references a machine id, because reach is set on each machine rather than recorded against one.",
+      "retireBody": "Its descriptor is removed from the registry and nothing else is rewritten. Reach is set on each machine and names none, so it is untouched; a channel BOUND to this machine keeps naming it, and runs nowhere until you bind it to another.",
+      "retired": "{{name}} retired.",
       "derivedNote": "This machine's id is stored in a local file rather than derived from the host, so deleting ~/.coffer makes it come back as a new machine and this row has to be retired by hand."
     }
   }

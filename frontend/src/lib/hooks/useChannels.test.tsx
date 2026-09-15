@@ -9,6 +9,7 @@ import {
   useChannelStatus,
   useCreateChannel,
   useIssuePairingCode,
+  useRebindChannel,
 } from "./useChannels";
 import { mockApiClient } from "@/test/mockApiClient";
 import { resourcesKey } from "@/lib/api/queryKeys";
@@ -88,6 +89,8 @@ describe("useChannels hooks", () => {
       pending_pairing: false,
       peer: null,
       callback: null,
+      runs_on: "machine-here",
+      runs_here: true,
     };
     const fetchMock = stubFetch(status);
 
@@ -109,6 +112,36 @@ describe("useChannels hooks", () => {
     expect(result.current.data?.code).toBe("ABCD2345");
     expect(String(fetchMock.mock.calls[0][0])).toContain("/channels/tg/pairing-code");
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST" });
+  });
+
+  test("useRebindChannel PATCHes the config with the new binding, keeping the rest", async () => {
+    // A rebind is an ordinary config edit — there is no command reaching
+    // across to the other machine — so every other field has to survive it.
+    // Dropping a credential ref here would move the channel and break it in
+    // the same request.
+    const api = mockApiClient();
+    getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
+
+    const { result } = renderHook(() => useRebindChannel("tg"), { wrapper: makeWrapper() });
+    act(() =>
+      result.current.mutate({
+        config: { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" },
+        runsOn: "machine-there",
+        machine: "Desktop",
+      }),
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(api.PATCH).toHaveBeenCalledWith("/resources/{kind}/{name}", {
+      params: { path: { kind: "channel", name: "tg" } },
+      body: {
+        config: {
+          channel_type: "telegram",
+          bot_token_ref: "channel/tg/bot-token",
+          runs_on: "machine-there",
+        },
+      },
+    });
   });
 
   test("useIssuePairingCode toasts an error when the request fails (not silent)", async () => {

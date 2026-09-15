@@ -63,26 +63,6 @@ export type TreeOut = Schemas["TreeOut"];
  */
 export type TidyOut = Schemas["TidyOut"];
 
-/** One matching line quoted back from a hit, so the reader can see why it matched. */
-export interface SearchLineOut {
-  line_number: number;
-  line: string;
-}
-
-/** One file `search` is answering with. */
-export interface SearchHitOut {
-  path: string;
-  title: string;
-  description: string;
-  lines: SearchLineOut[];
-}
-
-/** Answer to `POST /knowledge/search`. Search is literal — there is no mode to
- * report and no score to rank by. */
-export interface SearchOut {
-  results: SearchHitOut[];
-}
-
 /** What one successful `POST /knowledge/upload` produced. */
 export interface IngestedDocumentOut {
   /** Path of the converted Markdown file, relative to the knowledge root. */

@@ -7,6 +7,12 @@
 // messages are i18n keys) — never zod's own text, never a toast. Only a server
 // failure is toasted, and it is also stated inline so the dialog explains
 // itself once the toast is gone.
+//
+// The channel is bound to THIS machine at creation (spec channels, "Where a
+// channel runs"): a channel that names no machine is one no daemon will start,
+// and "I filled in the form and the bot never answered" is the worst possible
+// first experience of the feature. The binding is movable afterwards from the
+// list row or the detail page.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -23,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
+import { useSyncStatus } from "@/lib/hooks/useSync";
 import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
 import { useCreateChannel } from "@/lib/hooks/useChannels";
 import {
@@ -64,6 +71,10 @@ export function AddChannelDialog({
   const { t } = useTranslation();
   const { toast } = useToast();
   const navigate = useNavigate();
+  // This machine's id, which the new channel is bound to. It is read here and
+  // passed into the planner rather than fetched there, so planning stays pure.
+  const { data: syncStatus } = useSyncStatus();
+  const machineId = syncStatus?.machine_id ?? null;
   const [channelType, setChannelType] = useState<ChannelType>("telegram");
   const [delivery, setDelivery] = useState<ChannelDelivery>(DEFAULT_DELIVERY);
   const [name, setName] = useState("");
@@ -136,7 +147,15 @@ export function AddChannelDialog({
       setFieldErrors(next);
       return;
     }
-    runCreate(planChannel(parsed.data));
+    // A channel is bound to the machine it is created from. Without this
+    // machine's id there is nothing to bind it to, and registering anyway
+    // would produce a channel that runs nowhere — so the form says why and
+    // stays open rather than creating a bot that will never answer.
+    if (machineId === null) {
+      setFormError(t("channels.dialog.machineUnknown"));
+      return;
+    }
+    runCreate(planChannel(parsed.data, machineId));
   };
 
   return (

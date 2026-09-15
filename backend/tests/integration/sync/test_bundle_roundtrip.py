@@ -218,21 +218,25 @@ async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
     assert "scope" not in raw
 
 
-async def test_export_withholds_a_machine_local_kind_entirely(vault: VaultMachine) -> None:
-    """A channel is one host's inbound surface — its webhook URL, its tunnel,
-    its port — so it gets no document at all, and is not counted as one either.
+async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachine) -> None:
+    """A channel is exported now, and counted as exported.
 
-    The counting half matters: a withheld kind reported as a failure would read
-    to the user like a row that could not be published, and a withheld kind
-    counted as exported would be a document nobody can find."""
+    It used to be withheld entirely, on the grounds that an inbound surface
+    means nothing off its host. The document travels because it names the one
+    machine whose daemon runs its adapter, and the binding must be in the
+    document for that to be worth anything — a document that travelled without
+    it would be a channel every machine could read as its own.
+    """
     await vault.register("mcp_server", "files", {"value": "files"})
-    await vault.register("channel", "seatalk", {"value": "port-8787"})
+    await vault.register("channel", "seatalk", {"value": "port-8787", "runs_on": vault.machine_id})
 
     summary = await vault.exporter.export(vault.bundle, with_credentials=False)
 
     root = pathlib.Path(vault.bundle.path)
-    assert not (root / "resources" / "channel").exists()
-    assert _areas(summary)["resources"] == 1
+    document = root / "resources" / "channel" / "seatalk.yaml"
+    assert document.is_file()
+    assert _doc(document)["config"]["runs_on"] == vault.machine_id
+    assert _areas(summary)["resources"] == 2
     assert summary.failures == []
 
 
@@ -657,13 +661,19 @@ async def test_resource_applier_runs_the_gate_before_it_writes_anything(
     assert vault.gate.seen == [{"value": "nope", "config_dir": f"{vault.home}/.gone"}]
 
 
-# --- apply: the kind that never travels -------------------------------------
+# --- apply: a channel is an ordinary document now ---------------------------
 
 
-async def test_resource_applier_ignores_a_channel_document(vault: VaultMachine) -> None:
-    """A channel is withheld in both directions, and ``upsert`` is the easy
-    half: a document that reached this machine anyway — written by a build that
-    still published channels — must not register one here."""
+async def test_resource_applier_registers_an_arriving_channel_with_its_binding(
+    vault: VaultMachine,
+) -> None:
+    """The document lands, and it lands naming somebody else's machine.
+
+    That is the whole of what the apply side owes: register the channel as it
+    was written, binding included. What stops this machine from answering the
+    bot is not the applier refusing the row — it is the runtime reading a name
+    that is not its own.
+    """
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
@@ -674,40 +684,35 @@ async def test_resource_applier_ignores_a_channel_document(vault: VaultMachine) 
             "kind": "channel",
             "name": "theirs",
             "description": None,
-            "config": {"value": "their-port-8787"},
+            "config": {"value": "their-port-8787", "runs_on": "ffffffffffffffff"},
         },
     )
 
     await applier.upsert("resources/channel/theirs.yaml")
 
-    assert await vault.resource_names("channel") == []
+    arrived = await vault.find("channel", "theirs")
+    assert arrived is not None
+    assert arrived.config["runs_on"] == "ffffffffffffffff"
 
 
-async def test_a_channel_deletion_in_the_tree_does_not_delete_the_local_channel(
+async def test_a_channel_deletion_in_the_tree_deletes_the_channel(
     vault: VaultMachine,
 ) -> None:
-    """The safety property, asserted where the damage would be done.
+    """A channel deletion is honoured like every other kind's.
 
-    The exporter stopped writing channel documents, so the first differential
-    export after this build lands publishes the channel documents already in
-    the shared tree as *deletions* — a genuine diff, indistinguishable at the
-    git layer from the user having deleted those channels. A machine that
-    honoured it would walk its own channels out of its registry, taking their
-    pairings and their credentials with them, on the round that was supposed to
-    stop channels travelling in the first place.
-
-    So whatever a ``resources/channel/`` path says, this machine's answer is
-    that the path is not about it.
+    It was once refused outright, and that refusal was a safety property rather
+    than tidiness: the build that stopped exporting channels published every
+    channel document already in the tree as a deletion, and honouring those
+    would have walked each machine's own channels out of its registry. That
+    build is behind us — a channel is exported again — so the refusal would now
+    only mean a channel the user deleted on one machine coming back on the
+    other. The one-way upgrade ordering it leaves behind is written down in
+    spec vault-sync's amendment, not papered over here.
     """
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
-    # This machine's own channel, registered here and configured for this host.
-    await vault.register("channel", "seatalk", {"value": "my-port-8787"})
-    vault.set_credential("channel/seatalk/token", "pairing-secret")
-    # And the document an older build published, sitting in the working tree
-    # under the same name — which is what makes the deletion look addressed to
-    # this machine's channel.
+    await vault.register("channel", "seatalk", {"value": "port-8787", "runs_on": vault.machine_id})
     _stage_doc(
         vault.worktree,
         "resources/channel/seatalk.yaml",
@@ -715,26 +720,13 @@ async def test_a_channel_deletion_in_the_tree_does_not_delete_the_local_channel(
             "kind": "channel",
             "name": "seatalk",
             "description": None,
-            "config": {"value": "someone-elses-port-8787"},
+            "config": {"value": "port-8787", "runs_on": vault.machine_id},
         },
     )
 
     await applier.remove("resources/channel/seatalk.yaml")
 
-    surviving = await vault.find("channel", "seatalk")
-    assert surviving is not None, (
-        "a channel document's deletion walked this machine's own channel out of the registry"
-    )
-    assert surviving.config["value"] == "my-port-8787"
-    # And the credential the channel cites was not released along with it —
-    # deleting the row is what would have orphaned it.
-    assert vault.has_credential("channel/seatalk/token")
-
-    # A kind that does travel is still removable through the same applier, so
-    # this is a rule about channels and not a removal that stopped working.
-    await vault.register("mcp_server", "files", {"value": "files"})
-    await applier.remove("resources/mcp_server/files.yaml")
-    assert await vault.resource_names("mcp_server") == []
+    assert await vault.find("channel", "seatalk") is None
 
 
 async def test_resource_applier_removes_a_row_and_agrees_when_it_is_already_gone(

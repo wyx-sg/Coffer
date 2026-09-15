@@ -41,6 +41,7 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
     ChannelCommand("new", "", "Start a fresh conversation"),
     ChannelCommand("agent", "[key]", "Show or switch the agent (opens a fresh conversation)", True),
     ChannelCommand("model", "[name]", "Show or switch the model (next turn)", True),
+    ChannelCommand("effort", "[level]", "Show or switch the reasoning effort (next turn)", True),
     ChannelCommand("stop", "", "Interrupt the running turn"),
     ChannelCommand("status", "", "Conversation, agent, and turn state", True),
     ChannelCommand("save", "[collection]", "Save the document you just sent into a collection"),

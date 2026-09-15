@@ -13,7 +13,6 @@ from collections.abc import Sequence
 
 import pytest
 
-from coffer.application.memory.overrides import Override
 from coffer.application.memory.recall import RecallService
 from coffer.domain.memory.fact import TYPE_PROJECT, Fact, Origin
 from coffer.infrastructure.memory import store
@@ -57,16 +56,8 @@ class FakeMemory:
         return store.list_facts(partition)
 
 
-class FakeOverrides:
-    def __init__(self, overrides: dict[str, Override] | None = None) -> None:
-        self._overrides = dict(overrides or {})
-
-    async def all(self) -> dict[str, Override]:
-        return self._overrides
-
-
-def _service(memory: FakeMemory, overrides: FakeOverrides | None = None) -> RecallService:
-    return RecallService(memory=memory, overrides=overrides or FakeOverrides())
+def _service(memory: FakeMemory) -> RecallService:
+    return RecallService(memory=memory)
 
 
 # ---------------------------------------------------------------------------
@@ -154,9 +145,7 @@ async def test_recall_returns_facts_the_digest_omitted() -> None:
         async def list_partitions(self) -> Sequence[PartitionSummary]:
             return [PartitionSummary(name="myproj", project_root="/repo/myproj", fact_count=40)]
 
-    ctx = await compose_context(
-        _ContextMemory(), FakeOverrides(), agent=None, cwd="/repo/myproj", budget_tokens=150
-    )
+    ctx = await compose_context(_ContextMemory(), agent=None, cwd="/repo/myproj", budget_tokens=150)
     # The digest is small; confirm the specific fact we will recall is not in it.
     assert "needleinahaystack" not in ctx.text
     assert ctx.facts_omitted > 0
@@ -170,24 +159,6 @@ async def test_recall_returns_facts_the_digest_omitted() -> None:
 # ---------------------------------------------------------------------------
 # other coverage
 # ---------------------------------------------------------------------------
-
-
-async def test_recall_excludes_a_hidden_fact() -> None:
-    fact = _persist(
-        _fact(
-            slug="hidden-one",
-            partition="coffer",
-            title="Should stay hidden",
-            description="d",
-            body="This entry carries the codeword hiddenmarker.",
-        )
-    )
-    overrides = FakeOverrides({fact.key: Override(fact_key=fact.key, hidden=True)})
-    service = _service(FakeMemory(visible_by_agent={None: ["coffer"]}), overrides)
-
-    outcome = await service.recall("hiddenmarker")
-
-    assert outcome.facts == ()
 
 
 async def test_recall_reports_origins_on_returned_facts() -> None:

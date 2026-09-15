@@ -21,7 +21,6 @@ from collections.abc import Mapping, Sequence
 import yaml
 
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.exporter import MACHINE_LOCAL_KINDS
 from coffer.application.sync.ports import CredentialSyncPort, ImportGate, SyncedStatePort
 from coffer.domain.error_base import CofferError
 from coffer.domain.errors import ResourceNotFound
@@ -29,10 +28,6 @@ from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.fernet_time import is_fresher
 from coffer.domain.sync.portability import expand_home
-
-#: The bundle paths a machine-local kind occupies, derived from the exporter's
-#: own list so the two halves of the rule cannot drift apart.
-_MACHINE_LOCAL_PREFIXES = tuple(f"resources/{kind}/" for kind in sorted(MACHINE_LOCAL_KINDS))
 
 
 class TreeApplier:
@@ -118,16 +113,8 @@ class ResourceApplier:
         self._actor = actor
 
     async def upsert(self, path: str) -> None:
-        if _is_machine_local(path):
-            return
         doc = await asyncio.to_thread(_read_yaml, self._worktree / path)
         kind, name = _ref_from(doc, path)
-        if kind in MACHINE_LOCAL_KINDS:
-            # The path said otherwise but the document is what gets registered,
-            # and ``_ref_from`` believes the document over the path. Checking
-            # both is what makes "a channel never arrives here" true rather
-            # than merely usual.
-            return
         raw_config = doc.get("config")
         config: dict[str, object] = dict(raw_config) if isinstance(raw_config, Mapping) else {}
         if self._home:
@@ -171,8 +158,6 @@ class ResourceApplier:
             )
 
     async def remove(self, path: str) -> None:
-        if _is_machine_local(path):
-            return
         kind, name = _ref_from({}, path)
         ref = ResourceRef(kind, name)
         if await self._find(ref) is None:
@@ -276,26 +261,6 @@ def _read_yaml(path: pathlib.Path) -> dict[str, object]:
     if not isinstance(raw, Mapping):
         raise SyncSerializationError(f"{path.name} is not a mapping")
     return dict(raw)
-
-
-def _is_machine_local(path: str) -> bool:
-    """Whether this path belongs to a kind that never travels.
-
-    Both directions, and the removal direction is the one that matters. The
-    exporter no longer writes channel documents, so the first differential
-    export after this build lands publishes the channel documents already in
-    the shared tree as *deletions* — a genuine diff, indistinguishable at the
-    git layer from the user having deleted those channels. An applier that
-    honoured it would walk every other machine's own channels out of its
-    registry, taking their pairings and credentials with them, on the round
-    that was supposed to stop channels travelling in the first place.
-
-    So this is a safety property, not tidiness: whatever a ``resources/<kind>/``
-    path says for a machine-local kind, this machine's answer is that the path
-    is not about it. The round still marks it absorbed and the pointer still
-    advances, which is what keeps the deletion from being retried forever.
-    """
-    return path.startswith(_MACHINE_LOCAL_PREFIXES)
 
 
 def _ref_from(doc: Mapping[str, object], path: str) -> tuple[str, str]:

@@ -33,8 +33,6 @@ _console = Console()
 #: timeout `client_or_exit()` would otherwise impose on every session start.
 _CONTEXT_TIMEOUT_S = 3.0
 
-_OVERRIDE_FIELDS = ("hidden", "pinned", "superseded_by", "conflict_choice")
-
 
 def _verbose(ctx: typer.Context) -> bool:
     return bool(ctx.obj and ctx.obj.get("verbose"))
@@ -83,18 +81,10 @@ def list_facts(
 
     def render(data: dict[str, Any]) -> None:
         table = Table(title=f"memory:{partition}")
-        for col in ("key", "slug", "title", "type", "status", "hidden", "pinned"):
+        for col in ("key", "slug", "title", "type", "status"):
             table.add_column(col)
         for f in data["facts"]:
-            table.add_row(
-                f["key"],
-                f["slug"],
-                f["title"],
-                f["type"],
-                f["status"],
-                str(f["hidden"]),
-                str(f["pinned"]),
-            )
+            table.add_row(f["key"], f["slug"], f["title"], f["type"], f["status"])
         _console.print(table)
 
     _echo_json_or(ctx, r.json(), output_json, render)
@@ -186,105 +176,13 @@ def context(
         return
 
 
-def _patch_override(ctx: typer.Context, fact_key: str, changes: dict[str, Any]) -> None:
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.patch(f"/memory/facts/{fact_key}/override", json=changes)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(_json.dumps(r.json(), indent=2))
-
-
-def _clear_override(ctx: typer.Context, fact_key: str, field: str) -> None:
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.delete(f"/memory/facts/{fact_key}/override", params={"field": field})
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(_json.dumps(r.json(), indent=2))
-
-
-@app.command("hide")
-def hide(ctx: typer.Context, fact_key: str = typer.Argument(...)) -> None:
-    """Hide a fact from every delivery and retrieval result (FR-042)."""
-    _patch_override(ctx, fact_key, {"hidden": True})
-
-
-@app.command("unhide")
-def unhide(ctx: typer.Context, fact_key: str = typer.Argument(...)) -> None:
-    """Reverse ``hide``."""
-    _clear_override(ctx, fact_key, "hidden")
-
-
-@app.command("pin")
-def pin(ctx: typer.Context, fact_key: str = typer.Argument(...)) -> None:
-    """Pin a fact so the digest's budget always prefers it (FR-051)."""
-    _patch_override(ctx, fact_key, {"pinned": True})
-
-
-@app.command("unpin")
-def unpin(ctx: typer.Context, fact_key: str = typer.Argument(...)) -> None:
-    """Reverse ``pin``."""
-    _clear_override(ctx, fact_key, "pinned")
-
-
-@app.command("supersede")
-def supersede(
-    ctx: typer.Context,
-    fact_key: str = typer.Argument(..., help="The older fact"),
-    by: str = typer.Option(..., "--by", help="The fact key that replaces it"),
-) -> None:
-    """Mark a fact superseded by another, by hand."""
-    _patch_override(ctx, fact_key, {"superseded_by": by})
-
-
-@app.command("unsupersede")
-def unsupersede(ctx: typer.Context, fact_key: str = typer.Argument(...)) -> None:
-    """Reverse ``supersede``."""
-    _clear_override(ctx, fact_key, "superseded_by")
-
-
-@app.command("settle")
-def settle(
-    ctx: typer.Context,
-    fact_key: str = typer.Argument(..., help="One side of the conflict"),
-    winner: str = typer.Option(..., "--winner", help="The fact key that wins"),
-) -> None:
-    """Settle a conflict this fact was flagged in."""
-    _patch_override(ctx, fact_key, {"conflict_choice": winner})
-
-
-@app.command("unsettle")
-def unsettle(ctx: typer.Context, fact_key: str = typer.Argument(...)) -> None:
-    """Reverse ``settle``."""
-    _clear_override(ctx, fact_key, "conflict_choice")
-
-
-@app.command("overrides")
-def list_overrides(ctx: typer.Context, output_json: bool = typer.Option(False, "--json")) -> None:
-    """List every developer decision on record."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/memory/overrides")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    table = Table(title="Memory overrides")
-    for col in _OVERRIDE_FIELDS:
-        table.add_column(col)
-    table.add_column("fact_key")
-    for o in data["overrides"]:
-        table.add_row(*(str(o[f]) for f in _OVERRIDE_FIELDS), o["fact_key"])
-    _console.print(table)
-
-
 @app.command("delivery")
 def delivery_status(
     ctx: typer.Context,
     agent: str = typer.Option("", "--agent", help="Restrict to one agent"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Show per-agent delivery installation state and last-fired time (FR-055)."""
+    """Show per-agent delivery installation state (FR-054)."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/memory/delivery", params={"agent": agent} if agent else None)
@@ -296,10 +194,9 @@ def delivery_status(
     table = Table(title="Memory delivery")
     table.add_column("agent")
     table.add_column("installed")
-    table.add_column("last fired")
     table.add_column("command")
     for d in data["delivery"]:
-        table.add_row(d["agent"], str(d["installed"]), d["last_fired_at"] or "never", d["command"])
+        table.add_row(d["agent"], str(d["installed"]), d["command"])
     _console.print(table)
 
 

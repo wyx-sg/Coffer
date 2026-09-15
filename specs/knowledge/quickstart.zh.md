@@ -52,8 +52,7 @@ coffer resource delete knowledge:shopee
   `directory` 下创建文件（文件名由 `title` slug 化而来），或替换 `path` 处的
   文件。二者恰选其一。
 - `coffer__delete(path)` —— 从磁盘删除一个文件。
-
-**没有 `coffer__search`**：背后没有带排序的索引，它只会是 `grep` 的第二个名字。
+- `coffer__search(query)` —— 与 `grep` 同一个字面匹配器，但按**文件**报告而不是按行：每个命中是一个路径、它的 `title` 与 `description`，以及匹配到的那几行。匹配是字面的，所以给它一个有辨识度的词或一句原话，而不是用你自己的话提问（FR-024）。
 
 动作是「先看目录再 grep」——下钻决定*读哪个文件*，grep 定位*哪一行*：
 

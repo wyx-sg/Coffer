@@ -338,7 +338,12 @@ clean success sends no completion summary while a failed turn does.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
   paired chat. `/stop` and `/new` take effect even while a turn is running;
   other messages join the conversation's pending queue (FR-050 — the one the
-  web shows; the channel refuses past 10 waiting) and run in order.
+  web shows; the channel refuses past 10 waiting) and run in order. These are
+  the commands that need nothing of the conversation; the ones that configure
+  the conversation the chat is bound to — `/agent`, `/model`, `/effort` — are
+  specified in FR-013 and FR-017, and `/save` in spec knowledge FR-036. All of
+  them live on one roster (FR-065), so none of the lists derived from it can go
+  stale.
 - **FR-008**: A notify entry point (REST + CLI) delivers arbitrary text to a
   channel's paired peer, independent of any conversation.
 - **FR-009**: The SeaTalk callback listener is a separate process serving only
@@ -360,8 +365,8 @@ clean success sends no completion summary while a failed turn does.
 - **FR-011**: The Channels page lists channels, registers new ones (storing
   secrets through the credential store), shows status (adapter running,
   paired peer, callback endpoint), issues pairing codes, and toggles
-  enable/disable. CLI parity: `coffer channel list / register / pair /
-status / notify`.
+  enable/disable, and binds each channel to the machine that runs it (FR-080).
+  CLI parity: `coffer channel list / register / bind / pair / status / notify`.
 - **FR-012**: Channel events are audited: pairing issued, paired,
   notification sent — alongside the automatic resource-lifecycle audit.
 - **FR-013**: The owner switches the conversation's agent from chat. `/agent`
@@ -420,6 +425,26 @@ status / notify`.
   No surface refuses an id: a channel binds an agent and nothing more, so
   whatever the bound CLI accepts, `/model` can reach. With no suggestions it
   falls back to the text report.
+
+  **`/effort` is the other half of that choice.** For an agent whose models take
+  a reasoning level — Codex on `turn/start`, Claude Code as the CLI's
+  `--effort` — the model id is not the whole decision, and the level is not part
+  of the model NAME, so it is its own command rather than an argument to
+  `/model` (the same reason the web Chat page renders a second picker beside the
+  model picker rather than folding levels into it, FR-078). It behaves exactly
+  as `/model` does: no argument reports the level in effect and renders the
+  choices as a selection card where the transport `supports_buttons`, an
+  argument applies it to the next turn of the SAME conversation, a tap takes the
+  same path as the text, and Coffer validates nothing — the level reaches the
+  agent verbatim, so one it cannot run fails at the CLI where every other
+  unusable choice does. The levels offered are those of the model the
+  conversation is actually ON, read from the same catalogue `/model` offers, so
+  a level menu never describes a model the conversation is not running. An agent
+  whose model reports no levels has nothing to choose between: `/effort` says so
+  in one line rather than rendering an empty card. Like `/model`, there is no
+  clearing form — a reserved word meaning "unset" would be a level name Coffer
+  invented in a namespace it does not own — and `/new` is the way back to the
+  agent's own default, since a fresh conversation carries no overrides at all.
 - **FR-018**: On a transport that declares the `supports_buttons` capability,
   the core MAY render a command's choice list as an **interactive selection
   card** (Telegram inline keyboard, SeaTalk interactive message). A button tap
@@ -465,12 +490,16 @@ status / notify`.
   **rewrites the same message** at the next window through the same
   `supports_card_update` path an applied choice uses. One rule serves both
   cards — `/agent`'s two choices are under the bound and render with no
-  navigation chrome at all.
+  navigation chrome at all, and `/effort`'s handful of levels likewise.
 
   A navigation payload lives in its own callback namespace (`page:<kind>:<index>`),
-  disjoint from the `agent:` / `model:` values a choice carries and fixed-size
+  disjoint from the `agent:` / `model:` / `effort:` values a choice carries and fixed-size
   well inside the 64-byte callback budget. The separation is what guarantees the
-  invariant: **a page turn changes nothing.** It re-reads what is in effect and
+  invariant: **a page turn changes nothing.** The set of kinds that namespace
+  admits is closed and explicit, so adding a card that ticks a current choice
+  (`/effort`'s is the third) means adding its kind there too; a `page:` value
+  naming a kind Coffer does not render is dropped, not applied. It re-reads what
+  is in effect and
   re-renders; it can never be mistaken for a choice, and a malformed navigation
   value is dropped rather than allowed to fall through to the switch. Because the
   page in view may not hold the option in effect, the card's body always names
@@ -655,7 +684,8 @@ status / notify`.
 ### Key Entities
 
 - **Channel** — resource `channel:<name>`; config = type, credential refs,
-  default agent + config.
+  default agent + config, and `runs_on` — the `machine_id` of the one machine
+  whose daemon runs this channel's adapter (see "Where a channel runs").
 - **ChannelPeer** — the paired owner of a channel: `(resource, chat_id)`,
   display name, paired-at, pointer to the active conversation, the paired
   sender's identity (`sender_id`), and sticky preferences (chosen agent).
@@ -700,28 +730,105 @@ status / notify`.
 
 ## Where a channel runs
 
-A channel's platform identity (a polled bot, a webhook endpoint) tolerates
-only ONE consumer, so "which machine answers this bot" must have exactly one
-answer — and the way to guarantee that is not to narrow a channel down to one
-machine but to never let it reach a second one. **A `channel` does not
-converge.** It is the one kind a round ignores in both directions (spec
-vault-sync, `## What does not sync`): a channel is an inbound surface welded to
-the machine it was registered on — that machine's port, that machine's tunnel,
-the webhook URL the platform was told to call — so a copy arriving anywhere
-else is inert at best and a rival consumer at worst.
+> **Amendment 2026-09-14 (a channel travels, and names the machine that runs
+> it).** Reverses the previous rule that a `channel` never converges. That rule
+> was correct about the danger and wrong about the remedy: it refused to let the
+> document travel because an arriving copy would be inert at best and a rival
+> consumer at worst — and then had no way to express, anywhere, which machine
+> the one live consumer was. What follows is the same guarantee reached the
+> other way: the document travels, and it names its machine. Spec vault-sync
+> carries the matching amendment.
 
-So a channel runs on the machine it was configured on, and there is no other
-machine holding a row that could start a second adapter. A channel runs when it
-is enabled, here, and stops when it is disabled, here. Two adapters can still be
-pointed at one bot identity, but only the way they always could — by someone
-registering the same bot twice, on two machines, by hand — and no field inside
-Coffer could have prevented that one.
+A channel's platform identity — a polled bot, a webhook endpoint, a held
+WebSocket — tolerates exactly ONE consumer. So "which machine answers this bot"
+must have exactly one answer, and that answer is written down: **a channel is
+bound to one machine**, and only the bound machine's daemon starts an adapter
+for it.
+
+The binding is `runs_on`, a `machine_id` (spec vault-sync, "Identity is
+derived") in the channel's own configuration. It is configuration, not a
+property of the row, and that is the load-bearing choice: configuration is what
+a resource document carries between machines, so the binding travels with the
+channel it binds. Every machine holding the document reads the same name, and
+every machine but one finds it is not being named.
+
+### Reach and the binding answer different questions
+
+They are easy to confuse and must never be merged.
+
+| | Reach (`enabled` + `scope`) | Binding (`runs_on`) |
+| --- | --- | --- |
+| Question | **which agents** may this channel drive, and is it live here | **which machine** runs the adapter |
+| Travels? | no — set per machine, stays on it | **yes** — it is one answer for the whole vault |
+| Where | the resource row | the channel's config |
 
 A channel's `scope`
 ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))
-therefore says exactly one thing, and it is not about machines — see FR-079. It
-names the agents the channel may DRIVE. The one place it meets the runtime is
-the empty case: a channel that may drive nothing does not run at all.
+still says exactly one thing and it is still not about machines (FR-079): it
+names the agents the channel may DRIVE. Giving the binding a home in `scope`
+would have made "where does this apply" carry two unrelated answers, and a
+machine axis on reach was withdrawn precisely because each machine already says
+what it activates by holding its own reach. The binding is the opposite kind of
+fact: it is one decision the machines share, which is why it travels and reach
+does not.
+
+### What the runtime does with it
+
+The runtime starts an adapter only for a channel bound to the machine it is
+running on. Everything else fails **closed** — nothing is started — and the
+three cases are distinguished in what the surfaces report rather than in what
+the runtime does:
+
+- **Bound to another machine.** Normal. The channel is not this machine's to
+  run and the surfaces say so, so a channel that is quiet here never looks like
+  a channel that crashed here.
+- **Bound to a machine the registry does not know** — retired, or never seen.
+  Reported as a fault, because it is one: the channel runs nowhere, and nothing
+  will fix it but a rebind. It is NOT started here. Starting a channel because
+  nobody else claims it is the rival-consumer failure arriving by the back door:
+  every machine that cannot resolve the id would reason identically and they
+  would all start.
+- **Unbound** (`runs_on` absent or null). Also runs nowhere, and also reported.
+  A document naming no machine means the same thing on every machine that holds
+  it, so "run it" could only mean "run it on all of them". A channel registered
+  through any of Coffer's own surfaces is bound to the registering machine at
+  creation, so unbound is a state a user reaches by importing or hand-editing,
+  not one they fall into.
+
+Two adapters can still be pointed at one bot identity, but only the way they
+always could — by someone registering the same bot twice, by hand, under two
+names — and no field inside Coffer could have prevented that one.
+
+### Rebinding
+
+Changing `runs_on` from machine A to machine B is an ordinary configuration
+edit, and it converges the ordinary way — no restart, and no command that
+reaches across to another machine.
+
+- The machine that **loses** the channel stops its adapter on its next
+  reconcile tick after it sees the change: about two seconds on the machine the
+  edit was made on, and one tick after the converge round that brings the change
+  over on the other.
+- The machine that **gains** it starts one on its next tick after the same
+  round lands the document there.
+
+So the clean way to hand a channel over is to rebind it from the machine that
+currently holds it: the stop is immediate and local, and the start happens
+afterwards, elsewhere. Rebinding TO the machine one is sitting at while another
+machine still holds the channel is allowed and is sometimes the only option —
+the old machine may be the one that is broken — but it opens a window, bounded
+by that machine's sync interval, in which both adapters are live. The surface
+that offers the rebind says so.
+
+### Pairings travel with the channel
+
+A channel's peer pairings are synced state (spec vault-sync, `## What syncs`),
+because a channel that travels without them makes the owner re-pair from their
+phone every time it moves, and a rebind is meant to be one click. What travels
+is platform identity — chat id, sender id, display name, the chat's sticky
+agent. The active conversation pointer does not: conversations are machine-local
+and a published pointer would name a conversation the other machine does not
+have.
 
 ## Acceptance Scenarios
 
@@ -899,6 +1006,36 @@ the empty case: a channel that may drive nothing does not run at all.
 - **Given** an enabled telegram channel with a running adapter
 - **When** the user disables and re-enables the channel
 - **Then** polling stops while disabled and resumes after enabling
+
+### Scenario: only the machine a channel names starts its adapter
+
+- **Given** an enabled channel bound to another machine's `machine_id`
+- **When** the runtime reconciles
+- **Then** no adapter is started here, and the management surface reports the
+  channel as bound elsewhere rather than as stopped
+
+### Scenario: a channel bound to an unknown machine starts nowhere
+
+- **Given** an enabled channel whose binding names a machine the registry does
+  not hold
+- **When** the runtime reconciles on any machine
+- **Then** no machine starts an adapter for it, and the channel is reported as
+  bound to a machine that no longer exists
+
+### Scenario: an unbound channel runs nowhere and says so
+
+- **Given** an enabled channel whose configuration carries no binding
+- **When** the runtime reconciles
+- **Then** no adapter is started, and the channel's status carries a diagnostic
+  naming the missing binding and the fix
+
+### Scenario: rebinding hands the channel over without a restart
+
+- **Given** an enabled channel running on this machine
+- **When** the user binds it to another machine
+- **Then** this machine stops its adapter on the next reconcile, without a
+  daemon restart, and the channel's binding is what the next converge round
+  publishes
 
 ### Scenario: deleting a channel cleans up its runtime and peer
 
@@ -2190,7 +2327,14 @@ API server a user reaches is not guaranteed to be new enough.
   ephemeral messages), Coffer uses it for those; the agent's actual reply is
   always an ordinary message the group can see. This is the group-noise half of
   FR-024: that requirement stops the bot from *acting* on everything, this one
-  stops it from *saying* everything out loud.
+  stops it from *saying* everything out loud. Every command declares which side
+  of that line it falls on, on the same roster FR-065 registers the menu from:
+  `/new` and `/stop` change state the whole room shares and stay visible, while
+  the ones that answer the asker — `/agent`, `/model`, `/effort`, `/status`,
+  `/help` — are delivered privately where the transport can. A command added
+  without that declaration defaults to private, which is the safe way round but
+  still a decision the roster states rather than one a new command inherits by
+  accident.
   **Selection cards are deliberately excluded.** A card is the one surface that
   must be *rewritten* after it is used (FR-018), and a privately-delivered
   message is rewritten through a different address space — Telegram edits an
@@ -2206,7 +2350,10 @@ API server a user reaches is not guaranteed to be new enough.
   opening the bot for the first time sees what it is and what it accepts
   instead of an empty chat. The registered menu MUST list every command the
   channel actually handles — a command the help text offers but the menu omits
-  is a drift bug, not a design choice. Copy the owner already wrote, and the
+  is a drift bug, not a design choice. This is enforced structurally rather than
+  by review: the menu, the help text and the per-command privacy flag (FR-064)
+  are all rendered from one roster, so adding a command (`/effort` is the most
+  recent) is one entry plus its handler, with no second list to forget. Copy the owner already wrote, and the
   bot's name, are their branding decision and MUST NOT be overwritten.
 - **FR-066**: Pairing is one tap. Where the platform supports a parameterised
   start link, the pairing code (FR-005) is issued as a link that carries it, so
@@ -2318,10 +2465,18 @@ decision it rests on is recorded in
   the turn emitted them, and a card whose result has not arrived yet reads as
   still running.
 - **FR-078**: The page MUST let the owner read and set the conversation's agent
-  configuration — which agent it runs on and which model that agent is put on —
-  over `GET|PATCH .../agent-config`, persisting the model while preserving the
-  conversation's working directory and upstream session id, and reverting to the
-  agent's own default when it is cleared. A missing Coffer LLM connection MUST
+  configuration — which agent it runs on, which model that agent is put on, and
+  how hard that model thinks — over `GET|PATCH .../agent-config`, persisting
+  both while preserving the conversation's working directory and upstream
+  session id, and reverting to the agent's own default when either is cleared; a
+  body that mentions one leaves the other where it was. The reasoning level is a
+  SECOND control beside the model picker, not a variant of it: the agents take
+  it as their own field rather than as part of the model name, and it renders
+  only when the chosen model reports levels — nothing to choose between means no
+  control at all, not a disabled or empty one. Both controls MUST be offered on
+  the **draft** surface as well as in an open conversation, because the first
+  turn is the one a user most wants to pitch, and by the time the conversation
+  exists that turn is already running. A missing Coffer LLM connection MUST
   NOT block the page: with none configured the draft surface still accepts a
   message and the turn runs on the agent's own built-in model and login, because
   a Coffer connection is an optional override, not a prerequisite (see the
@@ -2336,9 +2491,10 @@ decision it rests on is recorded in
   rather than borrowed, and the spec says so explicitly because a reader who
   assumes the usual reading gets it backwards. That inverted reading is the
   whole of what a channel's scope says: there is no second thing in it, and in
-  particular nothing about where the channel runs, because a channel does not
-  travel to a machine that would have to be told not to run it (see "Where a
-  channel runs").
+  particular nothing about WHICH MACHINE runs the channel. That question has its
+  own field, `runs_on` (FR-080), for a reason scope cannot satisfy: scope is
+  reach, reach is machine-local and never travels, and the machine that runs a
+  channel is one answer the machines must share.
 
   - An unrestricted scope MUST mean every registered agent. That is the
     pre-scope behaviour and what every existing channel carries, so no channel
@@ -2371,6 +2527,44 @@ decision it rests on is recorded in
     default once the scope no longer admits it, so narrowing a scope takes
     effect on the next conversation rather than waiting on whoever set the
     preference.
+
+- **FR-080**: A channel MUST name the one machine that runs it. Its
+  configuration carries `runs_on`, the `machine_id` of the machine whose daemon
+  starts this channel's adapter (spec vault-sync, "Identity is derived"). It is
+  configuration and not a property of the row, because it MUST travel with the
+  channel document; reach MUST NOT travel and MUST NOT be made to carry this
+  (see "Where a channel runs").
+
+  - The binding MUST be authoritative for adapter startup. A runtime MUST start
+    an adapter only for a channel whose `runs_on` is this machine's id, and MUST
+    fail **closed** otherwise: an unknown machine, a retired one, and no binding
+    at all all mean "not this machine", and none of them may be read as
+    permission to start. Starting on a guess cannot be walked back — the
+    platform has already been answered twice.
+  - **Unbound MUST run nowhere**, and MUST be reported rather than left to look
+    like a stopped adapter. A channel registered through any Coffer surface MUST
+    be bound to the registering machine at creation, so unbound is reached by
+    import or by hand, not by using the product.
+  - A binding naming a machine no longer in the registry MUST be reported as a
+    fault on the channel, distinctly from a channel that is merely bound
+    elsewhere. Both run nowhere here; only one of them is somebody's mistake.
+  - Rebinding MUST converge without a restart and without a command that reaches
+    another machine. The losing machine MUST stop its adapter within one
+    reconcile tick of seeing the change; the gaining machine MUST start one
+    within one tick of the converge round that brings the change to it. The
+    surface offering the rebind MUST say that binding a channel to the machine
+    the user is sitting at, while another machine still holds it, leaves both
+    live until that machine's next round.
+  - A channel's configuration MUST carry credential **references** only, never
+    secret material, exactly as it did when it never travelled — the rule is
+    unchanged, and travelling is what makes it load-bearing rather than merely
+    tidy. Ciphertext for those refs travels only when the user opts the remote
+    in to credentials, and a machine holding ciphertext without the master key
+    MUST report those refs locked rather than failing decryption silently.
+  - A channel bound to another machine MUST NOT be refused by this machine's
+    own preconditions. Its `default_agent` names an agent on the machine that
+    runs it; validating that here would hold a good document out of the registry
+    for a fault on nobody's machine.
 
 ## Deliberately out of scope
 

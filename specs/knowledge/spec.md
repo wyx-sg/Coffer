@@ -34,6 +34,8 @@ The reason is that the tier that was the *fallback* turned out to be the whole o
 
 What the removal buys is that **nothing derived stands between a query and a file**. There is no index, so there is nothing to rebuild, nothing to be stale, nothing to reconcile, and nothing to exclude from a backup.
 
+The same reasoning reaches the web page, so the **in-page search box goes with it**. A collection's view carried a box that posted to `/knowledge/search` and answered with a list of hits sitting where the tree should be — a second way to reach a file, with its own rules, stacked on top of the folder it was querying. A collection *is* a folder, so the page now browses it and nothing else: one tree on the left, one read-only preview on the right, the same two panes a skill's Files tab is (FR-061). The `search` route itself is untouched and keeps the callers it was built for — `coffer__search` for agents, `coffer knowledge search` for the CLI. What it loses is the one caller that was duplicating the tree it sat above.
+
 ## User Scenarios & Testing
 
 ### User Story 1 — One knowledge store, every agent (Priority: P1)
@@ -204,7 +206,7 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 ### Surfaces
 
 - **FR-060**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list the catalogue at a path, read a file, search, upload a document, write a file, delete one, and trigger tidy. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source, embedding-configuration or per-scope settings endpoint.
-- **FR-061**: The web UI MUST present the knowledge root as a **single tree** — no lane tabs — rendering content **read-only** through the unified file preview, with open-in-external-editor and reveal-in-file-manager on a file and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view. There is nothing to report about index freshness and no rebuild to offer.
+- **FR-061**: The web UI MUST present a collection as a **two-pane file browser**, the same one a skill's folder gets (spec [skill-manager](../skill-manager/spec.md)): a **single tree** on the left — no lane tabs, opened a directory at a time as FR-021 lists it — and the file chosen from it on the right, rendered **read-only** through the unified file preview with open-in-external-editor and reveal-in-file-manager on it and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view. The page MUST NOT carry a retrieval box of its own: the one input beside the tree narrows the names already on screen, client-side, and reading the files themselves is `search` and `grep`, whose callers are the agents' tools and the CLI. There is nothing to report about index freshness and no rebuild to offer.
 - **FR-062**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
 
 ### Migration

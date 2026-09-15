@@ -296,9 +296,14 @@ MCP invocation records and conversations, none of which sync.
   configuration. Each machine decides for itself what that resource reaches
   there, so convergence can never re-answer a permission question a machine had
   already answered ([Per-agent resource scope](./per-agent-resource-scope.md)).
-- The `channel` kind does not converge at all. A channel is an inbound surface
-  bound to one machine, so a channel travelling is at best inert and at worst a
-  second machine answering the same conversation.
+- The `channel` kind converges like every other, and each channel names the one
+  machine whose daemon runs its adapter. It did NOT converge at first, on the
+  grounds that a channel is an inbound surface bound to one machine and so
+  travels to be at best inert and at worst a second machine answering the same
+  conversation. That objection is answered rather than avoided by a binding
+  (spec channels FR-080): the document travels, the adapter does not, and only
+  the machine the document names starts one. The reversal is written up in spec
+  vault-sync's `## What does not sync` amendment.
 - Coffer now writes the vault without a human in the loop. That is the real
   cost of this decision, and it is why the pointer, the snapshot and the
   circuit breaker are normative rather than nice to have.

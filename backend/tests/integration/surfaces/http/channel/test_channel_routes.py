@@ -68,6 +68,12 @@ class _StubRuntime:
     def adapter(self, name: str) -> _StubAdapter | None:
         return self.adapters.get(name)
 
+    async def local_machine_id(self) -> str | None:
+        # This stub stands in for a runtime that was never given a machine, so
+        # the binding gate is skipped for it and every channel reads as local —
+        # which is what these route tests are about, not the binding.
+        return None
+
 
 @dataclass
 class _Ctx:
@@ -198,6 +204,11 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "peer": None,
         "callback": None,  # telegram needs no callback ingress
         "diagnostics": [],  # nothing contradicts the configuration
+        # The binding travels on the wire even when there is nothing to say:
+        # a surface must be able to tell "bound elsewhere" from "stopped", and
+        # a field that appeared only sometimes would make that a guess.
+        "runs_on": None,
+        "runs_here": True,  # this runtime has no machine, so nothing is foreign
     }
 
 

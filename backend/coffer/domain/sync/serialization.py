@@ -20,11 +20,10 @@ again after the desktop's next round, with nothing in the history that reads
 like a decision anyone made. What travels is the resource — its identity and
 its configuration. What it reaches, here, stays here.
 
-Which resources get a document *at all* is not decided here. A kind that is
-bound to one machine never reaches this module —
-:data:`coffer.application.sync.exporter.MACHINE_LOCAL_KINDS` is the one place
-that names them — so this stays kind-agnostic and projects whatever it is
-handed.
+Every kind gets a document, including ``channel``, which was once withheld
+entirely: a channel names inside its own config the single machine whose daemon
+runs its adapter, so the document can travel without the adapter travelling
+with it. This module stays kind-agnostic and projects whatever it is handed.
 
 This module is pure: it deals in dicts only. YAML encoding lives in
 infrastructure.

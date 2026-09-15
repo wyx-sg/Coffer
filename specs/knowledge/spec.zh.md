@@ -34,6 +34,8 @@
 
 这次移除换来的是：**查询和文件之间不再隔着任何派生物。** 没有索引，也就没有什么要重建、没有什么会过期、没有什么要对账，更没有什么要排除在备份之外。
 
+同一条理由也延伸到 Web 页面，于是**页内搜索框也随之移除**。collection 的详情页上原本有一个框，向 `/knowledge/search` 发请求，然后在本该是树的位置回一串命中列表——这是通往同一个文件的第二条路，有它自己的规则，还叠在它正在查询的那个文件夹之上。collection *就是*一个文件夹，所以这个页面现在只做浏览这一件事：左边一棵树，右边一个只读预览，和 skill 详情页的 Files tab 是同一副两栏（FR-061）。`search` 路由本身不动，它为之而建的调用方也都还在——agent 用 `coffer__search`，CLI 用 `coffer knowledge search`。被拿掉的只是那个在树上面重复了树的调用方。
+
 ## 用户场景与测试
 
 ### 用户故事 1 — 一个知识库，所有 agent（优先级 P1）
@@ -204,7 +206,7 @@ agent 手里有一个有辨识度的词或短语，它要的是这个词句出�
 ### Surface
 
 - **FR-060**: `/api/v1/knowledge` 下的 REST API 与 `coffer knowledge` CLI 组 MUST 覆盖：创建 collection、按路径列目录、读文件、search、上传文档、写文件、删文件、触发 tidy。删除 collection 走 Resource 框架（`DELETE /api/v1/resources/knowledge/{name}`）。MUST NOT 存在索引、重建索引、check-sources、update-source、embedding 配置或 per-scope 设置端点。
-- **FR-061**: Web UI MUST 把知识根呈现为**单一树**——没有 lane tab——通过统一文件预览以**只读**方式渲染内容，并对文件及其所在文件夹提供「在外部编辑器打开」和「在文件管理器中显示」。MUST NOT 有应用内编辑器。它 MUST 提供把文档上传进当前所看 collection 的入口。没有索引新鲜度可报，也没有重建可给。
+- **FR-061**: Web UI MUST 把一个 collection 呈现为**两栏文件浏览器**，和 skill 的文件夹用的是同一副（spec [skill-manager](../skill-manager/spec.md)）：左边一棵**单一树**——没有 lane tab，按 FR-021 列目录的方式一级一级展开——右边是从树上选中的那个文件，通过统一文件预览以**只读**方式渲染，并对它及其所在文件夹提供「在外部编辑器打开」和「在文件管理器中显示」。MUST NOT 有应用内编辑器。它 MUST 提供把文档上传进当前所看 collection 的入口。这个页面 MUST NOT 自带检索框：树旁边那唯一一个输入框只在客户端筛选已经显示出来的名字，而真正去读文件内容的是 `search` 和 `grep`，它们的调用方是 agent 的工具和 CLI。没有索引新鲜度可报，也没有重建可给。
 - **FR-062**: 读取响应 MUST 带上文件的绝对路径及其所在文件夹的绝对路径。
 
 ### 迁移

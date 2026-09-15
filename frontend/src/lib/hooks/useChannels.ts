@@ -9,6 +9,9 @@
 // on a transport is per-agent, so the list row and the detail header both mount
 // the shared reach control. The scope binding itself is generic
 // (useScope.ts) — there is nothing channel-specific about it, so none here.
+// The machine BINDING is the other axis and is channel-specific: it lives in
+// the channel's own config (`runs_on`), travels with the document, and is
+// written through the same config PATCH an edit uses — see useRebindChannel.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -75,6 +78,42 @@ export function useUpdateChannel() {
       void qc.invalidateQueries({ queryKey: resourcesKey });
       void qc.invalidateQueries({ queryKey: channelStatusKey(name) });
       toast.success(t("channels.edit.saved", { name }));
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/** What a rebind needs: the channel's CURRENT config (so the PATCH preserves
+ *  every credential ref and platform field beside the binding) and the machine
+ *  it should run on. */
+export interface ChannelRebind {
+  config: Record<string, unknown>;
+  runsOn: string;
+  /** Display name of the target machine — the toast's, not the wire's. */
+  machine: string;
+}
+
+/**
+ * Move a channel's adapter to another machine (spec channels, "Where a channel
+ * runs"). The binding is an ordinary config field, so this is an ordinary
+ * config PATCH — there is no command that reaches across to the other machine
+ * and none is needed: each daemon reconciles against the document it holds.
+ *
+ * Both caches move: the resource list carries `config.runs_on` for the table,
+ * and the channel status carries the daemon's own `runs_here` plus the
+ * unbound diagnostic this may have just cleared.
+ */
+export function useRebindChannel(name: string) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: ({ config, runsOn }: ChannelRebind) =>
+      applyChannelEdit({ name, config: { ...config, runs_on: runsOn }, secrets: [] }),
+    onSuccess: (_name, { machine }) => {
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+      void qc.invalidateQueries({ queryKey: channelStatusKey(name) });
+      toast.success(t("channels.machine.rebound", { name, machine }));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

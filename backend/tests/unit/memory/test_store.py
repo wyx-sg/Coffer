@@ -75,7 +75,6 @@ def test_round_trip_is_exact_when_superseded() -> None:
         status=STATUS_SUPERSEDED,
         superseded_by="abc123def456",
         conflicts_with=("111111111111",),
-        proposed=True,
     )
     store.write_fact(fact)
     assert store.read_fact(fact.partition, fact.slug) == fact

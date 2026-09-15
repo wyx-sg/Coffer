@@ -4,11 +4,12 @@
 // installation of Coffer that has converged with this remote, read as a
 // derived view of `machines/*.yaml` in the working tree.
 //
-// The list is not only the Machines tab's data — it is also the pick-list
-// every scope editor builds its machine axis from, which is why it lives in
-// its own hook file rather than inside the Sync page's tree. `scope` names a
-// machine by its DERIVED id, never by the display name, so renaming is free
-// and a mistyped id can never be entered by hand.
+// The list is not only the Machines tab's data — it is also the pick-list the
+// channel binding control offers (spec channels, "Where a channel runs"),
+// which is why it lives in its own hook file rather than inside the Sync
+// page's tree. `scope` has no machine axis and never did name a machine; the
+// binding does, by DERIVED id rather than display name, so renaming a machine
+// is free and a mistyped id can never be entered by hand.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -22,8 +23,8 @@ export function useMachines() {
 }
 
 /**
- * Rename THIS machine. Free by construction: `scope` references the derived
- * id, never the label, so nothing else has to change.
+ * Rename THIS machine. Free by construction: a channel's binding references
+ * the derived id, never the label, so nothing else has to change.
  */
 export function useRenameSelf() {
   const qc = useQueryClient();
@@ -37,10 +38,16 @@ export function useRenameSelf() {
 }
 
 /**
- * Retire another machine. The daemon strips it from the scope of every
- * resource naming it in the same change — a descriptor removed while scopes
- * still name it would leave those resources dormant on a machine nobody can
- * see — so the resource caches are invalidated alongside the registry.
+ * Retire another machine: its descriptor leaves the registry, and nothing in
+ * the vault is rewritten to match. Reach is set per machine and names no
+ * machine id, so there is nothing to strip out of it.
+ *
+ * A channel BOUND to the retired machine keeps its binding, and that is the
+ * honest outcome rather than an oversight: the channel now names a machine
+ * nobody claims, which means it runs nowhere and needs a rebind — a fault the
+ * channel surfaces report. Silently unbinding it would swap one dead state for
+ * another and lose the evidence of which machine it used to be. The resource
+ * caches are still invalidated, because those surfaces now read differently.
  */
 export function useRetireMachine() {
   const qc = useQueryClient();

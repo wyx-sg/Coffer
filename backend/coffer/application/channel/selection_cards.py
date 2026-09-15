@@ -1,6 +1,7 @@
 """The selection cards Coffer offers in a chat, built in one place.
 
-There are two — pick an agent, pick a model — and each is built three times:
+There are a few — pick an agent, pick a model, pick how hard that model thinks,
+pick where a document is saved — and each is built three times:
 when the user asks for it, when they turn a page, and again after they tap, so
 the card stops offering the option they just took. Building them here rather
 than inline in ``commands.py`` keeps those renderings from drifting apart,
@@ -82,7 +83,7 @@ def parse_page_turn(value: str) -> tuple[str, int] | None:
     if prefix != PAGE_PREFIX:
         return None
     kind, _, index = rest.partition(":")
-    if kind not in ("agent", "model", "collection") or not index.isdigit():
+    if kind not in ("agent", "model", "effort", "collection") or not index.isdigit():
         return None
     return kind, int(index)
 
@@ -236,6 +237,44 @@ def model_card(
         header=f"Current model: {shown}\nTap a choice (or send /model <name>):",
         options=options,
         current_value=f"model:{current}" if current else None,
+        current_label=shown,
+        page=page,
+    )
+
+
+def effort_card(
+    *, current: str | None, levels: Sequence[str], page: int | None = None
+) -> SelectionCard:
+    """Pick how hard the chosen model thinks next turn.
+
+    The second half of the model choice, and a card of its own for the same
+    reason the web renders a second picker: the level is not part of the model
+    NAME — both agents take it as their own field (Codex's ``turn/start``,
+    Claude's ``--effort``) — so folding four levels into the model card would
+    multiply one model into four buttons that are the same model.
+
+    ``current`` is ``None`` when the conversation pins no level, in which case
+    the agent's own default is in effect and no option carries the tick. The
+    caller only builds this when ``levels`` is non-empty: an agent that reports
+    none has nothing to choose between, and an empty card is worse than the
+    sentence saying so.
+    """
+    shown = current or "(agent default)"
+    options = [
+        ChoiceButton(
+            label=_tick(level, level == current),
+            value=f"effort:{level}",
+            selected=level == current,
+        )
+        for level in dict.fromkeys(levels)
+        if callback_fits(f"effort:{level}")
+    ]
+    return _paginate(
+        kind="effort",
+        title="Effort",
+        header=f"Current effort: {shown}\nTap a choice (or send /effort <level>):",
+        options=options,
+        current_value=f"effort:{current}" if current else None,
         current_label=shown,
         page=page,
     )

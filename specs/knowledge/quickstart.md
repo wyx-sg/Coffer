@@ -57,9 +57,11 @@ collection the agent is authorized for.
   in `directory` (the name is slugified from `title`), or replace the file at
   `path`. Exactly one of the two.
 - `coffer__delete(path)` — remove a file from disk.
-
-There is **no `coffer__search`**: with no ranked index behind it, it would be a
-second name for `grep`.
+- `coffer__search(query)` — the same literal matcher `grep` uses, reported a
+  **file** at a time rather than a line at a time: each hit is a path, its
+  `title` and `description`, and the lines that matched. Matching is literal,
+  so give it a distinctive word or an exact phrase, not a question in your own
+  words (FR-024).
 
 The motion is catalogue-then-grep — descend to choose *which file*, grep to find
 *which line*:

@@ -514,6 +514,18 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 - **When** 列出该 agent 的 transcript 时带上搜索词、项目过滤与排序键（`started_at`、`last_activity_at` 或 `message_count`），
 - **Then** 返回的每条会话摘要都携带派生出的标题、消息数、`started_at`、`last_activity_at` 与该会话文件的绝对源路径；只返回标题或项目路径命中搜索、且项目命中过滤的会话，按请求的排序键与方向排序，并以 `limit`/`offset` 分页、连同命中总数一并返回——只读，不发出任何 audit 事件，也不写入任何内容。
 
+### Scenario: read one of the agent's conversations
+
+- **Given** 一个已注册 agent，其某次本地会话 transcript 已被 FR-047 列出，且其中某一轮粘贴了一个 API key，
+- **When** 用户用列表给出的绝对源路径打开该会话，并指定一个小于会话长度的轮次窗口，
+- **Then** Coffer 返回该会话的摘要字段，连同那一窗带角色、正文与时间戳的轮次——粘贴的 key 已被脱敏，过长的一轮被截到开头并做标记，整份文件的轮次总数与这一窗一并给出——而落在该 agent 自己 transcript 目录之外的路径被拒为 `not_found`（404），与「transcript 已不存在」是同一个答案；只读，不发出任何 audit 事件，也不写入任何内容。
+
+### Scenario: browse one native memory store's files
+
+- **Given** 一个已注册 `claude_code` agent，其某个原生记忆 store 已被 FR-040 列出，store 目录里有若干 Markdown 文件和一个子目录，
+- **When** 用户用列表给出的 `memory_dir` 打开该 store，随后读取其中一个文件，
+- **Then** Coffer 把 store 目录返回成一棵树（目录在文件之前，路径相对 store），并返回该文件的内容以及支撑打开 / 显示的绝对路径；而不属于该 agent 的目录——包括它同级的那个项目目录——以及逃出 store 的路径，都被拒为 `not_found`（404）；只读，不发出任何 audit 事件，也不写入任何内容。
+
 ### Scenario: list a directory config entry's files
 
 - **Given** 一个已注册 `claude_code` agent，其 `agents/` 目录含 Markdown subagent 文件（可嵌套），
@@ -625,7 +637,9 @@ agent 注册之后，用户希望直接在 Coffer 里查看该 agent 自己的�
 
 agent 会把每次会话的 transcript 写进它自己的配置目录——Claude Code 的 `<config_dir>/projects/**/*.jsonl`，Codex 的 `<config_dir>/sessions/**/*.jsonl`。registry 把它们列出来，好让用户能从 agent 页面找到过去的某次会话，并在它所在的位置打开。这只是一个浏览面，仅此而已：Coffer 解析这些文件以派生出摘要，绝不写入它们、绝不存储它们的内容，也绝不把它们发往任何地方。
 
-- **FR-047**: 系统 MUST 暴露一份只读的、agent 本地会话 transcript 的列表。每条会话摘要携带其 `session_id`、派生出的 `title`（该会话的第一个用户回合，已做密钥擦洗）、`project_path`、`message_count`、`started_at`、`last_activity_at`，以及该 transcript 文件的绝对 `source_path`——最后这项支撑 FR-038 的打开 / 显示操作。该列表 MUST 支持对标题与项目路径的大小写不敏感子串搜索、按 `project` 的精确过滤、按 `started_at` / `last_activity_at`（默认）/ `message_count` 双向排序，以及 `limit`/`offset` 分页并附命中的 `total`——因为一个 agent 会累积成千上万次会话，这个界面不可能一次全部加载。解析逐文件进行并按修改时间缓存；解析失败的文件被跳过，而不是让整份列表失败。消息正文不随响应传输，也不驻留在内存里。该列表一切在读取时从磁盘派生、不存储任何东西，并且——与其它工作区列表一样（FR-011）——不发出任何 audit 事件。
+- **FR-047**: 系统 MUST 暴露一份只读的、agent 本地会话 transcript 的列表。每条会话摘要携带其 `session_id`、派生出的 `title`（该会话的第一个**真实**用户回合，已做密钥擦洗——正文只是一块注入式标记块的回合出自 harness 而非真人，不作为候选）、`project_path`、`message_count`、`started_at`、`last_activity_at`，以及该 transcript 文件的绝对 `source_path`——最后这项支撑 FR-038 的打开 / 显示操作。该列表 MUST 支持对标题与项目路径的大小写不敏感子串搜索、按 `project` 的精确过滤、按 `started_at` / `last_activity_at`（默认）/ `message_count` 双向排序，以及 `limit`/`offset` 分页并附命中的 `total`——因为一个 agent 会累积成千上万次会话，这个界面不可能一次全部加载。解析逐文件进行，并按该文件的修改时间**与大小**缓存；解析失败的文件被跳过，而不是让整份列表失败。**这份列表**不随响应传输消息正文，也不驻留它——正文只在 FR-048 的单次会话读取里、为读者打开的那一次会话而传输。
+
+  该列表 MAY 为这些摘要保留一份**一次性的派生 sidecar**，以免每次 daemon 重启都重付一次冷解析的代价——一个 agent 的 transcript 可达数千个文件、数 GB，重新派生一遍就是好几秒的阻塞 I/O。该 sidecar 不含任何消息正文，位于 **vault 之外、`coffer.db` 之外**的某个路径上，用户随时可以删掉它，任何导出或备份都不携带它。它 MUST 只改变得到答案的时间，绝不改变答案本身：只有当文件的修改时间与大小仍然匹配时，摘要才会从中取用；当 sidecar 缺失、为空、损坏或正被写入时，列表 MUST 仍然给出正确结果——只是更慢。系统 MAY 在后台、在请求路径之外预热它，好让装完之后的第一次访问不必替所有人买单。列表返回的一切仍然派生自 agent 自己磁盘上的文件：关于一次会话的任何东西都不是被存储的事实。与其它工作区列表一样（FR-011），无论是这份列表还是预热过程，都不发出任何 audit 事件。
 
 **不再提供：把 transcript 蒸馏进记忆。** Coffer 一度读取同一批文件，把持久的事实蒸馏进知识层的 journal 通道。那条路径、它的账本、它的后台扫描以及它写入的那个通道都已删除（见 spec knowledge）；本列表不会把它们复活。留下来的是那一半不需要模型、也不可能损坏任何东西的部分：把有哪些会话展示给用户，并打开其中一次。
 
@@ -639,13 +653,17 @@ agent 会把每次会话的 transcript 写进它自己的配置目录——Claud
 
 **界面**
 
-- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/收编、插件列出/切换/卸载、原生记忆扫描（FR-040）、transcript 列表（FR-047）——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。Web UI 的 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。agent 详情页有七个 tab——概览、Skill、MCP 服务器、插件、记忆、对话记录与配置文件。其中只有插件 tab 会对 agent 本身产生写操作（启用 / 禁用 / 卸载）；记忆与对话记录是 agent 自有 store 的只读视图，每一行都提供「在外部编辑器中打开 / 在文件管理器中显示」。
+- **FR-048**: 系统 MUST 暴露一个只读的**单次会话读取**，返回某一份 transcript 的摘要字段（即 FR-047 所列）连同它的一**窗**对话轮次——每一轮的角色、正文与时间戳——外加取这一窗所用的 `limit`/`offset`。会话由 FR-047 给出的绝对 `source_path` 寻址，该路径 MUST 解析落在该 agent 自己的 transcript 目录之内；其它任何路径一律 `not_found`（404），与「transcript 已被删除」给出同一个答案，使两者之差无法被用来探测文件系统。这是 transcript **正文**唯一会传输的地方，一切守护正文的手段都集中在此：每一轮都用 FR-047 给标题所用的同一套擦洗做密钥擦洗（用户提示词正是粘贴密钥会落到的地方），超过系统单轮上限的轮次被截到开头并做标记，返回的轮次数量有界——一份 transcript 可达数十 MB，所以界面是翻页读它而不是整份加载。整份文件的轮次总数与这一窗一并返回，读者绝不会只看到 200 轮却要自己猜是不是全部。只读：不写入任何内容、不驻留任何内容，也不发出任何 audit 事件（FR-011）。
+
+- **FR-049**: 系统 MUST 暴露一个只读的**原生记忆 store 读取**，把某个 store 的目录返回成文件树（每一项的名称、相对 store 的路径、类型与大小），并把其中某个文件返回成文本（内容、供 FR-038 打开 / 显示用的绝对路径，以及它是否被截断、是否为二进制）。store 由 FR-040 给出的 `memory_dir` 寻址，该路径 MUST 恰好是那套布局本会列出的目录——逐项目布局的 `<projects>/<slug>/<memory>`，或 Codex 全局布局的那个唯一 `<memories>` 目录——而不是 agent 配置目录下的任意路径：配置目录里还放着它的 transcript、设置与插件缓存。不属于该 agent 的目录、逃出 store 的文件路径、以及不存在的文件，一律 `not_found`（404）。读取有大小上限、遍历有深度上限，且两者都会如实报告而非悄悄生效。只读：Coffer 绝不写入 agent 自己的记忆，所以这个界面只做预览并提供 FR-038 的打开 / 显示，而不是一个编辑器，并且不发出任何 audit 事件（FR-011）。
+
+- **FR-009**: 每一个管理操作——注册/列出/查看/更新/移除、配置文件列出/读取/写入（含目录子文件）、Coffer-MCP 安装/卸载/状态、MCP 条目列出/收编、插件列出/切换/卸载、原生记忆扫描（FR-040）与 store 文件读取（FR-049）、transcript 列表（FR-047）与单次会话读取（FR-048）——MUST 同时通过 (a) REST API 与 (b) `coffer agent ...` CLI 提供。Web UI 的 Agents 页面 MUST 暴露以上全部，**除配置文件内容写入之外**（单文件与目录子文件）：在 UI 中，配置文件与目录子文件是**只读**的，带「在外部编辑器中打开 / 在文件管理器中显示」操作（FR-038），而 REST API 与 CLI 保留程序化的写入/创建/删除路径。agent 详情页有七个 tab——概览、Skill、MCP 服务器、插件、记忆、对话记录与配置文件。其中只有插件 tab 会对 agent 本身产生写操作（启用 / 禁用 / 卸载）；记忆与对话记录是 agent 自有 store 的只读视图。这两张表都不带逐行操作：点一行就是**打开**它所指的东西，而「在外部编辑器中打开 / 在文件管理器中显示」（FR-038）落在被打开的那个页面上，紧挨着它们所作用的对象。点对话记录的一行，打开那一次会话、渲染成可读的对话（FR-048）；点记忆的一行，把该 store 的目录打开成文件树加只读预览（FR-049）——因为一个 store 就是一个目录，而一次会话就是一个文件。
 - **FR-010**: CLI MUST 在每个读取类操作上支持 `--json` 以提供机器可读输出。
 - **FR-038**: 对每个配置文件（及每个目录条目子文件），UI MUST 提供针对该文件的**在外部编辑器中打开**与**在文件管理器中显示**操作，使用 FR-014/FR-015 的 `path`。打开与显示通过 daemon 的文件系统动作端点（FR-039）执行真实的 OS 动作——因为环回 daemon 始终在用户自己的机器上（ADR: daemon-proxies-os-file-actions）。没有 copy-path 回退。用于「在外部编辑器中打开」的编辑器引用 spec ui-shell 定义的用户「首选外部编辑器」偏好（此处不再重新规定）。
 
 **可观测性**
 
-- **FR-011**: 系统 MUST 为每一个生命周期事件写入一条 audit 条目：agent 创建、更新、移除；配置文件写入/删除（`agent_config_file_written` / `agent_config_file_deleted`）；Coffer MCP 安装/卸载；MCP 条目收编（`agent_mcp_entry_adopted`）；插件切换/卸载（`agent_plugin_toggled` / `agent_plugin_uninstalled`）。（agent 没有启用/禁用的概念；发现与全部工作区列表——MCP 条目、插件、配置文件、原生记忆 store、transcript 会话——都是只读的，均不发出任何 audit 事件。）
+- **FR-011**: 系统 MUST 为每一个生命周期事件写入一条 audit 条目：agent 创建、更新、移除；配置文件写入/删除（`agent_config_file_written` / `agent_config_file_deleted`）；Coffer MCP 安装/卸载；MCP 条目收编（`agent_mcp_entry_adopted`）；插件切换/卸载（`agent_plugin_toggled` / `agent_plugin_uninstalled`）。（agent 没有启用/禁用的概念；发现与全部工作区列表——MCP 条目、插件、配置文件、原生记忆 store、transcript 会话——都是只读的，均不发出任何 audit 事件，包括为 FR-047 的 transcript 摘要缓存预热的后台过程。读取列表中的**某一项**——单次会话的对话轮次（FR-048）、单个 store 的文件（FR-049）——是同一件事的更小尺度，同样不发出任何 audit 事件。）
 - **FR-012**: 系统 MUST 暴露一个只读的发现操作，把已安装但未注册的 agent 列为候选项，可通过 REST API（`GET /api/v1/agents/candidates`）、`coffer agent detect` CLI 与 Web UI 的 Agents 页面访问。
 
 **配置目录选择器**
@@ -670,7 +688,7 @@ agent 会把每次会话的 transcript 写进它自己的配置目录——Claud
 - **Agent MCP Entry（agent MCP 条目）**：agent 自己文件中所配置的一个 MCP server 的派生（绝不存储）视图——名称、来源文件、传输方式、`enabled`（Codex）、`is_coffer`、`matches_resource`。文件是事实来源；Coffer 读取与收编条目但不保留副本，且只在收编的移除步骤中才编辑条目。
 - **Agent Plugin（agent 插件）**：一个已安装插件的派生（绝不存储）视图——id（`<name>@<marketplace>`）、marketplace、启用状态、`cache_present`，外加从插件安装目录尽力读取的清单信息。所有输入都是只读的：Coffer 上报的启用状态就是各 agent 文档化配置面所声明的那个，Coffer 绝不把它写回去。
 - **Native Memory Store（原生记忆 store）**：coding agent 自己的某个原生记忆 store 的派生（绝不存储）视图——`claude_code` 为逐项目目录（`<config_dir>/projects/<slug>/memory`），`codex` 为单一全局 task-grouped `<config_dir>/memories/MEMORY.md` 的某个路由 cwd 切片。携带 `project` 标签与 `path`（**真实**项目 cwd）、真实的 `memory_dir`，以及 `item_count`。只读：Coffer 列出这些 store 并打开它们，绝不写入它们。
-- **Transcript Session（transcript 会话）**：agent 自己某个会话 transcript 文件的派生（绝不存储）摘要——`session_id`、经擦洗派生出的 `title`、`project_path`、`message_count`、`started_at`、`last_activity_at`，以及该文件的绝对 `source_path`。在读取时从磁盘上的 `.jsonl` 解析，并按修改时间缓存；消息正文既不返回也不驻留。
+- **Transcript Session（transcript 会话）**：agent 自己某个会话 transcript 文件的派生摘要——`session_id`、经擦洗派生出的 `title`、`project_path`、`message_count`、`started_at`、`last_activity_at`，以及该文件的绝对 `source_path`。从磁盘上的 `.jsonl` 解析，并按该文件的修改时间与大小缓存——既在内存里，也在 FR-047 那份一次性 sidecar 里；后者不含任何消息正文，位于 vault 之外、`coffer.db` 之外，而且它是对「派生结果」的缓存，不是对「会话」的记录：删掉它，同样的摘要会再次算出来。消息正文从来不属于摘要、也从不驻留；打开某一次会话时，FR-048 直接从文件流式取出一段有界、已擦洗的窗口，事后什么都不留。
 - **Directory Config Entry（目录型配置条目）**：解析到一个文件目录而非单个文件的 allowlist 配置条目。子文件以校验过的条目相对路径寻址；磁盘上的目录是事实来源。
 
 ## Success Criteria

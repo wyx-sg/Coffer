@@ -920,6 +920,60 @@ token-usage notification.
 **Unchanged:** J3/M3 — Coffer writes down no model name, and now no level either;
 both stay raw passthrough.
 
+## Amendment 2026-09-14 — Claude Code reports its reasoning levels too
+
+> Status: Draft. **Amends N4** of the 2026-09-13b amendment, whose closing
+> sentence — "An agent that reports no efforts (Claude Code) is unaffected end to
+> end" — was a description of Coffer's own omission, read at the time as a
+> property of the agent. **Refines N1** (where a level comes from) and **extends**
+> the surfaces the choice is offered on.
+
+**Why.** N4 said Claude Code reports no efforts. It does not report them the way
+Codex does — there is no per-model `supportedReasoningEfforts` in its catalog —
+but the runtime Coffer drives it with takes one: the installed Claude Agent SDK
+declares `EffortLevel` and renders `ClaudeAgentOptions.effort` as the CLI's
+`--effort` flag. Coffer dropped it in three places at once (the discovery
+sources reported no levels, the provider did not persist one, the adapter never
+set it), so "Claude Code has no effort" was a statement about Coffer, not about
+Claude Code — and it was the kind of statement that is self-confirming, because
+with nothing reported no surface ever asked.
+
+- **O1 — The levels come from the RUNTIME, not from the model.** For Codex they
+  are per model because its protocol says so; for Claude Code they are the same
+  for every entry, read once from the SDK's own `EffortLevel` alias rather than
+  written down here. This keeps M1's discipline exactly: Coffer holds no list,
+  and an SDK release that adds a level reaches the pickers without an edit. An
+  SDK that declares none yields an empty tuple, which is the pre-amendment world
+  — the controls hide themselves and turns are unchanged.
+- **O2 — No default is named for it.** `ClaudeAgentOptions.effort` defaults to
+  `None`, meaning "whatever the CLI decides", and the CLI does not say what that
+  is. N1's rule ("a default a picker cannot show is worse than no default at
+  all") therefore lands on `default_effort: None` for every Claude Code entry.
+  Its prose documentation calls one level the default; prose is not a
+  machine-readable fact, and a picker naming the wrong default is worse than one
+  naming none.
+- **O3 — An active connection no longer erases the levels.** The 2026-09-11c
+  amendment made an active connection's curated ids the whole answer a picker
+  gets, and that answer was rebuilt as bare ids — which silently emptied every
+  effort control the moment a connection went active. Ids are the connection's
+  to answer; LEVELS are not, because the turn still runs through the agent's own
+  runtime whatever endpoint it points at. So an id the agent also reports keeps
+  its levels, and one the agent has never heard of reports none. The label and
+  description stay the connection's business (still empty), so 2026-09-11c is
+  narrowed rather than reversed.
+- **O4 — Two more surfaces offer the choice, for both agents.** The web Chat
+  page's DRAFT bar gets the effort picker the open conversation already had
+  (spec channels FR-078) — the first turn is the one most worth pitching, and by
+  the time the conversation exists it is already running — and a channel gets
+  `/effort`, `/model`'s sibling in every respect (spec channels FR-017). N4's
+  "Coffer validates no level" is unchanged on both: the level is passed through
+  verbatim, and `xhigh` on a model that cannot do it degrades inside Claude's
+  own runtime, which is exactly where that decision belongs.
+
+**Amends:** N4's last sentence. **Unchanged:** N2 (stored per conversation
+beside the model), N3 (Codex applies it on the turn), J3/M3 (raw passthrough,
+no name and no level written down).
+
 ## Scope
 
 ### In scope

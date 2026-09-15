@@ -39,12 +39,30 @@ def test_application_help_text_is_the_rendered_roster() -> None:
 
 
 def test_names_returns_typed_forms() -> None:
-    assert names() == {"/new", "/agent", "/model", "/stop", "/status", "/save", "/help"}
+    assert names() == {
+        "/new",
+        "/agent",
+        "/model",
+        "/effort",
+        "/stop",
+        "/status",
+        "/save",
+        "/help",
+    }
 
 
 @pytest.mark.parametrize(
     ("command", "private"),
-    [("/status", True), ("/help", True), ("/agent", True), ("/new", False), ("/stop", False)],
+    [
+        ("/status", True),
+        ("/help", True),
+        ("/agent", True),
+        # The reasoning level is the asker's own business, exactly like the
+        # model it sits beside.
+        ("/effort", True),
+        ("/new", False),
+        ("/stop", False),
+    ],
 )
 def test_group_private_marks_the_asker_only_commands(command: str, private: bool) -> None:
     assert is_group_private(command) is private
@@ -75,6 +93,16 @@ def test_the_current_model_is_marked_selected_on_its_card() -> None:
 
     card = model_card(current="opus", picks=["opus", "sonnet"])
     assert [b.value for b in card.buttons if b.selected] == ["model:opus"]
+
+
+def test_the_current_effort_is_marked_selected_on_its_card() -> None:
+    from coffer.application.channel.selection_cards import effort_card
+
+    card = effort_card(current="xhigh", levels=["low", "high", "xhigh"])
+    assert [b.value for b in card.buttons if b.selected] == ["effort:xhigh"]
+    # With none pinned the agent's own default is in effect, and nothing is
+    # ticked — a card must not claim a choice the conversation has not made.
+    assert [b.value for b in effort_card(current=None, levels=["low"]).buttons if b.selected] == []
 
 
 # -- private answers in a group (FR-064) --------------------------------------

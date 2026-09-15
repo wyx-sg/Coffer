@@ -27,7 +27,7 @@ Spec [knowledge](../knowledge/spec.md) holds what the user or an agent **wrote d
 
 ## What this does not repeat
 
-Coffer has built two halves of a memory loop before and removed both. **Transcript distillation** (removed 2026-09-09) read session transcripts and wrote a journal; this layer does not read a transcript at all — Claude Code and Codex each already distil their own, far better than Coffer did, and this layer starts from their output. **Session-context injection** (removed 2026-09-10) was a working hook that had never once been installed on the maintainer's machine; delivery returns here with the failure addressed head-on: installation is an explicit act with a visible outcome, and the layer records whether injection actually happens (FR-055).
+Coffer has built two halves of a memory loop before and removed both. **Transcript distillation** (removed 2026-09-09) read session transcripts and wrote a journal; this layer does not read a transcript at all — Claude Code and Codex each already distil their own, far better than Coffer did, and this layer starts from their output. **Session-context injection** (removed 2026-09-10) was a working hook that had never once been installed on the maintainer's machine; delivery returns here with the failure addressed head-on: installation is an explicit act with a visible outcome, and every fire is recorded in the audit log, so "it is installed" and "it is running" are separately answerable (FR-055).
 
 ## User Scenarios & Testing
 
@@ -55,13 +55,7 @@ Two facts disagree — an older one recorded that a mechanism shipped, a newer o
 
 **Independent Test**: aggregate two facts on one subject with opposite conclusions and different timestamps; confirm the pair is reported as a conflict and that the delivered digest carries the newer one.
 
-### User Story 5 — The developer's judgement outlives the rebuild (Priority: P1)
-
-The developer hides a fact that was never right, pins one that always matters, and settles a conflict by hand. Then the sources change and everything is recomputed — and their three decisions are still in force.
-
-**Independent Test**: record an override of each kind, delete the entire memory tree, re-run aggregation, and confirm all three still apply to the regenerated facts.
-
-### User Story 6 — Delivery is installed on purpose, and visibly (Priority: P1)
+### User Story 5 — Delivery is installed on purpose, and visibly (Priority: P1)
 
 Session-start delivery requires touching an agent's own settings, so Coffer never does it silently. The developer installs it from Coffer, sees that it is installed, and — this being the thing that failed last time — sees when it last actually ran.
 
@@ -76,6 +70,8 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 ### Scenario: the Codex profile becomes global facts
 
 ### Scenario: aggregation never modifies an agent's native memory files
+
+### Scenario: aggregation runs unattended, without anyone asking for it
 
 ### Scenario: an unchanged source file is skipped on the next sync
 
@@ -95,11 +91,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 ### Scenario: deleting the memory tree and re-syncing reproduces the facts
 
-### Scenario: a hidden fact stays hidden across a rebuild
-
-### Scenario: a pinned fact stays pinned across a rebuild
-
-### Scenario: a hand-settled conflict stays settled across a rebuild
+### Scenario: a partition's own directory is browsable as a file tree
 
 ### Scenario: the composed context stays within its token budget
 
@@ -115,7 +107,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 ### Scenario: hook installation is marker-scoped and removable
 
-### Scenario: hook status reports never-fired until an injection happens
+### Scenario: every hook fire is recorded in the audit log
 
 ### Scenario: an agent whose native memory shape is unreadable degrades loudly
 
@@ -143,44 +135,37 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 - **FR-020**: Each fact MUST be one Markdown file under its partition, carrying frontmatter with `title`, `description`, `type` (`user` | `feedback` | `project`), the origins it was seen in, `captured_at`, the source's own timestamp when it has one, and a status of `active` or `superseded`.
 - **FR-021**: A fact's body MUST be the source's own words, not a paraphrase. Summarising happens in the derived digest (FR-031); the fact stays quotable back to its origin.
-- **FR-022**: Every fact MUST carry an **origin key** that is stable across recomputation — derived from the contributing agent, the native file, and the fact's anchor within it — because it is what the developer's decisions are attached to (FR-040). Two agents contributing the same fact MUST produce one fact with two origins, not two facts.
-- **FR-023**: The whole tree under `~/.coffer/memory/` MUST be derived: deleting it and re-running aggregation MUST reproduce it. It MUST NOT converge with the sync remote (spec [vault-sync](../vault-sync/spec.md)): it is aggregated from the agents installed on *this* machine, so sending it to another would send facts that machine's own next pass would recompute away, and a machine that has never installed an agent would have that agent's partition appear and then vanish. Losing the machine loses the derived tree, and that is accepted — what must survive is the sources it is derived from and the decisions attached to it, which is what FR-043 carries.
+- **FR-022**: Every fact MUST carry an **origin key** that is stable across recomputation — derived from the contributing agent, the native file, and the fact's anchor within it — because it is what two agents' contributions are matched on across recomputation. Two agents contributing the same fact MUST produce one fact with two origins, not two facts.
+- **FR-023**: The whole tree under `~/.coffer/memory/` MUST be derived: deleting it and re-running aggregation MUST reproduce it. It MUST NOT converge with the sync remote (spec [vault-sync](../vault-sync/spec.md)): it is aggregated from the agents installed on *this* machine, so sending it to another would send facts that machine's own next pass would recompute away, and a machine that has never installed an agent would have that agent's partition appear and then vanish. Losing the machine loses the derived tree, and that is accepted: the sources it is derived from are the agents' own files, which the machine that has them can always recompute from.
 
 ### Organise
 
 - **FR-030**: After aggregation, an **organise** pass MUST run over each changed partition, driven by the internal connection: it merges duplicates across agents, marks a fact superseded when a later one contradicts it, flags a pair it cannot settle as a conflict, and writes the partition's digest.
 - **FR-031**: Organise MAY rewrite the derived digest freely and MUST NOT archive prior revisions — knowledge's `.history/` exists because knowledge is the only copy, and memory is not. It MUST NOT edit a fact's body (FR-021) and MUST NOT delete a fact.
 - **FR-032**: With no internal connection configured, organise MUST still produce a usable digest **mechanically** — facts grouped by type, newest first, one line each from their frontmatter — and simply contribute no merges, supersessions or conflict proposals. It MUST NOT be a no-op: an installation with no internal model still gets delivery.
-- **FR-033**: A supersession or conflict that organise proposes MUST be recorded on the facts as the model's finding, distinguishable on every surface from one the developer settled (FR-041).
-
-### The developer's decisions
-
-- **FR-040**: The developer MUST be able to **hide** a fact, **pin** one, mark one **superseded by** another, and **settle** a conflict in favour of one side. These MUST be stored apart from the derived tree, keyed by origin key, in the one table this layer adds.
-- **FR-041**: Overrides MUST be reapplied after every aggregation and organise pass, and MUST win over anything the model decided. Deleting the memory tree, or a partition being renamed, MUST NOT lose them.
-- **FR-042**: A hidden fact MUST be absent from every delivery and every retrieval result while remaining visible — and reversible — on the management surface. A pinned fact MUST be preferred by the digest's budget (FR-051).
-- **FR-043**: Overrides MUST converge with the sync remote (spec [vault-sync](../vault-sync/spec.md)), and are the only part of this layer that does. They are the opposite of FR-023's tree in exactly the way that matters: a hide or a pin is a **decision the developer made**, not a computation, so no machine's aggregation pass can reproduce it and every machine must be told. They travel keyed by origin key (FR-022) — which is stable across recomputation and is therefore stable across machines that recompute independently — with one document per override. An origin key holds characters a path cannot, so the document name MUST be derived from the key rather than being the key.
+- **FR-033**: A supersession or conflict that organise proposes MUST be recorded on the facts themselves, as the model's finding. Nothing settles it by hand: a conflict is shown because two facts disagree, and the next pass over changed sources is what resolves it.
 
 ### Delivery
 
 - **FR-050**: Delivery MUST have exactly three layers. **L0**, always: who the developer is, what this project's memory holds, and how to ask for more. **L1**, when it fits the budget: the partition's digest, one line per fact. **L2**, on request: `coffer__recall`.
-- **FR-051**: The composed payload MUST be **bounded by an explicit token budget**, and when facts are left out it MUST say how many and how to reach them. Pinned facts, then `global` facts about the person, then the current project's most recent, MUST be preferred in that order.
+- **FR-051**: The composed payload MUST be **bounded by an explicit token budget**, and when facts are left out it MUST say how many and how to reach them. `global` facts about the person, then the current project's most recent, MUST be preferred in that order.
 - **FR-052**: `coffer__recall` MUST take a word or phrase, span only the partitions the calling agent's scope allows, and return the matching facts **whole**, with their origins. Matching MUST be memory's own **case-insensitive substring scan** over the facts already in hand — a fact's body first, and failing that its title and description — with no score, no mode and no reason in the answer. It MUST need no internal connection at all: recall used to borrow spec [knowledge](../knowledge/spec.md)'s ranked retrieval, and that engine was deliberately removed along with every other use of embeddings in Coffer, so there is nothing left for recall to borrow and nothing for it to degrade from. The scan stays memory's own rather than reaching for knowledge's ripgrep, because at the corpus size this layer assumes the facts are already loaded.
 - **FR-053**: A **channel-driven turn** MUST receive L0 and L1 through the system-prompt append the turn platform already composes (spec [channels](../channels/spec.md)). It MUST NOT require a hook, since Coffer owns that context itself.
 - **FR-054**: For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it. Where it has none — Codex, whose only hook events are `PreToolUse`, `PostToolUse`, `PreCompact`, `Stop` and `UserPromptSubmit` — delivery MUST use its earliest per-session event with a **once-per-session guard**, so the digest arrives once rather than on every prompt. Installation MUST be an **explicit act** on Coffer's surface, marker-scoped so it can be identified, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing and is only ever written on the developer's instruction.
-- **FR-055**: Coffer MUST report, per agent, whether delivery is installed and **when it last actually fired**, reporting never-fired until one does. This is the check the removed injection layer lacked: it shipped, was never installed, and nothing said so for two months.
+- **FR-055**: Coffer MUST record **an audit event for every delivery fire**, so that whether injection is actually happening is answerable after the fact. This is the check the removed injection layer lacked: it shipped, was never installed, and nothing said so for two months. A fire is an event, not a property of the agent: the per-agent delivery status MUST report installation only, and MUST NOT carry a last-fired timestamp or warn about the absence of one — a hook installed a minute ago has legitimately never fired, and a surface that flags that is crying wolf on its own normal state.
 
 ### Surfaces
 
 - **FR-060**: The MCP gateway MUST expose exactly one new built-in tool, `coffer__recall`, and its description MUST tell the caller that matching is literal, so an agent gives it a distinctive word or phrase rather than a whole question. There MUST be no `remember` tool: this layer's facts are derived from agents' own memories, and an agent records something by recording it the way it already does.
-- **FR-061**: A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and facts, show one fact with its origins and conflicts, run a sync, run an organise pass, compose the session context, apply and clear each override, and install/inspect/remove delivery for an agent.
-- **FR-062**: The web UI MUST present partitions **as a table**, in the same shape whether or not any exist — an installation with no partitions yet MUST get that table's own empty row and a reachable sync, not a different page — and MUST present one partition's facts, surface conflicts as pairs to settle, and expose the four overrides.
-- **FR-064**: Per-agent delivery state, including last-fired (FR-055), MUST be presented on **that agent's own detail page**, not on the partitions surface. Delivery writes one agent's settings file, so it is per-agent state; a surface that is already scoped to an agent MUST NOT make the reader pick one again.
+- **FR-061**: A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and facts, show one fact with its origins and conflicts, browse a partition's own directory and read one file from it, run a sync, run an organise pass, compose the session context, and install/inspect/remove delivery for an agent.
+- **FR-062**: The web UI MUST present partitions **as a table**, in the same shape whether or not any exist — an installation with no partitions yet MUST get that table's own empty row and a reachable sync, not a different page. One partition MUST be presented as a **file tree over its own directory** with a read-only preview beside it — the same two panes a skill's Files tab is — and MUST offer open-in-editor and reveal-in-file-manager on the previewed file. It MUST NOT carry per-fact actions: a partition is a folder of derived Markdown, and the surface that browses it says so by looking like one.
+- **FR-064**: Per-agent delivery state MUST be presented on **that agent's own detail page**, not on the partitions surface. Delivery writes one agent's settings file, so it is per-agent state; a surface that is already scoped to an agent MUST NOT make the reader pick one again. That surface answers one question — installed or not; firing is read as events on the audit surface (FR-055, FR-065).
 - **FR-065**: This layer MUST NOT carry an audit surface of its own. Its events are read on the vault-wide audit surface, which every kind shares; a kind-scoped second copy is a duplicate surface, and every event type this layer records MUST therefore be legible there rather than shown as a raw event code.
-- **FR-063**: Every lifecycle act — aggregation, organise, each override, delivery installed or removed — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
+- **FR-063**: Every lifecycle act — aggregation, organise, delivery installed, removed or fired — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
 
 ### Constraints
 
-- **FR-070**: This layer MUST add exactly **one** table, holding the developer's overrides. Facts, digests and partition metadata are files or existing Resource rows.
+- **FR-070**: This layer MUST add **no table of its own**. Facts, digests and partition metadata are files or existing Resource rows, and nothing else about a partition is worth keeping anywhere but in the partition.
 - **FR-071**: File content MUST leave the machine only through the internal connection the developer configured, and only for the organise pass (FR-030) — exactly as spec [knowledge](../knowledge/spec.md) allows, and not at all when none is configured. Recall MUST send nothing anywhere: it reads no further than the facts on disk.
 - **FR-072**: Reading MUST be confined to the memory paths of registered agents' config directories. Every path built from a source's contents MUST pass a traversal guard.
 - **FR-073**: This layer MUST NOT reintroduce transcript distillation, a journal lane, native-memory projection, or a per-agent capability matrix. The two readers are written as two readers; a third agent earns an abstraction, not before.
@@ -188,10 +173,10 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 ## Success Criteria
 
 - **SC-001**: A fact learned by one agent is present in the session context composed for a different agent, with no file in either agent's own memory having changed.
-- **SC-002**: Deleting `~/.coffer/memory/` entirely and re-running a sync reproduces every fact, and every override the developer had recorded is still in force.
+- **SC-002**: Deleting `~/.coffer/memory/` entirely and re-running a sync reproduces every fact.
 - **SC-003**: The session context stays inside its stated token budget on a partition with an order of magnitude more facts than the budget admits, and names what it omitted.
 - **SC-004**: An installation with no internal connection configured still gets partitions, facts, a digest, delivery and recall — with merging and supersession absent rather than the feature absent. Recall is unaffected either way: it never needed a connection.
-- **SC-005**: The surface can answer, for each agent, whether delivery is installed and when it last fired.
+- **SC-005**: The surface can answer, for each agent, whether delivery is installed; and the audit surface can answer when that agent's hook last fired.
 - **SC-006**: A malformed or unrecognised native memory in one agent leaves the other agent's aggregation, and all previously aggregated facts, intact.
 
 ## Assumptions

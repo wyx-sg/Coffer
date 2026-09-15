@@ -51,6 +51,7 @@ import shutil
 from typing import IO
 
 from coffer.domain.agent.model_catalogue import AgentModel
+from coffer.infrastructure.agent.claude_effort import claude_effort_levels
 
 _log = logging.getLogger(__name__)
 
@@ -201,6 +202,12 @@ class ClaudeBinaryModelDiscovery:
         An alias whose target the catalog does not describe keeps its own name
         as the label: a picker entry reading "Opus" is worse than one reading
         "Opus 5", but far better than an empty one.
+
+        Every alias carries the SDK's reasoning levels (``claude_effort``). The
+        bundle has no per-model effort table to read, and it would not mean
+        anything if it did: Claude takes the level as an option on the session,
+        not as a property of the model, so the menu is the runtime's, not the
+        entry's.
         """
         start = window.find(_ALIASES_MARKER)
         if start < 0:
@@ -216,7 +223,13 @@ class ClaudeBinaryModelDiscovery:
             if not alias:
                 continue
             target = raw_target.decode("utf-8", "replace").strip()
-            out.append(AgentModel(id=alias, label=display.get(target) or alias.capitalize()))
+            out.append(
+                AgentModel(
+                    id=alias,
+                    label=display.get(target) or alias.capitalize(),
+                    efforts=claude_effort_levels(),
+                )
+            )
         return out
 
 

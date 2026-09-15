@@ -88,8 +88,10 @@ def test_no_record_call_passes_a_string_literal_event_type() -> None:
 
 def test_memory_route_events_are_enum_members() -> None:
     assert AuditEventType("memory_organised") is AuditEventType.MEMORY_ORGANISED
-    assert AuditEventType("memory_override_set") is AuditEventType.MEMORY_OVERRIDE_SET
-    assert AuditEventType("memory_override_cleared") is AuditEventType.MEMORY_OVERRIDE_CLEARED
+    assert AuditEventType("memory_delivery_fired") is AuditEventType.MEMORY_DELIVERY_FIRED
+    # The two override events were retired with the surface that wrote them
+    # (migration 0078 purges their rows), so naming them here would fail.
+    assert not [m for m in AuditEventType if "override" in m.value]
 
 
 def test_event_values_are_unique_snake_case() -> None:

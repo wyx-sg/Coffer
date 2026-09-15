@@ -72,11 +72,27 @@ class _CommonChannelFields(BaseModel):
     # the channel's own: it is the framework-level per-agent scope on the
     # resource row (ADR per-agent-resource-scope), not a config field.
     #
-    # NOTE: there is no runtime-affinity field here any more. `runs_on` (the
-    # machine whose runtime started this channel's adapter) went away with
-    # continuous multi-machine sync (ADR vault-sync) — an enabled channel runs on
-    # this, the only, machine. Pydantic ignores unknown keys, so a stored
-    # pre-withdrawal config carrying `runs_on` still validates.
+    # The ``machine_id`` (spec vault-sync "Identity is derived") of the ONE
+    # machine whose daemon starts this channel's adapter. A channel travels
+    # again — it is an ordinary synced resource document — and this field is
+    # what makes that safe: a bot identity tolerates a single consumer, so the
+    # document says which machine that is and every other machine reads its own
+    # id, finds it does not match, and starts nothing. See spec channels
+    # ``## Where a channel runs``.
+    #
+    # It lives in ``config`` and not on the resource row because it travels:
+    # ``config`` is what a resource document carries, while the row's reach
+    # (``enabled`` + ``scope``) is deliberately left behind on each machine.
+    # The two answer different questions and the spec keeps them apart — reach
+    # is *which agents*, here; the binding is *which machine* runs the adapter,
+    # for the whole vault.
+    #
+    # ``None`` is unbound, and unbound runs NOWHERE. It is not "runs here": a
+    # document with no machine named in it means the same thing on every
+    # machine that holds it, and "start it" would mean "start it on all of
+    # them" — the rival-consumer failure this field exists to prevent. The
+    # surfaces show an unbound channel as unbound and bind it in one click.
+    runs_on: str | None = Field(default=None, max_length=64)
 
 
 class TelegramChannelConfig(_CommonChannelFields):

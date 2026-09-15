@@ -92,7 +92,6 @@ def _fact_to_frontmatter(fact: Fact) -> dict[str, Any]:
         "status": fact.status,
         "superseded_by": fact.superseded_by,
         "conflicts_with": list(fact.conflicts_with),
-        "proposed": fact.proposed,
         "origins": [
             {
                 "agent": o.agent,
@@ -131,7 +130,6 @@ def _frontmatter_to_fact(partition: str, slug: str, fm: dict[str, Any], body: st
         status=str(fm.get("status") or STATUS_ACTIVE),
         superseded_by=str(fm.get("superseded_by", "")),
         conflicts_with=tuple(str(c) for c in raw_conflicts),
-        proposed=bool(fm.get("proposed", False)),
     )
 
 

@@ -113,9 +113,7 @@ async def test_duplicate_pair_becomes_one_fact_with_both_origins(fake_connection
     a, b = store.read_fact(_PARTITION, "a"), store.read_fact(_PARTITION, "b")
     active, superseded = (a, b) if a.status == STATUS_ACTIVE else (b, a)
     assert superseded.status == STATUS_SUPERSEDED
-    assert superseded.proposed is True
     assert superseded.superseded_by == active.key
-    assert active.proposed is True
     assert {o.native_path for o in active.origins} == {"/native/a.md", "/native/b.md"}
 
 
@@ -138,11 +136,9 @@ async def test_supersede_proposal_marks_the_older_fact(fake_connection) -> None:
     assert result.superseded == 1
     older = store.read_fact(_PARTITION, "a")
     assert older.status == STATUS_SUPERSEDED
-    assert older.proposed is True
     assert older.superseded_by == fact_b.key
     newer = store.read_fact(_PARTITION, "b")
     assert newer.status == STATUS_ACTIVE
-    assert newer.proposed is False
 
 
 @pytest.mark.acceptance(
@@ -167,8 +163,6 @@ async def test_conflict_is_flagged_on_both_sides(fake_connection) -> None:  # ty
     a, b = store.read_fact(_PARTITION, "a"), store.read_fact(_PARTITION, "b")
     assert a.conflicts_with == (fact_b.key,)
     assert b.conflicts_with == (fact_a.key,)
-    assert a.proposed is True
-    assert b.proposed is True
 
 
 async def test_malformed_json_yields_no_proposals_and_does_not_raise(fake_connection) -> None:  # type: ignore[no-untyped-def]

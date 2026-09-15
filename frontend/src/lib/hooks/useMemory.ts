@@ -2,47 +2,44 @@
 //
 // ALL queries + mutations for the `memory` kind (agents/frontend.md §3). Keys
 // are hierarchical under one `["memory"]` root so a write with cross-cutting
-// effects — a sync, an organise pass, any override — can invalidate the whole
-// subtree with a prefix, mirroring `lib/hooks/useKnowledge.ts`.
+// effects — a sync, an organise pass — can invalidate the whole subtree with a
+// prefix, mirroring `lib/hooks/useKnowledge.ts`.
 //
-// Overrides are NOT partition-scoped (one table, keyed by fact key, spec
-// memory FR-070), so `useMemoryOverrides` fetches the whole list once; callers
-// that need "does fact X have a developer decision" build a lookup from it
-// rather than each fact paying its own GET.
+// A partition's file keys hang off that partition's own key rather than a
+// sibling root, because a sync or organise pass rewrites the files on disk:
+// nesting them means the broad invalidation those mutations already do
+// reaches the open preview too, with no key threaded through by hand.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
 import {
-  clearOverrideField,
   getFact,
   installDelivery,
   listDelivery,
   listFacts,
-  listOverrides,
+  listPartitionFiles,
   listPartitions,
   organise,
-  patchOverride,
+  readPartitionFile,
   removeDelivery,
   sync,
 } from "@/lib/api/memory";
-import type { OverrideField, OverridePatch } from "@/lib/api/memoryTypes";
 import {
   memoryAgentDeliveryKey,
   memoryDeliveryKey,
   memoryFactKey,
   memoryFactsKey,
   memoryKey,
-  memoryOverridesKey,
+  memoryPartitionFileKey,
+  memoryPartitionFilesKey,
   memoryPartitionsKey,
 } from "@/lib/api/queryKeys";
 
-/** Every lifecycle act that can change what a fact's overrides say
- * (hide/pin/supersede/settle) invalidates broadly: the developer's decision
- * can touch two facts at once (a settled conflict resolves both sides, FR-041
- * / `overrides.py`'s `_settle_conflict`) and nothing here is worth threading a
- * narrower key for. */
+/** Aggregation and the organise pass both rewrite whole partitions on disk —
+ * partition list, fact counts and every file under them — so both invalidate
+ * the full `["memory"]` prefix rather than threading a narrower key. */
 function invalidateMemory(qc: ReturnType<typeof useQueryClient>): void {
   void qc.invalidateQueries({ queryKey: memoryKey });
 }
@@ -54,6 +51,7 @@ export function useMemoryPartitions() {
   });
 }
 
+/** One partition's facts. */
 export function useMemoryFacts(partition: string, enabled = true) {
   return useQuery({
     queryKey: memoryFactsKey(partition),
@@ -62,9 +60,7 @@ export function useMemoryFacts(partition: string, enabled = true) {
   });
 }
 
-/** One fact's body + origins, fetched lazily — a partition holds hundreds of
- * facts (spec memory §Assumptions), so this is fetched per-fact on demand
- * (e.g. "show origins"), never eagerly for a whole list. */
+/** One fact in full, with its own words and its origins. */
 export function useMemoryFact(partition: string, slug: string | null) {
   return useQuery({
     queryKey: memoryFactKey(partition, slug ?? ""),
@@ -73,18 +69,28 @@ export function useMemoryFact(partition: string, slug: string | null) {
   });
 }
 
-/** The developer's decisions across every fact (FR-040), one query for the
- * whole table. */
-export function useMemoryOverrides() {
+/** The partition's directory, recursively — one read for the whole tree, as
+ * the skill file browser does: a partition holds tens of files, not a repo. */
+export function usePartitionFiles(partition: string) {
   return useQuery({
-    queryKey: memoryOverridesKey,
-    queryFn: async () => (await listOverrides()).overrides,
+    queryKey: memoryPartitionFilesKey(partition),
+    queryFn: async () => (await listPartitionFiles(partition)).root,
+    enabled: partition.length > 0,
   });
 }
 
-/** Read the agents' native memory now. Partitions, fact counts and the whole
- * facts subtree can all change, so the invalidation is the full `["memory"]`
- * prefix — same breadth as knowledge's tidy. */
+/** One file out of that directory, read-only. */
+export function usePartitionFileContent(partition: string, path: string | null) {
+  return useQuery({
+    queryKey: memoryPartitionFileKey(partition, path ?? ""),
+    queryFn: () => readPartitionFile(partition, path as string),
+    enabled: Boolean(partition && path),
+  });
+}
+
+/** Read the agents' native memory now. Partitions, fact counts and every
+ * partition's files can all change, so the invalidation is the full
+ * `["memory"]` prefix — same breadth as knowledge's tidy. */
 export function useSyncMemory() {
   const qc = useQueryClient();
   const { t } = useTranslation();
@@ -119,34 +125,6 @@ export function useOrganisePartition(partition: string) {
       invalidateMemory(qc);
       toast.success(t("memory.detail.organiseDone"));
     },
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Apply one or more of the four overrides to a fact (hide, pin, supersede,
- * settle) — a partial patch, so setting one never disturbs another already
- * recorded on the same fact. */
-export function useSetOverride() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (vars: { factKey: string; patch: OverridePatch }) =>
-      patchOverride(vars.factKey, vars.patch),
-    onSuccess: () => invalidateMemory(qc),
-    onError: (error) => toast.error(translateApiError(t, error)),
-  });
-}
-
-/** Clear one override field back to "no decision", e.g. un-hide or un-pin. */
-export function useClearOverride() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (vars: { factKey: string; field: OverrideField }) =>
-      clearOverrideField(vars.factKey, vars.field),
-    onSuccess: () => invalidateMemory(qc),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

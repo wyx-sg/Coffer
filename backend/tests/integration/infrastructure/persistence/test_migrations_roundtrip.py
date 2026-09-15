@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0077"
+HEAD_REVISION = "0079"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -144,7 +144,10 @@ HEAD_REVISION = "0077"
 # axis back off ``resources.scope_json`` (``{"agents": a, "machines": m}`` ->
 # ``{"agents": a}``), resolving each machine list against this machine's cached
 # id rather than dropping the key, so no row's reach widens — no DDL,
-# table/column set unchanged at head.
+# table/column set unchanged at head. 0079 is DATA-only: it writes ``runs_on``
+# (the machine whose daemon runs the adapter) into every ``kind='channel'``
+# ``config_json``, so an existing channel keeps running exactly where it already
+# ran once the binding gate exists — no DDL, table/column set unchanged at head.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -160,7 +163,6 @@ EXPECTED_TABLES = {
     "channel_peers",
     "channel_thread_conversations",
     "sync_remotes",
-    "memory_overrides",
     "sync_convergence_state",
     "sync_held_paths",
     "sync_runs",
@@ -170,13 +172,13 @@ EXPECTED_TABLES = {
 # (0052 renames them on the way up and back on the way down), so every stepwise
 # assertion under 0052 compares against this set instead. ``sync_remotes`` comes
 # out too: 0062 created it, so nothing below 0052 has ever seen it, and so do
-# ``memory_overrides`` (0070), ``sync_convergence_state`` / ``sync_held_paths``
-# (0073) and ``sync_runs`` (0075).
+# ``sync_convergence_state`` / ``sync_held_paths`` (0073) and ``sync_runs``
+# (0075). ``memory_overrides`` needs no subtracting: 0070 created it and 0078
+# dropped it again, so head does not carry it either.
 PRE_MERGE_TABLES = (
     EXPECTED_TABLES
     - {
         "sync_remotes",
-        "memory_overrides",
         "sync_convergence_state",
         "sync_held_paths",
         "sync_runs",
@@ -1005,15 +1007,19 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_remotes)")}
 
-    # 0074 adds internal_engine_config.tidy_owner_machine_id, 0073 adds the two
-    # machine-local convergence tables plus the round-shaped sync_remotes
-    # columns, and 0070 adds memory_overrides — all present at head, all removed
-    # by their own downgrades on the way back to 0069.
+    # 0074 adds internal_engine_config.tidy_owner_machine_id and 0073 adds the
+    # two machine-local convergence tables plus the round-shaped sync_remotes
+    # columns — present at head, all removed by their own downgrades on the way
+    # back to 0069. ``memory_overrides`` is the odd one: 0070 creates it and
+    # 0078 drops it, so it is absent at head and must reappear on the way down,
+    # which is the whole point of 0078 keeping a downgrade at all.
     convergence_tables = {"sync_convergence_state", "sync_held_paths"}
-    assert "memory_overrides" in _user_tables(db_path)
+    assert "memory_overrides" not in _user_tables(db_path)
     assert convergence_tables <= _user_tables(db_path)
     assert "tidy_owner_machine_id" in _internal_engine_config_columns()
     assert {"last_started_at", "last_join", "last_run_json"} <= _sync_remotes_columns()
+    command.downgrade(cfg, "0071")
+    assert "memory_overrides" in _user_tables(db_path)
     command.downgrade(cfg, "0069")
     assert "memory_overrides" not in _user_tables(db_path)
     assert not (convergence_tables & _user_tables(db_path))

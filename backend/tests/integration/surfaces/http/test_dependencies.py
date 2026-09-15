@@ -85,12 +85,7 @@ _PROVIDERS: list[_Provider] = [
     # knowledge kind
     *_pairs(knowledge_deps, "_knowledge_service", "_search_service", "_ingest_service"),
     # memory kind
-    *_pairs(
-        memory_deps,
-        "_memory_service",
-        "_memory_override_repo",
-        "_memory_delivery_service",
-    ),
+    *_pairs(memory_deps, "_memory_service", "_memory_delivery_service"),
     # turn platform (chat)
     *_pairs(
         chat_deps,

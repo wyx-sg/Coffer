@@ -1,13 +1,18 @@
 // frontend/src/components/channel/ChannelsTable.test.tsx
 //
 // The channels list (spec channels, FR-041). Each row carries the platform type,
-// default agent, a live runtime-health badge (Running/Stopped), the reach
-// control, a paired-owner cell and a delete action — the health and
-// paired cells fed by the per-row /channels/{name}/status query, which we stub
-// here. The health badge mirrors the MCP-server surface's
-// ServerHealthCell, so this test asserts it reflects the adapter `running`
-// state.
-import { afterEach, describe, expect, test, vi } from "vitest";
+// default agent, a live runtime-health badge (Running/Stopped), the machine the
+// channel is bound to, the reach control, a paired-owner cell and a delete
+// action — the health, machine and paired cells fed by the per-row
+// /channels/{name}/status query, which we stub here. The health badge mirrors
+// the MCP-server surface's ServerHealthCell, so this test asserts it reflects
+// the adapter `running` state.
+//
+// The machine cell has four states and each is tested, because they are the
+// difference between "quiet because it is someone else's to run" and "quiet
+// because it runs nowhere at all" — two facts a single Stopped badge cannot
+// tell apart, and only one of which is a fault.
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -17,8 +22,15 @@ import { ChannelsTable } from "./ChannelsTable";
 import type { ChannelStatus } from "@/lib/api/channels";
 import type { ResourceOut } from "@/lib/api/resources";
 
+const navigateMock = vi.fn();
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
+
 vi.mock("@/lib/hooks/useChannels", () => ({
   useChannelStatus: vi.fn(),
+  useRebindChannel: vi.fn(),
   CHANNEL_KIND: "channel",
 }));
 // The bound-agent column shows display names from the provider registry, with
@@ -28,6 +40,11 @@ vi.mock("@/lib/hooks/useAgentProviders", () => ({
     data: [{ agent_key: "codex", display_name: "Codex", available: true }],
   })),
 }));
+
+// The "Runs on" cell joins the binding against the machine registry and this
+// machine's id; both are stubbed so the four states can be set up directly.
+vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
+vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
 
 // The state column is now ScopeControl, so every row reaches the scope /
 // agents / enable hooks. `scope` rides the list payload, so useResourceScope
@@ -45,8 +62,30 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useDisableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
-const { useChannelStatus } = await import("@/lib/hooks/useChannels");
+const { useChannelStatus, useRebindChannel } = await import("@/lib/hooks/useChannels");
+const { useMachines } = await import("@/lib/hooks/useMachines");
+const { useSyncStatus } = await import("@/lib/hooks/useSync");
 const useChannelStatusMock = vi.mocked(useChannelStatus);
+
+/** This machine, and the other machine in the registry. */
+const HERE = "machine-here";
+const THERE = "machine-there";
+
+let rebind: { mutate: ReturnType<typeof vi.fn>; isPending: boolean };
+
+/** The registry as the daemon would report it. Pass [] for a vault that has
+ *  never converged — the single-machine install, which has no registry and
+ *  must still be able to bind. */
+function stubMachines(machines: { machine_id: string; name: string; is_self: boolean }[]) {
+  vi.mocked(useMachines).mockReturnValue({ data: { machines } } as unknown as ReturnType<
+    typeof useMachines
+  >);
+}
+
+const REGISTRY = [
+  { machine_id: HERE, name: "Laptop", is_self: true },
+  { machine_id: THERE, name: "Desktop", is_self: false },
+];
 
 function status(name: string, over: Partial<ChannelStatus> = {}): ChannelStatus {
   return {
@@ -56,6 +95,8 @@ function status(name: string, over: Partial<ChannelStatus> = {}): ChannelStatus 
     running: true,
     peer: null,
     callback: null,
+    runs_on: HERE,
+    runs_here: true,
     ...over,
   };
 }
@@ -76,16 +117,40 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-function channel(name: string, agent?: string, enabled = true): ResourceOut {
+function channel(
+  name: string,
+  agent?: string,
+  runsOn: string | null = HERE,
+  enabled = true,
+): ResourceOut {
   return {
     name,
     kind: "channel",
-    config: { channel_type: "telegram", ...(agent ? { default_agent: agent } : {}) },
+    config: {
+      channel_type: "telegram",
+      ...(agent ? { default_agent: agent } : {}),
+      ...(runsOn === null ? {} : { runs_on: runsOn }),
+    },
     enabled,
   } as unknown as ResourceOut;
 }
 
+/** The row's machine picker, by its accessible name. */
+function machinePicker(name = "tg") {
+  return screen.getByRole("combobox", { name: new RegExp(`machine running ${name}`, "i") });
+}
+
 describe("ChannelsTable", () => {
+  beforeEach(() => {
+    rebind = { mutate: vi.fn(), isPending: false };
+    vi.mocked(useRebindChannel).mockReturnValue(
+      rebind as unknown as ReturnType<typeof useRebindChannel>,
+    );
+    vi.mocked(useSyncStatus).mockReturnValue({
+      data: { machine_id: HERE },
+    } as unknown as ReturnType<typeof useSyncStatus>);
+    stubMachines(REGISTRY);
+  });
   afterEach(() => vi.clearAllMocks());
 
   test("renders one row per channel, naming the default agent for a human", () => {
@@ -127,7 +192,7 @@ describe("ChannelsTable", () => {
 
   test("the toolbar offers the shared three-state reach filter", () => {
     stubStatuses({ tg: status("tg"), st: status("st") });
-    render(<ChannelsTable items={[channel("tg"), channel("st", undefined, false)]} />, {
+    render(<ChannelsTable items={[channel("tg"), channel("st", undefined, HERE, false)]} />, {
       wrapper: wrap(null),
     });
     expect(screen.getByRole("columnheader", { name: "Reach" })).toBeInTheDocument();
@@ -152,6 +217,19 @@ describe("ChannelsTable", () => {
     });
     render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
     expect(screen.getByText(/Alice/)).toBeInTheDocument();
+  });
+
+  test("the reach column keeps the shared header, not a kind-local 'State'", () => {
+    // Every other kind's table calls this column Reach; this one was the last
+    // straggler, and two names for one control is how the column drifts into
+    // meaning two different things.
+    stubStatuses({ tg: status("tg") });
+    render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
+
+    expect(screen.getByRole("columnheader", { name: /^reach$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /^state$/i })).toBeNull();
+    // And it is a DIFFERENT question from the machine binding beside it.
+    expect(screen.getByRole("columnheader", { name: /^runs on$/i })).toBeInTheDocument();
   });
 
   test("the state column is the reach control, not a static badge", () => {
@@ -194,6 +272,102 @@ describe("ChannelsTable", () => {
     const bar = within(screen.getByTestId("bulk-reach-control"));
     expect(bar.getByRole("button")).toHaveTextContent(/set reach/i);
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
+  });
+
+  test("marks the bound machine when it is this one", () => {
+    stubStatuses({ tg: status("tg", { runs_on: HERE, runs_here: true }) });
+    render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
+
+    // The registry's name, marked as this machine — "Stopped" beside it would
+    // be a fault to chase, which is exactly what the marking is for.
+    expect(machinePicker()).toHaveTextContent(/Laptop · this machine/i);
+  });
+
+  test("names the other machine when the channel is bound there", () => {
+    stubStatuses({ tg: status("tg", { running: false, runs_on: THERE, runs_here: false }) });
+    render(<ChannelsTable items={[channel("tg", "builtin", THERE)]} />, { wrapper: wrap(null) });
+
+    expect(machinePicker()).toHaveTextContent(/^Desktop$/);
+    // Not this machine's to run, so a stopped adapter here is not a fault.
+    expect(screen.getByText("Stopped")).toBeInTheDocument();
+  });
+
+  test("a binding nobody claims reads as a fault, never as a blank", () => {
+    // Retiring a machine leaves its channels naming it. The channel runs on no
+    // machine at all until it is rebound, so the cell must say so rather than
+    // quietly showing an empty box or the first machine in the list.
+    stubStatuses({
+      tg: status("tg", { running: false, runs_on: "machine-gone", runs_here: false }),
+    });
+    render(<ChannelsTable items={[channel("tg", "builtin", "machine-gone")]} />, {
+      wrapper: wrap(null),
+    });
+
+    const picker = machinePicker();
+    expect(picker).toHaveTextContent(/unknown machine \(machine-gone\)/i);
+    expect(picker.className).toContain("text-destructive");
+  });
+
+  test("an unbound channel says so, and the state is not offered as a choice", () => {
+    stubStatuses({ tg: status("tg", { running: false, runs_on: null, runs_here: false }) });
+    render(<ChannelsTable items={[channel("tg", "builtin", null)]} />, { wrapper: wrap(null) });
+
+    const picker = machinePicker();
+    expect(picker).toHaveTextContent(/not bound/i);
+    // Warn, not error: nothing is broken, nothing has been chosen yet.
+    expect(picker.className).toContain("status-warn");
+
+    // jsdom has no PointerEvent, so open the Radix listbox from the keyboard.
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    const options = screen.getAllByRole("option").map((o) => o.textContent ?? "");
+    expect(options).toEqual(["Laptop · this machine", "Desktop"]);
+    // "Not bound" is reportable, never choosable — binding to nobody is asking
+    // for a channel that runs nowhere.
+    expect(options.some((o) => /not bound/i.test(o))).toBe(false);
+  });
+
+  test("this machine is offered even when the registry is empty", () => {
+    // A single-machine install has never converged and so has no registry at
+    // all; an empty pick-list would leave it unable to bind anything.
+    stubMachines([]);
+    stubStatuses({ tg: status("tg", { runs_on: null, runs_here: false }) });
+    render(<ChannelsTable items={[channel("tg", "builtin", null)]} />, { wrapper: wrap(null) });
+
+    fireEvent.keyDown(machinePicker(), { key: "ArrowDown" });
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "This machine · this machine",
+    ]);
+  });
+
+  test("picking a machine rebinds through the channel's own config", () => {
+    stubStatuses({ tg: status("tg", { runs_on: HERE, runs_here: true }) });
+    render(<ChannelsTable items={[channel("tg", "builtin")]} />, { wrapper: wrap(null) });
+
+    fireEvent.keyDown(machinePicker(), { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("option", { name: "Desktop" }));
+
+    // The whole config rides along: a rebind that dropped the credential refs
+    // would move the channel and break it in the same request.
+    expect(rebind.mutate).toHaveBeenCalledWith({
+      config: { channel_type: "telegram", default_agent: "builtin", runs_on: HERE },
+      runsOn: THERE,
+      machine: "Desktop",
+    });
+  });
+
+  test("interacting with the machine picker does not navigate away", () => {
+    stubStatuses({ tg: status("tg") });
+    render(<ChannelsTable items={[channel("tg")]} />, { wrapper: wrap(null) });
+
+    // The row navigates …
+    fireEvent.click(screen.getByText("tg"));
+    expect(navigateMock).toHaveBeenCalledWith("/channels/tg");
+
+    // … but the control inside it does not: opening a picker is not a request
+    // to leave the page, and losing the row mid-gesture would be maddening.
+    navigateMock.mockClear();
+    fireEvent.click(machinePicker());
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   test("falls back to a placeholder health cell before the status loads", () => {

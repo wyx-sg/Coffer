@@ -71,6 +71,11 @@ class _StubAdapter:
         return SentMessage(message_id="m1")
 
 
+#: The id the stubbed ``/sync/status`` answers with, so the CLI binds a freshly
+#: registered channel to "this machine" the way it does against a real daemon.
+_MACHINE_ID = "0123456789abcdef"
+
+
 class _StubRuntime:
     def __init__(self) -> None:
         self.adapters: dict[str, _StubAdapter] = {}
@@ -79,6 +84,9 @@ class _StubRuntime:
 
     def is_running(self, name: str) -> bool:
         return name in self.adapters
+
+    async def local_machine_id(self) -> str:
+        return _MACHINE_ID
 
     def tunnel_running(self, name: str) -> bool:
         return False
@@ -142,6 +150,15 @@ def channel_daemon(tmp_path, monkeypatch):
     err_handlers.register(fapp)
     fapp.include_router(resource_router)
     fapp.include_router(channel_router)
+
+    # `coffer channel register` and `coffer channel bind` ask the daemon which
+    # machine it is, because a CLI deriving its own id would be a second answer
+    # to a question that must have exactly one. The real daemon always serves
+    # this; the stub serves the one field they read.
+    @fapp.get("/api/v1/sync/status")
+    def _sync_status() -> dict[str, Any]:
+        return {"machine_id": _MACHINE_ID}
+
     fapp.dependency_overrides[get_resource_service] = lambda: resources
     fapp.dependency_overrides[get_audit_service] = lambda: audit
     set_channel_service(service)
@@ -226,16 +243,48 @@ def test_register_and_list_channels(channel_daemon: _Daemon) -> None:
 
 
 def test_register_carries_no_scope(channel_daemon: _Daemon) -> None:
-    """A channel declares no activation scope (ADR per-agent-resource-scope) — registration writes
-    none, and an enabled channel simply runs on this, the only, machine. The
-    withdrawn `--runs-on` flag is gone with the machine registry (ADR vault-sync)."""
+    """A channel declares no activation scope (ADR per-agent-resource-scope) —
+    registration writes none, so a newly registered channel may drive every
+    registered agent until the owner narrows it.
+
+    Its machine BINDING is a different field and registration does write that
+    one: an unbound channel runs nowhere, so leaving it out would make the
+    plain registration produce a bot that never answers."""
     r = _register_tg()
     assert r.exit_code == 0, r.output
     resource = channel_daemon.run(
         channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
     )
     assert resource.scope is None
-    assert "runs_on" not in resource.config
+    assert resource.config["runs_on"] == _MACHINE_ID
+
+
+def test_bind_moves_the_channel_to_another_machine_and_keeps_the_rest(
+    channel_daemon: _Daemon,
+) -> None:
+    """`coffer channel bind` is an ordinary config edit, and must stay one.
+
+    The credential refs are the thing to watch: a bind that rebuilt the config
+    from flags instead of patching the stored one would drop them, and the
+    channel would arrive on its new machine with no way to authenticate.
+    """
+    assert _register_tg().exit_code == 0
+
+    result = runner.invoke(app, ["channel", "bind", "tg", "ffffffffffffffff"])
+    assert result.exit_code == 0, result.output
+
+    resource = channel_daemon.run(
+        channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
+    )
+    assert resource.config["runs_on"] == "ffffffffffffffff"
+    assert resource.config["bot_token_ref"] == _TG_REF
+
+    # With no machine named, bind takes the daemon it is talking to.
+    assert runner.invoke(app, ["channel", "bind", "tg"]).exit_code == 0
+    resource = channel_daemon.run(
+        channel_daemon.resources.get(ResourceRef(kind="channel", name="tg"))
+    )
+    assert resource.config["runs_on"] == _MACHINE_ID
 
 
 @pytest.mark.acceptance(

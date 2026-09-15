@@ -1,14 +1,15 @@
 // frontend/src/pages/KnowledgeDetailPage.tsx
 //
-// Detail surface for ONE collection: a tree on the left, the selected file on
-// the right, read-only. There are no tabs, because there are no lanes — what
+// Detail surface for ONE collection: the same two-pane file browser the skill
+// detail page's Files tab is — a tree on the left, the selected file on the
+// right, read-only. There are no tabs, because there are no lanes — what
 // someone wrote and what someone put there are the same kind of thing and live
 // in the same folder (ADR knowledge-is-plain-files).
 //
 // Read-only is deliberate and load-bearing. Correcting a file happens in the
-// user's own editor, reached from the FileActions bar; with no index behind the
-// files, that edit is live on the very next read with nothing to reconcile
-// (spec knowledge FR-061).
+// user's own editor, reached from the FileActions bar on the preview; with no
+// index behind the files, that edit is live on the very next read with nothing
+// to reconcile (spec knowledge FR-061).
 //
 // Reach (ScopeControl) lives in the header, as on every other scoped Resource's
 // detail page: which agents this collection is exposed to is a property of the
@@ -18,8 +19,11 @@
 // the same file — addressable state belongs to the router (agents/frontend.md).
 //
 // The filter box narrows the tree by title/filename as you type, entirely
-// client-side; the search panel above it is the other thing — a backend pass
-// over the files' contents.
+// client-side — it is the tree's own narrowing, not a search. Reading the files
+// themselves has its own surfaces — `coffer__search` and `coffer__grep` for
+// agents, `coffer knowledge search|grep` for the CLI — and a box in this page
+// that queried the server was a second retrieval surface with its own rules,
+// answering in a list that sat where the tree should be.
 import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -34,7 +38,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { translateApiError } from "@/lib/api/errors";
 import { useResource } from "@/lib/hooks/useResources";
 import { KnowledgePreviewBody } from "@/components/knowledge/KnowledgePreviewBody";
-import { KnowledgeSearchPanel } from "@/components/knowledge/KnowledgeSearchPanel";
 import { KnowledgeTreeLevel } from "@/components/knowledge/KnowledgeTreeLevel";
 import { useKnowledgeFile, useTidyCollection } from "@/lib/hooks/useKnowledge";
 
@@ -104,16 +107,20 @@ export function KnowledgeDetailPage() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(16rem,22rem)_1fr]">
+      {/* The skill Files tab's proportions, so the two browsers sit the same
+          way on the page. */}
+      <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
         <div className="space-y-2">
-          <KnowledgeSearchPanel collection={collection} onSelectPath={setSelected} />
+          <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {t("knowledge.detail.treeLabel")}
+          </p>
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder={t("knowledge.detail.filterPlaceholder")}
             aria-label={t("knowledge.detail.filterPlaceholder")}
           />
-          <nav aria-label={t("knowledge.detail.treeLabel")} className="rounded-md border p-2">
+          <nav aria-label={t("knowledge.detail.treeLabel")}>
             <KnowledgeTreeLevel
               path={collection}
               depth={0}

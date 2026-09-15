@@ -3,8 +3,16 @@
 // [Install/Uninstall Coffer MCP][Edit][Delete] actions) over seven tabs —
 // Overview, Skills, MCP servers, Plugins, Memory, Conversations and Config
 // files. The active tab lives in the URL (?tab=) so a refresh or a shared link
-// reopens the same one. Leaving the Config files tab with an unsaved draft asks
-// first: switching tabs unmounts the editor and would drop the edits.
+// reopens the same one — and so that coming back from a Memory or Conversations
+// detail page returns to the tab the row was on, rather than landing on
+// Overview and losing the reader's place. Leaving the Config files tab with an
+// unsaved draft asks first: switching tabs unmounts the editor and would drop
+// the edits.
+//
+// Of the seven, only Plugins acts on the agent (enable / disable / uninstall);
+// Memory and Conversations are read-only views of what the agent keeps on disk,
+// and a row in either opens its own page — the store's files, or that one
+// conversation — where the open / reveal actions live.
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";

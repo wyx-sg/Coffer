@@ -4,8 +4,11 @@ Every agent-workspace operation exists on BOTH REST and CLI (spec
 agent-registry FR-009/FR-010); this is the CLI half of
 
   ``GET /agents/{name}/native-memory`` → ``coffer agent native-memory <name>``
+  ``GET .../native-memory/files``      → ``coffer agent native-memory-files``
 
-Read-only, like the route: it lists the stores and never writes them.
+Read-only, like the routes: it lists the stores, prints one store's files or one
+file's contents, and never writes them. The second command takes a ``memory_dir``
+the first one printed — the same identity the web surface navigates by.
 
 Kept out of ``agent_cmd.py`` to respect the 400-line backend file cap; the same
 ``attach``-on-the-existing-typer pattern as ``agent_workspace_cmd.py`` keeps the
@@ -15,6 +18,7 @@ user-facing tree at ``coffer agent native-memory ...``.
 from __future__ import annotations
 
 import json as _json
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -57,6 +61,54 @@ def native_memory(
     _console.print(table)
 
 
+def native_memory_files(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    memory_dir: str = typer.Option(..., "--dir", help="A memory_dir from `native-memory`."),
+    path: str | None = typer.Option(
+        None, "--path", help="Print this file's contents instead of the tree."
+    ),
+    output_json: bool = typer.Option(False, "--json", help="JSON output"),
+) -> None:
+    """Show one native-memory store: its files, or one file's contents."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        if path is None:
+            r = c.get(f"/agents/{name}/native-memory/files", params={"dir": memory_dir})
+        else:
+            r = c.get(
+                f"/agents/{name}/native-memory/files/content",
+                params={"dir": memory_dir, "path": path},
+            )
+        if r.status_code == 404:
+            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
+            raise typer.Exit(4)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    if path is None:
+        _print_tree(data["root"], depth=0)
+        return
+    if data["binary"]:
+        typer.echo(f"(binary file, {data['size']} bytes)")
+        return
+    typer.echo(data["content"])
+    if data["truncated"]:
+        typer.echo("(truncated — showing the start of the file)")
+
+
+def _print_tree(node: dict[str, Any], *, depth: int) -> None:
+    """Print a store's tree as indented lines, in the order the server sorted it."""
+    indent = "  " * depth
+    suffix = "/" if node["type"] == "dir" else ""
+    typer.echo(f"{indent}{node['name'] or '.'}{suffix}")
+    for child in node.get("children", []):
+        _print_tree(child, depth=depth + 1)
+
+
 def attach(agent_app: typer.Typer) -> None:
-    """Register the native-memory command on agent_cmd's existing typer."""
+    """Register the native-memory commands on agent_cmd's existing typer."""
     agent_app.command("native-memory")(native_memory)
+    agent_app.command("native-memory-files")(native_memory_files)

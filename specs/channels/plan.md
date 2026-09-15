@@ -78,7 +78,12 @@ backend/coffer/
 │       ├── service.py   # ChannelService: pairing API, notify, status, peers
 │       ├── inbound.py   # InboundProcessor: owner gate, commands, queueing,
 │       │                #   conversation mapping, turn driving
-│       └── runtime.py   # ChannelRuntime: reconciler loop + listener lifecycle
+│       ├── runtime.py   # ChannelRuntime: reconciler loop + listener lifecycle
+│       │                #   gated by the channel's machine binding
+│       ├── wanted.py   # the three gates deciding which channels run here:
+│       │                #   enabled, the machine binding, scope
+│       └── sync_state.py # ChannelPeerSyncState: pairing identity as a
+│                        #   synced state area (never the conversation pointer)
 ├── infrastructure/channel/
 │   ├── persistence.py   # ChannelPeerModel + repo
 │   ├── render.py        # markdown → telegram HTML / plain; chunking

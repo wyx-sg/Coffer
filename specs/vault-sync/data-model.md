@@ -193,7 +193,10 @@ config: { ... }          # the validated, json-mode config; keys sorted
   `## What does not sync`). A document written by an older build still carries
   them; they are parsed and discarded, never rejected, so one machine that has
   not upgraded cannot stall convergence for the rest.
-- There is no document for a `channel` at all, in either direction.
+- A `channel` gets an ordinary document like every other kind. It once got none
+  at all; it travels now because its config names the one machine whose daemon
+  runs its adapter (`runs_on`, spec channels FR-080), so the document can move
+  without the adapter moving with it.
 - Mapping keys are sorted; there is exactly one document per resource, so an
   unchanged vault produces an unchanged tree.
 - String values under this machine's home are normalized to `${HOME}/...` and
@@ -286,6 +289,15 @@ providers — the sync slice never imports kind modules. Current areas:
 - `agent-plugins/<agent>.yaml` — the plugin inventory: which plugins and
   marketplaces each agent has on each machine. An **inventory, not a
   replicator** — applying one writes nothing into any agent's configuration.
+- `channel-peers/<channel>/<chat>.yaml` — one channel pairing: the chat id, the
+  sender id the owner gate checks, the display name and the chat's sticky
+  agent. Platform identity, all of it, which is why it travels: a channel moves
+  between machines now, and one that arrived without its pairings would make
+  the owner re-pair from their phone on every rebind. The **active conversation
+  pointer is not in the document** — conversations are machine-local, so an
+  incoming pairing keeps whatever pointer this machine already held. The file
+  name is a sanitised chat id and therefore only an address; the payload
+  carries the true ids.
 - `settings/internal-engine.yaml` — the internal-engine singleton: `model`,
   `auto_tidy_enabled`, and now `tidy_owner_machine_id`. The owner field is what
   makes an unattended rewriter safe on several machines: a tidy pass is a no-op

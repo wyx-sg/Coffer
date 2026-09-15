@@ -150,42 +150,7 @@ def test_sync_then_partitions_and_facts(memory_cli_daemon):
     assert "uv sync --frozen" in shown.output
 
 
-@pytest.mark.acceptance(spec="memory", scenario="a hidden fact stays hidden across a rebuild")
-def test_hide_survives_a_rebuild_via_cli(memory_cli_daemon):
-    import shutil
-
-    tmp_path = memory_cli_daemon
-    _register_cc_via_http(tmp_path)
-    _write_cc_fact(tmp_path)
-    _runner.invoke(cli_app, ["memory", "sync"])
-
-    partitions = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["memory", "partitions", "--json"]).output)
-    )["partitions"]
-    project = next(p for p in partitions if p["name"] != "global")
-    facts = json.loads(
-        _extract_json(
-            _runner.invoke(cli_app, ["memory", "facts", project["name"], "--json"]).output
-        )
-    )["facts"]
-    key = facts[0]["key"]
-
-    hidden = _runner.invoke(cli_app, ["memory", "hide", key])
-    assert hidden.exit_code == 0, hidden.output
-
-    shutil.rmtree(tmp_path / "memory")
-    _runner.invoke(cli_app, ["memory", "sync"])
-
-    facts2 = json.loads(
-        _extract_json(
-            _runner.invoke(cli_app, ["memory", "facts", project["name"], "--json"]).output
-        )
-    )["facts"]
-    assert facts2[0]["key"] == key
-    assert facts2[0]["hidden"] is True
-
-
-def test_overrides_list_and_delivery_round_trip(memory_cli_daemon):
+def test_delivery_install_status_and_remove_round_trip(memory_cli_daemon):
     tmp_path = memory_cli_daemon
     _register_cc_via_http(tmp_path)
 
@@ -261,14 +226,12 @@ def test_context_prints_the_composed_text_and_records_a_fire(memory_cli_daemon, 
 
     monkeypatch.setattr(memory_cmd.httpx, "post", _fake_post)
 
-    before = _runner.invoke(cli_app, ["memory", "delivery", "--json"])
-    before_data = json.loads(_extract_json(before.output))["delivery"]
-    assert next(d for d in before_data if d["agent"] == "cc")["last_fired_at"] == ""
+    before = _runner.invoke(cli_app, ["audit", "list", "--json"])
+    assert "memory_delivery_fired" not in before.output
 
     result = _runner.invoke(cli_app, ["memory", "context", "--agent", "cc", "--cwd", "/tmp"])
     assert result.exit_code == 0, result.output
     assert "Coffer memory" in result.output
 
-    after = _runner.invoke(cli_app, ["memory", "delivery", "--json"])
-    after_data = json.loads(_extract_json(after.output))["delivery"]
-    assert next(d for d in after_data if d["agent"] == "cc")["last_fired_at"] != ""
+    after = _runner.invoke(cli_app, ["audit", "list", "--json"])
+    assert "memory_delivery_fired" in after.output

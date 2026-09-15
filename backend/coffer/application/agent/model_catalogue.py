@@ -23,11 +23,16 @@ shaped to prevent:
   last of it away, so the web picker and a channel's ``/model`` card both offer
   the whole list.
 
-  With an LLM connection ACTIVE for the agent, they answer from somewhere else
+  With an LLM connection ACTIVE for the agent, the IDS come from somewhere else
   entirely. The agent's turns then go to that endpoint, not to the account its
   own catalogue describes, so its models are the wrong list: offering them can
-  only produce ids the endpoint rejects. The connection's own curated set is
-  the answer instead, and the agent is not consulted at all.
+  only produce ids the endpoint rejects. The connection's own curated set is the
+  answer instead. What the agent still answers for is the reasoning LEVELS an id
+  can be run at — those belong to the runtime driving the turn, not to the
+  endpoint it points at.
+
+* ``efforts()`` — the levels for ONE chosen model, the second half of the same
+  choice, asked by the web effort picker and the channel `/effort` card.
 
 Neither is a validator. A model NAME typed anywhere is passed to the CLI
 verbatim: it accepts aliases the catalogue never carries and models newer than
@@ -39,6 +44,7 @@ from __future__ import annotations
 import logging
 import pathlib
 from collections.abc import Iterable
+from dataclasses import replace
 from typing import Protocol
 
 from coffer.domain.agent.config import AgentConfig
@@ -160,8 +166,44 @@ class AgentModelCatalogueService:
         if endpoint_models:
             # No label: the id is the user's own text, and the only thing that
             # could describe it is the endpoint, which this must not ask.
-            return _deduped(AgentModel(id=model_id) for model_id in endpoint_models)
+            #
+            # The reasoning LEVELS do come across, though, because they are not
+            # the endpoint's to answer: the level is a setting on the agent's own
+            # runtime (Codex's turn field, Claude's ``--effort``), and the turn
+            # still goes through that runtime whatever endpoint it points at. An
+            # id the agent also knows therefore keeps its menu; one the agent has
+            # never heard of reports none, which is the honest answer. Dropping
+            # them here silently emptied the effort picker for every agent the
+            # moment a connection went active.
+            known = {m.id: m for m in await self.catalogue(agent_key)}
+            return _deduped(
+                replace(known[model_id], label="", description="")
+                if model_id in known
+                else AgentModel(id=model_id)
+                for model_id in endpoint_models
+            )
         return await self.catalogue(agent_key)
+
+    async def efforts(self, agent_key: str, model: str | None) -> list[str]:
+        """The reasoning levels the conversation's CURRENT model can be run at.
+
+        Satisfies the channel ``ModelSuggestionPort``, so an `/effort` card
+        offers exactly what the web picker beside the model does — including the
+        rule for "no model pinned": the agent then runs a default it never names
+        to us, so the FIRST offered entry stands in for it. That stand-in could
+        only mislead for an agent whose catalogue mixed effort-bearing and
+        effort-free models, and neither does — Codex reports levels per model
+        but for all of them, and Claude Code's are the runtime's, identical on
+        every entry.
+
+        Empty for an agent that takes no such setting, which is what a surface
+        reads as "offer no control at all".
+        """
+        offered = await self.offered(agent_key)
+        entry = next((m for m in offered if m.id == model), None) if model else None
+        if entry is None and not model:
+            entry = offered[0] if offered else None
+        return list(entry.efforts) if entry is not None else []
 
     async def suggest(self, agent_key: str) -> list[str]:
         """The plain-id list — satisfies the channel ``ModelSuggestionPort``, so
