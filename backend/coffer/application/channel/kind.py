@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
-from coffer.application.channel.agent_vocabulary import drives
+from coffer.application.channel.agent_vocabulary import drives, scope_agent_keys
 from coffer.domain.channel.config import DEFAULT_AGENT, ChannelConfigModel
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, Resource, ResourceRef
@@ -64,7 +64,7 @@ def _validate_default_agent(
     if routable and types_by_name is not None and not drives(scope, default_agent, types_by_name):
         raise ValueError(
             f"default_agent '{default_agent}' is outside this channel's scope "
-            f"(may route to: {', '.join(sorted(routable))})"
+            f"({_scope_reads_as(scope, routable, types_by_name)})"
         )
     known = agent_keys()
     if known and default_agent not in known:
@@ -72,6 +72,23 @@ def _validate_default_agent(
             f"default_agent '{default_agent}' is not a registered agent "
             f"(known: {', '.join(sorted(known))})"
         )
+
+
+def _scope_reads_as(
+    scope: Scope | None, routable: list[str], types_by_name: Mapping[str, str]
+) -> str:
+    """How a rejected scope reads to the owner: the names, and what they drive.
+
+    Both halves, because a scope names agent RESOURCES and the refusal is about
+    agent KEYS, and printing only the names produced the one message nobody can
+    act on: "scope (may drive: claude_code) excludes this channel\'s
+    default_agent \'claude_code\'" — the same string on both sides of an
+    exclusion. Saying what the names resolve to turns that into the sentence it
+    always meant: this name drives no registered agent.
+    """
+    keys = scope_agent_keys(scope, types_by_name) or []
+    names = ", ".join(sorted(routable))
+    return f"may drive: {names} → {', '.join(keys) if keys else 'no registered agent'}"
 
 
 def _make_scope_validator(
@@ -121,9 +138,9 @@ def _validate_channel_scope(
     default_agent = str(resource.config.get("default_agent") or DEFAULT_AGENT)
     if not drives(scope, default_agent, types_by_name):
         raise ValueError(
-            f"scope (may drive: {', '.join(sorted(routable))}) excludes this channel's "
-            f"default_agent '{default_agent}', which would leave it unable to drive "
-            "anything. Add that agent to the scope, or change the channel's "
+            f"scope ({_scope_reads_as(scope, routable, types_by_name)}) excludes this "
+            f"channel's default_agent '{default_agent}', which would leave it unable to "
+            "drive anything. Add that agent to the scope, or change the channel's "
             "default_agent first."
         )
 
