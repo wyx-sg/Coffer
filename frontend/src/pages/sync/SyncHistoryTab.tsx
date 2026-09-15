@@ -59,6 +59,26 @@ function RunDetail({ run }: { run: RunRecord }) {
         <p className="text-sm text-muted-foreground">{t(`sync.round.join.${run.join}`)}</p>
       ) : null}
 
+      {/* What the round actually moved. The row above carries the tally; this
+          is the question the tally raises, and the paths were in the stored
+          payload all along — the detail used to skip straight to the faults
+          and tell a round that changed two documents there was nothing
+          further to report. */}
+      <SyncRoundPathList
+        titleKey="sync.round.applied"
+        hintKey="sync.round.appliedHint"
+        items={run.applied.changes.map((c) => t(`sync.round.change.${c.status}`, { path: c.path }))}
+        testId="sync-run-applied"
+      />
+      <SyncRoundPathList
+        titleKey="sync.round.published"
+        hintKey="sync.round.publishedHint"
+        items={run.published.changes.map((c) =>
+          t(`sync.round.change.${c.status}`, { path: c.path }),
+        )}
+        testId="sync-run-published"
+      />
+
       <SyncRoundPathList
         titleKey="sync.conflict.paths"
         items={run.conflicts}
@@ -94,6 +114,8 @@ function RunDetail({ run }: { run: RunRecord }) {
       ) : null}
 
       {!run.join &&
+      run.applied.changes.length === 0 &&
+      run.published.changes.length === 0 &&
       run.conflicts.length === 0 &&
       run.agent_resolved.length === 0 &&
       run.failures.length === 0 &&

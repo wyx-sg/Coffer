@@ -6,14 +6,14 @@
 // same mapping the list's health badge uses — so both surfaces agree.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, KeyRound, Activity, Send } from "lucide-react";
+import { Copy, KeyRound, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
+import type { PairingCode } from "@/lib/api/channels";
 import { cn, formatDateTime } from "@/lib/utils";
 import { channelHealthClass } from "./channelHealth";
 
@@ -37,80 +37,6 @@ export function StatusRow({ label, value }: { label: string; value: React.ReactN
 }
 
 /** Adapter run state + the paired peer (or "not paired"). */
-export function ChannelStatusCard({ status }: { status: ChannelStatus | undefined }) {
-  const { t } = useTranslation();
-  return (
-    <Card className="paper-card">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 font-serif text-lg">
-          <Activity className="size-4 text-primary" aria-hidden />
-          {t("channels.status.title")}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {status === undefined ? (
-          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-        ) : (
-          <>
-            <StatusRow
-              label={t("channels.status.adapter")}
-              value={<RunStateBadge running={status.running} />}
-            />
-            {status.peer === null ? (
-              <StatusRow
-                label={t("channels.status.peer")}
-                value={<span className="text-muted-foreground">{t("channels.notPaired")}</span>}
-              />
-            ) : (
-              <>
-                <StatusRow
-                  label={t("channels.status.peer")}
-                  value={<span className="font-medium">{status.peer.display_name}</span>}
-                />
-                <StatusRow
-                  label={t("channels.status.chatId")}
-                  value={<code className="text-xs">{status.peer.chat_id}</code>}
-                />
-                <StatusRow
-                  label={t("channels.status.pairedAt")}
-                  value={formatDateTime(status.peer.paired_at)}
-                />
-                <StatusRow
-                  label={t("channels.status.conversation")}
-                  value={
-                    status.peer.active_conversation_id !== null ? (
-                      <code className="text-xs">{status.peer.active_conversation_id}</code>
-                    ) : (
-                      <span className="text-muted-foreground">{t("channels.status.none")}</span>
-                    )
-                  }
-                />
-              </>
-            )}
-            {status.pending_pairing ? (
-              <p className="pt-1 text-xs text-muted-foreground">
-                {t("channels.status.pendingPairing")}
-              </p>
-            ) : null}
-            {(status.diagnostics ?? []).map((diagnostic) => (
-              // FR-060: a setting that reads correctly here and does nothing in
-              // the chat — the one case worth interrupting the status list for.
-              <p
-                key={diagnostic.code}
-                role="alert"
-                className="mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive"
-              >
-                {diagnostic.message}
-              </p>
-            ))}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Generate-pairing-code button + the LARGE code with expiry and copy. */
 export function ChannelPairingCard({
   code,
   isPending,

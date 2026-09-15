@@ -14,20 +14,21 @@ type DaemonLogListOut = components["schemas"]["DaemonLogListOut"];
 
 interface UseDaemonLogArgs {
   since?: string;
-  errorsOnly?: boolean;
+  /** Severity floor; everything at or above it. "" is every level. */
+  level?: string;
   limit?: number;
   /** False switches the lane off entirely — no request, no discarded response. */
   enabled?: boolean;
 }
 
-export function useDaemonLog({ since, errorsOnly, limit = 100, enabled = true }: UseDaemonLogArgs) {
+export function useDaemonLog({ since, level, limit = 100, enabled = true }: UseDaemonLogArgs) {
   return useQuery({
-    queryKey: daemonLogsKey({ since, errorsOnly, limit }),
+    queryKey: daemonLogsKey({ since, level, limit }),
     queryFn: async (): Promise<DaemonLogListOut> => {
       const client = getApiClient();
       const query: Record<string, string | number | boolean> = { limit };
       if (since) query.since = since;
-      if (errorsOnly) query.errors_only = true;
+      if (level) query.level = level;
       const { data, error } = await client.GET("/daemon/logs", {
         params: { query: query as never },
       });

@@ -24,10 +24,28 @@ from coffer.domain.sync.backup import (
 from coffer.domain.sync.errors import BackupRemoteInvalid
 
 
+class DocChangeOut(BaseModel):
+    """One document's fate in one round: what moved, and which way."""
+
+    path: str
+    #: ``added`` | ``modified`` | ``deleted``.
+    status: str
+
+
 class DiffCountsOut(BaseModel):
+    """What a round moved, as a tally AND as the list behind it.
+
+    The tally alone is what a row can show; the list is what the reader opens
+    the row to find out. A round reporting `+1 ~1` and then "nothing further to
+    report" is the surface refusing to answer the only question the row raises,
+    and the paths were in the payload the whole time.
+    """
+
     added: int = 0
     modified: int = 0
     deleted: int = 0
+    #: Every path this side of the round touched, sorted, with its status.
+    changes: list[DocChangeOut] = []
 
 
 class FailureOut(BaseModel):

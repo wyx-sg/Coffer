@@ -100,6 +100,19 @@ export function ChannelMachineSelect({ name, config, runsOn, runsHere, compact =
             {labelFor(option)}
           </SelectItem>
         ))}
+        {/* FR-080 requires the surface offering the rebind to say what a
+            rebind actually costs: binding a channel to the machine you are
+            sitting at, while another still holds it, leaves both live until
+            that machine's next round. It belongs in the menu rather than
+            beside it — this is the moment the choice is made. */}
+        <div className="max-w-[18rem] space-y-1.5 border-t px-2 pb-1 pt-2">
+          <p className="text-xs text-muted-foreground">{t("channels.machine.handover")}</p>
+          {/* Reach and the binding must never be merged (spec channels, "Reach
+              and the binding answer different questions"), and this menu is
+              where they are most easily confused: the reach control sits one
+              row away in the same card. */}
+          <p className="text-xs text-muted-foreground">{t("channels.machine.notReach")}</p>
+        </div>
       </SelectContent>
     </Select>
   );

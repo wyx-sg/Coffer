@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
+import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
 import { SkillFileViewer } from "@/components/skills/SkillFileViewer";
 import { translateApiError } from "@/lib/api/errors";
 import type { SkillFileNode } from "@/lib/api/skills";
@@ -31,7 +32,7 @@ export function SkillFileTree({ name }: { name: string }) {
         ) : tree.error ? (
           <p className="px-1 text-sm text-destructive">{translateApiError(t, tree.error)}</p>
         ) : tree.data ? (
-          <ul className="space-y-0.5">
+          <ul className={cn("space-y-0.5", FILE_PANE_MAX_HEIGHT)}>
             <TreeNode
               node={tree.data}
               depth={0}

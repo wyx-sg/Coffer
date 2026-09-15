@@ -27,7 +27,7 @@ vi.mock("@/lib/hooks/useSync", () => ({
 
 const { useSyncStatus, useConfirmRound, useRejectRound } = await import("@/lib/hooks/useSync");
 
-const NO_COUNTS = { added: 0, modified: 0, deleted: 0 };
+const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
 
 function round(overrides: Partial<ConvergeRound> = {}): ConvergeRound {
   return {
@@ -147,8 +147,8 @@ describe("SyncStatusTab", () => {
     // be compared against the rounds before it.
     seed(
       round({
-        applied: { added: 3, modified: 1, deleted: 0 },
-        published: { added: 0, modified: 2, deleted: 1 },
+        applied: { added: 3, modified: 1, deleted: 0, changes: [] },
+        published: { added: 0, modified: 2, deleted: 1, changes: [] },
         commit: "abc1234",
         agent_resolved: ["knowledge/notes/merged.md"],
         failures: [{ path: "resources/agent/desktop.yaml", reason: "config_dir missing" }],

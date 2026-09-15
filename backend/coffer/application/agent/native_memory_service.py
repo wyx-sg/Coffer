@@ -31,6 +31,7 @@ infrastructure implements it).
 from __future__ import annotations
 
 import asyncio
+import functools
 import pathlib
 from typing import Protocol
 
@@ -61,8 +62,11 @@ class NativeMemoryScanPort(Protocol):
         single global task-grouped store under ``memories_dir``."""
         ...
 
-    def build_tree(self, store_dir: pathlib.Path) -> MemoryFileNode:
-        """Return *store_dir* as a recursive read-only tree."""
+    def build_tree(
+        self, store_dir: pathlib.Path, *, only: frozenset[str] | None = None
+    ) -> MemoryFileNode:
+        """Return *store_dir* as a recursive read-only tree, restricted to the
+        root entries in *only* when the directory holds more than the store."""
         ...
 
     def read_file(self, store_dir: pathlib.Path, relpath: str) -> MemoryFileContent:
@@ -122,8 +126,10 @@ class AgentNativeMemoryService:
         memory stores — a client may only browse a directory the scan itself
         would have listed.
         """
-        store_dir = await self._checked_store_dir(name, memory_dir)
-        return await asyncio.to_thread(self._scanner.build_tree, store_dir)
+        store_dir, only = await self._checked_store_dir(name, memory_dir)
+        return await asyncio.to_thread(
+            functools.partial(self._scanner.build_tree, store_dir, only=only)
+        )
 
     async def read_file(self, name: str, memory_dir: str, relpath: str) -> MemoryFileContent:
         """One file inside the store at *memory_dir*.
@@ -131,14 +137,24 @@ class AgentNativeMemoryService:
         Raises as :meth:`read_tree` does, plus ``ValueError`` when *relpath*
         escapes the store and ``FileNotFoundError`` when nothing is there.
         """
-        store_dir = await self._checked_store_dir(name, memory_dir)
+        store_dir, _only = await self._checked_store_dir(name, memory_dir)
         return await asyncio.to_thread(self._scanner.read_file, store_dir, relpath)
 
-    async def _checked_store_dir(self, name: str, memory_dir: str) -> pathlib.Path:
-        """Resolve *memory_dir* and prove it is one of this agent's stores.
+    async def _checked_store_dir(
+        self, name: str, memory_dir: str
+    ) -> tuple[pathlib.Path, frozenset[str] | None]:
+        """Resolve *memory_dir*, prove it is one of this agent's stores, and say
+        which of its entries the store actually consists of.
 
         Resolution comes first so that a symlink pointing out of the config dir
         is judged by where it lands, not by how it is spelled.
+
+        The second half of the answer exists because a store directory is not
+        always the store. Codex's memory is one ``MEMORY.md`` inside
+        ``~/.codex/memories``, and that directory also holds its automations,
+        extensions, skills and a git checkout — so browsing the directory would
+        put a pile of things that are not memory on a page that claims to show
+        memory. A per-project store has no such problem, and gets ``None``.
         """
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
         cfg = AgentConfig.model_validate((await self._agents.get(name)).config)
@@ -146,7 +162,8 @@ class AgentNativeMemoryService:
         candidate = pathlib.Path(memory_dir).resolve()
         if not is_native_memory_dir(layout, cfg.resolved_config_dir().resolve(), candidate):
             raise ValueError(f"not a native memory store of this agent: {memory_dir!r}")
-        return candidate
+        only = frozenset({layout.index_file}) if isinstance(layout, CodexGlobalLayout) else None
+        return candidate, only
 
     @staticmethod
     def _to_store(scan: ScannedStore) -> NativeMemoryStore:

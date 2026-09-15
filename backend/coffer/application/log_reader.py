@@ -70,6 +70,42 @@ _LEVELS = {
 #: all is kept too (see ``matches_level``) — it is usually a traceback.
 _ERROR_LEVELS = {"error", "critical", "exception"}
 
+#: Log levels in order of severity, least to most. A filter names a floor and
+#: everything at or above it survives — which is what a reader means by "show
+#: me warnings": warnings AND the errors among them, not warnings alone.
+_LEVEL_ORDER: tuple[str, ...] = ("debug", "info", "warning", "error", "critical")
+
+
+def normalise_level(raw: str) -> str:
+    """One level name from whatever a line called it.
+
+    ``_LEVELS`` is the same table the parsers use, so a level read off a
+    zerolog line and one read off structlog's JSON land on the same word.
+    Returns ``""`` for anything the table does not know.
+    """
+    token = raw.strip()
+    if not token:
+        return ""
+    if token.lower() in _LEVEL_ORDER:
+        return token.lower()
+    return _LEVELS.get(token.upper(), "")
+
+
+def at_least(record: dict[str, Any], floor: str) -> bool:
+    """Whether ``record`` is at or above ``floor`` on the severity scale.
+
+    A record whose level cannot be read survives every floor: not knowing what
+    a line was is not evidence that it was harmless — the same rule
+    ``matches_level`` has always applied to the errors-only filter. An
+    unrecognised floor filters nothing, for the same reason.
+    """
+    level = normalise_level(str(record.get("level", "")))
+    wanted = normalise_level(floor)
+    if not level or not wanted:
+        return True
+    return _LEVEL_ORDER.index(level) >= _LEVEL_ORDER.index(wanted)
+
+
 # cloudflared (zerolog): `2026-09-14T06:29:20Z INF Registered tunnel … ip=…`
 _ZEROLOG = re.compile(
     r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"
@@ -237,7 +273,9 @@ def matches_level(record: dict[str, Any], errors_only: bool) -> bool:
 
 __all__ = [
     "TAIL_BYTES",
+    "at_least",
     "matches_level",
+    "normalise_level",
     "parse_log_line",
     "parse_log_lines",
     "strip_ansi",

@@ -414,27 +414,42 @@ export interface components {
         RoundOut: {
             /** @enum {string} */
             status: "ok" | "no_change" | "joined" | "conflict" | "awaiting_confirmation" | "push_failed" | "error";
+            /**
+             * @description Set when this round joined a remote; null otherwise
+             * @enum {string|null}
+             */
+            join: "new" | "returning" | null;
+            /** @description What the round wrote into this vault */
+            applied: components["schemas"]["DiffCountsOut"];
+            /** @description What the round wrote into the remote */
+            published: components["schemas"]["DiffCountsOut"];
             /** @description The pointer after the round; unchanged when the round did not absorb */
             commit: string | null;
-            areas: components["schemas"]["AreaCountOut"][];
-            applied: components["schemas"]["AppliedPathOut"][];
+            /** @description Paths git could not merge. A non-empty list aborts the round untouched */
+            conflicts: string[];
+            /** @description Paths an agent merged — reported whether or not the round succeeded */
+            agent_resolved: string[];
             /** @description Per-path failures. They are reported and never abort the round */
             failures: components["schemas"]["PathFailureOut"][];
-            /** @description Paths that cannot apply on this machine at all — an agent whose config_dir does not exist here. Preserved like a pending path, but not retried and not an error. */
-            not_applicable: components["schemas"]["PathFailureOut"][];
-            /** @description The retry set after the round. The exporter must not delete these */
-            pending: string[];
-            conflicts: components["schemas"]["ConflictOut"][];
-            /** @description Set when status is awaiting_confirmation */
-            confirmation?: components["schemas"]["PendingConfirmationOut"] | null;
-            /** @description Set when the round started without a pointer */
-            join?: components["schemas"]["JoinOut"] | null;
-            /** @description Named on a conflict, because that is where the user resolves it with their own git tools. */
-            worktree_path?: string | null;
-            /** @description Already redacted of the push credential */
-            error?: string | null;
-            /** Format: date-time */
-            ran_at?: string | null;
+            /** @description Credential refs whose ciphertext this machine holds without the key */
+            locked_refs: string[];
+            /** @description Set when the deletion guard held the round for confirmation */
+            pending: components["schemas"]["PendingConfirmationOut"];
+            error: string | null;
+        };
+        /** @description What one side of a round moved — the tally a history row shows, and the paths behind it that opening the row is for. */
+        DiffCountsOut: {
+            added: number;
+            modified: number;
+            deleted: number;
+            /** @description Every path this side touched, sorted by path */
+            changes: components["schemas"]["DocChangeOut"][];
+        };
+        /** @description One document's fate in one round. */
+        DocChangeOut: {
+            path: string;
+            /** @enum {string} */
+            status: "added" | "modified" | "deleted";
         };
         RestoreIn: {
             /** @description A sha, a ref, or a YYYY-MM-DD date resolving to the last commit at or before it — the tip cannot return something deleted last week. */

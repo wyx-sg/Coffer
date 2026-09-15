@@ -268,7 +268,7 @@ describe("ProviderDetailPage", () => {
     });
   });
 
-  test("flipping one off removes just that model; clearing writes the empty (unrestricted) set", async () => {
+  test("flipping one off removes just that model", async () => {
     apiMock.get.mockResolvedValue(makeProvider({ models: chat("gpt-5", "gpt-5-codex") }));
     apiMock.update.mockResolvedValue(makeProvider({ models: chat("gpt-5-codex") }));
     renderPage();
@@ -283,10 +283,6 @@ describe("ProviderDetailPage", () => {
     expect(apiMock.update).toHaveBeenCalledWith("acme", {
       models: [{ id: "gpt-5-codex", modality: "text" }],
     });
-
-    fireEvent.click(screen.getByRole("button", { name: /clear selection/i }));
-    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(2));
-    expect(apiMock.update).toHaveBeenLastCalledWith("acme", { models: [] });
   });
 
   test("the search box narrows the table to the matching model ids", async () => {

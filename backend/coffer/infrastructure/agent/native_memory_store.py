@@ -111,13 +111,17 @@ class FileNativeMemoryScanner:
         single global task-grouped store (``memories_dir/<index_file>``)."""
         return codex_stores(memories_dir, index_file)
 
-    def build_tree(self, store_dir: pathlib.Path) -> MemoryFileNode:
+    def build_tree(
+        self, store_dir: pathlib.Path, *, only: frozenset[str] | None = None
+    ) -> MemoryFileNode:
         """One store's directory as a read-only tree (see ``native_memory_files``).
 
         The caller has already established that ``store_dir`` is one of this
-        agent's stores; this adapter's only remaining job is the walk.
+        agent's stores; this adapter's only remaining job is the walk — and,
+        for a layout whose directory holds more than the store, keeping to the
+        entries ``only`` names.
         """
-        return native_memory_files.build_tree(store_dir)
+        return native_memory_files.build_tree(store_dir, only=only)
 
     def read_file(self, store_dir: pathlib.Path, relpath: str) -> MemoryFileContent:
         """One file inside a store, capped and containment-checked."""

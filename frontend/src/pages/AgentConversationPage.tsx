@@ -17,6 +17,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
 
+import { AgentTranscriptOutline } from "@/components/agents/AgentTranscriptOutline";
 import { AgentTranscriptView } from "@/components/agents/AgentTranscriptView";
 import { FileActions } from "@/components/FileActions";
 import { Button } from "@/components/ui/button";
@@ -100,7 +101,14 @@ export function AgentConversationPage() {
         <FileActions filePath={data.source_path} />
       </header>
 
-      <AgentTranscriptView messages={data.messages} />
+      {/* Contents on the left, the conversation in its own frame on the right
+          — the same two-pane shape every other detail surface here uses. The
+          outline indexes the loaded window, which is what the header's turn
+          range already says the reader is looking at. */}
+      <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
+        <AgentTranscriptOutline messages={data.messages} />
+        <AgentTranscriptView messages={data.messages} />
+      </div>
 
       {/* Paging the turns, not the sessions — the transcript can be far longer
           than one window, and the whole file is never fetched at once. */}

@@ -224,17 +224,6 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
         }
       />
 
-      {selected.length > 0 ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={update.isPending}
-          onClick={() => write([])}
-          className="text-muted-foreground"
-        >
-          {t("settings.connections.detail.clearSelection")}
-        </Button>
-      ) : null}
     </Card>
   );
 }

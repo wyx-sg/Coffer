@@ -370,7 +370,6 @@
     },
     "daemon": {
       "emptyState": "No matching log records.",
-      "errorsOnly": "Errors only",
       "noMessage": "(log record with no message)",
       "searchPlaceholder": "Search log records",
       "table": {
@@ -378,6 +377,14 @@
         "level": "Level",
         "logger": "Logger",
         "message": "Message"
+      },
+      "levelLabel": "Log level",
+      "level": {
+        "all": "All levels",
+        "debug": "Debug and above",
+        "info": "Info and above",
+        "warning": "Warnings and errors",
+        "error": "Errors only"
       }
     }
   },
@@ -546,7 +553,6 @@
         "loadingModels": "Listing this endpoint's models…",
         "retryFetch": "Retry",
         "noModelsYet": "This endpoint listed no models. Leave the selection empty and every model it offers stays available.",
-        "clearSelection": "Clear selection (no restriction)",
         "modelId": "Model",
         "modelSearchPlaceholder": "Search models…",
         "modelOffered": "Offered",
@@ -912,7 +918,9 @@
       "turnTruncated": "This turn was too long to show in full — open the file to read the rest.",
       "turnRange": "Turns {{from}}–{{to}} of {{total}}",
       "earlier": "Earlier turns",
-      "later": "Later turns"
+      "later": "Later turns",
+      "outline": "Contents",
+      "outlineEmpty": "No prompts in this window."
     },
     "memoryStore": {
       "tree": "Files",
@@ -1435,7 +1443,16 @@
       "failures": "Could not be applied here",
       "failure": "{{path}} — {{reason}}",
       "lockedRefs": "Credentials this machine cannot decrypt",
-      "lockedRefsHint": "This vault holds their ciphertext but not the key that opens it. Import the master key from the machine that has it, below."
+      "lockedRefsHint": "This vault holds their ciphertext but not the key that opens it. Import the master key from the machine that has it, below.",
+      "applied": "Applied here",
+      "appliedHint": "What this round wrote into this vault.",
+      "published": "Published to the remote",
+      "publishedHint": "What this round wrote into the shared tree.",
+      "change": {
+        "added": "added · {{path}}",
+        "modified": "changed · {{path}}",
+        "deleted": "deleted · {{path}}"
+      }
     },
     "history": {
       "title": "History",
