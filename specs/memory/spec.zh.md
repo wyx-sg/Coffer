@@ -95,11 +95,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 
 ### Scenario: deleting the memory tree and re-syncing reproduces the facts
 
-### Scenario: a hidden fact stays hidden across a rebuild
-
-### Scenario: a pinned fact stays pinned across a rebuild
-
-### Scenario: a hand-settled conflict stays settled across a rebuild
+### Scenario: a partition's own directory is browsable as a file tree
 
 ### Scenario: the composed context stays within its token budget
 

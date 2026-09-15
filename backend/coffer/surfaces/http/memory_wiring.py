@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 from coffer.application.agent.service import AgentService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.memory.aggregate import AgentSource
+from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.builtin_recall_tool import register_recall_tool
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.kind import make_memory_kind
@@ -154,6 +155,29 @@ def wire_memory_kind(
         delivery_service=delivery_service,
         organise=_organise,
     )
+
+
+def start_aggregate_worker(service: MemoryService) -> asyncio.Task[None]:
+    """Start the aggregation pass (FR-007) — a catch-up on boot, then hourly.
+
+    On by default: a pass reads the agents' own memory files and writes only
+    the derived tree, and FR-006 makes a pass over unchanged sources nearly
+    free. The Sync button and ``coffer memory sync`` stay: this makes the
+    layer current without being asked, it does not replace asking.
+    Returns the task; the lifespan cancels it at shutdown.
+    """
+    worker = AggregateWorker(aggregate=service.aggregate)
+    return asyncio.create_task(worker.run_forever())
+
+
+async def stop_aggregate_worker(task: asyncio.Task[None]) -> None:
+    """Cancel the pass and wait for it to acknowledge; a pending pass is
+    dropped, not fired (the next boot aggregates everything again)."""
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        logger.debug("memory.aggregate_worker.stopped")
 
 
 def start_organise_worker(

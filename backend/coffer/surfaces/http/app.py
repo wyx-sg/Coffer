@@ -81,7 +81,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.memory_wiring import stop_organise_worker
+from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_organise_worker
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
@@ -282,6 +282,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         knowledge_service=kinds.knowledge.service,
         tidy_pass=tidy_pass,
         organise=kinds.memory.organise,
+        memory_service=kinds.memory.service,
         resource_svc=resource_svc,
         audit=audit,
         engine_config=internal_engine_config_svc,
@@ -315,6 +316,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_converge_worker(workers.converge_worker)
         await stop_tidy_worker(workers.tidy_task)
         await stop_organise_worker(workers.organise_task)
+        await stop_aggregate_worker(workers.aggregate_task)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;

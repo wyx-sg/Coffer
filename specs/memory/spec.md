@@ -95,11 +95,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 ### Scenario: deleting the memory tree and re-syncing reproduces the facts
 
-### Scenario: a hidden fact stays hidden across a rebuild
-
-### Scenario: a pinned fact stays pinned across a rebuild
-
-### Scenario: a hand-settled conflict stays settled across a rebuild
+### Scenario: a partition's own directory is browsable as a file tree
 
 ### Scenario: the composed context stays within its token budget
 

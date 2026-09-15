@@ -1047,7 +1047,7 @@
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents already learned, read from their own memory — Claude Code's per-project notes and Codex's task groups — normalised into facts by project, plus one global partition for what is about you rather than any project. Coffer never writes back into an agent's own memory.",
+    "subtitle": "What your agents already learned, read from their own memory — Claude Code's per-project notes and Codex's task groups — normalised into facts by project, plus one global partition for what is about you rather than any project. Coffer never writes back into an agent's own memory. It re-reads them on its own; the button just does it now.",
     "readFromAgents": "Read from agents",
     "reading": "Reading…",
     "syncDone": "Read {{count}} facts across {{partitions}} partitions.",

@@ -1047,7 +1047,7 @@
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），按项目归一化为一组事实，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。",
+    "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），按项目归一化为一组事实，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。它会自己定时重读；按钮只是让它立刻跑一次。",
     "readFromAgents": "读取 Agent 记忆",
     "reading": "读取中…",
     "syncDone": "已读取 {{partitions}} 个分区，共 {{count}} 条事实。",
