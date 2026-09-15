@@ -38,11 +38,7 @@ describe("MessageBubble", () => {
   });
 
   test("renders per-message token usage when present", () => {
-    render(
-      <MessageBubble
-        message={makeAssistant({ prompt_tokens: 12, completion_tokens: 34 })}
-      />,
-    );
+    render(<MessageBubble message={makeAssistant({ prompt_tokens: 12, completion_tokens: 34 })} />);
     expect(screen.getByText(/12 in/)).toBeInTheDocument();
     expect(screen.getByText(/34 out/)).toBeInTheDocument();
   });
@@ -75,5 +71,22 @@ describe("MessageBubble", () => {
     );
     expect(screen.getByText("photo.jpg")).toBeInTheDocument();
     expect(screen.getByText(/image\/jpeg/)).toBeInTheDocument();
+  });
+
+  test("an attachment without a filename gets a translated label", () => {
+    render(
+      <MessageBubble
+        message={makeUser({ content: [{ type: "attachment", filename: null, mime: null }] })}
+      />,
+    );
+    expect(screen.getByText("Attachment")).toBeInTheDocument();
+  });
+
+  test("bubbles size to their content within a readable max width", () => {
+    const { container } = render(<MessageBubble message={makeUser({})} />);
+    const bubble = container.querySelector(".rounded-xl") as HTMLElement;
+    expect(bubble.className).toContain("w-fit");
+    expect(bubble.className).toContain("max-w-3xl");
+    expect(bubble.className).not.toMatch(/max-w-\[/);
   });
 });

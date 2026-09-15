@@ -21,6 +21,13 @@ vi.mock("@/lib/hooks/useChannels", () => ({
   useChannelStatus: vi.fn(),
   CHANNEL_KIND: "channel",
 }));
+// The bound-agent column shows display names from the provider registry, with
+// a static fallback for the keys Coffer knows; stub the registry as loaded.
+vi.mock("@/lib/hooks/useAgentProviders", () => ({
+  useAgentProviders: vi.fn(() => ({
+    data: [{ agent_key: "codex", display_name: "Codex", available: true }],
+  })),
+}));
 
 // The state column is now ScopeControl, so every row reaches the scope /
 // agents / enable hooks. `scope` rides the list payload, so useResourceScope
@@ -69,30 +76,41 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-function channel(name: string, agent = "builtin"): ResourceOut {
+function channel(name: string, agent?: string, enabled = true): ResourceOut {
   return {
     name,
     kind: "channel",
-    config: { channel_type: "telegram", default_agent: agent },
-    enabled: true,
+    config: { channel_type: "telegram", ...(agent ? { default_agent: agent } : {}) },
+    enabled,
   } as unknown as ResourceOut;
 }
 
 describe("ChannelsTable", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("renders one row per channel with name and default agent", () => {
-    stubStatuses({ tg: status("tg"), st: status("st") });
-    render(<ChannelsTable items={[channel("tg", "claude_code"), channel("st")]} />, {
-      wrapper: wrap(null),
-    });
+  test("renders one row per channel, naming the default agent for a human", () => {
+    stubStatuses({ tg: status("tg"), st: status("st"), cx: status("cx") });
+    render(
+      <ChannelsTable
+        items={[channel("tg", "claude_code"), channel("cx", "codex"), channel("st")]}
+      />,
+      { wrapper: wrap(null) },
+    );
     expect(screen.getByText("tg")).toBeInTheDocument();
     expect(screen.getByText("st")).toBeInTheDocument();
-    expect(screen.getByText("claude_code")).toBeInTheDocument();
+    // Display names, never the provider key — from the registry when it has
+    // the key, from the static map otherwise.
+    expect(screen.getByText("Claude Code")).toBeInTheDocument();
+    expect(screen.getByText("Codex")).toBeInTheDocument();
+    expect(screen.queryByText("claude_code")).not.toBeInTheDocument();
+    // A config that names no agent shows the empty value, not a made-up key.
+    const st = within(screen.getByText("st").closest("tr") as HTMLElement);
+    expect(st.queryByText("builtin")).not.toBeInTheDocument();
+    expect(st.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   test("shows a live health badge reflecting the adapter running state", () => {
-    // tg's adapter is live -> Running; st's is down -> Stopped.
+    // tg's adapter is live -> Running (ok); st's is down -> Stopped (warn).
     stubStatuses({
       tg: status("tg", { running: true }),
       st: status("st", { running: false }),
@@ -101,8 +119,23 @@ describe("ChannelsTable", () => {
 
     const badges = screen.getAllByTestId("channel-health-badge");
     expect(badges).toHaveLength(2);
-    expect(screen.getByText("Running")).toBeInTheDocument();
-    expect(screen.getByText("Stopped")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toHaveClass("text-status-ok");
+    // Stopped is attention, not "unknown": the same warn tone the detail
+    // page's Status card uses.
+    expect(screen.getByText("Stopped")).toHaveClass("text-status-warn");
+  });
+
+  test("the toolbar offers the shared three-state reach filter", () => {
+    stubStatuses({ tg: status("tg"), st: status("st") });
+    render(<ChannelsTable items={[channel("tg"), channel("st", undefined, false)]} />, {
+      wrapper: wrap(null),
+    });
+    expect(screen.getByRole("columnheader", { name: "Reach" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("combobox", { name: "Reach" }));
+    fireEvent.click(screen.getByRole("option", { name: "Disabled" }));
+    expect(screen.getByText("st")).toBeInTheDocument();
+    expect(screen.queryByText("tg")).not.toBeInTheDocument();
   });
 
   test("shows the paired owner when the channel has a peer", () => {

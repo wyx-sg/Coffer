@@ -7,28 +7,37 @@
 // hand. In edit mode (`initial` set) the secret is optional — left blank, the
 // stored key is kept.
 //
-// WHICH AGENTS the connection reaches is NOT a field here. It used to be a set
-// of compatible-agents checkboxes writing a `compatible_agents` config key; that
-// key is gone — the axis is now the resource's framework-level per-agent SCOPE
-// (ADR per-agent-resource-scope), owned by the shared `ScopeControl` that the
-// connection's table row and its detail header already render. Keeping a second
-// control here would either duplicate that one or, as it briefly did, send a
-// field the backend no longer reads and silently discard the user's choice. A
-// new connection starts on its wire's default scope (`Kind.default_scope`), so
-// the common case needs no input at all; the hint below says where to change it.
+// Validation is react-hook-form + the zod schema in providerFormSchema.ts, so
+// every message under a field is translated and the endpoint is checked to be
+// a full URL before anything is sent — the browser's own `required` bubbles
+// could do neither.
+//
+// WHICH AGENTS the connection reaches is NOT a field here: the axis is the
+// resource's framework-level per-agent SCOPE (ADR per-agent-resource-scope),
+// owned by the shared `ScopeControl` that the connection's table row and its
+// detail header render. A new connection starts on its wire's default scope
+// (`Kind.default_scope`); the hint below says where to change it.
 //
 // The NAME is editable in edit mode, but it does NOT travel in the PATCH body:
 // it is the connection's identity, not one of its settings, so it leaves as its
 // own rename call — `onUpdate` hands the caller the new name alongside the
 // patch and the caller sequences the two. That ordering is what makes a name
 // collision fail before anything else has been written.
-import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
 import {
   wireNeedsCredential,
@@ -37,7 +46,8 @@ import {
   type ProviderCreate,
   type ProviderPatch,
 } from "@/lib/api/providers";
-import { PRESETS } from "./connectionPresets";
+import { PRESETS, PROTOCOL_LABEL_KEY, SELECTABLE_PROTOCOLS } from "./connectionPresets";
+import { providerFormSchema, type ProviderFormValues } from "./providerFormSchema";
 
 interface Props {
   /** Present → edit an existing connection (protocol locked, secret optional). */
@@ -52,6 +62,19 @@ interface Props {
   onCancel: () => void;
 }
 
+/** Required fields carry a mark after the label; the label text itself stays
+ *  clean so its accessible name is just the word. */
+const REQUIRED = "after:ml-0.5 after:text-destructive after:content-['*']";
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return (
+    <p id={id} className="text-xs text-destructive" role="alert">
+      {message}
+    </p>
+  );
+}
+
 export function ProviderForm({
   initial,
   submitError,
@@ -62,46 +85,86 @@ export function ProviderForm({
 }: Props) {
   const { t } = useTranslation();
   const isEdit = initial != null;
-  const [name, setName] = useState(initial?.name ?? "");
-  const [presetId, setPresetId] = useState("openai");
-  const [protocol, setProtocol] = useState<Protocol | "">(initial?.protocol ?? "openai");
-  const [baseUrl, setBaseUrl] = useState(initial?.base_url ?? "https://api.openai.com/v1");
-  const [secret, setSecret] = useState("");
+  const form = useForm<ProviderFormValues>({
+    resolver: zodResolver(providerFormSchema(t, { isEdit })),
+    defaultValues: {
+      name: initial?.name ?? "",
+      presetId: "openai",
+      protocol: initial?.protocol ?? "openai",
+      baseUrl: initial?.base_url ?? "https://api.openai.com/v1",
+      secret: "",
+    },
+  });
+  const { register, control, watch, setValue, handleSubmit, formState } = form;
+  const { errors } = formState;
 
+  const presetId = watch("presetId");
+  const protocol = watch("protocol");
   const isCustom = presetId === "custom";
-  const needsCredential = protocol === "" || wireNeedsCredential(protocol);
+  const needsCredential = wireNeedsCredential(protocol);
 
   // Picking a preset fills protocol + endpoint; custom clears the endpoint for
   // hand entry.
   const pickPreset = (id: string) => {
-    setPresetId(id);
+    setValue("presetId", id);
     const preset = PRESETS.find((p) => p.id === id);
-    setProtocol(id === "custom" ? "openai" : (preset?.protocol ?? "openai"));
-    setBaseUrl(id === "custom" ? "" : (preset?.baseUrl ?? ""));
+    setValue("protocol", id === "custom" ? "openai" : preset?.protocol || "openai");
+    setValue("baseUrl", id === "custom" ? "" : (preset?.baseUrl ?? ""), { shouldValidate: false });
   };
 
+  const submit = handleSubmit(async (values) => {
+    const baseUrl = values.baseUrl.trim();
+    if (isEdit) {
+      const patch: ProviderPatch = { base_url: baseUrl };
+      if (values.protocol !== initial.protocol) patch.protocol = values.protocol;
+      if (needsCredential && values.secret) patch.secret_value = values.secret;
+      const renamed = values.name.trim();
+      await onUpdate?.(patch, renamed && renamed !== initial.name ? renamed : null);
+      return;
+    }
+    const body: ProviderCreate = {
+      name: values.name.trim(),
+      protocol: values.protocol,
+      base_url: baseUrl,
+    };
+    if (needsCredential && values.secret) body.secret_value = values.secret;
+    await onSubmit(body);
+  });
+
+  const protocolPicker = (id: string) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className={REQUIRED}>
+        {t("settings.connections.wireFormat")}
+      </Label>
+      <Controller
+        control={control}
+        name="protocol"
+        render={({ field }) => (
+          <Select value={field.value} onValueChange={(v) => field.onChange(v as Protocol)}>
+            <SelectTrigger id={id}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SELECTABLE_PROTOCOLS.map((p) => (
+                <SelectItem key={p} value={p}>
+                  {t(PROTOCOL_LABEL_KEY[p])}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      />
+    </div>
+  );
+
   return (
-    <form
-      className="space-y-3"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (isEdit) {
-          const patch: ProviderPatch = { base_url: baseUrl };
-          if (protocol && protocol !== initial.protocol) patch.protocol = protocol;
-          if (needsCredential && secret) patch.secret_value = secret;
-          const renamed = name.trim();
-          await onUpdate?.(patch, renamed && renamed !== initial.name ? renamed : null);
-          return;
-        }
-        if (!protocol) return; // guard: a custom connection still needs a protocol
-        const values: ProviderCreate = { name, protocol, base_url: baseUrl };
-        if (needsCredential && secret) values.secret_value = secret;
-        await onSubmit(values);
-      }}
-    >
+    <form className="space-y-3" onSubmit={submit} noValidate>
       <div className="space-y-1.5">
-        <Label htmlFor="p-name">{t("settings.connections.name")}</Label>
-        <Input id="p-name" value={name} onChange={(e) => setName(e.target.value)} required />
+        <Label htmlFor="p-name" className={REQUIRED}>
+          {t("settings.connections.name")}
+        </Label>
+        <Input id="p-name" aria-describedby="p-name-error" {...register("name")} />
+        <FieldError id="p-name-error" message={errors.name?.message} />
         {isEdit ? (
           <p className="text-xs text-muted-foreground">{t("settings.connections.renameHint")}</p>
         ) : null}
@@ -112,69 +175,53 @@ export function ProviderForm({
           keys off it — an endpoint that turns out to speak a different wire is
           corrected here rather than recreated. */}
       {isEdit ? (
-        <div className="space-y-1.5">
-          <Label htmlFor="p-wire-edit">{t("settings.connections.wireFormat")}</Label>
-          <select
-            id="p-wire-edit"
-            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-            value={protocol}
-            onChange={(e) => setProtocol(e.target.value as Protocol)}
-          >
-            <option value="anthropic">anthropic</option>
-            <option value="openai">openai</option>
-            <option value="ollama">ollama</option>
-          </select>
-        </div>
+        protocolPicker("p-wire-edit")
       ) : (
         <div className="space-y-1.5">
           <Label htmlFor="p-preset">{t("settings.connections.provider")}</Label>
-          <select
-            id="p-preset"
-            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-            value={presetId}
-            onChange={(e) => pickPreset(e.target.value)}
-          >
-            {PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.id === "custom" ? t("settings.connections.customProvider") : p.label}
-              </option>
-            ))}
-          </select>
+          <Select value={presetId} onValueChange={pickPreset}>
+            <SelectTrigger id="p-preset">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRESETS.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.id === "custom" ? t("settings.connections.customProvider") : p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       )}
 
       {/* Custom connections pick the protocol by hand. */}
-      {!isEdit && isCustom && (
-        <div className="space-y-1.5">
-          <Label htmlFor="p-wire">{t("settings.connections.wireFormat")}</Label>
-          <select
-            id="p-wire"
-            className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-            value={protocol}
-            onChange={(e) => setProtocol(e.target.value as Protocol)}
-          >
-            <option value="anthropic">anthropic</option>
-            <option value="openai">openai</option>
-            <option value="ollama">ollama</option>
-          </select>
-        </div>
-      )}
+      {!isEdit && isCustom ? protocolPicker("p-wire") : null}
 
       <div className="space-y-1.5">
-        <Label htmlFor="p-base">{t("settings.connections.baseUrl")}</Label>
-        <Input id="p-base" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
+        <Label htmlFor="p-base" className={REQUIRED}>
+          {t("settings.connections.baseUrl")}
+        </Label>
+        <Input
+          id="p-base"
+          inputMode="url"
+          aria-describedby="p-base-error"
+          {...register("baseUrl")}
+        />
+        <FieldError id="p-base-error" message={errors.baseUrl?.message} />
       </div>
 
       {needsCredential && (
         <div className="space-y-1.5">
-          <Label htmlFor="p-secret">{t("settings.connections.secret")}</Label>
+          <Label htmlFor="p-secret" className={isEdit ? undefined : REQUIRED}>
+            {t("settings.connections.secret")}
+          </Label>
           <PasswordInput
             id="p-secret"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            required={!isEdit}
-            placeholder={isEdit ? t("settings.connections.secretKeepBlank") : undefined}
+            aria-describedby="p-secret-error"
+            placeholder={isEdit ? t("common.secretKeepBlank") : undefined}
+            {...register("secret")}
           />
+          <FieldError id="p-secret-error" message={errors.secret?.message} />
         </div>
       )}
 
@@ -190,7 +237,7 @@ export function ProviderForm({
         <Button type="button" variant="ghost" onClick={onCancel}>
           {t("common.cancel")}
         </Button>
-        <Button type="submit" disabled={pending || (!isEdit && !protocol)}>
+        <Button type="submit" disabled={pending}>
           {t("common.save")}
         </Button>
       </DialogFooter>

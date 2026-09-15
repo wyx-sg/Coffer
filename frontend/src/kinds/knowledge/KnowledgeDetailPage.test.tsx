@@ -8,6 +8,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { KnowledgeDetailPage } from "./KnowledgeDetailPage";
 import { acceptance } from "@/test/acceptance";
 
@@ -50,14 +51,18 @@ function renderPage() {
   // The header's reach control reads the collection's Resource, so the page now
   // needs a real query client — the fetch never resolves here, and the control
   // renders from its own defaults.
+  // The header's Tidy button carries a tooltip, which Layout's provider
+  // normally hosts; the page is rendered bare here, so mount one.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/knowledge/shopee"]}>
-        <Routes>
-          <Route path="/knowledge/:scope" element={<KnowledgeDetailPage />} />
-        </Routes>
-      </MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter initialEntries={["/knowledge/shopee"]}>
+          <Routes>
+            <Route path="/knowledge/:name" element={<KnowledgeDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
@@ -75,44 +80,40 @@ const FILE = {
 };
 
 describe("KnowledgeDetailPage", () => {
-  acceptance(
-    "knowledge",
-    "the viewer renders content read-only and offers open and reveal",
-    () => {
-      treeMock.mockReturnValue({
-        data: { path: "shopee", directories: [], files: [FILE] },
-        isPending: false,
-        error: null,
-      } as unknown as ReturnType<typeof useKnowledgeTree>);
-      fileMock.mockReturnValue({
-        data: FILE,
-        isPending: false,
-        error: null,
-      } as unknown as ReturnType<typeof useKnowledgeFile>);
-      tidyMock.mockReturnValue({
-        mutate: vi.fn(),
-        isPending: false,
-      } as unknown as ReturnType<typeof useTidyCollection>);
-      stubInertDefaults();
+  acceptance("knowledge", "the viewer renders content read-only and offers open and reveal", () => {
+    treeMock.mockReturnValue({
+      data: { path: "shopee", directories: [], files: [FILE] },
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof useKnowledgeTree>);
+    fileMock.mockReturnValue({
+      data: FILE,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof useKnowledgeFile>);
+    tidyMock.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof useTidyCollection>);
+    stubInertDefaults();
 
-      renderPage();
-      // The viewer only opens once a file is chosen, so choose one — the tree
-      // row is a button carrying the file's title.
-      fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
+    renderPage();
+    // The viewer only opens once a file is chosen, so choose one — the tree
+    // row is a button carrying the file's title.
+    fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
 
-      // The body renders…
-      expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
-      // …and the actions that change it hand the file to the user's own tools
-      // (spec knowledge FR-021/FR-061) — there is no in-app editor, because the
-      // files are the only copy and an edit made elsewhere is live on the next
-      // read with nothing to reconcile.
-      expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-      expect(screen.queryByRole("textbox", { name: /body|content/i })).toBeNull();
-      // One tree, not a Documents/Notes tab pair.
-      expect(screen.queryByRole("tab")).toBeNull();
-    },
-  );
+    // The body renders…
+    expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
+    // …and the actions that change it hand the file to the user's own tools
+    // (spec knowledge FR-021/FR-061) — there is no in-app editor, because the
+    // files are the only copy and an edit made elsewhere is live on the next
+    // read with nothing to reconcile.
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /body|content/i })).toBeNull();
+    // One tree, not a Documents/Notes tab pair.
+    expect(screen.queryByRole("tab")).toBeNull();
+  });
 
   test("prompts for a selection before a file is chosen", () => {
     treeMock.mockReturnValue({
@@ -155,6 +156,6 @@ describe("KnowledgeDetailPage", () => {
     stubInertDefaults();
 
     renderPage();
-    expect(screen.getByRole("button", { name: /back to knowledge/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to knowledge/i })).toBeInTheDocument();
   });
 });

@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { syncApi, type SyncRemoteInput } from "@/lib/api/sync";
+import { syncApi, type ConvergeRound, type SyncRemoteInput } from "@/lib/api/sync";
 import { useToast } from "@/components/ui/toast";
 
 export const syncKey = ["sync"] as const;
@@ -61,9 +61,9 @@ function useRoundInvalidation() {
 }
 
 /**
- * Store the remote, replacing any previous one — the card auto-saves, so this
- * fires whenever the user finishes with a field rather than behind a Save
- * button. `worktree_path` rides along unchanged when the daemon already has
+ * Store the remote, replacing any previous one — behind the card's Save
+ * button, or from the "converge automatically" switch flipping the stored
+ * remote. `worktree_path` rides along unchanged when the daemon already has
  * one: the card does not offer it, and omitting it would silently reset an
  * adopted working tree to the default.
  */
@@ -78,15 +78,32 @@ export function useSaveSyncRemote() {
   });
 }
 
-/** Run one converge round now. Held and conflicted rounds come back as a 200
- *  carrying the story, not as an error, so the page renders them as banners. */
+/**
+ * Run one converge round now. Held and conflicted rounds come back as a 200
+ * carrying the story, not as an error, so the page renders them as banners —
+ * and every completed round toasts its outcome, so a click on "Converge now"
+ * is never answered by silence. The counts sum both directions: what the
+ * round applied here plus what it published, which is what the round moved.
+ */
 export function useRunConverge() {
   const invalidate = useRoundInvalidation();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
     mutationFn: () => syncApi.run(),
-    onSuccess: invalidate,
+    onSuccess: (round: ConvergeRound) => {
+      invalidate();
+      const applied = round.applied ?? { added: 0, modified: 0, deleted: 0 };
+      const published = round.published ?? { added: 0, modified: 0, deleted: 0 };
+      toast.success(
+        t("sync.toast.roundDone", {
+          status: t(`sync.round.statusLabel.${round.status}`, { defaultValue: round.status }),
+          added: applied.added + published.added,
+          modified: applied.modified + published.modified,
+          deleted: applied.deleted + published.deleted,
+        }),
+      );
+    },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/RetentionPolicySection.test.tsx
 import { describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { RetentionPolicySection } from "./RetentionPolicySection";
 import type { components } from "@/lib/api/types";
 
@@ -91,5 +91,63 @@ describe("RetentionPolicySection", () => {
     expect(Number(daysInput.value)).toBe(3650);
     fireEvent.blur(daysInput);
     expect(onUpdate).toHaveBeenCalledWith(3650);
+  });
+
+  test("a value under 1 is raised to 1 and says so", () => {
+    render(<RetentionPolicySection policy={basePolicy} onUpdate={vi.fn()} updating={false} />);
+    const daysInput = screen.getByRole("spinbutton") as HTMLInputElement;
+    fireEvent.change(daysInput, { target: { value: "0" } });
+    expect(Number(daysInput.value)).toBe(1);
+    expect(screen.getByRole("status")).toHaveTextContent("Minimum is 1 day");
+
+    fireEvent.change(daysInput, { target: { value: "45" } });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  test("shortening the window asks first, then saves on confirm", async () => {
+    const onUpdate = vi.fn();
+    render(<RetentionPolicySection policy={basePolicy} onUpdate={onUpdate} updating={false} />);
+    const daysInput = screen.getByRole("spinbutton");
+    fireEvent.change(daysInput, { target: { value: "7" } });
+    fireEvent.blur(daysInput);
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Shorten retention to 7 days?");
+    fireEvent.click(within(dialog).getByRole("button", { name: /shorten/i }));
+    expect(onUpdate).toHaveBeenCalledWith(7);
+  });
+
+  test("cancelling the shortening puts the field back", async () => {
+    const onUpdate = vi.fn();
+    render(<RetentionPolicySection policy={basePolicy} onUpdate={onUpdate} updating={false} />);
+    const daysInput = screen.getByRole("spinbutton") as HTMLInputElement;
+    fireEvent.change(daysInput, { target: { value: "7" } });
+    fireEvent.blur(daysInput);
+
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(onUpdate).not.toHaveBeenCalled();
+    expect(Number(daysInput.value)).toBe(30);
+  });
+
+  test("turning keep-forever off is a shortening too, so it asks", async () => {
+    const onUpdate = vi.fn();
+    render(<RetentionPolicySection policy={foreverPolicy} onUpdate={onUpdate} updating={false} />);
+    fireEvent.click(screen.getByRole("switch"));
+    expect(onUpdate).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /shorten/i }));
+    expect(onUpdate).toHaveBeenCalledWith(30);
+  });
+
+  test("reports the rows the last prune removed, or that none has run", () => {
+    const { rerender } = render(
+      <RetentionPolicySection policy={foreverPolicy} onUpdate={vi.fn()} updating={false} />,
+    );
+    expect(screen.getByText(/100 rows removed/)).toBeInTheDocument();
+    rerender(<RetentionPolicySection policy={basePolicy} onUpdate={vi.fn()} updating={false} />);
+    expect(screen.getByText("Not pruned yet")).toBeInTheDocument();
   });
 });

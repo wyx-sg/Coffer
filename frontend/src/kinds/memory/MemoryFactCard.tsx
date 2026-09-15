@@ -12,7 +12,7 @@
 // detail would turn one page load into hundreds of requests.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Pin, PinOff, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Pin, Eye, EyeOff } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,8 +25,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { FactSummaryOut, OverrideOut } from "@/kinds/memory/types";
 import { useClearOverride, useMemoryFact, useSetOverride } from "@/kinds/memory/useMemory";
+import { formatDateTime } from "@/lib/utils";
 
 interface Props {
   fact: FactSummaryOut;
@@ -48,6 +50,9 @@ export function MemoryFactCard({ fact, override, partition, candidates }: Props)
 
   const busy = setOverride.isPending || clearOverride.isPending;
   const settledSupersede = Boolean(override?.superseded_by);
+  // The icon buttons carry their action as both accessible name and tooltip.
+  const hiddenLabel = fact.hidden ? t("memory.unhide") : t("memory.hide");
+  const pinnedLabel = fact.pinned ? t("memory.unpin") : t("memory.pin");
 
   const toggleHidden = () => {
     if (fact.hidden) clearOverride.mutate({ factKey: fact.key, field: "hidden" });
@@ -100,32 +105,40 @@ export function MemoryFactCard({ fact, override, partition, candidates }: Props)
           </div>
 
           <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              disabled={busy}
-              aria-label={fact.hidden ? t("memory.unhide") : t("memory.hide")}
-              title={fact.hidden ? t("memory.unhide") : t("memory.hide")}
-              onClick={toggleHidden}
-            >
-              {fact.hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              disabled={busy}
-              aria-label={fact.pinned ? t("memory.unpin") : t("memory.pin")}
-              title={fact.pinned ? t("memory.unpin") : t("memory.pin")}
-              onClick={togglePinned}
-            >
-              {fact.pinned ? (
-                <Pin className="size-4 fill-current" />
-              ) : (
-                <PinOff className="size-4" />
-              )}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={busy}
+                  aria-label={hiddenLabel}
+                  onClick={toggleHidden}
+                >
+                  {fact.hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{hiddenLabel}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  disabled={busy}
+                  aria-label={pinnedLabel}
+                  onClick={togglePinned}
+                >
+                  {/* The icon shows the STATE, as the eye beside it does: a
+                      filled pin when pinned, an outline when not. A crossed-out
+                      pin on an unpinned fact read as "pinned off", i.e. the
+                      wrong way round. */}
+                  <Pin className={fact.pinned ? "size-4 fill-current" : "size-4"} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{pinnedLabel}</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -206,7 +219,7 @@ export function MemoryFactCard({ fact, override, partition, candidates }: Props)
                       </Badge>
                       <span className="font-mono">{o.native_path}</span>
                       {" · "}
-                      {new Date(o.captured_at).toLocaleString()}
+                      {formatDateTime(o.captured_at)}
                     </li>
                   ))}
                 </ul>

@@ -2,7 +2,7 @@
 //
 // The channels list surface (spec channels). We mock the data hook + the two
 // heavy children (dialog, table) so the test asserts ChannelsPage's own
-// branching (loading / error / empty-welcome / populated) and that the Add
+// branching (skeleton / error / empty-welcome / populated) and that the Add
 // action opens the dialog.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -19,8 +19,8 @@ vi.mock("@/kinds/channel/AddChannelDialog", () => ({
     open ? <div data-testid="add-dialog" /> : null,
 }));
 vi.mock("@/kinds/channel/ChannelsTable", () => ({
-  ChannelsTable: ({ items }: { items: ResourceOut[] }) => (
-    <div data-testid="channels-table">
+  ChannelsTable: ({ items, isLoading }: { items: ResourceOut[]; isLoading?: boolean }) => (
+    <div data-testid="channels-table" data-loading={isLoading ? "true" : "false"}>
       {items.map((r) => (
         <span key={r.name}>{r.name}</span>
       ))}
@@ -60,11 +60,13 @@ function stubQuery(opts: { data?: ResourceOut[]; isPending?: boolean; error?: un
 describe("ChannelsPage", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("shows the loading card while the query is pending", () => {
+  test("keeps the header up and hands the table isLoading while the query is pending", () => {
     stubQuery({ isPending: true });
     render(wrap(<ChannelsPage />));
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
-    expect(screen.queryByTestId("channels-table")).not.toBeInTheDocument();
+    // No bare "Loading…" card: the title stays mounted over a loading table.
+    expect(screen.getByRole("heading", { name: /channels/i })).toBeInTheDocument();
+    expect(screen.getByTestId("channels-table")).toHaveAttribute("data-loading", "true");
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
   });
 
   test("shows the error card with the translated message when the query errors", () => {

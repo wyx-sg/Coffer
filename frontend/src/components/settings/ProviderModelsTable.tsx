@@ -191,7 +191,7 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
           })}
         </p>
       ) : listMsg && fetched.length === 0 ? (
-        <p className="text-sm text-amber-600">{listMsg}</p>
+        <p className="text-sm text-status-warn">{listMsg}</p>
       ) : null}
 
       <DataTable

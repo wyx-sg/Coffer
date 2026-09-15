@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/DataSettings.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DataSettings } from "./DataSettings";
 
@@ -77,7 +77,7 @@ describe("DataSettings", () => {
     render(wrap(<DataSettings />));
 
     await screen.findByText("Audit log");
-    expect(screen.getByLabelText("Retention (days)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Keep for (days)")).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Keep forever"));
     expect(screen.queryByLabelText("Retention (days)")).not.toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("DataSettings", () => {
     render(wrap(<DataSettings />));
     await screen.findByText("Audit log");
 
-    const daysInput = screen.getByLabelText("Retention (days)");
+    const daysInput = screen.getByLabelText("Keep for (days)");
     fireEvent.change(daysInput, { target: { value: "90" } });
     fireEvent.blur(daysInput);
 
@@ -111,6 +111,41 @@ describe("DataSettings", () => {
         }),
       );
     });
+  });
+
+  test("clearing expired data asks first, then reports rows per policy by its display name", async () => {
+    const postMock = vi.fn().mockResolvedValue({
+      data: { tables: { audit_log: 12, mcp_invocations: 0 } },
+      error: undefined,
+    });
+    mockPolicies(MOCK_POLICIES, { postMock });
+    render(wrap(<DataSettings />));
+    await screen.findByText("Audit log");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear expired data now" }));
+    expect(postMock).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Clear expired data now?");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear expired data now" }));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith("/retention/prune", { body: {} }));
+    // Named the way the rows are, never by table name; zero-row tables are left out.
+    expect(await screen.findByRole("status")).toHaveTextContent("Removed 12 rows from Audit log");
+    expect(screen.getByRole("status")).not.toHaveTextContent("audit_log");
+    expect(screen.getByRole("status")).not.toHaveTextContent("MCP invocations");
+  });
+
+  test("a prune that removed nothing says so", async () => {
+    const postMock = vi.fn().mockResolvedValue({ data: { tables: {} }, error: undefined });
+    mockPolicies([MOCK_POLICIES[0]], { postMock });
+    render(wrap(<DataSettings />));
+    await screen.findByText("Audit log");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear expired data now" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear expired data now" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Nothing to clear");
   });
 
   test("toggling 'keep forever' auto-saves retention_days: null", async () => {

@@ -1,4 +1,5 @@
 // frontend/src/kinds/mcp/McpServerDetailTabs.tsx
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,9 +54,24 @@ export function McpServerDetailTabs({
 }: Props) {
   const { t } = useTranslation();
   const overview = extractOverview(config);
+  // The open tab lives in the URL (`?tab=`), so a reload or a shared link
+  // lands on the same tab — addressable state belongs to the router, not to
+  // component state (agents/frontend.md).
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "overview";
+  const setTab = (next: string) => {
+    setParams(
+      (prev) => {
+        if (next === "overview") prev.delete("tab");
+        else prev.set("tab", next);
+        return prev;
+      },
+      { replace: true },
+    );
+  };
 
   return (
-    <Tabs defaultValue="overview">
+    <Tabs value={tab} onValueChange={setTab}>
       <div className="flex flex-wrap items-center gap-3">
         <TabsList>
           <TabsTrigger value="overview">{t("mcp.server.tabs.overview")}</TabsTrigger>

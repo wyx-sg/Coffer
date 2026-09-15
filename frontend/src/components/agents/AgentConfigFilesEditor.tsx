@@ -10,14 +10,19 @@
 // render as expandable nodes whose children come from the list response; a
 // child opens in the same right pane.
 //
-// Composition only: state + data plumbing live in useConfigEditorState; the
-// presentation lives in ConfigFileTree (left pane) and ConfigEditorPane (right
-// pane).
+// An unsaved draft is guarded three ways: picking another file asks first
+// (the selection is parked in useConfigEditorState until confirmed), the page
+// asks before switching tabs (`onDirtyChange`), and the browser asks before
+// unload. Composition only: state + data plumbing live in useConfigEditorState;
+// the presentation lives in ConfigFileTree (left) and ConfigEditorPane (right).
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ConfigEditorPane } from "@/components/agents/ConfigEditorPane";
 import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
+import { useBeforeUnload } from "@/lib/hooks/useBeforeUnload";
 import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
 
 // Keys that have a human description under `agents.config.desc.<key>`. Listing
@@ -34,9 +39,23 @@ const DESCRIBED_KEYS = new Set([
   "soul",
 ]);
 
-export function AgentConfigFilesEditor({ name }: { name: string }) {
+interface Props {
+  name: string;
+  /** Reports whether an unsaved draft is on screen, so the page can guard
+   *  tab switches that would unmount this editor. */
+  onDirtyChange?: (dirty: boolean) => void;
+}
+
+export function AgentConfigFilesEditor({ name, onDirtyChange }: Props) {
   const { t } = useTranslation();
   const s = useConfigEditorState(name);
+  const dirty = s.draft.dirty;
+
+  useBeforeUnload(dirty);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
 
   // One-line "what is this file for" description for the selected key, only for
   // keys we have copy for; unknown keys render nothing rather than a raw key.
@@ -79,7 +98,7 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
       {/* Right: the selected file (or directory hint). */}
       <div className="min-w-0">
         {s.selectedKey && s.isDirSelected ? (
-          <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("agents.config.directoryHint")}
           </div>
         ) : s.selectedKey ? (
@@ -100,11 +119,22 @@ export function AgentConfigFilesEditor({ name }: { name: string }) {
             readOnlyMissing={s.readOnlyMissing}
           />
         ) : (
-          <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+          <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("agents.config.selectFile")}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={s.hasPendingSelection}
+        onOpenChange={(open) => {
+          if (!open) s.cancelPendingSelection();
+        }}
+        title={t("common.discardChanges.title")}
+        description={t("common.discardChanges.body")}
+        confirmLabel={t("common.discardChanges.confirm")}
+        onConfirm={s.confirmPendingSelection}
+      />
     </div>
   );
 }

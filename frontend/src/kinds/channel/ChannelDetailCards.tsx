@@ -1,8 +1,9 @@
 // frontend/src/kinds/channel/ChannelDetailCards.tsx
 // The detail-page cards: live status (adapter + paired peer), pairing
-// (generate / show a code), the SeaTalk callback endpoint, and a "send test
-// message" card wired to the notify capability. Kept out of ChannelDetailPage
-// so the page stays within the size budget.
+// (generate / show a code), and a "test delivery" card wired to the notify
+// capability. Kept out of ChannelDetailPage so the page stays within the size
+// budget. The adapter's run state is tinted through channelHealth.ts — the
+// same mapping the list's health badge uses — so both surfaces agree.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, KeyRound, Activity, Send } from "lucide-react";
@@ -13,6 +14,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
+import { cn, formatDateTime } from "@/lib/utils";
+import { channelHealthClass } from "./channelHealth";
+
+/** Running / stopped pill, on the one tone mapping the list badge uses too. */
+export function RunStateBadge({ running }: { running: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <Badge variant="outline" className={cn("border-transparent", channelHealthClass(running))}>
+      {running ? t("channels.status.running") : t("channels.status.stopped")}
+    </Badge>
+  );
+}
 
 export function StatusRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -41,13 +54,7 @@ export function ChannelStatusCard({ status }: { status: ChannelStatus | undefine
           <>
             <StatusRow
               label={t("channels.status.adapter")}
-              value={
-                status.running ? (
-                  <Badge>{t("channels.status.running")}</Badge>
-                ) : (
-                  <Badge variant="outline">{t("channels.status.stopped")}</Badge>
-                )
-              }
+              value={<RunStateBadge running={status.running} />}
             />
             {status.peer === null ? (
               <StatusRow
@@ -66,7 +73,7 @@ export function ChannelStatusCard({ status }: { status: ChannelStatus | undefine
                 />
                 <StatusRow
                   label={t("channels.status.pairedAt")}
-                  value={new Date(status.peer.paired_at).toLocaleString()}
+                  value={formatDateTime(status.peer.paired_at)}
                 />
                 <StatusRow
                   label={t("channels.status.conversation")}
@@ -166,9 +173,7 @@ export function ChannelPairingCard({
               </a>
             ) : null}
             <p className="text-xs text-muted-foreground">
-              {t("channels.pairing.expires", {
-                time: new Date(code.expires_at).toLocaleTimeString(),
-              })}
+              {t("channels.pairing.expires", { time: formatDateTime(code.expires_at) })}
             </p>
           </div>
         ) : null}
@@ -206,7 +211,7 @@ export function ChannelTestMessageCard({
       <CardContent className="space-y-3">
         <p className="max-w-prose text-sm text-muted-foreground">{t("channels.test.subtitle")}</p>
         <div className="space-y-2">
-          <Label htmlFor="channel-test-message">{t("channels.test.title")}</Label>
+          <Label htmlFor="channel-test-message">{t("channels.test.messageLabel")}</Label>
           <Input
             id="channel-test-message"
             value={text}

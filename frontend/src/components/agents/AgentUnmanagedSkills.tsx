@@ -17,7 +17,8 @@
 // the files on disk is how the user decides whether to adopt or delete one. The
 // browser can't reach the filesystem, so that goes through the loopback daemon
 // (useFsActions → /fs/open with no `with`, i.e. the OS default handler, which
-// for a directory is the file manager).
+// for a directory is the file manager). Adopt/delete failures toast from the
+// hooks; only the adopt success is confirmed here.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FolderOpen } from "lucide-react";
@@ -27,17 +28,9 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import type { UnmanagedSkillOut } from "@/lib/api/agents";
-import { translateApiError } from "@/lib/api/errors";
 import { useFsActions } from "@/lib/fsActions";
 import {
   useAdoptUnmanagedSkill,
@@ -76,7 +69,7 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
             <Badge
               variant="outline"
               data-testid="foreign-link-badge"
-              className="border-amber-500/50 text-amber-600 dark:text-amber-400"
+              className="border-status-warn/50 text-status-warn"
             >
               {t("agents.skillsTab.foreignLink")}
             </Badge>
@@ -91,7 +84,7 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
         !s.valid && s.reason ? (
           <span className="line-clamp-1 max-w-md text-muted-foreground">{s.reason}</span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">{t("common.emptyValue")}</span>
         ),
     },
     {
@@ -131,7 +124,6 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
                     {
                       onSuccess: () =>
                         toast.success(t("agents.skillsTab.adoptSuccess", { name: s.name })),
-                      onError: (e) => toast.error(translateApiError(t, e)),
                     },
                   )
                 }
@@ -183,42 +175,23 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
         emptyMessage={t("agents.skillsTab.unmanagedNoMatch")}
       />
 
-      <Dialog
+      <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("common.delete")}: {deleteTarget?.name}
-            </DialogTitle>
-            <DialogDescription>{t("agents.skillsTab.deleteConfirm")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() => {
-                if (!deleteTarget) return;
-                remove.mutate(
-                  { skill: deleteTarget.name, location: deleteTarget.location },
-                  {
-                    onSuccess: () => setDeleteTarget(null),
-                    onError: (e) => toast.error(translateApiError(t, e)),
-                  },
-                );
-              }}
-            >
-              {t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title={t("agents.removeConfirmTitle", { name: deleteTarget?.name ?? "" })}
+        description={t("agents.skillsTab.deleteConfirm")}
+        confirmLabel={t("common.delete")}
+        pending={remove.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          remove.mutate(
+            { skill: deleteTarget.name, location: deleteTarget.location },
+            { onSuccess: () => setDeleteTarget(null) },
+          );
+        }}
+      />
     </Card>
   );
 }

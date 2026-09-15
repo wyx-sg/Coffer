@@ -1,5 +1,7 @@
 // components/chat/Composer.tsx
-// Text input + send button pinned at the bottom of the message thread.
+// Text input + send button pinned at the bottom of the message thread. While a
+// turn streams the Send button becomes a Stop button in the same slot; the
+// input itself stays live, since a message sent mid-turn queues server-side.
 import {
   forwardRef,
   useImperativeHandle,
@@ -22,7 +24,7 @@ interface Props {
   disabled?: boolean;
   /**
    * True while a turn streams. The composer stays ENABLED — a message sent now
-   * queues server-side. Drives the Stop button and a subtle "will queue" hint.
+   * queues server-side. Swaps Send for Stop and shows a "will queue" hint.
    */
   streaming?: boolean;
   /** Called when the user stops an in-flight turn. Shown only while streaming. */
@@ -95,6 +97,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     }
   };
 
+  const showStop = streaming && !!onStop;
+
   return (
     <div className="border-t border-border bg-background px-4 py-3">
       <div className="flex items-end gap-2">
@@ -109,33 +113,32 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           className="max-h-[200px] min-h-[40px] resize-none py-2 leading-5"
           aria-label={t("chat.composer.ariaLabel")}
         />
-        <Button
-          size="sm"
-          onClick={handleSend}
-          disabled={!canSend}
-          aria-label={t("chat.composer.send")}
-          className="mb-0.5 shrink-0"
-        >
-          <Send className="size-4" />
-        </Button>
+        {showStop ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onStop}
+            aria-label={t("chat.composer.stop")}
+            className="mb-0.5 shrink-0"
+          >
+            <Square className="size-4" />
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSend}
+            disabled={!canSend}
+            aria-label={t("chat.composer.send")}
+            className="mb-0.5 shrink-0"
+          >
+            <Send className="size-4" />
+          </Button>
+        )}
       </div>
       {streaming && (
-        <div className="mt-1.5 flex items-center gap-2">
-          {onStop && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-6 gap-1 px-2 text-xs"
-              onClick={onStop}
-              aria-label={t("chat.composer.stop")}
-            >
-              <Square className="size-3" />
-              {t("chat.composer.stop")}
-            </Button>
-          )}
-          <span className="text-xs text-muted-foreground">{t("chat.composer.streaming")}</span>
-        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">{t("chat.composer.streaming")}</p>
       )}
     </div>
   );

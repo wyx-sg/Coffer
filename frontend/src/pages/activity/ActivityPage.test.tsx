@@ -14,11 +14,16 @@ vi.mock("@/lib/api/client", () => ({
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
-function wrap(ui: React.ReactNode) {
+/** The page reads its tab from the URL, so every render sits under a router. */
+function wrap(ui: React.ReactNode, initialEntries: string[] = ["/activity"]) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchInterval: false as never } },
   });
-  return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>
+    </QueryClientProvider>
+  );
 }
 
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -198,6 +203,40 @@ describe("ActivityPage", () => {
     await screen.findByText("Registered filesystem");
     expect(screen.queryByRole("button", { name: /refresh/i })).not.toBeInTheDocument();
   });
+
+  test("the active tab lives in the URL: ?tab= opens it, switching rewrites it", async () => {
+    const get = mockApi({ daemon: [DAEMON_RECORD] });
+    let search = "";
+    function Probe() {
+      search = useLocation().search;
+      return null;
+    }
+    render(
+      wrap(
+        <>
+          <ActivityPage />
+          <Probe />
+        </>,
+        ["/activity?tab=daemon"],
+      ),
+    );
+
+    expect(tab(/daemon/i)).toHaveAttribute("data-state", "active");
+    await waitFor(() => expect(fetched(get, "/daemon/logs")).toBe(true));
+
+    openTab(/mcp calls/i);
+    await waitFor(() => expect(search).toBe("?tab=mcp"));
+
+    // The default tab needs no parameter, so the URL goes back to clean.
+    openTab(/changes/i);
+    await waitFor(() => expect(search).toBe(""));
+  });
+
+  test("an unknown ?tab= falls back to Changes", () => {
+    mockApi();
+    render(wrap(<ActivityPage />, ["/activity?tab=nope"]));
+    expect(tab(/changes/i)).toHaveAttribute("data-state", "active");
+  });
 });
 
 acceptance("ui-shell", "activity gives each record its own tab", async () => {
@@ -297,10 +336,11 @@ acceptance("ui-shell", "legacy /audit redirects to activity", async () => {
   }
   render(
     wrap(
-      <MemoryRouter initialEntries={["/audit"]}>
+      <>
         <AppRoutes />
         <Probe />
-      </MemoryRouter>,
+      </>,
+      ["/audit"],
     ),
   );
 

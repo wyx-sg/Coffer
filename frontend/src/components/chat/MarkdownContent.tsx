@@ -3,16 +3,74 @@
 // syntax-highlighted code blocks. Single newlines are kept as line breaks
 // (remark-breaks) so agent output laid out one-fact-per-line (e.g. the
 // `/usage` report) renders line-by-line instead of collapsing into one run-on
-// paragraph. The highlight.js theme is imported once in main.tsx; the code-block
-// background override lives in index.css (`.markdown-body`). Element styles use
-// semantic tokens + the type scale (no prose plugin is installed); see
-// agents/frontend.md §6.
+// paragraph. Fenced blocks carry a Copy button (the code is what the user most
+// often wants out of a reply). The highlight.js theme is imported once in
+// main.tsx; the code-block background override lives in index.css
+// (`.markdown-body`). Element styles use semantic tokens + the type scale (no
+// prose plugin is installed); see agents/frontend.md §6.
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { Check, Copy } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import rehypeHighlight from "rehype-highlight";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+/** How long the "Copied" confirmation stays on a code block. */
+const COPIED_MS = 1500;
+
+function CodeBlock({ children }: { children?: ReactNode }) {
+  const { t } = useTranslation();
+  const preRef = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  const copy = async () => {
+    // Read the rendered text: highlighting has split the source into spans.
+    const text = preRef.current?.textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      // Clipboard unavailable (insecure context / permission denied): the
+      // block stays selectable by hand.
+    }
+  };
+
+  return (
+    <div className="relative my-2">
+      <pre
+        ref={preRef}
+        className="overflow-x-auto rounded-md border border-border bg-muted/50 p-3 pr-12 text-xs leading-relaxed"
+      >
+        {children}
+      </pre>
+      {copied ? (
+        <span className="absolute right-10 top-2 text-xs text-muted-foreground" role="status">
+          {t("common.copied")}
+        </span>
+      ) : null}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="absolute right-1 top-1 text-muted-foreground hover:text-foreground"
+        onClick={() => void copy()}
+        aria-label={t("common.copy")}
+      >
+        {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+      </Button>
+    </div>
+  );
+}
 
 const COMPONENTS: Components = {
   p: ({ children }) => <p className="my-2 leading-relaxed first:mt-0 last:mb-0">{children}</p>,
@@ -59,11 +117,7 @@ const COMPONENTS: Components = {
     </th>
   ),
   td: ({ children }) => <td className="border-b border-border px-2.5 py-1.5">{children}</td>,
-  pre: ({ children }) => (
-    <pre className="my-2 overflow-x-auto rounded-md border border-border bg-muted/50 p-3 text-xs leading-relaxed">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   code: ({ className, children }) => {
     // Fenced blocks carry a language-* class (and rehype-highlight adds hljs);
     // inline code has neither, so render it as a small pill instead.
@@ -72,7 +126,7 @@ const COMPONENTS: Components = {
       return <code className={cn("hljs", className)}>{children}</code>;
     }
     return (
-      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground/80">
+      <code className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground/80">
         {children}
       </code>
     );

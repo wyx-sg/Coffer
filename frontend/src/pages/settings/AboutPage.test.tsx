@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/AboutPage.test.tsx
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 import { AboutPage } from "./AboutPage";
@@ -16,8 +16,22 @@ function wrap({ children }: PropsWithChildren) {
   return <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
 }
 
+const STATUS = {
+  version: "0.7.42",
+  status: "ready",
+  started_at: "2026-05-01T08:00:00Z",
+  port: 8000,
+};
+
+function mockStatus() {
+  getApiClientMock.mockReturnValue({
+    GET: vi.fn().mockResolvedValue({ data: STATUS, error: undefined }),
+  } as unknown as ReturnType<typeof getApiClient>);
+}
+
 describe("AboutPage", () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.unstubAllGlobals());
 
   test("shows license and source unconditionally", () => {
     // useDaemonStatus is allowed to be in-flight; the other fields don't depend on it.
@@ -30,31 +44,41 @@ describe("AboutPage", () => {
     expect(screen.getByText(/github\.com\/wyx-sg\/Coffer/)).toBeInTheDocument();
   });
 
-  test("shows the version returned by /daemon/status", async () => {
-    getApiClientMock.mockReturnValue({
-      GET: vi.fn().mockResolvedValue({
-        data: {
-          version: "0.7.42",
-          status: "running",
-          uptime_seconds: 0,
-          listen_address: "127.0.0.1:1717",
-        },
-        error: undefined,
-      }),
-    } as unknown as ReturnType<typeof getApiClient>);
+  test("shows the version, port and start time returned by /daemon/status", async () => {
+    mockStatus();
     render(<AboutPage />, { wrapper: wrap });
 
     await waitFor(() => {
       expect(screen.getByText("0.7.42")).toBeInTheDocument();
     });
+    expect(screen.getByText("Daemon port")).toBeInTheDocument();
+    expect(screen.getByText("8000")).toBeInTheDocument();
+    expect(screen.getByText("Daemon started")).toBeInTheDocument();
   });
 
-  test("falls back to '—' before /daemon/status resolves", () => {
+  test("falls back to '—' for every daemon field before /daemon/status resolves", () => {
     getApiClientMock.mockReturnValue({
       GET: vi.fn().mockReturnValue(new Promise(() => {})),
     } as unknown as ReturnType<typeof getApiClient>);
     render(<AboutPage />, { wrapper: wrap });
 
-    expect(screen.getByText("—")).toBeInTheDocument();
+    // Version, port and start time all come from the daemon.
+    expect(screen.getAllByText("—")).toHaveLength(3);
+  });
+
+  test("Copy diagnostics puts every row on the clipboard as label: value lines", async () => {
+    mockStatus();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    render(<AboutPage />, { wrapper: wrap });
+    await screen.findByText("0.7.42");
+
+    fireEvent.click(screen.getByRole("button", { name: /copy diagnostics/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const text = writeText.mock.calls[0][0] as string;
+    expect(text).toContain("Version: 0.7.42");
+    expect(text).toContain("Daemon port: 8000");
+    expect(text).toContain("Source: https://github.com/wyx-sg/Coffer");
   });
 });

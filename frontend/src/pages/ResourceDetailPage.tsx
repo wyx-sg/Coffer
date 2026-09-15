@@ -1,24 +1,27 @@
 // frontend/src/pages/ResourceDetailPage.tsx
+//
+// The /mcp-servers/:name detail route. The MCP servers surface only ever lists
+// one kind, so the kind is fixed here rather than read off the URL; the kind
+// registry still supplies the page, so a kind module stays the one place that
+// says how its detail renders.
 import { Navigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/EmptyState";
 import { getKindUI } from "@/lib/components/kindRegistry";
+
+const KIND = "mcp_server";
 
 export function ResourceDetailPage() {
   const { t } = useTranslation();
-  const { kind = "", name = "" } = useParams<{ kind: string; name: string }>();
-  const kindUI = getKindUI(kind);
+  const { name = "" } = useParams<{ name: string }>();
+  const kindUI = getKindUI(KIND);
 
   if (kindUI === undefined) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("resourceDetail.unknownKind")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>{t("resourceDetail.unknownKindBody", { kind })}</p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        title={t("resourceDetail.unknownKind")}
+        description={t("resourceDetail.unknownKindBody", { kind: KIND })}
+      />
     );
   }
 

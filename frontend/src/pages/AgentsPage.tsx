@@ -37,15 +37,16 @@ export function AgentsPage() {
 
       {/* One combined Add dialog — it auto-detects installed agents and also
           offers manual registration behind a disclosure. */}
-      <AgentAddDialog open={showAdd} onOpenChange={setShowAdd} onCreated={() => void refetch()} />
+      <AgentAddDialog
+        open={showAdd}
+        onOpenChange={setShowAdd}
+        onCreated={() => void refetch()}
+        hasRegisteredAgents={hasAgents}
+      />
 
-      {isPending ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+      {/* The header stays mounted through loading — the table renders skeleton
+          rows under it rather than the page swapping to a loading card. */}
+      {error ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-destructive">{t("agents.loadFailed")}</CardTitle>
@@ -54,10 +55,10 @@ export function AgentsPage() {
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
           </CardContent>
         </Card>
-      ) : (agents ?? []).length === 0 ? (
+      ) : !isPending && !hasAgents ? (
         <AgentWelcomePanel onAddAgent={() => setShowAdd(true)} />
       ) : (
-        <AgentTable agents={agents ?? []} />
+        <AgentTable agents={agents ?? []} isLoading={isPending} />
       )}
     </div>
   );

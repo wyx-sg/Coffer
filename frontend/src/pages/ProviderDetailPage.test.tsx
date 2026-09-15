@@ -183,8 +183,14 @@ describe("ProviderDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: "acme" })).toBeInTheDocument();
     expect(screen.getByText("https://gw/v1")).toBeInTheDocument();
-    expect(screen.getByText("Codex")).toBeInTheDocument();
     expect(screen.getByText("the gateway")).toBeInTheDocument();
+    // The wire is named for what it is — the header chip and the card row
+    // both say "OpenAI-compatible", never the raw `openai`.
+    expect(screen.getAllByText("OpenAI-compatible")).toHaveLength(2);
+    expect(screen.queryByText(/^openai$/)).not.toBeInTheDocument();
+    // Reach is the header control's; there is no compatible-agents row.
+    expect(screen.queryByText("Compatible agents")).not.toBeInTheDocument();
+    expect(screen.queryByText("Codex")).not.toBeInTheDocument();
     // A key is stored — we say so, and never render the reference or the value.
     expect(screen.getByText("Stored")).toBeInTheDocument();
     expect(screen.queryByText("provider/acme/key")).not.toBeInTheDocument();
@@ -613,7 +619,26 @@ describe("ProviderDetailPage", () => {
     apiMock.get.mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "no such connection"));
     renderPage();
     expect(await screen.findByText("Model provider not found")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /back to model providers/i }));
-    expect(navigateMock).toHaveBeenCalledWith("/model-providers");
+    // The header's back link and the empty state's action both lead home.
+    const links = screen.getAllByRole("link", { name: /back to model providers/i });
+    expect(links.length).toBeGreaterThan(0);
+    links.forEach((l) => expect(l).toHaveAttribute("href", "/model-providers"));
+  });
+
+  test("the open tab lives in the URL, so ?tab=models opens on Models", async () => {
+    apiMock.get.mockResolvedValue(makeProvider());
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MemoryRouter initialEntries={["/model-providers/acme?tab=models"]}>
+        <QueryClientProvider client={qc}>
+          <Routes>
+            <Route path="/model-providers/:name" element={<ProviderDetailPage />} />
+          </Routes>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await screen.findByRole("heading", { name: "acme" });
+    expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
+    expect(probedFor).toContain("acme");
   });
 });

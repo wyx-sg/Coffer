@@ -19,10 +19,12 @@ afterEach(() => localStorage.clear());
 
 const STORE_KEY = "coffer.preferredEditor";
 
-const editorInput = () =>
-  screen.getByRole("textbox", { name: /preferred editor/i }) as HTMLInputElement;
-const openEditorPicker = () =>
-  fireEvent.click(screen.getByRole("button", { name: /choose editor/i }));
+const editorSelect = () => screen.getByRole("combobox", { name: /preferred editor/i });
+// Radix Select opens on keyboard in jsdom (pointer events are stubbed).
+const openEditorPicker = () => fireEvent.keyDown(editorSelect(), { key: "ArrowDown" });
+const pickOption = (name: RegExp | string) => fireEvent.click(screen.getByRole("option", { name }));
+const customInput = () =>
+  screen.getByRole("textbox", { name: /custom editor command/i }) as HTMLInputElement;
 
 describe("GeneralSettings", () => {
   test("renders the default page-size control reflecting the stored preference", () => {
@@ -34,31 +36,40 @@ describe("GeneralSettings", () => {
       "50",
     );
   });
+
+  test("both controls are the same Select — no native <select> on the page", () => {
+    render(<GeneralSettings />);
+    expect(document.querySelectorAll("select")).toHaveLength(0);
+    expect(screen.getAllByRole("combobox")).toHaveLength(2);
+  });
 });
 
 describe("GeneralSettings preferred editor", () => {
-  test("picking a detected editor fills the field with its launcher value", () => {
+  test("picking a detected editor stores its launcher value", () => {
     render(<GeneralSettings />);
     openEditorPicker();
-    fireEvent.click(screen.getByRole("button", { name: "Cursor" }));
+    pickOption("Cursor");
     expect(localStorage.getItem(STORE_KEY)).toBe("cursor");
-    // The value lands in the editable field in place — no separate text box.
-    expect(editorInput().value).toBe("cursor");
+    expect(editorSelect()).toHaveTextContent("Cursor");
+    // A detected editor needs no free-text field.
+    expect(screen.queryByRole("textbox", { name: /custom editor command/i })).toBeNull();
   });
 
   test("choosing system default clears the override", () => {
     localStorage.setItem(STORE_KEY, "code");
     render(<GeneralSettings />);
-    expect(editorInput().value).toBe("code");
+    expect(editorSelect()).toHaveTextContent("Visual Studio Code");
     openEditorPicker();
-    fireEvent.click(screen.getByRole("button", { name: /system default/i }));
+    pickOption(/system default/i);
     expect(localStorage.getItem(STORE_KEY)).toBeNull();
-    expect(editorInput().value).toBe("");
+    expect(editorSelect()).toHaveTextContent(/system default/i);
   });
 
-  test("a custom editor is typed straight into the field and persists", () => {
+  test("Custom… reveals a text field whose value persists on blur", () => {
     render(<GeneralSettings />);
-    const input = editorInput();
+    openEditorPicker();
+    pickOption(/custom/i);
+    const input = customInput();
     fireEvent.change(input, { target: { value: "/Applications/Zed.app" } });
     fireEvent.blur(input);
     expect(localStorage.getItem(STORE_KEY)).toBe("/Applications/Zed.app");
@@ -68,10 +79,11 @@ describe("GeneralSettings preferred editor", () => {
     expect(localStorage.getItem(STORE_KEY)).toBeNull();
   });
 
-  test("a stored custom value (not in the picker) shows in the field on load", () => {
+  test("a stored custom value (not in the picker) shows as Custom with the field open", () => {
     localStorage.setItem(STORE_KEY, "/opt/weird/editor");
     render(<GeneralSettings />);
-    expect(editorInput().value).toBe("/opt/weird/editor");
+    expect(editorSelect()).toHaveTextContent(/custom/i);
+    expect(customInput().value).toBe("/opt/weird/editor");
   });
 });
 
@@ -79,17 +91,17 @@ acceptance("ui-shell", "general tab persists the preferred editor", () => {
   const { unmount } = render(<GeneralSettings />);
 
   // Choosing an application from the picker persists it.
-  fireEvent.click(screen.getByRole("button", { name: /choose editor/i }));
-  fireEvent.click(screen.getByRole("button", { name: "Visual Studio Code" }));
+  openEditorPicker();
+  pickOption("Visual Studio Code");
   expect(localStorage.getItem("coffer.preferredEditor")).toBe("code");
 
-  // Reloading the page shows the same persisted value in the field.
+  // Reloading the page shows the same persisted value in the picker.
   unmount();
   render(<GeneralSettings />);
-  expect(editorInput().value).toBe("code");
+  expect(editorSelect()).toHaveTextContent("Visual Studio Code");
 
   // Clearing the override restores the operating-system default (empty store).
-  fireEvent.click(screen.getByRole("button", { name: /choose editor/i }));
-  fireEvent.click(screen.getByRole("button", { name: /system default/i }));
+  openEditorPicker();
+  pickOption(/system default/i);
   expect(localStorage.getItem("coffer.preferredEditor")).toBeNull();
 });

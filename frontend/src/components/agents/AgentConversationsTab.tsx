@@ -16,6 +16,7 @@ import { DataTable, type Column } from "@/components/DataTable";
 import { RowActions } from "@/components/RowActions";
 import { translateApiError } from "@/lib/api/errors";
 import { useFileActionItems } from "@/lib/fileActionItems";
+import { formatDateTime } from "@/lib/utils";
 import type {
   SortOrder,
   TranscriptSessionSummary,
@@ -25,9 +26,10 @@ import { useDefaultPageSize } from "@/lib/preferences";
 import { TRANSCRIPTS_PAGE_SIZE, useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 
 function TimeCell({ value }: { value: string | null }) {
+  const { t } = useTranslation();
   return (
     <span className="text-xs text-muted-foreground">
-      {value ? new Date(value).toLocaleString() : "—"}
+      {value ? formatDateTime(value) : t("common.emptyValue")}
     </span>
   );
 }

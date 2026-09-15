@@ -81,10 +81,42 @@ describe("AgentAddDialog — detected section", () => {
     expect(screen.getByRole("checkbox")).toBeChecked();
   });
 
-  test("shows the empty message when nothing new is found", () => {
+  test("shows the 'may already be added' message when agents are registered and none is new", () => {
+    stub({ data: [] });
+    renderDialog(
+      <AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} hasRegisteredAgents />,
+    );
+    expect(screen.getByText(/no new agents found/i)).toBeInTheDocument();
+  });
+
+  test("on a first run with nothing detected, points at the manual form instead", () => {
+    // Nothing is registered, so "they may already be added" would be wrong.
     stub({ data: [] });
     renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
-    expect(screen.getByText(/no new agents found/i)).toBeInTheDocument();
+    expect(screen.getByText(/no agents were detected on this machine/i)).toBeInTheDocument();
+    expect(screen.queryByText(/may already be added/i)).not.toBeInTheDocument();
+  });
+
+  test("the footer carries Cancel and the primary action in one row", () => {
+    stub({ data: [CODEX] });
+    renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+    const cancel = screen.getByRole("button", { name: /cancel/i });
+    const primary = screen.getByRole("button", { name: /add selected/i });
+    expect(cancel.parentElement).toBe(primary.parentElement);
+    // Opening the manual form swaps the primary for Register in the same slot.
+    fireEvent.click(screen.getByRole("button", { name: /add manually/i }));
+    expect(screen.queryByRole("button", { name: /add selected/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^register$/i }).parentElement).toBe(
+      cancel.parentElement,
+    );
+  });
+
+  test("the manual form's type picker shows product names, not registry keys", () => {
+    stub({ data: [] });
+    renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /add manually/i }));
+    expect(screen.getByRole("combobox", { name: /type/i })).toHaveTextContent("Claude Code");
+    expect(screen.queryByText("claude_code")).not.toBeInTheDocument();
   });
 
   test("adding the selected candidate registers it and reports success", async () => {

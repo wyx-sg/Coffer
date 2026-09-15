@@ -34,7 +34,7 @@ const stdioResource = {
   updated_at: "2026-05-21T00:00:00Z",
 };
 
-function wrap(ui: React.ReactNode, route = "/mcp-servers/mcp_server/fs") {
+function wrap(ui: React.ReactNode, route = "/mcp-servers/fs") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -42,7 +42,7 @@ function wrap(ui: React.ReactNode, route = "/mcp-servers/mcp_server/fs") {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[route]}>
         <Routes>
-          <Route path="/mcp-servers/mcp_server/:name" element={ui} />
+          <Route path="/mcp-servers/:name" element={ui} />
           <Route path="/mcp-servers" element={<div data-testid="resources-page">resources</div>} />
         </Routes>
       </MemoryRouter>
@@ -179,11 +179,11 @@ describe("McpServerDetailPage", () => {
 
     // The badge must show "healthy" (from /status), not "failing" (from capsError).
     const badge = await screen.findByTestId("health-badge");
-    expect(badge).toHaveTextContent("healthy");
-    expect(badge).not.toHaveTextContent("failing");
+    expect(badge).toHaveTextContent(/healthy/i);
+    expect(badge).not.toHaveTextContent(/failing/i);
 
     // The badge must also not be stuck on "unknown" while capabilities load.
-    expect(badge).not.toHaveTextContent("unknown");
+    expect(badge).not.toHaveTextContent(/unknown/i);
   });
 
   test("overview counts read — (not 0) when the capabilities fetch errors", async () => {
@@ -232,10 +232,11 @@ describe("McpServerDetailPage", () => {
     } as unknown as ReturnType<typeof getApiClient>);
 
     render(wrap(<McpServerDetailPage />));
-    // The error branch renders a destructive card with the server's
-    // error message + a "back to MCP servers" link.
-    expect(await screen.findByText(/no such server/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /back to mcp servers/i })).toBeInTheDocument();
+    // The error branch is the shared EmptyState: the TRANSLATED error (never
+    // the server's raw message) plus a "back to MCP servers" link.
+    expect(await screen.findByText(/resource not found/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no such server/i)).toBeNull();
+    expect(screen.getByRole("link", { name: /back to mcp servers/i })).toBeInTheDocument();
   });
 
   test("clicking Refresh invalidates the capabilities query", async () => {

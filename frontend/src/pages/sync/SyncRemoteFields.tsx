@@ -5,52 +5,30 @@
 // credential ciphertext rides along.
 //
 // Presentational — it owns no state and saves nothing. The card above it keeps
-// the draft and decides when to persist, which is what lets every field here
-// follow the same auto-save rule (commit on blur or Enter) without repeating
-// it six times.
+// the draft, validates it, and persists it behind one Save button; this
+// component only edits the draft and shows the field errors it is handed.
 //
 // There is deliberately no password field: the remote names its credential by
 // reference, so a secret has no reason to exist in this component's tree.
-import type React from "react";
 import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-
-export interface FormState {
-  url: string;
-  branch: string;
-  credentialRef: string;
-  includeCredentials: boolean;
-  intervalSeconds: number;
-  enabled: boolean;
-}
+import { MIN_INTERVAL_SECONDS, type FormErrors, type FormState } from "./syncRemoteForm";
 
 interface Props {
   form: FormState;
   setForm: (next: FormState) => void;
+  errors: FormErrors;
   busy: boolean;
-  commit: () => void;
-  blurOnEnter: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  toggle: (field: "enabled" | "includeCredentials") => (checked: boolean) => void;
 }
 
-export function SyncRemoteFields({ form, setForm, busy, commit, blurOnEnter, toggle }: Props) {
+export function SyncRemoteFields({ form, setForm, errors, busy }: Props) {
   const { t } = useTranslation();
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4">
-        <Label htmlFor="sync-enabled">{t("sync.remote.enabled")}</Label>
-        <Switch
-          id="sync-enabled"
-          checked={form.enabled}
-          disabled={busy}
-          onCheckedChange={toggle("enabled")}
-        />
-      </div>
-
       <div className="space-y-2">
         <Label htmlFor="sync-url">{t("sync.remote.url")}</Label>
         <Input
@@ -58,10 +36,14 @@ export function SyncRemoteFields({ form, setForm, busy, commit, blurOnEnter, tog
           value={form.url}
           disabled={busy}
           placeholder="https://git.example.com/me/coffer-vault.git"
+          aria-invalid={errors.url ? true : undefined}
           onChange={(e) => setForm({ ...form, url: e.target.value })}
-          onBlur={commit}
-          onKeyDown={blurOnEnter}
         />
+        {errors.url ? (
+          <p className="text-xs text-destructive" role="alert">
+            {t(`sync.remote.errors.${errors.url}`)}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row">
@@ -72,8 +54,6 @@ export function SyncRemoteFields({ form, setForm, busy, commit, blurOnEnter, tog
             value={form.branch}
             disabled={busy}
             onChange={(e) => setForm({ ...form, branch: e.target.value })}
-            onBlur={commit}
-            onKeyDown={blurOnEnter}
           />
         </div>
         <div className="space-y-2 sm:w-48">
@@ -81,18 +61,19 @@ export function SyncRemoteFields({ form, setForm, busy, commit, blurOnEnter, tog
           <Input
             id="sync-interval"
             type="number"
-            min={1}
+            min={MIN_INTERVAL_SECONDS}
             value={form.intervalSeconds}
             disabled={busy}
+            aria-invalid={errors.interval ? true : undefined}
             onChange={(e) =>
-              setForm({
-                ...form,
-                intervalSeconds: Math.max(1, parseInt(e.target.value || "0", 10) || 1),
-              })
+              setForm({ ...form, intervalSeconds: parseInt(e.target.value || "0", 10) || 0 })
             }
-            onBlur={commit}
-            onKeyDown={blurOnEnter}
           />
+          {errors.interval ? (
+            <p className="text-xs text-destructive" role="alert">
+              {t(`sync.remote.errors.${errors.interval}`)}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -106,8 +87,6 @@ export function SyncRemoteFields({ form, setForm, busy, commit, blurOnEnter, tog
           disabled={busy}
           placeholder="sync.PUSH_TOKEN"
           onChange={(e) => setForm({ ...form, credentialRef: e.target.value })}
-          onBlur={commit}
-          onKeyDown={blurOnEnter}
         />
         <p className="text-xs text-muted-foreground">{t("sync.remote.credentialRefHint")}</p>
       </div>
@@ -118,7 +97,7 @@ export function SyncRemoteFields({ form, setForm, busy, commit, blurOnEnter, tog
           id="sync-with-credentials"
           checked={form.includeCredentials}
           disabled={busy}
-          onCheckedChange={toggle("includeCredentials")}
+          onCheckedChange={(checked) => setForm({ ...form, includeCredentials: checked })}
         />
       </div>
       <p className="text-xs text-muted-foreground">{t("sync.remote.includeCredentialsHint")}</p>

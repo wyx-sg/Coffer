@@ -124,7 +124,7 @@ export function CodeView({
 
   return (
     <div
-      className={cn("relative overflow-hidden rounded border", className)}
+      className={cn("relative overflow-hidden rounded-md border", className)}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
           e.preventDefault();

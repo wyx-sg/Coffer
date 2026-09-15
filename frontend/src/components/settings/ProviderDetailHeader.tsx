@@ -1,10 +1,11 @@
 // frontend/src/components/settings/ProviderDetailHeader.tsx
-// Header of the connection detail page (mirrors McpServerDetailHeader): the
-// name, the connection's type + state badges, and the actions that change the
-// connection itself — Edit (the existing ProviderForm, in a dialog owned
-// here so the page file stays lean), Delete (confirmed by the page), and the
-// shared ScopeControl, which is where this connection's REACH — disabled, every
-// agent, or a chosen set — is both SHOWN and changed. It replaced a read-only
+// Header of the connection detail page, rendered through the shared PageHeader
+// like every other detail surface: the back link, the name, the protocol chip
+// + Active pill beside it, and the actions that change the connection itself —
+// the shared ScopeControl first (where this connection's REACH — disabled,
+// every agent, or a chosen set — is both SHOWN and changed), then Edit (the
+// existing ProviderForm, in a dialog owned here so the page file stays lean)
+// and Delete (confirmed by the page). It replaced a read-only
 // badge: the list could flip a provider and its own page could not, and a badge
 // next to the control would have stated the same state twice. `provider` now
 // declares per-agent scope, so this is the three-segment control and the ONLY
@@ -14,9 +15,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 
+import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
+import { ActiveProviderBadge } from "@/components/settings/ActiveProviderBadge";
+import { PROTOCOL_LABEL_KEY } from "@/components/settings/connectionPresets";
 import { ProviderForm } from "@/components/settings/ProviderForm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,34 +72,34 @@ export function ProviderDetailHeader({
   };
 
   return (
-    <header className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl tracking-tight">{provider.name}</h1>
-          <Badge variant="secondary">{provider.protocol}</Badge>
-          {provider.is_active ? (
-            <Badge className="gap-1">
-              <Check className="size-3" />
-              {t("settings.connections.active")}
-            </Badge>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
-            <Pencil className="mr-1.5 size-3.5" /> {t("common.edit")}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onDeleteClick}
-            disabled={deletePending}
-            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
-          </Button>
-          <ScopeControl kind="provider" name={provider.name} enabled={provider.enabled} />
-        </div>
-      </div>
+    <>
+      <PageHeader
+        back={{ to: "/model-providers", label: t("settings.connections.detail.back") }}
+        title={provider.name}
+        badges={
+          <>
+            <Badge variant="secondary">{t(PROTOCOL_LABEL_KEY[provider.protocol])}</Badge>
+            {provider.is_active ? <ActiveProviderBadge /> : null}
+          </>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ScopeControl kind="provider" name={provider.name} enabled={provider.enabled} />
+            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1.5 size-3.5" /> {t("common.edit")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onDeleteClick}
+              disabled={deletePending}
+              className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
+            </Button>
+          </div>
+        }
+      />
       <Dialog open={editOpen} onOpenChange={(open) => !open && closeEdit()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -111,6 +115,6 @@ export function ProviderDetailHeader({
           />
         </DialogContent>
       </Dialog>
-    </header>
+    </>
   );
 }

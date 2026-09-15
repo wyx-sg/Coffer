@@ -2,14 +2,15 @@
 //
 // One semantic-state -> Tailwind colour vocabulary, shared by the MCP
 // health badge, the invocations status badge and the channels table so they
-// never drift.
+// never drift. Built on the status.ok|warn|err tokens (visual-language.md),
+// never the raw palette.
 
 export type Tone = "ok" | "error" | "warn" | "muted";
 
 const TONE_CLASS: Record<Tone, string> = {
-  ok: "bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200",
+  ok: "bg-status-ok/15 text-status-ok",
   error: "bg-destructive/10 text-destructive",
-  warn: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+  warn: "bg-status-warn/15 text-status-warn",
   muted: "bg-muted text-muted-foreground",
 };
 

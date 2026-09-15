@@ -6,7 +6,7 @@
 // files that open the same way, and a Coffer memory-projection block renders an
 // info annotation.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren, ReactNode } from "react";
 import { AgentConfigFilesEditor } from "./AgentConfigFilesEditor";
@@ -219,6 +219,65 @@ describe("AgentConfigFilesEditor", () => {
     openSettings();
 
     expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();
+  });
+
+  test("switching files while the draft is dirty asks first; cancel keeps the edit", () => {
+    stubDirFiles();
+    stubFile('{"theme": "dark"}');
+    stubChild(undefined);
+    const onDirtyChange = vi.fn();
+
+    renderEditor(<AgentConfigFilesEditor name="cc" onDirtyChange={onDirtyChange} />);
+    openSettings();
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"theme": "light"}' } });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+
+    // Picking the directory node is a selection change → confirm dialog, no switch yet.
+    fireEvent.click(screen.getByText("Memory directory"));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(/discard unsaved changes/i);
+    expect(screen.queryByText(/this is a directory/i)).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue('{"theme": "light"}');
+  });
+
+  test("confirming the discard applies the parked selection and drops the draft", () => {
+    stubDirFiles();
+    stubFile('{"theme": "dark"}');
+    stubChild(undefined);
+    const onDirtyChange = vi.fn();
+
+    renderEditor(<AgentConfigFilesEditor name="cc" onDirtyChange={onDirtyChange} />);
+    openSettings();
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "changed" } });
+    fireEvent.click(screen.getByText("Memory directory"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /discard/i }));
+
+    expect(screen.getByText(/this is a directory/i)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  test("a dirty draft blocks page unload; a clean one does not", () => {
+    stubFiles();
+    stubFile("{}");
+    stubChild(undefined);
+    const fire = () => {
+      const e = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+
+    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    openSettings();
+    expect(fire()).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "{ }" } });
+    expect(fire()).toBe(true);
   });
 
   test("en and zh locales carry the same agents.config keys", () => {

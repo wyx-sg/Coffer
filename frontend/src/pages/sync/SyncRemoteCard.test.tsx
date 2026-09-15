@@ -1,9 +1,11 @@
 // frontend/src/pages/sync/SyncRemoteCard.test.tsx
 //
-// The remote's configuration card: auto-saving fields (no Save button), a
-// "converge now" button, and the invariant that nothing on it can hold a
-// secret — the push credential is named by REFERENCE and resolved by the
-// daemon at push time.
+// The remote's configuration card: an explicit form behind one Save button
+// (disabled until the draft is changed and valid), an auto-saving "converge
+// automatically" switch that only works once a remote exists, a "converge
+// now" button, and the invariant that nothing on it can hold a secret — the
+// push credential is named by REFERENCE and resolved by the daemon at push
+// time.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
@@ -53,6 +55,8 @@ function status(configured: boolean): SyncStatus {
   };
 }
 
+const saveButton = () => screen.getByRole("button", { name: /save remote/i });
+
 afterEach(() => vi.clearAllMocks());
 
 describe("SyncRemoteCard", () => {
@@ -66,42 +70,89 @@ describe("SyncRemoteCard", () => {
     expect(screen.getByText(/\/home\/me\/\.coffer\/sync/)).toBeInTheDocument();
   });
 
-  test("has no Save button — every field auto-saves on blur", () => {
+  test("Save is disabled until a field changes, and blurring alone writes nothing", () => {
     stub();
     render(<SyncRemoteCard status={status(true)} />);
-    expect(screen.queryByRole("button", { name: /^save$/i })).not.toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
 
     const branch = screen.getByLabelText(/branch/i);
+    fireEvent.blur(branch);
+    expect(saveMutate).not.toHaveBeenCalled();
+
     fireEvent.change(branch, { target: { value: "vault" } });
     fireEvent.blur(branch);
-    expect(saveMutate).toHaveBeenCalledWith(expect.objectContaining({ branch: "vault" }));
-  });
-
-  test("an unchanged field does not write", () => {
-    stub();
-    render(<SyncRemoteCard status={status(true)} />);
-    fireEvent.blur(screen.getByLabelText(/branch/i));
     expect(saveMutate).not.toHaveBeenCalled();
+    expect(saveButton()).toBeEnabled();
+
+    fireEvent.click(saveButton());
+    expect(saveMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: "vault", enabled: true }),
+      expect.anything(),
+    );
   });
 
-  test("a blank URL is not a configuration, so nothing is written", () => {
+  test("a URL that is not a git remote blocks Save and says why", () => {
     stub();
     render(<SyncRemoteCard status={status(false)} />);
     const url = screen.getByLabelText(/repository url/i);
-    fireEvent.change(url, { target: { value: "   " } });
-    fireEvent.blur(url);
-    expect(saveMutate).not.toHaveBeenCalled();
+    fireEvent.change(url, { target: { value: "not a url" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/git remote url/i);
+    expect(saveButton()).toBeDisabled();
+
+    fireEvent.change(url, { target: { value: "git@github.com:me/vault.git" } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(saveButton()).toBeEnabled();
+  });
+
+  test("an interval under 60 seconds blocks Save", () => {
+    stub();
+    render(<SyncRemoteCard status={status(true)} />);
+    fireEvent.change(screen.getByLabelText(/interval/i), { target: { value: "30" } });
+    expect(screen.getByRole("alert")).toHaveTextContent(/60 seconds/i);
+    expect(saveButton()).toBeDisabled();
+  });
+
+  test("a first save starts the remote enabled", () => {
+    stub();
+    render(<SyncRemoteCard status={status(false)} />);
+    fireEvent.change(screen.getByLabelText(/repository url/i), {
+      target: { value: "https://git.example.com/me/vault.git" },
+    });
+    fireEvent.click(saveButton());
+    expect(saveMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "https://git.example.com/me/vault.git", enabled: true }),
+      expect.anything(),
+    );
   });
 
   test("an adopted working tree rides along unchanged rather than resetting", () => {
     stub();
     render(<SyncRemoteCard status={status(true)} />);
     fireEvent.click(screen.getByLabelText(/include credentials/i));
+    fireEvent.click(saveButton());
     expect(saveMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         worktree_path: "/home/me/.coffer/sync",
         include_credentials: true,
       }),
+      expect.anything(),
+    );
+  });
+
+  test("converge automatically saves at once, from the STORED remote, and is inert until one exists", () => {
+    stub();
+    const { rerender } = render(<SyncRemoteCard status={status(false)} />);
+    const toggle = screen.getByRole("switch", { name: /converge automatically/i });
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText(/save the remote first/i)).toBeInTheDocument();
+
+    rerender(<SyncRemoteCard status={status(true)} />);
+    // An unsaved draft edit must not ride along with the switch.
+    fireEvent.change(screen.getByLabelText(/branch/i), { target: { value: "draft" } });
+    fireEvent.click(screen.getByRole("switch", { name: /converge automatically/i }));
+    expect(saveMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: false, branch: "main" }),
+      expect.anything(),
     );
   });
 

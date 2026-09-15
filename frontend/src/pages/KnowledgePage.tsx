@@ -50,14 +50,9 @@ export function KnowledgePage() {
         onCreated={() => void refetch()}
       />
 
-
-      {isPending ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            {t("common.loading")}
-          </CardContent>
-        </Card>
-      ) : error ? (
+      {/* The header stays mounted through loading — the table renders skeleton
+          rows under it rather than the page swapping to a loading card. */}
+      {error ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-destructive">{t("knowledge.loadFailed")}</CardTitle>
@@ -66,10 +61,10 @@ export function KnowledgePage() {
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
           </CardContent>
         </Card>
-      ) : !hasItems ? (
+      ) : !isPending && !hasItems ? (
         <KnowledgeWelcomePanel onAdd={() => setShowAdd(true)} />
       ) : (
-        <KnowledgeTable items={items} />
+        <KnowledgeTable items={items} isLoading={isPending} />
       )}
     </div>
   );

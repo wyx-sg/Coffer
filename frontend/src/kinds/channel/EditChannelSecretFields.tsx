@@ -66,7 +66,7 @@ export function EditChannelSecretFields({
               id="edit-channel-public-base-url"
               value={draft.publicBaseUrl}
               onChange={(e) => onChange({ publicBaseUrl: e.target.value })}
-              placeholder="https://xxx.trycloudflare.com"
+              placeholder={t("channels.dialog.publicBaseUrlPlaceholder")}
               autoComplete="off"
             />
             <p className="text-xs text-muted-foreground">
@@ -80,7 +80,7 @@ export function EditChannelSecretFields({
               value={draft.tunnelToken}
               onChange={(e) => onChange({ tunnelToken: e.target.value })}
               autoComplete="off"
-              placeholder={t("channels.edit.rotatePlaceholder")}
+              placeholder={t("common.secretKeepBlank")}
             />
             <p className="text-xs text-muted-foreground">{t("channels.dialog.tunnelTokenHint")}</p>
           </div>
@@ -95,7 +95,7 @@ export function EditChannelSecretFields({
             value={draft.botToken}
             onChange={(e) => onChange({ botToken: e.target.value })}
             autoComplete="off"
-            placeholder={t("channels.edit.rotatePlaceholder")}
+            placeholder={t("common.secretKeepBlank")}
           />
           <p className="text-xs text-muted-foreground">{t("channels.edit.rotateHint")}</p>
         </div>
@@ -108,7 +108,7 @@ export function EditChannelSecretFields({
               value={draft.appSecret}
               onChange={(e) => onChange({ appSecret: e.target.value })}
               autoComplete="off"
-              placeholder={t("channels.edit.rotatePlaceholder")}
+              placeholder={t("common.secretKeepBlank")}
             />
           </div>
           {/* Webhook-only: websocket delivery verifies no signature. */}
@@ -122,7 +122,7 @@ export function EditChannelSecretFields({
                 value={draft.signingSecret}
                 onChange={(e) => onChange({ signingSecret: e.target.value })}
                 autoComplete="off"
-                placeholder={t("channels.edit.rotatePlaceholder")}
+                placeholder={t("common.secretKeepBlank")}
               />
             </div>
           ) : null}

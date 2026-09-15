@@ -6,27 +6,36 @@
 // (default — caller passes ALL rows; filter/slice in memory) and server (caller
 // passes ONE page + a `serverPagination` descriptor and drives search through
 // `search.value`/`search.onChange`) for large lists that page on demand.
-import { Fragment, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+// Row rendering (data rows, skeleton rows, the empty state) lives in
+// DataTableBody.tsx.
+import { useMemo, useState, type ReactNode } from "react";
 
 import { DataTableToolbar } from "@/components/DataTableToolbar";
 import { DataTableHead } from "@/components/DataTableHead";
-import { RowSelectCell, useTableSelection } from "@/components/DataTableSelection";
+import { DataRows, EmptyRow, SkeletonRows } from "@/components/DataTableBody";
+import { useTableSelection } from "@/components/DataTableSelection";
 import { TableBulkBar, usePageSelectAll } from "@/components/DataTableBulk";
 import { Pagination } from "@/components/Pagination";
 import { useDefaultPageSize } from "@/lib/preferences";
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import type {
-  Column,
-  FilterDef,
-  ServerPagination,
-  TableSelection,
+import { Table, TableBody } from "@/components/ui/table";
+import {
+  skeletonCount,
+  type Column,
+  type FilterDef,
+  type ListLoading,
+  type ServerPagination,
+  type TableSelection,
 } from "@/components/DataTable.types";
 // Re-exported so call sites keep importing these from "@/components/DataTable".
 export type { Column, FilterDef, ServerPagination, TableSelection };
 
-interface Props<T> {
+// Cap the body at 20 rows (row ≈ 3rem) — beyond that the container scrolls
+// vertically under the sticky header (#227), so a 50- or 100-row page keeps
+// its pager and toolbar on screen. Tailwind's max-h scale stops at 24rem, so
+// the value has to be arbitrary; it lives here, named, rather than inline.
+const BODY_MAX_HEIGHT = "max-h-[60rem]";
+
+interface Props<T> extends ListLoading {
   rows: T[];
   columns: Column<T>[];
   rowKey: (row: T) => string;
@@ -50,6 +59,8 @@ interface Props<T> {
   /** When set, page on demand against the server instead of slicing in memory. */
   serverPagination?: ServerPagination;
   emptyMessage: string;
+  /** Rendered under the empty message, e.g. the primary "create" button. */
+  emptyAction?: ReactNode;
 }
 
 export function DataTable<T>({
@@ -65,6 +76,8 @@ export function DataTable<T>({
   pageSize,
   serverPagination,
   emptyMessage,
+  emptyAction,
+  isLoading = false,
 }: Props<T>) {
   const server = serverPagination;
   // Search may be controlled (server mode) or internal (client mode).
@@ -121,7 +134,12 @@ export function DataTable<T>({
   const canSelect = (r: T) => (isSelectable ? isSelectable(r) : true);
   // Header checkbox selects the CURRENT PAGE; TableBulkBar escalates to "all".
   const ps = usePageSelectAll({
-    sel, pageRows, filtered, rowKey, canSelect, total,
+    sel,
+    pageRows,
+    filtered,
+    rowKey,
+    canSelect,
+    total,
     server: Boolean(server),
     resetKey: `${query}␟${JSON.stringify(filterVals)}`,
   });
@@ -152,10 +170,7 @@ export function DataTable<T>({
       ) : null}
 
       <div className="rounded-md border bg-card">
-        {/* Cap the body at ~20 rows (row ≈ 3rem); beyond that the container
-            scrolls vertically. The wrapper already scrolls horizontally, and
-            the header is sticky so column titles stay pinned while scrolling. */}
-        <Table containerClassName="max-h-[calc(3rem*20)]">
+        <Table containerClassName={BODY_MAX_HEIGHT} aria-busy={isLoading || undefined}>
           <DataTableHead
             columns={columns}
             hasSelection={Boolean(selection)}
@@ -166,62 +181,25 @@ export function DataTable<T>({
             onToggleAll={ps.togglePage}
           />
           <TableBody>
-            {pageRows.length === 0 ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={colCount} className="py-10 text-center text-muted-foreground">
-                  {emptyMessage}
-                </TableCell>
-              </TableRow>
+            {isLoading && pageRows.length === 0 ? (
+              <SkeletonRows count={skeletonCount(size)} colCount={colCount} />
+            ) : pageRows.length === 0 ? (
+              <EmptyRow colCount={colCount} message={emptyMessage} action={emptyAction} />
             ) : (
-              pageRows.map((row) => {
-                const key = rowKey(row);
-                const isOpen = expanded.has(key);
-                const clickable = expandable || Boolean(onRowClick);
-                return (
-                  <Fragment key={key}>
-                    <TableRow
-                      className={clickable ? "cursor-pointer" : undefined}
-                      onClick={
-                        expandable
-                          ? () => toggleExpand(key)
-                          : onRowClick
-                            ? () => onRowClick(row)
-                            : undefined
-                      }
-                    >
-                      {selection ? (
-                        <RowSelectCell
-                          selectable={canSelect(row)}
-                          checked={sel.keys.has(key)}
-                          ariaLabel={selection.ariaSelectRow(row)}
-                          onToggle={() => sel.toggle(key)}
-                        />
-                      ) : null}
-                      {expandable ? (
-                        <TableCell className="py-3 pr-0 text-muted-foreground">
-                          {isOpen ? (
-                            <ChevronDown className="size-4" />
-                          ) : (
-                            <ChevronRight className="size-4" />
-                          )}
-                        </TableCell>
-                      ) : null}
-                      {columns.map((c) => (
-                        <TableCell key={c.key} className={cn("py-3", c.className)}>
-                          {c.cell(row)}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                    {expandable && isOpen ? (
-                      <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={colCount} className="bg-muted/20 p-0">
-                          {getRowDetail!(row)}
-                        </TableCell>
-                      </TableRow>
-                    ) : null}
-                  </Fragment>
-                );
-              })
+              <DataRows
+                rows={pageRows}
+                columns={columns}
+                rowKey={rowKey}
+                colCount={colCount}
+                onRowClick={onRowClick}
+                getRowDetail={getRowDetail}
+                expanded={expanded}
+                onToggleExpand={toggleExpand}
+                selection={selection}
+                canSelect={canSelect}
+                selectedKeys={sel.keys}
+                onToggleSelect={sel.toggle}
+              />
             )}
           </TableBody>
         </Table>

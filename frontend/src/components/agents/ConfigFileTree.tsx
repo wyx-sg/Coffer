@@ -56,7 +56,7 @@ export function ConfigFileTree({
               <Folder className="size-4 shrink-0 opacity-70" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{f.display_name}</span>
-                <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                <span className="block truncate font-mono text-xs text-muted-foreground">
                   {f.path}
                 </span>
               </span>
@@ -105,12 +105,12 @@ export function ConfigFileTree({
               <FileText className="size-4 shrink-0 opacity-70" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{f.display_name}</span>
-                <span className="block truncate font-mono text-[11px] text-muted-foreground">
+                <span className="block truncate font-mono text-xs text-muted-foreground">
                   {f.path}
                 </span>
               </span>
               {!f.exists ? (
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span className="shrink-0 text-xs uppercase tracking-wide text-muted-foreground">
                   {t("agents.config.notCreated")}
                 </span>
               ) : null}

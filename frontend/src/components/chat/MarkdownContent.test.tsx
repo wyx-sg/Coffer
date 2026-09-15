@@ -1,7 +1,37 @@
-import { describe, expect, test } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { MarkdownContent } from "./MarkdownContent";
+
+describe("MarkdownContent code-block copy", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  test("copies the block's text to the clipboard and confirms for 1.5 s", async () => {
+    // Fake timers (still advancing real time) so the confirmation's timeout is
+    // ours to fire.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    render(<MarkdownContent content={"```js\nconst x = 1;\n```"} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^copy$/i }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("const x = 1;\n"));
+    expect(await screen.findByRole("status")).toHaveTextContent(/copied/i);
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  test("inline code gets no copy button", () => {
+    render(<MarkdownContent content="use `foo()`" />);
+    expect(screen.queryByRole("button", { name: /copy/i })).not.toBeInTheDocument();
+  });
+});
 
 describe("MarkdownContent", () => {
   test("renders bold/italic markup as real elements, not raw characters", () => {

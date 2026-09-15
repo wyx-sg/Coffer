@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
+import { formatDateTime } from "@/lib/utils";
 import type { DeliveryStatusOut } from "@/kinds/memory/types";
 import { useInstallDelivery, useMemoryDelivery, useRemoveDelivery } from "@/kinds/memory/useMemory";
 
@@ -71,7 +72,7 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
               ? t("memory.delivery.neverFiredHint", { event: status.event })
               : t("memory.delivery.lastFiredAt", {
                   event: status.event,
-                  time: new Date(status.last_fired_at).toLocaleString(),
+                  time: formatDateTime(status.last_fired_at),
                 })
             : t("memory.delivery.notInstalledHint")}
         </p>

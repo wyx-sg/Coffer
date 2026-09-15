@@ -4,7 +4,7 @@
 // framework per-agent scope, owned by the shared ScopeControl (the wire's own
 // default is applied server-side by `Kind.default_scope` when the connection is
 // created).
-import type { AgentType, Protocol } from "@/lib/api/providers";
+import type { Protocol } from "@/lib/api/providers";
 
 export interface Preset {
   id: string;
@@ -61,11 +61,17 @@ function normaliseEndpoint(url: string): string {
   return url.trim().toLowerCase().replace(/\/+$/, "");
 }
 
-// One display label per agent type, shared by every surface that RENDERS the
-// effective compatible-agents set (the list table's chips, the detail page's
-// configuration card). Nothing writes that set any more — it is derived from the
-// resource's scope — so these labels are read-only display.
-export const AGENT_LABEL_KEY: Record<AgentType, string> = {
-  claude_code: "settings.connections.agentClaudeCode",
-  codex: "settings.connections.agentCodex",
+// One display label per protocol, shared by every surface that names the wire
+// a connection speaks (the detail header's chip, the configuration card, the
+// form's protocol picker). The enum value (`openai`) is never shown raw: it is
+// a wire format, not a vendor, so the label says what it actually is.
+export const PROTOCOL_LABEL_KEY: Record<Protocol, string> = {
+  anthropic: "settings.connections.protocols.anthropic",
+  openai: "settings.connections.protocols.openai",
+  ollama: "settings.connections.protocols.ollama",
+  unknown: "settings.connections.protocols.unknown",
 };
+
+/** The protocols a user can pick by hand, in picker order. `unknown` is only
+ *  ever the probe's verdict, never a choice. */
+export const SELECTABLE_PROTOCOLS: readonly Protocol[] = ["anthropic", "openai", "ollama"] as const;

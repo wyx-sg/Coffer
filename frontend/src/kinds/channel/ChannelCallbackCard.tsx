@@ -8,7 +8,7 @@
 // Split out of ChannelDetailCards to keep each within the size budget.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, PlugZap, Webhook } from "lucide-react";
+import { Check, Copy, PlugZap, Webhook, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,9 @@ import { Label } from "@/components/ui/label";
 import type { CallbackInfo, CallbackTestResult, WebSocketState } from "@/lib/api/channels";
 import { testChannelCallback } from "@/lib/api/channels";
 import { translateApiError } from "@/lib/api/errors";
-import { StatusRow } from "./ChannelDetailCards";
+import { toneClass } from "@/lib/statusColors";
+import { cn } from "@/lib/utils";
+import { RunStateBadge, StatusRow } from "./ChannelDetailCards";
 
 /** A live socket is the only healthy state; everything else wants attention. */
 const UNHEALTHY: WebSocketState[] = ["kicked", "sdk_missing", "error"];
@@ -44,13 +46,17 @@ function WebSocketCard({ callback }: { callback: CallbackInfo }) {
           label={t("channels.callback.connection")}
           value={
             <Badge
-              variant={
-                state === "connected"
-                  ? "default"
-                  : state !== null && UNHEALTHY.includes(state)
-                    ? "destructive"
-                    : "outline"
-              }
+              variant="outline"
+              className={cn(
+                "border-transparent",
+                toneClass(
+                  state === "connected"
+                    ? "ok"
+                    : state !== null && UNHEALTHY.includes(state)
+                      ? "error"
+                      : "warn",
+                ),
+              )}
             >
               {t(`channels.callback.websocketState.${state ?? "unknown"}`)}
             </Badge>
@@ -130,10 +136,22 @@ export function ChannelCallbackCard({ name, callback }: { name: string; callback
               </Button>
               {testResult ? (
                 <span
-                  className={`text-xs ${testResult.ok ? "text-primary" : "text-destructive"}`}
+                  className={cn(
+                    "inline-flex items-center gap-1 text-xs",
+                    testResult.ok ? "text-status-ok" : "text-status-err",
+                  )}
                   role="status"
                 >
-                  {testResult.ok ? "✓ " : "✗ "}
+                  {testResult.ok ? (
+                    <Check className="size-3.5 shrink-0" aria-hidden />
+                  ) : (
+                    <X className="size-3.5 shrink-0" aria-hidden />
+                  )}
+                  <span className="sr-only">
+                    {testResult.ok
+                      ? t("channels.callback.testOk")
+                      : t("channels.callback.testFailed")}
+                  </span>
                   {testResult.detail}
                 </span>
               ) : null}
@@ -148,24 +166,12 @@ export function ChannelCallbackCard({ name, callback }: { name: string; callback
         />
         <StatusRow
           label={t("channels.callback.listener")}
-          value={
-            callback.listener_running ? (
-              <Badge>{t("channels.status.running")}</Badge>
-            ) : (
-              <Badge variant="outline">{t("channels.status.stopped")}</Badge>
-            )
-          }
+          value={<RunStateBadge running={callback.listener_running} />}
         />
         {callback.tunnel_managed ? (
           <StatusRow
             label={t("channels.callback.tunnel")}
-            value={
-              callback.tunnel_running ? (
-                <Badge>{t("channels.status.running")}</Badge>
-              ) : (
-                <Badge variant="outline">{t("channels.status.stopped")}</Badge>
-              )
-            }
+            value={<RunStateBadge running={callback.tunnel_running} />}
           />
         ) : null}
         <p className="pt-1 text-xs text-muted-foreground">{t("channels.callback.hint")}</p>

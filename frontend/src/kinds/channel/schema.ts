@@ -3,27 +3,28 @@
 // Zod schema driving the add-channel form, plus the pure planning step that
 // turns validated form values into the resource config + the list of
 // credential-store writes. Field names mirror specs/channels/data-model.md:
-// secrets never live in the config — only `*_ref` references do.
+// secrets never live in the config — only `*_ref` references do. Every issue
+// message is an i18n KEY (`channels.dialog.errors.*`): the dialog renders
+// `t(issue.message)` under the field the path names, never zod's own English.
 import { z } from "zod";
 
 import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
 
 /**
- * The agent a newly-created channel routes to by default. This is a chat
- * provider KEY (`claude_code`, underscore) — the key the turn orchestrator
- * resolves an agent by — not the `claude-code` resource name. A hyphenated
- * value passes registration but fails at turn time with UNKNOWN_AGENT, leaving
- * the bot silently dead. The backend validates `default_agent` against the live
- * provider registry (the builtin-agent-is-internal-capability ADR retired the old "builtin" pseudo-agent). The owner
- * can re-bind it later via the edit dialog.
+ * The agent a newly-created channel routes to by default: a chat provider KEY
+ * (`claude_code`, underscore) — what the turn orchestrator resolves by — not
+ * the `claude-code` resource name, which passes registration but fails at turn
+ * time with UNKNOWN_AGENT. The backend validates it against the live provider
+ * registry (the old "builtin" pseudo-agent is retired); the edit dialog re-binds.
  */
 export const DEFAULT_AGENT = "claude_code";
 
+const ERR = "channels.dialog.errors";
 const channelNameSchema = z
   .string()
-  .min(1, "name required")
-  .max(64)
-  .regex(/^[a-zA-Z0-9_-]+$/, "letters, digits, dash, underscore only");
+  .min(1, `${ERR}.name`)
+  .max(64, `${ERR}.nameTooLong`)
+  .regex(/^[a-zA-Z0-9_-]+$/, `${ERR}.nameFormat`);
 
 /** The inbound transport a new SeaTalk channel is created on. */
 export const DEFAULT_DELIVERY: ChannelDelivery = "webhook";
@@ -32,7 +33,7 @@ const addChannelFormUnion = z.discriminatedUnion("channel_type", [
   z.object({
     channel_type: z.literal("telegram"),
     name: channelNameSchema,
-    bot_token: z.string().min(1, "bot token required"),
+    bot_token: z.string().min(1, `${ERR}.botToken`),
   }),
   z.object({
     channel_type: z.literal("seatalk"),
@@ -40,8 +41,8 @@ const addChannelFormUnion = z.discriminatedUnion("channel_type", [
     // Which transport SeaTalk delivers events on. Webhook is the default: it
     // is the method that works without the operator-supplied official SDK.
     delivery: z.enum(["webhook", "websocket"]).default(DEFAULT_DELIVERY),
-    app_id: z.string().min(1, "app id required"),
-    app_secret: z.string().min(1, "app secret required"),
+    app_id: z.string().min(1, `${ERR}.appId`),
+    app_secret: z.string().min(1, `${ERR}.appSecret`),
     // Required on webhook (it verifies every request's signature), forbidden on
     // websocket (the register handshake authenticates) — enforced below.
     signing_secret: z.string().optional(),
@@ -65,13 +66,13 @@ export const addChannelFormSchema = addChannelFormUnion.superRefine((values, ctx
   const reject = (path: string, message: string) =>
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
   if (values.delivery === "webhook") {
-    if (!values.signing_secret) reject("signing_secret", "signing secret required");
+    if (!values.signing_secret) reject("signing_secret", `${ERR}.signingSecret`);
     return;
   }
   // Websocket owns no signature, no public URL and no tunnel — a config field
   // that decides nothing would be a lie about the system.
   for (const field of ["signing_secret", "public_base_url", "tunnel_token"] as const) {
-    if (values[field]?.trim()) reject(field, "not allowed for websocket delivery");
+    if (values[field]?.trim()) reject(field, `${ERR}.websocketField`);
   }
 });
 

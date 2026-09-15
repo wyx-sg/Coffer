@@ -1,14 +1,24 @@
 // frontend/src/lib/hooks/useAgents.ts — TanStack Query bindings for agents.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 
+import { useToast } from "@/components/ui/toast";
 import {
   agentsApi,
   type AdoptMcpEntryBody,
   type AgentCreate,
   type AgentPatch,
 } from "@/lib/api/agents";
+import { translateApiError } from "@/lib/api/errors";
 
 const AGENTS_KEY = ["agents"] as const;
+
+/** Shared onError → toast handler — a failed mutation must never be silent. */
+function useAgentToastError() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return (error: unknown) => toast.error(translateApiError(t, error));
+}
 
 export function useAgents() {
   return useQuery({
@@ -25,12 +35,15 @@ export function useAgent(name: string) {
   });
 }
 
+// No onError toast on register / patch: the add dialog and the edit form each
+// render the failure inline next to the field it concerns (e.g. the 409 for an
+// already-registered config dir), so a toast would double-surface it.
 export function useRegisterAgent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: AgentCreate) => agentsApi.register(body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: AGENTS_KEY });
+      void qc.invalidateQueries({ queryKey: AGENTS_KEY });
     },
   });
 }
@@ -40,18 +53,21 @@ export function usePatchAgent() {
   return useMutation({
     mutationFn: (vars: { name: string; body: AgentPatch }) => agentsApi.patch(vars.name, vars.body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: AGENTS_KEY });
+      void qc.invalidateQueries({ queryKey: AGENTS_KEY });
     },
   });
 }
 
 export function useRemoveAgent() {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: (name: string) => agentsApi.remove(name),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: AGENTS_KEY });
+    onSuccess: (_data, name) => {
+      qc.removeQueries({ queryKey: ["agents", name] });
+      void qc.invalidateQueries({ queryKey: AGENTS_KEY });
     },
+    onError,
   });
 }
 
@@ -99,16 +115,16 @@ export function useAgentMcpStatus(name: string) {
 
 export function useAgentMcpInstall(name: string) {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: (install: boolean) =>
       install ? agentsApi.mcpInstall(name) : agentsApi.mcpUninstall(name),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: mcpKey(name) });
+      void qc.invalidateQueries({ queryKey: mcpKey(name) });
     },
+    onError,
   });
 }
-
-// --- Session-start hook install (rules injection, slice 6) ---
 
 // --- MCP entries (specs agent-registry/skill-manager workspace amendment) ---
 
@@ -122,23 +138,27 @@ export function useAgentMcpEntries(name: string) {
 
 export function useRemoveMcpEntry(agentName: string) {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ entry, source }: { entry: string; source?: string }) =>
       agentsApi.removeMcpEntry(agentName, entry, source),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
     },
+    onError,
   });
 }
 
+// No onError toast: the adopt dialog shows the failure inline, where the
+// name-conflict / secret hints it carries are actionable.
 export function useAdoptMcpEntry(agentName: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ entry, body }: { entry: string; body: AdoptMcpEntryBody }) =>
       agentsApi.adoptMcpEntry(agentName, entry, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
-      qc.invalidateQueries({ queryKey: ["resources", { kind: "mcp_server" }] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName, "mcp-entries"] });
+      void qc.invalidateQueries({ queryKey: ["resources", { kind: "mcp_server" }] });
     },
   });
 }
@@ -155,22 +175,26 @@ export function useAgentPlugins(name: string) {
 
 export function useTogglePlugin(agentName: string) {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       agentsApi.togglePlugin(agentName, id, enabled),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
     },
+    onError,
   });
 }
 
 export function useUninstallPlugin(agentName: string) {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ id }: { id: string }) => agentsApi.uninstallPlugin(agentName, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName, "plugins"] });
     },
+    onError,
   });
 }
 
@@ -196,26 +220,30 @@ export function useUnmanagedSkills(name: string) {
 
 export function useAdoptUnmanagedSkill(agentName: string) {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ skill, location }: { skill: string; location: string }) =>
       agentsApi.adoptUnmanagedSkill(agentName, skill, location),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "unmanaged-skills"] });
-      qc.invalidateQueries({ queryKey: ["skills"] });
-      qc.invalidateQueries({ queryKey: ["agents", agentName] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName, "unmanaged-skills"] });
+      void qc.invalidateQueries({ queryKey: ["skills"] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName] });
     },
+    onError,
   });
 }
 
 export function useDeleteUnmanagedSkill(agentName: string) {
   const qc = useQueryClient();
+  const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ skill, location }: { skill: string; location: string }) =>
       agentsApi.deleteUnmanagedSkill(agentName, skill, location),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["agents", agentName, "unmanaged-skills"] });
-      qc.invalidateQueries({ queryKey: ["skills"] });
-      qc.invalidateQueries({ queryKey: ["agents", agentName] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName, "unmanaged-skills"] });
+      void qc.invalidateQueries({ queryKey: ["skills"] });
+      void qc.invalidateQueries({ queryKey: ["agents", agentName] });
     },
+    onError,
   });
 }

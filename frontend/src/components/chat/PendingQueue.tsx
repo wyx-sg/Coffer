@@ -35,7 +35,7 @@ export function PendingQueue({ pending, onEdit, onRemove }: Props) {
           </span>
           <button
             type="button"
-            className="shrink-0 rounded p-0.5 hover:text-foreground"
+            className="shrink-0 rounded-sm p-0.5 hover:text-foreground"
             onClick={() => onEdit(idx)}
             aria-label={t("chat.queue.edit")}
           >
@@ -43,7 +43,7 @@ export function PendingQueue({ pending, onEdit, onRemove }: Props) {
           </button>
           <button
             type="button"
-            className="shrink-0 rounded p-0.5 hover:text-destructive"
+            className="shrink-0 rounded-sm p-0.5 hover:text-destructive"
             onClick={() => onRemove(idx)}
             aria-label={t("chat.queue.remove")}
           >

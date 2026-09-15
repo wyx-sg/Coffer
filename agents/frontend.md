@@ -48,7 +48,14 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
   use the `pages` + `components` + `hooks` + `api` layout above, not a
   `kinds/<name>/` module.
 - UI primitives live in `src/components/ui/` (shadcn). Cross-feature helpers go
-  in `src/lib/`.
+  in `src/lib/`. Three already exist — reuse them, do not re-derive:
+  - `lib/reachFilter.ts` — the one "Reach" filter every scoped list offers
+    (MCP servers, skills, knowledge, memory, providers).
+  - `lib/agents/display.ts` — the human-readable forms of agent wire values
+    (product name for a registry key, home-relative path), shared by the
+    table, the add form and the detail header.
+  - `lib/chat/turnErrors.ts` — copy for a failed chat turn: pure mapping from
+    error shape to actionable text, unit-tested without a component.
 
 ## 3. State Management
 
@@ -58,6 +65,7 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 | Ephemeral UI state (open/collapsed, draft input)                | local `useState` in the component                       |
 | User preference that must survive reload                        | `localStorage` via `src/lib/preferences.ts`             |
 | **Addressable** app state (which conversation/resource is open) | the **URL** (router param), not `useState`              |
+| Page-level tab / selected file                                  | the **URL search param** (`?tab=`, `?file=`) via `useSearchParams` |
 
 The API token is deliberately not in that table: it is read from
 `window.__COFFER_TOKEN__`, injected into the served page by whoever served it
@@ -65,11 +73,17 @@ The API token is deliberately not in that table: it is read from
 
 The last row matters: anything a user would expect to survive a refresh, deep-link,
 or back-button MUST be a route param (`/chat/:id`, `/agents/:name`), not local
-state. "Which item is selected" is navigation, not UI state.
+state. "Which item is selected" is navigation, not UI state. The same holds one
+level down: which tab a page is on and which file is open in a tree are
+`?tab=` / `?file=` search params read with `useSearchParams`, so a link can land
+on a tab and a reload comes back where it was. The detail pages (Agent, Skill,
+Provider, MCP server, Knowledge), Sync and Activity all follow it; the default
+tab is the absence of the param, never `?tab=overview`.
 
 There is no global store. Cross-component server data is shared through the
 query cache (same query key → same data), not through Context. The only Context
-providers are `QueryClientProvider` and `ToastProvider`.
+providers are `QueryClientProvider`, `ToastProvider` and the `TooltipProvider`
+that `Layout` mounts once for the Tooltip primitive.
 
 ### Query keys
 
@@ -101,9 +115,10 @@ Two request styles exist; pick by whether the spec shipped an OpenAPI contract:
   Full path/response type safety.
 - **Shared hand-written helper** otherwise. **Target state: one shared
   `call<T>()`** (URL building + 204 handling + `{error:{code,message}}` →
-  `ApiError`). Today `call<T>()` is copy-pasted in `api/chat.ts`, `agents.ts`,
-  `models.ts`, `skills.ts` — when you touch one, lift it to a shared
-  `src/lib/api/call.ts` and have the module import it. Do not add a fifth copy.
+  `ApiError`). It exists — `src/lib/api/call.ts`, which `api/sync.ts` imports —
+  but `api/agents.ts`, `chat.ts`, `channels.ts`, `providers.ts`,
+  `internalEngine.ts` and `skills.ts` still own a copy each. When you touch one,
+  switch it to the shared import. Do not add another copy.
 
 All errors converge on `ApiError(code, message)` (`src/lib/api/errors.ts`).
 Surface them with `translateApiError(t, error)`, which maps `errors.<CODE>`
@@ -135,19 +150,41 @@ return useMutation({
 - Bulk/table actions go through `src/lib/hooks/useBulkMutate.ts` (one summary
   toast + one invalidation burst), never a per-row toast loop.
 - Prefix `qc.invalidateQueries(...)` calls with `void` (they're fire-and-forget).
+- **Delete confirmations use `ConfirmDialog`** (`components/ui/confirm-dialog.tsx`,
+  never `window.confirm`). The dialog closes only in the mutation's `onSuccess`
+  and receives `pending` while the mutation runs, so a failed delete stays open
+  with its error instead of vanishing as if it had worked.
 
 ## 6. Components & Design System
 
 - **Build from `src/components/ui/` primitives** (shadcn: `Button`, `Dialog`,
-  `Select`, `Textarea`, …). Don't hand-roll a control a primitive already covers.
+  `Select`, `Textarea`, `Tooltip`, `DropdownMenu`, `Skeleton`, `ConfirmDialog`,
+  …). Don't hand-roll a control a primitive already covers — no native `title=`
+  hints where `Tooltip` fits, no bespoke pulsing block where `Skeleton` does.
+- **Shared surfaces above the primitives**, used the same way everywhere:
+  - `PageHeader` is the one page header, list and detail alike: `icon` (list
+    pages), `back` (detail pages), `badges` beside the title, `actions` on the
+    right. Detail-page actions keep one fixed order: reach → test/refresh →
+    edit → delete.
+  - `DataTable` is the one list table. Pass `isLoading` so the header stays
+    mounted over skeleton rows (never a "Loading…" card in the table's place)
+    and `emptyAction` for the call-to-action under the empty message. The reach
+    column's header key is `resources.cols.reach` on every table.
+  - `EmptyState` is the shared "nothing here yet" card (icon, title,
+    description, action).
+  - `Button` icon sizes are `icon-sm` / `icon-md` (plus the default `icon`);
+    pick from those, do not size an icon button by hand.
+- **Dates always go through `formatDateTime`** (`src/lib/utils`) — never a raw
+  `toLocaleString`, so every timestamp reads the same.
 - **Named exports only.** `export function Foo()`. No default exports.
 - **File header comment**: first line `// src/path` + one line of purpose.
 - **`cn()`** (`src/lib/utils`) for conditional classes. No inline `style` except
   a documented theming bridge.
 - **Semantic tokens only** (`text-muted-foreground`, `bg-card`, `border-border`).
-  Health/status surfaces use the `status.ok|warn|err` tokens — **not** raw
-  `green/amber/emerald` palette classes. (`statusColors.ts`, `ToolCallCard`
-  currently bypass this — fix on touch.)
+  Health/status colour comes only from `src/lib/statusColors.ts`, which maps a
+  tone onto the `status.ok|warn|err` tokens — components never pick a status
+  class themselves, and raw `green/amber/emerald` palette classes do not appear
+  in `src`.
 - **Type scale only** — `text-sm`/`text-xs`/… never `text-[11px]`. Radius from
   the prescribed set (`rounded-lg` cards, `rounded-md` controls, `rounded-sm`
   chips). See [`visual-language.md`](./visual-language.md).
@@ -185,6 +222,7 @@ return useMutation({
 
 When you work near these, migrate toward the target; don't extend the debt:
 
-1. **One `call<T>()`** in `src/lib/api/call.ts`; the four hand-written API
-   modules import it instead of each owning a copy.
-2. **`onError` toast on every mutation** that can fail visibly.
+1. **One `call<T>()`** — `src/lib/api/call.ts` exists; the six hand-written API
+   modules still owning a copy (§4) import it instead.
+2. **`onError` toast on every mutation** that can fail visibly (a handful of
+   hooks still omit it).

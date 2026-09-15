@@ -31,7 +31,7 @@ export function ServerHealthCell({ name }: { name: string }) {
   if (runner?.missingRunner) {
     return (
       <span className="flex flex-col gap-0.5">
-        <span className="text-sm text-amber-600">
+        <span className="text-sm text-status-warn">
           {t("mcp.missingRunner", { runner: runner.missingRunner })}
         </span>
         <span className="text-xs text-muted-foreground">

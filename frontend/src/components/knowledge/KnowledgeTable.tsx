@@ -27,12 +27,20 @@ import { resourcesApi } from "@/lib/api/resources";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useKindReach } from "@/lib/hooks/useResources";
+import { reachFilter } from "@/lib/reachFilter";
 import { collectionsKey } from "@/kinds/knowledge/useKnowledge";
 import type { CollectionOut } from "@/kinds/knowledge/types";
 
 const KIND = "knowledge";
 
-export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
+export function KnowledgeTable({
+  items,
+  isLoading = false,
+}: {
+  items: CollectionOut[];
+  /** Skeleton rows while the list resolves — the page keeps its header up. */
+  isLoading?: boolean;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -41,6 +49,11 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const bulk = useBulkMutate({ invalidate: [["resources"], collectionsKey()] });
+
+  const reachOf = (r: CollectionOut) => ({
+    enabled: reach.get(r.name)?.enabled ?? true,
+    scope: reach.get(r.name)?.scope ?? null,
+  });
 
   const columns: Column<CollectionOut>[] = [
     {
@@ -67,16 +80,11 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
     },
     {
       key: "reach",
-      header: t("resources.cols.status"),
+      header: t("resources.cols.reach"),
       className: "whitespace-nowrap text-right",
       cell: (r) => (
         <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-          <ScopeControl
-            kind={KIND}
-            name={r.name}
-            enabled={reach.get(r.name)?.enabled ?? true}
-            scope={reach.get(r.name)?.scope ?? null}
-          />
+          <ScopeControl kind={KIND} name={r.name} {...reachOf(r)} />
         </div>
       ),
     },
@@ -97,6 +105,7 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
     <>
       <DataTable
         rows={items}
+        isLoading={isLoading}
         columns={columns}
         rowKey={(r) => r.name}
         onRowClick={(r) => navigate(`/knowledge/${encodeURIComponent(r.name)}`)}
@@ -104,6 +113,7 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
           accessor: (r) => `${r.name} ${r.description ?? ""}`,
           placeholder: t("knowledge.searchPlaceholder"),
         }}
+        filters={[reachFilter(t, reachOf)]}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
@@ -130,7 +140,9 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
             </>
           ),
         }}
-        emptyMessage={t("knowledge.empty")}
+        // Rows exist, so an empty table here means the search/filter matched
+        // nothing — the "no collections yet" welcome is the page's, not ours.
+        emptyMessage={t("knowledge.noMatches")}
       />
       <ConfirmDialog
         open={deletingName !== null}
@@ -139,15 +151,21 @@ export function KnowledgeTable({ items }: { items: CollectionOut[] }) {
         }}
         title={t("knowledge.delete.title")}
         description={t("knowledge.delete.description", { name: deletingName ?? "" })}
-        confirmLabel={t("common.delete")}
+        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         variant="destructive"
+        pending={del.isPending}
         onConfirm={() => {
-          const name = deletingName;
-          setDeletingName(null);
-          if (name === null) return;
+          // Close only on success; the hook toasts a failure and the dialog
+          // stays up so the reader can retry or cancel.
+          if (deletingName === null) return;
           del.mutate(
-            { kind: KIND, name },
-            { onSuccess: () => void qc.invalidateQueries({ queryKey: collectionsKey() }) },
+            { kind: KIND, name: deletingName },
+            {
+              onSuccess: () => {
+                setDeletingName(null);
+                void qc.invalidateQueries({ queryKey: collectionsKey() });
+              },
+            },
           );
         }}
       />

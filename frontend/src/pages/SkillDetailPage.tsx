@@ -1,25 +1,21 @@
 // frontend/src/pages/SkillDetailPage.tsx
-// Per-skill detail page (mirrors AgentDetailPage): a back link, a header with
-// the source badge + Delete, and two tabs — Overview and Files (a read-only
-// tree + content viewer of the skill's master folder).
+// Per-skill detail page (mirrors AgentDetailPage): the shared PageHeader with
+// a back link, reach + Delete as actions, and two tabs — Overview and Files (a
+// read-only tree + content viewer of the skill's master folder). The open tab
+// lives in the URL (`?tab=`), so a reload lands on the same tab.
 import { useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Trash2 } from "lucide-react";
 
+import { EmptyState } from "@/components/EmptyState";
+import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
 import { SkillOverview } from "@/components/skills/SkillDetailTabs";
 import { SkillFileTree } from "@/components/skills/SkillFileTree";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { useRemoveSkill, useSkill } from "@/lib/hooks/useSkills";
@@ -29,11 +25,26 @@ export function SkillDetailPage() {
   const { name = "" } = useParams<{ name: string }>();
   const navigate = useNavigate();
   // When navigated here from an agent's Skills tab, location.state carries a
-  // return target so we can offer a "back to <agent>" button.
+  // return target, so "← back" leads to that agent rather than the list.
   const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
+  const back = backState?.backTo
+    ? { to: backState.backTo, label: t("common.backTo", { label: backState.backLabel ?? "" }) }
+    : { to: "/skills", label: t("skills.detail.back") };
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "overview";
   const { data: skill, isPending, error } = useSkill(name);
   const remove = useRemoveSkill();
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const setTab = (next: string) =>
+    setParams(
+      (prev) => {
+        if (next === "overview") prev.delete("tab");
+        else prev.set("tab", next);
+        return prev;
+      },
+      { replace: true },
+    );
 
   if (isPending) {
     return (
@@ -46,57 +57,31 @@ export function SkillDetailPage() {
   }
   if (error || !skill) {
     return (
-      <Card className="border-destructive/40">
-        <CardHeader>
-          <CardTitle className="text-destructive">{t("skills.loadFailed")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            {error ? translateApiError(t, error) : t("skills.loadFailed")}
-          </p>
-          <Button variant="link" onClick={() => navigate("/skills")} className="-ml-2">
-            <ArrowLeft className="mr-1 size-4" />
-            {t("skills.detail.back")}
+      <EmptyState
+        icon={Sparkles}
+        title={t("skills.loadFailed")}
+        description={error ? translateApiError(t, error) : undefined}
+        action={
+          <Button variant="outline" asChild>
+            <Link to="/skills">
+              <ArrowLeft className="mr-1 size-4" />
+              {t("skills.detail.back")}
+            </Link>
           </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="-ml-2 flex flex-wrap items-center gap-1">
-        {backState?.backTo ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(backState.backTo!)}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="mr-1.5 size-4" />
-            {t("common.backTo", { label: backState.backLabel ?? "" })}
-          </Button>
-        ) : null}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/skills")}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="mr-1.5 size-4" /> {t("skills.detail.back")}
-        </Button>
-      </div>
-
-      <div className="space-y-2">
-        {/* Title + actions on one row; the description sits below the title. */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <h1 className="font-serif text-3xl tracking-tight">{skill.name}</h1>
-            {/* Source badge intentionally hidden — every skill is local_import
-                today (no signal). skill.source stays available for when other
-                origins (e.g. git import) land. */}
-          </div>
-          <div className="flex items-center gap-2">
+      {/* The description is long-form and lives in the Overview card, not the
+          subtitle — a paragraph under the title pushed the tabs off-screen. */}
+      <PageHeader
+        back={back}
+        title={skill.name}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
             <ScopeControl kind="skill" name={skill.name} enabled={skill.enabled} />
             <Button
               variant="outline"
@@ -107,13 +92,10 @@ export function SkillDetailPage() {
               <Trash2 className="mr-1.5 size-3.5" /> {t("common.delete")}
             </Button>
           </div>
-        </div>
-        {skill.description ? (
-          <p className="max-w-prose text-sm text-muted-foreground">{skill.description}</p>
-        ) : null}
-      </div>
+        }
+      />
 
-      <Tabs defaultValue="overview">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="overview">{t("skills.detail.tabs.overview")}</TabsTrigger>
           <TabsTrigger value="files">{t("skills.detail.tabs.files")}</TabsTrigger>
@@ -128,33 +110,23 @@ export function SkillDetailPage() {
         </TabsContent>
       </Tabs>
 
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("skills.removeConfirmTitle", { name: skill.name })}</DialogTitle>
-            <DialogDescription>{t("skills.removeConfirmBody")}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={remove.isPending}
-              onClick={() =>
-                remove.mutate(skill.name, {
-                  onSuccess: () => {
-                    setDeleteOpen(false);
-                    navigate("/skills");
-                  },
-                })
-              }
-            >
-              {remove.isPending ? t("common.deleting") : t("common.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={t("skills.removeConfirmTitle", { name: skill.name })}
+        description={t("skills.removeConfirmBody")}
+        confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
+        pending={remove.isPending}
+        onConfirm={() =>
+          // Close only on success; the hook toasts a failure.
+          remove.mutate(skill.name, {
+            onSuccess: () => {
+              setDeleteOpen(false);
+              navigate("/skills");
+            },
+          })
+        }
+      />
     </div>
   );
 }
