@@ -5,8 +5,6 @@ from __future__ import annotations
 import json as _json
 import os
 import signal
-import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -14,7 +12,7 @@ import typer
 
 from coffer.infrastructure.daemon import bootstrap, port_alloc
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
-from coffer.infrastructure.daemon.spawn import daemon_spawn_command
+from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import daemon_port_cmd
 
@@ -96,30 +94,13 @@ def _start_daemon() -> None:
 
     _refuse_if_the_port_is_taken()
 
-    cmd = daemon_spawn_command()
-
-    log_dir = home / ".coffer" / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / "daemon.log"
-    log = open(log_path, "ab")  # noqa: SIM115 — handle leaks intentionally into child
-
-    if sys.platform == "win32":
-        creationflags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log,
-            stderr=log,
-            stdin=subprocess.DEVNULL,
-            creationflags=creationflags,
-        )
-    else:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=log,
-            stderr=log,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+    # The same detached spawn the shim and the CLI's auto-spawn use: stdio to
+    # ~/.coffer/logs/daemon.log, so the daemon's own refusal is readable there.
+    try:
+        proc = spawn_detached_daemon()
+    except OSError as exc:
+        typer.echo(f"failed to spawn daemon: {exc}", err=True)
+        raise typer.Exit(1) from None
 
     if not _wait_for_daemon_json(daemon_json, timeout=10.0):
         proc.kill()

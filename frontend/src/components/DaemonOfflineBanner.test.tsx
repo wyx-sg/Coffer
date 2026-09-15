@@ -3,7 +3,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 
-vi.mock("@/lib/hooks/useDaemon", () => ({
+// The status/skew queries are stubbed; the restart mutation stays real so the
+// desktop branch below exercises the actual restart → reconnect → refetch flow.
+vi.mock("@/lib/hooks/useDaemon", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
   useDaemonStatus: vi.fn(),
   useDaemonOutOfDate: vi.fn(() => ({ data: false })),
 }));
@@ -100,7 +103,8 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       restartDaemon: restartDaemonMock,
       connectToShellDaemon: vi.fn().mockResolvedValue(undefined),
     }));
-    vi.doMock("@/lib/hooks/useDaemon", () => ({
+    vi.doMock("@/lib/hooks/useDaemon", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
       useDaemonOutOfDate: () => ({ data: false }),
     }));
@@ -121,7 +125,8 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       restartDaemon: restartDaemonMock,
       connectToShellDaemon: vi.fn(),
     }));
-    vi.doMock("@/lib/hooks/useDaemon", () => ({
+    vi.doMock("@/lib/hooks/useDaemon", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
       useDaemonOutOfDate: () => ({ data: false }),
     }));
@@ -146,7 +151,8 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       restartDaemon: restartDaemonMock,
       connectToShellDaemon: connectMock,
     }));
-    vi.doMock("@/lib/hooks/useDaemon", () => ({
+    vi.doMock("@/lib/hooks/useDaemon", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
       useDaemonOutOfDate: () => ({ data: false }),
     }));
@@ -180,7 +186,8 @@ describe("DaemonOfflineBanner (desktop restart branch)", () => {
       restartDaemon: restartDaemonMock,
       connectToShellDaemon: connectMock,
     }));
-    vi.doMock("@/lib/hooks/useDaemon", () => ({
+    vi.doMock("@/lib/hooks/useDaemon", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("@/lib/hooks/useDaemon")>()),
       useDaemonStatus: () => ({ isError: true, error: new Error("offline") }),
       useDaemonOutOfDate: () => ({ data: false }),
     }));

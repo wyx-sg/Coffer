@@ -4,7 +4,7 @@
 // to render. The event-folding reducer lives in ./chatTurnEvents.
 //
 // API:
-//   const { send, isStreaming, liveMessage, error, clearError,
+//   const { send, isStreaming, liveMessage, pendingEchoes, error, clearError,
 //           interrupt, pending, setPending } = useChatTurn(convId);
 //
 // The subscription is opened on the active conversation and stays open across
@@ -18,10 +18,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { subscribeConversationEvents } from "@/lib/chat/streamClient";
 import { chatApi, type Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import { CONVERSATIONS_KEY, messagesKey } from "./useConversations";
-import { type LiveMessage, handleEvent } from "./chatTurnEvents";
+import { conversationsKey, messagesKey } from "@/lib/api/queryKeys";
+import {
+  type LiveMessage,
+  type PendingEcho,
+  createEcho,
+  handleEvent,
+  reconcileEchoes,
+  subscribeMessagesCache,
+} from "./chatTurnEvents";
 
-export type { LiveMessage } from "./chatTurnEvents";
+export type { LiveMessage, PendingEcho } from "./chatTurnEvents";
 
 // A mid-turn stream drop is recovered by re-subscribing (GET /events replays the
 // in-flight turn), bounded so a hard failure can't hammer the endpoint.
@@ -35,6 +42,12 @@ export interface UseChatTurnResult {
   isStreaming: boolean;
   /** Live partial message — non-null while streaming (and briefly after). */
   liveMessage: LiveMessage | null;
+  /**
+   * Prompts this client sent whose persisted user rows have not been fetched
+   * yet, in send order. The thread renders them after the fetched messages;
+   * the hook retires each one when its row lands (see chatTurnEvents).
+   */
+  pendingEchoes: PendingEcho[];
   /** Latest error from a failed send/stream. */
   error: Error | null;
   /** Clear any error to allow a retry. */
@@ -53,6 +66,23 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
   const [liveMessage, setLiveMessage] = useState<LiveMessage | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [pending, setPendingState] = useState<string[]>([]);
+  const [echoes, setEchoes] = useState<PendingEcho[]>([]);
+
+  // Mirror of isStreaming for send(): a message sent while a turn is in flight
+  // is queued server-side and shown by the queue chip, so it gets no echo.
+  const isStreamingRef = useRef(false);
+  useEffect(() => {
+    isStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  // Retire echoes as their persisted rows land — on every fill of the messages
+  // cache (turn_start / turn_done / send refetches, window refocus, ...).
+  useEffect(() => {
+    if (!conversationId) return;
+    return subscribeMessagesCache(qc, conversationId, (rows) => {
+      setEchoes((prev) => reconcileEchoes(prev, rows));
+    });
+  }, [conversationId, qc]);
 
   // Complete-reply count captured at turn_start (see chatTurnEvents) to detect a
   // new reply landing before dropping the live bubble. A ref so the subscription
@@ -72,6 +102,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     setLiveMessage(null);
     setError(null);
     setPendingState([]);
+    setEchoes([]);
     priorReplyCountRef.current = 0;
 
     // Reconcile against the persisted messages once the stream ends. Returns
@@ -130,6 +161,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
               setIsStreaming,
               setLiveMessage,
               setPendingState,
+              setEchoes,
               setError,
               isCancelled: () => cancelled,
             });
@@ -142,10 +174,15 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
           const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
           setError(wrapped);
           setIsStreaming(false);
-          // Drop the bubble once the reply is committed; otherwise keep what
-          // streamed but stop it "thinking" — the error banner owns the state.
-          if (await replyHasLanded()) setLiveMessage(null);
-          else setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : prev));
+          // Drop the bubble (and the echoes its refetch settled) once the reply
+          // is committed; otherwise keep what streamed but stop it "thinking" —
+          // the error banner owns the state.
+          if (await replyHasLanded()) {
+            setLiveMessage(null);
+            setEchoes([]);
+          } else {
+            setLiveMessage((prev) => (prev ? { ...prev, streaming: false } : prev));
+          }
           return;
         }
 
@@ -155,6 +192,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
           // The turn finished and its reply is committed — drop the stale bubble.
           setIsStreaming(false);
           setLiveMessage(null);
+          setEchoes([]);
           return;
         }
         if (!turnInFlight || reconnects >= MAX_STREAM_RECONNECTS) {
@@ -180,17 +218,26 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
       // Fire-and-return: NEVER blocks on an in-flight turn. A second message sent
       // mid-turn is queued server-side and surfaced via queue_changed.
       setError(null);
-      // Optimistic echo so the prompt is visible immediately. If a turn is
-      // already streaming the reply belongs to the earlier prompt, so keep the
-      // existing live bubble and only fill in the echo when there is none.
-      setLiveMessage(
-        (prev) => prev ?? { userText: text, text: "", toolBlocks: [], streaming: false },
-      );
+      // Optimistic echo so the prompt is visible immediately. Not while a turn
+      // streams: that send is queued and the queue chip shows it. The echo
+      // remembers what this client had already fetched so its own row — and
+      // never an older identical prompt — retires it.
+      const echo = isStreamingRef.current
+        ? null
+        : createEcho(text, qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? []);
+      if (echo) setEchoes((prev) => [...prev, echo]);
+      const dropEcho = () => {
+        if (echo) setEchoes((prev) => prev.filter((e) => e.id !== echo.id));
+      };
       try {
-        await chatApi.sendMessage(conversationId, text);
+        const ack = await chatApi.sendMessage(conversationId, text);
+        // Queued behind a turn this client did not know about: no row exists
+        // yet and the queue chip owns the message until its turn starts.
+        if (ack.queued) dropEcho();
       } catch (err) {
         const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
         setError(wrapped);
+        dropEcho();
       } finally {
         // Refresh the conversation list (first turn auto-titles it) AND the
         // messages. The messages refetch is the safety net for the draft→first-
@@ -198,7 +245,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
         // bus ring buffer is already cleared), turn_start/turn_done never fire on
         // this client, so nothing else would load the committed user message and
         // reply — leaving the optimistic echo stranded.
-        void qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
+        void qc.invalidateQueries({ queryKey: conversationsKey });
         void qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
       }
     },
@@ -235,6 +282,7 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     send,
     isStreaming,
     liveMessage,
+    pendingEchoes: echoes,
     error,
     clearError,
     interrupt,

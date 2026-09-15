@@ -12,34 +12,11 @@ agent) and in tests (fakes).
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass
 from typing import Any, Protocol
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Message
-
-
-@dataclass(frozen=True)
-class ToolSpec:
-    """Describes a single tool exposed by the MCP gateway.
-
-    Not part of the frozen platform seam — ``ToolGateway`` / ``ToolSpec`` are an
-    infrastructure-side collaborator of the built-in agent, injected into its
-    adapter at build time. Other agents need not use them.
-    """
-
-    name: str
-    description: str
-    input_schema: dict[str, Any]
-
-
-class ToolGateway(Protocol):
-    """The built-in agent's view of Coffer's aggregated tool surface."""
-
-    async def list_tools(self) -> list[ToolSpec]: ...
-
-    async def call_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class AgentAdapter(Protocol):
@@ -101,3 +78,38 @@ class AgentProvider(Protocol):
     async def availability(self) -> bool:
         """Whether this agent can currently be picked for a new conversation."""
         ...
+
+
+class CatalogueModel(Protocol):
+    """One model an agent can be put on, as the agent itself reports it.
+
+    Structural mirror of the agent kind's ``AgentModel`` — the chat surface
+    reads these five fields and nothing else."""
+
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def label(self) -> str: ...
+
+    @property
+    def description(self) -> str: ...
+
+    @property
+    def efforts(self) -> Sequence[str]: ...
+
+    @property
+    def default_effort(self) -> str | None: ...
+
+
+class ModelCatalogPort(Protocol):
+    """The models each registered agent can be put on.
+
+    Answered by the agent kind (its catalogue service reads the agent's own
+    executable, RPC and config), consumed by the turn platform's
+    ``/agent-providers/{agent_key}/models`` route. Declared here so the chat
+    kind never imports the agent kind: the composition root hands the agent
+    service in, and it satisfies this port structurally.
+    """
+
+    async def catalogue(self, agent_key: str) -> Sequence[CatalogueModel]: ...

@@ -114,6 +114,11 @@ class SyncExporter:
             except Exception as e:
                 summary.failures.append((f"state/{provider.area}", str(e)))
                 continue
+            if self._home:
+                # The same ``${HOME}`` rule a resource document gets: a state
+                # area is as free to carry a path as a config is.
+                home = self._home
+                area_docs = [(rel, normalize_home(doc, home)) for rel, doc in area_docs]
             state_docs.append((provider.area, area_docs))
 
         blobs: dict[str, bytes] = {}

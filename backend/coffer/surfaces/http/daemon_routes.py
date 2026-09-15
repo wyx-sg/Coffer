@@ -7,6 +7,7 @@ import os
 import secrets
 import signal
 import stat
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -19,8 +20,14 @@ from coffer.application.log_reader import matches_level, parse_log_lines, tail_l
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.surfaces.http.auth import require_token, set_active_token
-from coffer.surfaces.http.dependencies import get_actor, get_audit_service
+from coffer.surfaces.http.dependencies import (
+    get_actor,
+    get_audit_service,
+    get_resource_service_optional,
+)
+from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 from coffer.surfaces.http.schemas import (
     DaemonLogListOut,
     DaemonLogRecordOut,
@@ -28,10 +35,6 @@ from coffer.surfaces.http.schemas import (
     TokenRotationOut,
     UpstreamSummary,
 )
-
-# Avoid importing kind-specific modules at module level (Contract 6).
-# We access the health repo through the same module-level variable pattern
-# used by _get_optional_resource_service below.
 
 router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
 
@@ -72,24 +75,13 @@ def set_started_at(started_at: datetime) -> None:
     _STARTED_AT = started_at
 
 
-def _get_optional_resource_service() -> ResourceService | None:
-    """Return resource service if initialised, else None (e.g. during startup)."""
-    from coffer.surfaces.http import dependencies as _deps
-
-    return _deps._resource_service
-
-
-def _get_optional_health_repo() -> Any:
-    """Return health repo if initialised, else None (e.g. during startup)."""
-    from coffer.surfaces.http import dependencies as _deps
-
-    return _deps._health_repo
-
-
 @router.get("/status", response_model=DaemonStatusOut)
 async def get_status(
-    resource_service: ResourceService | None = Depends(_get_optional_resource_service),  # noqa: B008
-    health_repo: Any | None = Depends(_get_optional_health_repo),  # noqa: B008
+    # Both are the ``*_optional`` seams, not the raising getters: /status is the
+    # readiness probe and must answer during startup, before the composition
+    # root has published either singleton.
+    resource_service: ResourceService | None = Depends(get_resource_service_optional),  # noqa: B008
+    health_repo: MCPServerHealthRepo | None = Depends(get_health_repo_optional),  # noqa: B008
 ) -> DaemonStatusOut:
     phase = get_daemon_phase()
     upstream_summary: UpstreamSummary | None = None
@@ -105,8 +97,7 @@ async def get_status(
             healthy = 0
             unhealthy = 0
             if health_repo is not None:
-                health_rows: list[tuple[str, str]] = await health_repo.list_all()
-                health_by_name = dict(health_rows)
+                health_by_name = dict(await health_repo.list_all())
                 registered_names = {r.name for r in resources}
                 for name in registered_names:
                     st = health_by_name.get(name)
@@ -130,6 +121,10 @@ async def get_status(
         # it reuses report different versions and the skew is detectable
         # client-side (P2) instead of silently passing.
         version=coffer.__version__,
+        # Which build is answering: the frozen binary's path, or the interpreter
+        # of a run-from-source daemon. Lets a caller that finds a version
+        # mismatch say which daemon it attached to, not merely that one exists.
+        executable=sys.executable,
         started_at=_STARTED_AT,
         port=_PORT,
         upstream_summary=upstream_summary,

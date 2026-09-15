@@ -11,12 +11,11 @@ import {
 } from "@/lib/api/providers";
 import { resourcesApi } from "@/lib/api/resources";
 import { useToast } from "@/components/ui/toast";
+import { providerKey, providersKey } from "@/lib/api/queryKeys";
 
-const PROVIDERS_KEY = ["providers"] as const;
 /** A connection is a resource of this kind — enable/disable goes through the
  *  kind-agnostic resource endpoints. */
 const PROVIDER_KIND = "provider";
-export const providerKey = (name: string) => ["providers", name] as const;
 
 /** Shared onError → toast handler — a failed mutation must never be silent. */
 function useProviderToastError() {
@@ -27,12 +26,12 @@ function useProviderToastError() {
 
 export function useProviders() {
   return useQuery({
-    queryKey: PROVIDERS_KEY,
+    queryKey: providersKey,
     queryFn: async () => (await providersApi.list()).providers,
   });
 }
 
-/** One connection, for its detail page. The key extends PROVIDERS_KEY so the
+/** One connection, for its detail page. The key extends providersKey so the
  *  list-level invalidation every mutation already does refreshes it too. */
 export function useProvider(name: string) {
   return useQuery({
@@ -51,7 +50,7 @@ function useProviderResourceToggle(mutate: (kind: string, name: string) => Promi
   return useMutation({
     mutationFn: (name: string) => mutate(PROVIDER_KIND, name),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });
@@ -71,7 +70,7 @@ export function useCreateProvider() {
   return useMutation({
     mutationFn: (body: ProviderCreate) => providersApi.create(body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
   });
 }
@@ -83,7 +82,7 @@ export function useUpdateProvider() {
     mutationFn: (vars: { name: string; patch: ProviderPatch }) =>
       providersApi.update(vars.name, vars.patch),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });
@@ -101,7 +100,7 @@ export function useRenameProvider() {
       providersApi.rename(vars.name, vars.newName),
     onSuccess: (_data, vars) => {
       qc.removeQueries({ queryKey: providerKey(vars.name) });
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });
@@ -113,7 +112,7 @@ export function useDeleteProvider() {
   return useMutation({
     mutationFn: (name: string) => providersApi.remove(name),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });
@@ -127,7 +126,7 @@ export function useActivateProvider() {
   return useMutation({
     mutationFn: (name: string) => providersApi.activate(name),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });
@@ -141,7 +140,7 @@ export function useUseBuiltinProvider() {
   return useMutation({
     mutationFn: (wire: Protocol) => providersApi.useBuiltin(wire),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });
@@ -154,7 +153,7 @@ export function useSetInternalDefaultProvider() {
   return useMutation({
     mutationFn: (name: string) => providersApi.setInternalDefault(name),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: PROVIDERS_KEY });
+      qc.invalidateQueries({ queryKey: providersKey });
     },
     onError,
   });

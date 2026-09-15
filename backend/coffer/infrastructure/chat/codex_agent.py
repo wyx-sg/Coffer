@@ -24,6 +24,8 @@ from typing import Any
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    STREAM_ENDED,
+    STREAM_ENDED_MESSAGE,
     AgentEvent,
     TurnDone,
     TurnError,
@@ -220,7 +222,7 @@ class CodexAppServerAdapter:
             # terminal event ends the drain. The iterator ends when the RPC
             # stream reaches EOF so a turn that never sends ``turn/completed``
             # still terminates (the ``_stream`` tail then synthesizes a
-            # ``TurnDone``).
+            # ``stream_ended`` error).
             try:
                 async for method, params in _notifications_until_eof(rpc):
                     for event in map_codex_notification(method, params, state):
@@ -272,13 +274,13 @@ class CodexAppServerAdapter:
                 await session.close()
 
         if not state.terminal_emitted:
-            # The stream ended without a turn/completed — synthesize a terminal
-            # so the orchestrator never hangs waiting for one.
-            yield TurnDone(
-                prompt_tokens=state.prompt_tokens,
-                completion_tokens=state.completion_tokens,
-                stop_reason="end_turn",
-            )
+            # The stream ended without a turn/completed — the agent process went
+            # away mid-turn (crashed, was killed, lost its connection). That is
+            # a failure, not a finished answer: a ``TurnDone`` here would put a
+            # ✅ on a reply that may stop mid-sentence. Synthesize a terminal
+            # ERROR so the orchestrator never hangs and the outcome is honest;
+            # whatever text streamed before the cut is still delivered with it.
+            yield TurnError(code=STREAM_ENDED, message=STREAM_ENDED_MESSAGE)
 
 
 async def _notifications_until_eof(

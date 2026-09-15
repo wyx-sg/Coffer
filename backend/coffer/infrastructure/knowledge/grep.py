@@ -5,6 +5,11 @@ fallback mode but the mechanism: it matches bytes, which means CJK matches
 without a tokenizer, and it reads the files themselves, which means a human's
 edit needs no import step to be findable.
 
+Ripgrep is preferred, not required. A machine without ``rg`` on its PATH gets
+the same search from ``grep_fallback`` — the same files, the same regex
+semantics, the same bounds — walked in Python and therefore slower. The
+switch is logged once so a slow search has a visible cause (FR-022).
+
 ``--no-hidden`` is passed explicitly even though it is ripgrep's default,
 because a user's ``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on
 underneath us and start answering with the revisions in ``.history/`` (FR-052).
@@ -21,11 +26,28 @@ import shutil
 from coffer.domain.errors import EngineUnavailable, GrepPatternInvalid
 from coffer.domain.knowledge.entry import GrepMatch, GrepOutcome
 from coffer.infrastructure.knowledge import paths
+from coffer.infrastructure.knowledge.grep_fallback import grep_tree
 
 DEFAULT_MAX_MATCHES = 200
 DEFAULT_TIMEOUT_S = 5.0
 
 _logger = logging.getLogger(__name__)
+
+#: Whether the "no ripgrep, searching in Python" notice has been logged. Once
+#: per process: the fact does not change between calls, and a line per search
+#: would bury the log.
+_fallback_noted = False
+
+
+def _note_fallback() -> None:
+    global _fallback_noted
+    if _fallback_noted:
+        return
+    _fallback_noted = True
+    _logger.info(
+        "knowledge.grep.fallback",
+        extra={"detail": "ripgrep (rg) is not on PATH; searching in Python, which is slower"},
+    )
 
 
 class RipgrepSearch:
@@ -41,13 +63,14 @@ class RipgrepSearch:
         *,
         max_matches: int = DEFAULT_MAX_MATCHES,
     ) -> GrepOutcome:
-        rg = shutil.which("rg")
-        if rg is None:
-            raise EngineUnavailable("ripgrep", "the 'rg' binary is not on PATH")
         present = [r for r in roots if r.exists()]
         if not present:
             return GrepOutcome()
         cap = max(1, max_matches)
+        rg = shutil.which("rg")
+        if rg is None:
+            _note_fallback()
+            return await self._grep_in_python(present, pattern, cap)
         args = [
             rg,
             "--json",
@@ -83,6 +106,23 @@ class RipgrepSearch:
             detail = stderr.decode("utf-8", errors="replace").strip().splitlines()
             raise GrepPatternInvalid(pattern, detail[0] if detail else "ripgrep error")
         matches = _parse(stdout.decode("utf-8", errors="replace"), cap + 1)
+        return GrepOutcome(matches=tuple(matches[:cap]), truncated=len(matches) > cap)
+
+    async def _grep_in_python(
+        self, roots: list[pathlib.Path], pattern: str, cap: int
+    ) -> GrepOutcome:
+        """The same search without ``rg``, off the event loop.
+
+        The walk is synchronous file I/O, so it runs in a worker thread; it
+        stops itself at the timeout rather than being cancelled, and reports
+        that stop as truncation exactly as the ``rg`` path does.
+        """
+        matches, timed_out = await asyncio.to_thread(
+            grep_tree, roots, pattern, cap + 1, timeout_s=self._timeout
+        )
+        if timed_out:
+            _logger.warning("knowledge.grep.timeout", extra={"timeout_s": self._timeout})
+            return GrepOutcome(truncated=True)
         return GrepOutcome(matches=tuple(matches[:cap]), truncated=len(matches) > cap)
 
 

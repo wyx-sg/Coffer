@@ -5,26 +5,29 @@ acquires the port + token before uvicorn binds. The lifespan here reads
 daemon.json back to set the auth token + port, runs Alembic migrations,
 wires services, and starts the background workers.
 
+Every wiring step below RETURNS what it built, and the next step takes it as
+a parameter: the order the lifespan reads in is the dependency order, and a
+step cannot run before what it needs exists. ``app.state`` carries only two
+final results that routes and tests read (``kinds``, ``mcp_session_supervisors``).
+
 In-process tests can call `create_app()` directly and override
 `set_active_token(...)` manually if they want authenticated calls.
 
 MCP-specific composition (upstream factory, session supervisors,
 prunable registry, reaper env knobs) lives in
-:mod:`coffer.surfaces.http.app_mcp_composition` to keep this file under
-the 400-line guideline.
-
-Credential-store DI singletons and the master-key bootstrap live in
-:mod:`coffer.surfaces.http.credential_composition` for the same reason.
+:mod:`coffer.surfaces.http.app_mcp_composition`; credential-store DI
+singletons and the master-key bootstrap in
+:mod:`coffer.surfaces.http.credential_composition` — both for the 400-line
+guideline.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import os
 import pathlib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -52,9 +55,7 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.infrastructure.sync.identity import coffer_dir
 from coffer.surfaces.http import cors, daemon_routes, host_guard, webui
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.agent_skill_wiring import (
-    run_skill_drift_boot_heal,
-)
+from coffer.surfaces.http.agent_skill_wiring import run_skill_drift_boot_heal
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
@@ -62,15 +63,13 @@ from coffer.surfaces.http.app_mcp_composition import (
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.background_workers import start_background_workers
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
+from coffer.surfaces.http.chat_wiring import wire_chat
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     make_credential_resolver,
     run_legacy_keychain_migration,
 )
 from coffer.surfaces.http.dependencies import (
-    get_invocation_repo_optional,
-    get_mcp_session_factory,
-    get_provider_service,
     set_audit_service,
     set_internal_engine_config_service,
     set_resource_service,
@@ -82,18 +81,14 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.memory_wiring import (
-    stop_organise_worker,
-)
+from coffer.surfaces.http.memory_wiring import stop_organise_worker
 from coffer.surfaces.http.migrations_runner import run_migrations
-from coffer.surfaces.http.provider_wiring import (
-    run_provider_projection_sweep,
-)
+from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
+from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_wiring import stop_converge_worker
 from coffer.surfaces.http.tidy_wiring import stop_tidy_worker, wire_tidy
-from coffer.surfaces.http.wiring import wire_chat
 
 
 def _db_url() -> str:
@@ -108,6 +103,45 @@ def _daemon_json_path() -> pathlib.Path:
 
 
 _logger = logging.getLogger(__name__)
+
+
+async def _best_effort(step: str, awaitable: Awaitable[object]) -> None:
+    """One teardown step that must not abort the steps after it.
+
+    A failure is a WARNING with the traceback — never silent. Cancellation is
+    DEBUG: every task here was cancelled by this very teardown, so seeing it
+    acknowledge is the expected outcome, not a fault.
+    """
+    try:
+        await awaitable
+    except asyncio.CancelledError:
+        _logger.debug("shutdown.%s.cancelled", step)
+    except Exception:
+        _logger.warning("shutdown.%s.failed", step, exc_info=True)
+
+
+def _publish_daemon_identity() -> None:
+    """Read token + port + started_at if daemon.json exists (set by entry.py
+    BEFORE uvicorn starts). Absent is fine — an in-process app (tests,
+    `uvicorn coffer.main:app`) has no discovery file. Present-but-unreadable
+    is a real fault and MUST fail startup: swallowing it left the token unset,
+    so every authenticated route answered 503 while /daemon/status said
+    "ready"."""
+    json_path = _daemon_json_path()
+    if not json_path.exists():
+        return
+    try:
+        info = read_daemon_json(json_path)
+    except (ValueError, KeyError, OSError) as exc:
+        _logger.error(
+            "daemon.json at %s is unreadable (%r); refusing to start without a token",
+            json_path,
+            exc,
+        )
+        raise RuntimeError(f"daemon.json at {json_path} is unreadable: {exc}") from exc
+    set_active_token(info.token)
+    daemon_routes.set_port(info.port)
+    daemon_routes.set_started_at(info.started_at)
 
 
 @asynccontextmanager
@@ -134,11 +168,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     sm = session_maker(engine)
 
     db_path = pathlib.Path(_db_url().split("///", 1)[1]).expanduser()
-    credential_store = await init_credential_store(engine, db_path)
+    credentials = await init_credential_store(engine, db_path)
+    credential_store = credentials.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
-    # search/ingest, the tidy pass) shares one resolver rather than each
-    # re-wrapping the same store.
-    _credential_resolver = make_credential_resolver(credential_store)
+    # ingest, the tidy pass, the memory organise pass, the sync conflict
+    # resolver) shares one resolver rather than each re-wrapping the store.
+    credential_resolver = make_credential_resolver(credential_store)
 
     audit_repo = SqlAlchemyAuditRepo(sm)
     resource_repo = SqlAlchemyResourceRepo(sm)
@@ -166,8 +201,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     retention_svc = build_retention_service(sm, audit=audit)
     await retention_svc.initialize_defaults()
-    # Also registers the engine-settings synced state area (spec vault-sync).
-    internal_engine_config_svc = build_config_services(app, sm, audit)
+    # What each kind contributes to vault convergence (spec vault-sync),
+    # collected as wiring proceeds and handed to ``start_sync`` at the end.
+    sync_contributions = SyncContributions()
+    # Also registers the engine-settings synced state area.
+    internal_engine_config_svc = build_config_services(sm, audit, sync_contributions)
 
     set_resource_service(resource_svc)
     set_audit_service(audit)
@@ -185,33 +223,41 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         builtin_tools, audit_repo=audit_repo, log_path=lambda: log_dir() / "daemon.log"
     )
 
-    knowledge_service, process_supervisor, session_supervisors = await wire_resource_kinds(
+    # Every resource kind, in dependency order (see kind_wiring).
+    kinds = await wire_resource_kinds(
         app,
         resource_svc=resource_svc,
         audit=audit,
         sm=sm,
         builtin_tools=builtin_tools,
         credential_store=credential_store,
-        credential_resolver=_credential_resolver,
+        credential_resolver=credential_resolver,
+        sync=sync_contributions,
     )
 
     # Wire the chat feature (spec channels). Must come AFTER all other wiring so the
     # coffer-builtin-agent gateway session sees the fully-populated
-    # BuiltinToolRegistry (knowledge + skill + MCP tools). The session factory
-    # is the one wire_mcp_kind registered via set_mcp_session_factory.
-    chat_gateway_session = wire_chat(sm, get_mcp_session_factory(), credential_store)
+    # BuiltinToolRegistry (knowledge + skill + MCP tools); the session factory
+    # and the agent service are the kinds' own results.
+    chat = wire_chat(
+        sm, kinds.mcp.session_factory, credential_store, kinds.agent_skill.agent_service
+    )
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
-    app.state.mcp_session_supervisors = session_supervisors
+    # Kept on app.state: an integration test asserts the registry's contents.
+    app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
     # Another internal-LLM knowledge consumer: the tidy pass over a collection.
-    # Reuses the resolver built above; `start_tidy_worker` further down decides
-    # whether it ever fires by itself.
-    wire_tidy(app, knowledge_service, get_provider_service(), _credential_resolver)
+    # Same model selector the knowledge kind built for ingest; the worker in
+    # `start_background_workers` decides whether it ever fires by itself.
+    tidy_pass = wire_tidy(kinds.knowledge.models, credential_resolver)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
-    # drives turns through the chat service handles wire_chat published.
-    channel_runtime = wire_channel_kind(app, resource_svc, audit, sm, credential_store)
+    # drives turns through the chat platform's handles, and `/save` through the
+    # knowledge kind's.
+    channel_runtime = wire_channel_kind(
+        app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge
+    )
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
     # (best-effort; see credential_composition for the mechanics).
@@ -219,52 +265,44 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Boot heals — best-effort, never allowed to fail startup (see
     # provider_wiring / agent_skill_wiring for what each corrects).
-    await run_provider_projection_sweep(app)
-    await run_skill_drift_boot_heal(app)
+    await run_provider_projection_sweep(kinds.provider.boot_heal)
+    await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
-    _inv_repo = get_invocation_repo_optional()
-    if _inv_repo is not None:
-        await _inv_repo.start()
+    await kinds.mcp.invocation_repo.start()
 
-    # Read token + port + started_at if daemon.json exists (set by entry.py BEFORE uvicorn starts).
-    json_path = _daemon_json_path()
-    if json_path.exists():
-        try:
-            info = read_daemon_json(json_path)
-            set_active_token(info.token)
-            daemon_routes.set_port(info.port)
-            daemon_routes.set_started_at(info.started_at)
-        except (ValueError, KeyError, OSError):
-            pass
+    _publish_daemon_identity()
 
     # Frozen builds only; no-op from source (FR-026, see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
-    start_background_workers(
-        app,
+    workers = start_background_workers(
         retention_svc=retention_svc,
-        knowledge_service=knowledge_service,
+        knowledge_service=kinds.knowledge.service,
+        tidy_pass=tidy_pass,
+        organise=kinds.memory.organise,
         resource_svc=resource_svc,
         audit=audit,
+        engine_config=internal_engine_config_svc,
+        provider_service=kinds.provider.service,
+        credential_resolver=credential_resolver,
         db_path=db_path,
         sm=sm,
         credential_store=credential_store,
+        master_key=credentials.master_key,
+        sync_contributions=sync_contributions,
     )
 
     # Channel adapter reconciler (spec channels). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
     # credentials on its first tick.
     channel_runtime_task = asyncio.create_task(channel_runtime.run())
-    app.state.channel_runtime = channel_runtime
-    app.state.channel_runtime_task = channel_runtime_task
 
     # Reap /mcp sessions that have been idle past the threshold. Without this
     # a downstream client that never closes its SSE stream would leak its
     # session + per-session supervisor + upstream subprocesses indefinitely.
     reaper_task = start_session_reaper(**reaper_kwargs_from_env())
-    app.state.mcp_session_reaper_task = reaper_task
 
     # T3: set lifecycle phase
     daemon_routes.set_daemon_phase("ready")
@@ -273,49 +311,43 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         daemon_routes.set_daemon_phase("draining")
-        app.state.retention_worker.stop()
-        await stop_converge_worker(app)
-        await stop_tidy_worker(app)
-        await stop_organise_worker(app)
+        workers.retention_worker.stop()
+        await stop_converge_worker(workers.converge_worker)
+        await stop_tidy_worker(workers.tidy_task)
+        await stop_organise_worker(workers.organise_task)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;
-        # everything is suppressed so a dead reconciler (stored exception)
+        # every step is best-effort so a dead reconciler (stored exception)
         # can never abort the rest of this teardown.
         channel_runtime.stop()
         channel_runtime_task.cancel()
-        with contextlib.suppress(BaseException):
-            await asyncio.wait_for(channel_runtime_task, timeout=2.0)
-        with contextlib.suppress(Exception):
-            await channel_runtime.dispose()
-        # Best-effort shutdown
-        retention_task = app.state.retention_worker_task
+        await _best_effort("channel_runtime", asyncio.wait_for(channel_runtime_task, timeout=2.0))
+        await _best_effort("channel_runtime.dispose", channel_runtime.dispose())
+        # The retention worker was asked to stop above; give it a grace period
+        # to finish an in-flight prune, then cancel it.
         try:
-            await asyncio.wait_for(retention_task, timeout=2.0)
-        except (TimeoutError, asyncio.CancelledError):
-            retention_task.cancel()
+            await asyncio.wait_for(workers.retention_task, timeout=2.0)
+        except TimeoutError:
+            _logger.warning("shutdown.retention_worker.grace_expired; cancelling")
+            workers.retention_task.cancel()
+        except asyncio.CancelledError:
+            _logger.debug("shutdown.retention_worker.cancelled")
+            workers.retention_task.cancel()
         reaper_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await reaper_task
+        await _best_effort("mcp_session_reaper", reaper_task)
         # Drain the buffered invocation writer before tearing down sessions.
-        _inv_repo = get_invocation_repo_optional()
-        if _inv_repo is not None:
-            with contextlib.suppress(Exception):
-                await _inv_repo.stop()
+        await _best_effort("invocation_repo", kinds.mcp.invocation_repo.stop())
         # Dispose the built-in agent's chat gateway session first (best-effort);
         # its on_dispose callback removes its entry from session_supervisors.
-        with contextlib.suppress(Exception):
-            await chat_gateway_session.dispose()
+        await _best_effort("chat_gateway_session", chat.gateway_session.dispose())
         # Dispose MCP supervisors (best-effort)
-        with contextlib.suppress(Exception):
-            await process_supervisor.dispose()
-        for sup in list(session_supervisors.values()):
-            with contextlib.suppress(Exception):
-                await sup.dispose()
-        session_supervisors.clear()
+        await _best_effort("process_supervisor", kinds.mcp.process_supervisor.dispose())
+        for session_id, sup in list(kinds.mcp.session_supervisors.items()):
+            await _best_effort(f"session_supervisor[{session_id}]", sup.dispose())
+        kinds.mcp.session_supervisors.clear()
         # Close per-/mcp/-session state in the protocol routes
-        with contextlib.suppress(Exception):
-            await shutdown_all_sessions()
+        await _best_effort("mcp_sessions", shutdown_all_sessions())
         # The knowledge service holds no long-lived handles (the directory is
         # session-maker-bound + lazy), so only the shared engine needs disposal.
         await engine.dispose()

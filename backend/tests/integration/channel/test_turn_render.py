@@ -140,6 +140,27 @@ async def test_error_turn_ends_with_a_failed_summary() -> None:
     assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
 
 
+@pytest.mark.acceptance(spec="channels", scenario="an errored turn still delivers what it streamed")
+async def test_error_turn_still_delivers_what_was_streamed_before_it() -> None:
+    # A turn that streamed half an answer and then died (stream_ended, a
+    # timeout, a provider error) owes the user that half: it is delivered
+    # first, the failure notice under it — the interrupted path's shape.
+    adapter = FakeChannelAdapter(supports_edit=False)
+    events = [
+        TextDelta(text="The answer is "),
+        TextDelta(text="forty-two, because"),
+        TurnError(code="stream_ended", message="the agent stopped responding"),
+    ]
+
+    await _render(adapter, events)
+
+    assert adapter.sent[0] == (
+        "owner",
+        "The answer is forty-two, because\n\n⚠️ the agent stopped responding [stream_ended]",
+    )
+    assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
+
+
 async def test_interrupted_turn_ends_with_a_stopped_summary() -> None:
     adapter = FakeChannelAdapter(supports_edit=False)
     events = [

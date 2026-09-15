@@ -1,63 +1,106 @@
 """Start the daemon's background workers, in one place.
 
-Four timers that outlive a request: retention pruning, the knowledge tidy pass,
-the memory organise pass, and the vault converge round. They are gathered here
-rather than inlined in the lifespan because each needs a different slice of the
-graph, and reading which worker gets what is the only reason to look at this
-code at all.
+Four timers that outlive a request: retention pruning, the vault converge
+round, the knowledge tidy pass, and the memory organise pass. They are gathered
+here rather than inlined in the lifespan because each needs a different slice
+of the graph, and reading which worker gets what is the only reason to look at
+this code at all.
 
-Order matters once: sync is wired before its worker starts, and the tidy worker
-is started before sync only in the sense that it reads ``app.state`` lazily —
-it takes the converge round's lock through ``app.state.sync_service``, which
-``start_sync`` has published by the time a tick actually runs.
+Order matters once: sync is wired before the tidy worker starts, because the
+tidy worker takes the converge round's lock, this machine's identity and the
+pending-round state from the sync graph — as parameters, not by looking them up
+later. Nothing in ``start_sync`` depends on tidy.
 """
 
 from __future__ import annotations
 
 import asyncio
 import pathlib
-from typing import Any
+from collections.abc import Callable
+from dataclasses import dataclass
 
-from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.audit_service import AuditService
+from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.knowledge.service import KnowledgeService
+from coffer.application.knowledge.tidy import TidyPass
+from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
+from coffer.application.sync.worker import ConvergeWorker
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.logging.files import prune_log_dir
-from coffer.surfaces.http.credential_composition import get_master_key_manager
+from coffer.surfaces.http.memory.organise_state import OrganiseRunner
 from coffer.surfaces.http.memory_wiring import start_organise_worker
-from coffer.surfaces.http.sync_wiring import start_converge_worker, start_sync
+from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.sync_wiring import SyncWiring, start_converge_worker, start_sync
 from coffer.surfaces.http.tidy_wiring import start_tidy_worker
 
 
+@dataclass(frozen=True)
+class BackgroundWorkers:
+    """Every long-lived worker the lifespan must stop, plus the sync graph
+    (returned so the lifespan can see what the tidy worker was given)."""
+
+    retention_worker: RetentionWorker
+    retention_task: asyncio.Task[None]
+    sync: SyncWiring
+    converge_worker: ConvergeWorker
+    tidy_task: asyncio.Task[None]
+    organise_task: asyncio.Task[None]
+
+
 def start_background_workers(
-    app: FastAPI,
     *,
     retention_svc: RetentionService,
     knowledge_service: KnowledgeService,
+    tidy_pass: TidyPass,
+    organise: OrganiseRunner,
     resource_svc: ResourceService,
     audit: AuditService,
+    engine_config: InternalEngineConfigService,
+    provider_service: ProviderService,
+    credential_resolver: Callable[[str], str],
     db_path: pathlib.Path,
-    sm: Any,
-    credential_store: Any,
-) -> None:
-    worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
-    app.state.retention_worker = worker
-    app.state.retention_worker_task = asyncio.create_task(worker.run())
-
-    # The notes tidy pass: on idle after a write, and on a periodic sweep.
-    start_tidy_worker(app, knowledge_service)
-    start_organise_worker(app, resource_svc)
+    sm: async_sessionmaker[AsyncSession],
+    credential_store: EncryptedCredentialStore,
+    master_key: MasterKeyManager,
+    sync_contributions: SyncContributions,
+) -> BackgroundWorkers:
+    retention_worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
+    retention_task = asyncio.create_task(retention_worker.run())
 
     # Vault sync (spec vault-sync): a converge round on a timer beside the
     # retention worker, re-reading its interval from the configured remote. It
-    # is a no-op until the user configures one.
-    start_converge_worker(
-        app,
-        start_sync(
-            app, resource_svc, audit, db_path, get_master_key_manager(), sm, credential_store
-        ),
+    # is a no-op until the user configures one. Wired FIRST among the vault
+    # rewriters: the tidy worker below takes its lock and state.
+    sync = start_sync(
+        resource_svc,
+        audit,
+        db_path,
+        master_key,
         sm,
+        credential_store,
+        sync_contributions,
+        # The conflict resolver rides the same internal connection every other
+        # internal-LLM consumer uses; ``ProviderService`` IS its model port.
+        models=provider_service,
+        credential_resolver=credential_resolver,
+    )
+    converge_worker = start_converge_worker(sync, sm)
+
+    # The notes tidy pass: on idle after a write, and on a periodic sweep.
+    tidy_task = start_tidy_worker(knowledge_service, tidy_pass, resource_svc, engine_config, sync)
+    organise_task = start_organise_worker(organise, resource_svc)
+
+    return BackgroundWorkers(
+        retention_worker=retention_worker,
+        retention_task=retention_task,
+        sync=sync,
+        converge_worker=converge_worker,
+        tidy_task=tidy_task,
+        organise_task=organise_task,
     )

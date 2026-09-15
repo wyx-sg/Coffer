@@ -57,6 +57,9 @@ class AuditEventType(StrEnum):
     MEMORY_AGGREGATED = "memory_aggregated"
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
+    MEMORY_ORGANISED = "memory_organised"
+    MEMORY_OVERRIDE_SET = "memory_override_set"
+    MEMORY_OVERRIDE_CLEARED = "memory_override_cleared"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"
@@ -73,6 +76,9 @@ class AuditEventType(StrEnum):
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
+    # A projection write refused because the agent's native config file changed
+    # on disk between Coffer's read and its write (optimistic concurrency).
+    PROVIDER_PROJECTION_REFUSED = "provider_projection_refused"
 
 
 @dataclass

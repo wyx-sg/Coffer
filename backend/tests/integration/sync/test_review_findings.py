@@ -233,3 +233,90 @@ async def test_a_resource_that_fails_to_serialize_is_not_published_as_a_deletion
         "a row that merely failed to serialize here was published as a deletion "
         "and removed on the other machine"
     )
+
+
+async def test_the_deletion_guard_sees_the_retry_set_too(tmp_path: pathlib.Path) -> None:
+    """spec vault-sync ``## Safety``: the circuit breaker bounds what a round
+    would *apply*, and the retry set is applied alongside the diff.
+
+    A held path the tree has since dropped is absorbed as the deletion it now
+    is. Twenty-five of those in one round is exactly the kind of deletion the
+    guard exists to hold — and a guard that ran over the diff alone would let
+    every one of them through unasked. The holds here are what a round that
+    crashed between the merge and the apply leaves behind.
+    """
+    a, b = await _pair(tmp_path)
+    for i in range(30):
+        a.write_knowledge("notes", f"n{i:02d}", f"body {i}\n")
+    await settle(a, b)
+
+    ghosts = [f"knowledge/notes/ghost{i:02d}.md" for i in range(25)]
+    for path in ghosts:
+        await a.state.hold(path, applicable=True)
+
+    run = await a.converge()
+
+    assert run.status is ConvergeStatus.AWAITING_CONFIRMATION, (
+        f"25 retry-set deletions were applied without the guard (round: {run.status})"
+    )
+    assert run.pending is not None
+    assert run.pending.direction is GuardDirection.APPLY
+    assert set(ghosts) <= set(run.pending.paths)
+    assert ("knowledge", 25, 30) in run.pending.breaches
+    assert len(a.knowledge_paths()) == 30
+
+
+async def test_clearing_or_setting_the_remote_waits_for_the_round_in_flight(
+    tmp_path: pathlib.Path,
+) -> None:
+    """``ConvergeService.clear_remote`` / ``set_remote`` take the round's lock.
+
+    A round ends by writing the pointer. A clear that slipped in mid-round
+    would be undone by that write, and the base the user asked to forget
+    would let the next ``adopt`` skip the join detection. A ``set_remote``
+    mid-round would repoint ``origin`` under a round that has already merged
+    from the old one.
+    """
+    import asyncio
+
+    from coffer.domain.sync.backup import BackupRemote
+
+    a, b = await _pair(tmp_path)
+    a.write_knowledge("notes", "kept", "kept\n")
+    await settle(a, b)
+    await a.remote_config()
+    service = a.service()
+    assert await service.get_remote() is not None
+
+    started = asyncio.Event()
+    release = asyncio.Event()
+    real_run = a.round.run
+
+    async def held_run(**kwargs):  # type: ignore[no-untyped-def]
+        started.set()
+        await release.wait()
+        return await real_run(**kwargs)
+
+    a.round.run = held_run  # type: ignore[method-assign]
+    in_flight = asyncio.create_task(service.run_once())
+    await started.wait()
+
+    clearing = asyncio.create_task(service.clear_remote())
+    setting = asyncio.create_task(
+        service.set_remote(BackupRemote(url=a.remote_url, worktree_path=str(a.worktree)))
+    )
+    for _ in range(20):
+        await asyncio.sleep(0)
+    assert not clearing.done(), "clear_remote ran while a round held the lock"
+    assert not setting.done(), "set_remote ran while a round held the lock"
+
+    release.set()
+    run = await in_flight
+    assert run.status in (ConvergeStatus.OK, ConvergeStatus.NO_CHANGE)
+    assert await clearing is True
+    # The clear ran after the round's pointer write, so nothing resurrected it
+    # — and the set that queued behind the clear then stored the remote again.
+    assert await asyncio.wait_for(setting, 30) is not None
+    await service.clear_remote()
+    assert await a.state.pointer() is None
+    assert await service.get_remote() is None

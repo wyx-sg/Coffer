@@ -36,6 +36,7 @@ import tomlkit
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.types import AgentType
+from coffer.domain.connection import CODEX_ENV_KEY as _CODEX_ENV_KEY
 from coffer.domain.provider.config import Protocol
 
 # --- Codex provider-block identity --------------------------------------------
@@ -44,8 +45,10 @@ from coffer.domain.provider.config import Protocol
 #: selector that points at it.
 CODEX_PROVIDER_ID = "coffer"
 #: The env var Codex reads the API key from (``model_providers.coffer.env_key``).
-#: The raw key is materialized into this var at runtime, never written to disk.
-CODEX_ENV_KEY = "COFFER_PROVIDER_KEY"
+#: Declared in the kind-agnostic ``domain.connection`` because the chat kind's
+#: Codex adapter has to materialise the key into the same variable; re-exported
+#: here so the projection's own vocabulary stays in one place.
+CODEX_ENV_KEY = _CODEX_ENV_KEY
 
 #: Filename of the model catalogue Coffer writes next to an agent's
 #: ``config.toml``, and what ``model_catalog_json`` is pointed at. The name also

@@ -64,7 +64,11 @@ backend/coffer/
 │   ├── fs.py                       # 文件树：目录遍历、原子读/写/删
 │   ├── frontmatter.py              # 唯一 import PyYAML 的模块
 │   ├── naming.py                   # slugify + unique_name —— 路径就是身份
-│   └── legacy_migration.py         # migration 0066 先跑的那次单向磁盘重写
+│   ├── grep.py                     # ripgrep，纯 Python 回退在 grep_fallback.py
+│   └── grep_fallback.py            # 没有 rg 的机器上走的同一次搜索
+├── infrastructure/persistence/migrations/
+│   ├── knowledge_tree_0066.py      # migration 0066 先跑的那次单向磁盘重写
+│   └── knowledge_tree_0066_text.py # 它所需 helper 的冻结副本——不 import 任何活代码
 └── surfaces/
     ├── http/knowledge/             # routes.py、schemas.py、tidy_state.py
     ├── http/knowledge_wiring.py    # 组装：设置 app.state.kinds["knowledge"]

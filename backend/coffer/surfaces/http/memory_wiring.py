@@ -27,17 +27,18 @@ FR-052).
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from coffer.application.agent.service import AgentService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.builtin_recall_tool import register_recall_tool
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.kind import make_memory_kind
-from coffer.application.memory.organise import organise_partition
+from coffer.application.memory.organise import OrganiseResult, organise_partition
 from coffer.application.memory.organise_worker import OrganiseWorker
 from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
@@ -46,16 +47,17 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.persistence.memory_overrides_repo import OverrideRepository
-from coffer.surfaces.http.dependencies import (
+from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
     set_memory_override_repo,
     set_memory_service,
 )
-from coffer.surfaces.http.memory.organise_state import set_organise_runner
+from coffer.surfaces.http.memory.organise_state import OrganiseRunner, set_organise_runner
+from coffer.surfaces.http.sync_contributions import SyncContributions
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
-    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from coffer.application.audit_service import AuditService
     from coffer.application.provider.service import ProviderService
@@ -89,6 +91,17 @@ class _InternalModelSelector:
         return await self._provider_service.resolve_internal_connection()
 
 
+@dataclass(frozen=True)
+class MemoryWiring:
+    """What the memory kind hands back: its three services and the organise
+    runner the background worker sweeps with."""
+
+    service: MemoryService
+    override_repo: OverrideRepository
+    delivery_service: DeliveryService
+    organise: OrganiseRunner
+
+
 def wire_memory_kind(
     app: FastAPI,
     resource_svc: ResourceService,
@@ -96,10 +109,11 @@ def wire_memory_kind(
     builtin_tools: BuiltinToolRegistry,
     provider_service: ProviderService,
     credential_resolver: Callable[[str], str],
-    sm: async_sessionmaker[Any],
-    agent_service: Any,
-) -> tuple[MemoryService, OverrideRepository, DeliveryService]:
-    """Wire the ``memory`` kind into the app; return its three services."""
+    sm: async_sessionmaker[AsyncSession],
+    agent_service: AgentService,
+    sync: SyncContributions,
+) -> MemoryWiring:
+    """Wire the ``memory`` kind into the app; return what it built."""
     service = MemoryService(
         resources=resource_svc,
         audit=audit,
@@ -113,11 +127,7 @@ def wire_memory_kind(
     # The developer's decisions are the one part of this layer that syncs — the
     # derived tree is rebuilt per machine and must not (spec vault-sync
     # "What does not sync").
-    providers = getattr(app.state, "sync_state_providers", None)
-    if providers is None:
-        providers = []
-        app.state.sync_state_providers = providers
-    providers.append(MemoryOverrideSyncState(override_repo))
+    sync.state_providers.append(MemoryOverrideSyncState(override_repo))
 
     recall_service = RecallService(memory=service, overrides=override_repo)
     register_recall_tool(builtin_tools, recall_service=recall_service)
@@ -130,36 +140,42 @@ def wire_memory_kind(
     models = _InternalModelSelector(provider_service)
     completion = LangchainLlmCompletion()
 
-    async def _organise(partition: str) -> Any:
+    async def _organise(partition: str) -> OrganiseResult:
         return await organise_partition(
             partition, models=models, completion=completion, credential_resolver=credential_resolver
         )
 
     set_organise_runner(_organise)
-    app.state.memory_organise_runner = _organise
 
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
-    return service, override_repo, delivery_service
+    return MemoryWiring(
+        service=service,
+        override_repo=override_repo,
+        delivery_service=delivery_service,
+        organise=_organise,
+    )
 
 
-def start_organise_worker(app: FastAPI, resource_svc: ResourceService) -> None:
+def start_organise_worker(
+    organise: OrganiseRunner, resource_svc: ResourceService
+) -> asyncio.Task[None]:
     """Start the organise sweep — on by default (``organise_worker.py``'s own
     docstring: the tree it rewrites is disposable, so there is no unattended-
-    rewrite risk to gate behind an operator switch, unlike knowledge's tidy)."""
+    rewrite risk to gate behind an operator switch, unlike knowledge's tidy).
+    Returns the task; the lifespan cancels it at shutdown."""
 
     async def _list_partitions() -> list[str]:
         return [r.name for r in await resource_svc.list(kind=KIND_MEMORY, enabled=True)]
 
-    worker = OrganiseWorker(
-        organise=app.state.memory_organise_runner, list_partitions=_list_partitions
-    )
-    app.state.memory_organise_worker_task = asyncio.create_task(worker.run_forever())
+    worker = OrganiseWorker(organise=organise, list_partitions=_list_partitions)
+    return asyncio.create_task(worker.run_forever())
 
 
-async def stop_organise_worker(app: FastAPI) -> None:
-    task = getattr(app.state, "memory_organise_worker_task", None)
-    if task is None:
-        return
+async def stop_organise_worker(task: asyncio.Task[None]) -> None:
+    """Cancel the sweep and wait for it to acknowledge; a pending pass is
+    dropped, not fired (the next boot sweeps everything)."""
     task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
+    try:
         await task
+    except asyncio.CancelledError:
+        logger.debug("memory.organise_worker.stopped")

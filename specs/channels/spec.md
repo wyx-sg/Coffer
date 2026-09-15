@@ -337,7 +337,8 @@ clean success sends no completion summary while a failed turn does.
   Capabilities are declared by the adapter, not special-cased in the core.
 - **FR-006**: Commands `/new`, `/stop`, `/status`, `/help` work from any
   paired chat. `/stop` and `/new` take effect even while a turn is running;
-  other messages queue (FIFO, bounded at 10) and run in order.
+  other messages join the conversation's pending queue (FR-050 — the one the
+  web shows; the channel refuses past 10 waiting) and run in order.
 - **FR-008**: A notify entry point (REST + CLI) delivers arbitrary text to a
   channel's paired peer, independent of any conversation.
 - **FR-009**: The SeaTalk callback listener is a separate process serving only
@@ -346,7 +347,13 @@ clean success sends no completion summary while a failed turn does.
   valid events to the daemon over loopback with the daemon token, and rejects
   everything else. The daemon spawns it while at least one SeaTalk channel on
   **webhook** delivery is enabled and stops it otherwise; a channel on websocket
-  delivery (FR-071) needs none of this and MUST NOT bring the listener up.
+  delivery (FR-071) needs none of this and MUST NOT bring the listener up. The
+  listener refuses any request body larger than 1 MiB with HTTP 413 before it
+  is read: a declared `Content-Length` over the limit is rejected without
+  reading a byte, and a body without one is read only until its running size
+  passes the limit. A SeaTalk event envelope is a few kilobytes; the cap exists
+  because the listener sits behind a public tunnel and MUST NOT buffer an
+  arbitrary upload in memory before discovering it is unsigned.
 - **FR-010**: Telegram inbound uses long polling with the update offset
   committed only after dispatch; adapters reconnect with exponential backoff
   and never crash the daemon.
@@ -569,8 +576,10 @@ status / notify`.
   bot answers on the @mention message and still replies into the forum topic. A
   quoted/replied message contributes a `> sender: …` context prefix where the
   platform inlines it.
-- **FR-027**: Each `(channel, chat, thread)` has its own turn queue/session,
-  so a DM turn, a group-main turn, and a thread turn never share state.
+- **FR-027**: Each `(channel, chat, thread)` maps to its own conversation and
+  renders its own turn, so a DM turn, a group-main turn, and a thread turn never
+  share state. What waits behind a running turn is that conversation's pending
+  queue (FR-050), not a buffer of the channel's own.
 - **FR-071**: A SeaTalk channel declares which inbound transport it uses, and
   that choice decides which of its fields may exist at all. A `delivery` field
   carries `webhook` or `websocket`; absent means `webhook`.
@@ -590,7 +599,11 @@ status / notify`.
     nothing is a lie about the system. A deployment whose only SeaTalk channels
     use websocket delivery MUST leave the callback listener stopped and spawn no
     tunnel: the point of the transport is that nothing is exposed, and a listener
-    nobody can reach is still a port nobody asked for.
+    nobody can reach is still a port nobody asked for. The kick flag and its
+    reason are written on the SDK's listen thread and read by the supervisor on
+    the event loop; the two MUST share the connector's state lock, and a kick
+    signalled from any thread is observed by the supervisor even when `listen()`
+    then returns without raising.
   - `app_id` and `app_secret_ref` are required on both, and everything past
     ingress is shared: an event arrives as the same envelope and is ingested
     through the same channel entry point, so deduplication, normalization, the
@@ -1680,6 +1693,57 @@ the empty case: a channel that may drive nothing does not run at all.
 - **Then** the edit is accepted and the channel stays dormant — off is not
   frozen.
 
+### Scenario: a channel message waits in the conversation's own queue
+
+- **Given** a turn running on a paired channel's conversation, with a web tab
+  subscribed to it,
+- **When** the peer sends more messages and the web sends one too,
+- **Then** they wait on the one pending queue in arrival order — the web's
+  pending chips show the channel's messages — and run as consecutive turns
+
+### Scenario: a stop from the chat holds the queued messages
+
+- **Given** a turn running with a channel message queued behind it,
+- **When** the peer sends `/stop`,
+- **Then** the turn ends as interrupted and the queued message is held, and the
+  peer's next message resumes the queue in order
+
+### Scenario: an agent stream that ends without a terminal is a turn error
+
+- **Given** an agent whose event stream ends without a completion event,
+- **When** the turn is driven,
+- **Then** exactly one terminal event follows, a `stream_ended` turn error, with
+  the text streamed before the cut delivered ahead of it
+
+### Scenario: a silent turn is cancelled by the idle watchdog
+
+- **Given** an agent that streams part of a reply and then produces nothing,
+- **When** the idle window passes,
+- **Then** the turn ends with a `turn_timeout` error, the agent's cancellation
+  path runs, and the partial reply is kept on a message marked failed
+
+### Scenario: an errored turn still delivers what it streamed
+
+- **Given** a turn that streamed text before failing,
+- **When** the channel renders it,
+- **Then** the chat receives the text, then the error notice, then the failed
+  summary
+
+### Scenario: an oversized callback body is refused before it is read
+
+- **Given** a running callback listener,
+- **When** a request declares, or streams, a body larger than 1 MiB,
+- **Then** the listener responds 413 without buffering the body, and nothing
+  reaches the daemon
+
+### Scenario: a failed telegram download never puts the bot token in the log
+
+- **Given** a Telegram message with a photo whose file download fails after
+  `getFile` succeeds,
+- **When** the adapter handles the message,
+- **Then** the turn runs with a note that the attachment could not be
+  downloaded, and no log record contains the bot token
+
 
 ## Channels as a management plane (north star)
 
@@ -2029,13 +2093,16 @@ browser — reads in one place instead of two.
   run its turn — sequential FIFO, one turn per queued message, never coalesced.
   A pending message is not committed to the message sequence until its turn
   starts. The queue is in-memory, so a daemon restart drops what has not yet
-  been committed. (A message arriving from a channel while a turn is in flight
-  is held by that channel's own inbound buffering, FR-027, rather than this
-  queue.)
+  been committed. A message arriving from a channel while a turn is in flight
+  joins this same queue: the web's pending chips show it, `/status` counts it,
+  and the two surfaces drain one FIFO per conversation — the channel keeps no
+  buffer of its own. Past ten waiting, a channel message is dropped and the
+  chat told (FR-006); the web composer is not bounded.
 - **FR-051**: Interrupting a turn MUST also **pause** the pending queue: the
   current turn stops with its partial output kept, and queued messages are held
   rather than auto-run until the owner resumes them. This is what `/stop`
-  (FR-011) reaches.
+  (FR-011) reaches, from the chat exactly as `POST .../interrupt` does from the
+  web; the next message from either surface resumes the held queue.
 - **FR-052**: System MUST express a turn as a sequence of typed events covering,
   at minimum, turn start, text deltas, tool calls, tool results, turn
   completion, turn error, and pending-queue change.
@@ -2048,7 +2115,16 @@ browser — reads in one place instead of two.
 - **FR-054**: An interrupted turn — user interrupt, adapter failure, or daemon
   restart — MUST leave the partial assistant message persisted and marked
   complete rather than discarded. Stopping a turn is distinct from discarding
-  the conversation, which throws the turn away.
+  the conversation, which throws the turn away. Two failures the platform
+  detects itself, agent-agnostically: an agent whose event stream ends without
+  a terminal event (its process died or lost its connection mid-turn) MUST be
+  reported as a turn error (`stream_ended`), never as a completed turn — a ✅
+  on a reply cut mid-sentence is a lie; and a turn that produces no event for
+  the idle window (`COFFER_TURN_IDLE_TIMEOUT_SECONDS`, default 300; `0`
+  disables the watchdog) MUST be cancelled with a `turn_timeout` error, its
+  agent process stopped through the adapter's own cancellation path. In both
+  cases whatever text streamed before the failure is kept on the assistant
+  message (marked failed) and delivered to the chat ahead of the notice.
 - **FR-055**: Every completed turn MUST be recorded in the audit log with the
   actor, the agent, the conversation, and the turn's token usage, so "which
   agent did what, driven by whom" is answerable after the fact (see FR-030 for
@@ -2143,7 +2219,13 @@ API server a user reaches is not guaranteed to be new enough.
   becomes an `Attachment` (FR-020). Where a platform caps what a bot may
   download, a file over that cap MUST produce a message telling the user, not a
   silent no-op: the failure mode being fixed is a user who sent a file and got
-  an answer that never mentions it.
+  an answer that never mentions it. A download that fails after `getFile`
+  succeeded — the platform answers the file endpoint with an error status, or
+  the connection fails — is noted in the turn text (`[attachment '<name>' could
+  not be downloaded]`) and the turn still runs on whatever text and other
+  attachments arrived. The Telegram file URL embeds the bot token, so this path
+  MUST log only the failure's class or the method and HTTP status, never the
+  request URL and never a traceback that quotes it.
 - **FR-068**: A reply is attached to what it answers. In a group, the bot's
   reply MUST be sent as a platform-level reply to the message that triggered it,
   so a busy room can tell which question each answer belongs to.

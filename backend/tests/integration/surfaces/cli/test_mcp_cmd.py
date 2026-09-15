@@ -50,13 +50,15 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.daemon_routes import router as daemon_router
 from coffer.surfaces.http.dependencies import (
     get_audit_service,
-    get_capability_discovery,
-    get_invocation_repo,
-    get_preferences_repo,
     get_resource_service,
     get_retention_service,
 )
 from coffer.surfaces.http.mcp.capability_routes import router as capability_router
+from coffer.surfaces.http.mcp.dependencies import (
+    get_capability_discovery,
+    get_invocation_repo,
+    get_preferences_repo,
+)
 from coffer.surfaces.http.mcp.invocation_routes import router as invocation_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from coffer.surfaces.http.retention_routes import router as retention_router

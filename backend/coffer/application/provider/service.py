@@ -5,8 +5,7 @@ A profile is stored as a ``provider`` resource (CRUD + audit + sync come free
 from ``ResourceService``). This service adds the credential-vault handling, the
 single-active-per-agent invariant, the native-config projection (the "switch",
 chosen by the agents a connection's per-agent scope reaches — not its wire), and
-the
-per-connection key resolution used by Claude Code's ``apiKeyHelper``.
+the per-connection key resolution used by Claude Code's ``apiKeyHelper``.
 
 The credential store is synchronous (short-lived SQLite connections); every
 call is wrapped in ``asyncio.to_thread`` so the busy-wait never blocks the loop
@@ -21,6 +20,7 @@ from typing import Protocol as _Protocol
 from uuid import uuid4
 
 from coffer.application.audit_service import AuditService
+from coffer.application.provider.projection_ops import deproject_connection, project_connection
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.rename_ops import rename as _rename_op
 from coffer.application.provider.results import ActivateResult, DeactivateResult
@@ -235,9 +235,7 @@ class ProviderService:
 
         # 1) Project first. ollama (no targets) is internal-only — projects to
         #    no agent. ``skipped`` lists in-scope agents with no registered one.
-        projected: list[str] = []
-        for at in targets:
-            projected.extend(self._projector.project_type(name, cfg, agents, at))
+        projected = await project_connection(self, name, cfg, targets, agents, actor=actor)
         covered = {at for at in targets if self._projector.agents_of_type(agents, at)}
         skipped = [at.value for at in targets if at not in covered]
 
@@ -255,7 +253,7 @@ class ProviderService:
             if not rc.is_active or not (other & mine):
                 continue
             for at in other - mine:
-                self._projector.deproject_type(agents, at)
+                await deproject_connection(self, agents, at, actor=actor, connection=r.name)
             await self._set_active(r, active=False, actor=actor)
             previous = r.name
         if not cfg.is_active:
@@ -287,7 +285,7 @@ class ProviderService:
         deprojected: list[str] = []
         previous: str | None = None
         if agent_type is not None:
-            deprojected = self._projector.deproject_type(agents, agent_type)
+            deprojected = await deproject_connection(self, agents, agent_type, actor=actor)
             for r in await self.list():
                 rc = self._cfg(r)
                 compat = self._compat(r)
@@ -295,7 +293,7 @@ class ProviderService:
                     continue
                 for at in compat:
                     if at is not agent_type:
-                        self._projector.deproject_type(agents, at)
+                        await deproject_connection(self, agents, at, actor=actor, connection=r.name)
                 await self._set_active(r, active=False, actor=actor)
                 previous = r.name
 

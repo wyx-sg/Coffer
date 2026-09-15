@@ -168,22 +168,26 @@ class ConvergeRound(BackwardsMixin):
 
         # --- 3 diff --------------------------------------------------------
         applied = await self._diff(local, merged)
+        # The retry set is applied alongside the diff, so the guard must see
+        # it too: a held path the tree has since dropped is a deletion this
+        # round is about to perform, and a guard that only looked at ``D``
+        # would let any number of those through unasked.
+        retried = await outstanding_holds(self._mirror, self._state, applied)
+        everything = DiffSummary.of([*applied.changes, *retried.changes])
 
         # --- 4 guard + snapshot --------------------------------------------
         breach = (
             []
             if waived is GuardDirection.APPLY
-            else await breached(self._mirror, self._guard, applied, local)
+            else await breached(self._mirror, self._guard, everything, local)
         )
         if breach:
-            return await self._hold(started, GuardDirection.APPLY, merged, applied, breach)
+            return await self._hold(started, GuardDirection.APPLY, merged, everything, breach)
         await snapshot(self._mirror, local)
 
         # --- 5 apply -------------------------------------------------------
         failures = await self.apply(applied)
-        failures.extend(
-            await self.apply(await outstanding_holds(self._mirror, self._state, applied))
-        )
+        failures.extend(await self.apply(retried))
         failures.extend(await reconcile(self._post_import, applied))
 
         # --- 6 publish ------------------------------------------------------

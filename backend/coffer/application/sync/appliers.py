@@ -60,6 +60,10 @@ class TreeApplier:
 
     def _copy_in(self, path: str) -> None:
         src = self._worktree / path
+        if src.is_symlink():
+            # Whatever it points at is not vault content. A remote that
+            # committed a link to ``/etc/passwd`` must not have it read here.
+            raise SyncSerializationError(f"{path} is a symlink in the working tree")
         if not src.is_file():
             raise SyncSerializationError(f"{path} is not a file in the working tree")
         dst = self._live_root / self._relative(path)
@@ -191,19 +195,33 @@ class StateApplier:
     claims is skipped rather than failed: it belongs to a module this build
     does not have, and refusing it every round would turn a version difference
     into a permanent error.
+
+    A state document is carried with the same ``${HOME}`` sentinel a resource
+    document is (spec vault-sync ``## Determinism and path portability``), so
+    it is expanded against this machine's home here, exactly as the resource
+    applier does — one rule for every serialized document.
     """
 
     prefix = "state/"
 
-    def __init__(self, providers: Sequence[SyncedStatePort], *, worktree: pathlib.Path) -> None:
+    def __init__(
+        self,
+        providers: Sequence[SyncedStatePort],
+        *,
+        worktree: pathlib.Path,
+        home: str | None = None,
+    ) -> None:
         self._providers = {p.area: p for p in providers}
         self._worktree = worktree
+        self._home = home
 
     async def upsert(self, path: str) -> None:
         provider, rel = self._route(path)
         if provider is None:
             return
         doc = await asyncio.to_thread(_read_yaml, self._worktree / path)
+        if self._home:
+            doc = expand_home(doc, self._home)
         failures = await provider.import_docs([(rel, doc)])
         if failures:
             raise SyncSerializationError(f"{path}: {failures[0][1]}")

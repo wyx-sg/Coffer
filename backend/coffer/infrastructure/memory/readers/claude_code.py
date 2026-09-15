@@ -27,7 +27,7 @@ regenerates that role itself (FR-004).
 A fact's `project_root` is recovered the same way the agent page's
 native-memory listing recovers it (`infrastructure.agent.native_memory_store`):
 preferring a sibling session transcript's own recorded `cwd`
-(`infrastructure.agent.claude_code_transcripts.cwd_from_transcripts`) —
+(`infrastructure.agent_files.claude_code_transcripts.cwd_from_transcripts`) —
 authoritative, no decoding involved — and falling back to
 `domain.agent.native_memory.resolve_project_slug`'s filesystem-aware slug
 decode only when no transcript recorded one (e.g. every transcript for this
@@ -47,7 +47,7 @@ from coffer.domain.agent.native_memory import resolve_project_slug
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.fact import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawFact, SourceFile
-from coffer.infrastructure.agent.claude_code_transcripts import cwd_from_transcripts
+from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
 
 _INDEX_NAME = "MEMORY.md"
 _FENCE = "---"
@@ -102,7 +102,11 @@ class ClaudeCodeMemoryReader:
             raise UnreadableMemory(source.path, str(exc)) from exc
 
         frontmatter, body = _split_frontmatter(text, source.path)
-        raw_type = str(frontmatter.get("metadata", {}).get("type", "") or "").strip().lower()
+        # ``metadata:`` with nothing under it loads as ``None``, not ``{}``.
+        metadata = frontmatter.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            raise UnreadableMemory(source.path, "frontmatter 'metadata' is not a mapping")
+        raw_type = str(metadata.get("type", "") or "").strip().lower()
         if raw_type == _SKIP_TYPE:
             return ()
 

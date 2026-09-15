@@ -309,6 +309,28 @@ components:
       name: X-Coffer-Token
 
   schemas:
+    ErrorOut:
+      type: object
+      description: |
+        The app-wide error envelope (`surfaces/http/errors.py`), the same shape
+        `ErrorResponse` carries in the mcp-gateway contract. Contract-only
+        alias — there is no Pydantic model of this name.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: SKILL_NOT_FOUND
+            message:
+              type: string
+              example: "skill not found: reviewer"
+            details:
+              type: object
+              additionalProperties: true
+
     SkillSourceType:
       type: string
       enum: [local_import]

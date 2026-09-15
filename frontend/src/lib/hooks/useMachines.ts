@@ -14,8 +14,8 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import { syncApi } from "@/lib/api/sync";
-import { syncKey, syncMachinesKey } from "@/lib/hooks/useSync";
 import { useToast } from "@/components/ui/toast";
+import { resourcesKey, scopeKey, skillsKey, syncKey, syncMachinesKey } from "@/lib/api/queryKeys";
 
 export function useMachines() {
   return useQuery({ queryKey: syncMachinesKey, queryFn: () => syncApi.machines() });
@@ -50,9 +50,9 @@ export function useRetireMachine() {
     mutationFn: (machineId: string) => syncApi.retire(machineId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: syncKey });
-      void qc.invalidateQueries({ queryKey: ["resources"] });
-      void qc.invalidateQueries({ queryKey: ["skills"] });
-      void qc.invalidateQueries({ queryKey: ["scope"] });
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+      void qc.invalidateQueries({ queryKey: skillsKey });
+      void qc.invalidateQueries({ queryKey: scopeKey });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

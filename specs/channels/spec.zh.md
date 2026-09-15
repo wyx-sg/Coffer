@@ -298,8 +298,8 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
   做什么（如 `⏳ Bash · list the desktop`、`✅ Read · wedding.json`）。能力由
   adapter 声明，内核不做特判。
 - **FR-006**: `/new`、`/stop`、`/status`、`/help` 命令在任何已配对的聊天里
-  可用。`/stop` 与 `/new` 即使在 turn 运行中也立即生效；其他消息排队
-  （FIFO，上限 10）并按序运行。
+  可用。`/stop` 与 `/new` 即使在 turn 运行中也立即生效；其他消息进入该会话的
+  待处理队列（FR-050——就是网页端显示的那条；channel 在 10 条等待之后拒收）并按序运行。
 - **FR-008**: 一个 notify 入口（REST + CLI）把任意文本投递给 channel 的
   已配对 peer，与任何对话无关。
 - **FR-009**: SeaTalk 回调监听器是只服务 `POST /seatalk/{channel}` 的独立
@@ -307,7 +307,11 @@ agent 的 turn-started 审计记录；观察干净成功不发完成摘要、而
   `sha256(body + signing_secret)` 签名，把合法事件携带 daemon token 经
   loopback 转发给 daemon，并拒绝其他一切。daemon 在至少一个使用 **webhook**
   投递的 SeaTalk channel 处于启用状态时拉起它，否则停止它；使用 websocket 投递
-  的 channel（FR-071）一样都不需要，也 MUST NOT 把监听器带起来。
+  的 channel（FR-071）一样都不需要，也 MUST NOT 把监听器带起来。监听器在读取之前
+  就以 HTTP 413 拒绝任何超过 1 MiB 的请求体：声明的 `Content-Length` 超限时一个字节
+  都不读就拒绝；没有声明长度的请求体只读到累计大小越过上限为止。一个 SeaTalk 事件
+  envelope 只有几 KB；设这个上限是因为监听器坐在公网隧道后面，MUST NOT 在发现请求
+  没签名之前先把任意大小的上传缓冲进内存。
 - **FR-010**: Telegram 入站使用 long polling，update offset 只在分发完成后
   提交；adapter 以指数退避重连，且永不让 daemon 崩溃。
 - **FR-011**: Channels 页面列出 channel、注册新 channel（secret 经凭据存储
@@ -468,8 +472,9 @@ status / notify`。
   上下文）。Telegram 完全无法拉取历史（Bot API 的限制），因此 Telegram 上不读取线程
   上下文——bot 仅基于 @mention 消息本身作答，但仍会回复进该 forum topic。一条被引用/
   回复的消息在平台内联该信息处贡献一段 `> sender: …` 上下文前缀。
-- **FR-027**: 每个 `(channel, chat, thread)` 都有自己的 turn 队列/会话，因此 DM turn、
-  群主聊天 turn 与线程 turn 彼此永不共享状态。
+- **FR-027**: 每个 `(channel, chat, thread)` 映射到自己的会话、渲染自己的 turn，因此
+  DM turn、群主聊天 turn 与线程 turn 彼此永不共享状态。排在运行中 turn 后面等待的，
+  是该会话的待处理队列（FR-050），而不是 channel 自己的缓冲。
 - **FR-071**: 一个 SeaTalk channel 要声明自己用哪种入站传输，而这个选择决定了它的哪些
   字段才允许存在。`delivery` 字段取 `webhook` 或 `websocket`；缺省即 `webhook`。
   - **Webhook** 就是 FR-009 描述的那条路。channel MUST 带 `signing_secret_ref`，
@@ -483,7 +488,10 @@ status / notify`。
     请求体要签名，没有公网 URL 要描述，也没有隧道要照看，而一个什么都决定不了的配置
     字段就是对系统的谎言。一套部署里如果 SeaTalk channel 全都用 websocket 投递，它
     MUST 让回调监听器保持停止、也不拉任何隧道：这个传输的全部意义就是什么都不暴露，
-    而一个谁也到不了的监听器，仍然是一个没人要过的端口。
+    而一个谁也到不了的监听器，仍然是一个没人要过的端口。kick 标志及其原因在 SDK 的
+    监听线程上写入、由事件循环上的 supervisor 读取；两者 MUST 共用 connector 的状态锁，
+    并且从任一线程发出的 kick 都会被 supervisor 观察到——即使 `listen()` 随后正常返回
+    而没有抛出。
   - `app_id` 与 `app_secret_ref` 两种投递都必需，而 ingress 之后的一切都是共用的：
     事件以同一个 envelope 到达，经同一个 channel 入口被摄入，因此去重、归一化、属主
     门禁、媒体下载、线程，以及 turn，表现完全一致。本规范其余的要求没有一条区分这两者。
@@ -1463,6 +1471,50 @@ bot 身份，但只剩下它们一直以来就有的那条路——有人手工�
 - **When** 属主修正它配置里的某个字段，例如 bot token 的凭据引用，
 - **Then** 这次编辑被接受，渠道仍然休眠——关掉不等于冻结。
 
+### Scenario: a channel message waits in the conversation's own queue
+
+- **Given** 一条已配对 channel 的会话上有 turn 在跑，且有一个网页标签页订阅着它，
+- **When** 对端再发几条消息、网页端也发一条，
+- **Then** 它们按到达顺序在同一条待处理队列上等待——网页端的待处理小片显示出 channel
+  的消息——并作为连续的 turn 依次运行
+
+### Scenario: a stop from the chat holds the queued messages
+
+- **Given** 一个正在跑的 turn，后面排着一条 channel 消息，
+- **When** 对端发送 `/stop`，
+- **Then** turn 以被中断结束、排队的消息被挂起，对端的下一条消息按序恢复队列
+
+### Scenario: an agent stream that ends without a terminal is a turn error
+
+- **Given** 一个事件流没有完成事件就结束的 agent，
+- **When** 驱动这个 turn，
+- **Then** 紧接着恰好一个终止事件——`stream_ended` turn 错误——而断开之前流出的文本先于它投递
+
+### Scenario: a silent turn is cancelled by the idle watchdog
+
+- **Given** 一个流出部分回复后再无任何产出的 agent，
+- **When** 空闲窗口过去，
+- **Then** turn 以 `turn_timeout` 错误结束，agent 的取消路径被执行，部分回复保留在标记为
+  failed 的消息上
+
+### Scenario: an errored turn still delivers what it streamed
+
+- **Given** 一个在失败前已流出文本的 turn，
+- **When** channel 渲染它，
+- **Then** 聊天先收到那段文本，再收到错误通知，最后是失败摘要
+
+### Scenario: an oversized callback body is refused before it is read
+
+- **Given** 一个运行中的回调监听器，
+- **When** 一个请求声明或流式发送超过 1 MiB 的请求体，
+- **Then** 监听器不缓冲请求体就回 413，什么都到不了 daemon
+
+### Scenario: a failed telegram download never puts the bot token in the log
+
+- **Given** 一条带照片的 Telegram 消息，其文件在 `getFile` 成功后下载失败，
+- **When** adapter 处理这条消息，
+- **Then** turn 带着「附件无法下载」的备注照常运行，且没有任何日志记录包含 bot token
+
 
 
 ## Channels as a management plane（北极星）
@@ -1709,11 +1761,14 @@ Web 端 Chat 页面是它们的另一个客户端。那个页面又回来了（�
   运行期间发来的消息：这样的消息进入该会话的**待处理队列**。进行中的 turn 结束时，
   系统必须从队首出队、把它提交为下一条用户消息并跑它的 turn——顺序 FIFO，
   一条排队消息一个 turn，绝不合并。待处理消息在它的 turn 开始前不会进入消息序列。
-  该队列在内存中，因此守护进程重启会丢掉尚未提交的部分。（turn 进行中从 channel
-  到达的消息由该 channel 自己的入站缓冲承接，见 FR-027，而不是这个队列。）
+  该队列在内存中，因此守护进程重启会丢掉尚未提交的部分。turn 进行中从 channel
+  到达的消息进入的就是这同一条队列：网页端的待处理小片会显示它，`/status` 会数上它，
+  两个界面按每个会话一条 FIFO 排空——channel 不再有自己的缓冲。等待超过十条时，
+  channel 消息被丢弃并告知聊天（FR-006）；网页端的草稿区不设上限。
 - **FR-051**: 中断一个 turn 必须同时**暂停**待处理队列：当前 turn 停止并保留其部分
   输出，排队的消息被挂起、不自动运行，直到属主恢复它们。`/stop`（FR-011）触达的
-  就是这里。
+  就是这里——从聊天里触达，与网页端的 `POST .../interrupt` 完全一样；之后任一界面
+  发来的下一条消息会恢复被挂起的队列。
 - **FR-052**: 系统必须把一个 turn 表达为一串类型化事件，至少覆盖 turn 开始、
   文本增量、工具调用、工具结果、turn 完成、turn 错误和待处理队列变化。
 - **FR-053**: 系统必须把这些事件发布到每会话的进程内事件总线上，任意数量的订阅者
@@ -1722,7 +1777,13 @@ Web 端 Chat 页面是它们的另一个客户端。那个页面又回来了（�
   ——这就是为什么 peer 的连接在 turn 中途断掉，回复依然跑完并被持久化。
 - **FR-054**: 被中断的 turn——用户中断、适配器失败或守护进程重启——必须留下已持久化
   且标记为完成的部分 assistant 消息，而不是丢弃它。停止一个 turn 与丢弃会话不同，
-  后者会把这个 turn 扔掉。
+  后者会把这个 turn 扔掉。有两种失败由平台自己、不分 agent 地检测：agent 的事件流
+  没有终止事件就结束了（它的进程在 turn 中途死掉或断了连接）MUST 报为 turn 错误
+  （`stream_ended`），绝不能报为完成的 turn——给一条说到一半的回复打 ✅ 是在说谎；
+  以及一个 turn 在空闲窗口内（`COFFER_TURN_IDLE_TIMEOUT_SECONDS`，默认 300；`0`
+  关闭看门狗）没有产生任何事件，MUST 以 `turn_timeout` 错误取消，并经由 adapter 自己的
+  取消路径停掉 agent 进程。两种情况下失败前已流出的文本都保留在（标记为 failed 的）
+  assistant 消息上，并先于错误通知投递到聊天里。
 - **FR-055**: 每个完成的 turn 必须以 actor、agent、会话和该 turn 的 token 用量记入
   审计日志，使「哪个 agent 做了什么、由谁驱动」事后可查（channel 专属字段见 FR-030）。
 
@@ -1783,7 +1844,11 @@ markdown——第四项则完全没有对应。下列要求把每一项迁到平
   一切——照片、文档、语音、音频、视频、动图、贴纸、圆形视频——都会被下载并成为
   `Attachment`（FR-020）。当平台对 bot 可下载的大小设上限时，超限文件必须产生一条
   告知用户的消息，而不是静默的空操作：要修的失败模式是「用户发了个文件，却得到一个
-  从头到尾没提这个文件的回答」。
+  从头到尾没提这个文件的回答」。`getFile` 成功之后的下载失败——平台的文件端点回了
+  错误状态，或连接失败——会在 turn 文本里留下备注（`[attachment '<name>' could not
+  be downloaded]`），turn 照样带着已到达的文本和其他附件运行。Telegram 的文件 URL 内嵌
+  bot token，所以这条路径 MUST 只记录失败的类名或方法与 HTTP 状态，绝不记录请求 URL，
+  也绝不记录会引用它的 traceback。
 - **FR-068**: 回复要挂在它所回答的那条消息上。在群里，bot 的回复必须以平台级 reply
   的形式发给触发它的那条消息，于是热闹的房间能分辨每个回答属于哪个问题。
 - **FR-069**: 选择卡使用平台的按钮词汇。当平台提供超出标签之外的按钮语义——禁用态、

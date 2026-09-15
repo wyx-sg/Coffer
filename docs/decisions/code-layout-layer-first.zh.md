@@ -53,8 +53,17 @@ backend/coffer/
     └── shim/                     # coffer-mcp-shim (MCP-only by nature)
 ```
 
-每种 kind 在组合根 (composition root) 通过一个显式的 `KindModule` dataclass
-注册 —— 没有全局注册表、没有 import 副作用、没有 `kinds/` 目录。
+每种 kind 的 `make_<kind>_kind()` 工厂（`application/<kind>/kind.py`）返回一个
+冻结的 `Kind` 描述符（`domain/resource.py`）；组合根 (composition root) ——
+`surfaces/http/app.py` 的 lifespan 经由各 kind 的 `*_wiring.py` 模块，以及
+`surfaces/cli/main.py` —— 自己把这个 `Kind` 注册进每个 app 的 `kinds` 字典，并自己
+挂载该 kind 的路由与 CLI 命令组。装配是显式的：每个 `wire_*` 步骤返回一个小的冻结
+dataclass 说明它建了什么，`app.py` 把这些结果作为参数往下传（sync 的注册统一经
+一个 `SyncContributions` 收集器流转）；没有任何步骤通过 `app.state` 去发现前一步。
+FastAPI 依赖提供者同样按 kind 拆分：`surfaces/http/dependencies.py` 只保留与 kind
+无关的核心（actor、resource、audit、retention、内部引擎配置），每个 kind 在自己的
+模块里发布具体类型的 `set_*`/`get_*` 对。没有载体对象、没有全局注册表、没有 import
+副作用、没有 `kinds/` 目录。
 
 ## 后果
 
@@ -69,8 +78,18 @@ infrastructure)` 分层。架构文档读起来与目录树一致。
   `kinds/profile/domain/profile.py`）。
 - Importlinter 规则读起来自然：
   - 禁止 `domain → infrastructure | surfaces`
-  - 禁止 `*/mcp → */<other_kind>`
+  - 禁止 `*/<kind> → */<other_kind>` —— 每种 kind 一条对称的「Cross-kind imports
+    forbidden」契约，覆盖全部九种（mcp、agent、skill、knowledge、channel、chat、
+    provider、memory、sync）。两条明列的例外都只涉及某 kind 的纯*领域词汇*而非其
+    服务：`provider` 与 `memory` 可以 import `domain.agent`（对 agent 做事本来就是这
+    两种 kind 的职责），`channel` 可以 import `domain.chat`（驱动对话轮次本来就是
+    channel 的职责）。`domain.knowledge` / `infrastructure.knowledge` 仍是豁免的底层
+    基座。仅用于类型注解的（`TYPE_CHECKING`）import 不计入。唯一被认可的集中元数据
+    例外是 Alembic 的 `migrations/env.py`，它 import 每种 kind 的 ORM model 模块。
   - 禁止 `domain/*`（与 kind 无关）→ `domain/<kind>/*`
+  - 两种 kind 都需要的包落到该层根目录、与 kind 无关：`infrastructure/net/`（SSRF
+    防护）、`infrastructure/agent_files/`（解析 Claude Code 的落盘 transcript）、
+    `domain/connection.py`（`CODEX_ENV_KEY`）。
 
 **负面**
 

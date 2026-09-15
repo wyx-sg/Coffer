@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError, translateApiError } from "@/lib/api/errors";
 import { useToast } from "@/components/ui/toast";
+import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 
 export type CapabilityType = "tool" | "resource" | "prompt";
 
@@ -41,7 +42,7 @@ export function useEnableCapability() {
   return useMutation({
     mutationFn: (input: ToggleInput) => capabilitiesApi.setEnabled("enable", input),
     onSuccess: (_data, vars) => {
-      void qc.invalidateQueries({ queryKey: ["mcp", "capabilities", vars.serverName] });
+      void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(vars.serverName) });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
@@ -54,7 +55,7 @@ export function useDisableCapability() {
   return useMutation({
     mutationFn: (input: ToggleInput) => capabilitiesApi.setEnabled("disable", input),
     onSuccess: (_data, vars) => {
-      void qc.invalidateQueries({ queryKey: ["mcp", "capabilities", vars.serverName] });
+      void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(vars.serverName) });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

@@ -117,3 +117,4 @@ section that future readers most often want — don't skip it.>
 | [`per-agent-resource-scope`](per-agent-resource-scope.zh.md) | 按 agent 的资源 scope | Accepted |
 | [`budget-driven-tool-tiering`](budget-driven-tool-tiering.zh.md) | 网关侧的预算驱动工具分层 | Accepted |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.zh.md) | SeaTalk 入站走 WebSocket，SDK 由 operator 提供 | Accepted |
+| [`product-scope-is-settled`](product-scope-is-settled.zh.md) | 产品范围已定 | Accepted |

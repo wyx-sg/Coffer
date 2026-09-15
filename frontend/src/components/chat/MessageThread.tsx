@@ -1,21 +1,20 @@
 // components/chat/MessageThread.tsx
-// Scrollable list of messages + live streaming message. Follows the stream
-// only while the user sits at the bottom (a "Jump to latest" pill brings them
-// back — useFollowScroll), restarts at the bottom whenever another
-// conversation opens, and on a failed turn swaps the in-progress bubble for the
-// error banner with a Retry that re-sends the message that failed. Which rows
-// render is decided by the pure helpers in lib/chat/threadView.
+// Scrollable list of messages + echoed just-sent prompts + live streaming
+// message. Follows the stream only while the user sits at the bottom (a "Jump
+// to latest" pill brings them back — useFollowScroll), restarts at the bottom
+// whenever another conversation opens, and on a failed turn swaps the
+// in-progress bubble for the error banner with a Retry that re-sends the
+// message that failed. Which persisted rows render is decided by
+// useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowDown } from "lucide-react";
-import { chatApi } from "@/lib/api/chat";
-import { messagesKey } from "@/lib/hooks/useConversations";
+import { useMessageThread } from "@/lib/hooks/useMessageThread";
 import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
 import { describeTurnError } from "@/lib/chat/turnErrors";
-import { retryTextFor, shouldShowEcho, visibleThreadMessages } from "@/lib/chat/threadView";
-import type { LiveMessage } from "@/lib/hooks/useChatTurn";
-import type { Conversation } from "@/lib/api/chat";
+import { retryTextFor } from "@/lib/chat/threadView";
+import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
+import type { Conversation, Message } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { ChatErrorBanner } from "./ChatErrorBanner";
@@ -29,6 +28,12 @@ import { translateApiError } from "@/lib/api/errors";
 interface Props {
   conversation: Conversation;
   liveMessage: LiveMessage | null;
+  /**
+   * Prompts sent from this client whose persisted rows have not landed yet.
+   * Rendered as user bubbles after the fetched messages; the turn hook owns
+   * when each one retires, so the thread never dedupes them itself.
+   */
+  pendingEchoes?: PendingEcho[];
   isStreaming: boolean;
   /** Error from the latest chat turn (network, credential, agent error, etc.) */
   turnError?: Error | null;
@@ -51,9 +56,25 @@ interface Props {
   restorePending?: boolean;
 }
 
+const NO_ECHOES: PendingEcho[] = [];
+
+/** Shape an echo as a user message so MessageBubble renders it like a row. */
+function echoAsMessage(echo: PendingEcho, conversationId: string): Message {
+  return {
+    id: echo.id,
+    conversation_id: conversationId,
+    seq: Number.MAX_SAFE_INTEGER,
+    role: "user",
+    content: [{ type: "text", text: echo.text }],
+    status: "complete",
+    created_at: new Date(echo.sentAt).toISOString(),
+  };
+}
+
 export function MessageThread({
   conversation,
   liveMessage,
+  pendingEchoes = NO_ECHOES,
   isStreaming,
   turnError,
   onClearTurnError,
@@ -83,28 +104,21 @@ export function MessageThread({
   // Transcript-wide Cmd/Ctrl+F over the rendered messages (shared find UX).
   const { find, inputRef, onKeyDown } = useDomFind(scrollRef);
 
-  const { data, isPending, error } = useQuery({
-    queryKey: messagesKey(conversation.id),
-    queryFn: async () => (await chatApi.listMessages(conversation.id)).messages,
-    // No polling: the persistent /events subscription drives the live turn and
-    // invalidates this query when the turn ends.
-  });
-
-  const visibleMessages = visibleThreadMessages(data ?? [], liveMessage, turnError);
-  const echoText = liveMessage?.userText;
-  const showEcho = shouldShowEcho(visibleMessages, echoText);
+  const { messages, isPending, error } = useMessageThread(conversation.id, liveMessage, turnError);
+  const isEmpty = messages.length === 0 && pendingEchoes.length === 0 && !liveMessage;
   // A failed turn is never "thinking": freeze the live bubble so only the
   // banner reports the state, and keep whatever text already streamed.
   const liveForRender =
     turnError && liveMessage ? { ...liveMessage, streaming: false } : liveMessage;
-  const retryText = retryTextFor(visibleMessages, echoText);
+  // Retry re-sends the newest echo, else the last persisted user message.
+  const retryText = retryTextFor(messages, pendingEchoes[pendingEchoes.length - 1]?.text);
 
   const scroll = useFollowScroll({
     scrollRef,
     bottomRef,
     resetKey: conversation.id,
     isStreaming,
-    contentVersion: [data, liveMessage],
+    contentVersion: [messages, pendingEchoes, liveMessage],
   });
 
   return (
@@ -132,29 +146,19 @@ export function MessageThread({
               {translateApiError(t, error)}
             </p>
           )}
-          {!isPending && !error && data?.length === 0 && !liveMessage && (
+          {!isPending && !error && isEmpty && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {t("chat.thread.empty")}
             </p>
           )}
 
           <div className="space-y-3">
-            {visibleMessages.map((msg) => (
+            {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            {showEcho && (
-              <MessageBubble
-                message={{
-                  id: "optimistic-user-echo",
-                  conversation_id: conversation.id,
-                  seq: Number.MAX_SAFE_INTEGER,
-                  role: "user",
-                  content: [{ type: "text", text: echoText }],
-                  status: "complete",
-                  created_at: "",
-                }}
-              />
-            )}
+            {pendingEchoes.map((echo) => (
+              <MessageBubble key={echo.id} message={echoAsMessage(echo, conversation.id)} />
+            ))}
             {liveForRender && <MessageBubble live={liveForRender} />}
           </div>
 

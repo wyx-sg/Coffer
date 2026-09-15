@@ -6,14 +6,13 @@ it so the channel's public callback URL is reachable without the user running a
 tunnel by hand. One child per channel (each named tunnel has its own token).
 
 The token never lands in argv (``ps`` is world-readable) — it is written to a
-0600 temp file and passed with ``--token-file``, removed on stop. Each spawn is
-recorded in the upstream-pids directory so a daemon crash leaves nothing behind:
-the startup orphan sweep reaps it.
+0600 temp file and passed with ``--token-file``, removed on stop. Each spawn goes
+through :class:`ChildProcess`, which records it in the upstream-pids directory
+so a daemon crash leaves nothing behind: the startup orphan sweep reaps it.
 """
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
 import os
@@ -22,7 +21,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from coffer.infrastructure.daemon.orphan_sweep import reap_pidfile, record_spawn
+from coffer.infrastructure.daemon.child_process import ChildProcess
 
 _logger = logging.getLogger(__name__)
 
@@ -52,10 +51,9 @@ def _resolve_cloudflared() -> str:
 
 @dataclass
 class _Tunnel:
-    proc: asyncio.subprocess.Process
+    child: ChildProcess
     token: str
     token_file: Path
-    pidfile: Path | None
 
 
 class TunnelController:
@@ -66,14 +64,14 @@ class TunnelController:
 
     def running(self, name: str) -> bool:
         t = self._tunnels.get(name)
-        return t is not None and t.proc.returncode is None
+        return t is not None and t.child.running
 
     def active(self) -> set[str]:
         return {name for name in self._tunnels if self.running(name)}
 
     async def ensure_running(self, name: str, token: str) -> None:
         existing = self._tunnels.get(name)
-        if existing is not None and existing.proc.returncode is None and existing.token == token:
+        if existing is not None and existing.child.running and existing.token == token:
             return
         await self.ensure_stopped(name)
         binary = (
@@ -94,33 +92,17 @@ class TunnelController:
             "--protocol",
             "http2",
         ]
-        proc = await asyncio.create_subprocess_exec(*command)
-        pidfile = record_spawn(_PIDFILE_PREFIX, proc.pid, command)
-        self._tunnels[name] = _Tunnel(
-            proc=proc, token=token, token_file=token_file, pidfile=pidfile
-        )
-        _logger.info("channel.tunnel.started", extra={"channel": name, "pid": proc.pid})
+        child = await ChildProcess.spawn(_PIDFILE_PREFIX, command)
+        self._tunnels[name] = _Tunnel(child=child, token=token, token_file=token_file)
+        _logger.info("channel.tunnel.started", extra={"channel": name, "pid": child.pid})
 
     async def ensure_stopped(self, name: str) -> None:
         tunnel = self._tunnels.pop(name, None)
         if tunnel is None:
             return
-        proc = tunnel.proc
-        if proc.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                proc.terminate()
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=3.0)
-            except TimeoutError:
-                with contextlib.suppress(ProcessLookupError):
-                    proc.kill()
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(proc.wait(), timeout=2.0)
+        await tunnel.child.terminate()
         with contextlib.suppress(Exception):
             tunnel.token_file.unlink(missing_ok=True)
-        if tunnel.pidfile is not None and tunnel.pidfile.exists():
-            with contextlib.suppress(Exception):
-                reap_pidfile(tunnel.pidfile)
         _logger.info("channel.tunnel.stopped", extra={"channel": name})
 
     async def dispose(self) -> None:

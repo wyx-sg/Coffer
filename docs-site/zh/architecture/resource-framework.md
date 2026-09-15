@@ -92,9 +92,9 @@ stateDiagram-v2
 
 ## Kind 在组装入口处注册
 
-框架不使用全局注册表，也不依赖 import 副作用。每个 kind 在组装入口处通过 `KindModule` dataclass 显式装配。组装入口是 `surfaces/http/app.py`（FastAPI 装配）和 `surfaces/cli/main.py`（Typer 装配）。
+框架不使用全局注册表，也不依赖 import 副作用。每个 kind 暴露一个工厂——`application/<kind>/kind.py` 里的 `make_<kind>_kind()`——返回一个冻结的 `Kind`，再由组装入口显式装配：每个 kind 一个 `*_wiring.py` 模块，构建其服务、注册其路由器，并返回一个带类型的 dataclass 交给组装入口传下去。组装入口是 `surfaces/http/app.py`（FastAPI 装配）和 `surfaces/cli/main.py`（Typer 装配）。
 
-添加新 kind 是机械性工作：在每一层创建 kind 的子目录（`domain/<kind>/`、`application/<kind>/`、`infrastructure/<kind>/`、`surfaces/http/<kind>/`、`surfaces/cli/<kind>/`），实现 kind 特定的逻辑，然后在组装入口注册一个 `KindModule`。审计、保留和资源列表接口面将自动继承。
+添加新 kind 是机械性工作：在每一层创建 kind 的子目录（`domain/<kind>/`、`application/<kind>/`、`infrastructure/<kind>/`、`surfaces/http/<kind>/`、`surfaces/cli/<kind>/`），实现 kind 特定的逻辑，写好它的 `make_<kind>_kind()` 工厂，再添加一个由组装入口调用的 wiring 模块。审计、保留和资源列表接口面将自动继承。
 
 ## 为什么「一切皆资源 kind」（ADR everything-is-a-resource-kind）
 

@@ -22,6 +22,7 @@ from coffer.domain.chat.message import (
     ToolUseBlock,
 )
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.chat.dependencies import get_chat_service, get_turn_orchestrator
 from coffer.surfaces.http.chat.schemas import (
     AgentConfigOut,
     AgentConfigPatch,
@@ -34,7 +35,6 @@ from coffer.surfaces.http.chat.schemas import (
     MessageListOut,
     MessageOut,
 )
-from coffer.surfaces.http.turn_dependencies import get_chat_service, get_turn_orchestrator
 
 router = APIRouter(
     prefix="/api/v1/chat",

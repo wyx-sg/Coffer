@@ -35,6 +35,8 @@ The layering import rules, the credential-access rule, and the "extract cross-cu
 - `domain/` stays pure Python + Pydantic only — no FastAPI, SQLAlchemy, httpx, or other external SDKs.
 - `application/` defines ports; `infrastructure/` adapts to them.
 - `keyring` is imported only by the credential module; everywhere else passes credential refs.
+- Each resource kind's `make_<kind>_kind()` factory returns a frozen `Kind`; the composition root (`surfaces/http/app.py` via per-kind `*_wiring.py`, `surfaces/cli/main.py`) registers it and mounts its routes. FastAPI dependency providers are split per kind: `surfaces/http/dependencies.py` holds only the kind-agnostic core, and each kind publishes its own concretely-typed `set_*`/`get_*` pairs from its own module — nothing is typed `Any`.
+- The import-linter cross-kind fence covers every kind symmetrically (mcp, agent, skill, knowledge, channel, chat, provider, memory, sync). The only exceptions are domain vocabulary, not services: `provider`/`memory` may import `domain.agent`, `channel` may import `domain.chat`; `TYPE_CHECKING`-only imports don't count. Code two kinds need moves to a kind-agnostic package at the layer root (`infrastructure/net/`, `infrastructure/agent_files/`, `domain/connection.py`).
 
 ### Code Style
 

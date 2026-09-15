@@ -109,9 +109,9 @@ async def test_status_includes_upstream_summary(tmp_path, monkeypatch):
         assert r2.status_code == 201, r2.text
 
         # Write health rows directly through the health repo
-        from coffer.surfaces.http import dependencies as _deps
+        from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 
-        health_repo = _deps._health_repo
+        health_repo = get_health_repo_optional()
         assert health_repo is not None
         await health_repo.upsert("srv-healthy", "healthy", datetime.now(tz=UTC))
         await health_repo.upsert("srv-failing", "failing", datetime.now(tz=UTC))

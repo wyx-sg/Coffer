@@ -16,13 +16,17 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { syncApi, type ConvergeRound, type SyncRemoteInput } from "@/lib/api/sync";
 import { useToast } from "@/components/ui/toast";
-
-export const syncKey = ["sync"] as const;
-export const syncRemoteKey = ["sync", "remote"] as const;
-export const syncStatusKey = ["sync", "status"] as const;
-export const syncMachinesKey = ["sync", "machines"] as const;
-export const syncRunsKey = ["sync", "runs"] as const;
-export const syncKeyFingerprintKey = ["sync", "key-fingerprint"] as const;
+import {
+  agentsKey,
+  knowledgeKey,
+  resourcesKey,
+  skillsKey,
+  syncKey,
+  syncKeyFingerprintKey,
+  syncRemoteKey,
+  syncRunsKey,
+  syncStatusKey,
+} from "@/lib/api/queryKeys";
 
 export function useSyncRemote() {
   return useQuery({ queryKey: syncRemoteKey, queryFn: () => syncApi.getRemote() });
@@ -53,10 +57,10 @@ function useRoundInvalidation() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: syncKey });
-    void qc.invalidateQueries({ queryKey: ["resources"] });
-    void qc.invalidateQueries({ queryKey: ["skills"] });
-    void qc.invalidateQueries({ queryKey: ["agents"] });
-    void qc.invalidateQueries({ queryKey: ["knowledge"] });
+    void qc.invalidateQueries({ queryKey: resourcesKey });
+    void qc.invalidateQueries({ queryKey: skillsKey });
+    void qc.invalidateQueries({ queryKey: agentsKey });
+    void qc.invalidateQueries({ queryKey: knowledgeKey });
   };
 }
 

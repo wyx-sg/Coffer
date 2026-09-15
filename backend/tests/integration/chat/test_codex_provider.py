@@ -19,8 +19,8 @@ from typing import Any
 import pytest
 
 from coffer.domain.chat.conversation import Conversation
+from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.codex_agent import CodexAppServerAdapter
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.chat.persistence import ConversationRepo

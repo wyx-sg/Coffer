@@ -41,7 +41,7 @@ class ConvergeStatus(StrEnum):
     #: user confirms or rejects.
     AWAITING_CONFIRMATION = "awaiting_confirmation"
     #: Everything applied locally; the push did not land. The commit stays and
-    #: the next round carries it, exactly as a backup push failure always did.
+    #: the next round carries it.
     PUSH_FAILED = "push_failed"
     FAILED = "failed"
     DISABLED = "disabled"

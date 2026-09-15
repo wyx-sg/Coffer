@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { daemonLogsKey } from "@/lib/api/queryKeys";
 
 type DaemonLogListOut = components["schemas"]["DaemonLogListOut"];
 
@@ -21,7 +22,7 @@ interface UseDaemonLogArgs {
 
 export function useDaemonLog({ since, errorsOnly, limit = 100, enabled = true }: UseDaemonLogArgs) {
   return useQuery({
-    queryKey: ["daemon", "logs", { since, errorsOnly, limit }],
+    queryKey: daemonLogsKey({ since, errorsOnly, limit }),
     queryFn: async (): Promise<DaemonLogListOut> => {
       const client = getApiClient();
       const query: Record<string, string | number | boolean> = { limit };

@@ -114,6 +114,39 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // The editor, the syntax highlighter and the markdown pipeline are the
+        // three heavy vendor graphs, and none of them is needed to paint the
+        // landing page. Naming them keeps each in its own file so a page-level
+        // `lazy()` in router.tsx can pull it in only when a route that renders
+        // code or markdown actually loads, and so an app change never
+        // invalidates the cached vendor bytes.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (
+            /[\\/]node_modules[\\/](@codemirror|@uiw|@lezer|@marijn|style-mod|w3c-keyname|crelt)[\\/]/.test(
+              id,
+            )
+          ) {
+            return "codemirror";
+          }
+          if (/[\\/]node_modules[\\/](highlight\.js|lowlight|rehype-highlight)[\\/]/.test(id)) {
+            return "highlight";
+          }
+          if (
+            /[\\/]node_modules[\\/](react-markdown|remark-|rehype-|micromark|mdast-|hast-|unified|unist-|vfile|bail|trough|zwitch|devlop|ccount|longest-streak|markdown-table|escape-string-regexp|property-information|space-separated-tokens|comma-separated-tokens|decode-named-character-reference|character-entities|character-reference-invalid|html-url-attributes|html-void-elements|estree-util-|parse-entities|is-decimal|is-hexadecimal|is-alphanumerical|is-alphabetical|is-plain-obj|trim-lines|inline-style-parser|style-to-object|style-to-js)/.test(
+              id,
+            )
+          ) {
+            return "markdown";
+          }
+          return undefined;
+        },
+      },
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,

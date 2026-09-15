@@ -133,6 +133,62 @@ async def test_put_remote_that_cannot_be_reached_is_rejected_at_the_front_door(
     assert (await client.get("/api/v1/sync/remote")).json()["configured"] is False
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"url": "-x"},
+        {"url": "--receive-pack=touch pwned"},
+        {"url": "https://example.invalid/v.git", "branch": "--receive-pack=x"},
+        {"url": "https://example.invalid/v.git", "branch": "-x"},
+        {"url": "https://example.invalid/v.git", "branch": "a..b"},
+        {"url": "https://example.invalid/v.git", "branch": "a.lock"},
+        {"url": "https://example.invalid/v.git", "branch": "with space"},
+        {"url": "https://example.invalid/v.git", "worktree_path": ""},
+    ],
+)
+async def test_put_remote_refuses_what_git_would_read_as_an_option(client, body) -> None:
+    """The URL and the branch become git arguments. A value git would parse as
+    an option — ``--receive-pack=<cmd>`` is a command — is a 422 at the wire,
+    before any adapter sees it, and nothing is stored."""
+    r = await client.put("/api/v1/sync/remote", json=body)
+
+    assert r.status_code == 422, r.text
+    assert (await client.get("/api/v1/sync/remote")).json()["configured"] is False
+
+
+@pytest.mark.parametrize(
+    "where",
+    ["knowledge_root", "skills_root", "root", "relative"],
+)
+async def test_put_remote_refuses_a_working_tree_inside_the_vault(client, fleet, where) -> None:
+    """spec vault-sync ``## Concepts`` (working tree): the round mirrors the
+    vault *into* the tree and ``reset --hard``s it, so a tree at, inside or
+    above a vault directory would copy the vault into itself and then erase
+    it. Coffer's own directory is refused the same way, and so is a relative
+    path, which would resolve against whatever the daemon's cwd happens to be."""
+    a, _b = fleet
+    set_sync_service(a.service(guard_worktree=True))
+    path = "relative/sync" if where == "relative" else str(getattr(a, where))
+
+    r = await client.put("/api/v1/sync/remote", json={"url": a.remote_url, "worktree_path": path})
+
+    assert r.status_code == 422, r.text
+    assert _code(r) == "BACKUP_REMOTE_INVALID"
+    assert (await client.get("/api/v1/sync/remote")).json()["configured"] is False
+
+
+async def test_put_remote_accepts_the_working_tree_beside_the_vault(client, fleet) -> None:
+    a, _b = fleet
+    set_sync_service(a.service(guard_worktree=True))
+
+    r = await client.put(
+        "/api/v1/sync/remote", json={"url": a.remote_url, "worktree_path": str(a.worktree)}
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["worktree_path"] == str(a.worktree)
+
+
 async def test_delete_remote_is_idempotent(client, fleet) -> None:
     a, _b = fleet
     await _configure(client, a)

@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { ScrollText } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { InvocationsTable } from "@/kinds/mcp/InvocationsTable";
+import { InvocationsTable } from "@/components/mcp/InvocationsTable";
 import { ChangesTab } from "./ChangesTab";
 import { DaemonTab } from "./DaemonTab";
 

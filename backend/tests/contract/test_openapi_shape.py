@@ -47,7 +47,13 @@ def test_openapi_dump_references_daemon_status_schema() -> None:
     schema = app.openapi()
     assert "DaemonStatusOut" in schema["components"]["schemas"]
     daemon_status = schema["components"]["schemas"]["DaemonStatusOut"]
-    assert set(daemon_status["required"]) == {"status", "version", "started_at", "port"}
+    assert set(daemon_status["required"]) == {
+        "status",
+        "version",
+        "executable",
+        "started_at",
+        "port",
+    }
     status_prop = daemon_status["properties"]["status"]
     assert status_prop["type"] == "string"
     assert status_prop.get("enum") == [

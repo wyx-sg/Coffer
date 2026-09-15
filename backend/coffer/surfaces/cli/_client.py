@@ -18,9 +18,10 @@ from pathlib import Path
 import httpx
 import typer
 
-from coffer.infrastructure.daemon.bootstrap import live_daemon
+from coffer.infrastructure.daemon.bootstrap import live_daemon, probe_status
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, read
-from coffer.infrastructure.daemon.spawn import daemon_spawn_command
+from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
+from coffer.infrastructure.daemon.version_skew import skew_warning
 from coffer.surfaces.cli._options import ExitCode
 
 # How long (seconds) to wait for daemon.json to appear after spawning.
@@ -72,42 +73,35 @@ def _wait_for_daemon(timeout: float = _DAEMON_BOOT_TIMEOUT) -> DaemonInfo | None
 def _spawn_daemon() -> subprocess.Popen[bytes] | None:
     """Detached best-effort spawn of the daemon process.
 
-    Stdout/stderr go to ~/.coffer/logs/daemon.log; stdin is DEVNULL.
+    Stdout/stderr go to ~/.coffer/logs/daemon.log; stdin is DEVNULL — the
+    shared :func:`spawn_detached_daemon`, so the daemon's own refusal (a
+    squatted port) lands in the log this surface tells the user to read.
     The caller is responsible for waiting for daemon.json to appear.
 
     Returns the ``Popen`` handle so the caller can ``kill()`` the
     half-started daemon if it never publishes daemon.json within the boot
     timeout; returns ``None`` if the spawn itself failed (OSError).
     """
-    home = Path(os.environ.get("HOME", "~")).expanduser()
-    log_dir = home / ".coffer" / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_path = log_dir / "daemon.log"
-    log = open(log_path, "ab")  # noqa: SIM115 — handle leaks intentionally into child
-
-    cmd = daemon_spawn_command()
-
     try:
-        if sys.platform == "win32":
-            creationflags = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
-            return subprocess.Popen(
-                cmd,
-                stdout=log,
-                stderr=log,
-                stdin=subprocess.DEVNULL,
-                creationflags=creationflags,
-            )
-        return subprocess.Popen(
-            cmd,
-            stdout=log,
-            stderr=log,
-            stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        return spawn_detached_daemon()
     except OSError as e:
-        log.close()
         print(f"coffer: failed to spawn daemon: {e}", file=sys.stderr)
         return None
+
+
+#: How long the version-skew probe waits. Short: the daemon just answered the
+#: liveness probe, and a missed warning costs nothing but the warning.
+_SKEW_PROBE_TIMEOUT: float = 2.0
+
+
+def warn_if_version_skew(info: DaemonInfo) -> None:
+    """Print a one-line WARNING to stderr when the daemon ``info`` names is a
+    different build than this CLI (ADR daemon-detect-or-spawn: detection, not
+    refusal). Silent when the probe fails — the command itself will say so.
+    """
+    message = skew_warning(probe_status(info, timeout=_SKEW_PROBE_TIMEOUT), caller="coffer")
+    if message is not None:
+        print(message, file=sys.stderr)
 
 
 def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
@@ -141,6 +135,7 @@ def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
             )
             raise DaemonNotRunning()
 
+    warn_if_version_skew(info)
     base = f"http://127.0.0.1:{info.port}/api/v1"
     return (
         httpx.Client(

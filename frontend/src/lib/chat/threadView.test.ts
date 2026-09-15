@@ -2,7 +2,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { Message } from "@/lib/api/chat";
-import { retryTextFor, shouldShowEcho, textOf, visibleThreadMessages } from "./threadView";
+import { retryTextFor, textOf, visibleThreadMessages } from "./threadView";
 
 const msg = (over: Partial<Message>): Message => ({
   id: "m",
@@ -54,18 +54,6 @@ describe("visibleThreadMessages", () => {
   test("after a failed turn drops only the empty placeholder, never streamed text", () => {
     const out = visibleThreadMessages([user, placeholder, partial], null, new Error("x"));
     expect(out.map((m) => m.id)).toEqual(["u", "q"]);
-  });
-});
-
-describe("shouldShowEcho", () => {
-  test("no echo text → nothing to show", () => {
-    expect(shouldShowEcho([msg({})], undefined)).toBe(false);
-  });
-
-  test("shown until the persisted user row with the same text is last", () => {
-    expect(shouldShowEcho([], "hi")).toBe(true);
-    expect(shouldShowEcho([msg({ content: [{ type: "text", text: "hi" }] })], "hi")).toBe(false);
-    expect(shouldShowEcho([msg({ content: [{ type: "text", text: "other" }] })], "hi")).toBe(true);
   });
 });
 

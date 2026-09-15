@@ -94,3 +94,47 @@ def test_exists_does_not_decrypt_corrupt_row(db_path: pathlib.Path) -> None:
     assert other.exists("ref") is True
     with pytest.raises(CredentialUnreadable):
         other.get("ref")
+
+
+# --------------------------------------------------------------------------- #
+# async facade: the same calls, off the event loop                             #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_async_facade_roundtrips_through_the_same_rows(
+    store: EncryptedCredentialStore,
+) -> None:
+    await store.aset("svc/key", "s3cret")
+    assert await store.aexists("svc/key") is True
+    assert await store.aget("svc/key") == "s3cret"
+    assert store.get("svc/key") == "s3cret", "the sync API sees the async write"
+    await store.adelete("svc/key")
+    assert await store.aget("svc/key") is None
+    assert await store.aexists("svc/key") is False
+
+
+@pytest.mark.asyncio
+async def test_async_facade_runs_the_blocking_call_off_the_loop_thread(
+    db_path: pathlib.Path,
+) -> None:
+    """The point of the facade: the SQLite call must not run on the loop thread,
+    where its busy-wait would stall every other request."""
+    import threading
+
+    seen: list[int] = []
+
+    class _Recording(EncryptedCredentialStore):
+        def get(self, ref: str) -> str | None:
+            seen.append(threading.get_ident())
+            return super().get(ref)
+
+        def exists(self, ref: str) -> bool:
+            seen.append(threading.get_ident())
+            return super().exists(ref)
+
+    store = _Recording(db_path=db_path, key=Fernet.generate_key())
+    await store.aget("nope")
+    await store.aexists("nope")
+    assert len(seen) == 2
+    assert all(ident != threading.get_ident() for ident in seen)

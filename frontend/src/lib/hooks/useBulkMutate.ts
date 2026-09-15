@@ -12,13 +12,14 @@
 // toast per failed row.
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryKey } from "@tanstack/react-query";
 
 import { useToast } from "@/components/ui/toast";
 
 interface BulkOptions {
-  /** Query keys to invalidate once after the batch settles (single burst). */
-  invalidate?: (readonly unknown[])[];
+  /** Query keys to invalidate once after the batch settles (single burst).
+   *  Pass builders from `lib/api/queryKeys.ts`, never inline arrays. */
+  invalidate?: QueryKey[];
 }
 
 /**

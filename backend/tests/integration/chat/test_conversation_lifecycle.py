@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from coffer.domain.chat.conversation import Conversation
+from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.message import (
     Message,
     Role,
@@ -21,7 +22,6 @@ from coffer.domain.chat.message import (
     ToolResultBlock,
     ToolUseBlock,
 )
-from coffer.domain.errors import ConversationNotFound
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (

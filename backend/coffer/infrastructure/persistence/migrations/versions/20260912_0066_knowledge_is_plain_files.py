@@ -13,8 +13,9 @@ none of them is replaced: a collection is a row in the kind-agnostic
 ``documents.title`` today — the file on disk is named by a ULID and its
 frontmatter never carried one. Dropping the table first would erase every title
 with no way back, so ``upgrade`` runs the on-disk rewrite FIRST
-(``infrastructure/knowledge/legacy_migration.py``), reading the rows it is about
-to destroy, and only then drops.
+(``persistence/migrations/knowledge_tree_0066.py``, frozen alongside this file so
+the migration never tracks the knowledge layer's live code), reading the rows it
+is about to destroy, and only then drops.
 
 What the rewrite does: ``<scope>/{notes,docs}/<ULID>.md`` becomes
 ``<collection>/<slug-of-title>.md`` carrying exactly ``title``,
@@ -47,7 +48,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import inspect, text
 
-from coffer.infrastructure.knowledge.legacy_migration import migrate
+from coffer.infrastructure.persistence.migrations.knowledge_tree_0066 import migrate
 
 revision: str = "0066"
 down_revision: str | None = "0065"

@@ -9,6 +9,7 @@ the retrieval eval can score it offline.
 
 from __future__ import annotations
 
+import functools
 import math
 import re
 from collections.abc import Sequence
@@ -32,6 +33,35 @@ class ScoredTool:
     score: float
 
 
+@dataclass(frozen=True)
+class _Index:
+    """The query-independent half of the score, computed once per catalogue."""
+
+    doc_tfs: tuple[dict[str, float], ...]
+    doc_lens: tuple[float, ...]
+    avg_len: float
+
+
+@functools.lru_cache(maxsize=8)
+def _index(catalogue: tuple[tuple[str, str], ...]) -> _Index:
+    """Tokenize and weigh every tool once. Keyed on the catalogue itself, so a
+    changed tool list (a server added, a description edited) is a new index
+    and an unchanged one costs a hash of the tuple rather than a re-tokenize
+    of every description on every search."""
+    doc_tfs: list[dict[str, float]] = []
+    doc_lens: list[float] = []
+    for name, description in catalogue:
+        tf: dict[str, float] = {}
+        for tok in _tokenize(name):
+            tf[tok] = tf.get(tok, 0.0) + _NAME_WEIGHT
+        for tok in _tokenize(description):
+            tf[tok] = tf.get(tok, 0.0) + _DESC_WEIGHT
+        doc_tfs.append(tf)
+        doc_lens.append(sum(tf.values()))
+    n = len(catalogue)
+    return _Index(tuple(doc_tfs), tuple(doc_lens), (sum(doc_lens) / n) if n else 0.0)
+
+
 def rank_tools(
     query: str,
     catalogue: Sequence[tuple[str, str]],
@@ -47,19 +77,9 @@ def rank_tools(
     if not query_terms:
         return []
 
-    doc_tfs: list[dict[str, float]] = []
-    doc_lens: list[float] = []
-    for name, description in catalogue:
-        tf: dict[str, float] = {}
-        for tok in _tokenize(name):
-            tf[tok] = tf.get(tok, 0.0) + _NAME_WEIGHT
-        for tok in _tokenize(description):
-            tf[tok] = tf.get(tok, 0.0) + _DESC_WEIGHT
-        doc_tfs.append(tf)
-        doc_lens.append(sum(tf.values()))
-
+    index = _index(tuple((str(name), str(description)) for name, description in catalogue))
+    doc_tfs, doc_lens, avg_len = index.doc_tfs, index.doc_lens, index.avg_len
     n = len(catalogue)
-    avg_len = (sum(doc_lens) / n) if n else 0.0
 
     idf: dict[str, float] = {}
     for term in query_terms:

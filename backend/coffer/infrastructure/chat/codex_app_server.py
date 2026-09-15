@@ -11,6 +11,10 @@ binary on ``PATH`` via ``shutil.which`` (production machines ship a working npm
 wrapper; the adapter never hard-codes a path) and spawns it with stdin/stdout
 pipes, which become the NDJSON reader/writer the RPC client reads/writes.
 
+The process goes through :class:`ChildProcess` so its PID is recorded for the
+startup orphan sweep — a daemon crash must not leave a ``codex app-server``
+running with nothing pointing at it — and torn down by the shared ladder.
+
 Only stdlib ``asyncio`` + ``shutil`` are used (Contract 9 — no new dependency).
 The real-subprocess factory is covered by an integration test that skips when
 ``codex`` is absent; it is never exercised in the unit tier.
@@ -26,8 +30,12 @@ from collections.abc import Callable, Sequence
 from typing import Protocol
 
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
+from coffer.infrastructure.daemon.child_process import ChildProcess
 
 _logger = logging.getLogger(__name__)
+
+#: Pidfile prefix under ``~/.coffer/upstream-pids`` for the app-server child.
+_CHILD_NAME = "codex-app-server"
 
 
 class CodexAppServerSession(Protocol):
@@ -62,7 +70,7 @@ class CodexSubprocessSession:
         self._argv = list(argv)
         self._cwd = cwd
         self._env = env
-        self._proc: asyncio.subprocess.Process | None = None
+        self._child: ChildProcess | None = None
         self._rpc: CodexRpcClient | None = None
         self._stderr_task: asyncio.Task[None] | None = None
 
@@ -78,17 +86,18 @@ class CodexSubprocessSession:
         # end ("codex rpc stream ended"); the actual cause (e.g. a broken codex
         # install: "Missing optional dependency @openai/codex-…") is on stderr,
         # so surfacing it here turns an opaque failure into an actionable log.
-        proc = await asyncio.create_subprocess_exec(
-            *self._argv,
+        self._child = await ChildProcess.spawn(
+            _CHILD_NAME,
+            self._argv,
             cwd=self._cwd,
             env=self._env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+        proc = self._child.process
         if proc.stdin is None or proc.stdout is None:
             raise RuntimeError("codex app-server subprocess has no stdin/stdout pipe")
-        self._proc = proc
         if proc.stderr is not None:
             self._stderr_task = asyncio.create_task(self._drain_stderr(proc.stderr))
         self._rpc = CodexRpcClient(proc.stdout, proc.stdin)
@@ -114,12 +123,9 @@ class CodexSubprocessSession:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._stderr_task
             self._stderr_task = None
-        proc = self._proc
-        if proc is not None and proc.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                proc.terminate()
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(proc.wait(), timeout=5.0)
+        child, self._child = self._child, None
+        if child is not None:
+            await child.terminate()
 
 
 def default_app_server_session(cwd: str, env: dict[str, str] | None) -> CodexAppServerSession:

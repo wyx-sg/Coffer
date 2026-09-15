@@ -378,7 +378,7 @@ null 值在校验阶段被拒绝（422）。
 
 - **Given** daemon 刚刚启动,
 - **When** 调用 `GET /api/v1/daemon/status`,
-- **Then** 响应中 `status: "ready"`、`port` 非零、`started_at` 为时间戳；同样的值也写入 `~/.coffer/daemon.json`。
+- **Then** 响应中 `status: "ready"`、`port` 非零、`started_at` 为时间戳，并带有 daemon 的 `version` 与 `executable`；同样的端口与启动时间也写入 `~/.coffer/daemon.json`。若 CLI 或 shim 自身版本与响应中的不同，它会在 stderr 打印一行警告，指出两边的版本与该可执行文件，然后照常继续（ADR daemon-detect-or-spawn：只检测，不拒绝）。
 
 ### Scenario: rotating the daemon token invalidates the previous one
 
@@ -458,8 +458,14 @@ null 值在校验阶段被拒绝（422）。
 
 - **Given** 一个从解压后的 release 归档启动的冻结态 `coffer-daemon`，其同目录下放着 `coffer-mcp-shim` 与 `coffer-callback`,
 - **When** daemon 启动,
-- **Then** 每个同目录二进制都出现在 `~/.coffer/bin/` 下且具备可执行位，复制过程经由同目录临时文件加 rename 原子完成,
-- **And** 在没有任何变化的情况下再启动一次不会动这些文件，而版本变化则会替换它们 —— 由字节大小、mtime 与版本哨兵三个信号共同判定是否过期。
+- **Then** 每个同目录二进制都可经 `~/.coffer/bin/<name>` 访问且具备可执行位 —— 它是指向 `~/.coffer/bin/<version>/` 的符号链接，文件经同目录临时文件加 rename 原子复制到那里，链接本身也是原子翻转的,
+- **And** 在没有任何变化的情况下再启动一次不会动这些文件，而版本变化则把新构建部署到它自己的 `<version>/` 目录并重新指向链接 —— 由字节大小与版本哨兵两个信号判定是否过期 —— 上一版本的目录仍留在磁盘上，把链接指回去即可回滚；只保留最新的两个版本目录。
+
+### Scenario: a schema upgrade keeps a copy of the vault
+
+- **Given** daemon 启动时面对的 `coffer.db` 的 Alembic 版本落后于本构建的 head,
+- **When** 启动期迁移运行,
+- **Then** 升级前的状态以 `coffer.db.pre-<revision>`（如有 `-wal`/`-shm` 伴随文件也一并复制）留在活文件旁边，只保留最新的三份副本；而对已经是当前 schema 的库 —— 或内存库 —— 启动时什么都不复制。
 
 ## Requirements
 
@@ -507,7 +513,7 @@ null 值在校验阶段被拒绝（422）。
 - **FR-023**: 发布流水线 MUST 产出单一一份聚合的 `SHA256SUMS`（在 CI 中生成，并在 release job 中跨 matrix leg 拼接），覆盖每一个制品，使下载者无需只凭 GitHub Release 页面就能校验完整性。
 - **FR-024**: daemon MUST 自己以静态文件的形式，在它自己的 loopback origin 上提供构建好的 Web UI，使 UI 与管理 API 同源 (same-origin)。因此跨域访问 MUST 默认关闭；Vite dev server 的 origin 仅在既有的 `COFFER_DEV_CORS` opt-in 之下仍可访问。
 - **FR-025**: daemon MUST 在它自己提供的 `index.html` 里把 API token 交给浏览器 —— 以注入到文档 head 中的 `window.__COFFER_TOKEN__` 全局变量形式，其取值来自 FR-013 的请求头校验所比对的同一个进程内 token，因此两者不可能漂移。它 MUST 对**每一条**解析到该文档的路由都这么做 —— 裸 `/` 与经 SPA 回退提供的每一条客户端路由一视同仁 —— 并且 MUST 以 `Cache-Control: no-store` 提供、不带 ETag 与 Last-Modified，因为该文档现在携带了一份每个 daemon 各自的密钥，而一份缓存副本会把上一个 daemon 已失效的 token 交给重启后的浏览器。页面 MUST NOT 持久化该 token：存下来的 token 会活得比铸造它的 daemon 更久，而 daemon 每次启动都会铸造一个新的。API token MUST NOT 在任何环节出现在 URL 里 —— URL 会落进浏览器历史，而那与 FR-012 / FR-013 的「仅 loopback + token」姿态相抵触；响应正文则不受这些影响。因此 `coffer open` MUST NOT 自带任何凭据：它从 `~/.coffer/daemon.json` 读取 daemon 真实的端口（该端口会随重启变动），并在那个 origin 上打开浏览器。
-- **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-callback` —— 幂等地部署到 `~/.coffer/bin/`。`coffer` 在这份清单里，是为了让只装了桌面 `.dmg`（FR-022）的用户在首次启动后磁盘上就有管理 CLI；`coffer-daemon` 在其中，是为了让冻结态的 shim 能把它当同目录兄弟解析到。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename 覆盖目标），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由三个信号判定 —— 字节大小、源比目标更新的 mtime、以及一个版本哨兵 —— 使同样大小的跨版本升级也能被检出。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback`。
+- **FR-026**: 当 daemon 检测到自己以冻结构建运行时，它 MUST 在启动时把同目录的二进制 —— `coffer`、`coffer-daemon`、`coffer-mcp-shim`、`coffer-callback` —— 幂等地部署到 `~/.coffer/bin/`。`coffer` 在这份清单里，是为了让只装了桌面 `.dmg`（FR-022）的用户在首次启动后磁盘上就有管理 CLI；`coffer-daemon` 在其中，是为了让冻结态的 shim 能把它当同目录兄弟解析到。每个构建 MUST 落在各自的 `~/.coffer/bin/<version>/` 目录里，对外的 `~/.coffer/bin/<name>` 路径是指向它的符号链接并原子翻转，使部署从不原地覆盖二进制，且上一版本的目录留在磁盘上以便回滚（保留最新的两个版本目录，更旧的清理掉）。复制 MUST 是原子的（同目录临时文件、先设可执行位、再 rename，版本哨兵最后写入），使崩溃或正在并发执行的二进制永远不会观察到被截断的文件；是否过期 MUST 由两个信号判定 —— 字节大小与版本哨兵 —— 绝不用 mtime，它只说明构建何时解压，而不是它的内容。在 `alembic upgrade head` 改动磁盘上的 `coffer.db` 之前，daemon MUST 先把它（连同 `-wal`/`-shm` 伴随文件）复制为 `coffer.db.pre-<revision>`，只保留最新的三份；已经是当前 schema 的库或内存库 MUST NOT 被复制。源码安装 MUST NOT 做这件事：`pip install` 已经把 console script 装到 `PATH` 上了（FR-018）。这件事归 daemon 所有，因为运行期正是它在拉起 `coffer-callback`。
 
 - **FR-027**: daemon MUST 拒绝任何 `Host` 请求头未指向 loopback 权威的请求 —— `127.0.0.1`、`localhost` 或 `::1`，带不带端口皆可 —— 以错误码 `HOST_NOT_LOOPBACK` 返回 `421`，而不是照常提供服务。这正是 FR-025 得以安全的前提：绑定 loopback（FR-012）挡得住远程主机，却挡不住**浏览器** —— 攻击者把自己页面的域名重解析到 `127.0.0.1`（DNS rebinding），浏览器便视之为同源，CORS 因此不生效。而 rebinding 不会改变 `Host` 请求头，所以被重绑定的请求仍然写着攻击者自己的域名，在它能从被提供的文档里读到 token 之前就被拒绝。该规则 MUST 覆盖 daemon 暴露的每一个面。它不涉及独立的 `coffer-callback` 监听器 —— 那是另一个端口上的另一个进程，也是隧道唯一会指向的东西。
 - **FR-028**: daemon 的监听端口 MUST **默认固定且可修改**，好让指向 Coffer UI 的浏览器书签跨重启依然有效。什么都没配置时，daemon MUST 精确绑定 `8000`，MUST NOT 去扫描替代端口；漂移的 origin 不只是坏掉一个书签，因为浏览器 `localStorage` 是按 origin 隔离的 —— 端口一变，界面语言、侧边栏状态、分页大小、首选编辑器就静默重置，而用户不会把这两件事联系起来。「固定一个默认端口并允许修改」也正是同类带 Web UI 的本地服务的做法。该设置 MUST 存放在 daemon **绑定端口之前**就能读到的文件里 —— `~/.coffer/daemon-config.json`，权限 `0600` —— 因为端口是在打开数据库、跑 migration 之前选定的，任何基于数据库的设置都承载不了它。它 MUST NOT 是环境变量：daemon 由第一个需要它的入口（CLI、MCP shim）以 detached 子进程拉起，继承的是那个调用方的环境，而 shell profile 到不了那里，从 GUI 启动的 agent 更是从未读过它。配置了端口时，daemon MUST 精确绑定该端口，MUST NOT 回退到别的端口 —— 悄悄漂移正是这条设置要终结的行为。绑不上时，daemon MUST 拒绝启动，并 MUST 说明是哪个进程占着该端口、以及解决它的确切命令。用户 MUST 能**从 CLI** 读取并修改该设置；它 MUST 在没有 daemon 运行时也能用，因为「daemon 绑不上端口」恰恰就是这条设置必须能被修好的那个状态。它 MUST NOT 有 REST 端点或设置面板：一个默认就正确的端口不配在 UI 里占位置，而退路属于诊断端口冲突的地方。改动在下次启动时生效，因此 CLI MUST 提供 `coffer daemon restart`，让应用改动只需一条命令。这条设置**刻意不在 FR-014 的审计要求之内**：它既不是资源也不是能力，而是在数据库打开之前读取的进程配置，并且拥有它的 CLI 必须在没有 daemon 运行时也能用 —— 而那恰恰是最要紧的那条路径上审计表够不到的时候。只在碰巧有 daemon 时才记录一笔，比一笔都不记更不诚实。
@@ -524,7 +530,7 @@ null 值在校验阶段被拒绝（422）。
 **Scope enforcement（[Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.zh.md)）**
 
 - **FR-020**: System MUST 在网关按会话的把关点，依据 `mcp_server` 的框架级 `scope`（一条允许列表 `agents`，为 `null` 即不设限）过滤其暴露：会话自报的 agent 身份把关该会话的 `tools/list` / `resources/list` / `prompts/list` 与调用路由。一台被 scope 排除的服务器，对该会话而言与一个被禁用的能力无法区分，而它本身仍是已注册的，在管理面里照常列出、照常可编辑。提问会话的身份是这道关卡唯一的输入；scope 只点名 agent、不点名别的，因为一台服务器的触达（reach）是机器本地的、绝不会从别处到来（spec vault-sync `## What does not sync`）——一台不该在本机跑的服务器，压根就不会在本机被启用。scope MUST NOT 把关拉起：supervisor 不承载任何策略，也没有会话身份可供判断，因此这个判定在它上面一层生效。所有拉起路径都在那道关卡的下游（列举的扇出只从已过滤集合里拉起；一次调用会在调用接缝上重新判定），因此带 scope 的服务器与任何其他已启用服务器一样被拉起，但没有任何会话能拉起一台它看不见的服务器。管理路由（含 `POST /{name}/test`）是对资源的管理操作而非 agent 会话，MUST NOT 受 scope 把关——于是所有者始终可以测试一台本机上没有任何会话看得见的服务器。
-- **FR-021**: System MUST 在 MCP 握手时接受自报的 agent 身份（`params._meta["coffer/agent"]`，与既有的 `coffer/cwd` key 并列），该身份由 Coffer-MCP 安装（spec agent-registry FR-019）以 `coffer-mcp-shim --agent <name>` 的形式写入受管 agent 的调用。没有上报身份的会话 MUST 被当作 `agent=None`，只能匹配完全不带 scope 的服务器。身份是自报的，不做加密验证——这是一条被明确记录的信任边界，在仅本机 loopback、单用户的姿态下（FR-012）可以接受。
+- **FR-021**: System MUST 在 MCP 握手时接受自报的 agent 身份（`params._meta["coffer/agent"]`，与既有的 `coffer/cwd` key 并列），该身份由 Coffer-MCP 安装（spec agent-registry FR-019）以 `coffer-mcp-shim --agent <name>` 的形式写入受管 agent 的调用。没有上报身份的会话 MUST 被当作 `agent=None`，只能匹配完全不带 scope 的服务器。身份是自报的，不做加密验证——这是一条被明确记录的信任边界，在仅本机 loopback、单用户的姿态下（FR-012）可以接受。身份**只在握手时上报一次**，别处不再接受：网关把身份穿进 Coffer 内置工具调用（作为知识与记忆工具据以授权的 `agent` 参数）时，MUST 用会话的身份覆盖客户端塞进调用参数里的任何 `agent`，会话没有上报身份时 MUST 把这个参数整个去掉——客户端因此无法逐次调用换一个身份，任何内置工具的 input schema 也不公开 `agent`。
 
 ### Key Entities
 

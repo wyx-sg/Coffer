@@ -61,17 +61,41 @@ def split(relpath: str) -> list[str]:
     return segments
 
 
+def _anchor(candidate: pathlib.Path) -> pathlib.Path:
+    """The nearest part of ``candidate`` that is already on disk.
+
+    A symlink counts even when it dangles: it is the thing a later write would
+    follow, so it is the thing whose target has to be checked.
+    """
+    for part in (candidate, *candidate.parents):
+        if part.is_symlink() or part.exists():
+            return part
+    return candidate
+
+
+def assert_inside_root(candidate: pathlib.Path, relpath: str) -> None:
+    """Refuse a path that resolves outside the knowledge root.
+
+    Checked on the nearest *existing* ancestor rather than on ``candidate``
+    itself: a file that does not exist yet has nothing to resolve, but the
+    directory it would be created in does — and a symlinked directory inside
+    the root would carry the write wherever it points (FR-006).
+    """
+    root = knowledge_root()
+    root_resolved = root.resolve()
+    if not _anchor(candidate).resolve().is_relative_to(root_resolved):
+        raise UnsafeKnowledgePath(relpath, "escapes the knowledge root")
+
+
 def resolve(relpath: str) -> pathlib.Path:
     """Absolute path for a knowledge-root-relative path, traversal-checked.
 
     The guard runs on the segments *and* on the resolved result: a symlink
-    inside the root could otherwise point out of it.
+    inside the root — to a file, or to a directory a new file would land in —
+    could otherwise point out of it.
     """
-    root = knowledge_root()
-    candidate = root.joinpath(*split(relpath))
-    root_resolved = root.resolve() if root.exists() else root
-    if candidate.exists() and not candidate.resolve().is_relative_to(root_resolved):
-        raise UnsafeKnowledgePath(relpath, "escapes the knowledge root")
+    candidate = knowledge_root().joinpath(*split(relpath))
+    assert_inside_root(candidate, relpath)
     return candidate
 
 

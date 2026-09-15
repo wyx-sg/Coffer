@@ -2,7 +2,9 @@
 
 Disabling a tool/prompt on one machine is shared intent — the same server on
 the other machine should honor it. Docs carry only the DISABLED capabilities
-per server (enabled is the default; seen-timestamps stay machine-local).
+per server (enabled is the default; seen-timestamps stay machine-local), and a
+server's document exists only while something on it is disabled — so deleting
+it is how "nothing disabled here" travels.
 """
 
 from __future__ import annotations
@@ -74,39 +76,67 @@ class McpPreferenceSyncState:
         return docs, owned
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
+        """Make each named server's disabled set exactly what its document says.
+
+        Only the servers the documents name are touched. The applier hands
+        over one document at a time, so a server absent from ``docs`` has not
+        been decided about here — its document was simply not in this batch.
+        The one way a server's disabled set becomes empty is its document being
+        deleted, which arrives through :meth:`delete_docs`.
+        """
         errors: list[tuple[str, str]] = []
         by_name = {r.name: r.id for r in await self._resources.list(kind="mcp_server")}
-        wanted_by_server: dict[str, set[tuple[str, str]]] = {}
-        for _path, doc in docs:
-            server = str(doc.get("server") or "")
+        for rel, doc in docs:
+            server = str(doc.get("server") or rel)
             entries = doc.get("disabled")
-            if not server or not isinstance(entries, list):
+            resource_id = by_name.get(server)
+            if resource_id is None or not isinstance(entries, list):
                 continue
-            wanted_by_server[server] = {
+            wanted = {
                 (str(e.get("type")), str(e.get("key")))
                 for e in entries
                 if isinstance(e, dict) and e.get("type") and e.get("key")
             }
-        for server, resource_id in by_name.items():
-            wanted = wanted_by_server.get(server, set())
             try:
-                current = await self._prefs.list_for(resource_id)
-                now = datetime.now(tz=UTC)
-                seen = {(str(p.capability_type), p.capability_key): p for p in current}
-                for key, pref in seen.items():
-                    if not pref.enabled and key not in wanted:
-                        await self._prefs.set_enabled(
-                            resource_id, pref.capability_type, pref.capability_key, True
-                        )
-                for cap_type, cap_key in wanted:
-                    if cap_type not in _CAPABILITY_TYPES:
-                        continue  # a future capability type this build ignores
-                    typed = cast(CapabilityType, cap_type)
-                    existing = seen.get((cap_type, cap_key))
-                    if existing is None:
-                        await self._prefs.insert(resource_id, typed, cap_key, False, now, now)
-                    elif existing.enabled:
-                        await self._prefs.set_enabled(resource_id, typed, cap_key, False)
+                await self._converge(resource_id, wanted)
             except Exception as e:
                 errors.append((server, str(e)))
         return errors
+
+    async def delete_docs(self, rels: list[str]) -> None:
+        """Re-enable everything on a server whose document another machine
+        took back.
+
+        A document exists only while something on that server is disabled, so
+        its deletion means "nothing disabled" — the same operation import runs
+        when a capability drops out of the list, applied to the whole server.
+        The rows stay: enabled is their default, and their seen-timestamps are
+        this machine's own record of what the server offered. A rel naming a
+        server this machine does not register is ignored; the deletion cannot
+        have been about anything here.
+        """
+        by_name = {r.name: r.id for r in await self._resources.list(kind="mcp_server")}
+        for rel in rels:
+            resource_id = by_name.get(rel)
+            if resource_id is not None:
+                await self._converge(resource_id, set())
+
+    async def _converge(self, resource_id: int, wanted: set[tuple[str, str]]) -> None:
+        """Make ``wanted`` the server's exact set of disabled capabilities."""
+        current = await self._prefs.list_for(resource_id)
+        now = datetime.now(tz=UTC)
+        seen = {(str(p.capability_type), p.capability_key): p for p in current}
+        for key, pref in seen.items():
+            if not pref.enabled and key not in wanted:
+                await self._prefs.set_enabled(
+                    resource_id, pref.capability_type, pref.capability_key, True
+                )
+        for cap_type, cap_key in wanted:
+            if cap_type not in _CAPABILITY_TYPES:
+                continue  # a future capability type this build ignores
+            typed = cast(CapabilityType, cap_type)
+            existing = seen.get((cap_type, cap_key))
+            if existing is None:
+                await self._prefs.insert(resource_id, typed, cap_key, False, now, now)
+            elif existing.enabled:
+                await self._prefs.set_enabled(resource_id, typed, cap_key, False)

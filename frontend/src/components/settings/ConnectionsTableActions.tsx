@@ -15,6 +15,7 @@ import { ScopeControl } from "@/components/ScopeControl";
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import { providersApi, type Provider } from "@/lib/api/providers";
+import { providersKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import type { ResourceReach } from "@/lib/hooks/useResources";
 
@@ -79,7 +80,7 @@ export function ConnectionsBulkActions({
   onDone: () => void;
 }) {
   const { t } = useTranslation();
-  const bulk = useBulkMutate({ invalidate: [["providers"]] });
+  const bulk = useBulkMutate({ invalidate: [providersKey] });
 
   return (
     <>

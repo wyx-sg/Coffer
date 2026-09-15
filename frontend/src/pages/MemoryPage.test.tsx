@@ -13,9 +13,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
 import { MemoryPage } from "./MemoryPage";
-import type { PartitionOut } from "@/kinds/memory/types";
+import type { PartitionOut } from "@/lib/api/memoryTypes";
 
-vi.mock("@/kinds/memory/useMemory", () => ({
+vi.mock("@/lib/hooks/useMemory", () => ({
   memoryKey: ["memory"],
   useMemoryPartitions: vi.fn(),
   useSyncMemory: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
@@ -34,7 +34,7 @@ vi.mock("@/lib/hooks/useResourceMutations", () => {
   return { useEnableResource: vi.fn(stub), useDisableResource: vi.fn(stub) };
 });
 
-const { useMemoryPartitions } = await import("@/kinds/memory/useMemory");
+const { useMemoryPartitions } = await import("@/lib/hooks/useMemory");
 const partitionsMock = vi.mocked(useMemoryPartitions);
 
 function stubPartitions(partitions: PartitionOut[]) {

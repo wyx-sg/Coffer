@@ -1,14 +1,13 @@
 """The boot hook that heals drifted provider projection.
 
 The heal itself is covered in
-``tests/unit/application/providers/test_projection_boot_heal.py``; what matters
+``tests/unit/application/provider/test_projection_boot_heal.py``; what matters
 here is that boot actually runs it and that a machine with an odd agent config
-still boots.
+still boots. The lifespan hands the heal in explicitly (it is what
+``wire_provider_kind`` returns), so the tests do the same.
 """
 
 from __future__ import annotations
-
-from fastapi import FastAPI
 
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 
@@ -26,30 +25,20 @@ class _Reconcile:
 
 
 async def test_boot_runs_the_heal() -> None:
-    app = FastAPI()
     reconcile = _Reconcile([])
-    app.state.provider_projection_heal = reconcile
 
-    await run_provider_projection_sweep(app)
+    await run_provider_projection_sweep(reconcile)
 
     assert reconcile.calls == 1, "a flag the agent contradicts only heals if boot asks"
 
 
 async def test_a_reported_problem_does_not_fail_boot() -> None:
-    app = FastAPI()
-    app.state.provider_projection_heal = _Reconcile(["claude-code: config dir missing"])
-
-    await run_provider_projection_sweep(app)  # logged, not raised
+    await run_provider_projection_sweep(
+        _Reconcile(["claude-code: config dir missing"])
+    )  # logged, not raised
 
 
 async def test_a_raising_heal_does_not_fail_boot() -> None:
     """An unreadable or unwritable agent config is somebody else's file being
     odd — never a reason for the daemon not to come up."""
-    app = FastAPI()
-    app.state.provider_projection_heal = _Reconcile(PermissionError("settings.json"))
-
-    await run_provider_projection_sweep(app)
-
-
-async def test_an_app_without_the_provider_kind_is_a_no_op() -> None:
-    await run_provider_projection_sweep(FastAPI())
+    await run_provider_projection_sweep(_Reconcile(PermissionError("settings.json")))

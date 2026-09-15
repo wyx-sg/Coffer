@@ -31,12 +31,12 @@ from coffer.domain.knowledge.converter import UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import (
+from coffer.surfaces.http.errors import error_response
+from coffer.surfaces.http.knowledge.dependencies import (
     get_ingest_service,
     get_knowledge_service,
     get_search_service,
 )
-from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.knowledge.schemas import (
     CollectionCreate,
     CollectionListOut,

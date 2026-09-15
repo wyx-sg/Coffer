@@ -8,7 +8,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
-import { transcriptsKey, useAgentTranscripts } from "./useAgentTranscripts";
+import { agentTranscriptsKey } from "@/lib/api/queryKeys";
+import { useAgentTranscripts } from "./useAgentTranscripts";
 
 function wrapper() {
   const qc = new QueryClient({
@@ -38,13 +39,13 @@ const SAMPLE_SESSION = {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("transcriptsKey", () => {
+describe("agentTranscriptsKey", () => {
   test("returns the expected hierarchical query key", () => {
-    expect(transcriptsKey("claude")).toEqual(["agents", "claude", "conversations"]);
+    expect(agentTranscriptsKey("claude")).toEqual(["agents", "claude", "conversations"]);
   });
 
   test("extends the key with the params so each page caches independently", () => {
-    expect(transcriptsKey("claude", { limit: 10, offset: 10 })).toEqual([
+    expect(agentTranscriptsKey("claude", { limit: 10, offset: 10 })).toEqual([
       "agents",
       "claude",
       "conversations",

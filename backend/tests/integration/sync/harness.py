@@ -435,7 +435,7 @@ class VaultMachine:
                     gates=[self.gate],
                     home=str(self.home),
                 ),
-                StateApplier([self.state_provider], worktree=self.worktree),
+                StateApplier([self.state_provider], worktree=self.worktree, home=str(self.home)),
                 CredentialApplier(self.credentials, worktree=self.worktree),
             ],
             arbiter=ConflictArbiter(self.resolver),
@@ -455,7 +455,9 @@ class VaultMachine:
 
     # --- the service the surfaces drive -------------------------------------
 
-    def service(self, *, lock: asyncio.Lock | None = None) -> ConvergeService:
+    def service(
+        self, *, lock: asyncio.Lock | None = None, guard_worktree: bool = False
+    ) -> ConvergeService:
         """The real :class:`ConvergeService` over this machine's graph.
 
         The surfaces (HTTP routes, CLI) talk to a service, never to a round, so
@@ -464,6 +466,11 @@ class VaultMachine:
         ones: the working tree is fixed for a machine in these tests, and
         handing back the same objects is what lets a test inspect the state a
         route just changed.
+
+        ``guard_worktree`` hands the service this machine's roots as the
+        protected ones, so a test can drive the working-tree containment check
+        through a surface; off by default because the routes' fixtures store
+        the spec's default ``~/.coffer/sync`` and never resolve it.
         """
         return ConvergeService(
             remotes=SqlAlchemySyncRemoteRepo(self.sessions),
@@ -477,6 +484,8 @@ class VaultMachine:
             master_key=self.master_key,
             audit=self.audit,
             lock=lock,
+            protected_roots=[self.knowledge_root, self.skills_root] if guard_worktree else (),
+            coffer_dir=self.root if guard_worktree else None,
         )
 
     def _rename(self, name: str) -> None:

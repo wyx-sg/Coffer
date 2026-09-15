@@ -83,22 +83,17 @@ class Resource:
 class Kind:
     """Pure descriptor of a resource kind.
 
-    Held by ResourceService; lookup-only. Surface-layer bindings (routers,
-    CLI groups) live in KindModule (composition root) not here.
+    Held by ResourceService; lookup-only. Each kind's ``make_<kind>_kind()``
+    factory in ``application/<kind>/kind.py`` returns one of these. Surface
+    artefacts (HTTP routers, Typer groups) are NOT carried here: the
+    composition root registers them itself through its per-kind wiring
+    modules (``surfaces/http/<kind>_wiring.py`` and ``surfaces/cli/main.py``),
+    so the domain layer never references a surface.
     """
 
     name: str
     display_name: str
     config_schema: type[BaseModel]
-    # The hook may return ``None`` (purely synchronous) or an ``Awaitable``;
-    # the kind-agnostic ResourceService awaits the result when present so
-    # cleanup completes BEFORE the row is removed (a fire-and-forget task
-    # would race the delete and find a ResourceNotFound on follow-up reads).
-    on_delete: Callable[[ResourceRef], Awaitable[None] | None] | None = None
-    # Optional kind-specific name validator, called at register time BEFORE
-    # persistence. Raises to reject the name. Used by `mcp_server` to reserve
-    # the `__` tool/prompt namespace separator (CODE-030).
-    validate_name: Callable[[str], None] | None = None
     # Whether the kind-agnostic POST /api/v1/resources endpoint may create this
     # kind. Kinds that own creation invariants beyond config validation — a
     # skill's master folder under ~/.coffer/skills/, an agent's on-disk
@@ -107,16 +102,20 @@ class Kind:
     # passing ``allow_lifecycle_kind=True`` to ResourceService.register
     # (CODE-REG, symmetric with the on_delete cleanup hook).
     generic_create_allowed: bool = True
-    # Optional kind-supplied audit redactor: given a validated config dict,
-    # return an audit-safe copy with secret-bearing fields stripped. Keeps the
-    # kind-agnostic ResourceService from hardcoding any one kind's config shape
-    # (e.g. mcp_server's ``transport.env``/``headers``) — resource framework / CODE-006.
-    audit_redactor: Callable[[dict[str, Any]], dict[str, Any]] | None = None
-    # Optional kind-supplied credential-ref extractor: given a validated config
-    # dict, return ``{logical_key: keychain_ref}``. ResourceService probes each
-    # ref at register/update time so a missing credential fails before any DB
-    # write — without the core knowing where a kind stores its refs.
-    credential_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
+    # Whether this kind supports the framework-level per-agent activation
+    # scope (ADR per-agent-resource-scope). False (the default) means the kind has no scope at all:
+    # ResourceService.update_scope rejects any non-null payload for it (422).
+    # `mcp_server`, `skill`, `knowledge`, `memory`, `channel` and `provider`
+    # set this True; `agent` deliberately does not — it IS the agent, so there
+    # is nothing for a per-agent scope to narrow.
+    supports_scope: bool = False
+
+    # --- Pre-write validators: run BEFORE persistence; raising rejects the write ---
+
+    # Optional kind-specific name validator, called at register time BEFORE
+    # persistence. Raises to reject the name. Used by `mcp_server` to reserve
+    # the `__` tool/prompt namespace separator (CODE-030).
+    validate_name: Callable[[str], None] | None = None
     # Optional semantic config validation beyond ``config_schema`` shape,
     # applied at REGISTRATION only (already shape-validated). Given the validated
     # config dict; raises ``ValueError`` to reject the write (e.g. a channel's
@@ -125,9 +124,11 @@ class Kind:
     validate_config: Callable[[dict[str, Any]], None] | None = None
     # Optional pre-write hook for ``ResourceService.update_config``.
     # Receives ``(ref, before_config, after_config)`` (both already shape-validated
-    # against ``config_schema``); may raise ``ConfigValidationError`` to reject the
-    # update, or trigger side effects — ``knowledge_base``/``memory`` force a
-    # re-index/re-embed when chunk or embedding config changed (FR-014). Sync or
+    # against ``config_schema``); raises ``ConfigValidationError`` to reject the
+    # update. Unlike ``validate_config`` it knows WHICH resource is being edited.
+    # Only `channel` supplies one today: it re-validates ``default_agent``
+    # against the live agent registry and against the channel's own scope, so
+    # an edit cannot bind the channel to an agent it may not drive. Sync or
     # async; the service awaits an Awaitable.
     on_update_config: (
         Callable[
@@ -136,13 +137,42 @@ class Kind:
         ]
         | None
     ) = None
-    # Whether this kind supports the framework-level per-agent activation
-    # scope (ADR per-agent-resource-scope). False (the default) means the kind has no scope at all:
-    # ResourceService.update_scope rejects any non-null payload for it (422).
-    # `mcp_server`, `skill`, `knowledge`, `memory`, `channel` and `provider`
-    # set this True; `agent` deliberately does not — it IS the agent, so there
-    # is nothing for a per-agent scope to narrow.
-    supports_scope: bool = False
+    # Optional PRE-write hook for ``ResourceService.update_scope`` (ADR per-agent-resource-scope):
+    # given the resource as it currently stands and the scope proposed for it,
+    # raise ``ValueError`` to reject the edit before anything is persisted. The
+    # kind-agnostic path converts that into ``ScopeInvalidError``, so the API
+    # answer has the same shape as a malformed-payload rejection and a kind
+    # never names a surface-level error code.
+    #
+    # It is the scope path's counterpart to ``on_update_config`` — the same
+    # "the kind gets a say before a write" precedent — and deliberately fires at
+    # the opposite end of the operation from ``on_scope_changed`` in the
+    # reactions section below; ``resource_scope_ops`` explains why the two differ.
+    #
+    # Only `channel` supplies one today: its scope names the agents it may
+    # DRIVE, so a narrowing that excluded its own ``default_agent`` would store
+    # a row the runtime then refuses to start. Rejecting it here is what keeps
+    # that invariant true on BOTH write paths (config and scope) rather than
+    # only on the config one. Sync or async; the service awaits an Awaitable.
+    validate_scope_for: (
+        Callable[
+            [Resource, Scope | None],
+            Awaitable[None] | None,
+        ]
+        | None
+    ) = None
+    # Optional kind-supplied credential-ref extractor: given a validated config
+    # dict, return ``{logical_key: keychain_ref}``. ResourceService probes each
+    # ref at register/update time so a missing credential fails before any DB
+    # write — without the core knowing where a kind stores its refs.
+    credential_ref_extractor: Callable[[dict[str, Any]], dict[str, str]] | None = None
+    # Optional kind-supplied audit redactor: given a validated config dict,
+    # return an audit-safe copy with secret-bearing fields stripped. Keeps the
+    # kind-agnostic ResourceService from hardcoding any one kind's config shape
+    # (e.g. mcp_server's ``transport.env``/``headers``) — resource framework / CODE-006.
+    # A pure transform of the config consulted when the audit event is built;
+    # it never rejects a write.
+    audit_redactor: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     # Optional kind-supplied starting scope, consulted ONCE by
     # ``ResourceService.register`` (ADR per-agent-resource-scope). Given the validated config,
     # returns the scope the new row is created with; ``None`` keeps the
@@ -161,30 +191,17 @@ class Kind:
     # agents a partition was aggregated FROM (spec memory FR-014) — cannot use
     # this hook and sets the scope itself right after registering.
     default_scope: Callable[[dict[str, Any]], Scope | None] | None = None
-    # Optional PRE-write hook for ``ResourceService.update_scope`` (ADR per-agent-resource-scope):
-    # given the resource as it currently stands and the scope proposed for it,
-    # raise ``ValueError`` to reject the edit before anything is persisted. The
-    # kind-agnostic path converts that into ``ScopeInvalidError``, so the API
-    # answer has the same shape as a malformed-payload rejection and a kind
-    # never names a surface-level error code.
-    #
-    # It is the scope path's counterpart to ``on_update_config`` — the same
-    # "the kind gets a say before a write" precedent — and deliberately fires at
-    # the opposite end of the operation from its neighbour ``on_scope_changed``
-    # below; ``resource_scope_ops`` explains why the two differ.
-    #
-    # Only `channel` supplies one today: its scope names the agents it may
-    # DRIVE, so a narrowing that excluded its own ``default_agent`` would store
-    # a row the runtime then refuses to start. Rejecting it here is what keeps
-    # that invariant true on BOTH write paths (config and scope) rather than
-    # only on the config one. Sync or async; the service awaits an Awaitable.
-    validate_scope_for: (
-        Callable[
-            [Resource, Scope | None],
-            Awaitable[None] | None,
-        ]
-        | None
-    ) = None
+
+    # --- Post-write reactions: run AFTER persistence + audit; cannot reject ---
+
+    # Cleanup for ``ResourceService.delete``. The one exception to "after": it
+    # runs BEFORE the row is removed so cleanup can still resolve the row — but
+    # it is a reaction to an already-decided delete, not a validator, and has
+    # no way to reject it. The hook may return ``None`` (purely synchronous) or
+    # an ``Awaitable``; the kind-agnostic ResourceService awaits the result when
+    # present so cleanup completes before the row is removed (a fire-and-forget
+    # task would race the delete and find a ResourceNotFound on follow-up reads).
+    on_delete: Callable[[ResourceRef], Awaitable[None] | None] | None = None
     # Optional post-write hook for ``ResourceService.update_scope`` (ADR per-agent-resource-scope).
     # Receives the ref whose scope just changed; invoked AFTER persistence +
     # audit (unlike ``on_update_config``, which runs BEFORE — scope

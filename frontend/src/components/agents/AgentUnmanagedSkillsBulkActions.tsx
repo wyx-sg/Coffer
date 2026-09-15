@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { Button } from "@/components/ui/button";
 import { agentsApi, type UnmanagedSkillOut } from "@/lib/api/agents";
+import { agentKey, agentUnmanagedSkillsKey, skillsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 export function AgentUnmanagedSkillsBulkActions({
@@ -22,7 +23,7 @@ export function AgentUnmanagedSkillsBulkActions({
   clear: () => void;
 }) {
   const { t } = useTranslation();
-  const invalidate = [["agents", agentName, "unmanaged-skills"], ["skills"], ["agents", agentName]];
+  const invalidate = [agentUnmanagedSkillsKey(agentName), skillsKey, agentKey(agentName)];
   const adopt = useBulkMutate({ invalidate });
   const remove = useBulkMutate({ invalidate });
 

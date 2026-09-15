@@ -9,10 +9,10 @@ import tomllib
 import pytest
 
 from coffer.domain.agent.types import AgentType
+from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.projection import (
     ANTHROPIC_API_KEY_HELPER,
-    CODEX_ENV_KEY,
     CODEX_PROVIDER_ID,
     anthropic_api_key_helper,
     apply_anthropic_settings,

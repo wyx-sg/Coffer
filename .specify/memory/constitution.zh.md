@@ -50,7 +50,8 @@
 
 - **语言。** 后端、CLI 及任何 MCP 适配层使用 Python 3.12+；前端使用
   TypeScript 5.x。在未走章程修订的情况下，不引入其他主语言。
-- **架构。** 分层：`surfaces → application → domain → infrastructure`。
+- **架构。** 分层：`surfaces → application → domain`；`infrastructure` 适配
+  `application` 中定义的 port，且只在组装入口 (composition root) 接线。
   `domain/` 不得 import `infrastructure/`、`surfaces/` 或任何外部 SDK；
   `application/` 不得 import `surfaces/`。跨层公共模块只在第二个 feature
   也需要它时才抽取。（例外：Resource 框架——见
@@ -94,7 +95,19 @@ Architectural Constraints 或 Quality Gate 的修改，必须满足：
 **PR 评审。** 每个 PR 描述都应在适用时点出它所触及的章程原则或约束，
 并解释该变更为何尊重 (或正式修订) 它们。
 
-**Version**: 0.6.0
+**Version**: 0.6.1
+
+> **0.6.1 修订（编辑性修订）。** 改写架构约束里的分层那一句。动机：它把分层
+> 写成 `surfaces → application → domain → infrastructure`，读起来像是 `domain`
+> 要 import `infrastructure`——那恰恰是紧接着的下一句所禁止的那条边，也与
+> [`agents/stack.md`](../../agents/stack.zh.md) 的表述（「`infrastructure` 适配
+> `application` 中定义的 port」）以及 import-linter 契约所强制执行的方向相反
+> （契约 3：`domain` 不 import 任何层；契约 2b：`application` 不 import
+> `infrastructure`）。当前表述：「分层：`surfaces → application → domain →
+> infrastructure`。」拟定表述：「分层：`surfaces → application → domain`；
+> `infrastructure` 适配 `application` 中定义的 port，且只在组装入口
+> (composition root) 接线。」下游影响：无——纯编辑性修订；import 规则不变，
+> 契约本来就在强制执行修正后的方向。决议由项目所有者记录。
 
 > **0.6.0 修订（spec vault-sync——双向同步）。** 以*用户自有同步远端*例外
 > 取代 0.5.0 的*用户自有备份远端*例外，并随之恢复 0.4.0 移除的机器维度。

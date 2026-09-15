@@ -23,8 +23,9 @@ import pytest
 from typer.testing import CliRunner
 
 from coffer.infrastructure.daemon import config as daemon_config
+from coffer.infrastructure.daemon import spawn as _spawn
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.surfaces.cli import daemon_cmd, daemon_port_cmd
+from coffer.surfaces.cli import daemon_port_cmd
 from coffer.surfaces.cli.main import app
 
 runner = CliRunner()
@@ -138,7 +139,7 @@ def test_start_refuses_when_the_configured_port_is_held(
         def _must_not_spawn(*args: Any, **kwargs: Any) -> None:
             raise AssertionError("start must not spawn a daemon onto a held port")
 
-        monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _must_not_spawn)
+        monkeypatch.setattr(_spawn.subprocess, "Popen", _must_not_spawn)
 
         res = runner.invoke(app, ["daemon", "start"])
     finally:
@@ -169,7 +170,7 @@ def test_start_refuses_when_the_default_port_is_held_and_nothing_is_configured(
         def _must_not_spawn(*args: Any, **kwargs: Any) -> None:
             raise AssertionError("start must not spawn a daemon onto a held default port")
 
-        monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _must_not_spawn)
+        monkeypatch.setattr(_spawn.subprocess, "Popen", _must_not_spawn)
 
         res = runner.invoke(app, ["daemon", "start"])
     finally:
@@ -204,7 +205,7 @@ def test_start_skips_the_pre_flight_under_the_range_override(
         spawned.append(args)
         raise RuntimeError("stop here — the pre-flight let us through, which is the point")
 
-    monkeypatch.setattr(daemon_cmd.subprocess, "Popen", _record_spawn)
+    monkeypatch.setattr(_spawn.subprocess, "Popen", _record_spawn)
     try:
         runner.invoke(app, ["daemon", "start"])
     finally:

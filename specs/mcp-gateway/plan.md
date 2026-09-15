@@ -76,7 +76,6 @@ backend/coffer/
 │   ├── audit.py                          # AuditEntry, AuditEventType
 │   ├── retention.py                      # RetentionPolicy
 │   ├── errors.py                         # CofferError hierarchy
-│   ├── kind_module.py                    # KindModule frozen dataclass (composition root data)
 │   └── mcp/
 │       ├── server_config.py              # MCPServerConfig + transports
 │       ├── capability.py                 # MCPTool/Resource/Prompt + Preference + Invocation
@@ -92,7 +91,7 @@ backend/coffer/
 │       ├── gateway_handlers.py           # JSON-RPC method dispatch helpers
 │       ├── gateway_aggregate_lists.py    # tools/resources/prompts list aggregation
 │       ├── gateway_server_requests.py    # upstream→downstream request relay (roots/sampling)
-│       ├── kind.py                       # MCP_KIND module (KindModule wiring)
+│       ├── kind.py                       # make_mcp_kind() → frozen Kind
 │       ├── supervisor.py                 # subprocess lifecycle
 │       ├── discovery.py                  # live capability discovery + cache
 │       └── credential_resolver.py        # materialise credential refs at spawn
@@ -176,7 +175,7 @@ Typer composition-root scaffold. No business logic yet; CI green on placeholders
 
 ### Phase 2 — Foundational (kind-agnostic core)
 
-Implements the Resource framework (`Resource`, `Kind`, `KindModule`,
+Implements the Resource framework (`Resource`, `Kind`,
 `ResourceService`, `AuditService`), the retention framework
 (`PrunableRegistry`, `RetentionService`, `RetentionWorker`), and the
 `/api/v1/resources/*`, `/api/v1/audit`, `/api/v1/retention/*`,

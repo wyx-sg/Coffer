@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from coffer.application.skill import content_ops, file_ops
 from coffer.application.skill.service import SkillService
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_skill_service
+from coffer.surfaces.http.skill_dependencies import get_skill_service
 from coffer.surfaces.http.skill_routes import _actor, _validate_skill_name
 
 router = APIRouter(

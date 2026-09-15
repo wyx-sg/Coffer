@@ -11,6 +11,7 @@ import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 import type { InvocationStatusFilter } from "@/lib/hooks/useMcpInvocations";
+import { mcpAllInvocationsKey } from "@/lib/api/queryKeys";
 
 type InvocationListOut = components["schemas"]["InvocationListOut"];
 
@@ -29,7 +30,7 @@ export function useActivityInvocations({
   enabled = true,
 }: UseActivityInvocationsArgs) {
   return useQuery({
-    queryKey: ["mcp", "invocations", "all", { limit, status, since }],
+    queryKey: mcpAllInvocationsKey({ limit, status, since }),
     queryFn: async (): Promise<InvocationListOut> => {
       const client = getApiClient();
       const query: Record<string, string | number> = { limit };

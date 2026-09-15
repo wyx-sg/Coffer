@@ -20,8 +20,8 @@ from coffer.infrastructure.chat.adapter_support import MemoryContextComposer
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
-from coffer.surfaces.http.dependencies import get_provider_service
-from coffer.surfaces.http.turn_dependencies import get_agent_model_catalogue
+from coffer.surfaces.http.agent_dependencies import get_agent_model_catalogue
+from coffer.surfaces.http.provider_dependencies import get_provider_service
 
 if TYPE_CHECKING:
     from coffer.infrastructure.chat.persistence import ConversationRepo
@@ -51,8 +51,9 @@ def build_agent_provider_registry(
     """
     registry = AgentProviderRegistry()
 
-    # Resolved per turn, so designating or clearing the internal default takes
-    # effect immediately. Returns None whenever transcription must not happen.
+    # Resolved per turn (lazily, through the provider kind's getter), so
+    # designating or clearing the internal default takes effect immediately.
+    # Returns None whenever transcription must not happen.
     transcriber_factory = (
         remote_transcriber_factory(
             lambda: get_provider_service().resolve_internal_connection(),
@@ -64,8 +65,10 @@ def build_agent_provider_registry(
 
     # Tell Claude Code, on every turn, which model Coffer put it on and what
     # else it could be switched to — it cannot see either, and left to itself it
-    # names a model at random. Resolved per turn (lazily, via the DI getter)
-    # because the catalogue service is published later in the same lifespan.
+    # names a model at random. Resolved per turn (lazily, via the agent kind's
+    # getter) because the catalogue service is built AFTER this registry in
+    # ``wire_chat`` — it needs the registry-free agent service, and the
+    # registry needs it — so the closure runs at request time by design.
     async def _list_models(agent_key: str) -> list[str]:
         ids: list[str] = await get_agent_model_catalogue().suggest(agent_key)
         return ids
@@ -85,7 +88,8 @@ def build_agent_provider_registry(
     # keyed by agent, not wire, so an openai-compatible gateway routed to it
     # resolves correctly — and inject it into the subprocess env; with no active
     # connection it stays None so the agent uses its own login (the
-    # provider-switching env_key seam).
+    # provider-switching env_key seam). Lazy per turn by design: it runs at
+    # request time, so the provider kind's getter is the right seam.
     def _key_resolver(agent_type: AgentType) -> Callable[[], Awaitable[str | None]]:
         async def _resolve() -> str | None:
             try:

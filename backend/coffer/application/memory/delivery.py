@@ -6,12 +6,18 @@ agent, moving its config dir, or aggregating memory — only a direct call to
 `install()` ever writes into a settings file, and every install/remove is
 audited with its actor. `status()` never writes anything.
 
-Reuses the SAME machinery `AgentConfigFileService`/`AgentMcpService` already
-use for touching an agent's own config directory: the allowlisted
-`ConfigFileSpec` from `domain.agent.config_files.spec_for` (so an unsupported
-key can never reach the filesystem), and the `ConfigFileStorePort` for the
-atomic read/write with a `.bak` of whatever was there before. This module
-never opens a config file on its own path.
+Touches an agent's config directory the same way `AgentConfigFileService`
+does: through the allowlisted `ConfigFileSpec` from
+`domain.agent.config_files.spec_for` (so an unsupported key can never reach
+the filesystem), and through an atomic read/write store that leaves a `.bak`
+of whatever was there before. The store is typed by this module's own
+`AgentConfigWriter` port — the same shape as the agent kind's
+`ConfigFileStorePort`, declared here rather than imported, so the memory kind
+never imports the agent kind's application layer (the cross-kind contract;
+the agent kind's *domain* vocabulary — `AgentConfig`, `spec_for`, `AgentType`
+— is the one allowed exception). The composition root injects the same
+infrastructure `ConfigFileStore` into both, which satisfies both ports
+structurally. This module never opens a config file on its own path.
 
 The actual JSON edit is delegated to `coffer.domain.memory.delivery` (the
 marker and the pure text transform) through one `DeliveryAdapter` per agent
@@ -24,10 +30,10 @@ half of FR-055: it is called by whatever actually serves the context (the
 
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Callable
 from typing import Protocol
 
-from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
@@ -52,6 +58,23 @@ _ADAPTERS: dict[AgentType, DeliveryAdapter] = {
 }
 
 
+class AgentConfigWriter(Protocol):
+    """The two filesystem operations delivery needs on an agent's config file.
+
+    Deliberately the same shape as the agent kind's `ConfigFileStorePort`
+    (minus `stat`, which delivery never calls): the infrastructure
+    `ConfigFileStore` satisfies both without knowing about either.
+    """
+
+    def read_text(self, path: pathlib.Path) -> str | None:
+        """Return file text, or `None` if the file does not exist."""
+        ...
+
+    def write_text_atomic(self, path: pathlib.Path, text: str) -> None:
+        """Atomically write `text` to `path` (temp file + rename)."""
+        ...
+
+
 # Structural type for the agent-lookup dependency — avoids a hard import of
 # AgentService (and keeps this service unit-testable with a fake), mirroring
 # AgentConfigFileService's own `_AgentLookup`.
@@ -66,7 +89,7 @@ class DeliveryService:
         *,
         agent_service: _AgentLookup,
         audit: AuditService,
-        store: ConfigFileStorePort,
+        store: AgentConfigWriter,
     ) -> None:
         self._agents = agent_service
         self._audit = audit

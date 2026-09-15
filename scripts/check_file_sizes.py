@@ -28,10 +28,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 #   lib/hooks/**   → hook tier (300)
 #   lib/components/**  → component tier (250)
 #   lib/**         → utility catch-all (300)
-#
-# kinds/ sub-structure:
-#   kinds/**/*Page.tsx → page tier (200) — detail/list pages live under kinds/
-#   kinds/**/*.{ts,tsx} → component tier (250) — everything else is a component
 RULES: list[tuple[str, int, str]] = [
     # --- frontend/src/lib --- (specific first, catch-all last)
     ("frontend/src/lib/hooks/**/*.ts", 300, "frontend hook"),
@@ -40,11 +36,7 @@ RULES: list[tuple[str, int, str]] = [
     ("frontend/src/lib/components/**/*.ts", 250, "frontend component"),
     ("frontend/src/lib/**/*.ts", 300, "frontend utility"),
     ("frontend/src/lib/**/*.tsx", 300, "frontend utility"),
-    # --- frontend/src/kinds ---
-    ("frontend/src/kinds/**/*Page.tsx", 250, "frontend page"),
-    ("frontend/src/kinds/**/*.tsx", 250, "frontend component"),
-    ("frontend/src/kinds/**/*.ts", 250, "frontend component"),
-    # --- legacy frontend/src/{hooks,components,pages} ---
+    # --- frontend/src/{hooks,components,pages} ---
     ("frontend/src/hooks/**/*.ts", 300, "frontend hook"),
     ("frontend/src/hooks/**/*.tsx", 300, "frontend hook"),
     ("frontend/src/components/**/*.tsx", 250, "frontend component"),

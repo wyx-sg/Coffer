@@ -6,24 +6,17 @@
 // the directory on disk.
 //
 // Its own module rather than a section of api/agents.ts, so this surface can
-// move independently; the transport helpers are reused from there (§4 of
-// agents/frontend.md — one call<T>(), not a fifth copy).
-import { call, enc } from "./agents";
+// move independently. Wire types from the agent-registry contract; transport
+// via the shared `call` (agents/frontend.md §4).
+import { call, enc } from "@/lib/api/call";
+import type { components } from "@/lib/api/generated/agent-registry";
 
-export interface NativeMemoryStore {
-  /** Best-effort project label (the leaf of the resolved project path). */
-  project: string;
-  /** The real project directory, when Coffer could resolve it. */
-  path: string | null;
-  /** The store's real identity on disk — what open/reveal act on. */
-  memory_dir: string;
-  item_count: number;
-}
+/** `memory_dir` is the store's real identity on disk — what open/reveal act on;
+ * `path` the real project directory, when Coffer could resolve it. */
+export type NativeMemoryStore = components["schemas"]["NativeMemoryStore"];
 
-export interface NativeMemoryListOut {
-  items: NativeMemoryStore[];
-}
+export type NativeMemoryListOut = components["schemas"]["NativeMemoryListOut"];
 
 export const agentNativeMemoryApi = {
-  list: (name: string) => call<NativeMemoryListOut>("GET", `/agents/${enc(name)}/native-memory`),
+  list: (name: string) => call<NativeMemoryListOut>(`/agents/${enc(name)}/native-memory`),
 };

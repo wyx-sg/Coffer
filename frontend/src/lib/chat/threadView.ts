@@ -1,7 +1,8 @@
 // frontend/src/lib/chat/threadView.ts — what the message thread shows.
-// The persisted messages, the live streaming bubble, the optimistic echo of
-// the just-sent prompt and a failed turn all overlap; these pure helpers
-// decide which rows render so the component only lays them out.
+// The persisted messages, the live streaming bubble and a failed turn overlap;
+// these pure helpers decide which persisted rows render and what a Retry
+// re-sends, so the component only lays them out. (The optimistic echoes are
+// the turn hook's — it retires each one when its persisted row lands.)
 import type { Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/chatTurnEvents";
 
@@ -33,18 +34,7 @@ export function visibleThreadMessages(
 }
 
 /**
- * Optimistic echo of the just-sent prompt: shown until a refetch delivers the
- * persisted user message. Once the last visible row IS that user message, the
- * fetched row wins and the echo is suppressed.
- */
-export function shouldShowEcho(visible: Message[], echoText: string | undefined): boolean {
-  if (echoText === undefined) return false;
-  const last = visible[visible.length - 1];
-  return !(last?.role === "user" && textOf(last) === echoText);
-}
-
-/**
- * The message a Retry re-sends: the optimistic echo, else the last persisted
+ * The message a Retry re-sends: the newest optimistic echo, else the last persisted
  * user message (the failed turn's prompt survives server-side). Empty when
  * there is nothing to resend.
  */

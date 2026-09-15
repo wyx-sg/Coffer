@@ -8,12 +8,19 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Sequence
+from typing import Any
 
 import pytest
 
 from coffer.application.chat.turn_orchestrator import active_turns
 from coffer.domain.channel.envelopes import InboundStop
-from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
+from coffer.domain.chat.events import (
+    AgentEvent,
+    QueueChanged,
+    TextDelta,
+    TurnDone,
+    TurnStarted,
+)
 from coffer.domain.chat.message import Message, Role, TextBlock
 
 from .conftest import ChannelEnv, inbound, turn_body, wait_until
@@ -196,6 +203,76 @@ async def test_eleventh_queued_message_is_dropped_with_a_busy_notice(env: Channe
     assert gated.runs == ["m0", *queued]
     assert "overflow" not in gated.runs
     assert "echo:overflow" not in adapter.texts()
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel message waits in the conversation's own queue"
+)
+async def test_channel_messages_queued_mid_turn_ride_the_conversation_queue(
+    env: ChannelEnv,
+) -> None:
+    # FR-050: the channel keeps no queue of its own. A message sent from the
+    # phone while a turn runs waits on the SAME pending queue a web send would,
+    # so the web's pending chips show it and both surfaces drain one FIFO.
+    gated = GatedAdapter()
+    env.provider.adapter = gated
+    resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "A"))
+    await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
+    conversation_id = await env.active_conversation(resource)
+    assert conversation_id is not None
+    observer = env.orchestrator.subscribe(conversation_id)  # a web tab
+    await env.processor.on_message(inbound("tg", "owner", "B"))
+    await env.orchestrator.enqueue_message(conversation_id, "C from the web")
+    await env.processor.on_message(inbound("tg", "owner", "D"))
+
+    pending = env.orchestrator.pending(conversation_id)
+    assert [turn_body(t) for t in pending] == ["B", "C from the web", "D"]
+    chips = [e.pending for e in _drain_now(observer) if isinstance(e, QueueChanged)]
+    assert [turn_body(t) for t in chips[-1]] == ["B", "C from the web", "D"]
+
+    gated.release.set()
+    await wait_until(lambda: "echo:D" in adapter.texts())
+    assert gated.runs == ["A", "B", "C from the web", "D"]
+    # The web send ran in its slot but was not the channel's to render.
+    assert [t for t in adapter.texts() if t.startswith("echo:")] == ["echo:A", "echo:B", "echo:D"]
+    assert env.orchestrator.pending(conversation_id) == []
+    env.orchestrator.unsubscribe(conversation_id, observer)
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a stop from the chat holds the queued messages")
+async def test_stop_holds_the_queued_messages_until_the_next_message(env: ChannelEnv) -> None:
+    # FR-051 reaches the channel too: /stop pauses the queue rather than letting
+    # the next message fire into the turn just stopped; the next send resumes it.
+    gated = GatedAdapter()
+    env.provider.adapter = gated
+    resource, adapter = await env.paired_channel()
+
+    await env.processor.on_message(inbound("tg", "owner", "A"))
+    await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
+    conversation_id = await env.active_conversation(resource)
+    assert conversation_id is not None
+    await env.processor.on_message(inbound("tg", "owner", "B"))
+
+    await env.processor.on_message(inbound("tg", "owner", "/stop"))
+    await wait_until(lambda: "⏹ Stopped." in adapter.texts())
+    await wait_until(lambda: conversation_id not in active_turns())
+    await asyncio.sleep(0.05)
+    assert [turn_body(t) for t in env.orchestrator.pending(conversation_id)] == ["B"]
+    assert gated.runs == ["A"]  # B is held, not run
+
+    gated.release.set()
+    await env.processor.on_message(inbound("tg", "owner", "C"))
+    await wait_until(lambda: "echo:C" in adapter.texts())
+    assert gated.runs == ["A", "B", "C"]
+
+
+def _drain_now(queue: asyncio.Queue[Any]) -> list[Any]:
+    out: list[Any] = []
+    while not queue.empty():
+        out.append(queue.get_nowait())
+    return out
 
 
 # -- the platform's own stop control (FR-063) ---------------------------------

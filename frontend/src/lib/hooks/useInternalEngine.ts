@@ -6,12 +6,11 @@ import { useTranslation } from "react-i18next";
 import { translateApiError } from "@/lib/api/errors";
 import { internalEngineApi } from "@/lib/api/internalEngine";
 import { useToast } from "@/components/ui/toast";
-
-const INTERNAL_ENGINE_KEY = ["internal-engine-config"] as const;
+import { internalEngineKey } from "@/lib/api/queryKeys";
 
 export function useInternalEngineConfig() {
   return useQuery({
-    queryKey: INTERNAL_ENGINE_KEY,
+    queryKey: internalEngineKey,
     queryFn: () => internalEngineApi.get(),
   });
 }
@@ -24,7 +23,7 @@ export function useSetInternalEngineModel() {
   return useMutation({
     mutationFn: (model: string | null) => internalEngineApi.setModel(model),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: INTERNAL_ENGINE_KEY });
+      qc.invalidateQueries({ queryKey: internalEngineKey });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

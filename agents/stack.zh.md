@@ -36,6 +36,8 @@ infrastructure/— adapters for SQLite, keyring, and outbound I/O
 - `domain/` 保持纯 Python + Pydantic——不引入 FastAPI、SQLAlchemy、httpx 或其他外部 SDK。
 - `application/` 定义 port，由 `infrastructure/` 适配。
 - 只有 credential 模块 import `keyring`，其他地方一律传 credential 引用。
+- 每种资源 kind 的 `make_<kind>_kind()` 工厂返回一个冻结的 `Kind`；组合根（`surfaces/http/app.py` 经由各 kind 的 `*_wiring.py`，以及 `surfaces/cli/main.py`）负责注册它并挂载其路由。FastAPI 依赖提供者按 kind 拆分：`surfaces/http/dependencies.py` 只保留与 kind 无关的核心，每个 kind 在自己的模块里发布具体类型的 `set_*`/`get_*` 对——没有任何东西标成 `Any`。
+- import-linter 的跨 kind 隔离对每种 kind 对称生效（mcp、agent、skill、knowledge、channel、chat、provider、memory、sync）。仅有的例外是领域词汇而非服务：`provider`/`memory` 可以 import `domain.agent`，`channel` 可以 import `domain.chat`；仅 `TYPE_CHECKING` 的 import 不计入。两种 kind 都需要的代码移到该层根目录下与 kind 无关的包（`infrastructure/net/`、`infrastructure/agent_files/`、`domain/connection.py`）。
 
 ### 代码风格
 

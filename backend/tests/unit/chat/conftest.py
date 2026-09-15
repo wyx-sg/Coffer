@@ -12,14 +12,13 @@ from collections.abc import AsyncIterator, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from coffer.application.chat.ports import ToolSpec
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.audit import AuditEntry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
+from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
 from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.domain.errors import ConversationNotFound
 
 # ---------------------------------------------------------------------------
 # Audit
@@ -134,11 +133,14 @@ class FakeMessageRepo:
     async def delete_message(self, message_id: str) -> None:
         self._messages = [m for m in self._messages if m.id != message_id]
 
-    async def list_by_conversation(self, conversation_id: str) -> list[Message]:
-        return sorted(
+    async def list_by_conversation(
+        self, conversation_id: str, *, limit: int | None = None
+    ) -> list[Message]:
+        rows = sorted(
             [m for m in self._messages if m.conversation_id == conversation_id],
             key=lambda m: m.seq,
         )
+        return rows if limit is None else rows[-limit:]
 
     async def next_seq(self, conversation_id: str) -> int:
         msgs = [m for m in self._messages if m.conversation_id == conversation_id]
@@ -162,28 +164,6 @@ class FakeMessageRepo:
 
     def all_messages(self) -> list[Message]:
         return list(self._messages)
-
-
-# ---------------------------------------------------------------------------
-# Tool gateway
-# ---------------------------------------------------------------------------
-
-
-class FakeToolGateway:
-    """Minimal ToolGateway that returns an empty skill catalogue by default."""
-
-    def __init__(self, skill_response: dict[str, Any] | None = None) -> None:
-        self._skill_response = skill_response or {"skills": []}
-        self.calls: list[tuple[str, dict[str, Any]]] = []
-
-    async def list_tools(self) -> list[ToolSpec]:
-        return []
-
-    async def call_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
-        self.calls.append((name, args))
-        if name == "coffer__list_skills":
-            return self._skill_response
-        return {}
 
 
 # ---------------------------------------------------------------------------

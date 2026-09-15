@@ -10,9 +10,9 @@ import { Plus, Radio } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AddChannelDialog } from "@/kinds/channel/AddChannelDialog";
-import { ChannelsTable } from "@/kinds/channel/ChannelsTable";
-import { ChannelWelcomePanel } from "@/kinds/channel/ChannelWelcomePanel";
+import { AddChannelDialog } from "@/components/channel/AddChannelDialog";
+import { ChannelsTable } from "@/components/channel/ChannelsTable";
+import { ChannelWelcomePanel } from "@/components/channel/ChannelWelcomePanel";
 import { translateApiError } from "@/lib/api/errors";
 import { useChannels } from "@/lib/hooks/useChannels";
 

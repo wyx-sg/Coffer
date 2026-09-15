@@ -14,7 +14,6 @@ from coffer.surfaces.http.agent_config_routes import router as agent_config_rout
 from coffer.surfaces.http.agent_native_memory_routes import (
     router as agent_native_memory_router,
 )
-from coffer.surfaces.http.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.agent_transcript_routes import router as agent_transcript_router
 from coffer.surfaces.http.agent_unmanaged_skill_routes import (
@@ -23,6 +22,7 @@ from coffer.surfaces.http.agent_unmanaged_skill_routes import (
 from coffer.surfaces.http.agent_workspace_routes import router as agent_workspace_router
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.channel_routes import router as channel_router
+from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
 from coffer.surfaces.http.credential_routes import router as credential_router

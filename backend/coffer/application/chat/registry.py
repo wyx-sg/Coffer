@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from coffer.application.chat.ports import AgentProvider
-from coffer.domain.errors import UnknownAgent
+from coffer.domain.chat.errors import UnknownAgent
 
 
 @dataclass(frozen=True)

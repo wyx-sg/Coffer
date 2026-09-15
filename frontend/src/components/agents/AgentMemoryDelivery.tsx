@@ -24,9 +24,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
+import type { DeliveryStatusOut } from "@/lib/api/memoryTypes";
+import { useInstallDelivery, useMemoryDelivery, useRemoveDelivery } from "@/lib/hooks/useMemory";
 import { formatDateTime } from "@/lib/utils";
-import type { DeliveryStatusOut } from "@/kinds/memory/types";
-import { useInstallDelivery, useMemoryDelivery, useRemoveDelivery } from "@/kinds/memory/useMemory";
 
 function DeliveryState({ status }: { status: DeliveryStatusOut }) {
   const { t } = useTranslation();

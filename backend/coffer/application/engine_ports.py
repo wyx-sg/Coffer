@@ -11,9 +11,12 @@ knowledge was the sole consumer, and it made `application.memory` import
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from coffer.domain.provider.config import ResolvedConnection
+if TYPE_CHECKING:
+    # Annotation-only: the port names the provider kind's connection value
+    # object without executing any of the provider kind's code.
+    from coffer.domain.provider.config import ResolvedConnection
 
 
 class ModelSelectorPort(Protocol):

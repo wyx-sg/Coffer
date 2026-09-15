@@ -38,6 +38,7 @@ from claude_agent_sdk import (
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    STREAM_ENDED_MESSAGE,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -690,8 +691,14 @@ async def test_cancel_interrupts_disconnects_and_persists_session():
 
 
 @pytest.mark.asyncio
-async def test_stream_end_without_terminal_synthesizes_turn_done():
-    # No ResultMessage in the stream — adapter must synthesize a terminal.
+@pytest.mark.acceptance(
+    spec="channels", scenario="an agent stream that ends without a terminal is a turn error"
+)
+async def test_stream_end_without_terminal_is_a_stream_ended_error():
+    # No ResultMessage in the stream: the claude process went away mid-turn.
+    # The adapter must synthesize exactly one terminal, and it must be an
+    # ERROR — a ``TurnDone`` here put a ✅ on a reply cut mid-sentence — while
+    # the text streamed before the cut is still delivered ahead of it.
     messages = [
         SystemMessage(subtype="init", data={"session_id": "s2"}),
         AssistantMessage(content=[SdkTextBlock(text="hi")], model="claude"),
@@ -701,7 +708,9 @@ async def test_stream_end_without_terminal_synthesizes_turn_done():
     events = await _collect(adapter, _user_turn("hello"))
     terminals = [e for e in events if isinstance(e, (TurnDone, TurnError))]
     assert len(terminals) == 1
-    assert isinstance(terminals[0], TurnDone)
+    assert terminals[0] == TurnError(code="stream_ended", message=STREAM_ENDED_MESSAGE)
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["hi"]
+    assert events.index(terminals[0]) == len(events) - 1
 
 
 # ---------------------------------------------------------------------------

@@ -145,6 +145,9 @@ markers = [
 [tool.importlinter]
 root_packages = ["coffer"]
 include_external_packages = true
+# Annotation-only imports (``if TYPE_CHECKING:``) do not count: a port may be
+# typed with another kind's class without executing any of its code.
+exclude_type_checking_imports = true
 
 # Contract 1: surfaces > application > domain — imports flow inward only.
 [[tool.importlinter.contracts]]
@@ -247,9 +250,32 @@ source_modules = ["coffer.surfaces.cli"]
 forbidden_modules = ["coffer.infrastructure.credentials"]
 
 # Contract 5: cross-kind imports forbidden. Each kind's modules may not import
-# any other kind's modules; the kind-agnostic core (Resource/Audit/etc.) is the
-# only shared substrate. As more kinds land, append to BOTH source_modules and
-# forbidden_modules (symmetrically) so each new kind is fenced off from peers.
+# any other kind's modules; the kind-agnostic core (Resource/Audit/etc.), the
+# knowledge substrate, and the kind-agnostic infrastructure packages
+# (``infrastructure.net``, ``infrastructure.agent_files``, ``infrastructure.llm``,
+# ``infrastructure.persistence``) are the only shared ground. Only the
+# composition root (``surfaces.http.app`` + ``*_wiring.py``,
+# ``surfaces.cli.main``) may see two kinds at once.
+#
+# One contract per kind, all nine generated from ONE table
+# (``scripts``-free: the table is the list below, kept symmetric by hand — a
+# kind appears as a source in its own contract and in the forbidden list of
+# every other). Two things are deliberately NOT fenced:
+#
+# * a kind's pure DOMAIN vocabulary, where another kind exists to act on it —
+#   ``provider`` and ``memory`` read ``domain.agent`` (which agents there are,
+#   where their config lives), ``channel`` reads ``domain.chat`` (what a turn
+#   carries). Each such dependency is named in that contract's
+#   ``ignore_imports`` so the exception is visible, never blanket.
+# * annotation-only imports under ``TYPE_CHECKING``
+#   (``exclude_type_checking_imports`` above): a Protocol may be typed with
+#   another kind's class without executing any of its code.
+#
+# Everything else crosses through a port the consuming kind declares
+# (``application.chat.ports.ModelCatalogPort``, ``application.memory.delivery
+# .AgentConfigWriter``) and the composition root satisfies.
+
+# MCP servers: the gateway, the supervisors, the capability catalogue.
 [[tool.importlinter.contracts]]
 name = "Cross-kind imports forbidden (mcp)"
 type = "forbidden"
@@ -259,21 +285,31 @@ source_modules = [
     "coffer.infrastructure.mcp",
     "coffer.surfaces.http.mcp",
     "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
 ]
 forbidden_modules = [
     "coffer.domain.agent",
     "coffer.application.agent",
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
     "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
     "coffer.domain.skill",
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
     "coffer.surfaces.cli.skill_cmd",
-    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
-    # Only the knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
@@ -283,9 +319,36 @@ forbidden_modules = [
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
     "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
 ]
 
-# Contract 5b: agent kind may not reach into mcp or skill. Symmetric with 5.
+# Managed coding agents and their on-disk config.
 [[tool.importlinter.contracts]]
 name = "Cross-kind imports forbidden (agent)"
 type = "forbidden"
@@ -294,7 +357,16 @@ source_modules = [
     "coffer.application.agent",
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
     "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
 ]
 forbidden_modules = [
     "coffer.domain.mcp",
@@ -302,14 +374,15 @@ forbidden_modules = [
     "coffer.infrastructure.mcp",
     "coffer.surfaces.http.mcp",
     "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
     "coffer.domain.skill",
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
     "coffer.surfaces.cli.skill_cmd",
-    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
-    # Only the knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
@@ -319,11 +392,36 @@ forbidden_modules = [
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
     "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
 ]
 
-# Contract 5c: skill kind may not reach into mcp or agent. Symmetric with 5/5b.
-# The composition root (coffer.surfaces.http.agent_skill_wiring) is permitted
-# to wire both kinds together because it lives outside the per-kind subpackages.
+# Skills: the master store and per-agent delivery.
 [[tool.importlinter.contracts]]
 name = "Cross-kind imports forbidden (skill)"
 type = "forbidden"
@@ -332,6 +430,9 @@ source_modules = [
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
     "coffer.surfaces.cli.skill_cmd",
 ]
 forbidden_modules = [
@@ -340,14 +441,21 @@ forbidden_modules = [
     "coffer.infrastructure.mcp",
     "coffer.surfaces.http.mcp",
     "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
     "coffer.domain.agent",
     "coffer.application.agent",
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
     "coffer.surfaces.cli.agent_cmd",
-    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
-    # Only the knowledge FACADE is fenced off from the other kinds.
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
@@ -357,12 +465,38 @@ forbidden_modules = [
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
     "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
 ]
 
-# Contract 5d: the knowledge kind may not reach into mcp/agent/skill/channel.
-# Symmetric with the others. There is ONE knowledge kind — ``memory`` and
-# ``knowledge_base`` were merged into it — so this replaces what used to be two
-# contracts fencing the two faces off from each other as well.
+# Knowledge: ``domain.knowledge`` and ``infrastructure.knowledge`` are the
+# SUBSTRATE (path layout, frontmatter parsing, the ripgrep wrapper) and stay
+# importable by every kind; only the knowledge FACADE is fenced off.
 [[tool.importlinter.contracts]]
 name = "Cross-kind imports forbidden (knowledge)"
 type = "forbidden"
@@ -379,15 +513,28 @@ forbidden_modules = [
     "coffer.infrastructure.mcp",
     "coffer.surfaces.http.mcp",
     "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
     "coffer.domain.agent",
     "coffer.application.agent",
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
     "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
     "coffer.domain.skill",
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
     "coffer.surfaces.cli.skill_cmd",
     "coffer.domain.channel",
     "coffer.application.channel",
@@ -395,9 +542,36 @@ forbidden_modules = [
     "coffer.surfaces.http.channel_routes",
     "coffer.surfaces.cli.channel_cmd",
     "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
 ]
 
-# Contract 5f: channel kind may not reach into any other kind. Symmetric.
+# IM channels: adapters, pairing, the inbound processor, the runtime.
 [[tool.importlinter.contracts]]
 name = "Cross-kind imports forbidden (channel)"
 type = "forbidden"
@@ -415,30 +589,386 @@ forbidden_modules = [
     "coffer.infrastructure.mcp",
     "coffer.surfaces.http.mcp",
     "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
     "coffer.domain.agent",
     "coffer.application.agent",
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
     "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
     "coffer.domain.skill",
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
     "coffer.surfaces.cli.skill_cmd",
-    # ``domain.knowledge`` and ``infrastructure.knowledge`` are the SUBSTRATE
-    # (path layout, frontmatter parsing, the ripgrep wrapper) and stay exempt.
-    # Only the knowledge FACADE is fenced off from the other kinds.
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
     "coffer.surfaces.cli.knowledge_cmd",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
+]
+ignore_imports = [
+    "coffer.application.channel.* -> coffer.domain.chat.*",
 ]
 
-# Contract 6: kind-agnostic core does not import kind-specific modules.
+# The turn platform (conversations, the agent-provider registry, the turn
+# orchestrator). It reads the agent kind's model catalogue through its own
+# ``ModelCatalogPort`` and the provider kind's key through a resolver the
+# composition root injects — never by import.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (chat)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.application.knowledge",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
+]
+
+# LLM connections and their projection into each agent's config.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (provider)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.application.knowledge",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
+]
+ignore_imports = [
+    "coffer.domain.provider.* -> coffer.domain.agent.*",
+    "coffer.application.provider.* -> coffer.domain.agent.*",
+    "coffer.surfaces.http.provider_schemas -> coffer.domain.agent.*",
+]
+
+# Memory: facts aggregated from the agents' own memories, and their delivery.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (memory)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.application.knowledge",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
+]
+ignore_imports = [
+    "coffer.application.memory.* -> coffer.domain.agent.*",
+    "coffer.infrastructure.memory.readers.* -> coffer.domain.agent.*",
+]
+
+# Vault convergence with a git remote.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (sync)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
+]
+forbidden_modules = [
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
+    "coffer.surfaces.cli.skill_cmd",
+    "coffer.application.knowledge",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+]
+
+# Contract 6: kind-agnostic core does not import kind-specific modules. The
+# core includes the kind-agnostic DI hub (``surfaces.http.dependencies``): each
+# kind publishes its own concretely-typed providers from its own module, so
+# the hub imports no kind and needs no ``Any``.
+#
+# The ONE sanctioned central-metadata exception: Alembic's ``env.py`` imports
+# every kind's ORM model module so ``Base.metadata`` is complete when
+# autogenerate and ``upgrade head`` run. That is the point of central
+# metadata, and there is no way to register a table without importing the
+# module that declares it; the exception is listed per module so a new kind
+# that adds a table has to add itself here on purpose.
 [[tool.importlinter.contracts]]
 name = "Kind-agnostic core does not import kind-specific code"
 type = "forbidden"
 source_modules = [
     "coffer.application.resource_service",
+    "coffer.application.resource_scope_ops",
+    "coffer.application.resource_delete_ops",
     "coffer.application.audit_service",
     "coffer.application.retention_service",
     "coffer.application.retention_worker",
@@ -446,7 +976,13 @@ source_modules = [
     "coffer.domain.resource",
     "coffer.domain.audit",
     "coffer.domain.retention",
+    "coffer.domain.scope",
+    "coffer.domain.connection",
+    "coffer.infrastructure.net",
+    "coffer.infrastructure.agent_files",
     "coffer.infrastructure.persistence.models",
+    "coffer.infrastructure.persistence.migrations.env",
+    "coffer.surfaces.http.dependencies",
     "coffer.surfaces.http.resource_routes",
     "coffer.surfaces.http.audit_routes",
     "coffer.surfaces.http.retention_routes",
@@ -456,22 +992,70 @@ forbidden_modules = [
     "coffer.application.mcp",
     "coffer.infrastructure.mcp",
     "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
     "coffer.domain.agent",
     "coffer.application.agent",
     "coffer.infrastructure.agent",
     "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
     "coffer.domain.skill",
     "coffer.application.skill",
     "coffer.infrastructure.skill",
     "coffer.surfaces.http.skill_routes",
-    # Substrate exempt (see the note in the cross-kind contracts); the facade
-    # is what the kind-agnostic core must not reach into.
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
+    "coffer.surfaces.cli.skill_cmd",
     "coffer.application.knowledge",
     "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
     "coffer.domain.channel",
     "coffer.application.channel",
     "coffer.infrastructure.channel",
     "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.infrastructure.persistence.memory_overrides_repo",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
+]
+ignore_imports = [
+    "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.channel.persistence",
+    "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.mcp.persistence",
 ]
 
 # Contract 7: converter confinement. ``markitdown`` has exactly two consumers —

@@ -18,8 +18,11 @@ Import rules:
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
 from pathlib import Path
+
+from coffer.infrastructure.logging.files import log_dir
 
 #: Where the retired macOS desktop bundle staged its `coffer-daemon`. Coffer
 #: no longer ships that bundle, but a machine that installed one still has it
@@ -68,3 +71,43 @@ def daemon_spawn_command() -> list[str]:
         return [str(sibling)]
 
     return [sys.executable, "-m", "coffer.infrastructure.daemon.entry"]
+
+
+def daemon_log_path() -> Path:
+    """Where a detached daemon's stdout/stderr land — ``~/.coffer/logs/daemon.log``."""
+    return log_dir() / "daemon.log"
+
+
+def spawn_detached_daemon() -> subprocess.Popen[bytes]:
+    """Spawn the daemon detached from the caller, stdio redirected to ``daemon.log``.
+
+    The one spawn every auto-spawn surface shares — the CLI's detect-or-spawn,
+    ``coffer daemon start`` and the shim — so they all keep the daemon's own
+    refusals. The daemon prints why it would not start (a squatted fixed port,
+    say) to stderr and exits; a spawner that sent stderr to ``DEVNULL`` (as the
+    shim once did) threw that away and could only report "did not come up
+    within 10s". Appending both streams to ``daemon.log`` keeps the message
+    where "check daemon.log" already points the user.
+
+    Raises ``OSError`` when the process cannot be started; the log handle is
+    closed on that path and otherwise leaks into the child on purpose.
+    """
+    log_path = daemon_log_path()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log = open(log_path, "ab")  # noqa: SIM115 — handle leaks intentionally into child
+    kwargs: dict[str, object] = {
+        "stdout": log,
+        "stderr": log,
+        "stdin": subprocess.DEVNULL,
+    }
+    if sys.platform == "win32":
+        kwargs["creationflags"] = (
+            subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS  # type: ignore[attr-defined]
+        )
+    else:
+        kwargs["start_new_session"] = True
+    try:
+        return subprocess.Popen(daemon_spawn_command(), **kwargs)  # type: ignore[call-overload,no-any-return]
+    except OSError:
+        log.close()
+        raise

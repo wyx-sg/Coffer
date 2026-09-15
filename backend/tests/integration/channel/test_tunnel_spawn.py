@@ -1,12 +1,15 @@
 """TunnelController: spawn/stop a cloudflared child per channel (fakes subprocess).
 
-The real cloudflared binary is never run; asyncio.create_subprocess_exec and the
-binary resolver are monkeypatched so we can assert lifecycle + the token-file
-hardening (token written 0600, never on argv, removed on stop).
+The real cloudflared binary is never run; the one OS call in
+``ChildProcess`` (``child_process._create_subprocess``) and the binary resolver
+are monkeypatched, so lifecycle, the pidfile record and the token-file hardening
+(token written 0600, never on argv, removed on stop) are all asserted for real.
+``HOME`` points at ``tmp_path`` so the pidfiles land in a throwaway vault.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +17,7 @@ import pytest
 
 from coffer.infrastructure.channel import tunnel_spawn
 from coffer.infrastructure.channel.tunnel_spawn import CloudflaredNotFoundError, TunnelController
+from coffer.infrastructure.daemon import child_process
 
 
 class _FakeProc:
@@ -34,20 +38,24 @@ class _FakeProc:
 
 
 @pytest.fixture
-def spawns(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    return tmp_path
+
+
+@pytest.fixture
+def spawns(home: Path, monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Record each spawned command; return a fresh _FakeProc per call."""
     recorded: list[list[str]] = []
     counter = {"pid": 1000}
 
-    async def fake_exec(*command: str, **_: Any) -> _FakeProc:
+    async def fake_exec(command: list[str], **_: Any) -> _FakeProc:
         recorded.append(list(command))
         counter["pid"] += 1
         return _FakeProc(counter["pid"])
 
     monkeypatch.setattr(tunnel_spawn, "_resolve_cloudflared", lambda: "/usr/bin/cloudflared")
-    monkeypatch.setattr(tunnel_spawn.asyncio, "create_subprocess_exec", fake_exec)
-    monkeypatch.setattr(tunnel_spawn, "record_spawn", lambda *a, **k: None)
-    monkeypatch.setattr(tunnel_spawn, "reap_pidfile", lambda *a, **k: None)
+    monkeypatch.setattr(child_process, "_create_subprocess", fake_exec)
     return recorded
 
 
@@ -55,7 +63,14 @@ def _token_file_from(command: list[str]) -> Path:
     return Path(command[command.index("--token-file") + 1])
 
 
-async def test_ensure_running_spawns_with_token_file_0600_not_argv(spawns: list[list[str]]):
+def _pidfiles(home: Path) -> list[Path]:
+    pid_dir = home / ".coffer" / "upstream-pids"
+    return sorted(pid_dir.glob("channel-tunnel-*.json")) if pid_dir.exists() else []
+
+
+async def test_ensure_running_spawns_with_token_file_0600_not_argv(
+    spawns: list[list[str]], home: Path
+):
     tc = TunnelController()
     await tc.ensure_running("st", "SECRET-TOKEN")
     assert tc.running("st") is True
@@ -67,7 +82,12 @@ async def test_ensure_running_spawns_with_token_file_0600_not_argv(spawns: list[
     tf = _token_file_from(cmd)
     assert tf.read_text() == "SECRET-TOKEN"
     assert (tf.stat().st_mode & 0o777) == 0o600
+    # The spawn is on record for the startup orphan sweep, under its own prefix.
+    [pidfile] = _pidfiles(home)
+    assert pidfile.name == "channel-tunnel-1001.json"
+    assert json.loads(pidfile.read_text())["command_line"] == cmd
     await tc.dispose()
+    assert _pidfiles(home) == []
 
 
 async def test_same_token_is_idempotent_new_token_respawns(spawns: list[list[str]]):
@@ -81,15 +101,19 @@ async def test_same_token_is_idempotent_new_token_respawns(spawns: list[list[str
     await tc.dispose()
 
 
-async def test_ensure_stopped_removes_token_file_and_marks_not_running(spawns: list[list[str]]):
+async def test_ensure_stopped_removes_token_file_and_marks_not_running(
+    spawns: list[list[str]], home: Path
+):
     tc = TunnelController()
     await tc.ensure_running("st", "T")
     tf = _token_file_from(spawns[0])
     assert tf.exists()
+    assert len(_pidfiles(home)) == 1
     await tc.ensure_stopped("st")
     assert tc.running("st") is False
     assert tc.active() == set()
     assert not tf.exists()
+    assert _pidfiles(home) == []  # the record goes with the child we reaped
 
 
 async def test_dispose_stops_all(spawns: list[list[str]]):

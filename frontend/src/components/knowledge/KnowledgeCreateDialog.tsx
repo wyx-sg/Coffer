@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCreateCollection } from "@/kinds/knowledge/useKnowledge";
+import { useCreateCollection } from "@/lib/hooks/useKnowledge";
 
 interface Props {
   open: boolean;

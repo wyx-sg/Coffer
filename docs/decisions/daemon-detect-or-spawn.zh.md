@@ -228,3 +228,13 @@ daemon 必须**比任一单一入口活得更久**：用户期望某个 MCP 客�
   胜者变成孤儿。并发测试也已修正为驱动一个真实的「已绑定但尚未服务」的 socket
   （并把释放锁与「正在服务」绑定），而不再把「`daemon.json` 存在」当作存活 ——
   那恰恰掩盖了这个窗口。
+- **2026-09-14** —— 本 ADR 的说法与实际运行之间的两处差距。（1）shim 过去以
+  `stderr=DEVNULL` 拉起 daemon，daemon 自己的拒绝理由（固定端口被占，`exit 2`
+  前打印到 stderr）被直接丢弃，shim 只能说「10 秒内没起来」；现在所有拉起方 ——
+  CLI 自动 spawn、`coffer daemon start`、shim —— 都走
+  `infrastructure/daemon/spawn.py` 里同一个 `spawn_detached_daemon`，把两路
+  输出追加到 `~/.coffer/logs/daemon.log`，也就是「去看 daemon.log」所指的地方。
+  （2）上文的版本偏差检测过去只有 `coffer daemon status` 做；现在每条 CLI 命令
+  （经 `client_or_exit`）与 shim（在其状态探测时）都把 daemon 的 `version` 与
+  自身构建比对，不一致时在 stderr 打印一行 WARNING —— 绝不拒绝。
+  `/daemon/status` 另外上报 daemon 的 `executable`，让警告能说清是哪个构建在应答。

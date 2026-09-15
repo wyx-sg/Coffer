@@ -2,17 +2,27 @@
 
 Extracted from ``TurnOrchestrator`` so the orchestrator file stays focused. The
 task publishes every ``AgentEvent`` to the conversation bus (so any number of web
-subscribers observe it) and, when a ``start_turn`` caller supplied a dedicated
-queue (the channel renderer), to that queue too — ending it with a ``None``
-sentinel. The cancellation/shielding semantics are unchanged: a user interrupt
-keeps the partial assistant message; a delete discards it.
+subscribers observe it) and, when the turn was started with a dedicated queue
+(a channel renderer's, or ``start_turn``'s), to that queue too — ending it with
+a ``None`` sentinel. The cancellation/shielding semantics are unchanged: a user
+interrupt keeps the partial assistant message; a delete discards it.
+
+The idle watchdog
+-----------------
+An agent process can wedge without dying — a hung tool, a network call that
+never returns, a CLI waiting on a prompt nobody will answer. Nothing upstream
+bounds that: the adapters wait for the next message forever. So the task
+itself keeps time between events: if none arrives for ``idle_timeout`` seconds
+the turn is cancelled with a ``turn_timeout`` error, which runs the adapter's
+own cancellation path (interrupt + disconnect / close — the backend subprocess
+is terminated there) and keeps whatever text was streamed.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
@@ -20,9 +30,11 @@ from coffer.application.chat.turn_persistence import (
     finalize_assistant_message,
     recover_placeholder_id,
 )
-from coffer.application.chat.turn_state import _ACTIVE_TURNS, _ActiveTurn
+from coffer.application.chat.turn_state import ActiveTurn, release_active
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    TURN_TIMEOUT,
+    AgentEvent,
     TextDelta,
     ToolCall,
     ToolResult,
@@ -38,6 +50,20 @@ from coffer.domain.chat.message import (
 )
 
 log = logging.getLogger(__name__)
+
+#: Default for the idle watchdog. Five minutes is longer than any single tool
+#: call a coding agent legitimately makes, and short enough that a wedged turn
+#: does not hold a conversation (and its subprocess) for an afternoon. The
+#: daemon reads ``COFFER_TURN_IDLE_TIMEOUT_SECONDS`` to change it (``0``
+#: disables the watchdog).
+DEFAULT_TURN_IDLE_TIMEOUT_SECONDS = 300.0
+
+#: How much of a conversation a turn is given. The adapters resume the agent's
+#: own session, which already holds the conversation; the history here is what
+#: a fresh session or a path-native agent gets as context, and the most recent
+#: rows are the ones that matter for it. A conversation of thousands of
+#: messages must not be loaded whole on every turn.
+HISTORY_LIMIT = 200
 
 
 def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
@@ -59,12 +85,28 @@ def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
     return []
 
 
+async def _next_event(events: AsyncIterator[AgentEvent], idle_timeout: float | None) -> AgentEvent:
+    """The adapter's next event, or ``TimeoutError`` after ``idle_timeout``
+    seconds of silence.
+
+    The timeout cancels the wait *inside* the adapter's generator, so the
+    adapter's own ``CancelledError`` handling runs — the same path a user
+    interrupt takes — before the ``TimeoutError`` surfaces here. An external
+    cancellation (interrupt, delete) still arrives as ``CancelledError``.
+    """
+    if idle_timeout is None:
+        return await events.__anext__()
+    async with asyncio.timeout(idle_timeout):
+        return await events.__anext__()
+
+
 async def run_turn_task(
     *,
     conversation_id: str,
-    active: _ActiveTurn,
+    active: ActiveTurn,
     adapter: AgentAdapter,
     chat: ChatService,
+    idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
 ) -> None:
     """Async task body: drive the adapter, publish events, persist the result.
 
@@ -73,10 +115,10 @@ async def run_turn_task(
     its own native shape."""
     bus = active.bus
 
-    def emit(event: object) -> None:
-        bus.publish(event)  # type: ignore[arg-type]
+    def emit(event: AgentEvent) -> None:
+        bus.publish(event)
         if active.primary_queue is not None:
-            active.primary_queue.put_nowait(event)  # type: ignore[arg-type]
+            active.primary_queue.put_nowait(event)
 
     text_parts: list[str] = []
     tool_use_blocks: list[ToolUseBlock] = []
@@ -90,7 +132,7 @@ async def run_turn_task(
     append_task: asyncio.Task[Message] | None = None
 
     try:
-        history = await chat.list_messages(conversation_id)
+        history = await chat.list_messages(conversation_id, limit=HISTORY_LIMIT)
         turn_attachments = _attachments_from_history(history)
         # Write a ``streaming`` placeholder assistant row BEFORE the first event.
         # A daemon crash mid-turn then leaves a row the startup sweep flips to
@@ -109,7 +151,28 @@ async def run_turn_task(
         )
         placeholder_id = (await asyncio.shield(append_task)).id
 
-        async for event in await adapter.run_turn(history=history, attachments=turn_attachments):
+        events = (await adapter.run_turn(history=history, attachments=turn_attachments)).__aiter__()
+        while True:
+            try:
+                event = await _next_event(events, idle_timeout)
+            except StopAsyncIteration:
+                break
+            except TimeoutError:
+                error_event = TurnError(
+                    code=TURN_TIMEOUT,
+                    message=(
+                        f"the agent produced nothing for {idle_timeout:g}s; "
+                        "the turn was cancelled and the agent process stopped"
+                    ),
+                )
+                log.warning(
+                    "Turn for conversation %s idle for %ss — cancelled (%s)",
+                    conversation_id,
+                    idle_timeout,
+                    TURN_TIMEOUT,
+                )
+                emit(error_event)
+                break
             emit(event)
             if isinstance(event, TextDelta):
                 text_parts.append(event.text)
@@ -204,11 +267,10 @@ async def run_turn_task(
             error_event=error_event,
         )
     finally:
-        # Ownership-checked removal — only evict our own entry so a racing start
-        # that registered a fresh entry is not lost.
-        if _ACTIVE_TURNS.get(conversation_id) is active:
-            del _ACTIVE_TURNS[conversation_id]
+        # Ownership-checked release — only our own entry, so a racing start that
+        # registered a fresh turn is not lost.
+        release_active(conversation_id, active)
         bus.end_turn()
-        # Close the channel's dedicated queue so its renderer never hangs.
+        # Close the dedicated queue so its renderer never hangs.
         if active.primary_queue is not None:
             active.primary_queue.put_nowait(None)

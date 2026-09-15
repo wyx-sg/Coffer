@@ -15,7 +15,7 @@ import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 
 import { KnowledgeTable } from "./KnowledgeTable";
-import type { CollectionOut } from "@/kinds/knowledge/types";
+import type { CollectionOut } from "@/lib/api/knowledgeTypes";
 
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", async (importOriginal) => {

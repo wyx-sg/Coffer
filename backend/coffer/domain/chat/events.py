@@ -74,9 +74,25 @@ class TurnDone:
     type: Literal["turn_done"] = "turn_done"
 
 
+#: ``TurnError.code`` when the agent's event stream ended without a terminal —
+#: the process died or its connection dropped mid-turn. Shared by every adapter
+#: so a surface can recognise the one failure that is not the agent's own.
+STREAM_ENDED = "stream_ended"
+STREAM_ENDED_MESSAGE = "the agent stopped responding before finishing the turn"
+
+#: ``TurnError.code`` when the orchestrator's idle watchdog cancelled a turn
+#: that produced no event for the configured window (the agent process is
+#: then terminated); the partial reply is kept.
+TURN_TIMEOUT = "turn_timeout"
+
+
 @dataclass(frozen=True)
 class TurnError:
-    """The turn failed — e.g. credential error, provider timeout, tool limit hit."""
+    """The turn failed — e.g. credential error, provider timeout, tool limit hit.
+
+    ``code`` is a short machine token; :data:`STREAM_ENDED` and
+    :data:`TURN_TIMEOUT` are the two the platform itself raises.
+    """
 
     code: str
     message: str

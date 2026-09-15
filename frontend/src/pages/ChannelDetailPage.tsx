@@ -17,13 +17,13 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScopeControl } from "@/components/ScopeControl";
-import { ChannelCallbackCard } from "@/kinds/channel/ChannelCallbackCard";
+import { ChannelCallbackCard } from "@/components/channel/ChannelCallbackCard";
 import {
   ChannelPairingCard,
   ChannelStatusCard,
   ChannelTestMessageCard,
-} from "@/kinds/channel/ChannelDetailCards";
-import { EditChannelDialog } from "@/kinds/channel/EditChannelDialog";
+} from "@/components/channel/ChannelDetailCards";
+import { EditChannelDialog } from "@/components/channel/EditChannelDialog";
 import { translateApiError } from "@/lib/api/errors";
 import {
   useChannelStatus,

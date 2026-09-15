@@ -1,7 +1,8 @@
-"""Drive one git working tree for the vault backup (spec vault-sync ``## Backup``).
+"""Drive one git working tree for vault convergence (spec vault-sync
+``## The converge round``).
 
 The adapter shells out to the real ``git`` binary rather than binding a library
-because the point of the backup is that what lands on the remote is an ordinary
+because the point of the design is that what lands on the remote is an ordinary
 git repository the user can clone, inspect and restore from with their own
 tools — the same binary they would reach for.
 
@@ -16,8 +17,14 @@ echoes the URL it tried back at you when authentication fails.
 
 Each invocation also runs with ``GIT_CONFIG_GLOBAL``/``GIT_CONFIG_SYSTEM``
 pointed at ``/dev/null`` and its commit identity supplied with ``-c``: a
-developer's own git config must not be able to change what the daemon's backup
+developer's own git config must not be able to change what the daemon's round
 does, and Coffer must not write an identity into the user's repository.
+
+Nothing the user configured is ever the first thing after a subcommand. The
+remote URL and the branch are validated in the domain (no leading ``-``), and
+here every positional argument git lets us fence off sits behind ``--`` — a
+``push`` is spelled as an explicit ``refs/heads/`` refspec because that command
+takes no ``--``. The two layers are redundant on purpose.
 """
 
 from __future__ import annotations
@@ -52,6 +59,12 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _QUOTEPATH = ("-c", "core.quotepath=false")
 _IDENTITY = ("-c", "user.name=Coffer", "-c", "user.email=coffer@localhost")
 _PINNED = _QUOTEPATH + _IDENTITY
+
+#: Written into the repository's *local* config the moment Coffer initialises
+#: or adopts a working tree. Its absence on a repository whose ``origin`` is
+#: somewhere else is how ``ensure_repo`` tells "the user's own checkout" from
+#: "the tree Coffer made and the user has since repointed".
+_MANAGED_KEY = "coffer.managed"
 
 
 class GitMirrorError(CofferError):
@@ -127,18 +140,16 @@ class GitMirror:
         *args: str,
         token: str | None = None,
         check: bool = True,
-        root: pathlib.Path | None = None,
     ) -> _Completed:
-        """Run ``git -C <root> <args>`` and capture its output.
+        """Run ``git -C <worktree> <args>`` and capture its output.
 
         ``asyncio.create_subprocess_exec`` — never a shell — so nothing in
         ``args`` can be re-parsed as a command, and a remote URL or branch name
         that happens to contain shell metacharacters is just a string.
         """
-        cwd = root or self._worktree
         with _askpass_script(token) as askpass:
             env = _git_env(token, askpass)
-            argv = ("git", "-C", str(cwd), *_PINNED, *args)
+            argv = ("git", "-C", str(self._worktree), *_PINNED, *args)
             pipe = asyncio.subprocess.PIPE
             proc = await asyncio.create_subprocess_exec(*argv, stdout=pipe, stderr=pipe, env=env)
             try:
@@ -167,21 +178,36 @@ class GitMirror:
 
         An existing repository is adopted with its history rather than
         re-initialized: the user may have been pushing to this remote before
-        Coffer was pointed at it, and a backup that begins by discarding
-        history is not a backup.
+        Coffer was pointed at it, and a history discarded on the way in is
+        not convergence. Adoption has one limit. A repository with commits
+        whose ``origin`` already points somewhere *else*, and which Coffer did
+        not create, is someone's checkout of something — the round would
+        ``reset --hard`` it every hour — so it is refused rather than
+        repointed. A tree Coffer made is marked as such and may be repointed
+        freely, which is what changing the remote's URL does.
         """
         self._worktree.mkdir(parents=True, exist_ok=True)
         if not (self._worktree / ".git").exists():
             await self._git("init", "-b", branch)
         await self._set_origin(remote_url)
+        await self._git("config", "--local", _MANAGED_KEY, "true")
         await self._ensure_branch(branch)
 
     async def _set_origin(self, remote_url: str) -> None:
-        current = await self._git("remote", "get-url", "origin", check=False)
+        current = await self._git("remote", "get-url", "--", "origin", check=False)
         if current.returncode != 0:
-            await self._git("remote", "add", "origin", remote_url)
-        elif current.stdout.strip() != remote_url:
-            await self._git("remote", "set-url", "origin", remote_url)
+            await self._git("remote", "add", "--", "origin", remote_url)
+            return
+        if current.stdout.strip() == remote_url:
+            return
+        managed = await self._git("config", "--local", "--get", _MANAGED_KEY, check=False)
+        if managed.stdout.strip() != "true" and await self.head() is not None:
+            raise GitMirrorError(
+                f"{self._worktree} is already a repository with origin "
+                f"{current.stdout.strip()}; it was not created by Coffer, so it is not "
+                "adopted. Point the working tree at an empty directory instead."
+            )
+        await self._git("remote", "set-url", "--", "origin", remote_url)
 
     async def _ensure_branch(self, branch: str) -> None:
         if await self._current_branch() == branch:
@@ -191,7 +217,9 @@ class GitMirror:
             # ref at the wanted branch and let the first commit create it.
             await self._git("symbolic-ref", "HEAD", f"refs/heads/{branch}")
             return
-        existing = await self._git("checkout", branch, check=False)
+        # The trailing ``--`` makes the name a ref and never a path; with no
+        # such branch this fails and one is created off the current commit.
+        existing = await self._git("checkout", branch, "--", check=False)
         if existing.returncode != 0:
             await self._git("checkout", "-b", branch)
 
@@ -213,29 +241,6 @@ class GitMirror:
         if diff.returncode == 1:
             return True
         raise GitMirrorError(self._failure(("diff",), diff, None))
-
-    async def discard_staged(self) -> None:
-        """Return the working tree and index to ``HEAD``.
-
-        ``reset --hard`` is the right tool and not an overreach: the caller only
-        reaches this after establishing that the staged diff is confined to a
-        file whose content carries no information (the bundle manifest's
-        timestamp), so there is nothing here to lose. Leaving it staged instead
-        would make the next ``checkout`` fail with "your local changes would be
-        overwritten" — and that checkout is how a restore reaches an earlier
-        revision.
-        """
-        await self._git("reset", "--hard", "HEAD")
-
-    async def staged_paths(self) -> list[str]:
-        """Repository-relative paths of everything currently staged.
-
-        ``stage_all`` answers "is there a diff at all"; this answers "a diff in
-        what", which is how the caller tells a real change from an export that
-        only restamped ``manifest.json``.
-        """
-        out = await self._git("diff", "--cached", "--name-only")
-        return [line for line in out.stdout.splitlines() if line.strip()]
 
     async def commit(self, message: str) -> str:
         await self._git("commit", "-m", message)
@@ -320,13 +325,10 @@ class GitMirror:
         return target.read_bytes() if target.is_file() else None
 
     async def push(self, *, branch: str, token: str | None) -> None:
-        await self._git("push", "origin", branch, token=token)
-
-    async def clone(self, *, remote_url: str, branch: str, token: str | None) -> None:
-        parent = self._worktree.parent
-        parent.mkdir(parents=True, exist_ok=True)
-        await self._git("clone", remote_url, str(self._worktree), token=token, root=parent)
-        await self.checkout_branch(branch)
+        # ``push`` takes no ``--``; an explicit refspec is what keeps the
+        # branch from ever being parsed as anything but a ref.
+        refspec = f"refs/heads/{branch}:refs/heads/{branch}"
+        await self._git("push", "origin", refspec, token=token)
 
     async def fetch(self, *, token: str | None) -> None:
         await self._git("fetch", "origin", token=token)
@@ -341,12 +343,16 @@ class GitMirror:
         wanted = revision.strip()
         if not wanted:
             raise GitMirrorError("a revision is required")
+        if wanted.startswith("-"):
+            raise GitMirrorError(f"not a usable revision: {wanted}")
         if _DATE_RE.match(wanted):
             return await self._revision_at_date(wanted)
         return await self._verify(wanted)
 
     async def _verify(self, ref: str) -> str:
-        found = await self._git("rev-parse", "--verify", f"{ref}^{{commit}}", check=False)
+        found = await self._git(
+            "rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}", check=False
+        )
         sha = found.stdout.strip()
         if found.returncode != 0 or not sha:
             raise GitMirrorError(f"unknown revision: {ref}")
@@ -361,38 +367,15 @@ class GitMirror:
         if cutoff >= datetime.now(tz=UTC).date():
             # git's own date parser cannot represent a far-future day at all
             # (it silently resolves to nothing), and a cutoff at or after today
-            # means "the newest backup you have" anyway.
+            # means "the newest commit you have" anyway.
             return await self._verify(start)
         found = await self._git("rev-list", "-1", f"--before={day} 23:59:59", start)
         sha = found.stdout.strip()
         if not sha:
-            raise GitMirrorError(f"no backup commit at or before {day}")
+            raise GitMirrorError(f"no commit at or before {day}")
         return sha
-
-    async def checkout(self, revision: str) -> None:
-        """Detached checkout, so reading an old revision never moves the branch."""
-        await self._git("checkout", "--detach", revision)
-
-    async def checkout_branch(self, branch: str) -> None:
-        local = await self._git("checkout", branch, check=False)
-        if local.returncode == 0:
-            return
-        await self._git("checkout", "-B", branch, f"origin/{branch}")
 
     async def head(self) -> str | None:
         out = await self._git("rev-parse", "HEAD", check=False)
         sha = out.stdout.strip()
         return sha if out.returncode == 0 and sha else None
-
-    async def has_unpushed(self, *, branch: str) -> bool:
-        """True when the branch is ahead of ``origin/<branch>``.
-
-        A run whose push failed keeps its commit, so the next run must be able
-        to see there is something to carry without re-exporting. A missing
-        upstream is not an error: nothing was ever pushed, so every commit that
-        exists is unpushed.
-        """
-        ahead = await self._git("rev-list", "--count", f"origin/{branch}..{branch}", check=False)
-        if ahead.returncode == 0:
-            return int(ahead.stdout.strip() or "0") > 0
-        return await self.head() is not None

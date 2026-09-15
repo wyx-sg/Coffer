@@ -1,31 +1,35 @@
+import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { LegacyScopeRedirect } from "./components/LegacyScopeRedirect";
-import { LegacyMcpServerRedirect } from "./kinds/mcp/LegacyMcpServerRedirect";
+import { LegacyMcpServerRedirect } from "./components/mcp/LegacyMcpServerRedirect";
+import { PageFallback } from "./components/PageFallback";
 import { AgentsPage } from "./pages/AgentsPage";
-import { AgentDetailPage } from "./pages/AgentDetailPage";
-import { ChatPage } from "./pages/ChatPage";
 import { ChannelsPage } from "./pages/ChannelsPage";
-import { ChannelDetailPage } from "./pages/ChannelDetailPage";
 import { SkillsPage } from "./pages/SkillsPage";
-import { SkillDetailPage } from "./pages/SkillDetailPage";
-import { KnowledgePage } from "./pages/KnowledgePage";
-import { KnowledgeDetailPage } from "./kinds/knowledge/KnowledgeDetailPage";
-import { ActivityPage } from "./pages/activity/ActivityPage";
-import { MemoryPage } from "./pages/MemoryPage";
-import { MemoryDetailPage } from "./kinds/memory/MemoryDetailPage";
 import { ResourcesPage } from "./pages/ResourcesPage";
-import { ResourceDetailPage } from "./pages/ResourceDetailPage";
-import { SettingsLayout } from "./pages/settings/SettingsLayout";
-import { SyncPage } from "./pages/sync/SyncPage";
-import { GeneralSettings } from "./pages/settings/GeneralSettings";
-import { DataSettings } from "./pages/settings/DataSettings";
-import { EngineSettings } from "./pages/settings/EngineSettings";
-import { SecuritySettings } from "./pages/settings/SecuritySettings";
-import { AboutPage } from "./pages/settings/AboutPage";
 import { ModelProvidersPage } from "./pages/ModelProvidersPage";
-import { ProviderDetailPage } from "./pages/ProviderDetailPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+
+// Page-level code splitting. The list pages a user lands on stay in the main
+// bundle so the first paint needs one request; every detail page and every
+// surface that pulls in the editor, the highlighter or the markdown pipeline
+// (chat, activity, settings, sync, knowledge, memory) is loaded on first
+// visit. `lazy()` wants a default export and §6 forbids them, so the loader
+// picks the named export out of the module.
+function lazyPage<K extends string>(
+  load: () => Promise<Record<K, ComponentType<object>>>,
+  name: K,
+): JSX.Element {
+  const Page: LazyExoticComponent<ComponentType<object>> = lazy(() =>
+    load().then((m) => ({ default: m[name] })),
+  );
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <Page />
+    </Suspense>
+  );
+}
 
 // Exported as data, not only as a built router: a test that has to prove a
 // legacy URL still lands somewhere (rather than on "page not found") needs the
@@ -37,10 +41,13 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     children: [
       { index: true, element: <Navigate to="/agents" replace /> },
-      { path: "chat", element: <ChatPage /> },
-      { path: "chat/:id", element: <ChatPage /> },
+      { path: "chat", element: lazyPage(() => import("./pages/ChatPage"), "ChatPage") },
+      { path: "chat/:id", element: lazyPage(() => import("./pages/ChatPage"), "ChatPage") },
       { path: "mcp-servers", element: <ResourcesPage /> },
-      { path: "mcp-servers/:name", element: <ResourceDetailPage /> },
+      {
+        path: "mcp-servers/:name",
+        element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
+      },
       // Legacy routes — this surface used to live at /resources, and the
       // detail page carried a kind segment that only ever said `mcp_server`.
       // Keep old bookmarks and links working by redirecting to the renamed
@@ -48,18 +55,39 @@ export const routes: RouteObject[] = [
       { path: "mcp-servers/mcp_server/:name", element: <LegacyMcpServerRedirect /> },
       { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
-      { path: "agents/:name", element: <AgentDetailPage /> },
+      {
+        path: "agents/:name",
+        element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
+      },
       { path: "channels", element: <ChannelsPage /> },
-      { path: "channels/:name", element: <ChannelDetailPage /> },
+      {
+        path: "channels/:name",
+        element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
+      },
       { path: "skills", element: <SkillsPage /> },
-      { path: "skills/:name", element: <SkillDetailPage /> },
-      { path: "knowledge", element: <KnowledgePage /> },
-      { path: "knowledge/:name", element: <KnowledgeDetailPage /> },
-      { path: "memory", element: <MemoryPage /> },
-      { path: "memory/:name", element: <MemoryDetailPage /> },
-      { path: "sync", element: <SyncPage /> },
+      {
+        path: "skills/:name",
+        element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
+      },
+      {
+        path: "knowledge",
+        element: lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
+      },
+      {
+        path: "knowledge/:name",
+        element: lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
+      },
+      { path: "memory", element: lazyPage(() => import("./pages/MemoryPage"), "MemoryPage") },
+      {
+        path: "memory/:name",
+        element: lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
+      },
+      { path: "sync", element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage") },
       { path: "model-providers", element: <ModelProvidersPage /> },
-      { path: "model-providers/:name", element: <ProviderDetailPage /> },
+      {
+        path: "model-providers/:name",
+        element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
+      },
       // Legacy route — `knowledge_base` was a resource kind with its own
       // surface before it merged into the one Knowledge kind. Keep old
       // bookmarks and links working by redirecting to the merged path.
@@ -67,7 +95,10 @@ export const routes: RouteObject[] = [
       // out into its own kind and surface above.)
       { path: "knowledge-bases", element: <Navigate to="/knowledge" replace /> },
       { path: "knowledge-bases/:name", element: <LegacyScopeRedirect /> },
-      { path: "activity", element: <ActivityPage /> },
+      {
+        path: "activity",
+        element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),
+      },
       // Legacy routes — the audit log had its own page at /audit, and
       // "Observability" was the name this surface carried before Activity
       // gathered all three records. Keep old bookmarks and links working by
@@ -76,14 +107,20 @@ export const routes: RouteObject[] = [
       { path: "observability", element: <Navigate to="/activity" replace /> },
       {
         path: "settings",
-        element: <SettingsLayout />,
+        element: lazyPage(() => import("./pages/settings/SettingsLayout"), "SettingsLayout"),
         children: [
           {
             index: true,
             element: <Navigate to="/settings/general" replace />,
           },
-          { path: "general", element: <GeneralSettings /> },
-          { path: "engine", element: <EngineSettings /> },
+          {
+            path: "general",
+            element: lazyPage(() => import("./pages/settings/GeneralSettings"), "GeneralSettings"),
+          },
+          {
+            path: "engine",
+            element: lazyPage(() => import("./pages/settings/EngineSettings"), "EngineSettings"),
+          },
           // Legacy routes — this surface used to live under Settings as
           // "LLM connections" (and before that as separate Models/Providers
           // pages). It is now /model-providers under RESOURCES. Keep old
@@ -91,15 +128,27 @@ export const routes: RouteObject[] = [
           { path: "llm-connections", element: <Navigate to="/model-providers" replace /> },
           { path: "models", element: <Navigate to="/model-providers" replace /> },
           { path: "providers", element: <Navigate to="/model-providers" replace /> },
-          { path: "data", element: <DataSettings /> },
+          {
+            path: "data",
+            element: lazyPage(() => import("./pages/settings/DataSettings"), "DataSettings"),
+          },
           // Legacy route — embedding/chunking config is now one of the two
           // cards on the Engine tab. Keep old bookmarks working by redirecting.
           { path: "embedding", element: <Navigate to="/settings/engine" replace /> },
           // Legacy route — Sync was a Settings tab before it became a
           // top-level page. Keep old bookmarks and links working.
           { path: "sync", element: <Navigate to="/sync" replace /> },
-          { path: "security", element: <SecuritySettings /> },
-          { path: "about", element: <AboutPage /> },
+          {
+            path: "security",
+            element: lazyPage(
+              () => import("./pages/settings/SecuritySettings"),
+              "SecuritySettings",
+            ),
+          },
+          {
+            path: "about",
+            element: lazyPage(() => import("./pages/settings/AboutPage"), "AboutPage"),
+          },
         ],
       },
       { path: "*", element: <NotFoundPage /> },

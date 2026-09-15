@@ -27,8 +27,8 @@ from claude_agent_sdk import (
 from claude_agent_sdk import TextBlock as SdkTextBlock
 
 from coffer.domain.chat.conversation import Conversation
+from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.domain.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.claude_sdk_agent import ClaudeSdkAgentAdapter
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.persistence import ConversationRepo

@@ -3,74 +3,33 @@
 // read absolute paths or reach the OS, but the daemon — always on the user's own
 // machine — can (ADR daemon-proxies-os-file-actions). `browse` backs the web folder picker; `open`/`reveal`
 // back the read-only file viewers' "open in editor" / "reveal in file manager".
+//
+// Wire types from the agent-registry contract; transport via the shared `call`
+// (agents/frontend.md §4).
 
-import { getCofferBaseUrl, getCofferToken } from "../auth";
-import { ApiError } from "./errors";
+import { call, enc } from "@/lib/api/call";
+import type { components } from "@/lib/api/generated/agent-registry";
 
-export interface FsEntry {
-  name: string;
-  path: string;
-}
+type Schemas = components["schemas"];
 
-export interface FsBrowseOut {
-  path: string;
-  parent: string | null;
-  entries: FsEntry[];
-}
+export type FsEntry = Schemas["FsEntry"];
+
+export type FsBrowseOut = Schemas["FsBrowseOut"];
 
 /** A GUI editor detected as installed (preferred-editor picker, spec ui-shell/004). */
-export interface EditorOption {
-  label: string;
-  value: string;
-}
-
-function authHeaders(extra?: Record<string, string>): Record<string, string> {
-  return {
-    "X-Coffer-Token": getCofferToken() ?? "",
-    "X-Coffer-Actor": "ui",
-    ...extra,
-  };
-}
-
-async function postAction(path: string, body: Record<string, unknown>): Promise<void> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, {
-    method: "POST",
-    headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(body),
-  });
-  if (!r.ok) {
-    const data = await r.json().catch(() => null);
-    const err = data?.error;
-    throw new ApiError(
-      err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? `request failed: ${r.status}`,
-    );
-  }
-}
+export type EditorOption = Schemas["EditorOption"];
 
 export const fsApi = {
-  browse: async (path?: string | null): Promise<FsBrowseOut> => {
-    const qs = path ? `?path=${encodeURIComponent(path)}` : "";
-    const r = await fetch(`${getCofferBaseUrl()}/fs/browse${qs}`, {
-      headers: authHeaders(),
-    });
-    const data = await r.json().catch(() => null);
-    if (!r.ok) {
-      const err = data?.error;
-      throw new ApiError(
-        err?.code ?? "INTERNAL_ERROR",
-        err?.message ?? `request failed: ${r.status}`,
-      );
-    }
-    return data as FsBrowseOut;
-  },
+  browse: (path?: string | null): Promise<FsBrowseOut> =>
+    call<FsBrowseOut>(`/fs/browse${path ? `?path=${enc(path)}` : ""}`),
 
   /** Open `path` in the preferred editor (`withApp`) or the OS default app. */
   open: (path: string, withApp?: string): Promise<void> =>
-    postAction("/fs/open", withApp ? { path, with: withApp } : { path }),
+    call<void>("/fs/open", { method: "POST", body: withApp ? { path, with: withApp } : { path } }),
 
   /** Select / reveal `path` in the OS file manager. */
-  reveal: (path: string): Promise<void> => postAction("/fs/reveal", { path }),
+  reveal: (path: string): Promise<void> =>
+    call<void>("/fs/reveal", { method: "POST", body: { path } }),
 
   /**
    * Open the host's native folder dialog (via the daemon) and return the chosen
@@ -78,36 +37,15 @@ export const fsApi = {
    * the caller should fall back to the in-app folder browser; `path: null` with
    * `available: true` means the user cancelled.
    */
-  pickFolder: async (
-    start?: string | null,
-  ): Promise<{ available: boolean; path: string | null }> => {
-    const r = await fetch(`${getCofferBaseUrl()}/fs/pick-folder`, {
+  pickFolder: (start?: string | null): Promise<Schemas["FsPickFolderOut"]> =>
+    call<Schemas["FsPickFolderOut"]>("/fs/pick-folder", {
       method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ start: start ?? null }),
-    });
-    const data = await r.json().catch(() => null);
-    if (!r.ok) {
-      const err = data?.error;
-      throw new ApiError(
-        err?.code ?? "INTERNAL_ERROR",
-        err?.message ?? `request failed: ${r.status}`,
-      );
-    }
-    return data as { available: boolean; path: string | null };
-  },
+      body: { start: start ?? null },
+    }),
 
   /** List GUI editors detected as installed, for the preferred-editor picker. */
   listEditors: async (): Promise<EditorOption[]> => {
-    const r = await fetch(`${getCofferBaseUrl()}/fs/editors`, { headers: authHeaders() });
-    const data = await r.json().catch(() => null);
-    if (!r.ok) {
-      const err = data?.error;
-      throw new ApiError(
-        err?.code ?? "INTERNAL_ERROR",
-        err?.message ?? `request failed: ${r.status}`,
-      );
-    }
-    return (data?.editors ?? []) as EditorOption[];
+    const out = await call<Partial<Schemas["FsEditorsOut"]> | null>("/fs/editors");
+    return out?.editors ?? [];
   },
 };

@@ -4,8 +4,14 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
-import { useChannels, useChannelStatus, useIssuePairingCode } from "./useChannels";
+import {
+  useChannels,
+  useChannelStatus,
+  useCreateChannel,
+  useIssuePairingCode,
+} from "./useChannels";
 import { mockApiClient } from "@/test/mockApiClient";
+import { resourcesKey } from "@/lib/api/queryKeys";
 import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
 
 // useChannels rides the generic resources API (openapi-fetch client) …
@@ -116,5 +122,56 @@ describe("useChannels hooks", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(errorToast).toHaveBeenCalledTimes(1);
     expect(errorToast).toHaveBeenCalledWith(expect.stringContaining("adapter offline"));
+  });
+});
+
+describe("useCreateChannel", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  test("registers the channel and refreshes the resources cache", async () => {
+    const api = mockApiClient();
+    getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
+    const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const { result } = renderHook(() => useCreateChannel(), {
+      wrapper: ({ children }: PropsWithChildren) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        name: "tg",
+        secrets: [{ ref: "channel/tg/bot-token", value: "123:abc" }],
+        config: { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" },
+      });
+    });
+
+    expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: resourcesKey }),
+      ),
+    );
+  });
+
+  test("toasts when registration fails", async () => {
+    const api = mockApiClient({
+      POST: vi.fn(async (path: string) =>
+        path === "/resources"
+          ? { error: { error: { code: "CONFIG_INVALID", message: "bad config" } } }
+          : { data: undefined, error: undefined },
+      ) as ReturnType<typeof mockApiClient>["POST"],
+    });
+    getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
+    const { result } = renderHook(() => useCreateChannel(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current
+        .mutateAsync({ name: "tg", secrets: [], config: { channel_type: "telegram" } })
+        .catch(() => undefined);
+    });
+
+    await waitFor(() => expect(errorToast).toHaveBeenCalled());
   });
 });

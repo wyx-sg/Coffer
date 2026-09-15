@@ -21,9 +21,9 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.mcp_entries import McpEntry, secret_env_keys
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists
+from coffer.surfaces.http.agent_dependencies import get_agent_service
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
-from coffer.surfaces.http.dependencies import get_agent_service
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.workspace_dependencies import (
     get_agent_mcp_entry_service,

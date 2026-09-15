@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import logging
 import pathlib
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
@@ -38,17 +39,19 @@ from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScan
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
 from coffer.infrastructure.agent.plugin_cli import ClaudePluginCli
 from coffer.infrastructure.agent.transcript_reader import FileTranscriptReader
+from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
 from coffer.infrastructure.skill.workspace_scan import WorkspaceScan
-from coffer.surfaces.http.dependencies import (
+from coffer.surfaces.http.agent_dependencies import (
     set_agent_config_file_service,
     set_agent_mcp_service,
     set_agent_service,
     set_auto_detect_service,
-    set_skill_service,
 )
+from coffer.surfaces.http.skill_dependencies import set_skill_service
+from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.workspace_dependencies import (
     set_agent_mcp_entry_service,
     set_agent_native_memory_service,
@@ -58,25 +61,45 @@ from coffer.surfaces.http.workspace_dependencies import (
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 _log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AgentSkillWiring:
+    """What the agent + skill kinds hand back to the lifespan: the two services
+    later kinds project into / deliver through, and the boot heal the lifespan
+    runs once every kind is wired."""
+
+    agent_service: AgentService
+    skill_service: SkillService
+    boot_heal: SkillDriftBootHeal
+
+
+class _BootHeal(Protocol):
+    """The one call ``run_skill_drift_boot_heal`` makes — structural, so a
+    test can hand in a fake without building a ``SkillService``."""
+
+    async def heal(self) -> list[str]: ...
 
 
 def wire_agent_and_skill_kinds(
     app: FastAPI,
     resource_svc: ResourceService,
     audit: AuditService,
-    sm: object,
-    builtin_tools: BuiltinToolRegistry | None = None,
-    credential_store: Any = None,
-) -> None:
+    sm: async_sessionmaker[AsyncSession],
+    builtin_tools: BuiltinToolRegistry,
+    credential_store: EncryptedCredentialStore,
+    sync: SyncContributions,
+) -> AgentSkillWiring:
     """Wire the agent + skill kinds (specs agent-registry, 005) into a running app.
 
     Mirrors the `wire_mcp_kind` pattern. Both kinds are wired in lockstep so
     the cross-kind on_delete hook (deleting an agent cascades into skill
     binding cleanup) can reference both services.
     """
-    binding_repo = SkillBindingRepo(sm)  # type: ignore[arg-type]
+    binding_repo = SkillBindingRepo(sm)
     master_store = MasterStore()
     master_store.ensure_root()
     sync_engine = SyncEngine()
@@ -191,11 +214,7 @@ def wire_agent_and_skill_kinds(
     # they are installed — so carrying it is a thing no single agent can do for
     # itself. Import stores the list and writes no agent config (see
     # ``plugin_sync_state``).
-    providers = getattr(app.state, "sync_state_providers", None)
-    if providers is None:
-        providers = []
-        app.state.sync_state_providers = providers
-    providers.append(AgentPluginSyncState(resource_svc, agent_plugin_svc))
+    sync.state_providers.append(AgentPluginSyncState(resource_svc, agent_plugin_svc))
 
     async def _agent_on_delete(ref: ResourceRef) -> None:
         # Awaited by ResourceService.delete BEFORE the agent row is removed,
@@ -227,17 +246,8 @@ def wire_agent_and_skill_kinds(
     # agent is installed (gate → quarantine otherwise), and imported rows
     # re-apply their on-disk side-effects (skill
     # delivery) after every sync import. start_sync reads these registries.
-    gates = getattr(app.state, "sync_import_gates", None)
-    if gates is None:
-        gates = []
-        app.state.sync_import_gates = gates
-    gates.append(AgentImportGate())
-    hooks = getattr(app.state, "sync_post_import_hooks", None)
-    if hooks is None:
-        hooks = []
-        app.state.sync_post_import_hooks = hooks
-
-    hooks.append(
+    sync.import_gates.append(AgentImportGate())
+    sync.post_import_hooks.append(
         AgentSideEffectsReconcile(
             agent_svc,
             config_file_store,
@@ -255,20 +265,22 @@ def wire_agent_and_skill_kinds(
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
 
-    if builtin_tools is not None:
-        register_skill_builtin_tools(builtin_tools, resources=resource_svc, skill_service=skill_svc)
+    register_skill_builtin_tools(builtin_tools, resources=resource_svc, skill_service=skill_svc)
 
     # Boot heal (see application/skill/boot_reconcile): repair_drift's re-link
     # of a broken/tampered symlink previously only ran from an explicit
     # click (CLI/REST) — nothing else ever inspects an already-delivered
     # link's on-disk health, so it never self-healed while the daemon was
-    # simply not running. Stashed on app.state the same way the provider kind
-    # stashes its boot heal in `provider_wiring`, so `run_skill_drift_boot_heal`
-    # can run it from the lifespan without this module owning startup ordering.
-    app.state.skill_drift_boot_heal = SkillDriftBootHeal(skill_service=skill_svc)
+    # simply not running. Returned rather than run here, so the lifespan owns
+    # the startup ordering (`run_skill_drift_boot_heal` runs after every kind).
+    return AgentSkillWiring(
+        agent_service=agent_svc,
+        skill_service=skill_svc,
+        boot_heal=SkillDriftBootHeal(skill_service=skill_svc),
+    )
 
 
-async def run_skill_drift_boot_heal(app: FastAPI) -> None:
+async def run_skill_drift_boot_heal(heal: _BootHeal) -> None:
     """Boot hook: re-deliver the skill drift ``repair_drift`` already knows how
     to fix safely, instead of waiting for a click on a button nobody used.
 
@@ -276,9 +288,6 @@ async def run_skill_drift_boot_heal(app: FastAPI) -> None:
     why. Best-effort, like the provider projection sweep it mirrors: whatever
     it finds is logged, and nothing here is allowed to fail boot.
     """
-    heal = getattr(app.state, "skill_drift_boot_heal", None)
-    if heal is None:
-        return
     try:
         notes = await heal.heal()
     except Exception:

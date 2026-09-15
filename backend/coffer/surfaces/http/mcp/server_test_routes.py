@@ -24,11 +24,9 @@ from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import (
-    get_credential_store,
-    get_health_repo,
-    get_resource_service,
-)
+from coffer.surfaces.http.credential_composition import get_credential_store
+from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.mcp.dependencies import get_health_repo
 from coffer.surfaces.http.schemas import McpTestResultOut
 
 router = APIRouter(

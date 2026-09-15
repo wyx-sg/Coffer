@@ -11,13 +11,14 @@ import { Plug, Unplug } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { agentsApi, type AgentOut } from "@/lib/api/agents";
+import { agentMcpInstallKey, agentsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 export function AgentBulkActions({ agents, onDone }: { agents: AgentOut[]; onDone: () => void }) {
   const { t } = useTranslation();
 
   const bulk = useBulkMutate({
-    invalidate: [["agents"], ...agents.map((a) => ["agents", a.name, "mcp-install"] as const)],
+    invalidate: [agentsKey, ...agents.map((a) => agentMcpInstallKey(a.name))],
   });
 
   const run = async (op: (name: string) => Promise<unknown>) => {

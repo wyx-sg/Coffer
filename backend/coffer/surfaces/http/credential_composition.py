@@ -14,54 +14,56 @@ import asyncio
 import logging
 import pathlib
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
 
 from sqlalchemy import text as _sa_text
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from coffer.application.audit_service import AuditService
 from coffer.application.credential_migration import (
     migrate_legacy_keychain,
 )
 from coffer.domain.credential_errors import MasterKeyMissing
 from coffer.domain.errors import CredentialMissing
+from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
 
-_credential_store: Any | None = None
+_credential_store: EncryptedCredentialStore | None = None
 
 
-def set_credential_store(store: Any) -> None:
+def set_credential_store(store: EncryptedCredentialStore) -> None:
     """Called by the composition root once on startup."""
     global _credential_store
     _credential_store = store
 
 
-def get_credential_store() -> Any:
-    """FastAPI Depends() target — actual type is EncryptedCredentialStore."""
+def get_credential_store() -> EncryptedCredentialStore:
+    """FastAPI Depends() target."""
     if _credential_store is None:
         raise RuntimeError("credential store not initialised")
     return _credential_store
 
 
-_master_key_manager: Any | None = None
+_master_key_manager: MasterKeyManager | None = None
 
 
-def set_master_key_manager(manager: Any) -> None:
+def set_master_key_manager(manager: MasterKeyManager) -> None:
     """Called by the composition root once on startup."""
     global _master_key_manager
     _master_key_manager = manager
 
 
-def get_master_key_manager() -> Any:
-    """FastAPI Depends() target — actual type is MasterKeyManager."""
+def get_master_key_manager() -> MasterKeyManager:
+    """FastAPI Depends() target."""
     if _master_key_manager is None:
         raise RuntimeError("master key manager not initialised")
     return _master_key_manager
 
 
-def make_credential_resolver(store: Any) -> Callable[[str], str]:
+def make_credential_resolver(store: EncryptedCredentialStore) -> Callable[[str], str]:
     """Build the ``ref -> plaintext`` resolver used by internal-LLM consumers
     (the notes tidy pass). Raises CredentialMissing for an unknown ref."""
 
@@ -74,9 +76,16 @@ def make_credential_resolver(store: Any) -> Callable[[str], str]:
     return _resolve
 
 
-async def init_credential_store(
-    engine: AsyncEngine, db_path: pathlib.Path
-) -> EncryptedCredentialStore:
+@dataclass(frozen=True)
+class CredentialWiring:
+    """The encrypted store every kind resolves refs against, and the master
+    key sync carries a fingerprint of."""
+
+    store: EncryptedCredentialStore
+    master_key: MasterKeyManager
+
+
+async def init_credential_store(engine: AsyncEngine, db_path: pathlib.Path) -> CredentialWiring:
     """Resolve the master key, build the encrypted store, publish DI singletons.
 
     Envelope encryption: resolve the Fernet master key (file first, then
@@ -105,17 +114,17 @@ async def init_credential_store(
         raise MasterKeyMissing(str(db_path.parent / "master.key")) from e
     set_credential_store(credential_store)
     set_master_key_manager(master_key_manager)
-    return credential_store
+    return CredentialWiring(store=credential_store, master_key=master_key_manager)
 
 
 _logger = logging.getLogger(__name__)
 
 
 async def run_legacy_keychain_migration(
-    kinds: dict[str, Any],
-    sm: Any,
-    credential_store: Any,
-    audit: Any,
+    kinds: dict[str, Kind],
+    sm: async_sessionmaker[AsyncSession],
+    credential_store: EncryptedCredentialStore,
+    audit: AuditService,
 ) -> None:
     """One-time move of legacy OS-keychain secrets into the encrypted store.
 

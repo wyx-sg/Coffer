@@ -36,7 +36,7 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import set_mcp_session_factory
+from coffer.surfaces.http.mcp.dependencies import set_mcp_session_factory
 from coffer.surfaces.http.mcp.protocol_routes import (
     _ACTIVE_SESSIONS,
     _JSON_RPC_INTERNAL_ERROR,
@@ -382,7 +382,7 @@ async def test_get_with_session_id_accepted(
     """
     from sse_starlette.sse import EventSourceResponse
 
-    from coffer.surfaces.http.dependencies import get_mcp_session_factory
+    from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
     from coffer.surfaces.http.mcp.protocol_routes import handle_get
 
     # Valid POST initialize → session registered
@@ -483,7 +483,7 @@ async def test_sse_client_disconnect_does_not_dispose_session(
     design. The session must survive a stream close and be left for the idle
     reaper to own.
     """
-    from coffer.surfaces.http.dependencies import get_mcp_session_factory
+    from coffer.surfaces.http.mcp.dependencies import get_mcp_session_factory
     from coffer.surfaces.http.mcp.protocol_routes import handle_get
 
     init = await http_client.post(

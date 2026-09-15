@@ -159,3 +159,61 @@ def test_a_file_may_be_all_title_and_description(knowledge_root) -> None:  # typ
     )
     assert written.body.strip() == ""
     assert fs.list_level("shopee").files[0].description == "where the real thing lives"
+
+
+def test_a_new_file_under_a_symlinked_directory_is_refused(knowledge_root, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """FR-006: a symlink inside the root must not carry a write out of it.
+
+    The target file does not exist yet, so the old ``exists()`` guard saw
+    nothing to resolve — and the atomic write then followed the link.
+    """
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (knowledge_root / "shopee" / "linked").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(UnsafeKnowledgePath):
+        paths.resolve("shopee/linked/new.md")
+    with pytest.raises(UnsafeKnowledgePath):
+        fs.write_file(directory="shopee/linked", title="Escape", description="d", body="b")
+    with pytest.raises(UnsafeKnowledgePath):
+        fs.write_file(
+            directory="shopee",
+            title="Escape",
+            description="d",
+            body="b",
+            relpath="shopee/linked/x.md",
+        )
+    assert list(outside.iterdir()) == []
+
+
+def test_a_dangling_symlink_pointing_outside_is_refused(knowledge_root, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    (knowledge_root / "shopee" / "escape.md").symlink_to(tmp_path / "outside" / "planted.md")
+
+    with pytest.raises(UnsafeKnowledgePath):
+        paths.resolve("shopee/escape.md")
+    assert not (tmp_path / "outside").exists()
+
+
+def test_a_symlink_that_stays_inside_the_root_is_allowed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    (knowledge_root / "shopee" / "real").mkdir()
+    (knowledge_root / "shopee" / "alias").symlink_to(
+        knowledge_root / "shopee" / "real", target_is_directory=True
+    )
+
+    written = fs.write_file(directory="shopee/alias", title="Inside", description="d", body="b")
+
+    assert (knowledge_root / "shopee" / "real" / "inside.md").is_file()
+    assert written.path == "shopee/alias/inside.md"
+
+
+def test_atomic_write_does_not_follow_a_planted_temp_symlink(knowledge_root, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The temp file is opened exclusively, so a link planted under its name
+    is replaced rather than written through."""
+    outside = tmp_path / "outside.md"
+    (knowledge_root / "shopee" / ".note.md.tmp").symlink_to(outside)
+
+    fs.write_file(directory="shopee", title="Note", description="d", body="b")
+
+    assert not outside.exists()
+    assert (knowledge_root / "shopee" / "note.md").is_file()
+    assert not (knowledge_root / "shopee" / ".note.md.tmp").exists()

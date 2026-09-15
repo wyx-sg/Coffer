@@ -1,7 +1,8 @@
 """The shared inbound pipeline: every channel's messages flow through here.
 
-owner gate → pairing claim → commands → queueing → conversation mapping →
-turn driving (execution lives in ``turn_driver``, rendering in ``turn_render``).
+owner gate → pairing claim → commands → conversation mapping → the chat
+platform's own queue (execution lives in ``turn_driver``, rendering in
+``turn_render``).
 
 The chat platform is reached only through its public seams (conversation
 service + turn orchestrator), exactly like the web UI: agents cannot tell a
@@ -14,7 +15,6 @@ never drive a turn (a card tap, a chat-lifecycle event) in ``inbound_events``.
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
 from collections.abc import Sequence
@@ -41,10 +41,8 @@ from coffer.application.channel.ports import (
 )
 from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
 from coffer.application.channel.turn_driver import (
-    QUEUE_MAX as _QUEUE_MAX,
-)
-from coffer.application.channel.turn_driver import (
     ConversationPort,
+    QueuedInbound,
     TurnDriver,
     TurnPort,
 )
@@ -91,7 +89,7 @@ class InboundProcessor:
         self._audit = audit
         self._bindings: dict[str, ChannelBinding] = {}
         # Keyed by (channel, chat_id, thread_id): one peer's DM, one group's
-        # main chat, and each of that group's threads all drain independently.
+        # main chat, and each of that group's threads each render their own turn.
         self._sessions: dict[tuple[str, str, str], _Session] = {}
         self._commands = ChannelCommands(
             threads=threads,
@@ -142,13 +140,14 @@ class InboundProcessor:
             session = self._sessions.pop(key, None)
             if session is None:
                 continue
-            if session.drain_task is not None:
-                session.drain_task.cancel()
-            # Cancelling the drain task only stops the renderer; the
-            # orchestrator turn keeps running and would deliver its reply to
-            # the web UI alone, leaving the bot silent. Interrupt the live
-            # turn so its partial reply is the contract — not a turn that
-            # completes undelivered.
+            if session.render_task is not None:
+                session.render_task.cancel()
+            # Cancelling the renderer only stops delivery; the orchestrator
+            # turn keeps running and would deliver its reply to the web UI
+            # alone, leaving the bot silent. Interrupt the live turn so its
+            # partial reply is the contract — not a turn that completes
+            # undelivered. (The interrupt also pauses the conversation's queue,
+            # FR-051, so nothing queued behind it runs into a bot that is gone.)
             if session.running_conversation_id is not None:
                 with contextlib.suppress(Exception):
                     self._turns.interrupt_turn(session.running_conversation_id)
@@ -304,16 +303,6 @@ class InboundProcessor:
                 thread_id=msg.thread_id,
             )
             return
-        session = self._session(msg.channel, peer.chat_id, msg.thread_id)
-        if len(session.queue) >= _QUEUE_MAX:
-            await safe_send(
-                binding,
-                peer.chat_id,
-                "⚠️ Busy — message dropped, try again.",
-                thread_id=msg.thread_id,
-                chat_kind=msg.chat_kind,
-            )
-            return
         # A media message with no caption still needs non-blank text to persist.
         # FR-042: the turn opens with its own provenance (platform, chat kind +
         # title + id, thread, sender) so the agent knows which group/thread it is
@@ -327,23 +316,20 @@ class InboundProcessor:
         # and the sender's mention id so a group reply opens by @mentioning
         # whoever asked (FR-070).
         origin = format_origin(msg, platform=binding.channel_type)
-        session.queue.append(
-            (
-                f"{origin}\n\n{text or attachment_note(attachments)}",
-                attachments,
-                msg.thread_id,
-                msg.chat_kind,
-                msg.platform_message_id,
-                msg.sender_mention_id,
-                msg.sender_mention_email,
-                title_hint,
-            )
+        await self._turn_driver.submit(
+            binding,
+            peer,
+            QueuedInbound(
+                text=f"{origin}\n\n{text or attachment_note(attachments)}",
+                attachments=attachments,
+                thread_id=msg.thread_id,
+                chat_kind=msg.chat_kind,
+                reply_to_message_id=msg.platform_message_id,
+                mention_user_id=msg.sender_mention_id,
+                mention_user_email=msg.sender_mention_email,
+                title_hint=title_hint,
+            ),
         )
-        if session.drain_task is None or session.drain_task.done():
-            session.drain_task = asyncio.create_task(
-                self._turn_driver.drain(binding, peer.chat_id, msg.thread_id),
-                name=f"channel-drain:{binding.name}:{peer.chat_id}:{msg.thread_id}",
-            )
 
     async def on_callback(self, cb: InboundCallback) -> None:
         """A selection-card button tap (handled in ``inbound_events``)."""

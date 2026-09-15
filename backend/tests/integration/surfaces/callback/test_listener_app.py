@@ -186,6 +186,87 @@ async def test_daemon_unreachable_maps_to_502() -> None:
     assert r.json() == {"error": "daemon unreachable"}
 
 
+# -- body cap ------------------------------------------------------------------
+
+_CAP = 1024 * 1024
+
+
+def _counting_chunks(total: int, chunk: int = 64 * 1024) -> tuple[Any, list[int]]:
+    """An async body of ``total`` bytes in ``chunk``-sized pieces, recording
+    how many pieces the listener actually pulled."""
+    pulled: list[int] = []
+
+    async def _gen() -> AsyncIterator[bytes]:
+        sent = 0
+        while sent < total:
+            piece = b"x" * min(chunk, total - sent)
+            pulled.append(len(piece))
+            sent += len(piece)
+            yield piece
+
+    return _gen(), pulled
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="an oversized callback body is refused before it is read"
+)
+async def test_a_declared_oversized_body_is_413_before_a_byte_is_read(
+    listener: tuple[httpx.AsyncClient, _StubDaemon],
+) -> None:
+    client, stub = listener
+    # An explicit Content-Length keeps httpx from switching to chunked, so the
+    # listener sees the declared size — and the body generator records whether
+    # it was ever pulled.
+    body, pulled = _counting_chunks(_CAP + 1)
+    r = await client.post(
+        "/seatalk/ch",
+        content=body,
+        headers={"Content-Length": str(_CAP + 1), "Signature": "irrelevant"},
+    )
+    assert r.status_code == 413
+    assert r.json() == {"error": "body too large"}
+    assert pulled == []  # refused on the header alone; nothing was buffered
+    assert stub.received == []
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="an oversized callback body is refused before it is read"
+)
+async def test_a_chunked_body_is_cut_off_the_moment_it_passes_the_cap(
+    listener: tuple[httpx.AsyncClient, _StubDaemon],
+) -> None:
+    """No Content-Length (httpx sends an async iterable as chunked): the
+    listener must stop pulling as soon as the running total exceeds the cap,
+    not buffer the whole upload and measure it afterwards."""
+    client, stub = listener
+    total = 4 * _CAP
+    body, pulled = _counting_chunks(total, chunk=64 * 1024)
+    r = await client.post("/seatalk/ch", content=body, headers={"Signature": "irrelevant"})
+    assert r.status_code == 413
+    assert r.json() == {"error": "body too large"}
+    # 1 MiB is 16 chunks of 64 KiB; the 17th tips it over and nothing after
+    # that is read. Reading the whole 4 MiB would be 64 pulls.
+    assert len(pulled) == 17
+    assert stub.received == []
+
+
+async def test_a_body_exactly_at_the_cap_is_still_processed(
+    listener: tuple[httpx.AsyncClient, _StubDaemon],
+) -> None:
+    client, stub = listener
+    skeleton = {"event_type": "interactive_message_click", "event": {"pad": ""}}
+    padding = _CAP - len(json.dumps(skeleton).encode())
+    envelope = {"event_type": "interactive_message_click", "event": {"pad": "p" * padding}}
+    body, headers = _signed(envelope)
+    assert len(body) == _CAP
+    r = await client.post("/seatalk/ch", content=body, headers=headers)
+    assert r.status_code == 200
+    assert r.json() == {"accepted": True}
+    [(name, forwarded, _token, _actor)] = stub.received
+    assert name == "ch"
+    assert forwarded == envelope  # signature verified over the full body
+
+
 # -- __main__ env parsing -------------------------------------------------------
 
 

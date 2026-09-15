@@ -29,6 +29,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -163,14 +164,34 @@ def live_daemon() -> DaemonInfo | None:
         info = read(path)
     except (ValueError, KeyError, OSError):
         return None  # malformed/stale → treat as no daemon
+    return info if probe_status(info) is not None else None
+
+
+def probe_status(
+    info: DaemonInfo, *, timeout: float = _LIVENESS_PROBE_TIMEOUT
+) -> dict[str, Any] | None:
+    """The ``/daemon/status`` body of the daemon ``info`` names, or ``None``
+    when nothing answers 200 there.
+
+    The single probe behind :func:`live_daemon`; callers that also want the
+    body — the CLI and shim compare its ``version`` with their own build — use
+    it directly. A 200 whose body is not a JSON object still counts as live
+    (an empty dict), so a liveness decision never hinges on the payload.
+    """
     try:
         resp = httpx.get(
             f"http://127.0.0.1:{info.port}/api/v1/daemon/status",
-            timeout=_LIVENESS_PROBE_TIMEOUT,
+            timeout=timeout,
         )
     except httpx.HTTPError:
         return None  # not reachable / not speaking HTTP → no live daemon
-    return info if resp.status_code == 200 else None
+    if resp.status_code != 200:
+        return None
+    try:
+        body = resp.json()
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
 
 
 def superseded_by() -> DaemonInfo | None:

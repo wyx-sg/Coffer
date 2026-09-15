@@ -68,7 +68,11 @@ backend/coffer/
 │   ├── fs.py                       # the file tree: catalogue walk, atomic read/write/delete
 │   ├── frontmatter.py              # the only PyYAML importer
 │   ├── naming.py                   # slugify + unique_name — the path is the identity
-│   └── legacy_migration.py         # the one-way on-disk rewrite migration 0066 runs first
+│   ├── grep.py                     # ripgrep, with the pure-Python fallback in grep_fallback.py
+│   └── grep_fallback.py            # the same search without rg, for a machine that lacks it
+├── infrastructure/persistence/migrations/
+│   ├── knowledge_tree_0066.py      # the one-way on-disk rewrite migration 0066 runs first
+│   └── knowledge_tree_0066_text.py # frozen copies of the helpers it needs — imports no live code
 └── surfaces/
     ├── http/knowledge/             # routes.py, schemas.py, tidy_state.py
     ├── http/knowledge_wiring.py    # composition: sets app.state.kinds["knowledge"]

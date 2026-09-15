@@ -49,9 +49,3 @@ def render_frontmatter(frontmatter: dict[str, Any], body: str) -> str:
     ).rstrip("\n")
     body_clean = body.strip("\n")
     return f"{_FENCE}\n{block}\n{_FENCE}\n\n{body_clean}\n"
-
-
-def body_of(text: str) -> str:
-    """The markdown body only (frontmatter stripped)."""
-    _, body = split_frontmatter(text)
-    return body

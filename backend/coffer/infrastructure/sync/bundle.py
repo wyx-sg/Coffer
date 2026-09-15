@@ -1,4 +1,4 @@
-"""Filesystem IO over one export bundle directory (spec and ADR vault-sync).
+"""Filesystem IO over the working tree's bundle layout (spec and ADR vault-sync).
 
 Layout::
 
@@ -24,6 +24,7 @@ state would tell the merge "this vault deleted everything it never absorbed".
 from __future__ import annotations
 
 import json
+import logging
 import pathlib
 from collections.abc import Callable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
@@ -36,6 +37,8 @@ from coffer.domain.sync.manifest import Manifest
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
 from coffer.infrastructure.sync.tree_mirror import _converge_files, _mirror_tree
+
+_logger = logging.getLogger(__name__)
 
 _MANIFEST = "manifest.json"
 _RESOURCES = "resources"
@@ -119,33 +122,35 @@ class Bundle:
             if existing.exists() and not existing.is_dir():
                 raise SyncBundleInvalid(str(self._root), f"{name} exists and is not a directory")
 
-    def require_readable(self) -> None:
-        if not self._root.exists():
-            raise SyncBundleInvalid(str(self._root), "directory does not exist")
-        if not self._root.is_dir():
-            raise SyncBundleInvalid(str(self._root), "path is not a directory")
-        if not (self._root / _MANIFEST).exists():
-            raise SyncBundleInvalid(str(self._root), "no manifest.json")
-
-    # --- live trees <-> bundle ---------------------------------------------
+    # --- live trees -> bundle ----------------------------------------------
 
     def mirror_trees_out(self) -> None:
-        # Nothing is filtered: with the derived indexes gone, every file under a
-        # mirrored root is source of truth — the two note/doc lanes plus the
-        # ``.raw/`` originals a re-conversion needs and the ``.history/``
-        # revisions that make an unattended rewrite recoverable on the other
-        # machine too.
+        # Hidden entries are not filtered: with the derived indexes gone, every
+        # regular file under a mirrored root is source of truth — the two
+        # note/doc lanes plus the ``.raw/`` originals a re-conversion needs and
+        # the ``.history/`` revisions that make an unattended rewrite
+        # recoverable on the other machine too. What IS left out is anything
+        # that is not a regular file of the vault's own: a symlink (its target
+        # is not vault content, and following it would publish whatever it
+        # points at) and anything under a ``.git`` directory (a nested
+        # repository's internals, which git would refuse to track anyway).
+        # Both are reported once per export rather than per file.
         self._root.mkdir(parents=True, exist_ok=True)
+        skipped: list[str] = []
         for subdir, live_root in self._trees:
-            _mirror_tree(live_root, self._root / subdir, protected=self._held_under(subdir))
-
-    def mirror_trees_in(self) -> None:
-        # ``delete_missing=False``: import never deletes, so a note this vault
-        # holds and the bundle does not survives the import untouched.
-        for subdir, live_root in self._trees:
-            tree = self._root / subdir
-            if tree.exists():
-                _mirror_tree(tree, live_root, delete_missing=False)
+            skipped.extend(
+                f"{subdir}/{rel}"
+                for rel in _mirror_tree(
+                    live_root, self._root / subdir, protected=self._held_under(subdir)
+                )
+            )
+        if skipped:
+            _logger.warning(
+                "sync: %d path(s) under the mirrored trees were skipped "
+                "(symlinks or .git internals): %s",
+                len(skipped),
+                ", ".join(skipped[:20]) + (" …" if len(skipped) > 20 else ""),
+            )
 
     def tree_counts(self) -> list[tuple[str, int]]:
         counts: list[tuple[str, int]] = []
@@ -169,18 +174,6 @@ class Bundle:
             json.dumps(manifest.to_dict(), sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
         )
-
-    def read_manifest(self) -> Manifest | None:
-        path = self._root / _MANIFEST
-        if not path.exists():
-            return None
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as e:
-            raise SyncSerializationError(f"manifest is not valid JSON: {e}") from e
-        if not isinstance(data, Mapping):
-            raise SyncSerializationError("manifest is not a mapping")
-        return Manifest.from_dict(data)
 
     # --- resource docs -----------------------------------------------------
 
@@ -235,22 +228,6 @@ class Bundle:
         desired = {f"{rel}.yaml": _dump(doc) for rel, doc in docs}
         _converge_files(self._root / _STATE / area, desired, protected=self._held_under(prefix))
 
-    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]:
-        """All parseable docs in an area; a corrupt file is skipped rather than
-        failing the whole import (per-doc failures are reported, not fatal)."""
-        target = self._root / _STATE / area
-        if not target.exists():
-            return []
-        out: list[tuple[str, dict[str, object]]] = []
-        for path in sorted(target.rglob("*.yaml")):
-            try:
-                data = yaml.safe_load(path.read_text(encoding="utf-8"))
-            except (yaml.YAMLError, OSError):
-                continue
-            if isinstance(data, dict):
-                out.append((path.relative_to(target).with_suffix("").as_posix(), data))
-        return out
-
     # --- credential blobs --------------------------------------------------
 
     def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
@@ -260,17 +237,6 @@ class Bundle:
         _converge_files(
             self._root / _CREDENTIALS, desired, protected=self._held_under(_CREDENTIALS)
         )
-
-    def read_credential_blobs(self) -> dict[str, bytes]:
-        target = self._root / _CREDENTIALS
-        if not target.exists():
-            return {}
-        # Rebuild the full slash ref from the path relative to ``credentials/``
-        # minus the ``.enc`` suffix, so namespaced refs round-trip.
-        return {
-            path.relative_to(target).with_suffix("").as_posix(): path.read_bytes()
-            for path in sorted(target.rglob("*.enc"))
-        }
 
     # --- machine descriptors -----------------------------------------------
 
@@ -313,9 +279,9 @@ class Bundle:
     def read_machine_descriptors(self) -> dict[str, dict[str, Any]]:
         """Every descriptor in the bundle, keyed by machine id.
 
-        Tolerant like ``read_state_docs``: a descriptor is written by a
-        possibly-newer build on someone else's machine, so one unreadable file
-        is skipped rather than stopping the registry from rendering."""
+        Tolerant on purpose: a descriptor is written by a possibly-newer build
+        on someone else's machine, so one unreadable file is skipped rather
+        than stopping the registry from rendering."""
         target = self._root / _MACHINES
         if not target.exists():
             return {}

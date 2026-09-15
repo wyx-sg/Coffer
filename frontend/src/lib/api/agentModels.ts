@@ -1,4 +1,4 @@
-// frontend/src/lib/api/agentModels.ts — typed fetch helper for
+// frontend/src/lib/api/agentModels.ts — request helper for
 // /api/v1/agent-providers/{agent_key}/models.
 //
 // The agent's model catalogue. It replaces the hardcoded per-agent constant the
@@ -19,9 +19,13 @@
 // carries its reasoning-effort levels beside its id, because an effort is a
 // setting ON a model rather than part of its name, and only the agent knows
 // which of its models take one.
+//
+// The wire type stays hand-written: the channels contract's `AgentModelOut`
+// marks `label`, `description`, `efforts` and `default_effort` optional, while
+// the backend always sends them and the pickers index `efforts` directly.
+// Transport via the shared `call` (agents/frontend.md §4).
 
-import { getCofferBaseUrl, getCofferToken } from "../auth";
-import { ApiError } from "./errors";
+import { call, enc } from "@/lib/api/call";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,36 +51,10 @@ export interface AgentModelsOut {
 }
 
 // ---------------------------------------------------------------------------
-// Internal fetch helper
-// ---------------------------------------------------------------------------
-
-async function send<T>(path: string, method: string, body?: unknown): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Coffer-Token": getCofferToken() ?? "",
-      "X-Coffer-Actor": "ui",
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  const data = await r.json().catch(() => null);
-  if (!r.ok) {
-    const err = data?.error;
-    throw new ApiError(
-      err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? `request failed: ${r.status}`,
-    );
-  }
-  return data as T;
-}
-
-// ---------------------------------------------------------------------------
 // API object
 // ---------------------------------------------------------------------------
 
 export const agentModelsApi = {
   /** The catalogue for one agent type. 404s on an unknown agent key. */
-  list: (agentKey: string) =>
-    send<AgentModelsOut>(`/agent-providers/${encodeURIComponent(agentKey)}/models`, "GET"),
+  list: (agentKey: string) => call<AgentModelsOut>(`/agent-providers/${enc(agentKey)}/models`),
 };

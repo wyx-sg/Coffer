@@ -25,8 +25,8 @@ ingress is aware of the difference.
 ## Technical Context
 
 - **Drives the platform in-process** — `ChatService.create_conversation`,
-  `TurnOrchestrator.start_turn` (drain the returned queue to the `None`
-  sentinel), `interrupt_turn`. No HTTP between channel
+  `TurnOrchestrator.enqueue_message` (its `on_start` hook hands the channel
+  the turn's event queue, drained to the `None` sentinel), `interrupt_turn`. No HTTP between channel
   core and chat platform.
 - **No new SDKs.** Telegram and SeaTalk are spoken with `httpx` against fixed
   hosts (`api.telegram.org`, `openapi.seatalk.io`). No user-controlled URLs

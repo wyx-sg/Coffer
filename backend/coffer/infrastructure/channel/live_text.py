@@ -60,9 +60,11 @@ MIN_UPDATE_INTERVAL = float(os.environ.get("COFFER_SEATALK_STREAM_INTERVAL", "0.
 #: everyone.
 TELEGRAM_UPDATE_INTERVAL = 1.5
 
-#: SeaTalk terminates a stream that goes 30 s without an update. Re-send the
-#: last snapshot well inside that window so a long tool run does not kill the
-#: stream (a killed stream cannot be resumed — its id is rejected forever).
+#: SeaTalk terminates a stream that goes 30 s without an update, and a Telegram
+#: draft is a 30-second preview: the one keep-alive cadence every live surface
+#: shares. Re-send the last snapshot well inside that window so a long tool run
+#: does not kill the stream (a killed stream cannot be resumed — its id is
+#: rejected forever) or freeze the draft.
 #:
 #: 10 s, not 20. The margin matters more than it looks: the stream is now opened
 #: when the TURN starts rather than when the first text arrives, so the gap the
@@ -70,7 +72,7 @@ TELEGRAM_UPDATE_INTERVAL = 1.5
 #: slips — a slow request, a busy loop — used to leave only 10 s of headroom
 #: before the platform killed the stream. Three ticks per window instead of one
 #: and a half means a single missed tick is survivable.
-_STREAM_KEEPALIVE_SECONDS = 10.0
+LIVE_KEEPALIVE_SECONDS = 10.0
 
 #: How many keep-alive ticks a surface may spend with no new content before it
 #: gives up (~10 minutes at the tick above) — the bound that keeps an abandoned
@@ -209,7 +211,7 @@ class LiveTextSurface:
         # snapshot forever. After this many silent ticks the surface gives up
         # (the platform terminates the stream shortly after, as it would anyway).
         for _ in range(_KEEPALIVE_MAX_TICKS):
-            await asyncio.sleep(self._keepalive_seconds or _STREAM_KEEPALIVE_SECONDS)
+            await asyncio.sleep(self._keepalive_seconds or LIVE_KEEPALIVE_SECONDS)
             if self._dead or not self._snapshot:
                 return
             self._last_write = self._now()
@@ -301,7 +303,7 @@ class SeaTalkLiveText(LiveTextSurface):
         thread_id: str = "",
         chat_kind: str = "direct",
         now: Callable[[], float] = time.monotonic,
-        keepalive_seconds: float = _STREAM_KEEPALIVE_SECONDS,
+        keepalive_seconds: float = LIVE_KEEPALIVE_SECONDS,
     ) -> None:
         super().__init__(keepalive_seconds=keepalive_seconds, now=now)
         self._post = post

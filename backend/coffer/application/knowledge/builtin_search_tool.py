@@ -15,13 +15,6 @@ from typing import Any
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.knowledge.search import SearchService
 
-#: Duplicated rather than imported to keep the import one-way: the sibling
-#: module calls into this one, never the reverse.
-_AGENT_PROPERTY = {
-    "type": "string",
-    "description": "Calling agent's identity (session-injected; omit it).",
-}
-
 _DESCRIPTION = (
     "Find the knowledge FILES that contain a word or phrase, each with the "
     "lines that matched — a literal text search, one result per file, with "
@@ -42,6 +35,8 @@ def register_search_tool(registry: BuiltinToolRegistry, *, search_service: Searc
         query = args.get("query")
         if not isinstance(query, str) or not query.strip():
             raise ValueError("'query' must be a non-empty string")
+        # Written by the gateway from the session handshake, never by the
+        # caller — it is not in the schema below on purpose.
         agent = args.get("agent")
         collection = args.get("collection")
         outcome = await search_service.search(
@@ -86,7 +81,6 @@ def register_search_tool(registry: BuiltinToolRegistry, *, search_service: Searc
                             "collection you may read."
                         ),
                     },
-                    "agent": _AGENT_PROPERTY,
                 },
                 "required": ["query"],
             },

@@ -62,9 +62,11 @@ CI 发布任务产出单一下载层级。**
   一个独立外壳。没有额外的 GUI 制品需要构建、签名或安装。
 - **daemon 在冻结态启动时部署同目录二进制**（spec mcp-gateway FR-026）。当
   `coffer-daemon` 检测到自己运行自冻结构建时，它会幂等地把同目录的
-  `coffer-mcp-shim`、`coffer-callback` 复制到 `~/.coffer/bin/`，
-  使用原子的「临时复制再重命名」以及 3 信号陈旧判定（字节大小、mtime、
-  版本哨兵）。这既让 MCP 客户端能解析 `command: coffer-mcp-shim` 配置，也
+  `coffer-mcp-shim`、`coffer-callback` 复制到 `~/.coffer/bin/<version>/`，
+  并把对外的 `~/.coffer/bin/<name>` 符号链接原子翻转到该目录上，使用原子的
+  「临时复制再重命名」以及 2 信号陈旧判定（字节大小、版本哨兵 —— 不用
+  mtime）。不会原地覆盖任何文件：上一版本的目录留着以便回滚（保留最新两个）。
+  这既让 MCP 客户端能解析 `command: coffer-mcp-shim` 配置，也
   让 shim 旁边始终有一份 `coffer-daemon`，使冻结态 shim 的 detect-or-spawn
   （[Detect-or-Spawn](daemon-detect-or-spawn.md)）在重启后能找到可启动的
   daemon。由 daemon 承担这件事是自然的：运行期正是它拉起 `coffer-callback`
@@ -227,3 +229,9 @@ CI 发布任务产出单一下载层级。**
   未签名的 `.dmg` 比未签名的 CLI 归档更糟 —— macOS 会在双击时以「Coffer 已损坏」拒绝它，
   而 `curl` 装下来的二进制根本不会被隔离 —— 所以 `xattr -dr com.apple.quarantine` 这一步
   现在对 app 的记载和对归档一样显眼。公证从此成为那个账号所能买到的、价值最高的一件事。
+- **2026-09-14** —— 按版本分目录部署。`deploy_frozen_sidecars` 过去只要大小、
+  mtime 或版本哨兵任一不同就原地覆盖 `~/.coffer/bin/<name>`，坏构建会替换掉唯一
+  一份，而同一版本重装（mtime 变、字节没变）会在每次启动时把所有二进制重新复制
+  一遍。现在每个构建落在 `~/.coffer/bin/<version>/`，对外名字是原子翻转到它上面
+  的符号链接，上一版本目录保留（留最新两个），mtime 不再是陈旧信号。回滚就是手动
+  把链接指回去；所有调用方使用的路径不变。

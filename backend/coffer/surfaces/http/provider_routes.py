@@ -12,7 +12,8 @@ from coffer.application.provider.targets import scoped_targets
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor, get_provider_service
+from coffer.surfaces.http.dependencies import get_actor
+from coffer.surfaces.http.provider_dependencies import get_provider_service
 from coffer.surfaces.http.provider_schemas import (
     ActivateOut,
     ActiveKeyOut,

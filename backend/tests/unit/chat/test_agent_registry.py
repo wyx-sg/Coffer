@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.chat.registry import AgentProviderRegistry
-from coffer.domain.errors import UnknownAgent
+from coffer.domain.chat.errors import UnknownAgent
 
 from .conftest import FakeAgentProvider
 

@@ -1,13 +1,21 @@
 // frontend/src/lib/api/agentTranscripts.ts — the read-only conversation list for
-// /api/v1/agents/{name}/transcripts. Split from agents.ts for file-size; reuses
-// the shared call/enc helpers exported from there.
+// /api/v1/agents/{name}/transcripts. Split from agents.ts for file-size. Wire
+// types from the agent-registry contract; transport via the shared `call`
+// (agents/frontend.md §4).
 
-import { call, enc } from "./agents";
+import { call, enc } from "@/lib/api/call";
+import type { components, operations } from "@/lib/api/generated/agent-registry";
 
 // ---------------------------------------------------------------------------
-// Wire types — mirror the backend's agent_transcript_routes.py schemas
+// Wire types
 // ---------------------------------------------------------------------------
 
+/**
+ * Hand-written rather than the contract's `TranscriptSession`: the contract
+ * marks `title` / `project_path` / `started_at` / `last_activity_at` optional,
+ * while the backend always sends them (null when unknown) and the table cells
+ * take `string | null`.
+ */
 export interface TranscriptSessionSummary {
   session_id: string;
   title: string | null;
@@ -19,8 +27,10 @@ export interface TranscriptSessionSummary {
   source_path: string;
 }
 
-export type TranscriptSort = "started_at" | "last_activity_at" | "message_count";
-export type SortOrder = "asc" | "desc";
+type ListQuery = NonNullable<operations["listAgentTranscripts"]["parameters"]["query"]>;
+
+export type TranscriptSort = NonNullable<ListQuery["sort"]>;
+export type SortOrder = NonNullable<ListQuery["order"]>;
 
 export interface TranscriptListParams {
   limit?: number;
@@ -33,12 +43,11 @@ export interface TranscriptListParams {
   order?: SortOrder;
 }
 
-export interface TranscriptSessionListResponse {
-  sessions: TranscriptSessionSummary[];
-  total: number;
-  limit: number;
-  offset: number;
-}
+/** `TranscriptSessionListOut` with the hand-written session row above. */
+export type TranscriptSessionListResponse = Omit<
+  components["schemas"]["TranscriptSessionListOut"],
+  "sessions"
+> & { sessions: TranscriptSessionSummary[] };
 
 // ---------------------------------------------------------------------------
 // Request functions
@@ -56,7 +65,6 @@ export function listTranscripts(
   if (opts.sort) sp.set("sort", opts.sort);
   if (opts.order) sp.set("order", opts.order);
   return call<TranscriptSessionListResponse>(
-    "GET",
     `/agents/${enc(agentName)}/transcripts?${sp.toString()}`,
   );
 }

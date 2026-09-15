@@ -98,6 +98,7 @@ export function ChatPage() {
           <MessageThread
             conversation={c.activeConv}
             liveMessage={c.turn.liveMessage}
+            pendingEchoes={c.turn.pendingEchoes}
             isStreaming={c.turn.isStreaming}
             turnError={c.turn.error}
             onStop={() => void c.turn.interrupt()}

@@ -249,7 +249,9 @@ describe("useAgentMcpStatus / useAgentMcpInstall", () => {
   });
 
   test("POSTs to install and DELETEs to uninstall", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { installed: true }));
+    // A fresh Response per call: a body can only be read once, and the shared
+    // `call` reads every 2xx body (it does not swallow a second read).
+    const fetchMock = vi.fn().mockImplementation(() => jsonResponse(200, { installed: true }));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useAgentMcpInstall("cur"), { wrapper: wrapper() });
 

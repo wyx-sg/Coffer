@@ -6,6 +6,7 @@
 // their slice out of a single cached read.
 import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
+import { mcpStatusKey } from "@/lib/api/queryKeys";
 
 export type McpServerStatus = "healthy" | "failing";
 
@@ -14,10 +15,6 @@ interface ServerStatusRead {
   status: McpServerStatus | null;
   /** The stdio launcher missing on THIS machine, if any. */
   missingRunner: string | null;
-}
-
-export function mcpServerStatusKey(serverName: string) {
-  return ["mcp", "status", serverName] as const;
 }
 
 /** A cheap backend read of persisted state (discovered capabilities + last
@@ -36,7 +33,7 @@ async function readServerStatus(serverName: string): Promise<ServerStatusRead> {
 
 function useServerStatusRead<T>(serverName: string, select: (read: ServerStatusRead) => T) {
   return useQuery({
-    queryKey: mcpServerStatusKey(serverName),
+    queryKey: mcpStatusKey(serverName),
     queryFn: () => readServerStatus(serverName),
     select,
   });

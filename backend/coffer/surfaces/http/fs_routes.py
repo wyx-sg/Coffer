@@ -18,8 +18,8 @@ from coffer.application.fs.browse_service import FsBrowseService
 from coffer.application.fs.editor_service import EditorDetectService
 from coffer.application.fs.open_service import FsOpenService
 from coffer.application.fs.pick_service import FsPickService
+from coffer.surfaces.http.agent_dependencies import get_fs_browse_service
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_fs_browse_service
 
 router = APIRouter(
     prefix="/api/v1/fs",

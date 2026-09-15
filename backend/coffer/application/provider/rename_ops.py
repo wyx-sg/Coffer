@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from coffer.application.provider.projection_ops import project_connection
 from coffer.domain.errors import ConfigValidationError, ResourceAlreadyExists
 from coffer.domain.resource import Resource
 
@@ -80,5 +81,4 @@ async def _reproject(service: ProviderService, new: str, renamed: Resource) -> N
     if not cfg.is_active:
         return
     agents = await service._agents.list()
-    for agent_type in service._compat(renamed):
-        service._projector.project_type(new, cfg, agents, agent_type)
+    await project_connection(service, new, cfg, service._compat(renamed), agents, actor="api")

@@ -1,6 +1,6 @@
 """The git adapter, against a real local bare repository — no network.
 
-Spec vault-sync ``## Backup``. These tests shell out to the real git
+Spec vault-sync ``## The converge round``. These tests shell out to the real git
 binary on purpose: the adapter's whole job is to be right about git's actual
 behaviour, and a mocked subprocess would only assert our own assumptions.
 """
@@ -136,18 +136,6 @@ async def test_push_failure_raises_with_a_redacted_message(
 
 
 @pytest.mark.asyncio
-async def test_unpushed_commits_are_detected(worktree: pathlib.Path, remote: pathlib.Path) -> None:
-    mirror = GitMirror(worktree)
-    await mirror.ensure_repo(remote_url=str(remote), branch="main")
-    (worktree / "a.txt").write_text("one")
-    await mirror.stage_all()
-    await mirror.commit("first")
-    assert await mirror.has_unpushed(branch="main") is True
-    await mirror.push(branch="main", token=None)
-    assert await mirror.has_unpushed(branch="main") is False
-
-
-@pytest.mark.asyncio
 async def test_resolve_revision_accepts_a_date(
     worktree: pathlib.Path, remote: pathlib.Path
 ) -> None:
@@ -220,7 +208,7 @@ async def test_ensure_repo_repoints_a_changed_origin(
 
 
 @pytest.mark.asyncio
-async def test_a_date_before_any_backup_has_no_revision(
+async def test_a_date_before_any_commit_has_no_revision(
     worktree: pathlib.Path, remote: pathlib.Path
 ) -> None:
     mirror = GitMirror(worktree)
@@ -231,35 +219,6 @@ async def test_a_date_before_any_backup_has_no_revision(
 
     with pytest.raises(GitMirrorError):
         await mirror.resolve_revision("2000-01-01")
-
-
-@pytest.mark.asyncio
-async def test_clone_then_read_an_earlier_revision_and_come_back(
-    worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
-) -> None:
-    """The restore path on a machine with no working tree of its own."""
-    source = GitMirror(worktree)
-    await source.ensure_repo(remote_url=str(remote), branch="main")
-    (worktree / "a.txt").write_text("one")
-    await source.stage_all()
-    first = await source.commit("first")
-    (worktree / "a.txt").write_text("two")
-    await source.stage_all()
-    await source.commit("second")
-    await source.push(branch="main", token=None)
-
-    fresh_path = tmp_path / "fresh"
-    fresh = GitMirror(fresh_path)
-    await fresh.clone(remote_url=str(remote), branch="main", token=None)
-    assert (fresh_path / "a.txt").read_text() == "two"
-    await fresh.fetch(token=None)
-    assert await fresh.head() is not None
-
-    await fresh.checkout(await fresh.resolve_revision(first))
-    assert (fresh_path / "a.txt").read_text() == "one"
-
-    await fresh.checkout_branch("main")
-    assert (fresh_path / "a.txt").read_text() == "two"
 
 
 # --- the converge round: merge, diff, snapshot tags ------------------------
@@ -609,3 +568,154 @@ async def test_reset_hard_returns_the_tree_to_a_revision(
 
     assert await mirror.head() == pointer
     assert (worktree / "notes.md").read_text(encoding="utf-8") == _LINES
+
+
+# --- what reaches git's argv --------------------------------------------------
+#
+# The URL and the branch are validated in the domain; the adapter is the second
+# layer, and these pin the shape of what it hands to git rather than trusting
+# the first layer to have run.
+
+
+@pytest.mark.asyncio
+async def test_a_remote_url_that_looks_like_an_option_is_a_url_to_git(
+    worktree: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """``remote add -- origin <url>``: even a dash-prefixed value is stored as
+    the URL, not parsed as ``--receive-pack``. The domain refuses such a URL
+    before it gets here; this is what happens if it ever does."""
+    marker = tmp_path / "pwned"
+    url = f"--receive-pack=touch {marker}"
+    mirror = GitMirror(worktree)
+    await mirror.ensure_repo(remote_url=url, branch="main")
+
+    out = subprocess.run(
+        ["git", "-C", str(worktree), "remote", "get-url", "--", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert out.stdout.strip() == url
+    assert not marker.exists()
+
+
+@pytest.mark.asyncio
+async def test_push_names_the_branch_as_an_explicit_refspec(
+    worktree: pathlib.Path, remote: pathlib.Path
+) -> None:
+    mirror = GitMirror(worktree)
+    await mirror.ensure_repo(remote_url=str(remote), branch="feat/x")
+    (worktree / "a.txt").write_text("one")
+    await mirror.stage_all()
+    await mirror.commit("first")
+
+    await mirror.push(branch="feat/x", token=None)
+
+    out = subprocess.run(
+        ["git", "-C", str(remote), "rev-parse", "--verify", "refs/heads/feat/x"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert out.returncode == 0, "the branch did not land under refs/heads/"
+
+
+@pytest.mark.asyncio
+async def test_a_revision_beginning_with_a_dash_is_refused(
+    worktree: pathlib.Path, remote: pathlib.Path
+) -> None:
+    mirror = GitMirror(worktree)
+    await mirror.ensure_repo(remote_url=str(remote), branch="main")
+    (worktree / "a.txt").write_text("one")
+    await mirror.stage_all()
+    await mirror.commit("first")
+
+    for revision in ("-x", "--output=/tmp/pwned", "  --all"):
+        with pytest.raises(GitMirrorError):
+            await mirror.resolve_revision(revision)
+
+
+# --- adoption --------------------------------------------------------------
+
+
+def _seed_foreign_repo(worktree: pathlib.Path, origin: str) -> None:
+    """A repository someone else made, with a commit and its own origin."""
+    worktree.mkdir(parents=True)
+    subprocess.run(["git", "init", "-b", "main", str(worktree)], check=True, capture_output=True)
+    (worktree / "theirs.txt").write_text("not ours")
+    _run(worktree, "add", "-A")
+    _run(worktree, "commit", "-m", "their history")
+    _run(worktree, "remote", "add", "origin", origin)
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_checkout_pointing_elsewhere_is_not_adopted(
+    worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """The round ``reset --hard``s the working tree every hour. A repository
+    Coffer did not create, with commits, and with an ``origin`` that is not the
+    configured remote is someone's checkout of something else."""
+    _seed_foreign_repo(worktree, str(tmp_path / "their-project.git"))
+
+    mirror = GitMirror(worktree)
+    with pytest.raises(GitMirrorError) as excinfo:
+        await mirror.ensure_repo(remote_url=str(remote), branch="main")
+
+    assert "not created by Coffer" in str(excinfo.value)
+    out = subprocess.run(
+        ["git", "-C", str(worktree), "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert out.stdout.strip() == str(tmp_path / "their-project.git"), "origin was repointed"
+    assert (worktree / "theirs.txt").read_text() == "not ours"
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_repository_with_no_commits_is_adopted(
+    worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """Empty is empty: an initialised directory with nothing in it has no
+    history to protect, whatever its origin says."""
+    worktree.mkdir(parents=True)
+    subprocess.run(["git", "init", "-b", "main", str(worktree)], check=True, capture_output=True)
+    _run(worktree, "remote", "add", "origin", str(tmp_path / "elsewhere.git"))
+
+    await GitMirror(worktree).ensure_repo(remote_url=str(remote), branch="main")
+
+    out = subprocess.run(
+        ["git", "-C", str(worktree), "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert out.stdout.strip() == str(remote)
+
+
+@pytest.mark.asyncio
+async def test_a_tree_coffer_made_can_be_repointed_at_a_new_remote(
+    worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """Changing the remote's URL is an ordinary thing to do to the tree Coffer
+    itself created — with history in it — and is told apart by the mark
+    ``ensure_repo`` leaves in the repository's local config."""
+    mirror = GitMirror(worktree)
+    await mirror.ensure_repo(remote_url=str(remote), branch="main")
+    (worktree / "a.txt").write_text("one")
+    await mirror.stage_all()
+    await mirror.commit("first")
+    other = tmp_path / "other.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-b", "main", str(other)], check=True, capture_output=True
+    )
+
+    await GitMirror(worktree).ensure_repo(remote_url=str(other), branch="main")
+
+    out = subprocess.run(
+        ["git", "-C", str(worktree), "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert out.stdout.strip() == str(other)

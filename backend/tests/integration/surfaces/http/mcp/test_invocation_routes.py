@@ -20,7 +20,7 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.dependencies import get_invocation_repo
+from coffer.surfaces.http.mcp.dependencies import get_invocation_repo
 from coffer.surfaces.http.mcp.invocation_routes import (
     aggregate_router as invocation_aggregate_router,
 )

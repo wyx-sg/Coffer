@@ -7,10 +7,13 @@ register-time probing call this from sync code paths. WAL mode (set by
 the async engine) makes concurrent sync readers safe; busy_timeout
 matches the engine's PRAGMA suite.
 
-Async callers MUST dispatch writes (set/delete) via ``asyncio.to_thread``:
-the busy-wait blocks its thread, and on the event loop that freezes the
-aiosqlite coroutine holding the write lock — its commit can never run, so
-the wait becomes a deadlock that always exhausts busy_timeout.
+Async callers MUST NOT call the sync methods on the event loop — use the
+``a*`` wrappers (``aget``/``aexists``/``aset``/``adelete``), which run them in
+``asyncio.to_thread``. A write's busy-wait blocks its thread, and on the event
+loop that freezes the aiosqlite coroutine holding the write lock — its commit
+can never run, so the wait becomes a deadlock that always exhausts
+busy_timeout. A read is no better: it opens a connection and waits on the same
+lock, stalling every other request for as long as the store takes.
 
 Plaintext exists only in memory between decrypt and the spawn that
 consumes it. The ciphertext column never reaches logs or audit rows.
@@ -18,6 +21,7 @@ consumes it. The ciphertext column never reaches logs or audit rows.
 
 from __future__ import annotations
 
+import asyncio
 import pathlib
 import sqlite3
 from contextlib import closing
@@ -80,3 +84,20 @@ class EncryptedCredentialStore:
     def count(self) -> int:
         with closing(self._connect()) as conn:
             return int(conn.execute("SELECT COUNT(*) FROM credentials").fetchone()[0])
+
+    # --- async facade: the same calls, off the event loop --------------------
+    # The sync API above stays for the CLI and other sync callers; anything
+    # running under the loop goes through these so a slow or lock-contended
+    # SQLite call never stalls unrelated requests.
+
+    async def aget(self, ref: str) -> str | None:
+        return await asyncio.to_thread(self.get, ref)
+
+    async def aexists(self, ref: str) -> bool:
+        return await asyncio.to_thread(self.exists, ref)
+
+    async def aset(self, ref: str, value: str) -> None:
+        await asyncio.to_thread(self.set, ref, value)
+
+    async def adelete(self, ref: str) -> None:
+        await asyncio.to_thread(self.delete, ref)

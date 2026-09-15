@@ -157,3 +157,34 @@ def test_a_deleted_project_still_yields_a_fact_with_a_best_effort_root(
     sources = reader.sources(str(config_dir))
     fact = reader.read(sources[0])[0]
     assert fact.project_root  # non-empty best-effort reconstruction, never a crash
+
+
+def test_an_empty_metadata_block_is_a_project_fact_not_a_crash(tmp_path: pathlib.Path) -> None:
+    """``metadata:`` with nothing under it loads as ``None``; the reader must
+    treat it as "no type given" rather than die on ``None.get`` (FR-005)."""
+    project_root = tmp_path / "Users" / "dev" / "empty-meta"
+    project_root.mkdir(parents=True)
+    memory_dir = _memory_dir(tmp_path, "claude", project_root)
+    (memory_dir / "fact.md").write_text(
+        "---\nname: a-fact\ndescription: d\nmetadata:\n---\n\nbody\n", encoding="utf-8"
+    )
+
+    reader = ClaudeCodeMemoryReader()
+    facts = reader.read(reader.sources(str(tmp_path / "claude"))[0])
+
+    assert len(facts) == 1
+    assert facts[0].title == "a-fact"
+    assert facts[0].type == "project"
+
+
+def test_a_scalar_metadata_block_is_unreadable_not_a_crash(tmp_path: pathlib.Path) -> None:
+    project_root = tmp_path / "Users" / "dev" / "scalar-meta"
+    project_root.mkdir(parents=True)
+    memory_dir = _memory_dir(tmp_path, "claude", project_root)
+    bad = memory_dir / "fact.md"
+    bad.write_text("---\nname: a-fact\nmetadata: just-a-string\n---\n\nbody\n", encoding="utf-8")
+
+    reader = ClaudeCodeMemoryReader()
+    with pytest.raises(UnreadableMemory) as exc_info:
+        reader.read(reader.sources(str(tmp_path / "claude"))[0])
+    assert exc_info.value.path == str(bad)

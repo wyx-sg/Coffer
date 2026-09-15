@@ -7,11 +7,11 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from coffer.application.providers.ports import ModelIntrospectionService
+from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.model_routes import router as model_router
-from coffer.surfaces.http.turn_dependencies import set_introspection_service
+from coffer.surfaces.http.provider_dependencies import set_introspection_service
 
 _TOKEN = "t-introspect"
 

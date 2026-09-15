@@ -44,9 +44,10 @@ Coffer 长期来看需要管理多种资源 (resource) 类型 (kind)。首份规
 
 **正面**
 
-- 未来新增 kind 可机械化接入：编写 `<layer>/<new_kind>/`，在组合根 (composition
-  root) 注册一个 `KindModule` 即可 —— 无需 schema 迁移，无需重连审计，
-  无需重整留存管道。
+- 未来新增 kind 可机械化接入：编写 `<layer>/<new_kind>/`，让它的
+  `make_<new_kind>_kind()` 工厂返回一个冻结的 `Kind`，再由组合根 (composition
+  root) 通过一个按 kind 的装配模块注册这个 `Kind` 并挂载其路由/CLI 命令组即可
+  —— 无需 schema 迁移，无需重连审计，无需重整留存管道。
 - 审计、留存、资源列表 UI 从第一天起就与 kind 无关。
 - 避免了首次重构成本（在第二种 kind 到来时从 MCP 专属代码里抽取资源）。
 - 从一开始就明确了框架与 kind 之间的边界，降低了 MCP 专属假设渗入框架代码的风险。

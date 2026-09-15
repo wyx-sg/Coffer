@@ -2,7 +2,7 @@
 
 Tests the routes through a real FastAPI app wired with:
 - Real ChatService over in-memory SQLite repos.
-- Real TurnOrchestrator with FakeAgentAdapter + FakeToolGateway from the unit conftest.
+- Real TurnOrchestrator with FakeAgentAdapter from the unit conftest.
 
 Coverage:
 - Conversation CRUD round-trip (create, get, list, rename/model, delete).
@@ -23,16 +23,16 @@ from fastapi.testclient import TestClient
 
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator, clear_active_turns
-from coffer.domain.errors import AgentConfigRejected
+from coffer.domain.chat.errors import AgentConfigRejected
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
-from coffer.surfaces.http.chat.turn_routes import router as turn_router
-from coffer.surfaces.http.turn_dependencies import (
+from coffer.surfaces.http.chat.dependencies import (
     get_agent_registry,
     get_chat_service,
     get_turn_orchestrator,
 )
+from coffer.surfaces.http.chat.turn_routes import router as turn_router
 
 # Reuse the in-memory fakes + wiring helper from the unit conftest.
 from tests.unit.chat.conftest import FakeAgentProvider, make_chat_services
@@ -473,7 +473,7 @@ def test_send_message_conversation_not_found_returns_404_json(monkeypatch) -> No
     app = _build_app(chat_svc, orchestrator)
     set_active_token(_TOKEN)
 
-    from coffer.domain.errors import ConversationNotFound
+    from coffer.domain.chat.errors import ConversationNotFound
 
     async def _raise_not_found(*args: object, **kwargs: object) -> None:  # type: ignore[misc]
         raise ConversationNotFound("no-such-conv")

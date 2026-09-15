@@ -14,8 +14,8 @@ from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_skill_service
 from coffer.surfaces.http.schemas import ScopeOut
+from coffer.surfaces.http.skill_dependencies import get_skill_service
 
 router = APIRouter(
     prefix="/api/v1/skills",

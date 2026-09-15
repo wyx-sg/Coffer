@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import datetime as _dt
 import json
+import subprocess
 import sys
 from typing import Any
 
@@ -790,7 +791,9 @@ async def test_spawn_daemon_invokes_popen(monkeypatch: pytest.MonkeyPatch) -> No
 
         return _P()
 
-    monkeypatch.setattr(shim_main.subprocess, "Popen", _fake_popen)
+    from coffer.infrastructure.daemon import spawn as daemon_spawn
+
+    monkeypatch.setattr(daemon_spawn.subprocess, "Popen", _fake_popen)
     # Ensure we're testing the non-frozen path (the test runner is never frozen).
     monkeypatch.delattr(sys, "frozen", raising=False)
     shim_main._spawn_daemon()
@@ -803,6 +806,12 @@ async def test_spawn_daemon_invokes_popen(monkeypatch: pytest.MonkeyPatch) -> No
     )
     if sys.platform != "win32":
         assert invoked[0]["kwargs"].get("start_new_session") is True
+    # The daemon's stderr is its refusal channel (PortInUse prints there and
+    # exits 2); it must reach daemon.log, not DEVNULL, or the shim can only
+    # ever say "did not come up within 10s".
+    assert invoked[0]["kwargs"]["stderr"] is not subprocess.DEVNULL
+    assert invoked[0]["kwargs"]["stderr"].name.endswith("daemon.log")
+    assert invoked[0]["kwargs"]["stdout"] is invoked[0]["kwargs"]["stderr"]
 
 
 @pytest.mark.asyncio
@@ -838,7 +847,9 @@ async def test_spawn_daemon_frozen_uses_sibling_binary(
 
         return _P()
 
-    monkeypatch.setattr(shim_main.subprocess, "Popen", _fake_popen)
+    from coffer.infrastructure.daemon import spawn as daemon_spawn
+
+    monkeypatch.setattr(daemon_spawn.subprocess, "Popen", _fake_popen)
     shim_main._spawn_daemon()
 
     assert len(invoked) == 1
@@ -860,7 +871,9 @@ async def test_spawn_daemon_logs_and_writes_stderr_on_oserror(
     def _bad_popen(cmd: list[str], **kwargs: Any) -> object:
         raise OSError("simulated spawn failure")
 
-    monkeypatch.setattr(shim_main.subprocess, "Popen", _bad_popen)
+    from coffer.infrastructure.daemon import spawn as daemon_spawn
+
+    monkeypatch.setattr(daemon_spawn.subprocess, "Popen", _bad_popen)
     shim_main._spawn_daemon()
     err = capsys.readouterr().err
     assert "failed to spawn daemon" in err
@@ -1208,3 +1221,39 @@ async def test_handle_envelope_reports_error_when_daemon_truly_down(
     err = json.loads(capsys.readouterr().out.strip())
     assert err["id"] == 9
     assert err["error"]["code"] == -32603
+
+
+# --------------------------------------------------------------------------- #
+# version skew: the shim says when the daemon it found is another build         #
+# --------------------------------------------------------------------------- #
+
+
+def test_shim_warns_on_stderr_when_daemon_version_differs(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from coffer.surfaces.shim import bootstrap as shim_main
+
+    response = httpx.Response(
+        200, json={"version": "0.0.1-old", "executable": "/old/coffer-daemon"}
+    )
+    shim_main._warn_if_version_skew(response)
+
+    err = capsys.readouterr().err
+    assert err.startswith("coffer-mcp-shim: WARNING:")
+    assert "0.0.1-old" in err and "/old/coffer-daemon" in err
+    assert err.count("\n") == 1
+
+
+def test_shim_is_quiet_when_daemon_version_matches(capsys: pytest.CaptureFixture[str]) -> None:
+    from coffer import __version__
+    from coffer.surfaces.shim import bootstrap as shim_main
+
+    shim_main._warn_if_version_skew(httpx.Response(200, json={"version": __version__}))
+    assert capsys.readouterr().err == ""
+
+
+def test_shim_is_quiet_on_an_unparsable_status_body(capsys: pytest.CaptureFixture[str]) -> None:
+    from coffer.surfaces.shim import bootstrap as shim_main
+
+    shim_main._warn_if_version_skew(httpx.Response(200, content=b"not json"))
+    assert capsys.readouterr().err == ""

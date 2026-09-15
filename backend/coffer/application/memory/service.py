@@ -90,6 +90,19 @@ DEFAULT_READERS: Mapping[str, MemoryReader] = {
 }
 
 
+def _source_failure(agent: str, path: str, exc: Exception) -> SourceFailure:
+    """One source's failure, whatever shape it took.
+
+    A reader is meant to raise ``UnreadableMemory`` for a file it cannot
+    parse, but a reader has bugs like any code, and FR-005's isolation is
+    only worth anything if it holds for the failure nobody anticipated: one
+    file that trips a reader must cost that file, not the whole pass.
+    """
+    if isinstance(exc, UnreadableMemory):
+        return SourceFailure(agent=agent, path=exc.path, reason=exc.reason)
+    return SourceFailure(agent=agent, path=path, reason=f"{type(exc).__name__}: {exc}")
+
+
 def _home_dir() -> str:
     """The developer's home directory, by the same rule ``paths.py`` uses.
 
@@ -170,10 +183,8 @@ class MemoryService:
 
                 try:
                     raw_facts = reader.read(source)
-                except UnreadableMemory as exc:
-                    failures.append(
-                        SourceFailure(agent=resource.name, path=exc.path, reason=exc.reason)
-                    )
+                except Exception as exc:
+                    failures.append(_source_failure(resource.name, source.path, exc))
                     # Left standing (FR-005): the digest is deliberately NOT
                     # recorded, so a future pass keeps retrying this source
                     # until its format is fixed (or it disappears).

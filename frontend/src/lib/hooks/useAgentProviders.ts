@@ -3,11 +3,12 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { agentProvidersApi } from "@/lib/api/agentProviders";
+import { agentProvidersKey } from "@/lib/api/queryKeys";
 
 /** The agents a channel can be bound to. */
 export function useAgentProviders() {
   return useQuery({
-    queryKey: ["agent-providers"],
+    queryKey: agentProvidersKey,
     queryFn: async () => (await agentProvidersApi.list()).agents,
   });
 }

@@ -94,6 +94,7 @@ lint:
 	$(PY) scripts/check_file_sizes.py
 	$(PY) scripts/check_response_models.py
 	$(PY) scripts/check_doc_numbering.py
+	$(PY) scripts/check_architecture_doc.py
 	$(PY) -m ruff check $(BACKEND) evals
 	$(PY) -m ruff format --check $(BACKEND) evals
 	$(PY) -m mypy --config-file $(BACKEND)/pyproject.toml $(BACKEND)/coffer
@@ -106,6 +107,7 @@ lint:
 # free and makes the two environments agree.
 	PYTHONPATH=$(BACKEND) .venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
 	@if [ -d $(FRONTEND)/node_modules ]; then \
+		PYTHONPATH=$(BACKEND) $(PY) scripts/dump_i18n_backend_keys.py --check && \
 		cd $(FRONTEND) && npm run lint && npm run typecheck; \
 	else \
 		echo "lint: $(FRONTEND)/node_modules missing — skipping frontend"; \

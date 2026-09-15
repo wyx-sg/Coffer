@@ -508,3 +508,47 @@ async def test_delete_without_credential_store_is_unaffected(tmp_path):
             await svc.get(ResourceRef("vault", "a"))
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_register_probes_credentials_off_the_loop_thread(tmp_path) -> None:
+    """The credential store's ``get`` is a blocking SQLite read; the register-time
+    probe must run it in a worker thread, not on the loop it would stall."""
+    import threading
+
+    class _SecretConfig(BaseModel):
+        secret_ref: str
+
+    loop_thread = threading.get_ident()
+    seen: list[int] = []
+
+    class _RecordingStore:
+        def get(self, ref: str) -> str | None:
+            seen.append(threading.get_ident())
+            return "value"
+
+    kinds = {
+        "vault": Kind(
+            name="vault",
+            display_name="Vault",
+            config_schema=_SecretConfig,
+            credential_ref_extractor=lambda cfg: {"secret": cfg["secret_ref"]},
+        ),
+    }
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    try:
+        svc = ResourceService(
+            kinds=kinds,
+            repo=SqlAlchemyResourceRepo(sm),
+            audit=AuditService(SqlAlchemyAuditRepo(sm)),
+            credentials=_RecordingStore(),
+        )
+        await svc.register(kind="vault", name="t", config={"secret_ref": "k1"}, actor="cli")
+        await svc.update_config(ResourceRef("vault", "t"), {"secret_ref": "k2"}, actor="cli")
+    finally:
+        await engine.dispose()
+    assert len(seen) == 2, "register and update each probe once"
+    assert all(ident != loop_thread for ident in seen)

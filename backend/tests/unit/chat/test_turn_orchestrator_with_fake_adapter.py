@@ -8,13 +8,13 @@ from typing import Any
 
 import pytest
 
-from coffer.application.chat.history import trim_history as _trim_history
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import (
-    _ACTIVE_TURNS,
     TurnOrchestrator,
+    active_turns,
     clear_active_turns,
 )
+from coffer.domain.chat.errors import AgentConfigRejected, TurnInProgress
 from coffer.domain.chat.events import (
     AgentEvent,
     TextDelta,
@@ -22,8 +22,7 @@ from coffer.domain.chat.events import (
     TurnError,
     TurnStarted,
 )
-from coffer.domain.chat.message import Message, Role, TextBlock
-from coffer.domain.errors import AgentConfigRejected, TurnInProgress
+from coffer.domain.chat.message import Role, TextBlock
 
 from .conftest import (
     FakeAgentAdapter,
@@ -90,7 +89,7 @@ class _BlockingAdapter:
 
 @pytest.fixture(autouse=True)
 def clear_turns() -> Any:
-    """Ensure _ACTIVE_TURNS is clean before and after each test."""
+    """Ensure the per-conversation turn state is clean before and after each test."""
     clear_active_turns()
     yield
     clear_active_turns()
@@ -225,7 +224,7 @@ async def test_build_adapter_error_propagates_and_releases_slot() -> None:
         await orchestrator.start_turn(conv.id, "hi")
 
     # The reservation was rolled back — a retry is possible.
-    assert conv.id not in _ACTIVE_TURNS
+    assert conv.id not in active_turns()
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +303,7 @@ async def test_unexpected_adapter_error_yields_internal_error_and_failed_message
 
     assistant = next(m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT)
     assert assistant.status == "failed"
-    assert conv.id not in _ACTIVE_TURNS
+    assert conv.id not in active_turns()
 
 
 @pytest.mark.asyncio
@@ -323,7 +322,7 @@ async def test_cancel_turn_discards_the_partial_turn() -> None:
 
     # No assistant message is persisted on the discard path.
     assert not [m for m in msg_repo.all_messages() if m.role == Role.ASSISTANT]
-    assert conv.id not in _ACTIVE_TURNS
+    assert conv.id not in active_turns()
 
 
 @pytest.mark.asyncio
@@ -360,7 +359,7 @@ async def test_interrupt_persists_the_partial_message() -> None:
     assert assistant.status == "complete"
     texts = [b.text for b in assistant.content if isinstance(b, TextBlock)]
     assert "partial answer" in "".join(texts)
-    assert conv.id not in _ACTIVE_TURNS
+    assert conv.id not in active_turns()
 
 
 @pytest.mark.asyncio
@@ -385,7 +384,7 @@ async def test_active_turns_cleared_after_completion() -> None:
     queue = await orchestrator.start_turn(conv.id, "hi")
     await drain_queue(queue)
 
-    assert conv.id not in _ACTIVE_TURNS
+    assert conv.id not in active_turns()
 
 
 # ---------------------------------------------------------------------------
@@ -553,23 +552,3 @@ async def test_sweep_streaming_flips_streaming_to_failed() -> None:
     statuses = [m.status for m in msg_repo._messages]
     assert statuses.count("failed") == 2
     assert "streaming" not in statuses
-
-
-# ---------------------------------------------------------------------------
-# History trimming (pure function)
-# ---------------------------------------------------------------------------
-
-
-def test_trim_history_no_truncation_when_messages_fit() -> None:
-    msgs: list[Message] = [make_message(i, "hi") for i in range(3)]
-    kept, truncated = _trim_history(msgs, char_budget=1_000_000)
-    assert len(kept) == 3
-    assert truncated is False
-
-
-def test_trim_history_truncation_when_messages_exceed_budget() -> None:
-    msgs: list[Message] = [make_message(i, "x" * 20) for i in range(5)]
-    kept, truncated = _trim_history(msgs, char_budget=45)
-    assert len(kept) < 5
-    assert truncated is True
-    assert kept[-1].id == "msg-4"  # the most recent message is always kept

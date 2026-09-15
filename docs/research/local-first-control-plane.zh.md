@@ -127,7 +127,7 @@ web 产品。
   `repo:backend/coffer/infrastructure/mcp/subprocess.py`
 - **SSRF 防护只覆盖 Coffer 自身的出站，不覆盖它 spawn 的上游。** `ssrf_guard.py`
   （`check_url` / `is_blocked_host`）只有两个调用方——`skill/source_fetcher.py`（技能拉取时的
-  git URL 校验）与 `providers/provider_introspector.py`（provider URL 探查）。MCP 子进程路径与
+  git URL 校验）与 `provider/introspector.py`（provider URL 探查）。MCP 子进程路径与
   网关都没有应用它；被 spawn 的上游可不受限制地出站。
   `repo:backend/coffer/infrastructure/skill/ssrf_guard.py`
 - **ToolHive MCPRemoteProxy 仍在开发中。** 逐字确认："MCPRemoteProxy support in vMCP is

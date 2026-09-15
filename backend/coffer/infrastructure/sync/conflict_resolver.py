@@ -31,9 +31,12 @@ import asyncio
 import logging
 import pathlib
 from collections.abc import Callable, Sequence
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from coffer.domain.provider.config import ResolvedConnection
+if TYPE_CHECKING:
+    # Annotation-only: the provider kind's vocabulary is named, never used at
+    # run time, so the cross-kind import stays out of the module graph.
+    from coffer.domain.provider.config import ResolvedConnection
 
 _logger = logging.getLogger(__name__)
 

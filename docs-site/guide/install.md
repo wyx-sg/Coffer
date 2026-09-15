@@ -166,4 +166,12 @@ daemon auto-starts the first time you run a management command or an MCP client 
 `coffer daemon start` exists for explicit control but is **not** a required setup step.
 :::
 
+### Prerequisites
+
+- **Python ≥ 3.12** for the from-source install (the release binaries bundle their own).
+- **[ripgrep](https://github.com/BurntSushi/ripgrep)** (`rg`) — recommended, on every install
+  path. Coffer's knowledge search (`coffer__grep`, `coffer__search`) runs `rg` when it is on
+  your `PATH`; without it Coffer falls back to a slower built-in search that returns the same
+  results, and notes the fallback once in the daemon log.
+
 See [Getting Started](/guide/getting-started) for the full from-source walkthrough.

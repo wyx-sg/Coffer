@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { Button } from "@/components/ui/button";
 import { agentsApi, type McpEntryOut } from "@/lib/api/agents";
+import { agentMcpEntriesKey, resourcesByKindKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 function defaultSecretRefs(agentName: string, entry: McpEntryOut): Record<string, string> {
@@ -32,12 +33,9 @@ export function AgentMcpServersBulkActions({
 }) {
   const { t } = useTranslation();
   const adopt = useBulkMutate({
-    invalidate: [
-      ["agents", agentName, "mcp-entries"],
-      ["resources", { kind: "mcp_server" }],
-    ],
+    invalidate: [agentMcpEntriesKey(agentName), resourcesByKindKey("mcp_server")],
   });
-  const remove = useBulkMutate({ invalidate: [["agents", agentName, "mcp-entries"]] });
+  const remove = useBulkMutate({ invalidate: [agentMcpEntriesKey(agentName)] });
 
   const adoptAll = async () => {
     await adopt.run(rows, (e) =>

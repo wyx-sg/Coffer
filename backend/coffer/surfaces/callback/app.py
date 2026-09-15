@@ -27,6 +27,34 @@ _logger = logging.getLogger(__name__)
 
 _FORWARD_TIMEOUT_SECONDS = 4.0  # SeaTalk expects our 200 within 5 s
 
+# A SeaTalk event envelope is a few KB; nothing near this size is one. The
+# listener sits behind a public tunnel, so a body is refused BEFORE it is
+# buffered — by Content-Length when declared, else by size as it streams —
+# rather than read whole into memory and only then found unsigned.
+_MAX_BODY_BYTES = 1024 * 1024
+
+
+async def _read_body(request: Request) -> bytes | None:
+    """The request body, or ``None`` once it is known to exceed the cap.
+
+    A declared ``Content-Length`` over the cap is refused without reading a
+    byte. Without one (a chunked body), the stream is consumed only up to the
+    first chunk that carries the total past the cap.
+    """
+    declared = request.headers.get("content-length")
+    if declared is not None:
+        with contextlib.suppress(ValueError):
+            if int(declared) > _MAX_BODY_BYTES:
+                return None
+    chunks: list[bytes] = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > _MAX_BODY_BYTES:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 
 def create_listener_app(
     *,
@@ -51,7 +79,10 @@ def create_listener_app(
         secret = signing_secrets.get(channel)
         if secret is None:
             return JSONResponse(status_code=404, content={"error": "unknown channel"})
-        body = await request.body()
+        body = await _read_body(request)
+        if body is None:
+            _logger.warning("callback.body_too_large", extra={"channel": channel})
+            return JSONResponse(status_code=413, content={"error": "body too large"})
         signature = request.headers.get("Signature", "")
         if not verify_seatalk_signature(body, secret, signature):
             _logger.warning("callback.signature_rejected", extra={"channel": channel})

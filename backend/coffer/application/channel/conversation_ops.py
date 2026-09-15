@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 from coffer.application.channel.conversation_spec import resolve_conversation_spec
+from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.errors import CofferError
 
@@ -22,8 +23,19 @@ if TYPE_CHECKING:
         ChannelThreadConversationRepoPort,
     )
 
+__all__ = [
+    "ConversationPort",
+    "ensure_conversation",
+    "explain_conversation_error",
+    "open_conversation",
+]
 
-class _ConversationPort(Protocol):
+
+class ConversationPort(Protocol):
+    """The slice of the chat platform's conversation service the channel core
+    uses — declared once, here, for the turn driver, the command router and
+    these helpers alike."""
+
     async def create_conversation(
         self,
         *,
@@ -35,9 +47,17 @@ class _ConversationPort(Protocol):
 
     async def get_conversation(self, conversation_id: str) -> Any: ...
 
+    async def set_conversation_model(
+        self, conversation_id: str, *, model_id: str | None
+    ) -> Any: ...
+
+    async def get_agent_config(self, conversation_id: str) -> AgentConfig: ...
+
+    async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None: ...
+
 
 async def open_conversation(
-    conversations: _ConversationPort,
+    conversations: ConversationPort,
     threads: ChannelThreadConversationRepoPort,
     binding: ChannelBinding,
     peer: ChannelPeer,
@@ -67,7 +87,7 @@ async def open_conversation(
 
 
 async def ensure_conversation(
-    conversations: _ConversationPort,
+    conversations: ConversationPort,
     threads: ChannelThreadConversationRepoPort,
     binding: ChannelBinding,
     peer: ChannelPeer,

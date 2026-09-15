@@ -3,12 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { retentionKey, retentionPoliciesKey } from "@/lib/api/queryKeys";
 
 type RetentionPolicyListOut = components["schemas"]["RetentionPolicyListOut"];
 
 export function useRetentionPolicies() {
   return useQuery({
-    queryKey: ["retention", "policies"],
+    queryKey: retentionPoliciesKey,
     queryFn: async (): Promise<RetentionPolicyListOut> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/retention/policies");
@@ -36,7 +37,7 @@ export function useUpdateRetentionPolicy() {
       if (error) throwApiError(error, "INTERNAL_ERROR", "update policy failed");
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["retention"] });
+      void qc.invalidateQueries({ queryKey: retentionKey });
     },
   });
 }
@@ -53,7 +54,7 @@ export function usePruneNow() {
       return data;
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["retention"] });
+      void qc.invalidateQueries({ queryKey: retentionKey });
     },
   });
 }

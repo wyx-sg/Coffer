@@ -14,16 +14,14 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import { getChannelStatus, issuePairingCode, notifyChannel } from "@/lib/api/channels";
-import { applyChannelEdit } from "@/kinds/channel/editChannel";
-import type { ChannelPlan } from "@/kinds/channel/schema";
+import { applyChannelEdit } from "@/components/channel/editChannel";
+import { createChannel } from "@/components/channel/registerChannel";
+import type { ChannelPlan } from "@/components/channel/schema";
 import { useResources } from "@/lib/hooks/useResources";
 import { useToast } from "@/components/ui/toast";
+import { channelStatusKey, resourcesKey } from "@/lib/api/queryKeys";
 
 export const CHANNEL_KIND = "channel";
-
-export function channelStatusKey(name: string) {
-  return ["channels", name, "status"] as const;
-}
 
 /** List channel resources (name, config, enabled) via the generic resources API. */
 export function useChannels() {
@@ -74,7 +72,7 @@ export function useUpdateChannel() {
   return useMutation({
     mutationFn: (plan: ChannelPlan) => applyChannelEdit(plan),
     onSuccess: (name) => {
-      void qc.invalidateQueries({ queryKey: ["resources"] });
+      void qc.invalidateQueries({ queryKey: resourcesKey });
       void qc.invalidateQueries({ queryKey: channelStatusKey(name) });
       toast.success(t("channels.edit.saved", { name }));
     },
@@ -89,6 +87,26 @@ export function useNotifyChannel(name: string) {
   return useMutation({
     mutationFn: (text: string) => notifyChannel(name, text),
     onSuccess: () => toast.success(t("channels.test.sent")),
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Register a new channel: secrets first, then the resource, rolling the
+ * secrets back when registration fails (registerChannel.ts). The resources
+ * cache is invalidated so the list shows the new row; what happens next
+ * (toast, navigate, close the dialog) is the caller's, via `mutate(plan,
+ * { onSuccess })`.
+ */
+export function useCreateChannel() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (plan: ChannelPlan) => createChannel(plan),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: resourcesKey });
+    },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

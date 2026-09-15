@@ -1363,8 +1363,19 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   (e.g. `theme`, `mcpServers`),
 - **When** the user activates an anthropic profile,
 - **Then** those keys are preserved byte-for-byte in the updated file, a
-  `.bak` file is written before the update, and only the Coffer-managed keys
-  are changed.
+  `.bak` file is written before the update (the previous `.bak` rotating to
+  `.bak.1`, then `.bak.2`; three generations are kept), and only the
+  Coffer-managed keys are changed.
+
+### Scenario: projection refuses to overwrite a concurrent edit
+
+- **Given** `~/.claude/settings.json` that the user saves from their editor
+  after Coffer has read it and before Coffer writes its projection,
+- **When** the projection write runs,
+- **Then** the write is refused with 409 `CONFIG_FILE_STALE`, the user's edit
+  is left intact on disk, no `.bak` is written, and an audit row
+  `provider_projection_refused` names the connection, the agent type and the
+  file — the caller re-reads and retries.
 
 ### Scenario: a provider switch is recorded in the audit log
 
@@ -1610,8 +1621,13 @@ connection's existing curated selection is left exactly as it was.
 
 - **FR-007**: System MUST project an activated anthropic profile into
   `~/.claude/settings.json` via `ConfigFileStore.write_text_atomic` (atomic +
-  `.bak`), merging only the specified keys, preserving everything else.
-  `ANTHROPIC_API_KEY` MUST NOT be written.
+  `.bak` rotated through three generations), merging only the specified keys,
+  preserving everything else. `ANTHROPIC_API_KEY` MUST NOT be written. Every
+  projection write (this one, FR-008's, and their de-projections) MUST carry
+  the fingerprint of the content it read and MUST be refused with 409
+  `CONFIG_FILE_STALE` — audited as `provider_projection_refused` — when the
+  file changed on disk in between, so a concurrent edit by the user is never
+  silently overwritten.
 - **FR-008**: System MUST project an activated openai profile into
   `~/.codex/config.toml` via `tomlkit` (comment/order-preserving), merging
   only the specified keys, preserving everything else.

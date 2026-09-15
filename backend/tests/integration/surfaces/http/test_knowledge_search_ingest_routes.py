@@ -18,7 +18,7 @@ import pytest
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.search import SearchService
-from coffer.surfaces.http.dependencies import get_knowledge_service
+from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
 
 from .conftest import _create_collection, _write_file
 

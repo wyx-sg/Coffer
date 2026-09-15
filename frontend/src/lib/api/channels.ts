@@ -1,41 +1,42 @@
-// frontend/src/lib/api/channels.ts — typed fetch helpers for /api/v1/channels/*
-// Hand-written wire types matching specs/channels/contracts/api.openapi.yaml
-// and backend/coffer/surfaces/http/channel_routes.py (mirrors chat.ts: channel
-// CRUD rides the generic /resources endpoints; these are the channel-specific
-// operations — pairing, status, notify).
+// frontend/src/lib/api/channels.ts — request helpers for /api/v1/channels/*
+// (mirrors chat.ts: channel CRUD rides the generic /resources endpoints; these
+// are the channel-specific operations — pairing, status, notify, callback test).
+//
+// Wire types are the channels contract's generated schemas
+// (`specs/channels/contracts/api.openapi.yaml` → `generated/channels.ts`),
+// re-exported under the names the hooks and pages already import. Transport is
+// the shared `call` (agents/frontend.md §4).
 
-import { getCofferBaseUrl, getCofferToken } from "../auth";
-import { ApiError } from "./errors";
+import { call, enc } from "@/lib/api/call";
+import type { components } from "@/lib/api/generated/channels";
+
+type Schemas = components["schemas"];
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type ChannelType = "telegram" | "seatalk";
+export type ChannelType = Schemas["ChannelStatusOut"]["channel_type"];
 
 /**
  * How SeaTalk events reach Coffer. `webhook` needs a publicly reachable URL and
  * verifies a signing secret; `websocket` holds one outbound connection to the
  * platform and needs neither. A bot uses exactly one at a time.
  */
-export type ChannelDelivery = "webhook" | "websocket";
+export type ChannelDelivery = Schemas["CallbackInfoOut"]["delivery"];
 
 /** Live state of a websocket-delivery channel's connection to SeaTalk. */
-export type WebSocketState = "connecting" | "connected" | "kicked" | "sdk_missing" | "error";
-
-/** The paired owner of a channel (null while unpaired). */
-export interface ChannelPeer {
-  chat_id: string;
-  display_name: string;
-  paired_at: string;
-  active_conversation_id: string | null;
-}
+export type WebSocketState = NonNullable<Schemas["CallbackInfoOut"]["websocket_state"]>;
 
 /**
  * SeaTalk inbound-delivery status — present for seatalk channels only. The
  * webhook-only fields below stay on the wire for both delivery methods, and
  * report their absent/false values on a websocket channel rather than
  * pretending a listener or a public URL exists.
+ *
+ * Hand-written rather than the contract's `CallbackInfoOut`, which marks every
+ * field past `listener_running` optional; the daemon always sends them and the
+ * callback card narrows `websocket_state` on `!== null` alone.
  */
 export interface CallbackInfo {
   /** Which inbound transport this channel uses. */
@@ -57,74 +58,31 @@ export interface CallbackInfo {
   websocket_error: string | null;
 }
 
-/** Result of the public-callback reachability self-test. */
-export interface CallbackTestResult {
-  ok: boolean;
-  detail: string;
-}
+/** The contract's `ChannelStatusOut` with the hand-written `CallbackInfo` above. */
+export type ChannelStatus = Omit<Schemas["ChannelStatusOut"], "callback"> & {
+  callback: CallbackInfo | null;
+};
+
+/** The paired owner of a channel (null while unpaired). */
+export type ChannelPeer = Schemas["ChannelPeerOut"];
 
 /**
  * Something configured on the channel that the platform will not actually
  * honour. Empty is the healthy case; a diagnostic always names its fix.
  */
-export interface ChannelDiagnostic {
-  /** Stable identifier, so the UI can style or link the finding. */
-  code: string;
-  /** What is wrong and what to do about it. */
-  message: string;
-}
+export type ChannelDiagnostic = Schemas["ChannelDiagnosticOut"];
 
-export interface ChannelStatus {
-  name: string;
-  channel_type: ChannelType;
-  enabled: boolean;
-  /** Whether the adapter task is currently live. */
-  running: boolean;
-  /** Whether an unexpired pairing code is outstanding. */
-  pending_pairing?: boolean;
-  peer: ChannelPeer | null;
-  callback: CallbackInfo | null;
-  /** Contradictions between the configuration and what the platform permits. */
-  diagnostics?: ChannelDiagnostic[];
-}
+export type PairingCode = Schemas["PairingCodeOut"];
 
-export interface PairingCode {
-  code: string;
-  expires_at: string;
-  /**
-   * A link carrying the code, so the owner pairs by opening it rather than
-   * transcribing it. Empty when the platform has no such link.
-   */
-  pair_url?: string;
-}
+export type NotifyOut = Schemas["NotifyOut"];
 
-export interface NotifyOut {
-  sent: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Internal fetch helper
-// ---------------------------------------------------------------------------
-
-async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<T> {
-  const r = await fetch(`${getCofferBaseUrl()}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-Coffer-Token": getCofferToken() ?? "",
-      "X-Coffer-Actor": "ui",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = await r.json().catch(() => null);
-  if (!r.ok) {
-    const err = data?.error;
-    throw new ApiError(
-      err?.code ?? "INTERNAL_ERROR",
-      err?.message ?? `request failed: ${r.status}`,
-    );
-  }
-  return data as T;
+/**
+ * Result of the public-callback reachability self-test. Hand-written: the
+ * `callback-test` route is not in the channels contract.
+ */
+export interface CallbackTestResult {
+  ok: boolean;
+  detail: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,17 +91,17 @@ async function call<T>(method: "GET" | "POST" | "PUT", path: string, body?: unkn
 
 /** Issue a single-use pairing code (replaces any previous pending code). */
 export function issuePairingCode(name: string): Promise<PairingCode> {
-  return call<PairingCode>("POST", `/channels/${encodeURIComponent(name)}/pairing-code`);
+  return call<PairingCode>(`/channels/${enc(name)}/pairing-code`, { method: "POST" });
 }
 
 /** Runtime, pairing, and callback status of a channel. */
 export function getChannelStatus(name: string): Promise<ChannelStatus> {
-  return call<ChannelStatus>("GET", `/channels/${encodeURIComponent(name)}/status`);
+  return call<ChannelStatus>(`/channels/${enc(name)}/status`);
 }
 
 /** Push a text message to the channel's paired peer. */
 export function notifyChannel(name: string, text: string): Promise<NotifyOut> {
-  return call<NotifyOut>("POST", `/channels/${encodeURIComponent(name)}/notify`, { text });
+  return call<NotifyOut>(`/channels/${enc(name)}/notify`, { method: "POST", body: { text } });
 }
 
 /**
@@ -151,5 +109,5 @@ export function notifyChannel(name: string, text: string): Promise<NotifyOut> {
  * only — a websocket channel has no public URL and the daemon rejects it).
  */
 export function testChannelCallback(name: string): Promise<CallbackTestResult> {
-  return call<CallbackTestResult>("POST", `/channels/${encodeURIComponent(name)}/callback-test`);
+  return call<CallbackTestResult>(`/channels/${enc(name)}/callback-test`, { method: "POST" });
 }

@@ -3,10 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
+import { skillFileKey, skillFilesKey, skillKey, skillsKey } from "@/lib/api/queryKeys";
 import { skillsApi, type SkillImportRequest } from "@/lib/api/skills";
 import { useToast } from "@/components/ui/toast";
-
-const SKILLS_KEY = ["skills"] as const;
 
 /** Shared onError → toast handler for the single-use skill mutations. */
 function useSkillToastError() {
@@ -17,14 +16,14 @@ function useSkillToastError() {
 
 export function useSkills() {
   return useQuery({
-    queryKey: SKILLS_KEY,
+    queryKey: skillsKey,
     queryFn: async () => (await skillsApi.list()).items,
   });
 }
 
 export function useSkill(name: string) {
   return useQuery({
-    queryKey: ["skills", name],
+    queryKey: skillKey(name),
     queryFn: () => skillsApi.get(name),
     enabled: !!name,
   });
@@ -36,7 +35,7 @@ export function useImportSkill() {
   return useMutation({
     mutationFn: (body: SkillImportRequest) => skillsApi.importLocal(body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: SKILLS_KEY });
+      qc.invalidateQueries({ queryKey: skillsKey });
     },
     onError,
   });
@@ -48,7 +47,7 @@ export function useRemoveSkill() {
   return useMutation({
     mutationFn: (name: string) => skillsApi.remove(name),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: SKILLS_KEY });
+      qc.invalidateQueries({ queryKey: skillsKey });
     },
     onError,
   });
@@ -56,7 +55,7 @@ export function useRemoveSkill() {
 
 export function useSkillFiles(name: string) {
   return useQuery({
-    queryKey: ["skills", name, "files"],
+    queryKey: skillFilesKey(name),
     queryFn: async () => (await skillsApi.filesTree(name)).root,
     enabled: !!name,
   });
@@ -64,7 +63,7 @@ export function useSkillFiles(name: string) {
 
 export function useSkillFileContent(name: string, path: string | null) {
   return useQuery({
-    queryKey: ["skills", name, "file", path ?? ""],
+    queryKey: skillFileKey(name, path ?? ""),
     queryFn: () => skillsApi.fileContent(name, path as string),
     enabled: !!name && !!path,
   });

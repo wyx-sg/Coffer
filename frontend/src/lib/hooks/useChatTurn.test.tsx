@@ -98,12 +98,147 @@ describe("useChatTurn", () => {
     });
 
     // The prompt is echoed immediately, before the POST resolves.
-    await waitFor(() => expect(result.current.liveMessage?.userText).toBe("what is OAuth?"));
+    await waitFor(() =>
+      expect(result.current.pendingEchoes.map((e) => e.text)).toEqual(["what is OAuth?"]),
+    );
     expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "what is OAuth?");
 
     await act(async () => {
       resolveSend();
     });
+    // Still standing until the persisted row lands.
+    expect(result.current.pendingEchoes).toHaveLength(1);
+  });
+
+  test("identical consecutive sends both echo, and each retires against its own persisted row", async () => {
+    // The wire has no client message id, so the hook matches echoes to rows by
+    // text + seq ordering + time. Two identical prompts must not collapse into
+    // one echo, and the older row must not retire the newer echo.
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const now = Date.now();
+    const olderIdentical = {
+      id: "u0",
+      conversation_id: "conv-1",
+      seq: 0,
+      role: "user",
+      content: [{ type: "text", text: "again" }],
+      status: "complete",
+      created_at: new Date(now - 120_000).toISOString(),
+    };
+    qc.setQueryData(["messages", "conv-1"], [olderIdentical]);
+    const wrapper = ({ children }: PropsWithChildren) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
+
+    await act(async () => {
+      await result.current.send("again");
+      await result.current.send("again");
+    });
+    expect(result.current.pendingEchoes.map((e) => e.text)).toEqual(["again", "again"]);
+
+    // The refetch brings only the first new row: exactly one echo retires, and
+    // the pre-existing identical row (seq 0) retires none of them.
+    act(() => {
+      qc.setQueryData(
+        ["messages", "conv-1"],
+        [
+          olderIdentical,
+          { ...olderIdentical, id: "u1", seq: 1, created_at: new Date(now + 50).toISOString() },
+        ],
+      );
+    });
+    expect(result.current.pendingEchoes).toHaveLength(1);
+
+    // The second row lands: the last echo retires.
+    act(() => {
+      qc.setQueryData(
+        ["messages", "conv-1"],
+        [
+          olderIdentical,
+          { ...olderIdentical, id: "u1", seq: 1, created_at: new Date(now + 50).toISOString() },
+          { ...olderIdentical, id: "u2", seq: 2, created_at: new Date(now + 90).toISOString() },
+        ],
+      );
+    });
+    expect(result.current.pendingEchoes).toEqual([]);
+  });
+
+  test("a send the server queued behind a turn drops its echo (the queue chip owns it)", async () => {
+    chatApiMock.sendMessage.mockResolvedValue({ queued: true });
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current.send("later");
+    });
+    expect(result.current.pendingEchoes).toEqual([]);
+  });
+
+  test("a send issued while this client streams a turn is not echoed", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(gatedSubscription(gate, { event: "turn_start", data: {} }));
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isStreaming).toBe(true));
+
+    await act(async () => {
+      await result.current.send("queued message");
+    });
+    expect(result.current.pendingEchoes).toEqual([]);
+    release();
+  });
+
+  test("a rejected send drops its echo", async () => {
+    chatApiMock.sendMessage.mockRejectedValue(new ApiError("CONVERSATION_NOT_FOUND", "gone"));
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+    expect(result.current.pendingEchoes).toEqual([]);
+    expect((result.current.error as ApiError).code).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  test("turn_error drops an echo whose row never matched (no ghost bubble)", async () => {
+    // The send was accepted, but the turn failed before any refetch carried a
+    // row that matches the echo — the failure must still retire it.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    subscribeMock.mockImplementation(async function* () {
+      await gate;
+      yield { event: "turn_start", data: {} };
+      yield { event: "turn_error", data: { code: "MODEL_ERROR", message: "provider failed" } };
+    });
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current.send("doomed");
+    });
+    expect(result.current.pendingEchoes).toHaveLength(1);
+
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(result.current.error).toBeInstanceOf(ApiError));
+    expect(result.current.pendingEchoes).toEqual([]);
+  });
+
+  test("switching conversation clears the echoes with the rest of the turn state", async () => {
+    const { result, rerender } = renderHook(({ id }) => useChatTurn(id), {
+      wrapper: makeWrapper(),
+      initialProps: { id: "conv-A" },
+    });
+    await act(async () => {
+      await result.current.send("for A");
+    });
+    expect(result.current.pendingEchoes).toHaveLength(1);
+
+    act(() => {
+      rerender({ id: "conv-B" });
+    });
+    expect(result.current.pendingEchoes).toEqual([]);
   });
 
   test("send() NEVER blocks while a turn streams — a second call still POSTs (queues)", async () => {

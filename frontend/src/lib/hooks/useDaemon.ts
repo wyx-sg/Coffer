@@ -1,15 +1,17 @@
 // frontend/src/lib/hooks/useDaemon.ts
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
-import { daemonVersionMatches } from "@/lib/tauri";
+import { connectToShellDaemon, daemonVersionMatches, restartDaemon } from "@/lib/tauri";
 import type { components } from "@/lib/api/types";
+import { daemonStatusKey, daemonVersionSkewKey } from "@/lib/api/queryKeys";
 
 type DaemonStatusOut = components["schemas"]["DaemonStatusOut"];
 
 export function useDaemonStatus() {
   return useQuery({
-    queryKey: ["daemon", "status"],
+    queryKey: daemonStatusKey,
     queryFn: async (): Promise<DaemonStatusOut> => {
       const client = getApiClient();
       const { data, error } = await client.GET("/daemon/status");
@@ -37,12 +39,46 @@ export function useDaemonStatus() {
  */
 export function useDaemonOutOfDate(version: string | undefined) {
   return useQuery({
-    queryKey: ["daemon", "version-skew", version],
+    queryKey: daemonVersionSkewKey(version),
     enabled: version !== undefined,
     queryFn: async (): Promise<boolean> => {
       if (version === undefined) return false;
       // matches === true → compatible → NOT out of date.
       return !(await daemonVersionMatches(version));
     },
+  });
+}
+
+/**
+ * Restart the daemon from the desktop shell, then reconnect. useMutation owns
+ * the in-flight / error state and dedups double-clicks. No toast: the
+ * offline banner renders the error inline, next to the button that caused it.
+ */
+export function useRestartDaemon() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  return useMutation({
+    mutationFn: async () => {
+      const result = await restartDaemon();
+      // The daemon mints a fresh token on every start, so the credentials the
+      // shell handed over at launch are now revoked. Re-run the handshake
+      // (get_daemon_info waits for the new daemon to publish daemon.json and
+      // listen) and swap the connection in before anything refetches —
+      // otherwise every request 401s until the app is relaunched.
+      try {
+        await connectToShellDaemon();
+      } catch (e) {
+        // Distinct failure: the daemon DID restart but we couldn't fetch its
+        // new credentials — tell the user to relaunch rather than implying the
+        // restart itself failed.
+        const message = e instanceof Error ? e.message : String(e);
+        throw new Error(t("daemon.offline.reconnectFailed", { message }));
+      }
+      return result;
+    },
+    // The token changed, so every cached query (not just daemon/status) was
+    // fetched with the revoked credentials — refetch the whole cache so the
+    // app recovers in place.
+    onSuccess: () => qc.invalidateQueries(),
   });
 }

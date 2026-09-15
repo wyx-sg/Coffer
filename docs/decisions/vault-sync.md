@@ -128,10 +128,22 @@ exporter writes differentially and must never clear and rewrite a directory,
 and it must never delete a path in the retry set — a document this vault failed
 to absorb is pending, not deleted.
 
+The same guarantee is what lets shared state be deleted at all. Under one-way
+import a state area could only ever be upserted; under convergence a deleted
+state document is a decision some machine took back, and every area's provider
+honours it in its own terms (spec `## Applying a diff`): an override is cleared,
+a server's capabilities are re-enabled, the engine settings are reset to their
+defaults, and the plugin inventory — which has no local store beyond the
+document and no uninstall path — drops nothing. One rule follows for the
+exporter: an area publishes a document only while there is a decision to carry,
+never for its defaults, or the machine that reset and the machine that never
+chose would add and delete the same document at each other forever.
+
 Because the apply runs unattended, two guards bound a defect in it. A pre-apply
 snapshot is tagged at the local commit, so rollback is the same machinery run
-backwards. And a circuit breaker stops a round whose deletions exceed their
-configured share and asks the user instead — **in both directions**. It guards
+backwards. And a circuit breaker stops a round whose deletions exceed a fixed
+share — 20% of an area, or 20 documents — and asks the user instead — **in
+both directions**. It guards
 what the round would apply to the vault, and equally what the round's own export
 would publish as a deletion. The second direction is the one that matters when
 this machine is the damaged one: a vault that lost its files to a reinstall, a

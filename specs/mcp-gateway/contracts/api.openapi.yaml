@@ -1096,10 +1096,16 @@ components:
 
     DaemonStatusOut:
       type: object
-      required: [status, version, started_at, port]
+      required: [status, version, executable, started_at, port]
       properties:
         status: { type: string, enum: [starting, ready, draining] }
         version: { type: string }
+        executable:
+          type: string
+          description: >-
+            The daemon process's executable (the frozen binary, or the
+            interpreter of a run-from-source daemon). A CLI or shim whose
+            version differs from `version` names it in its skew warning.
         started_at: { type: string, format: date-time }
         port: { type: integer }
         upstream_summary:

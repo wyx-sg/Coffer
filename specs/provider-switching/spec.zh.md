@@ -884,7 +884,13 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 - **Given** `~/.claude/settings.json` 中含有 Coffer 不管理的键（如 `theme`、`mcpServers`），
 - **When** 用户激活一条 anthropic profile，
-- **Then** 这些键在更新后的文件中逐字节保留，写入前创建 `.bak` 备份，只有 Coffer 管理的键被修改。
+- **Then** 这些键在更新后的文件中逐字节保留，写入前创建 `.bak` 备份（原有 `.bak` 轮转为 `.bak.1`、再到 `.bak.2`，共保留三代），只有 Coffer 管理的键被修改。
+
+### Scenario: projection refuses to overwrite a concurrent edit
+
+- **Given** 用户在 Coffer 读取 `~/.claude/settings.json` 之后、写入投影之前，从自己的编辑器保存了该文件，
+- **When** 投影写入执行，
+- **Then** 写入以 409 `CONFIG_FILE_STALE` 被拒绝，用户的修改原样留在磁盘上，不写 `.bak`，并记录一条审计 `provider_projection_refused`，写明连接、agent 类型与文件 —— 调用方重新读取后再试。
 
 ### Scenario: a provider switch is recorded in the audit log
 
@@ -1079,7 +1085,7 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 
 **投影**
 
-- **FR-007**：系统必须通过 `ConfigFileStore.write_text_atomic`（原子写 + `.bak`）将激活的 anthropic profile 投影到 `~/.claude/settings.json`，只合并指定键，其余内容保持原样。绝不写入 `ANTHROPIC_API_KEY`。
+- **FR-007**：系统必须通过 `ConfigFileStore.write_text_atomic`（原子写 + 轮转三代的 `.bak`）将激活的 anthropic profile 投影到 `~/.claude/settings.json`，只合并指定键，其余内容保持原样。绝不写入 `ANTHROPIC_API_KEY`。每一次投影写入（本条、FR-008 的以及它们的反投影）必须携带读取时内容的指纹，若文件在此期间在磁盘上被改动，必须以 409 `CONFIG_FILE_STALE` 拒绝并审计为 `provider_projection_refused`，使用户的并发编辑绝不被静默覆盖。
 - **FR-008**：系统必须通过 `tomlkit`（保留注释/顺序）将激活的 openai profile 投影到 `~/.codex/config.toml`，只合并指定键，其余内容保持原样。
 - **FR-009**：若 `fast_model` 为 `None`，`settings.json` 中的 `env.ANTHROPIC_SMALL_FAST_MODEL` 键必须省略或删除。
 - **FR-010**：域层投影逻辑必须为纯函数（无 I/O）。`domain/provider/projection.py` 中的纯函数 `apply_anthropic_settings(...)` 和 `apply_codex_provider(...)` 直接返回新的原生配置文本；`ProviderService._project(...)` 调用这些函数并执行文件写入。

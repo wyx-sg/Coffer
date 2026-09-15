@@ -94,45 +94,29 @@ class GitMirrorPort(Protocol):
 
     async def ensure_repo(self, *, remote_url: str, branch: str) -> None:
         """Initialize the working tree, or adopt an existing repository there,
-        and point ``origin`` at ``remote_url`` with ``branch`` checked out."""
+        and point ``origin`` at ``remote_url`` with ``branch`` checked out.
+
+        A repository Coffer did not create, whose ``origin`` already points
+        somewhere else, is refused rather than repointed: the round that
+        follows ``reset --hard``s the tree, and doing that to a checkout the
+        user keeps there for some other purpose is not adoption."""
 
     async def stage_all(self) -> bool:
         """Stage everything; True when the staged tree differs from ``HEAD``."""
-
-    async def staged_paths(self) -> list[str]:
-        """Repository-relative paths of what is staged, so a caller can tell a
-        real change from one that only restamped the bundle's manifest."""
-
-    async def discard_staged(self) -> None:
-        """Return the working tree and index to ``HEAD``.
-
-        Called when a staged diff turns out not to be worth committing: an
-        index left dirty makes git refuse the next ``checkout``, which is the
-        operation a restore-from-history depends on."""
 
     async def commit(self, message: str) -> str:
         """Commit what is staged and return the short sha."""
 
     async def push(self, *, branch: str, token: str | None) -> None:
-        """Push ``branch`` to ``origin``; raises on failure, already redacted."""
-
-    async def clone(self, *, remote_url: str, branch: str, token: str | None) -> None:
-        """Clone the remote into the working tree (restore on a fresh machine)."""
+        """Push ``branch`` to ``origin`` as an explicit ``refs/heads/`` refspec;
+        raises on failure, already redacted."""
 
     async def fetch(self, *, token: str | None) -> None: ...
 
     async def resolve_revision(self, revision: str) -> str:
         """Full sha for a sha, a ref, or a ``YYYY-MM-DD`` date (the last commit
-        at or before it) — the three things a user can name a restore point by."""
-
-    async def checkout(self, revision: str) -> None:
-        """Detached checkout, so restoring from history never moves the branch."""
-
-    async def checkout_branch(self, branch: str) -> None:
-        """Return to the branch tip after a detached checkout."""
+        at or before it) — the three things a user can name a restore point by.
+        A revision beginning with ``-`` is refused: git would read it as an
+        option."""
 
     async def head(self) -> str | None: ...
-
-    async def has_unpushed(self, *, branch: str) -> bool:
-        """True when local commits are ahead of ``origin/<branch>``; a run whose
-        push failed leaves its commit behind for the next run to carry."""

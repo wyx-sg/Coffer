@@ -22,11 +22,11 @@ from coffer.domain.sync.serialization import ResourceDoc
 
 
 class ImportGate(Protocol):
-    """Per-kind validation the importing machine runs BEFORE upserting a doc
-    (spec vault-sync import reconciliation). Raise ``CofferError`` to report the doc
-    as a per-resource failure — the rest of the bundle still imports, and the
-    user can re-run the import once this machine satisfies the precondition
-    (e.g. the agent's config dir exists here).
+    """Per-kind validation this machine runs BEFORE upserting a doc (spec
+    vault-sync ``## Applying a diff``). Raise ``CofferError`` to report the doc
+    as a per-path failure — the rest of the round still applies, the path is
+    held, and the next round retries it once this machine satisfies the
+    precondition (e.g. the agent's config dir exists here).
 
     A gate sees the config and nothing else. It used to be handed the document's
     activation scope as well, so a scope-aware gate could wave a doc that was
@@ -140,25 +140,19 @@ class BundlePort(Protocol):
         is what keeps the staged diff an honest account of what this vault
         changed."""
 
-    def require_readable(self) -> None:
-        """Raise ``SyncBundleInvalid`` unless the path is an existing bundle."""
-
     @property
     def path(self) -> str: ...
 
     def mirror_trees_out(self) -> None:
-        """Copy the live knowledge/memory/skill trees into the bundle."""
-
-    def mirror_trees_in(self) -> None:
-        """Copy the bundle's trees back into the live vault (never deleting)."""
+        """Converge the bundle's ``knowledge/`` and ``skills/`` on the live
+        trees. Symlinks and anything under a ``.git`` directory are skipped
+        and logged, never copied."""
 
     def tree_counts(self) -> list[tuple[str, int]]:
         """(subdir, file count) for each mirrored tree present in the bundle,
         plus ``machines`` once the bundle carries a registry."""
 
     def write_manifest(self, manifest: Manifest) -> None: ...
-
-    def read_manifest(self) -> Manifest | None: ...
 
     def write_resource_docs(
         self, docs: Sequence[Mapping[str, object]], *, unserializable: Sequence[str] = ()
@@ -173,13 +167,9 @@ class BundlePort(Protocol):
         """Converge ``state/<area>/`` on ``docs``, differentially and touching
         no other area."""
 
-    def read_state_docs(self, area: str) -> list[tuple[str, dict[str, object]]]: ...
-
     def write_credential_blobs(self, blobs: Mapping[str, bytes]) -> None:
         """Converge ``credentials/`` on ``blobs`` — one ``<ref>.enc`` per
         ciphertext blob, differentially."""
-
-    def read_credential_blobs(self) -> dict[str, bytes]: ...
 
     def write_machine_descriptor(
         self, machine_id: str, descriptor_doc: Mapping[str, object]
