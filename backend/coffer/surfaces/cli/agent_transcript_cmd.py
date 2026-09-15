@@ -1,10 +1,13 @@
-"""``coffer agent transcripts <name>`` — browse an agent's local conversations.
+"""``coffer agent transcripts`` / ``transcript`` — an agent's local conversations.
 
-CLI parity for the web Conversations tab: a thin HTTP shell over
-``GET /agents/{name}/transcripts``. Read-only. Its own module (rather than more
-lines in ``agent_cmd.py``) so both stay under the backend file-size cap;
-``agent_cmd`` calls :func:`attach` so the user-facing tree stays
-``coffer agent transcripts``.
+CLI parity for the web Conversations tab, which has two surfaces and so does
+this: ``transcripts`` lists the sessions (``GET /agents/{name}/transcripts``) and
+``transcript`` renders one of them (``.../transcripts/session``), taking the
+absolute ``source_path`` the listing printed. Read-only, both of them.
+
+Its own module (rather than more lines in ``agent_cmd.py``) so both stay under
+the backend file-size cap; ``agent_cmd`` calls :func:`attach` so the user-facing
+tree stays ``coffer agent transcripts`` / ``coffer agent transcript``.
 """
 
 from __future__ import annotations
@@ -79,6 +82,48 @@ def transcripts(
     _console.print(table)
 
 
+def transcript(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    path: str = typer.Option(..., "--path", help="Absolute source_path from `transcripts`."),
+    limit: int = typer.Option(200, "--limit", help="Max turns to show (1-500)."),
+    offset: int = typer.Option(0, "--offset", help="Skip this many turns."),
+    output_json: bool = typer.Option(False, "--json", help="JSON output"),
+) -> None:
+    """Print one conversation: its turns, secret-scrubbed and bounded.
+
+    A transcript can be tens of megabytes, so what comes back is a window —
+    ``limit`` turns from ``offset``, each cut at the server's per-turn cap. The
+    header says how many turns the file holds in total, so a short output is
+    never mistaken for a short conversation.
+    """
+    params: dict[str, Any] = {"path": path, "limit": limit, "offset": offset}
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/agents/{name}/transcripts/session", params=params)
+        if r.status_code == 404:
+            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
+            raise typer.Exit(4)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    shown = len(data["messages"])
+    header = data.get("title") or data["session_id"]
+    _console.print(f"[bold]{header}[/bold]")
+    _console.print(
+        f"{data['project_path'] or ''}  —  turns {data['offset'] + 1}"
+        f"-{data['offset'] + shown} of {data['message_count']}"
+    )
+    for message in data["messages"]:
+        _console.print(f"\n[bold]{message['role']}[/bold] {_short_time(message.get('timestamp'))}")
+        _console.print(message["text"])
+        if message.get("truncated"):
+            _console.print("[dim](turn truncated)[/dim]")
+
+
 def attach(agent_app: typer.Typer) -> None:
     """Register the transcript commands on agent_cmd's existing typer."""
     agent_app.command("transcripts")(transcripts)
+    agent_app.command("transcript")(transcript)

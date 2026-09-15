@@ -1,4 +1,4 @@
-"""AgentNativeMemoryService — list a coding agent's OWN native memory stores.
+"""AgentNativeMemoryService — read a coding agent's OWN native memory stores.
 
 Read-only. Resolves an agent to its :class:`AgentType`, looks up the native
 per-project memory layout for that type (``domain/agent/native_memory.py``), and
@@ -8,10 +8,24 @@ a :class:`NativeMemoryScanPort`. An agent type with no known native layout
 error. A non-existent agent name raises ``ResourceNotFound`` (→ 404) via the
 agent lookup.
 
+Beyond the listing it also opens one store: its directory as a tree and one of
+its files as text, which is what the store's detail page renders. A store is a
+directory, so a tree plus a read-only preview is the shape that shows it without
+interpreting it — the reader sees the same bytes the agent will.
+
+That read has to be guarded, because the client names the directory. The guard
+is ``is_native_memory_dir``: the candidate must be exactly the shape the layout
+would have listed, not merely somewhere under the agent's config dir. That
+matters — the config dir also holds the agent's transcripts, settings and plugin
+cache, and a surface that says "memory" must not become a reader for those. The
+alternative, re-running the scan and matching against its results, costs seconds
+per request to answer a question the layout already answers.
+
 Filesystem access goes through ``NativeMemoryScanPort`` (a Protocol this module
-owns); the concrete adapter lives in
-``infrastructure/agent/native_memory_store.py`` (Contract 2b: application defines
-the port, infrastructure implements it).
+owns); the concrete adapters live in
+``infrastructure/agent/native_memory_store.py`` and
+``native_memory_files.py`` (Contract 2b: application defines the port,
+infrastructure implements it).
 """
 
 from __future__ import annotations
@@ -23,8 +37,11 @@ from typing import Protocol
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.native_memory import (
     CodexGlobalLayout,
+    MemoryFileContent,
+    MemoryFileNode,
     NativeMemoryStore,
     ScannedStore,
+    is_native_memory_dir,
     native_memory_layout_for,
     resolve_project_slug,
 )
@@ -42,6 +59,14 @@ class NativeMemoryScanPort(Protocol):
     def scan_codex_global(self, memories_dir: pathlib.Path, index_file: str) -> list[ScannedStore]:
         """Return a :class:`ScannedStore` per distinct routed cwd in Codex's
         single global task-grouped store under ``memories_dir``."""
+        ...
+
+    def build_tree(self, store_dir: pathlib.Path) -> MemoryFileNode:
+        """Return *store_dir* as a recursive read-only tree."""
+        ...
+
+    def read_file(self, store_dir: pathlib.Path, relpath: str) -> MemoryFileContent:
+        """Read one file under *store_dir* (capped, containment-checked)."""
         ...
 
 
@@ -88,6 +113,40 @@ class AgentNativeMemoryService:
             )
         result = [self._to_store(scan) for scan in scans]
         return sorted(result, key=lambda s: (-s.item_count, s.project_label))
+
+    async def read_tree(self, name: str, memory_dir: str) -> MemoryFileNode:
+        """The store at *memory_dir*, as a file tree.
+
+        Raises ``ResourceNotFound`` when no such agent is registered and
+        ``ValueError`` when *memory_dir* is not one of this agent's native
+        memory stores — a client may only browse a directory the scan itself
+        would have listed.
+        """
+        store_dir = await self._checked_store_dir(name, memory_dir)
+        return await asyncio.to_thread(self._scanner.build_tree, store_dir)
+
+    async def read_file(self, name: str, memory_dir: str, relpath: str) -> MemoryFileContent:
+        """One file inside the store at *memory_dir*.
+
+        Raises as :meth:`read_tree` does, plus ``ValueError`` when *relpath*
+        escapes the store and ``FileNotFoundError`` when nothing is there.
+        """
+        store_dir = await self._checked_store_dir(name, memory_dir)
+        return await asyncio.to_thread(self._scanner.read_file, store_dir, relpath)
+
+    async def _checked_store_dir(self, name: str, memory_dir: str) -> pathlib.Path:
+        """Resolve *memory_dir* and prove it is one of this agent's stores.
+
+        Resolution comes first so that a symlink pointing out of the config dir
+        is judged by where it lands, not by how it is spelled.
+        """
+        # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
+        cfg = AgentConfig.model_validate((await self._agents.get(name)).config)
+        layout = native_memory_layout_for(cfg.type)
+        candidate = pathlib.Path(memory_dir).resolve()
+        if not is_native_memory_dir(layout, cfg.resolved_config_dir().resolve(), candidate):
+            raise ValueError(f"not a native memory store of this agent: {memory_dir!r}")
+        return candidate
 
     @staticmethod
     def _to_store(scan: ScannedStore) -> NativeMemoryStore:

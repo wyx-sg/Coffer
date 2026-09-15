@@ -1,7 +1,8 @@
-"""HTTP coverage for GET /api/v1/agents/{name}/native-memory.
+"""HTTP coverage for GET /api/v1/agents/{name}/native-memory and .../files.
 
 Boots the real app, registers an agent whose config_dir is a temp tree carrying
-the agent's own native memory, and asserts the read-only listing.
+the agent's own native memory, and asserts the read-only listing plus the
+read-only browse of one store (its tree and one of its files).
 """
 
 from __future__ import annotations
@@ -128,3 +129,93 @@ def test_list_native_memory_requires_token(tmp_path, monkeypatch):
     set_active_token(TOKEN)
     with TestClient(app) as c:
         assert c.get("/api/v1/agents/cc/native-memory").status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Browsing ONE store — the tree + preview behind a row click
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="browse one native memory store's files")
+def test_store_files_tree_and_content(tmp_path, monkeypatch):
+    """A store IS a directory, so its page shows the directory and its bytes."""
+    config_dir = tmp_path / "cc-config"
+    mem = config_dir / "projects" / "-X" / "memory"
+    (mem / "notes").mkdir(parents=True)
+    (mem / "MEMORY.md").write_text("# index\n", encoding="utf-8")
+    (mem / "notes" / "a.md").write_text("alpha fact", encoding="utf-8")
+
+    app = _app(tmp_path, monkeypatch, 59850)
+    with _client(app) as c:
+        _register_claude(c, config_dir)
+
+        r = c.get("/api/v1/agents/cc/native-memory/files", params={"dir": str(mem)})
+        assert r.status_code == 200, r.text
+        root = r.json()["root"]
+        assert root["path"] == ""
+        # Directories first, then files; paths are relative to the store dir.
+        assert [(n["name"], n["path"], n["type"]) for n in root["children"]] == [
+            ("notes", "notes", "dir"),
+            ("MEMORY.md", "MEMORY.md", "file"),
+        ]
+        assert [n["path"] for n in root["children"][0]["children"]] == ["notes/a.md"]
+
+        r = c.get(
+            "/api/v1/agents/cc/native-memory/files/content",
+            params={"dir": str(mem), "path": "notes/a.md"},
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["content"] == "alpha fact"
+        assert body["binary"] is False
+        assert body["truncated"] is False
+        # The absolute path is what the viewer's open / reveal act on (FR-038).
+        assert body["abs_path"] == str(mem / "notes" / "a.md")
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="browse one native memory store's files")
+def test_store_files_refuses_a_dir_that_is_not_a_store(tmp_path, monkeypatch):
+    """The config dir also holds transcripts and settings; this reads neither."""
+    config_dir = tmp_path / "cc-config"
+    mem = config_dir / "projects" / "-X" / "memory"
+    mem.mkdir(parents=True)
+    (mem / "MEMORY.md").write_text("i", encoding="utf-8")
+    (config_dir / "projects" / "-X").joinpath("secret.jsonl").write_text("{}", encoding="utf-8")
+
+    app = _app(tmp_path, monkeypatch, 59860)
+    with _client(app) as c:
+        _register_claude(c, config_dir)
+
+        # The project dir is inside the config dir but is not a memory store.
+        r = c.get(
+            "/api/v1/agents/cc/native-memory/files",
+            params={"dir": str(config_dir / "projects" / "-X")},
+        )
+        assert r.status_code == 404
+        assert r.json()["error"]["code"] == "NOT_FOUND"
+
+        # …and a path escaping the store is the same answer as one that is gone.
+        escape = c.get(
+            "/api/v1/agents/cc/native-memory/files/content",
+            params={"dir": str(mem), "path": "../secret.jsonl"},
+        )
+        assert escape.status_code == 404
+
+
+def test_store_files_emit_no_audit_event(tmp_path, monkeypatch):
+    """FR-011: workspace listings do not audit, and neither does opening one."""
+    config_dir = tmp_path / "cc-config"
+    mem = config_dir / "projects" / "-X" / "memory"
+    mem.mkdir(parents=True)
+    (mem / "MEMORY.md").write_text("i", encoding="utf-8")
+
+    app = _app(tmp_path, monkeypatch, 59870)
+    with _client(app) as c:
+        _register_claude(c, config_dir)
+        before = len(c.get("/api/v1/audit").json()["entries"])
+        c.get("/api/v1/agents/cc/native-memory/files", params={"dir": str(mem)})
+        c.get(
+            "/api/v1/agents/cc/native-memory/files/content",
+            params={"dir": str(mem), "path": "MEMORY.md"},
+        )
+        assert len(c.get("/api/v1/audit").json()["entries"]) == before

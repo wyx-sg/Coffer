@@ -5,17 +5,26 @@
 // resource surface. The list is large and unbounded, so the table runs in
 // DataTable's server-pagination mode: each page is fetched on demand
 // (limit/offset) rather than loading every session up front. Coffer never writes
-// these files — the only per-row actions are "open in editor" / "reveal", folded
-// into the "⋯" menu. The message-count / start / last-activity columns are
-// sortable (server-side sort + order), defaulting to most-recent activity first.
+// these files. Clicking a row opens that conversation's own page, which renders
+// the .jsonl as a readable dialogue and carries the open-in-editor / reveal
+// actions; the table itself offers no per-row menu, because a list of a thousand
+// sessions is for finding one, and everything you can do to the one you found
+// belongs where you can see it. The message-count / start / last-activity
+// columns are sortable (server-side sort + order), defaulting to most-recent
+// activity first.
+//
+// The search box is debounced HERE rather than inside DataTable: every other
+// DataTable caller filters rows it already holds, where a delay would only make
+// typing feel slower, and this is the one surface where a keystroke can cost a
+// full transcript parse on a cold reader. The input itself stays instant — only
+// the value that becomes a query key waits.
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { DataTable, type Column } from "@/components/DataTable";
-import { RowActions } from "@/components/RowActions";
 import { translateApiError } from "@/lib/api/errors";
-import { useFileActionItems } from "@/lib/fileActionItems";
 import { formatDateTime } from "@/lib/utils";
 import type {
   SortOrder,
@@ -23,6 +32,7 @@ import type {
   TranscriptSort,
 } from "@/lib/api/agentTranscripts";
 import { useDefaultPageSize } from "@/lib/preferences";
+import { useDebouncedValue } from "@/lib/hooks/usePagedList";
 import { TRANSCRIPTS_PAGE_SIZE, useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 
 function TimeCell({ value }: { value: string | null }) {
@@ -34,14 +44,6 @@ function TimeCell({ value }: { value: string | null }) {
   );
 }
 
-/** Row actions: open-in-editor + reveal, folded into the "⋯" menu. The tab is
- * read-only, so there is no primary action to keep beside them. */
-function ConversationRowActions({ session }: { session: TranscriptSessionSummary }) {
-  const { t } = useTranslation();
-  const fileItems = useFileActionItems(session.source_path);
-  return <RowActions items={fileItems} menuAriaLabel={t("common.moreActions")} />;
-}
-
 interface Props {
   /** Agent name — used as the route param for transcript queries. */
   name: string;
@@ -49,6 +51,7 @@ interface Props {
 
 export function AgentConversationsTab({ name }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<TranscriptSort>("last_activity_at");
@@ -56,8 +59,10 @@ export function AgentConversationsTab({ name }: Props) {
   const defaultPageSize = useDefaultPageSize();
   const [pageSize, setPageSize] = useState(defaultPageSize || TRANSCRIPTS_PAGE_SIZE);
 
+  const debouncedSearch = useDebouncedValue(search);
+
   const { data, isPending, error } = useAgentTranscripts(name, {
-    q: search.trim() || undefined,
+    q: debouncedSearch.trim() || undefined,
     sort,
     order,
     limit: pageSize,
@@ -140,12 +145,6 @@ export function AgentConversationsTab({ name }: Props) {
       className: "whitespace-nowrap",
       cell: (s) => <TimeCell value={s.last_activity_at} />,
     },
-    {
-      key: "actions",
-      header: "",
-      className: "text-right",
-      cell: (s) => <ConversationRowActions session={s} />,
-    },
   ];
 
   return (
@@ -168,6 +167,16 @@ export function AgentConversationsTab({ name }: Props) {
           // Key by the transcript file: one session_id can span several files
           // (subagent sidechains), so session_id is NOT unique per row.
           rowKey={(s) => s.source_path}
+          // The session is addressed by its FILE, here as in the key above:
+          // one session_id can span several files (subagent sidechains), so a
+          // page keyed by session_id would sometimes open the wrong one.
+          onRowClick={(s) =>
+            navigate(
+              `/agents/${encodeURIComponent(name)}/conversations?${new URLSearchParams({
+                path: s.source_path,
+              })}`,
+            )
+          }
           search={{
             placeholder: t("agents.conversationsTab.searchPlaceholder"),
             value: search,

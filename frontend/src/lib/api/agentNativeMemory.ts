@@ -2,8 +2,13 @@
 // Read-only client for /api/v1/agents/{name}/native-memory — the coding agent's
 // OWN native per-project memory stores (Claude Code's
 // <config_dir>/projects/<slug>/memory, Codex's global memories/MEMORY.md sliced
-// by routed cwd). Coffer never writes them: the UI lists them and opens/reveals
-// the directory on disk.
+// by routed cwd), plus one store's files: a tree and one file's contents.
+// Coffer never writes them; the store's page previews them and offers
+// open/reveal for a change that has to be real.
+//
+// A store is addressed by its `memory_dir` throughout, because that IS its
+// identity on disk — the project label and path beside it are best-effort
+// decodes, and for Codex several rows legitimately share one directory.
 //
 // Its own module rather than a section of api/agents.ts, so this surface can
 // move independently. Wire types from the agent-registry contract; transport
@@ -17,6 +22,40 @@ export type NativeMemoryStore = components["schemas"]["NativeMemoryStore"];
 
 export type NativeMemoryListOut = components["schemas"]["NativeMemoryListOut"];
 
+/** One entry in a store's tree. `path` is relative to the store directory. */
+export interface NativeMemoryFileNode {
+  name: string;
+  path: string;
+  type: "file" | "dir";
+  size: number | null;
+  /** A directory whose descendants were clipped at the server's depth bound. */
+  truncated: boolean;
+  children: NativeMemoryFileNode[];
+}
+
+export interface NativeMemoryFileTreeOut {
+  root: NativeMemoryFileNode;
+}
+
+/** One file's contents. No fingerprint: this surface has no write. */
+export interface NativeMemoryFileContent {
+  path: string;
+  /** Absolute path on disk, so the viewer can open / reveal it. */
+  abs_path: string;
+  content: string;
+  truncated: boolean;
+  binary: boolean;
+  size: number;
+}
+
 export const agentNativeMemoryApi = {
   list: (name: string) => call<NativeMemoryListOut>(`/agents/${enc(name)}/native-memory`),
+  files: (name: string, dir: string) =>
+    call<NativeMemoryFileTreeOut>(
+      `/agents/${enc(name)}/native-memory/files?${new URLSearchParams({ dir })}`,
+    ),
+  fileContent: (name: string, dir: string, path: string) =>
+    call<NativeMemoryFileContent>(
+      `/agents/${enc(name)}/native-memory/files/content?${new URLSearchParams({ dir, path })}`,
+    ),
 };

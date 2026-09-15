@@ -154,6 +154,24 @@ describe("AgentDetailPage", () => {
     expect(screen.getByRole("heading", { name: /edit agent/i })).toBeInTheDocument();
   });
 
+  test("?tab= opens that tab, so returning from a row's page keeps your place", () => {
+    // Memory and Conversations rows open their own detail pages; the back link
+    // on those pages carries ?tab= so the reader lands where they left rather
+    // than on Overview.
+    mockAgentLoaded();
+
+    renderAt("/agents/cur?tab=conversations");
+
+    expect(screen.getByRole("tab", { name: /conversations/i })).toHaveAttribute(
+      "data-state",
+      "active",
+    );
+    expect(screen.getByRole("tab", { name: /overview/i })).toHaveAttribute(
+      "data-state",
+      "inactive",
+    );
+  });
+
   test("shows a not-found message when the agent fails to load", () => {
     useAgentMock.mockReturnValue({
       data: undefined,

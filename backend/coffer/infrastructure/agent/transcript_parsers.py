@@ -1,6 +1,16 @@
 """Defensive per-agent transcript parsers (pure functions).
 
+What the browse list is made of: one ``.jsonl`` file in, one
+:class:`TranscriptSession` summary out. The record shapes themselves are not
+known here — :mod:`transcript_records` owns those, so that this module and
+:mod:`transcript_messages` agree on what a turn is — and what IS here is
+everything that only a *summary* needs: which user turn is worth a title, how
+to cut one down to a line, and which metadata records carry the session's cwd,
+id and timestamps.
+
 Design principles:
+- Take any iterable of lines — in production an open file handle, so a
+  transcript is streamed rather than held whole.
 - Never raise on a single bad line; skip and continue.
 - Count only natural-language *text* turns; tool_use / tool_result /
   function-call records carry no text and are not turns.
@@ -12,14 +22,18 @@ Design principles:
 
 from __future__ import annotations
 
-import json
-import logging
+import re
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import datetime
 
 from coffer.domain.agent.transcripts import TranscriptSession, scrub_secrets
-
-log = logging.getLogger(__name__)
+from coffer.infrastructure.agent.transcript_records import (
+    claude_turn,
+    codex_inner,
+    codex_turn,
+    iter_json_records,
+    parse_iso,
+)
 
 # Title cap — a session title is a single short line for the history table.
 _TITLE_MAX_CHARS = 80
@@ -40,94 +54,58 @@ _TITLE_NOISE_PREFIXES: tuple[str, ...] = (
     "caveat:",
 )
 
+# The prefixes above name the injected blocks seen most often, but naming them
+# one at a time never finishes: ``<turn_aborted>`` and ``<recommended_plugins>``
+# both reached the UI as session titles. What they have in common is the shape,
+# so match that instead — a "user turn" that is nothing but an XML/HTML-ish tag
+# block was written by the harness, not by a person.
+#
+# Narrow on purpose, in the same spirit as ``_SECRET_PATTERNS``: a tag is
+# ``<name>``, ``</name>``, ``<name attr="…">`` or ``<name/>`` with an
+# identifier-shaped name and no nested angle bracket. Prose that merely contains
+# a ``<`` — a comparison, an arrow, a shell redirect — matches nothing here and
+# survives.
+_TAG = re.compile(r"<\s*/?[A-Za-z_][\w.:-]*(?:\s[^<>]*)?/?>")
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
 
-def _parse_iso(ts: str | None) -> datetime | None:
-    """Parse an ISO-8601 timestamp string; return None on any failure.
-
-    Always returns a tz-aware datetime (UTC when no offset is present) so that
-    comparisons across sessions never raise TypeError on mixed aware/naive values.
-    """
-    if not ts:
-        return None
-    try:
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
+def _first_line(text: str) -> str:
+    """First non-empty line of *text*, stripped — what a title is made from."""
+    for line in text.strip().splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
 
 
-def _text_from_content(content: object) -> str | None:
-    """Extract plain text from a Claude ``content`` value (str or block list).
-
-    Returns None when the content carries no text at all (e.g. it is purely a
-    tool_use payload, which is not a conversational turn).
-    """
-    if isinstance(content, str):
-        return content or None
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            if block.get("type") == "text":
-                text = block.get("text")
-                if text:
-                    parts.append(str(text))
-            # tool_use / tool_result blocks are silently dropped
-        return "".join(parts) or None
-    return None
-
-
-def _text_from_codex_content(content: object) -> str | None:
-    """Extract text from a Codex message ``content`` (str or typed-block list).
-
-    Codex blocks use ``input_text`` / ``output_text`` (and plain ``text``);
-    tool / reasoning / other blocks are dropped.
-    """
-    if isinstance(content, str):
-        return content or None
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            btype = block.get("type", "")
-            if isinstance(btype, str) and (btype == "text" or btype.endswith("_text")):
-                text = block.get("text")
-                if text:
-                    parts.append(str(text))
-        return "".join(parts) or None
-    return None
+def _is_only_tags(text: str) -> bool:
+    """True when *text* has nothing left once tag-shaped spans are removed."""
+    return bool(text) and not _TAG.sub("", text).strip()
 
 
 def _is_real_user_text(text: str) -> bool:
     """True when *text* reads like a genuine human prompt suitable as a title.
 
     Filters out the non-conversational preambles (environment/instructions
-    blocks, shell-command echoes, slash commands) that lead most sessions.
+    blocks, shell-command echoes, slash commands) that lead most sessions, and
+    any turn that is only markup — either whole, or in the one line that would
+    have become the title.
     """
     stripped = text.strip()
     if not stripped:
         return False
     if stripped.startswith("/"):  # bare slash command, e.g. "/clear"
         return False
-    return not stripped.lower().startswith(_TITLE_NOISE_PREFIXES)
+    if stripped.lower().startswith(_TITLE_NOISE_PREFIXES):
+        return False
+    return not (_is_only_tags(stripped) or _is_only_tags(_first_line(stripped)))
 
 
 def _make_title(text: str) -> str:
     """First non-empty line of *text*, scrubbed, collapsed, and truncated."""
-    first_line = ""
-    for line in text.strip().splitlines():
-        if line.strip():
-            first_line = line.strip()
-            break
-    collapsed = " ".join(scrub_secrets(first_line).split())
+    collapsed = " ".join(scrub_secrets(_first_line(text)).split())
     if len(collapsed) > _TITLE_MAX_CHARS:
         return collapsed[: _TITLE_MAX_CHARS - 1].rstrip() + "…"
     return collapsed
@@ -159,25 +137,13 @@ def parse_claude_code(lines: Iterable[str], *, source_path: str) -> TranscriptSe
     ai_title: str | None = None
     first_user_title: str | None = None
 
-    for raw in lines:
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            record: dict[object, object] = json.loads(raw)
-        except json.JSONDecodeError:
-            log.debug("claude_code parser: skipping non-JSON line in %s", source_path)
-            continue
-
-        if not isinstance(record, dict):
-            continue
-
+    for record in iter_json_records(lines, source_path=source_path, label="claude_code parser"):
         # Extract metadata from any record that carries it (first wins).
         if project_path is None and isinstance(record.get("cwd"), str):
             project_path = record["cwd"]  # type: ignore[assignment]
         if session_id == source_path and isinstance(record.get("sessionId"), str):
             session_id = record["sessionId"]  # type: ignore[assignment]
-        ts = _parse_iso(record.get("timestamp"))  # type: ignore[arg-type]
+        ts = parse_iso(record.get("timestamp"))  # type: ignore[arg-type]
         if ts is not None:
             if started_at is None:
                 started_at = ts
@@ -190,15 +156,10 @@ def parse_claude_code(lines: Iterable[str], *, source_path: str) -> TranscriptSe
                 ai_title = _make_title(at)
             continue
 
-        msg_obj = record.get("message")
-        if not isinstance(msg_obj, dict):
+        turn = claude_turn(record)
+        if turn is None:
             continue
-        role = msg_obj.get("role")
-        if not isinstance(role, str):
-            continue
-        text = _text_from_content(msg_obj.get("content"))
-        if text is None:
-            continue
+        role, text = turn
         message_count += 1
         first_user_title = _title_from_user_text(first_user_title, role, text)
 
@@ -234,26 +195,12 @@ def parse_codex(lines: Iterable[str], *, source_path: str) -> TranscriptSession:
     last_activity_at: datetime | None = None
     first_user_title: str | None = None
 
-    for raw in lines:
-        raw = raw.strip()
-        if not raw:
-            continue
-        try:
-            record: dict[object, object] = json.loads(raw)
-        except json.JSONDecodeError:
-            log.debug("codex parser: skipping non-JSON line in %s", source_path)
-            continue
-
-        if not isinstance(record, dict):
-            continue
-
+    for record in iter_json_records(lines, source_path=source_path, label="codex parser"):
         kind = record.get("type")
-        payload = record.get("payload")
-        # Real rollout nests everything under ``payload``; flat/live shapes don't.
-        inner = payload if isinstance(payload, dict) else record
+        inner = codex_inner(record)
 
         # timestamp is top-level on every record (first → started, last → last_activity)
-        ts = _parse_iso(record.get("timestamp"))  # type: ignore[arg-type]
+        ts = parse_iso(record.get("timestamp"))  # type: ignore[arg-type]
         if ts is not None:
             if started_at is None:
                 started_at = ts
@@ -270,30 +217,10 @@ def parse_codex(lines: Iterable[str], *, source_path: str) -> TranscriptSession:
                     session_id = sid
             continue
 
-        role: object = None
-        content: object = None
-        if kind == "response_item" and inner.get("type") == "message":
-            role = inner.get("role")
-            content = inner.get("content")
-        elif kind == "message":  # flat fixture / legacy shape
-            role = record.get("role")
-            content = record.get("content")
-        elif kind == "item.completed":  # live stream shape — keep agent_message only
-            item = record.get("item")
-            if isinstance(item, dict) and item.get("type") == "agent_message":
-                text = item.get("text")
-                if isinstance(text, str) and text:
-                    message_count += 1
+        turn = codex_turn(record)
+        if turn is None:
             continue
-        else:
-            # event_msg (UI duplicate) + command_execution / file_change / tool_use … dropped
-            continue
-
-        if not isinstance(role, str):
-            continue
-        text = _text_from_codex_content(content)
-        if text is None:
-            continue
+        role, text = turn
         message_count += 1
         first_user_title = _title_from_user_text(first_user_title, role, text)
 

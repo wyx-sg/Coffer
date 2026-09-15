@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from datetime import UTC
 
-from coffer.infrastructure.agent.transcript_parsers import _parse_iso
 from coffer.infrastructure.agent.transcript_reader import parse_claude_code, parse_codex
+from coffer.infrastructure.agent.transcript_records import parse_iso as _parse_iso
 
 CLAUDE = [
     json.dumps(
@@ -326,3 +326,81 @@ def test_parse_iso_bare_timestamp_is_tz_aware() -> None:
 
     assert _parse_iso("not-a-timestamp") is None
     assert _parse_iso(None) is None
+
+
+# ---------------------------------------------------------------------------
+# A "user turn" that is nothing but markup is never a human prompt
+# ---------------------------------------------------------------------------
+
+
+def _codex_user_turns(*texts: str) -> list[str]:
+    lines = [json.dumps({"type": "session_meta", "payload": {"id": "s9", "cwd": "/repo"}})]
+    lines += [
+        json.dumps(
+            {
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": text}],
+                },
+            }
+        )
+        for text in texts
+    ]
+    return lines
+
+
+def test_parse_codex_title_skips_tag_blocks_it_has_no_literal_for() -> None:
+    """``<turn_aborted>`` and ``<recommended_plugins>`` both reached the UI as
+    titles. Neither is in the noise-prefix list, and neither needs to be: a turn
+    that is only markup is not a prompt."""
+    lines = _codex_user_turns(
+        "<turn_aborted>",
+        "<recommended_plugins>\n- coffer\n- ripgrep\n</recommended_plugins>",
+        "rename the retry helper",
+    )
+    s = parse_codex(lines, source_path="/tags.jsonl")
+    assert s.title == "rename the retry helper"
+    assert s.message_count == 3  # the noise turns are still turns
+
+
+def test_parse_codex_all_markup_turns_keep_the_existing_no_title_fallback() -> None:
+    """With no real user turn left, the title stays what it has always been for
+    a session with nothing to derive one from."""
+    s = parse_codex(
+        _codex_user_turns("<turn_aborted>", "<recommended_plugins/>"),
+        source_path="/allnoise.jsonl",
+    )
+    assert s.title is None
+    assert s.message_count == 2
+
+
+def test_parse_codex_prose_containing_an_angle_bracket_is_still_a_title() -> None:
+    """The bar the secret patterns set: narrow enough that ordinary prose — a
+    comparison, a generic type, a redirect — survives untouched."""
+    for text, expected in (
+        ("why does 3 < 4 fail here?", "why does 3 < 4 fail here?"),
+        ("use Array<string> for the ids", "use Array<string> for the ids"),
+        ("run make verify > out.log 2>&1", "run make verify > out.log 2>&1"),
+        ("<p>hello</p> is what it renders", "<p>hello</p> is what it renders"),
+    ):
+        s = parse_codex(_codex_user_turns(text), source_path="/prose.jsonl")
+        assert s.title == expected
+
+
+def test_parse_claude_title_skips_tag_blocks_too() -> None:
+    """The rule lives in the shared title helper, so both parsers get it."""
+    lines = [
+        json.dumps(
+            {
+                "type": "user",
+                "cwd": "/repo",
+                "sessionId": "c9",
+                "message": {"role": "user", "content": "<turn_aborted>"},
+            }
+        ),
+        json.dumps({"type": "user", "message": {"role": "user", "content": "add a health check"}}),
+    ]
+    s = parse_claude_code(lines, source_path="/tags-claude.jsonl")
+    assert s.title == "add a health check"

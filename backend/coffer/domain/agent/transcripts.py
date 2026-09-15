@@ -53,9 +53,12 @@ def is_transcript_file(path: Path) -> bool:
 class TranscriptSession:
     """One past conversation, projected to what the browse list needs.
 
-    Message *text* is deliberately absent: nothing reads it, and the reader
-    caches one of these per file for the daemon's lifetime — an agent with
-    thousands of past sessions would otherwise pin every transcript in memory.
+    Message *text* is deliberately absent: the list never shows it, and the
+    reader caches one of these per file for the daemon's lifetime — an agent
+    with thousands of past sessions would otherwise pin every transcript in
+    memory. Reading one session's turns is a separate, bounded act
+    (:class:`TranscriptSessionBody`) that streams the file again rather than
+    keeping anything.
     """
 
     session_id: str
@@ -68,6 +71,68 @@ class TranscriptSession:
     source_path: str = ""
     title: str | None = None
     last_activity_at: datetime | None = None
+
+
+#: Cap on one turn's text where it crosses the wire. A transcript runs to tens
+#: of megabytes and a single pasted turn can be a large fraction of that, so a
+#: page of a conversation is bounded twice over: by how many turns it carries
+#: (the caller's window) and by how much of any one turn it shows. Past this the
+#: text is cut and the turn says so — the whole file is one click away in the
+#: user's own editor, which is where an unbounded read belongs.
+MAX_MESSAGE_CHARS = 8_000
+
+
+@dataclass(frozen=True)
+class TranscriptMessage:
+    """One conversational turn, as a reader is allowed to see it.
+
+    ``text`` is already scrubbed (:func:`scrub_secrets`) and already cut to
+    ``MAX_MESSAGE_CHARS`` by the time one of these exists. That ordering is the
+    point: a transcript body is the one thing Coffer reads that can contain a
+    key the user pasted into a prompt, and until this feature no body left the
+    machine at all. Constructing the value IS the redaction, so there is no
+    window in which an unscrubbed turn is sitting in a variable waiting for
+    somebody downstream to remember.
+    """
+
+    role: str
+    text: str
+    timestamp: datetime | None = None
+    #: The turn was longer than ``MAX_MESSAGE_CHARS`` and ``text`` is its start.
+    truncated: bool = False
+
+
+@dataclass(frozen=True)
+class TranscriptSessionBody:
+    """One session's summary plus a bounded window of its turns.
+
+    ``session.message_count`` is the whole file's turn count; ``messages`` is
+    the ``limit`` turns starting at ``offset``. The two are deliberately
+    separate numbers — a reader looking at turns 0-199 of 812 should be told
+    that, not shown 200 and left to assume.
+    """
+
+    session: TranscriptSession
+    messages: list[TranscriptMessage]
+    offset: int
+    limit: int
+
+
+def is_session_of(agent_type_value: str, config_dir: Path, candidate: Path) -> bool:
+    """Whether *candidate* is one of this agent's own transcript files.
+
+    The containment rule behind reading a single session: the caller hands back
+    a ``source_path`` the listing gave it, and that is all the authority it has
+    — an arbitrary path must not become a file read. Both paths are expected to
+    be resolved already (so a symlink pointing out of the sessions dir is
+    caught here rather than followed), and an agent type with no transcript
+    layout contains nothing at all.
+    """
+    try:
+        root = sessions_dir(agent_type_value, config_dir)
+    except UnsupportedAgentTypeError:
+        return False
+    return is_transcript_file(candidate) and candidate.is_relative_to(root)
 
 
 # ---------------------------------------------------------------------------
@@ -102,8 +167,12 @@ def scrub_secrets(text: str) -> str:
 
 
 __all__ = [
+    "MAX_MESSAGE_CHARS",
+    "TranscriptMessage",
     "TranscriptSession",
+    "TranscriptSessionBody",
     "UnsupportedAgentTypeError",
+    "is_session_of",
     "is_transcript_file",
     "scrub_secrets",
     "sessions_dir",

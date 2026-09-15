@@ -89,6 +89,7 @@ from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_wiring import stop_converge_worker
 from coffer.surfaces.http.tidy_wiring import stop_tidy_worker, wire_tidy
+from coffer.surfaces.http.transcript_warm_wiring import stop_transcript_warm_worker
 
 
 def _db_url() -> str:
@@ -283,6 +284,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         tidy_pass=tidy_pass,
         organise=kinds.memory.organise,
         memory_service=kinds.memory.service,
+        transcript_reader=kinds.agent_skill.transcript_reader,
         resource_svc=resource_svc,
         audit=audit,
         engine_config=internal_engine_config_svc,
@@ -294,6 +296,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         master_key=credentials.master_key,
         sync_contributions=sync_contributions,
     )
+    # Published for the same reason ``app.state.kinds`` is: a test that asserts
+    # the lifespan actually started a worker needs a seam to reach it through,
+    # and the alternative is asserting the wiring by reading the wiring.
+    app.state.background_workers = workers
 
     # Channel adapter reconciler (spec channels). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
@@ -317,6 +323,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_tidy_worker(workers.tidy_task)
         await stop_organise_worker(workers.organise_task)
         await stop_aggregate_worker(workers.aggregate_task)
+        await stop_transcript_warm_worker(workers.warm_worker, workers.warm_task)
         # Stop channel adapters first so no new turns start mid-teardown.
         # Order matters: cancel the reconciler task BEFORE dispose() so an
         # in-flight tick cannot resurrect adapters dispose() just stopped;

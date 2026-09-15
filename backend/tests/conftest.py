@@ -40,6 +40,15 @@ os.environ.setdefault("COFFER_KNOWLEDGE_ROOT", str(_TEST_KNOWLEDGE_ROOT))
 _TEST_MEMORY_ROOT = Path(tempfile.gettempdir()) / "coffer-test-memory"
 os.environ.setdefault("COFFER_MEMORY_ROOT", str(_TEST_MEMORY_ROOT))
 
+# And once more for the agent layer's own derived state (the transcript
+# summary sidecar): ``paths.agent_state_root()`` falls back to
+# ``$HOME/.coffer/cache/agent``. Nothing under it is a truth — deleting it
+# only costs a slow listing — but a test run has no business writing into the
+# developer's ``~/.coffer`` at all, and a sidecar shared between tests would
+# hand one test the summaries another test's tree left behind.
+_TEST_AGENT_STATE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-agent-state"
+os.environ.setdefault("COFFER_AGENT_STATE_ROOT", str(_TEST_AGENT_STATE_ROOT))
+
 
 @pytest.fixture(autouse=True)
 def _isolated_knowledge_root(tmp_path, monkeypatch):
@@ -59,6 +68,18 @@ def _isolated_knowledge_root(tmp_path, monkeypatch):
 def _isolated_memory_root(tmp_path, monkeypatch):
     """Give every test its own memory tree, for the same reason as knowledge's."""
     monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory-root"))
+
+
+@pytest.fixture(autouse=True)
+def _isolated_agent_state_root(tmp_path, monkeypatch):
+    """Give every test its own transcript sidecar.
+
+    Isolation, not just safety: the sidecar is keyed by absolute path, and two
+    tests that both build a transcript tree under their own ``tmp_path`` would
+    otherwise share one file — so a test asserting "a cold reader parses every
+    file" would find another test's entries already sitting in it.
+    """
+    monkeypatch.setenv("COFFER_AGENT_STATE_ROOT", str(tmp_path / "agent-state"))
 
 
 # Accept any Host header across the suite. The loopback-Host guard

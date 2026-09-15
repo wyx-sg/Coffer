@@ -46,6 +46,11 @@ export const agentTranscriptsKey = <P extends object>(name: string, params?: P) 
   params
     ? (["agents", name, "conversations", params] as const)
     : (["agents", name, "conversations"] as const);
+/** One session's body, keyed by its FILE: `session_id` repeats across the
+ *  sidechain files a single conversation can leave behind, so the path is the
+ *  only thing that names exactly one of them. */
+export const agentTranscriptSessionKey = (name: string, sourcePath: string, offset: number) =>
+  ["agents", name, "conversations", "session", sourcePath, offset] as const;
 
 // ---------------------------------------------------------------------------
 // agentProviders — the turn platform's agent registry (/agent-providers)

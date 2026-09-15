@@ -12,12 +12,14 @@ exercised against a *real* filesystem in
 
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Callable
 
 from coffer.domain.agent.native_memory import (
     CodexGlobalLayout,
     NativeMemoryLayout,
     decode_project_slug,
+    is_native_memory_dir,
     native_memory_layout_for,
     resolve_project_slug,
 )
@@ -134,3 +136,40 @@ def test_resolve_without_leading_dash_delegates_to_the_lossy_decoder() -> None:
         "repo",
         "home/user/repo",
     )
+
+
+# ---------------------------------------------------------------------------
+# is_native_memory_dir — which directories a store's page may open
+# ---------------------------------------------------------------------------
+
+
+def test_is_native_memory_dir_accepts_only_the_layouts_own_shape() -> None:
+    """A client names the directory, so "is this a store" must be a real question.
+
+    Anything looser — "somewhere under the config dir" — would turn a surface
+    that says "memory" into a reader for the agent's transcripts, settings and
+    plugin cache, all of which live in the same tree.
+    """
+    config = pathlib.Path("/home/u/.claude")
+    layout = native_memory_layout_for(AgentType.CLAUDE_CODE)
+    store = config / "projects" / "-p-alpha" / "memory"
+
+    assert is_native_memory_dir(layout, config, store) is True
+    # The project dir holds the store, but is not one.
+    assert is_native_memory_dir(layout, config, store.parent) is False
+    # A sibling of the store under the same project is not one either.
+    assert is_native_memory_dir(layout, config, store.with_name("todos")) is False
+    # Nor is a "memory" dir at the wrong depth.
+    assert is_native_memory_dir(layout, config, config / "memory") is False
+
+
+def test_is_native_memory_dir_for_codex_is_the_single_global_store() -> None:
+    config = pathlib.Path("/home/u/.codex")
+    layout = native_memory_layout_for(AgentType.CODEX)
+    assert is_native_memory_dir(layout, config, config / "memories") is True
+    assert is_native_memory_dir(layout, config, config / "sessions") is False
+
+
+def test_an_agent_type_with_no_layout_contains_no_store() -> None:
+    """No layout is not "everything is a store"; it is "there are none"."""
+    assert is_native_memory_dir(None, pathlib.Path("/home/u"), pathlib.Path("/home/u/x")) is False

@@ -904,7 +904,25 @@
       "missing": "未检测到"
     },
     "noneDetected": "本机没有检测到 Agent，可在下方手动添加。",
-    "removeConfirmTitle": "移除 {{name}}？"
+    "removeConfirmTitle": "移除 {{name}}？",
+    "conversationDetail": {
+      "loadFailed": "无法加载这段对话。",
+      "roleUser": "你",
+      "roleAssistant": "Agent",
+      "noTurns": "这份记录中没有对话轮次。",
+      "turnTruncated": "这一轮内容过长，此处只显示开头——打开文件查看全文。",
+      "turnRange": "第 {{from}}–{{to}} 轮，共 {{total}} 轮",
+      "earlier": "更早的轮次",
+      "later": "更晚的轮次"
+    },
+    "memoryStore": {
+      "tree": "文件",
+      "selectFile": "选择一个文件查看。",
+      "binary": "二进制文件（{{size}} 字节）",
+      "truncated": "内容已截断——只显示文件开头。",
+      "readOnlyHint": "这些文件归 Agent 所有，它会自行改写；要修改请在编辑器中打开。",
+      "missingDir": "没有指定记忆存储——请从该 Agent 的「记忆」标签页进入。"
+    }
   },
   "skills": {
     "degradedBadge": "已复制",

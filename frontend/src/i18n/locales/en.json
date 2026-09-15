@@ -904,7 +904,25 @@
       "missing": "Not found"
     },
     "noneDetected": "No agents were detected on this machine. Add one manually below.",
-    "removeConfirmTitle": "Remove {{name}}?"
+    "removeConfirmTitle": "Remove {{name}}?",
+    "conversationDetail": {
+      "loadFailed": "Couldn't load this conversation.",
+      "roleUser": "You",
+      "roleAssistant": "Agent",
+      "noTurns": "This transcript has no conversational turns.",
+      "turnTruncated": "This turn was too long to show in full — open the file to read the rest.",
+      "turnRange": "Turns {{from}}–{{to}} of {{total}}",
+      "earlier": "Earlier turns",
+      "later": "Later turns"
+    },
+    "memoryStore": {
+      "tree": "Files",
+      "selectFile": "Select a file to view.",
+      "binary": "Binary file ({{size}} bytes)",
+      "truncated": "Content truncated — showing the start of the file.",
+      "readOnlyHint": "The agent owns these files and rewrites them; open one in your editor to change it.",
+      "missingDir": "No memory store was named — open one from the agent's Memory tab."
+    }
   },
   "skills": {
     "degradedBadge": "Copied",
