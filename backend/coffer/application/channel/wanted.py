@@ -26,14 +26,19 @@ changing.
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from coffer.application.channel.agent_vocabulary import (
+    agent_key_by_name,
+    as_agent_keys,
+    drives,
+)
 from coffer.application.channel.runtime_supervision import Desired
 from coffer.domain.channel.config import DEFAULT_AGENT
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope, is_active
+from coffer.domain.scope import Scope
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from coffer.application.resource_service import ResourceService
@@ -60,9 +65,11 @@ class Gate:
     _machine_id: str | None = None
     #: The binding of each channel already reported as not this machine's.
     _foreign: dict[str, object] = field(default_factory=dict)
-    #: The scope of each channel the last pass found live, keyed by name. Read
-    #: back by the runtime, which stamps it onto the binding at start — so a
-    #: scope edit reaches `/agent` within one tick rather than at the next
+    #: The scope of each channel the last pass found live, keyed by name, and
+    #: rewritten into agent KEYS (``agent_vocabulary.as_agent_keys``) because
+    #: that is the vocabulary every reader downstream of the binding speaks.
+    #: Read back by the runtime, which stamps it onto the binding at start — so
+    #: a scope edit reaches `/agent` within one tick rather than at the next
     #: daemon restart.
     scopes: dict[str, Scope | None] = field(default_factory=dict)
 
@@ -77,16 +84,21 @@ class Gate:
     async def wanted(self, resources: ResourceService) -> Desired:
         """Every channel this machine should be running, right now."""
         local = await self.machine_id()
+        # A scope names agents by RESOURCE NAME and a channel names its default
+        # by AGENT KEY, so the gate needs the registry to compare them at all
+        # (``agent_vocabulary``). Read once per pass: an agent registered mid-
+        # tick is picked up on the next one, two seconds later.
+        agent_keys = agent_key_by_name(await resources.list(kind="agent"))
         live: list[Resource] = []
         for r in await resources.list(kind="channel"):
             if not r.enabled:
                 continue
             if not self._bound_here(r, local):
                 continue
-            if not self._may_drive(r):
+            if not self._may_drive(r, agent_keys):
                 continue
             live.append(r)
-        self.scopes = {r.name: r.scope for r in live}
+        self.scopes = {r.name: as_agent_keys(r.scope, agent_keys) for r in live}
         return {r.name: (r.id, dict(r.config)) for r in live}
 
     def _bound_here(self, r: Resource, local: str | None) -> bool:
@@ -118,7 +130,7 @@ class Gate:
             )
         return False
 
-    def _may_drive(self, r: Resource) -> bool:
+    def _may_drive(self, r: Resource, agent_keys: Mapping[str, str]) -> bool:
         """Whether the channel may drive its own default agent.
 
         A channel's scope names the agents it may DRIVE (ADR
@@ -135,11 +147,16 @@ class Gate:
         than narrowing to that check, as defence-in-depth for a row that
         predates the scope-path validation and could still carry the
         inconsistent combination.
+
+        ``agent_keys`` is the registry's name→key map: the scope answers in
+        resource names and ``default_agent`` is an agent key, so without it
+        this compared two vocabularies and read every correctly-narrowed scope
+        as excluding the channel's own agent (``agent_vocabulary``).
         """
         # Read straight off the stored config rather than parsing it: a row this
         # cannot read is not one the adapter factory could start either.
-        default_agent = r.config.get("default_agent") or DEFAULT_AGENT
-        if is_active(r.scope, str(default_agent)):
+        default_agent = str(r.config.get("default_agent") or DEFAULT_AGENT)
+        if drives(r.scope, default_agent, agent_keys):
             return True
         # The scope and the agent it refused are both in the record, so the
         # reason a bot went quiet is readable without reconstructing the

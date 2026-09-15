@@ -25,6 +25,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.agent_vocabulary import agent_key_by_name
 from coffer.application.channel.inbound import ChannelBinding, InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
@@ -39,6 +40,7 @@ from coffer.application.chat.turn_orchestrator import (
 )
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
+from coffer.domain.agent.config import AgentConfig
 from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
@@ -51,7 +53,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Kind, Resource, ResourceRef
 from coffer.domain.scope import Scope
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
@@ -736,6 +738,18 @@ class ChannelEnv:
         self.registry.register(provider, display_name=agent_key.title())
         return provider
 
+    async def register_agent_resource(self, name: str, agent_key: str) -> Resource:
+        """An agent RESOURCE — what a scope actually names.
+
+        The turn platform's registry (``add_agent``) is keyed by agent key; the
+        resource table is keyed by the name the owner gave the agent, and the
+        two are only ever the same string by coincidence. A test about scope
+        needs the row, because the row is where the translation comes from.
+        """
+        return await self.resources.register(
+            kind="agent", name=name, config={"type": agent_key}, actor="test"
+        )
+
     async def register_channel(
         self,
         name: str = "tg",
@@ -886,7 +900,17 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     async def on_delete(ref: ResourceRef) -> None:
         await runtime.evict(ref.name)
 
-    kinds["channel"] = make_channel_kind(on_delete=on_delete)
+    async def agent_types() -> dict[str, str]:
+        """The registry's name→key map, wired exactly as production wires it —
+        a scope names agent RESOURCES and a channel names an agent KEY, so
+        without this the kind's two validators compare two vocabularies."""
+        return agent_key_by_name(await resources.list(kind="agent"))
+
+    kinds["channel"] = make_channel_kind(on_delete=on_delete, agent_types=agent_types)
+    # Enough of the agent kind for a scope to have something to name. The real
+    # one carries on-disk lifecycle these tests have no use for; what they need
+    # is that `kind=agent` rows exist and validate their config the same way.
+    kinds["agent"] = Kind(name="agent", display_name="Agent", config_schema=AgentConfig)
 
     service = ChannelService(
         resources=resources, peers=peers, pairing=pairing, runtime=runtime, audit=audit

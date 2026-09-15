@@ -23,6 +23,7 @@ import httpx
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
+from coffer.application.channel.agent_vocabulary import agent_key_by_name
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
@@ -158,6 +159,17 @@ def wire_channel_kind(
         the row carries right now."""
         return (await resource_svc.get(ref)).scope
 
+    async def agent_types() -> dict[str, str]:
+        """Every registered agent's resource NAME mapped to its agent KEY.
+
+        The channel surfaces speak agent keys (``claude_code``) because that is
+        what the turn platform routes on; a scope speaks resource names
+        (``claude-code``) because that is what an agent resource is called.
+        This is the one place the two meet, so the checks compare in a single
+        vocabulary instead of rejecting every correctly-narrowed scope.
+        """
+        return agent_key_by_name(await resource_svc.list(kind="agent"))
+
     app.state.kinds["channel"] = make_channel_kind(
         on_delete=on_delete,
         # Validate a channel's default_agent against the live agent registry at
@@ -167,6 +179,8 @@ def wire_channel_kind(
         # ...and against the agents this channel may drive (ADR per-agent-resource-scope), so
         # an edit cannot bind it to an agent its scope excludes.
         scope_of=channel_scope,
+        # …read in the same vocabulary the channel's own default_agent uses.
+        agent_types=agent_types,
         # ...except for a channel bound to another machine, whose agents are
         # that machine's business. Without this a converged channel would be
         # refused at this registry's door for a fault on nobody's machine.

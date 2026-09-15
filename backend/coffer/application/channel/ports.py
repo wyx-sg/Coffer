@@ -214,12 +214,15 @@ class ChannelBinding:
     # Group inbound gating (FR-035), sourced from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
-    # The channel's framework-level ``scope``, carried whole off the resource
-    # row (ADR per-agent-resource-scope). It names the agents this channel may
-    # drive; an unrestricted scope — every agent — is the default and what every
-    # channel carried before scope existed. A channel whose scope is empty is
-    # never bound at all: the runtime treats it as dormant and does not start
-    # its adapter. So a binding that exists has already passed that gate.
+    # The channel's framework-level ``scope`` off the resource row (ADR
+    # per-agent-resource-scope), rewritten into agent KEYS by the gate
+    # (``agent_vocabulary.as_agent_keys``) — the row itself names agent
+    # RESOURCES, and every reader below here asks about a key. It names the
+    # agents this channel may drive; an unrestricted scope — every agent — is
+    # the default and what every channel carried before scope existed. A
+    # channel whose scope is empty is never bound at all: the runtime treats it
+    # as dormant and does not start its adapter. So a binding that exists has
+    # already passed that gate.
     agent_scope: Scope | None = None
 
 
