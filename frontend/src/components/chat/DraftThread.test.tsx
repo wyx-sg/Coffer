@@ -10,17 +10,11 @@ import type { Provider } from "@/lib/api/providers";
 
 // The model picker (and the no-connection empty state) read the providers list.
 vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
-vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  // The picker introspects the active connection on open; return its catalogue.
-  useListProviderModels: () => ({
-    mutate: (
-      _probe: unknown,
-      opts: { onSuccess?: (r: { models: { id: string; modality: string }[] }) => void },
-    ) => opts?.onSuccess?.({ models: [{ id: "claude-opus-4-8", modality: "text" }] }),
-  }),
-}));
-
-// The effort picker reads the daemon-served model catalogue for its levels.
+// The model AND effort pickers both read the daemon's answer now — with a
+// connection active it is that connection's curated ids, resolved server-side.
+// The picker used to introspect the endpoint from the browser and union the
+// result with the agent's own catalogue; it no longer reaches the network at
+// all, so there is no introspection hook to mock here.
 vi.mock("@/lib/hooks/useAgentModels", () => ({ useAgentModels: vi.fn() }));
 
 import { useProviders } from "@/lib/hooks/useProviders";
@@ -112,11 +106,11 @@ describe("DraftThread", () => {
   test("offers a model picker beside the agent selector and commits the choice", () => {
     const onModelChange = vi.fn();
     renderDraft({ onModelChange });
-    // The active connection's introspected models are listed — pick one.
+    // Whatever the daemon offered for this agent is what the dropdown lists.
     const trigger = screen.getByRole("combobox", { name: /agent model/i });
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    fireEvent.click(screen.getByRole("option", { name: "claude-opus-4-8" }));
-    expect(onModelChange).toHaveBeenCalledWith("claude-opus-4-8");
+    fireEvent.click(screen.getByRole("option", { name: /^Opus 5\s*opus$/ }));
+    expect(onModelChange).toHaveBeenCalledWith("opus");
   });
 
   acceptance("channels", "chat runs on the built-in model when no connection", () => {

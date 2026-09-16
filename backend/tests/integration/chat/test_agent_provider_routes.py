@@ -63,11 +63,29 @@ def _agent_resource(config_dir: pathlib.Path, *, agent_type: str = "claude_code"
     )
 
 
-def _build_app(agents: _FakeAgents) -> FastAPI:
+class _FakeActiveConnection:
+    """The provider kind narrowed to the one question the catalogue asks it.
+
+    ``None`` = no active connection reaches this agent; ``[]`` = one is active
+    but curates nothing; a list = exactly the ids ticked on its detail page.
+    """
+
+    def __init__(self, curated: list[str] | None) -> None:
+        self._curated = curated
+
+    async def curated_models(self, agent_key: str) -> list[str] | None:
+        return None if self._curated is None else list(self._curated)
+
+
+def _build_app(agents: _FakeAgents, curated: list[str] | None = None) -> FastAPI:
     registry = AgentProviderRegistry()
     registry.register(FakeAgentProvider(None, agent_key="claude_code"), display_name="Claude Code")
     registry.register(FakeAgentProvider(None, agent_key="codex"), display_name="Codex")
-    catalogue = AgentModelCatalogueService(agents=agents, discovery=NativeConfigModelDiscovery())
+    catalogue = AgentModelCatalogueService(
+        agents=agents,
+        discovery=NativeConfigModelDiscovery(),
+        provider_models=_FakeActiveConnection(curated),
+    )
 
     app = FastAPI()
     err_handlers.register(app)
@@ -210,3 +228,112 @@ def test_the_catalogue_is_never_narrowed_by_anything_on_the_agent(
         "claude-opus-5",
         "claude-mythos-5",
     ]
+
+
+# ---------------------------------------------------------------------------
+# One list, everywhere.
+#
+# This route is what the web Chat page's model and effort pickers read; a
+# channel's `/model` card reads `offered()` in-process. They must answer the
+# same question, and they did not: the route served `catalogue()` — the agent's
+# own login — so with a connection active the page offered models the endpoint
+# would reject, while the chat card offered the curated ones.
+#
+# The harness above wires no provider layer by default, which is why every test
+# written before this one passes either way: `catalogue()` and `offered()` agree
+# exactly when no connection is active.
+# ---------------------------------------------------------------------------
+
+
+def _claude_agent_with_own_model(tmp_path: pathlib.Path) -> _FakeAgents:
+    config_dir = tmp_path / ".claude"
+    config_dir.mkdir()
+    (tmp_path / ".claude.json").write_text(
+        json.dumps(
+            {
+                "additionalModelOptionsCache": [
+                    {
+                        "value": "claude-fable-5-1[1m]",
+                        "label": "Fable",
+                        "description": "Most capable",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return _FakeAgents([_agent_resource(config_dir)])
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="every surface offers the same models",
+)
+def test_an_active_curated_connection_replaces_the_agents_own_catalogue(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The curated ids ARE the list — the agent's own login is not mixed in.
+
+    Mixing them offers ids the endpoint would reject: an active connection means
+    the turns do not go to the account the agent's catalogue describes.
+    """
+    agents = _claude_agent_with_own_model(tmp_path)
+
+    set_active_token(_TOKEN)
+    with TestClient(_build_app(agents, curated=["gw/big", "gw/small"])) as client:
+        resp = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
+
+    assert resp.status_code == 200, resp.text
+    ids = [m["id"] for m in resp.json()["models"]]
+    assert ids == ["gw/big", "gw/small"], ids
+    assert "claude-fable-5-1[1m]" not in ids, (
+        "the agent's own model survived an active connection — that id does not "
+        "exist on the endpoint the turns now go to"
+    )
+
+
+def test_an_id_the_agent_also_knows_keeps_its_reasoning_levels(tmp_path: pathlib.Path) -> None:
+    """Levels are not the endpoint's to answer — they are a setting on the
+    agent's own runtime, and the turn still goes through that runtime. So a
+    curated id the agent also reports keeps its effort menu; the effort picker
+    beside the model must not empty the moment a connection goes active."""
+    agents = _claude_agent_with_own_model(tmp_path)
+
+    set_active_token(_TOKEN)
+    with TestClient(_build_app(agents, curated=["claude-fable-5-1[1m]", "gw/unknown"])) as client:
+        resp = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
+
+    by_id = {m["id"]: m for m in resp.json()["models"]}
+    assert by_id["claude-fable-5-1[1m]"]["efforts"] == list(claude_effort_levels()), by_id
+    assert by_id["gw/unknown"]["efforts"] == [], "an id the agent never heard of reports no levels"
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="every surface offers the same models",
+)
+def test_a_connection_that_curates_nothing_falls_back_to_the_agents_catalogue(
+    tmp_path: pathlib.Path,
+) -> None:
+    """``[]`` means "no restriction": Coffer knows where the turns go, not what
+    that endpoint serves, and this read must not ask over the network."""
+    agents = _claude_agent_with_own_model(tmp_path)
+
+    set_active_token(_TOKEN)
+    with TestClient(_build_app(agents, curated=[])) as client:
+        resp = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
+
+    assert [m["id"] for m in resp.json()["models"]] == ["claude-fable-5-1[1m]"]
+
+
+def test_with_no_active_connection_the_agents_own_catalogue_is_the_list(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The built-in-login case, unchanged."""
+    agents = _claude_agent_with_own_model(tmp_path)
+
+    set_active_token(_TOKEN)
+    with TestClient(_build_app(agents, curated=None)) as client:
+        resp = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
+
+    assert [m["id"] for m in resp.json()["models"]] == ["claude-fable-5-1[1m]"]

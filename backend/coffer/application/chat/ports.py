@@ -103,13 +103,21 @@ class CatalogueModel(Protocol):
 
 
 class ModelCatalogPort(Protocol):
-    """The models each registered agent can be put on.
+    """What a model picker should OFFER for each registered agent.
 
     Answered by the agent kind (its catalogue service reads the agent's own
-    executable, RPC and config), consumed by the turn platform's
-    ``/agent-providers/{agent_key}/models`` route. Declared here so the chat
-    kind never imports the agent kind: the composition root hands the agent
-    service in, and it satisfies this port structurally.
+    executable, RPC and config, and narrows by the active connection), consumed
+    by the turn platform's ``/agent-providers/{agent_key}/models`` route.
+    Declared here so the chat kind never imports the agent kind: the
+    composition root hands the agent service in, and it satisfies this port
+    structurally.
+
+    ``offered``, not ``catalogue``: the catalogue is what the agent can run on
+    its OWN login, and an active connection means the turns do not go there.
+    The web picker used to read the catalogue and merge the endpoint's models
+    into it in the browser, so it offered ids that endpoint would reject, while
+    a channel's ``/model`` card — which has always read ``offered`` in-process
+    — offered the curated ones. One question, one answer, both surfaces.
     """
 
-    async def catalogue(self, agent_key: str) -> Sequence[CatalogueModel]: ...
+    async def offered(self, agent_key: str) -> Sequence[CatalogueModel]: ...

@@ -27,7 +27,10 @@ export type Protocol = Schemas["Protocol"];
 // framework per-agent scope (ADR per-agent-resource-scope), so it appears only on
 // the read side (`Provider.compatible_agents`) and is changed through
 // `PUT /resources/provider/{name}/scope` (see `lib/api/scope.ts`).
-export type AgentType = Schemas["AgentType"];
+// Not exported: `@/lib/api/agents` is where the rest of the app takes this
+// type from, and two names for one enum is how they drift. It is only
+// spelled here because `compatible_agents` below is typed with it.
+type AgentType = Schemas["AgentType"];
 
 /**
  * What KIND of model a curated entry names (provider-switching FR-029). One

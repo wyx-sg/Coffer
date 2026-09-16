@@ -3,16 +3,27 @@
 // Per-conversation model picker for a managed agent (the
 // builtin-agent-is-internal-capability and provider-switching ADRs, D4). The
 // value is `agent_config.model`, passed through to the agent's CLI. The picker
-// is a FIXED dropdown — never free-text (D4). Its options are the UNION, deduped
-// by id, of: the agent's own model catalogue from the daemon (curated aliases
-// first, then ids discovered from the agent's config), the active connection's
-// introspected models (fetched lazily on first open), and the current value so
-// it always stays selectable. The union matters: a connection being active does
-// not mean every chat runs through it, so hiding the agent's own models behind
-// an active connection left real models unreachable. It does NOT read the
-// connection's stored `model`/`fast_model` (those leave the connection in the E1
-// amendment). An empty value inherits the agent's projected default.
-import { useEffect, useMemo, useRef, useState } from "react";
+// is a FIXED dropdown — never free-text (D4).
+//
+// Its options are the daemon's answer, plus the current value so it always
+// stays selectable. Nothing else. `/agent-providers/{key}/models` serves
+// `offered()`: the agent's own catalogue on its built-in login, or the active
+// connection's curated ids when one is active — and it is the same function a
+// channel's `/model` card reads, so the page and the chat cannot disagree.
+//
+// This component used to answer the question itself: it pulled every
+// connection into the browser, found the active one, introspected its endpoint
+// on first open, and offered the UNION of that and the agent's catalogue. The
+// union was the bug. An active connection is projected into the agent's own
+// config, so every turn goes to that endpoint — and the agent's own ids
+// (`opus`, `sonnet`) do not exist there. The page offered models that would be
+// rejected, the chat card offered the curated ones, and the page's list also
+// changed depending on whether the endpoint happened to answer at that moment.
+//
+// It does NOT read the connection's stored `model`/`fast_model` (those left the
+// connection in the E1 amendment). An empty value inherits the agent's
+// projected default.
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -22,10 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { modelIds, type AgentType } from "@/lib/api/providers";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
-import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
-import { useProviders } from "@/lib/hooks/useProviders";
 
 // Sentinel select value for "inherit the projected default". Real model ids are
 // arbitrary strings; Radix forbids an empty-string item value, so this reserved
@@ -49,40 +57,7 @@ interface Props {
 
 export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Props) {
   const { t } = useTranslation();
-  const [fetched, setFetched] = useState<string[]>([]);
-  const introspected = useRef(false);
-
-  // The picker is reused in place when the agent changes (draft selector swap,
-  // or switching to a conversation bound to a different agent). Drop the
-  // previous agent's introspected catalogue so its models don't leak into the
-  // new agent's suggestions, and allow the new agent to be introspected.
-  useEffect(() => {
-    introspected.current = false;
-    setFetched([]);
-  }, [agentKey]);
-
-  const providers = useProviders();
-  const list = useListProviderModels();
-  const catalogue = useAgentModels(agentKey);
-
-  // The active connection for this agent is matched by its compatible-agents set
-  // (not its wire), so a connection the user routed to this agent shows up even if
-  // its endpoint speaks a different wire (the agnes case: an openai gateway →
-  // Claude Code) — consistent with the Agent Overview picker.
-  //
-  // `enabled` is tested alongside `is_active` because they answer different
-  // questions and can disagree: `compatible_agents` reports the CONFIGURED
-  // reach (not narrowed by the switch), and `is_active` is a claim about the
-  // agent's config file that the daemon's boot self-check exists to correct. A
-  // connection the user switched off is not one to offer models from.
-  const activeConnection = useMemo(
-    () =>
-      (providers.data ?? []).find(
-        (p) =>
-          p.enabled && p.is_active && (p.compatible_agents ?? []).includes(agentKey as AgentType),
-      ) ?? null,
-    [providers.data, agentKey],
-  );
+  const offered = useAgentModels(agentKey);
 
   const suggestions = useMemo(() => {
     const out: Option[] = [];
@@ -92,33 +67,13 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
       seen.add(id);
       out.push({ id, label: label && label !== id ? label : undefined });
     };
-    // The agent's own catalogue first — the models it runs on its own login.
-    for (const m of catalogue.data ?? []) add(m.id, m.label);
-    // Then whatever the active connection's endpoint advertises.
-    for (const m of fetched) add(m);
-    // Always keep the current value selectable, even when it is in neither list.
+    for (const m of offered.data ?? []) add(m.id, m.label);
+    // Always keep the current value selectable, even when the daemon no longer
+    // offers it — a model bound before the connection changed must not vanish
+    // from the control that is displaying it.
     if (value) add(value);
     return out;
-  }, [catalogue.data, fetched, value]);
-
-  // Pull the connection's catalogue once, the first time the dropdown is opened.
-  // Best-effort: a connection that can't list models just yields nothing.
-  const introspect = () => {
-    if (introspected.current || !activeConnection) return;
-    introspected.current = true;
-    list.mutate(
-      {
-        // Introspect with the connection's OWN wire (how to call its endpoint),
-        // not the agent's — they can differ (the agnes case).
-        provider: activeConnection.protocol,
-        base_url: activeConnection.base_url,
-        credential_ref: activeConnection.credential_ref,
-      },
-      // A connection's catalogue carries a modality per entry; only the text
-      // models can be a chat model.
-      { onSuccess: (r) => setFetched(modelIds(r.models, "text")) },
-    );
-  };
+  }, [offered.data, value]);
 
   const commit = (next: string | null) => {
     const norm = next?.trim() || null;
@@ -134,7 +89,6 @@ export function ModelPicker({ agentKey, value, onCommit, disabled = false }: Pro
       disabled={disabled}
       value={selectValue}
       onValueChange={(v) => commit(v === INHERIT ? null : v)}
-      onOpenChange={(open) => open && introspect()}
     >
       <SelectTrigger className="h-7 w-44 text-sm" aria-label={t("chat.modelPicker.label")}>
         <SelectValue placeholder={t("chat.modelPicker.placeholder")} />

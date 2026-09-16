@@ -4,18 +4,16 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { acceptance } from "@/test/acceptance";
 import { ModelPicker } from "./ModelPicker";
 
-vi.mock("@/lib/hooks/useProviders", () => ({ useProviders: vi.fn() }));
-vi.mock("@/lib/hooks/useModelIntrospection", () => ({ useListProviderModels: vi.fn() }));
 vi.mock("@/lib/hooks/useAgentModels", () => ({ useAgentModels: vi.fn() }));
+// Mocked though the component no longer reads it — see the guard test below.
+vi.mock("@/lib/hooks/useModelIntrospection", () => ({ useListProviderModels: vi.fn() }));
 
 import type { AgentModel } from "@/lib/api/agentModels";
 import { useAgentModels } from "@/lib/hooks/useAgentModels";
 import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
-import { useProviders } from "@/lib/hooks/useProviders";
 
-const useProvidersMock = useProviders as unknown as ReturnType<typeof vi.fn>;
-const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 const useAgentModelsMock = useAgentModels as unknown as ReturnType<typeof vi.fn>;
+const useListMock = useListProviderModels as unknown as ReturnType<typeof vi.fn>;
 
 /** The daemon-served catalogue per agent, read back from the installed agent
  * (`fable` is the case no frontend constant could have known about). */
@@ -45,29 +43,6 @@ const CATALOGUE: Record<string, AgentModel[]> = {
   ],
 };
 
-function makeConnection(over: Record<string, unknown> = {}) {
-  const merged = {
-    name: "p1",
-    protocol: "anthropic",
-    base_url: "https://api.example",
-    credential_ref: "ref",
-    // The stored model/fast_model must NEVER feed the picker (D4 / E1).
-    is_active: true,
-    internal_default: false,
-    enabled: true,
-    created_at: "",
-    updated_at: "",
-    ...over,
-  };
-  // The picker matches the active connection by its compatible-agents set; default
-  // it from the wire unless a test pins it explicitly.
-  return {
-    ...merged,
-    compatible_agents:
-      over.compatible_agents ?? (merged.protocol === "openai" ? ["codex"] : ["claude_code"]),
-  };
-}
-
 /** Open the Radix Select trigger and return its rendered option labels.
  *
  * jsdom has no PointerEvent, so drive the trigger via the keyboard (Radix opens
@@ -78,15 +53,8 @@ function openAndReadOptions(): string[] {
   return screen.getAllByRole("option").map((o) => o.textContent ?? "");
 }
 
-/** mutate stub that resolves list-models introspection with the given ids. */
-function introspectReturning(ids: string[]) {
-  const models = ids.map((id) => ({ id, modality: "text" }));
-  return vi.fn((_probe, opts) => opts.onSuccess({ models, message: "" }));
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
-  useProvidersMock.mockReturnValue({ data: [makeConnection()] });
   useListMock.mockReturnValue({ mutate: vi.fn() });
   useAgentModelsMock.mockImplementation((agentKey: string) => ({
     data: CATALOGUE[agentKey] ?? [],
@@ -98,8 +66,8 @@ describe("ModelPicker", () => {
     "provider-switching",
     "the agent's model picker offers a fixed list without free-form entry",
     () => {
-      // (A) No overriding connection for the agent → fixed built-in list, no
-      // "Custom…" escape hatch, and no free-text input anywhere.
+      // (A) The agent on its own login → its own catalogue, no "Custom…"
+      // escape hatch, and no free-text input anywhere.
       const codex = render(<ModelPicker agentKey="codex" value={null} onCommit={vi.fn()} />);
       let options = openAndReadOptions();
       expect(options).toContain("gpt-5-codex");
@@ -107,81 +75,66 @@ describe("ModelPicker", () => {
       expect(screen.queryByRole("textbox")).toBeNull();
       codex.unmount();
 
-      // (B) A connection is active for the agent → the dropdown lists the
-      // connection's INTROSPECTED models, never its stored `model`/`fast_model`.
-      useListMock.mockReturnValue({
-        mutate: introspectReturning(["claude-sonnet-4-6", "claude-3-5-haiku"]),
-      });
+      // (B) A connection is active → the daemon answers with its curated ids,
+      // and the list is still fixed. The picker does not decide this and never
+      // did know the connection's stored model/fast_model.
+      useAgentModelsMock.mockImplementation(() => ({
+        data: [
+          { id: "claude-sonnet-4-6", label: "", description: "", efforts: [], default_effort: null },
+          { id: "claude-3-5-haiku", label: "", description: "", efforts: [], default_effort: null },
+        ],
+      }));
       render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
       options = openAndReadOptions();
       expect(options).toContain("claude-sonnet-4-6");
       expect(options).toContain("claude-3-5-haiku");
-      // The stored connection model/fast_model are NOT offered.
       expect(options).not.toContain("claude-opus-4-8");
       expect(options.some((o) => /custom/i.test(o))).toBe(false);
     },
   );
 
-  test("a connection the user switched off is not treated as active", () => {
-    // `compatible_agents` reports the CONFIGURED reach and is deliberately not
-    // narrowed by `enabled`, so the picker has to test the switch itself. Before
-    // it did, a disabled connection still counted as the agent's active one and
-    // its introspected ids replaced the agent's own catalogue.
-    useProvidersMock.mockReturnValue({
-      data: [makeConnection({ enabled: false, compatible_agents: ["claude_code"] })],
-    });
-    const mutate = introspectReturning(["agnes-2.0"]);
+  test("the daemon's answer IS the list — nothing is merged into it here", () => {
+    // `/agent-providers/{key}/models` serves `offered()`: with a connection
+    // active for this agent, its curated ids ARE the list, because the turns go
+    // to that endpoint and not to the account the agent's own catalogue
+    // describes. The picker used to fetch the endpoint itself and union the two,
+    // so it offered ids the endpoint would reject — and disagreed with the
+    // `/model` card in a chat, which has always read the same `offered()`.
+    useAgentModelsMock.mockImplementation(() => ({
+      data: [{ id: "gw/big", label: "", description: "", efforts: [], default_effort: null }],
+    }));
+    // Resolving with the agent's own ids, so a picker that still introspected
+    // would visibly merge them back in.
+    const mutate = vi.fn((_probe, opts) =>
+      opts.onSuccess({ models: [{ id: "opus", modality: "text" }], message: "" }),
+    );
     useListMock.mockReturnValue({ mutate });
+
     render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
     const options = openAndReadOptions();
-    expect(options).not.toContain("agnes-2.0");
+
+    expect(options).toContain("gw/big");
+    expect(options.some((o) => o.includes("opus"))).toBe(false);
+    expect(options.some((o) => o.includes("sonnet"))).toBe(false);
     expect(mutate).not.toHaveBeenCalled();
-    // It falls back to the agent's own catalogue, as with no connection at all.
-    expect(options.some((o) => /Opus/.test(o))).toBe(true);
   });
 
-  test("selecting a listed (introspected) model commits it", () => {
+  test("selecting a model the daemon offered commits it", () => {
     const onCommit = vi.fn();
-    useListMock.mockReturnValue({ mutate: introspectReturning(["claude-sonnet-4-6"]) });
+    useAgentModelsMock.mockImplementation(() => ({
+      data: [
+        { id: "claude-sonnet-4-6", label: "", description: "", efforts: [], default_effort: null },
+      ],
+    }));
     render(<ModelPicker agentKey="claude_code" value={null} onCommit={onCommit} />);
     openAndReadOptions();
     fireEvent.click(screen.getByRole("option", { name: "claude-sonnet-4-6" }));
     expect(onCommit).toHaveBeenCalledWith("claude-sonnet-4-6");
   });
 
-  test("introspects on first open only (not on the second open)", () => {
-    const mutate = introspectReturning(["claude-sonnet-4-6"]);
-    useListMock.mockReturnValue({ mutate });
-    render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
-    const trigger = screen.getByRole("combobox", { name: /agent model/i });
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    fireEvent.keyDown(trigger, { key: "ArrowDown" }); // second open must not re-fetch
-    expect(mutate).toHaveBeenCalledTimes(1);
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toContain("claude-sonnet-4-6");
-  });
-
-  test("an active connection no longer hides the agent's own catalogue (D3)", () => {
-    // Regression: the picker used to be either/or — an active connection replaced
-    // the agent's catalogue, so a Claude Code chat actually running on Anthropic
-    // was offered only the connection's ids. The options are now a union.
-    useListMock.mockReturnValue({ mutate: introspectReturning(["agnes-2.0", "agnes-1.5-flash"]) });
-    render(<ModelPicker agentKey="claude_code" value={null} onCommit={vi.fn()} />);
-    const options = openAndReadOptions();
-    expect(options).toContain("agnes-2.0");
-    // A catalogue row renders as "<display name><id>", so match on the id.
-    expect(options.some((o) => o.includes("opus"))).toBe(true);
-    expect(options.some((o) => o.includes("sonnet"))).toBe(true);
-    // Catalogue first, then the connection's ids (the backend's order is kept).
-    expect(options.indexOf("agnes-2.0")).toBeGreaterThan(
-      options.findIndex((o) => o.includes("opus")),
-    );
-  });
-
   test("a catalogue-only model such as fable is selectable", () => {
-    // `fable` exists only in the daemon's catalogue — no frontend constant knows
-    // it, and the active connection does not list it.
+    // `fable` exists only in the daemon's answer — no frontend constant knows it.
     const onCommit = vi.fn();
-    useListMock.mockReturnValue({ mutate: introspectReturning(["agnes-2.0"]) });
     render(<ModelPicker agentKey="claude_code" value={null} onCommit={onCommit} />);
     expect(openAndReadOptions()).toContain("fable");
     fireEvent.click(screen.getByRole("option", { name: "fable" }));

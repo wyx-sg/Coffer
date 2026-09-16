@@ -54,13 +54,22 @@ vi.mock("@/lib/hooks/useProviders", () => ({
     ],
   }),
 }));
-vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  // The picker introspects the active connection on open; return its catalogue.
-  useListProviderModels: () => ({
-    mutate: (
-      _probe: unknown,
-      opts: { onSuccess?: (r: { models: { id: string; modality: string }[] }) => void },
-    ) => opts?.onSuccess?.({ models: [{ id: "claude-opus-4-8", modality: "text" }] }),
+// The model picker lists the daemon's answer for this agent — with a connection
+// active that is the connection's curated ids, resolved server-side. It used to
+// introspect the endpoint from the browser and union the result with the agent's
+// own catalogue; it no longer touches the network, so there is nothing to mock
+// beyond the one read it does.
+vi.mock("@/lib/hooks/useAgentModels", () => ({
+  useAgentModels: () => ({
+    data: [
+      {
+        id: "claude-opus-4-8",
+        label: "",
+        description: "",
+        efforts: [],
+        default_effort: null,
+      },
+    ],
   }),
 }));
 
@@ -173,7 +182,7 @@ describe("ChatPage", () => {
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
     renderPage("/chat");
 
-    // The model picker is a dropdown listing the connection's introspected models.
+    // The model picker is a dropdown listing what the daemon offered for this agent.
     const trigger = await screen.findByRole("combobox", { name: /agent model/i });
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
     fireEvent.click(screen.getByRole("option", { name: "claude-opus-4-8" }));

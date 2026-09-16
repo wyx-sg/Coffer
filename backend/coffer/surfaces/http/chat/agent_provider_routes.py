@@ -100,24 +100,34 @@ async def list_agent_models(
     registry: AgentProviderRegistry = Depends(get_agent_registry),  # noqa: B008
     catalogue: ModelCatalogPort = Depends(get_model_catalog),  # noqa: B008
 ) -> AgentModelsOut:
-    """The models this agent can be put on, as the agent itself reports them.
+    """The models a picker should offer for this agent.
 
-    Whatever the agent's own picker offers: Claude Code's tier aliases, each
-    labelled with the model it resolves to today; Codex's versioned ids, each
-    carrying the reasoning-effort levels it can run at and the one Codex would
-    pick itself. An effort is not part of a model NAME — Codex takes it as its
+    On the agent's own built-in login this is whatever the agent itself reports:
+    Claude Code's tier aliases, each labelled with the model it resolves to
+    today; Codex's versioned ids, each carrying the reasoning-effort levels it
+    can run at. An effort is not part of a model NAME — Codex takes it as its
     own field on a turn — so it rides beside the id instead of multiplying the
     list.
 
-    Nothing narrows this list, on either side. It is what the agent itself can be
-    put on, which is the only question the agent resource answers, and no
-    surface curates over it any more — the chat page's picker and a channel's
-    ``/model`` card both offer the whole of it.
+    With a Coffer connection ACTIVE for this agent, its curated ids are the list
+    instead, in the user's own order: the turns go to that endpoint and not to
+    the account the agent's own catalogue describes, so offering both could only
+    offer ids the endpoint rejects. A connection that curates nothing falls back
+    to the agent's catalogue — Coffer knows where the turns go, not what that
+    endpoint serves, and this read never asks over the network (spec
+    provider-switching FR-032). Reasoning levels survive the narrowing, because
+    a level is a setting on the agent's own runtime rather than the endpoint's
+    to answer.
+
+    This is the same answer a channel's ``/model`` card gets, from the same
+    function. It did not use to be: this route served the agent's whole
+    catalogue and the web picker merged the endpoint's models into it in the
+    browser, so the page and the chat disagreed about one question.
 
     An unregistered ``agent_key`` is a 404.
     """
     _known(registry, agent_key)
-    models = await catalogue.catalogue(agent_key)
+    models = await catalogue.offered(agent_key)
     return AgentModelsOut(
         models=[
             AgentModelOut(
