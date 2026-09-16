@@ -109,7 +109,8 @@ def provider_daemon(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="provider-switching", scenario="the command line covers create, list, and switch"
+    spec="provider-switching",
+    scenario="the command line covers create, list, switch and revert",
 )
 def test_cli_create_list_switch(provider_daemon):
     r = _runner.invoke(
@@ -176,3 +177,207 @@ def test_cli_key_by_connection_and_scope(provider_daemon):
 
     # No selector → usage error.
     assert _runner.invoke(cli_app, ["provider", "key"]).exit_code == 6
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the command line covers create, list, switch and revert",
+)
+def test_cli_use_builtin_reverts_a_wire_to_the_agents_own_login(provider_daemon):
+    """`switch`'s other half. POST /providers/use-builtin/{wire} has backed the
+    Model providers page since the deactivate path landed; the CLI had
+    activate's half and not this one, so a terminal-only user could put an
+    agent onto a Coffer connection and never take it off again."""
+    added = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "acme",
+            "--protocol",
+            "anthropic",
+            "--base-url",
+            "https://gw/anthropic",
+            "--secret",
+            "sk-x",
+        ],
+    )
+    assert added.exit_code == 0, added.output
+    assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
+
+    reverted = _runner.invoke(cli_app, ["provider", "use-builtin", "anthropic"])
+    assert reverted.exit_code == 0, reverted.output
+    assert "acme" in reverted.output
+
+    # The connection is no longer active for its wire.
+    shown = _runner.invoke(cli_app, ["provider", "show", "acme"])
+    assert json.loads(shown.output)["is_active"] is False
+
+
+def test_cli_use_builtin_is_idempotent_when_nothing_is_active(provider_daemon):
+    """The route is a no-op when the agent already runs built-in, and the CLI
+    must report that rather than fail."""
+    reverted = _runner.invoke(cli_app, ["provider", "use-builtin", "anthropic"])
+    assert reverted.exit_code == 0, reverted.output
+
+
+def test_cli_use_builtin_rejects_a_wire_that_is_not_one(provider_daemon):
+    """An unknown wire is a usage error the user can read, not a traceback."""
+    bad = _runner.invoke(cli_app, ["provider", "use-builtin", "smoke-signals"])
+    combined = bad.output + (bad.stderr or "")
+    assert bad.exit_code == 6, combined
+    assert "Traceback" not in combined, combined
+
+
+def test_cli_edit_corrects_a_mis_probed_wire(provider_daemon):
+    """`PATCH /providers/{name}` has accepted `protocol` since the probe could
+    be wrong; the CLI could not send it, and its help said the field was
+    immutable — so a terminal-only user had no way to correct a wrong wire at
+    all, and was told the correction did not exist."""
+    added = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "agnes",
+            "--protocol",
+            "anthropic",
+            "--base-url",
+            "https://agnes/v1",
+            "--secret",
+            "sk-agnes",
+        ],
+    )
+    assert added.exit_code == 0, added.output
+    ref = json.loads(_runner.invoke(cli_app, ["provider", "show", "agnes"]).output)[
+        "credential_ref"
+    ]
+
+    edited = _runner.invoke(cli_app, ["provider", "edit", "agnes", "--protocol", "openai"])
+    assert edited.exit_code == 0, edited.output
+
+    shown = json.loads(_runner.invoke(cli_app, ["provider", "show", "agnes"]).output)
+    assert shown["protocol"] == "openai"
+    # Corrected in place: the key did not have to be re-entered, which is the
+    # whole reason the field is mutable.
+    assert shown["credential_ref"] == ref
+
+
+def test_cli_edit_refuses_to_move_the_wire_while_the_connection_is_live(provider_daemon):
+    """The wire is not inert: it decides whether a connection can cover any
+    agent at all (an ollama one covers none) and which wire `use-builtin`
+    reverts. Moving it under a live projection would strand the native config
+    already written, so the daemon refuses and the CLI reports the conflict
+    with an exit code of its own, not a traceback."""
+    _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "acme",
+            "--protocol",
+            "anthropic",
+            "--base-url",
+            "https://gw/anthropic",
+            "--secret",
+            "sk-x",
+        ],
+    )
+    assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
+
+    refused = _runner.invoke(cli_app, ["provider", "edit", "acme", "--protocol", "openai"])
+    combined = refused.output + (refused.stderr or "")
+    assert refused.exit_code == 5, combined
+    assert "Traceback" not in combined, combined
+    # The message has to name the way out, or the user is simply stuck.
+    assert "use-builtin" in combined, combined
+    assert (
+        json.loads(_runner.invoke(cli_app, ["provider", "show", "acme"]).output)["protocol"]
+        == "anthropic"
+    )
+
+    # The way out works: revert, edit, and the wire moves.
+    assert _runner.invoke(cli_app, ["provider", "use-builtin", "anthropic"]).exit_code == 0
+    ok = _runner.invoke(cli_app, ["provider", "edit", "acme", "--protocol", "openai"])
+    assert ok.exit_code == 0, ok.output
+    assert (
+        json.loads(_runner.invoke(cli_app, ["provider", "show", "acme"]).output)["protocol"]
+        == "openai"
+    )
+
+
+def test_cli_edit_with_no_options_is_a_usage_error(provider_daemon):
+    """`edit` with nothing to change must say so rather than send an empty
+    patch — the guard added `--protocol` to that list, so it is re-pinned."""
+    empty = _runner.invoke(cli_app, ["provider", "edit", "acme"])
+    assert empty.exit_code == 6, empty.output + (empty.stderr or "")
+
+
+def test_cli_rename_moves_the_connection(provider_daemon):
+    """`POST /providers/{name}/rename` backs the connection detail page's
+    rename, and `coffer provider` had no counterpart — the last UI operation on
+    this kind the terminal could not reach. The name is the connection's
+    identity (the vault ref it owns, its audit trail, the agent config it is
+    projected into all spell it out), which is why it is its own verb rather
+    than another `edit` flag."""
+    added = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "acme",
+            "--protocol",
+            "anthropic",
+            "--base-url",
+            "https://gw/anthropic",
+            "--secret",
+            "sk-x",
+        ],
+    )
+    assert added.exit_code == 0, added.output
+
+    renamed = _runner.invoke(cli_app, ["provider", "rename", "acme", "acme-eu"])
+    assert renamed.exit_code == 0, renamed.output
+    assert "acme-eu" in renamed.output
+
+    assert [
+        p["name"]
+        for p in json.loads(_runner.invoke(cli_app, ["provider", "list", "--json"]).output)[
+            "providers"
+        ]
+    ] == ["acme-eu"]
+    # The key moved with it — a rename that left the secret at the old address
+    # would leave the connection unable to answer.
+    key = _runner.invoke(cli_app, ["provider", "key", "--connection", "acme-eu"])
+    assert key.exit_code == 0, key.output
+    assert key.output.strip() == "sk-x"
+
+
+def test_cli_rename_reports_a_name_already_taken(provider_daemon):
+    """409 is the route's answer to a collision; the CLI must surface it as a
+    readable message and the conflict exit code, not a traceback."""
+    for name in ("acme", "beta"):
+        _runner.invoke(
+            cli_app,
+            [
+                "provider",
+                "add",
+                name,
+                "--protocol",
+                "anthropic",
+                "--base-url",
+                "https://gw/anthropic",
+                "--secret",
+                "sk-x",
+            ],
+        )
+
+    clash = _runner.invoke(cli_app, ["provider", "rename", "acme", "beta"])
+    combined = clash.output + (clash.stderr or "")
+    assert clash.exit_code == 5, combined
+    assert "Traceback" not in combined, combined
+
+
+def test_cli_rename_of_a_missing_connection_is_not_found(provider_daemon):
+    missing = _runner.invoke(cli_app, ["provider", "rename", "ghost", "spectre"])
+    assert missing.exit_code == 4, missing.output

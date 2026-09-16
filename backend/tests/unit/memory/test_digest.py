@@ -86,3 +86,17 @@ def test_a_fact_with_no_description_still_gets_one_line() -> None:
     text = render_digest([_fact(description="")], partition="coffer")
 
     assert "- **A fact**" in text
+
+
+def test_a_blank_title_falls_back_to_the_fact_slug() -> None:
+    """A fact whose frontmatter lost its title still renders as a fact.
+
+    Facts are derived from an agent's own memory files, so a blank title is a
+    shape the reader can actually hit. Falling back to the slug keeps the line
+    identifying *which* fact it is; rendering the emphasis markers around
+    nothing would put ``- ****`` in front of the person browsing the folder.
+    """
+    text = render_digest([_fact(slug="prefers-worktrees", title="  ")], partition="coffer")
+
+    assert "prefers-worktrees" in text
+    assert "****" not in text

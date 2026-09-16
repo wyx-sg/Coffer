@@ -28,7 +28,7 @@ help:
 	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
 	@echo "  make verify-acceptance     audit spec.md scenarios vs test markers"
 	@echo "  make verify-benchmark      SC-003 gateway-overhead benchmark (COFFER_RUN_BENCHMARKS=1)"
-	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
+	@echo "  make lint                  ruff + mypy + eslint + tsc + knip + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
 	@echo "  make eval                  AI eval harness: tool-search suite (local) + baseline gate"
@@ -116,29 +116,18 @@ lint:
 # checkout it resolves to the same code either way, so setting it always is
 # free and makes the two environments agree.
 	PYTHONPATH=$(BACKEND) .venv/bin/lint-imports --config $(BACKEND)/pyproject.toml
+# `npm run knip` is the frontend's dead-code gate — eslint.config.js carries
+# only the react-hooks rules and one no-restricted-syntax, which is why dead
+# modules, dead hooks and dead query keys once accumulated unnoticed. Its
+# config is frontend/package.json's "knip" key, and the script is
+# `npx --yes knip@<pinned>`: the same on-demand pattern `make desktop` uses for
+# the Tauri CLI, so it needs no entry in the lockfile.
 	@if [ -d $(FRONTEND)/node_modules ]; then \
 		PYTHONPATH=$(BACKEND) $(PY) scripts/dump_i18n_backend_keys.py --check && \
-		cd $(FRONTEND) && npm run lint && npm run typecheck; \
+		cd $(FRONTEND) && npm run lint && npm run typecheck && npm run knip; \
 	else \
 		echo "lint: $(FRONTEND)/node_modules missing — skipping frontend"; \
 	fi
-# TODO(coordinator): add `npm run knip` to the frontend leg above.
-#
-# The frontend has no dead-export gate — eslint.config.js carries only the
-# react-hooks rules and one no-restricted-syntax — which is why dead modules,
-# dead hooks and dead query keys accumulated unnoticed. `npm run knip` (config
-# in frontend/package.json's "knip" key) is the gate for it, and it works: run
-# it today and it reports 1 unlisted dependency, 34 unused exports and 42
-# unused exported types.
-#
-# It is NOT wired in yet for exactly that reason — wiring it now turns
-# `make lint` and every CI job that calls it red. The frontend dead-code
-# cleanup is in flight; once it lands, re-run `npm run knip`, clear whatever
-# remains (or park it in the "ignore" list with a reason), and append
-# `&& npm run knip` to the `cd $(FRONTEND) &&` chain above. Nothing else needs
-# to change: the script is `npx --yes knip@<pinned>`, the same on-demand
-# pattern `make desktop` uses for the Tauri CLI, so there is no dependency or
-# lockfile change waiting on it.
 
 verify-unit:
 	$(PY) scripts/check_unit_purity.py

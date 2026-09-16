@@ -146,6 +146,40 @@ export function useRebuildFromRemote() {
   });
 }
 
+/**
+ * Undo the last applied round, from the pre-apply snapshot it left behind.
+ *
+ * The round is reversed in the vault and the pointer stays put, so the undo is
+ * an ordinary local change the NEXT round publishes — which is why this
+ * invalidates everything a round can move, exactly as running one does.
+ *
+ * No `onError` toast, against the default (agents/frontend.md §5): this is
+ * only ever reached from a ConfirmDialog, which renders the failure in place
+ * and stays open so it can be read and retried. A toast as well would report
+ * the same refusal twice.
+ */
+export function useRollbackRound() {
+  const invalidate = useRoundInvalidation();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: () => syncApi.rollback(),
+    onSuccess: (round: ConvergeRound) => {
+      invalidate();
+      // The daemon does not record a rollback as a round of its own, so the
+      // history this was clicked in looks unchanged afterwards. The toast is
+      // the only report the click gets; without it the undo is silent.
+      toast.success(
+        t("sync.rollback.done", {
+          added: round.applied.added,
+          modified: round.applied.modified,
+          deleted: round.applied.deleted,
+        }),
+      );
+    },
+  });
+}
+
 /** The key's short hash — never the key. Null when this vault holds none. */
 export function useKeyFingerprint() {
   return useQuery({

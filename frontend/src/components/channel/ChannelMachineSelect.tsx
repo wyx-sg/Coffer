@@ -1,4 +1,4 @@
-// frontend/src/kinds/channel/ChannelMachineSelect.tsx
+// frontend/src/components/channel/ChannelMachineSelect.tsx
 // The control that says — and changes — which machine runs a channel's
 // adapter (spec channels, "Where a channel runs"). One component for both
 // surfaces: the list row's cell and the detail page's machine card, so the

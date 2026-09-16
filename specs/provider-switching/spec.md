@@ -1,6 +1,6 @@
 # Feature Specification: Provider Switching
 
-**Status**: Draft
+**Status**: Accepted
 
 ## One-line
 
@@ -35,8 +35,13 @@ the chat surface offers the agent's own models and runs.
   and no `wire_api`: the Codex chat/responses choice belongs to the Codex
   binding. A connection answers "which gateway account", and which model an
   agent runs is a property of the USE, not of the account.
-- **E2 — `protocol` says what the endpoint speaks, and nothing keys off it for
-  projection.** It drives model introspection and whether a key is required.
+- **E2 — `protocol` says what the endpoint speaks; it does not choose the
+  agent, but two things do key off it.** It drives model introspection and
+  whether a key is required. Which agent a connection is written into comes
+  from its scope, not its wire (F1) — but a keyless (`ollama`) connection
+  reaches no agent whatever that scope says (FR-019), and `use-builtin <wire>`
+  finds the agent to revert *through* the wire. Both are why the wire cannot
+  move under a connection that is switched on (FR-034).
   `anthropic`, `openai`, `ollama` and `unknown` are the values; `unknown` means
   a probe was inconclusive. Coffer can detect it
   (`POST /api/v1/models/detect-protocol`), but the create surface asks for it
@@ -472,7 +477,8 @@ no redactor, because its config holds no secret. This spec adds
   by every picker that offers that connection's models.
 - The per-agent model catalogue read back from the installed agents, with the
   reasoning levels their runtimes report.
-- CLI: `coffer provider list|add|show|edit|rm|switch|key|internal-default`.
+- CLI: `coffer provider list|add|show|edit|rm|switch|use-builtin|key|internal-default`,
+  plus the per-agent model binding on `coffer agent edit`.
 - HTTP: the `/api/v1/providers` routes, `/api/v1/models/*` introspection, and
   `/api/v1/internal-engine-config[/upkeep]`.
 - Frontend: the Model providers library page, a connection detail page with
@@ -549,7 +555,11 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
 - `PATCH /api/v1/providers/{name}` → update `base_url`, `protocol`, `models`,
   `secret_value`, `description`. `credential_ref` is immutable; `secret_value`
   rotates the stored secret; `models` is a whole-value replace (`null` leaves it
-  alone, `[]` clears the restriction). Reach is not a patch field — it is a scope
+  alone, `[]` clears the restriction). A `protocol` that actually MOVES is
+  refused with `409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the connection
+  is `is_active` (FR-034); re-sending the wire it already has is not a change,
+  so a client that submits a whole form is never told its unchanged dropdown is
+  a conflict. Reach is not a patch field — it is a scope
   edit, and `ProviderOut.compatible_agents` reports the CONFIGURED reach
   read-only, with `enabled` riding the same payload
 - `POST /api/v1/providers/{name}/rename` (`{new_name}`) → rename; 409 when
@@ -589,14 +599,18 @@ neither is rejected. An `ollama` connection must supply NEITHER.
 
 ## CLI
 
-`coffer provider list|add|show|edit|rm|switch|key|internal-default`, with
-`--json` on `list`.
+`coffer provider list|add|show|edit|rm|switch|use-builtin|key|internal-default`,
+with `--json` on `list`.
 
 - `add <name> --protocol <p> --base-url <url> [--secret <value> |
   --credential-ref <ref>]`. No model is supplied: it is chosen at the point of
   use.
-- `edit <name> [--base-url <url>] [--secret <value>]` — the protocol and the
-  credential ref are not editable here.
+- `edit <name> [--protocol <wire>] [--base-url <url>] [--secret <value>]` —
+  `credential_ref` is the one that cannot move. The wire can, subject to
+  FR-034.
+- `use-builtin <wire>` is `switch`'s other half: it puts that wire's agents
+  back on their OWN built-in login, de-projecting Coffer's config and clearing
+  the active connection. Idempotent, so it succeeds when nothing was active.
 - `rm <name>` removes the connection, and its owned vault entry when nothing
   else cites it.
 - `switch <name>` activates the connection for every agent its scope reaches.
@@ -702,6 +716,13 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 - **When** the user patches `base_url` (no `secret_value`),
 - **Then** only that field is updated, `credential_ref` is unchanged, and
   `resource_updated` is audited.
+
+### Scenario: correcting a mis-probed wire is refused while the connection is live
+
+- **Given** a connection that is switched on and projected into an agent,
+- **When** the user patches its `protocol` to a different wire,
+- **Then** the request is refused `409` `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`, the stored wire is unchanged, and the message names `coffer provider use-builtin <wire>` as the way out
+- **And** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (FR-034)
 
 ### Scenario: list provider profiles
 
@@ -819,13 +840,15 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   anywhere in the tree's plaintext. A later edit converges the same way, so the
   second machine ends up with the edited config and description.
 
-### Scenario: the command line covers create, list, and switch
+### Scenario: the command line covers create, list, switch and revert
 
 - **Given** the daemon is running,
 - **When** the user runs `coffer provider add`, `coffer provider list --json`,
-  and `coffer provider switch` from the CLI,
+  `coffer provider switch` and `coffer provider use-builtin <wire>` from the CLI,
 - **Then** each operation succeeds with the same effect as the HTTP API and
-  `list --json` returns machine-readable output.
+  `list --json` returns machine-readable output,
+- **And** after the revert the connection is no longer active for its wire, so a
+  terminal-only user can undo the switch they made.
 
 ### Scenario: the connections page lists profiles and their compatible agents
 
@@ -1082,7 +1105,13 @@ connection's existing curated selection is left exactly as it was.
   drop that pointer only when it names the Coffer-owned filename.
 - **FR-009**: The model keys MUST come from the AGENT's binding. An unset
   `model` or `fast_model` MUST leave the corresponding key out of — or removed
-  from — the native config, so the agent runs on its own default.
+  from — the native config, so the agent runs on its own default. That binding
+  MUST be settable without the web UI: `PATCH /api/v1/agents/{name}` carries
+  `model` / `fast_model` / `wire_api`, and `coffer agent edit` exposes them as
+  `--model` / `--fast-model` / `--wire-api`, with `--clear-fast-model` for the
+  explicit null that unbinds the fast slot. It is an option on the verb that
+  edits the agent rather than a command of its own, because it is a field of
+  the agent.
 - **FR-010**: Domain projection logic MUST be pure (no I/O): the `apply_*` /
   `remove_*` functions in `domain/provider/projection.py` take the existing text
   and return the new native-config TEXT; `ProviderProjector` performs the file
@@ -1144,20 +1173,41 @@ connection's existing curated selection is left exactly as it was.
 
 **Surfaces**
 
-- **FR-017**: Create, switch and delete MUST be available via (a) the REST API,
-  (b) `coffer provider …` with `--json` on `list`, and (c) the web surfaces — the
-  Model providers library for create and delete, the Agent detail page for the
-  switch. Editing a connection MUST be available over REST, over the CLI
-  (`coffer provider edit`) and from its detail page.
+- **FR-034**: A connection's `protocol` MUST be correctable — the probe that
+  guessed the wire can be wrong, and re-entering the key to fix it is a worse
+  answer than editing it. But the wire is **not inert**, so changing it MUST be
+  refused while the connection is active, with a conflict that names the way
+  out. Two things key off it: a keyless (`ollama`) connection covers no agent
+  whatever its scope says (FR-019), and `use-builtin <wire>` finds the agent to
+  revert through the wire. Moving the wire of a connection that is currently
+  projected would leave the native config Coffer already wrote standing, with
+  nothing left that would ever take it off. Silently de-projecting instead MUST
+  NOT be the answer: the developer asked to change a field, not to take their
+  agents off a gateway. The refusal MUST be reachable on every surface that
+  offers the edit — REST, `coffer provider edit`, and the connection's form.
+
+- **FR-017**: Create, switch, revert-to-built-in, rename and delete MUST be
+  available via (a) the REST API, (b) `coffer provider …` with `--json` on
+  `list`, and (c) the web surfaces — the Model providers library for create and
+  delete, the Agent detail page for the switch, the connection's own page for
+  the rename. Editing a connection MUST be available over REST, over the CLI
+  (`coffer provider edit`) and from its detail page, **including correcting the
+  wire** (`--protocol`), which the CLI could not send while its own help called
+  the field immutable. Reverting is `coffer provider use-builtin <wire>`: a
+  surface that can put an agent onto a Coffer connection and not take it off
+  again is half an operation.
 - **FR-018**: The CLI `key` subcommand MUST accept `--connection <name>` as its
   primary form and `--wire <wire>` as the back-compat form, and MUST refuse a
   call naming neither.
 
 **Internal engine connection**
 
-- **FR-019**: The `ollama` protocol is internal-only: `target_for(Protocol.OLLAMA)`
-  MUST return `None`, such a connection MUST reach no agent whatever its scope
-  says, MUST never be `is_active`, and activating it MUST write no native config.
+- **FR-019**: The `ollama` protocol is internal-only: such a connection MUST
+  reach no agent whatever its scope says, MUST never be `is_active`, and
+  activating it MUST write no native config. The rule is enforced in
+  `application/provider/targets.py::scoped_targets`, which answers `[]` for
+  `ollama` **before** the scope is read — it is a rule about projection, not
+  about the config's shape, and scope lives outside the config.
 - **FR-020**: `credential_ref` MUST be optional — required for `anthropic` /
   `openai` / `unknown`, absent for `ollama`. On create, supplying neither
   `secret_value` nor `credential_ref` is valid ONLY for `ollama`; elsewhere
@@ -1315,8 +1365,9 @@ connection's existing curated selection is left exactly as it was.
   native config, calls a pure transform, writes it back atomically, refuses a
   stale write, and owns the Codex catalogue file's lifecycle.
 - **`ProjectionTarget` / `target_for_agent(agent_type)`**: the agent-keyed map to
-  the config file Coffer writes; `target_for(protocol)` is the wire-keyed form,
-  returning `None` for `ollama`.
+  the config file Coffer writes. The map is keyed by AGENT, not by wire — which
+  agent a connection is written into comes from its scope, not from its
+  protocol (E3/F1).
 - **`scoped_targets` / `projection_targets`**: the configured reach, and the
   reach intersected with `enabled` — two questions kept apart on purpose.
 - **`AgentModelCatalogueService`**: `catalogue()` (what an agent can run),

@@ -1,9 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildReferenceSidebar,
   classifyFile,
   rewriteLinks,
   extractTitle,
+  specFolderIdOf,
   specFolderLabel,
   specFileLabel,
   GH_BLOB,
@@ -150,4 +152,98 @@ test("specFolderLabel: three or more words", () => {
 
 test("specFolderLabel: two-word spec folder", () => {
   assert.equal(specFolderLabel("vault-sync"), "Vault Sync");
+});
+
+
+// --- nested specs ---------------------------------------------------------
+//
+// A spec's id is its path under `specs/`, so a child spec's is
+// `<parent>/<child>` (agents/sdd.md). The sidebar has to keep them apart: two
+// children of one parent would otherwise collapse into a single group and
+// their files — `spec.md` in each — would sit side by side under one heading
+// with no way to tell which spec either belonged to.
+
+test("specFolderIdOf: a top-level spec is its own folder name", () => {
+  assert.equal(specFolderIdOf("reference/specs/channels/spec.md"), "channels");
+});
+
+test("specFolderIdOf: a child spec keeps the whole path as its id", () => {
+  assert.equal(
+    specFolderIdOf("reference/specs/channels/telegram/spec.md"),
+    "channels/telegram",
+  );
+});
+
+test("specFolderIdOf: a contract under a child keeps that child's id", () => {
+  assert.equal(
+    specFolderIdOf("reference/specs/channels/telegram/contracts/api.openapi.yaml.md"),
+    "channels/telegram/contracts",
+  );
+});
+
+test("specFolderIdOf: a non-spec path has no folder", () => {
+  assert.equal(specFolderIdOf("reference/adr/vault-sync.md"), undefined);
+});
+
+function specDescriptor(dest) {
+  return {
+    area: "specs",
+    route: "/" + dest.replace(/\.md$/, ""),
+    base: dest.slice(dest.lastIndexOf("/") + 1, -3),
+    specFolder: specFolderIdOf(dest),
+    title: "ignored",
+  };
+}
+
+test("buildReferenceSidebar: a child spec nests inside its parent", () => {
+  const sidebar = buildReferenceSidebar([
+    specDescriptor("reference/specs/channels/spec.md"),
+    specDescriptor("reference/specs/channels/plan.md"),
+    specDescriptor("reference/specs/channels/telegram/spec.md"),
+    specDescriptor("reference/specs/channels/seatalk/spec.md"),
+  ]);
+  const specs = sidebar.find((g) => g.text === "Specs");
+  const channels = specs.items.find((g) => g.text === "Channels");
+
+  // The parent's own files come first, then one group per child — not four
+  // files in one flat list, and not two groups both called "Channels".
+  assert.deepEqual(
+    channels.items.map((i) => i.text),
+    ["Spec", "Plan", "SeaTalk", "Telegram"],
+  );
+  const telegram = channels.items.find((i) => i.text === "Telegram");
+  assert.deepEqual(
+    telegram.items.map((i) => i.link),
+    ["/reference/specs/channels/telegram/spec"],
+  );
+});
+
+test("buildReferenceSidebar: a parent with no files of its own still groups its children", () => {
+  const sidebar = buildReferenceSidebar([
+    specDescriptor("reference/specs/agent-registry/claude-code/spec.md"),
+    specDescriptor("reference/specs/agent-registry/codex/spec.md"),
+  ]);
+  const specs = sidebar.find((g) => g.text === "Specs");
+  const registry = specs.items.find((g) => g.text === "Agent Registry");
+  assert.deepEqual(
+    registry.items.map((i) => i.text),
+    ["Claude Code", "Codex"],
+  );
+});
+
+test("buildReferenceSidebar: a flat tree is unchanged by the nesting support", () => {
+  const sidebar = buildReferenceSidebar([
+    specDescriptor("reference/specs/memory/spec.md"),
+    specDescriptor("reference/specs/memory/quickstart.md"),
+    specDescriptor("reference/specs/knowledge/spec.md"),
+  ]);
+  const specs = sidebar.find((g) => g.text === "Specs");
+  assert.deepEqual(
+    specs.items.map((g) => g.text),
+    ["Knowledge", "Memory"],
+  );
+  assert.deepEqual(
+    specs.items.find((g) => g.text === "Memory").items.map((i) => i.text),
+    ["Spec", "Quickstart"],
+  );
 });

@@ -1,4 +1,4 @@
-// frontend/src/kinds/channel/ChannelRowCells.tsx
+// frontend/src/components/channel/ChannelRowCells.tsx
 // The channels list's per-row cells.
 //
 // They live apart from ChannelsTable because they are the half that FETCHES:

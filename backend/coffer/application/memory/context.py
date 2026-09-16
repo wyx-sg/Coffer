@@ -19,6 +19,13 @@ Three things this module is deliberately narrow about:
   second judgement applied on top any more: the developer's hide/pin/
   supersede/settle overrides are gone with the surface that recorded them, so
   what a fact's own frontmatter says is what delivery says.
+* **It does not render a fact line of its own.** FR-050's L1 *is* the
+  partition's digest, so the line comes from ``digest.fact_line`` — the same
+  renderer that writes ``summary.md`` — rather than from a second version of
+  it here. What it does not borrow is the file: the digest on disk is
+  organise's output, which may not exist yet and which this module has no
+  filesystem access to reach by design. Composition stays from the
+  ``MemoryPort``; only the wording is shared.
 * **The budget is spent in FR-051's stated preference order**: ``global``'s
   personal facts, then the current project's most recent — by filling L0 (the
   global side of that order) completely before L1 ever gets a look at what is
@@ -33,6 +40,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from coffer.application.memory.digest import fact_line, recency
 from coffer.application.memory.service import PartitionSummary
 from coffer.domain.memory.budget import estimate_tokens
 from coffer.domain.memory.fact import Fact
@@ -83,34 +91,35 @@ class ComposedContext:
     layers: tuple[str, ...]
 
 
-def _recency(fact: Fact) -> str:
-    """The latest origin timestamp a fact carries, or ``""`` for none.
-
-    ISO-8601 strings sort lexicographically the same as chronologically, so
-    this doubles as a sort key with no parsing.
-    """
-    return max((origin.captured_at for origin in fact.origins), default="")
-
-
 def _ordered(facts: Iterable[Fact]) -> tuple[Fact, ...]:
     """Most recent first — the whole of FR-051's within-partition order now
-    that pinning is gone."""
-    return tuple(sorted(facts, key=_recency, reverse=True))
+    that pinning is gone.
 
-
-def _fact_line(fact: Fact) -> str:
-    title = fact.title.strip() or fact.slug
-    description = fact.description.strip()
-    return f"- {title}: {description}" if description else f"- {title}"
+    The sort key is ``digest.recency``, not a second definition of "newest":
+    this module kept its own, which read ``captured_at`` alone, so a fact
+    timestamped only at its source sorted last here and correctly in the
+    digest."""
+    return tuple(sorted(facts, key=recency, reverse=True))
 
 
 def _pointer(omitted: int) -> str:
+    """The closing line: how many facts were left out, and how to reach them.
+
+    It asks for a **distinctive word or phrase**, not a question, because that
+    is the only shape recall can answer: matching is a literal,
+    case-insensitive substring scan (FR-052), and the tool's own description
+    says so (FR-060). This line used to ask for "a natural-language query" —
+    the first thing an agent reads every session, contradicting the tool it
+    points at — so an agent that followed it sent a whole question, matched
+    nothing, and read the empty answer as an empty memory.
+    """
+    reach = (
+        "call coffer__recall with a distinctive word or phrase from the one you want "
+        "(matching is literal, not a question)"
+    )
     if omitted:
-        return (
-            f"{omitted} more fact(s) not shown here — call coffer__recall with a "
-            "natural-language query to find them."
-        )
-    return "Call coffer__recall with a natural-language query for anything more specific."
+        return f"{omitted} more fact(s) not shown here — {reach}."
+    return f"For anything more specific, {reach}."
 
 
 def _resolve_cwd_partition(partitions: Sequence[PartitionSummary], cwd: str) -> str:
@@ -199,7 +208,7 @@ async def compose_context(
 
     global_included = 0
     for fact in global_visible:
-        line = _fact_line(fact)
+        line = fact_line(fact)
         if not budget.fits(line):
             break
         lines.append(line)
@@ -223,7 +232,7 @@ async def compose_context(
             budget.spend(label)
             l1_lines = [label]
             for fact in project_visible:
-                line = _fact_line(fact)
+                line = fact_line(fact)
                 if not budget.fits(line):
                     break
                 l1_lines.append(line)

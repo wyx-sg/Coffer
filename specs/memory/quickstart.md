@@ -43,6 +43,21 @@ coffer memory partitions --json
 absolute path of the native file it came from — so a fact that looks wrong is
 always traceable back to the thing that said it.
 
+A partition is also just a folder, and you can read it as one — the same two
+verbs `coffer knowledge` uses:
+
+```bash
+coffer memory ls coffer                       # the partition's own directory
+coffer memory read coffer facts/python-lockfile.md
+coffer memory read coffer README.md --json    # paths for an editor to open
+```
+
+`ls` prints the whole tree rather than one level, because a partition is two
+levels deep by construction: a `README.md` naming the project root, and a
+`facts/` folder holding one Markdown file per fact. Both commands are
+read-only — everything under `~/.coffer/memory/` is derived, so an edit here
+would survive only until the next sync.
+
 The files themselves are plain Markdown on your own disk, laid out as
 [`data-model.md`](./data-model.md) describes, so `ls ~/.coffer/memory/coffer/facts/`
 works too. The web UI presents a partition as a file tree with a read-only

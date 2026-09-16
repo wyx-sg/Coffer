@@ -6,7 +6,7 @@
 // is the difference between "another machine deleted a lot" and "this machine
 // is about to erase everyone else's vault".
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { acceptance } from "@/test/acceptance";
 
@@ -25,7 +25,9 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useImportMasterKey: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
-const { useSyncStatus, useConfirmRound, useRejectRound } = await import("@/lib/hooks/useSync");
+const { useSyncStatus, useConfirmRound, useRejectRound, useRebuildFromRemote } = await import(
+  "@/lib/hooks/useSync"
+);
 
 const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
 
@@ -138,6 +140,32 @@ describe("SyncStatusTab", () => {
     expect(confirmMutate).toHaveBeenCalled();
     screen.getByRole("button", { name: /^reject$/i }).click();
     expect(rejectMutate).toHaveBeenCalled();
+  });
+
+  test("a refused rebuild keeps its dialog open with the reason", () => {
+    // Rebuild is the most destructive answer on this banner — it discards every
+    // local-only document — and it was the one dialog here that closed before
+    // its mutation settled, so a refusal disappeared as if it had worked. The
+    // convention is the one `ConfirmDialog` documents: close only on success,
+    // show the failure in place.
+    const rebuildMutate = vi.fn();
+    vi.mocked(useRebuildFromRemote).mockReturnValue({
+      mutate: rebuildMutate,
+      isPending: false,
+      error: new Error("remote unreachable"),
+    } as unknown as ReturnType<typeof useRebuildFromRemote>);
+    seed(round({ status: "awaiting_confirmation", pending: pending("publish") }));
+    render(<SyncStatusTab />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^rebuild from remote$/i }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^rebuild from remote$/i }));
+
+    expect(rebuildMutate).toHaveBeenCalled();
+    const stillOpen = screen.getByRole("dialog");
+    // Scoped to the dialog: the banner itself is a role="alert", so an
+    // unscoped query would pass on the banner's own text and prove nothing.
+    expect(within(stillOpen).getByRole("alert")).toHaveTextContent(/remote unreachable/i);
   });
 
   test("what the last round did is not reported here — that is History", () => {

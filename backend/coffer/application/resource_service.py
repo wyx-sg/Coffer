@@ -113,6 +113,24 @@ class ResourceService:
             raise UnknownKind(kind)
         return self._kinds[kind]
 
+    def converges(self, kind: str) -> bool:
+        """Whether this kind's rows travel to the sync remote (spec vault-sync).
+
+        Public for the same reason ``supports_scope`` is: the sync layer has to
+        ask, and the answer belongs to the kind.
+
+        An unregistered kind answers **True**, which is the conservative answer
+        and not the obvious one. This flag exists only to withhold, so a kind
+        nobody has declared anything about must keep whatever behaviour it had:
+        an unknown kind arriving in a document still reaches
+        ``register`` and is still refused there by name (``UnknownKind``).
+        Answering False would have turned that named refusal into a silent skip
+        — a document quietly doing nothing is exactly what a converge round
+        must not produce.
+        """
+        kind_def = self._kinds.get(kind)
+        return kind_def.converges if kind_def is not None else True
+
     def supports_scope(self, kind: str) -> bool:
         """Whether the kind carries a per-agent activation scope (ADR per-agent-resource-scope).
 

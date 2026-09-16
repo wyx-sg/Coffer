@@ -71,6 +71,21 @@ through the daemon, falling back to a daemon-backed folder browser.
 coffer agent edit codex-work --config-dir /opt/codex-work-v2
 ```
 
+`edit` is also where the model an agent answers with is bound — the binding
+lives on the agent, not on the connection (spec provider-switching FR-009):
+
+```bash
+coffer agent edit codex-work --model gpt-5-codex
+coffer agent edit claude-code --model claude-opus-5 --fast-model claude-haiku-4-5
+coffer agent edit claude-code --clear-fast-model       # unbind the fast slot
+coffer agent show codex-work                           # read the binding back
+```
+
+An unbound agent projects no model at all and runs on its own default, which is
+why clearing a slot needs its own flag rather than an empty string. The change
+reaches the agent's config file the next time its connection is activated
+(`coffer provider switch <name>`) — that is the step that writes native config.
+
 ## Remove an agent
 
 ```bash

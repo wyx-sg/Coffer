@@ -7,6 +7,16 @@
 // so only the shapes the two agree on (the remote, a path failure) are aliased
 // to it; the rest stay hand-written and must be kept in step by hand.
 //
+// `POST /sync/restore` is deliberately absent, and the absence is the honest
+// answer rather than a gap: it takes a point in the REMOTE's history (a sha, a
+// ref, or a date) and no route exposes that history, so a browser could only
+// offer a blind date box. There is no preview of what would come back and no
+// way to tell "that date holds nothing" from "the wrong date" — and the
+// recovery it performs is asymmetric (it re-adds, never deletes), which is
+// exactly the nuance a blind box cannot convey. Restoring stays `coffer sync
+// restore`, where the user has `git log` on the working tree beside it. Undo
+// (`/rollback`) has none of that trouble: it names no revision.
+//
 // Nothing here ever carries the push credential or the master key into a
 // stored shape: a remote names its credential by REFERENCE, which the daemon
 // resolves at push time and nowhere else, so a fully configured remote is safe
@@ -150,6 +160,18 @@ export const syncApi = {
    *  The third answer for a machine whose files are gone: confirming a held
    *  round would publish the loss, rejecting would refuse it forever. */
   rebuild: () => call<ConvergeRound>("/sync/rebuild", { method: "POST" }),
+  /**
+   * Undo the last applied round, from the pre-apply snapshot it left behind.
+   *
+   * Takes no argument on purpose: the daemon reverses the round that left the
+   * NEWEST snapshot, so there is no round to name. A surface that offers this
+   * has to point at that one round itself (`rollbackTargetId`) rather than
+   * letting a user pick — every other choice would run this same call.
+   *
+   * 409 `SYNC_NOTHING_TO_ROLL_BACK` when no snapshot survives: the pruning
+   * keeps ten, and a vault with no remote has none.
+   */
+  rollback: () => call<ConvergeRound>("/sync/rollback", { method: "POST" }),
 
   machines: () => call<MachineList>("/sync/machines"),
   renameSelf: (name: string) =>

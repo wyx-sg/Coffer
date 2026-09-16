@@ -8,9 +8,10 @@ been deliberately deleted. That rule is normative (spec vault-sync "Why deletion
 is safe") and it lives in :mod:`coffer.infrastructure.sync.tree_mirror`; what
 this module owes it is an honest and *complete* account of what this vault
 publishes, area by area, on every export. Complete means every resource of
-every kind: the one thing held back is a resource's reach, and it is held back
-the same way on every export, so an absence in the tree is always a deletion
-somebody made rather than a document that went missing.
+every kind that converges: what is held back is a resource's reach and a
+non-converging kind's rows, and both are held back the same way on every
+export, so an absence in the tree is always a deletion somebody made rather
+than a document that went missing.
 
 Credentials are omitted unless the remote is configured to carry them, and even
 then only Fernet ciphertext travels; the master key is never written.
@@ -28,20 +29,28 @@ from coffer.domain.sync.models import AreaCount, ExportSummary
 from coffer.domain.sync.portability import normalize_home
 from coffer.domain.sync.serialization import resource_to_doc
 
-# NOTE — there is no machine-local kind list any more, and ``channel`` was the
-# only entry it ever had. It was withheld because a channel arriving on a
-# second machine was at best inert and at worst a second machine answering the
-# same conversation. A channel now names the one machine whose daemon starts
-# its adapter (spec channels ``## Where a channel runs``), which is the guard
-# that objection was missing, so every kind exports the same way and this
-# module has one rule instead of two.
+# NOTE — there is no machine-local kind LIST here, and there is not going to be
+# one. ``channel`` was the only entry it ever had: it was withheld because a
+# channel arriving on a second machine was at best inert and at worst a second
+# machine answering the same conversation. A channel now names the one machine
+# whose daemon starts its adapter (spec channels ``## Where a channel runs``),
+# which is the guard that objection was missing, so it travels like everything
+# else.
+#
+# What decides now is ``Kind.converges``, declared where the kind is defined.
+# The one kind that answers False is ``memory``: a partition row is derived
+# from the agents installed on THIS machine, and spec memory FR-023 forbids it
+# converging for a concrete reason — the second machine would show a partition
+# naming a project root it may not have, with no facts behind it, because the
+# derived tree stayed home. That is a rule about the kind, not about sync, so
+# it is written on the kind and this module asks.
 #
 # The reverse transition is not free, and it is the exporting side that pays:
-# a machine still running the withholding build keeps deleting channel
-# documents out of the shared tree, and a machine running this one honours
-# those deletions like any other. Upgrade both before a channel is expected to
-# travel; until then the publish-side deletion guard is what stands between a
-# stale exporter and somebody's channels.
+# a machine still running an older build keeps publishing the documents this
+# one withholds, and each export from this build publishes their absence as a
+# deletion. That is the cleanup rather than a loss — nothing at the other end
+# is derived from them — but it is a deletion, so the publish-side guard is
+# what stands between a mid-upgrade fleet and a surprise.
 
 
 class SyncExporter:
@@ -55,9 +64,11 @@ class SyncExporter:
     re-answer, silently and every round, a question the machine at the other
     end had already answered for itself.
 
-    Nothing else is held back. Every kind is exported, ``channel`` included —
-    a channel's own config now names the machine that runs it, so the document
-    can travel without the adapter travelling with it."""
+    Beyond that, only a kind that declares ``converges=False`` is held back —
+    ``memory``, whose rows each machine derives for itself (spec memory
+    FR-023). Every other kind is exported, ``channel`` included: a channel's
+    own config now names the machine that runs it, so the document can travel
+    without the adapter travelling with it."""
 
     def __init__(
         self,
@@ -77,6 +88,11 @@ class SyncExporter:
         docs: list[dict[str, object]] = []
         unserializable: list[str] = []
         for r in await self._resources.list():
+            # The flag only ever withholds: a kind nobody declared anything
+            # about keeps exporting, so this cannot quietly stop publishing a
+            # kind by failing to recognise it.
+            if not self._resources.converges(r.kind):
+                continue
             try:
                 config = dict(r.config)
                 # The bundle speaks ${HOME}, never this machine's literal home.

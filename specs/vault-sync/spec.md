@@ -1,5 +1,8 @@
 # Spec — Vault Sync
 
+**Status**: Accepted
+**Folder name**: this spec lives at `specs/vault-sync/`, the spec id every inbound link and `scripts/audit_acceptance.py` keys on.
+
 Keep one vault across the user's own machines by converging each of them with a
 git repository the user owns. A background worker commits what this vault
 holds, lets git three-way-merge it against what the remote holds, and applies
@@ -31,12 +34,20 @@ anything.
   is skipped as another repository's internals. What was skipped is logged
   once per round. In the other direction, a symlink the working tree holds is
   refused rather than read into the vault.
-- **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`, `memory`,
+- **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`,
   `provider`, `channel` definitions (system of record is SQLite; serialized to
   text). A resource document is identity, description and config — what the
   resource *is*. What it reaches is not in it; see below.
 
-  Every kind travels, `channel` included. A channel is an inbound surface —
+  Every kind travels **except one it declares for itself**: a kind sets
+  `converges=False` when its rows are derived on each machine rather than
+  authored by the user, and `memory` is the only kind that does (spec
+  [memory](../memory/spec.md) FR-023). The rule lives on the kind rather than
+  as a list in the sync layer, because whether a row is derived is a fact about
+  the kind; the exporter withholds such rows and the applier ignores such a
+  document, so a machine still on an older build cannot deliver one either.
+
+  `channel` is not that case — it travels. A channel is an inbound surface —
   a port, a tunnel, a webhook URL a platform has been told to call — so two
   machines answering one conversation is a real danger, and the document names
   the one machine that may: a channel carries `runs_on`, the `machine_id` of
@@ -65,8 +76,9 @@ anything.
 ## What does not sync (machine-local)
 
 Logs, `coffer.db` itself, `daemon-config.json`, PID files, port allocations,
-chat history, conversations, the audit log, MCP invocation records, and any
-runtime artifact. The master key is **never** written into the repository.
+chat history, conversations, the audit log, MCP invocation records, the whole
+of `~/.coffer/memory/` **and the `memory` partition rows derived from it**, and
+any runtime artifact. The master key is **never** written into the repository.
 
 One entry in this list is a decision rather than mechanics, and it says what a
 machine *does* with the vault belongs to that machine.
@@ -506,7 +518,7 @@ never reaches back into history on its own.
 | HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `GET /api/v1/sync/runs` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
 | HTTP (machines) | `GET /api/v1/sync/machines` · `PATCH /api/v1/sync/machines/self` · `DELETE /api/v1/sync/machines/{id}` |
 | HTTP (key) | `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
-| UI | A top-level **Sync** page with three tabs — **Status** (the remote, the next round, a run button, the master-key card), **History** (every round this machine has run, as a table: when, outcome, what it applied here, what it published, the commit) and **Machines** (the registry table). Conflicts and pending confirmations appear as a banner on Status, not as a permanent tab. Status says what the vault is doing; History says what it has been doing, which one round rendered as prose cannot — a round that failed once is noise, and a round that has failed every hour since Tuesday is the answer. |
+| UI | A top-level **Sync** page with three tabs — **Status** (the remote, the next round, a run button, the master-key card), **History** (every round this machine has run, as a table: when, outcome, what it applied here, what it published, the commit) and **Machines** (the registry table). The History row whose round a rollback would reverse — the newest one that reached its pre-apply snapshot — carries an **Undo** action naming the paths it would take back; no other row does, because `POST /sync/rollback` names no round and an Undo on every row would run the same call from each. Restoring at a point in time stays a CLI operation: `at` names a revision in the REMOTE's history, which no route exposes, so a page could only offer a blind date box with no preview of what would come back. Conflicts and pending confirmations appear as a banner on Status, not as a permanent tab. Status says what the vault is doing; History says what it has been doing, which one round rendered as prose cannot — a round that failed once is noise, and a round that has failed every hour since Tuesday is the answer. |
 
 ## Acceptance Scenarios
 

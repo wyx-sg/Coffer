@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/toast";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import {
   createCollection,
+  deleteFile,
   getFile,
   getTree,
   listCollections,
@@ -91,6 +92,30 @@ export function useTidyCollection(collection: string) {
       toast.error(translateApiError(t, error));
     },
     onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
+  });
+}
+
+/**
+ * Delete ONE file from a collection.
+ *
+ * The deleted file's own cache entry is REMOVED rather than invalidated: a
+ * viewer still mounted on it would otherwise refetch a path that is now a 404
+ * and replace the page with an error. Its ancestors' file counts all change
+ * with it, so the rest of the `["knowledge"]` subtree is invalidated — the
+ * same breadth as an upload, and for the same reason.
+ *
+ * No `onError` toast, against the default (agents/frontend.md §5): the only
+ * caller is a ConfirmDialog, which renders the failure in place and stays open
+ * so it can be read. A toast would say the same thing twice.
+ */
+export function useDeleteKnowledgeFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => deleteFile(path),
+    onSuccess: (_result, path) => {
+      qc.removeQueries({ queryKey: knowledgeFileKey(path) });
+      void qc.invalidateQueries({ queryKey: knowledgeKey });
+    },
   });
 }
 

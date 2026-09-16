@@ -615,3 +615,86 @@ def test_plugin_uninstall_force_and_prompt(workspace_cli):
     )
     assert [p["id"] for p in body["items"]] == ["p2@m1"]
     assert not cache_dir.exists()
+
+
+# ---------------------------------------------------------------------------
+# agent edit — the model binding (spec provider-switching E3)
+#
+# PATCH /agents/{name} has carried `model` / `fast_model` / `wire_api` since the
+# per-agent binding landed, and the projector reads exactly those fields
+# (`application/provider/projector.py`). Until these options existed a
+# terminal-only user could activate a connection and never bind a model to it,
+# so the agent kept answering on its own default and nothing said why.
+# ---------------------------------------------------------------------------
+
+
+def _add_codex(agent_cli_daemon, name: str = "cur"):
+    config_dir = agent_cli_daemon / f"cfg-{name}"
+    config_dir.mkdir(exist_ok=True)
+    added = _runner.invoke(
+        cli_app,
+        ["agent", "add", "codex", "--name", name, "--config-dir", str(config_dir)],
+    )
+    assert added.exit_code == 0, added.output
+    return config_dir
+
+
+def test_agent_edit_binds_a_model(agent_cli_daemon):
+    _add_codex(agent_cli_daemon)
+    result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--model", "gpt-5-codex"])
+    assert result.exit_code == 0, result.output
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    assert shown["model"] == "gpt-5-codex"
+
+
+def test_agent_edit_binds_a_fast_model_and_can_clear_it(agent_cli_daemon):
+    """The route distinguishes "absent" from "explicitly null" via
+    ``model_fields_set``; the CLI needs a way to say the second one, otherwise
+    a fast model can be set and never taken off."""
+    _add_codex(agent_cli_daemon)
+    bound = _runner.invoke(
+        cli_app,
+        ["agent", "edit", "cur", "--model", "big", "--fast-model", "small"],
+    )
+    assert bound.exit_code == 0, bound.output
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    assert (shown["model"], shown["fast_model"]) == ("big", "small")
+
+    cleared = _runner.invoke(cli_app, ["agent", "edit", "cur", "--clear-fast-model"])
+    assert cleared.exit_code == 0, cleared.output
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    assert shown["fast_model"] is None
+    assert shown["model"] == "big", "clearing the fast slot must not disturb the main one"
+
+
+def test_agent_edit_binding_a_model_leaves_the_config_dir_alone(agent_cli_daemon):
+    """A PATCH that omits `config_dir` must preserve the override — the route
+    says so, and the CLI must not send one it was never given."""
+    config_dir = _add_codex(agent_cli_daemon)
+    assert _runner.invoke(cli_app, ["agent", "edit", "cur", "--model", "big"]).exit_code == 0
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    assert shown["config_dir"] == str(config_dir)
+
+
+def test_agent_edit_rejects_a_wire_api_codex_cannot_load(agent_cli_daemon):
+    """`chat` makes Codex fail to load config.toml at all. The domain refuses
+    it; the CLI must surface that as a readable error, not a traceback."""
+    _add_codex(agent_cli_daemon)
+    bad = _runner.invoke(cli_app, ["agent", "edit", "cur", "--wire-api", "chat"])
+    combined = bad.output + (bad.stderr or "")
+    # 6 = INVALID_INPUT, i.e. the daemon refused the value — not 2, which is
+    # what typer returns for an option the command does not have at all.
+    assert bad.exit_code == 6, combined
+    assert "Traceback" not in combined, combined
+    assert "responses" in combined, combined
+
+
+def test_agent_show_reports_the_model_binding(agent_cli_daemon):
+    """A write with no read is half a surface: `show` is where a terminal user
+    checks what the projector will actually write."""
+    _add_codex(agent_cli_daemon)
+    bound = _runner.invoke(cli_app, ["agent", "edit", "cur", "--model", "gpt-5-codex"])
+    assert bound.exit_code == 0, bound.output
+    shown = _runner.invoke(cli_app, ["agent", "show", "cur"])
+    assert shown.exit_code == 0, shown.output
+    assert "gpt-5-codex" in shown.output

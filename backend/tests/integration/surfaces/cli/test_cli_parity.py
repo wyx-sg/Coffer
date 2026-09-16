@@ -101,11 +101,24 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "delivery-remove",
         "fact",
         "facts",
+        "ls",
         "organize",
         "partitions",
+        "read",
         "sync",
     },
-    "provider": {"add", "edit", "rm", "list", "show", "key", "switch", "internal-default"},
+    "provider": {
+        "add",
+        "edit",
+        "rename",
+        "rm",
+        "list",
+        "show",
+        "key",
+        "switch",
+        "use-builtin",
+        "internal-default",
+    },
     "sync": {
         "adopt",
         "confirm",
@@ -130,40 +143,37 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
 #: set would otherwise assert nothing about them.
 _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     "open": {"--json", "--no-browser"},
+    # The model an agent answers with is a FIELD of the agent, so it is bound
+    # by the verb that edits the agent rather than by a command of its own —
+    # which means the subcommand oracle above cannot see it and this is the
+    # only place that claims it. It mirrors PATCH /api/v1/agents/{name}, whose
+    # `model` / `fast_model` / `wire_api` the projector reads.
+    "agent edit": {"--model", "--fast-model", "--clear-fast-model", "--wire-api"},
+    # Same shape, one kind over: a connection's wire is a FIELD of the
+    # connection, corrected on the verb that edits it. `PATCH
+    # /api/v1/providers/{name}` carries `protocol`, and the CLI could not send
+    # it while its own help called the field immutable.
+    "provider edit": {"--protocol", "--base-url", "--secret"},
 }
 
-#: The UI operations that have NO CLI counterpart today — the exemptions to
-#: US4's claim, written down instead of left out.
+#: There are NO exempted UI operations today. `_KNOWN_PARITY_GAPS` used to
+#: live here, naming three: the per-agent model binding (now
+#: `coffer agent edit --model`, claimed in `_OPTION_ONLY_GROUPS`), reverting a
+#: wire to the agent's built-in login (now `coffer provider use-builtin`), and
+#: browsing a memory partition's files (now `coffer memory ls` / `read`). Each
+#: was asserted from the absent side, so closing it reddened this module and
+#: forced the exemption out — which is exactly what happened.
 #:
-#: The table above is an oracle of what the CLI *registers*; it cannot see an
-#: operation the UI has and the CLI simply never grew, so widening it by
-#: itself would have made the scenario's claim ("every UI-visible operation
-#: has a CLI subcommand") louder without making it truer. These three are what
-#: extending it to all fifteen groups surfaced. Each is asserted below to be
-#: STILL a gap, so closing one reds this test and forces its exemption to be
-#: deleted — a fence that admits its holes and notices when one is filled.
+#: Two more were found the way the table could not find them — by reading a
+#: route's callers rather than the CLI's tree — and closed rather than listed:
+#: `coffer provider rename` and `coffer provider edit --protocol`. That is the
+#: standing limitation of this module: it can prove the tree matches the table,
+#: and it cannot see an operation the CLI never grew.
 #:
-#: None of the three is fixed here: each is a CLI command that has to be
-#: designed, not a test change.
-_KNOWN_PARITY_GAPS: dict[str, str] = {
-    "agent model": (
-        "The model an agent answers with is bound only through the chat page, "
-        "via PATCH /api/v1/chat/conversations/{id}/agent-config. No CLI path "
-        "sets it: `coffer agent add|edit` take --config-dir and --description "
-        "and nothing else, and there is no `coffer agent model`."
-    ),
-    "provider use-builtin": (
-        "POST /api/v1/providers/use-builtin/{wire} exists and the Model "
-        "providers page calls it — reverting a wire protocol to the agent's "
-        "own built-in credentials. `coffer provider` has activate's half "
-        "(`switch`) but not this one."
-    ),
-    "memory files": (
-        "GET /api/v1/memory/partitions/{name}/files and .../files/content "
-        "back the memory detail page's file tree and viewer. `coffer memory` "
-        "reaches facts and partitions but cannot browse or read the files."
-    ),
-}
+#: If a UI operation ever ships without a CLI counterpart again, write the
+#: exemption back the same way: a name, the reason, and an assertion that the
+#: command is STILL missing, so that filling the gap cannot leave a stale
+#: exemption telling readers the CLI cannot do something it can.
 
 
 def _subcommands(path: str) -> set[str]:
@@ -214,9 +224,9 @@ def test_cli_covers_every_visual_operation():
 
     It used to name five groups of the fifteen, which is why this could not
     fail on the ten it never mentioned. What it still cannot see on its own is
-    a UI operation the CLI simply never grew — that is asserted separately, as
-    the named exemptions in ``_KNOWN_PARITY_GAPS``, so US4's claim is bounded
-    rather than assumed.
+    a UI operation the CLI simply never grew: that was carried as a table of
+    named exemptions, each asserted from the absent side, and all three are now
+    closed — see the note above ``_subcommands`` for how to write one back.
     """
     root = _subcommands("")
     top_level = {path for path in _EXPECTED_GROUPS if " " not in path}
@@ -240,41 +250,10 @@ def test_cli_covers_every_visual_operation():
         )
 
 
-def test_the_known_parity_gaps_are_still_gaps():
-    """Each exemption in ``_KNOWN_PARITY_GAPS`` is still missing.
-
-    An exemption that outlives its gap is worse than no exemption at all: it
-    goes on telling a reader the CLI cannot do something it can. So each one is
-    asserted from the absent side. When a gap is closed this test reds, and the
-    fix is to add the new subcommand to ``_EXPECTED_GROUPS`` and delete the
-    entry here.
-    """
-    assert set(_KNOWN_PARITY_GAPS) == {
-        "agent model",
-        "provider use-builtin",
-        "memory files",
-    }, "a parity gap was added or removed without updating the assertions below"
-
-    # 1. `agent model` — nothing on the agent CLI binds a model.
-    assert "model" not in _subcommands("agent"), _KNOWN_PARITY_GAPS["agent model"]
-    for sub in ("add", "edit"):
-        opts = _long_options(f"agent {sub}")
-        assert "--model" not in opts, (
-            f"`coffer agent {sub}` grew --model; the gap is closed — move it "
-            f"into _EXPECTED_GROUPS/_OPTION_ONLY_GROUPS and drop the exemption"
-        )
-
-    # 2. `provider use-builtin` — the route's CLI counterpart does not exist.
-    assert "use-builtin" not in _subcommands("provider"), _KNOWN_PARITY_GAPS["provider use-builtin"]
-
-    # 3. `memory files` — no file browse or read under `coffer memory`.
-    memory_subs = _subcommands("memory")
-    file_reaching = {"files", "file", "ls", "cat", "read", "tree"} & memory_subs
-    assert not file_reaching, (
-        f"`coffer memory` grew {sorted(file_reaching)}; {_KNOWN_PARITY_GAPS['memory files']}"
-    )
-
-
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="command line covers every visual operation",
+)
 def test_every_command_group_renders_its_help():
     """`--help` must succeed for every group — an import-time or annotation
     error in one command module otherwise only surfaces when a user reaches

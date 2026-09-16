@@ -1,4 +1,4 @@
-// frontend/src/kinds/channel/channelBinding.ts
+// frontend/src/components/channel/channelBinding.ts
 // The pure half of a channel's machine binding (spec channels, "Where a
 // channel runs"): what a `runs_on` value IS from this machine's point of view,
 // and the option list a picker offers for it.

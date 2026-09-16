@@ -109,6 +109,17 @@ class Kind:
     # set this True; `agent` deliberately does not — it IS the agent, so there
     # is nothing for a per-agent scope to narrow.
     supports_scope: bool = False
+    # Whether this kind's rows converge with the sync remote (spec vault-sync).
+    # True for everything the user authored — the rows a second machine is
+    # supposed to receive. False for a kind whose rows are DERIVED from what is
+    # installed on one machine: publishing those produces, at the other end, a
+    # row naming something that machine does not have, with nothing behind it,
+    # which the next local pass would recompute away anyway. `memory` is the
+    # only kind that sets it False today (spec memory FR-023). Declared here
+    # rather than listed in the exporter so the sync layer keeps one rule
+    # instead of a table of exceptions — the shape the retired machine-local
+    # kind list had.
+    converges: bool = True
 
     # --- Pre-write validators: run BEFORE persistence; raising rejects the write ---
 

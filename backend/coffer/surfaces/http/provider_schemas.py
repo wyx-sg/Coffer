@@ -57,10 +57,22 @@ class ProviderCreate(BaseModel):
 class ProviderPatch(BaseModel):
     """Partial update. ``credential_ref`` is immutable (it is the vault address
     the connection owns); ``protocol`` is not — the probe that guessed the wire
-    can be wrong, and nothing keys off it. Re-targeting which agents the
-    connection projects into is a scope edit, not a patch field (re-target then
-    re-activate to re-project). ``models`` replaces the curated set as a whole:
-    ``None`` leaves it alone, ``[]`` clears the restriction."""
+    can be wrong, so it is corrected in place rather than by re-entering the
+    connection, key and all.
+
+    Two things DO key off the wire, though, so that correction is refused with
+    409 ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while the connection is
+    ``is_active``: an ``ollama`` connection covers no agent whatever its scope
+    says, and ``use-builtin <wire>`` reaches an agent through the wire. Moving
+    the wire under a live projection would leave the native config already
+    written with nothing that would ever take it off. Revert the agents to their
+    built-in login, patch, then re-activate. An inactive connection patches
+    freely.
+
+    Re-targeting which agents the connection projects into is a scope edit, not
+    a patch field (re-target then re-activate to re-project). ``models``
+    replaces the curated set as a whole: ``None`` leaves it alone, ``[]`` clears
+    the restriction."""
 
     protocol: Protocol | None = None
     base_url: str | None = None

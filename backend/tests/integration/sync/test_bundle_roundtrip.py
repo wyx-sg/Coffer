@@ -38,6 +38,7 @@ from coffer.application.sync.appliers import (
     StateApplier,
     TreeApplier,
 )
+from coffer.domain.errors import ResourceNotFound, UnknownKind
 from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import Scope
 from coffer.domain.sync.errors import SyncSerializationError
@@ -238,6 +239,63 @@ async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachi
     assert _doc(document)["config"]["runs_on"] == vault.machine_id
     assert _areas(summary)["resources"] == 2
     assert summary.failures == []
+
+
+@pytest.mark.acceptance(spec="memory", scenario="a partition does not travel to the sync remote")
+async def test_export_withholds_a_kind_whose_rows_are_derived_on_each_machine(
+    vault: VaultMachine,
+) -> None:
+    """A ``memory`` partition row does not travel (spec memory FR-023).
+
+    The tree under ``~/.coffer/memory/`` was already left behind — it is not a
+    mirrored tree — but the partition's Resource ROW was exported like any
+    other, which produces on the second machine exactly the thing FR-023
+    forbids: a partition that appears there, naming a project root that machine
+    may not have, with no facts behind it because the facts stayed home.
+
+    The rule is declared on the kind (``Kind.converges``), not listed in this
+    module, so the exporter keeps one rule rather than a table of exceptions.
+    """
+    await vault.register("mcp_server", "files", {"value": "files"})
+    await vault.register("memory", "coffer", {"value": "/Users/someone/work/coffer"})
+
+    summary = await vault.exporter.export(vault.bundle, with_credentials=False)
+
+    root = pathlib.Path(vault.bundle.path)
+    assert not (root / "resources" / "memory").exists()
+    assert (root / "resources" / "mcp_server" / "files.yaml").is_file()
+    # Counted as it is written: a document withheld is not a document exported.
+    assert _areas(summary)["resources"] == 1
+    assert summary.failures == []
+
+
+@pytest.mark.acceptance(spec="memory", scenario="a partition does not travel to the sync remote")
+async def test_export_removes_a_derived_document_an_older_build_published(
+    vault: VaultMachine,
+) -> None:
+    """The reverse transition, and it is the exporting side that pays for it.
+
+    A machine still running the build that published ``memory`` documents left
+    them in the shared tree. This build does not produce them, so the
+    differential export publishes their absence as a deletion — which is the
+    cleanup, not a loss: nothing on the other end is derived from them.
+    """
+    await vault.register("mcp_server", "files", {"value": "files"})
+    root = pathlib.Path(vault.bundle.path)
+    stale = "resources/memory/coffer.yaml"
+    _stage(
+        root,
+        stale,
+        yaml.safe_dump(
+            {"kind": "memory", "name": "coffer", "config": {"value": "/elsewhere"}},
+            sort_keys=True,
+        ),
+    )
+
+    await vault.exporter.export(vault.bundle, with_credentials=False)
+
+    assert not (root / stale).exists()
+    assert (root / "resources" / "mcp_server" / "files.yaml").is_file()
 
 
 async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_nothing(
@@ -727,6 +785,76 @@ async def test_a_channel_deletion_in_the_tree_deletes_the_channel(
     await applier.remove("resources/channel/seatalk.yaml")
 
     assert await vault.find("channel", "seatalk") is None
+
+
+@pytest.mark.acceptance(spec="memory", scenario="a partition does not travel to the sync remote")
+async def test_resource_applier_ignores_a_document_of_a_kind_that_does_not_converge(
+    vault: VaultMachine,
+) -> None:
+    """The import side of spec memory FR-023, and it is not redundant.
+
+    Withholding on export only binds machines running this build. A machine
+    still on the older one keeps publishing ``memory`` documents, and this end
+    must not turn them into rows — otherwise the ghost partition arrives
+    anyway, from the one direction the exporting fix cannot reach.
+    """
+    applier = ResourceApplier(
+        vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
+    )
+    path = "resources/memory/theirs.yaml"
+    _stage_doc(
+        vault.worktree,
+        path,
+        {"kind": "memory", "name": "theirs", "config": {"value": "/their/repo"}},
+    )
+
+    await applier.upsert(path)
+
+    with pytest.raises(ResourceNotFound):
+        await vault.resources.get(ResourceRef("memory", "theirs"))
+
+
+async def test_resource_applier_still_names_a_kind_it_does_not_know(
+    vault: VaultMachine,
+) -> None:
+    """The withholding flag must not turn an unknown kind into a silent skip.
+
+    ``converges`` answers True for a kind nobody declared anything about, so a
+    document naming a kind this build does not have falls through to
+    ``register`` and is refused there BY NAME, exactly as before. The
+    alternative — answering False for the unknown — would have made a corrupt
+    or future document do nothing at all and report nothing, which is the one
+    outcome a converge round cannot afford.
+    """
+    applier = ResourceApplier(
+        vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
+    )
+    path = "resources/telepathy/whatever.yaml"
+    _stage_doc(
+        vault.worktree,
+        path,
+        {"kind": "telepathy", "name": "whatever", "config": {"value": "x"}},
+    )
+
+    with pytest.raises(UnknownKind):
+        await applier.upsert(path)
+
+
+async def test_resource_applier_will_not_delete_a_derived_row_the_remote_dropped(
+    vault: VaultMachine,
+) -> None:
+    """A partition here is derived from THIS machine's agents, so a deletion
+    arriving from the tree has no standing to remove it — and once the tree
+    stops carrying these documents at all, every machine's export publishes
+    exactly that deletion."""
+    await vault.register("memory", "coffer", {"value": "/here"})
+    applier = ResourceApplier(
+        vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
+    )
+
+    await applier.remove("resources/memory/coffer.yaml")
+
+    assert await vault.resources.get(ResourceRef("memory", "coffer")) is not None
 
 
 async def test_resource_applier_removes_a_row_and_agrees_when_it_is_already_gone(

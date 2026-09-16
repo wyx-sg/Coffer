@@ -360,7 +360,11 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
 
     async def _memory(agent_key: str, cwd: str) -> str | None:
         calls.append((agent_key, cwd))
-        return "## Coffer memory\nKnown about you (pinned first):\n- Likes tabs."
+        # The real composer's shape (application/memory/digest.fact_line).
+        # "(pinned first)" used to sit in this stub, describing an ordering
+        # that went with the per-fact overrides — a stub nothing compares
+        # against still teaches a reader the wrong payload.
+        return "## Coffer memory\nKnown about you:\n- **Likes tabs** — Two spaces are not a tab."
 
     provider = ClaudeSdkProvider(
         conversations=repo, session_factory=factory, compose_memory_context=_memory

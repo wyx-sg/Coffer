@@ -49,7 +49,7 @@ specs are `agent-registry`, `channels`, `knowledge`, `mcp-gateway`, `memory`,
 `provider-switching`, `skill-manager`, `ui-shell`, `vault-sync`. Seven carry the
 full set (`contracts/ data-model.md plan.md quickstart.md spec.md`, five of
 those plus `research.md`); `ui-shell` has `plan.md quickstart.md spec.md` because
-it adds no endpoints of its own; `memory` has only `spec.md`.
+it adds no endpoints of its own; `memory` has everything but `plan.md`.
 
 `tasks.md` is the one **transient** slot: a checkbox list an agent ticks
 through while building, deleted once the work ships, which is why no spec

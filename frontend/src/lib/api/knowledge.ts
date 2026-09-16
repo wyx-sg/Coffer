@@ -63,6 +63,18 @@ export function getFile(path: string): Promise<FileOut> {
   return call<FileOut>(`${ROOT}/file?path=${enc(path)}`);
 }
 
+/**
+ * Remove ONE file. `path` is relative to the knowledge root, the same string
+ * the tree and `getFile` use — the daemon refuses anything that escapes it.
+ *
+ * The file is the only copy: there is no index to fall out of step and nothing
+ * to restore it from but the sync remote's history, which is why every caller
+ * confirms first. 204, so nothing comes back.
+ */
+export function deleteFile(path: string): Promise<void> {
+  return call<void>(`${ROOT}/file?path=${enc(path)}`, { method: "DELETE" });
+}
+
 // --- tidy -------------------------------------------------------------------
 
 /**

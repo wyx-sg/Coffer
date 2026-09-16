@@ -26,7 +26,7 @@ import { useSyncRuns } from "@/lib/hooks/useSync";
 import type { RunRecord } from "@/lib/api/sync";
 import { formatDateTime } from "@/lib/utils";
 import { SyncRoundPathList } from "./SyncRoundPathList";
-import { runSearchHaystack, statusLabel, syncRunColumns } from "./syncRunColumns";
+import { rollbackTargetId, runSearchHaystack, statusLabel, syncRunColumns } from "./syncRunColumns";
 
 /** The statuses a round can end in — the filter's options, in severity order. */
 const STATUSES = [
@@ -134,6 +134,12 @@ export function SyncHistoryTab({ enabled }: Props) {
   // moment it is.
   const { data, isLoading, error } = useSyncRuns(enabled);
   const runs = useMemo(() => data?.runs ?? [], [data]);
+  // Which row may offer "Undo this round": `POST /sync/rollback` names no
+  // round, it reverses the newest pre-apply snapshot, so exactly one row can
+  // honestly carry the action. Computed over the WHOLE history rather than the
+  // visible page — a filter that hides the newest round must not promote the
+  // one under it into a target it is not.
+  const rollbackTarget = useMemo(() => rollbackTargetId(runs), [runs]);
 
   const filters: FilterDef<RunRecord>[] = [
     {
@@ -172,7 +178,7 @@ export function SyncHistoryTab({ enabled }: Props) {
           preserves the order it is handed. */}
       <DataTable
         rows={runs}
-        columns={syncRunColumns(t)}
+        columns={syncRunColumns(t, rollbackTarget)}
         rowKey={(run) => String(run.id)}
         search={{
           accessor: (run) => runSearchHaystack(t, run),

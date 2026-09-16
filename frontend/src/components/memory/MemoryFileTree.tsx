@@ -1,4 +1,4 @@
-// frontend/src/kinds/memory/MemoryFileTree.tsx
+// frontend/src/components/memory/MemoryFileTree.tsx
 //
 // Two-pane browser for one partition's own directory under `~/.coffer/memory/`:
 // a recursive left tree (expand/collapse dirs, click a file to select it) and a

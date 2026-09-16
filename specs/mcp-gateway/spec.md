@@ -336,8 +336,11 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 ### Scenario: command line covers every visual operation
 
 - **Given** the daemon is running,
-- **When** the user invokes the relevant `coffer mcp …` / `coffer resource …` / `coffer audit …` / `coffer retention …` subcommand,
-- **Then** the same effect is achieved as the corresponding management operation, and machine-readable JSON output is available for scripting.
+- **When** the CLI's live command tree is read,
+- **Then** it is **exactly** the reviewed table of every group the composition root registers and every subcommand under each — `daemon`, `open`, `resource`, `scope`, `audit`, `retention`, `mcp`, `credentials`, `agent`, `channel`, `skill`, `knowledge`, `memory`, `provider`, `sync`, with their nested groups — asserted in both directions, so a UI operation cannot ship a CLI counterpart without a reviewer seeing it here and a CLI command cannot appear without someone deciding it belongs,
+- **And** the groups whose surface is options rather than subcommands are claimed by those options instead, since an empty subcommand set would assert nothing about them,
+- **And** every group's `--help` renders, so an import-time error in one command module cannot wait for a user to reach for it,
+- **And** machine-readable JSON output is available for scripting.
 
 ### Scenario: command line surfaces same errors
 

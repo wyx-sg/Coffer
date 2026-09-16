@@ -18,6 +18,7 @@ import type { Column } from "@/components/DataTable";
 import type { DiffCounts, RunRecord } from "@/lib/api/sync";
 import { toneClass, type Tone } from "@/lib/statusColors";
 import { formatDateTime } from "@/lib/utils";
+import { SyncRollbackAction } from "./SyncRollbackAction";
 
 /**
  * A round's status in the badge vocabulary the rest of the app uses.
@@ -66,7 +67,49 @@ export function runSearchHaystack(t: TFunction, run: RunRecord): string {
     .toLowerCase();
 }
 
-export function syncRunColumns(t: TFunction): Column<RunRecord>[] {
+/**
+ * Statuses that prove a round reached step 4 and tagged a pre-apply snapshot
+ * (`convergence.py` `--- 4 guard + snapshot ---`): it applied, or it had
+ * nothing to apply, or it applied here and only the push failed.
+ */
+const SNAPSHOTTED = new Set(["ok", "no_change", "push_failed"]);
+
+/**
+ * Statuses that prove a round stopped BEFORE the snapshot — a conflict stops
+ * at the merge, a held round at the guard, and a disabled one never ran. Such
+ * a round left no snapshot, so the round underneath it is still the one a
+ * rollback undoes.
+ */
+const PRE_SNAPSHOT = new Set(["conflict", "awaiting_confirmation", "disabled"]);
+
+/**
+ * The id of the one round `POST /sync/rollback` would undo, or null.
+ *
+ * The route takes no argument: it reverses the round that left the NEWEST
+ * pre-apply snapshot. So the surface has to work out which row that is rather
+ * than offering the same call from every row under a different name.
+ *
+ * `failed` deliberately ends the walk with no target. A failed round may have
+ * died before the snapshot or after it — the status cannot say which — and
+ * guessing the wrong way would put "Undo" on a round that is not the one the
+ * daemon would reverse. No button is the honest answer; `coffer sync rollback`
+ * is still there for someone who knows what happened.
+ *
+ * @param runs the history, newest first, exactly as the daemon returns it.
+ */
+export function rollbackTargetId(runs: RunRecord[]): number | null {
+  for (const run of runs) {
+    if (SNAPSHOTTED.has(run.status)) return run.id;
+    if (!PRE_SNAPSHOT.has(run.status)) return null;
+  }
+  return null;
+}
+
+/**
+ * @param rollbackTarget the id from `rollbackTargetId` — the single row that
+ *   carries the Undo action, or null when no round can be undone.
+ */
+export function syncRunColumns(t: TFunction, rollbackTarget: number | null): Column<RunRecord>[] {
   return [
     {
       key: "when",
@@ -115,6 +158,14 @@ export function syncRunColumns(t: TFunction): Column<RunRecord>[] {
       // A dash, never a blank: a round that landed no commit (nothing changed,
       // or it never got that far) is saying something, not missing a value.
       cell: (run) => (run.commit ? run.commit.slice(0, 10) : "—"),
+    },
+    {
+      key: "undo",
+      // No header text: one action on one row, and a column heading over
+      // mostly-empty cells reads as a value that is missing everywhere else.
+      header: "",
+      className: "w-36 text-right",
+      cell: (run) => (run.id === rollbackTarget ? <SyncRollbackAction run={run} /> : null),
     },
   ];
 }

@@ -662,6 +662,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "已保存的凭据与内联密钥，二者必须且只能提供一个",
+    "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "该连接正在启用中，无法更改协议格式——请先让相关 agent 切回自带登录，再修改协议，然后重新启用",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "RESOURCE_NOT_FOUND": "资源未找到",
     "SCOPE_INVALID": "该资源类型不支持此生效范围设置",
@@ -1003,6 +1004,9 @@
       "tidyDone": "整理已完成。",
       "emptyFolder": "这里还没有内容",
       "selectAFile": "选择一个文件来阅读",
+      "deleteFile": "删除文件",
+      "deleteFileTitle": "删除这个文件？",
+      "deleteFileConfirm": "从磁盘上删除「{{path}}」？这个文件是唯一的副本——此操作不可撤销。",
       "treeLabel": "本集合中的文件"
     },
     "welcome": {
@@ -1423,6 +1427,17 @@
         "modified": "修改 · {{path}}",
         "deleted": "删除 · {{path}}"
       }
+    },
+    "rollback": {
+      "action": "撤销这一轮",
+      "title": "撤销这一轮？",
+      "description": "这会把本机金库恢复到 {{when}} 结束的那一轮开始写入之前的状态。撤销本身是一次普通的本地改动：下一轮会把它发布到远端，其他机器随之跟上。",
+      "willUndo": "这一轮在本机写入的内容——撤销会把每一条都反向还原",
+      "morePaths": "…还有 {{count}} 条",
+      "nothingApplied": "这一轮没有往本机金库里写任何内容，撤销它在本机不会改变什么。",
+      "confirm": "撤销这一轮",
+      "undoing": "正在撤销…",
+      "done": "已撤销这一轮（回退 +{{added}} ~{{modified}} −{{deleted}}）。"
     },
     "history": {
       "description": "这台机器执行过的每一轮收敛，最新的在最前。什么都没变的那些轮次也会列出来——正是它们说明金库一直在收敛。",

@@ -24,3 +24,5 @@ Restart the client after editing its config. Tools appear namespaced as `<server
 When an MCP client starts a session, it launches `coffer-mcp-shim` as a subprocess. The shim checks `~/.coffer/daemon.json` to find the running daemon. If the daemon is not running, the shim spawns it automatically. Once connected, the shim forwards `stdin/stdout` to the daemon's HTTP/SSE endpoint, bridging the client's stdio MCP protocol to the daemon.
 
 This means you never have to configure a port or token in your client — the shim handles discovery transparently.
+
+[Agents →](/guide/agents)

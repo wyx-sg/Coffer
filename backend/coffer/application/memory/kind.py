@@ -9,6 +9,16 @@ as it is a Resource row, so ``generic_create_allowed`` is False and
 ``supports_scope`` is True because per-agent delivery is the entire reason a
 partition is a Resource at all (spec memory FR-014) — without it there would
 be nothing for the framework's scope to narrow.
+
+``converges`` is False, and this is the only kind that sets it (spec memory
+FR-023). A partition row is derived from the agents installed on THIS machine,
+so publishing it to the sync remote puts on the second machine a partition
+naming a project root it may not have, with no facts behind it — the derived
+tree under ``~/.coffer/memory/`` is not mirrored either — until that machine's
+own next pass recomputes it away. FR-023 names that exact sequence as the
+reason the layer must not converge; the flag is what makes the sync layer
+honour it, and it is declared here because it is a fact about this kind rather
+than a case for the exporter to special-case.
 """
 
 from __future__ import annotations
@@ -41,4 +51,5 @@ def make_memory_kind(service: MemoryService) -> Kind:
         on_delete=_on_delete,
         generic_create_allowed=False,
         supports_scope=True,
+        converges=False,
     )

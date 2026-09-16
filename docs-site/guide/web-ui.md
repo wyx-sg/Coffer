@@ -330,15 +330,17 @@ own newest-first table:
 - **Daemon** — Coffer's own log: level, logger, message, including what broke.
 
 Each tab filters by free text and time range, plus the one filter its record
-affords — the actor, the call's status, errors only. Click any row to expand it
-to its raw underlying record. A single server's calls are also on its own detail
+affords — the actor, the call's status, a severity floor. Click any row to
+expand it to its raw underlying record. A single server's calls are also on its own detail
 page, under **Invocations** — the same table, scoped to that server.
 
 They are three tables rather than one because one table could only show what all
 three records have in common, and that is not much: a call's duration and a log
-record's level would have had nowhere to go. Reading *across* the three is your
-agent's job, not a filter's: **`coffer__diagnose`** returns all of them already
-joined on one timeline, so "why did that fail?" is a question you can just ask.
+record's level would have had nowhere to go. Reading *across* them is your
+agent's job, not a filter's: **`coffer__diagnose`** returns the changes and the
+daemon log together over one window, so "why did that fail?" is a question you
+can just ask. (It does not carry the MCP calls — those are read here, or with
+`coffer mcp invocations <server>`.)
 
 For scripting, `GET /api/v1/audit` and `coffer audit` are unchanged. `/audit` and
 `/observability` redirect here.
