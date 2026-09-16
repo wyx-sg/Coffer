@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useResource } from "@/lib/hooks/useResources";
 import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
 import { useMemoryPartitions, useOrganisePartition } from "@/lib/hooks/useMemory";
+import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 
 export function MemoryDetailPage() {
   const { t } = useTranslation();
@@ -36,6 +37,14 @@ export function MemoryDetailPage() {
   const partitions = useMemoryPartitions();
   const projectRoot = partitions.data?.find((p) => p.name === partition)?.project_root;
   const organise = useOrganisePartition(partition);
+  // Whether a pass is running is the DAEMON's answer, not this component's:
+  // the mutation's own `isPending` dies with the component, so leaving the
+  // page mid-pass and coming back used to show an idle button and invite a
+  // second concurrent pass over the same files. The local pending state is
+  // still OR-ed in, because it covers the moment between the click and the
+  // first poll.
+  const passRunning = useUpkeepRunning("memory", partition);
+  const organising = organise.isPending || passRunning;
 
   return (
     <div className="space-y-6">
@@ -53,12 +62,10 @@ export function MemoryDetailPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => organise.mutate()}
-                  disabled={organise.isPending}
+                  disabled={organising}
                 >
                   <RefreshCw
-                    className={
-                      organise.isPending ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"
-                    }
+                    className={organising ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"}
                   />
                   {t("memory.detail.organise")}
                 </Button>

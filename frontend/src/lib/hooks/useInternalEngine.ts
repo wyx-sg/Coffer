@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { internalEngineApi } from "@/lib/api/internalEngine";
+import { internalEngineApi, type UpkeepPass } from "@/lib/api/internalEngine";
 import { useToast } from "@/components/ui/toast";
 import { internalEngineKey } from "@/lib/api/queryKeys";
 
@@ -22,6 +22,40 @@ export function useSetInternalEngineModel() {
   const { toast } = useToast();
   return useMutation({
     mutationFn: (model: string | null) => internalEngineApi.setModel(model),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: internalEngineKey });
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/** Change one unattended pass's switch or interval (spec provider-switching E3a).
+ *
+ *  One pass per call, and each half omitted unless it is being changed: the
+ *  settings card toggles one row at a time, and a body carrying all three would
+ *  make every toggle a chance to write back a stale copy of the other two. */
+export function useSetUpkeep() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: ({
+      pass,
+      enabled,
+      interval_s,
+    }: {
+      pass: UpkeepPass;
+      enabled?: boolean;
+      interval_s?: number | null;
+    }) =>
+      internalEngineApi.setUpkeep({
+        pass,
+        ...(enabled === undefined ? {} : { enabled }),
+        ...(interval_s === undefined || interval_s === null ? {} : { interval_s }),
+        // `null` is "back to this pass's own default", which a null body field
+        // cannot say — the server reads this flag for it instead.
+        use_default_interval: interval_s === null,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: internalEngineKey });
     },

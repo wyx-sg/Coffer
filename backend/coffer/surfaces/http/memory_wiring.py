@@ -28,12 +28,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.service import AgentService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.builtin_recall_tool import register_recall_tool
@@ -44,6 +45,7 @@ from coffer.application.memory.organise_worker import OrganiseWorker
 from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.internal_engine_config import AGGREGATE, ORGANISE
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.memory.dependencies import (
@@ -145,16 +147,50 @@ def wire_memory_kind(
     )
 
 
-def start_aggregate_worker(service: MemoryService) -> asyncio.Task[None]:
-    """Start the aggregation pass (FR-007) — a catch-up on boot, then hourly.
+def _upkeep_enabled(
+    engine_config: InternalEngineConfigService, pass_name: str
+) -> Callable[[], Awaitable[bool]]:
+    """Reads the pass's switch, every pass. See ``start_aggregate_worker``."""
+
+    async def _enabled() -> bool:
+        return (await engine_config.get()).upkeep(pass_name).enabled
+
+    return _enabled
+
+
+def _upkeep_interval(
+    engine_config: InternalEngineConfigService, pass_name: str
+) -> Callable[[], Awaitable[int | None]]:
+    """Reads the pass's interval, re-read while a wait is already running so a
+    change in Settings lands within a slice rather than at the end of it."""
+
+    async def _interval() -> int | None:
+        return (await engine_config.get()).upkeep(pass_name).interval_s
+
+    return _interval
+
+
+def start_aggregate_worker(
+    service: MemoryService, engine_config: InternalEngineConfigService
+) -> asyncio.Task[None]:
+    """Start the aggregation pass (FR-007) — a catch-up on boot, then on a timer.
 
     On by default: a pass reads the agents' own memory files and writes only
     the derived tree, and FR-006 makes a pass over unchanged sources nearly
     free. The Sync button and ``coffer memory sync`` stay: this makes the
     layer current without being asked, it does not replace asking.
+
+    Both halves of "on a timer" are the operator's (spec provider-switching
+    E3a), and both are read PER PASS rather than captured here — the setting
+    converges from other machines through vault sync, so a value read once at
+    boot would be stale without anything on this machine having changed.
     Returns the task; the lifespan cancels it at shutdown.
     """
-    worker = AggregateWorker(aggregate=service.aggregate)
+    worker = AggregateWorker(
+        aggregate=service.aggregate,
+        is_enabled=_upkeep_enabled(engine_config, AGGREGATE),
+        read_interval=_upkeep_interval(engine_config, AGGREGATE),
+    )
     return asyncio.create_task(worker.run_forever())
 
 
@@ -169,17 +205,25 @@ async def stop_aggregate_worker(task: asyncio.Task[None]) -> None:
 
 
 def start_organise_worker(
-    organise: OrganiseRunner, resource_svc: ResourceService
+    organise: OrganiseRunner,
+    resource_svc: ResourceService,
+    engine_config: InternalEngineConfigService,
 ) -> asyncio.Task[None]:
-    """Start the organise sweep — on by default (``organise_worker.py``'s own
-    docstring: the tree it rewrites is disposable, so there is no unattended-
-    rewrite risk to gate behind an operator switch, unlike knowledge's tidy).
+    """Start the organise sweep — on by default, because the tree it rewrites is
+    disposable (FR-023: delete it and re-running reproduces it), unlike
+    knowledge's tidy. On by default is not the same as unstoppable, though: the
+    operator can switch it off and re-time it like any other pass.
     Returns the task; the lifespan cancels it at shutdown."""
 
     async def _list_partitions() -> list[str]:
         return [r.name for r in await resource_svc.list(kind=KIND_MEMORY, enabled=True)]
 
-    worker = OrganiseWorker(organise=organise, list_partitions=_list_partitions)
+    worker = OrganiseWorker(
+        organise=organise,
+        list_partitions=_list_partitions,
+        is_enabled=_upkeep_enabled(engine_config, ORGANISE),
+        read_interval=_upkeep_interval(engine_config, ORGANISE),
+    )
     return asyncio.create_task(worker.run_forever())
 
 

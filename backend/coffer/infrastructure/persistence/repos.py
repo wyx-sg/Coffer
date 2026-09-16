@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,7 +13,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
-from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
+from coffer.domain.internal_engine_config import (
+    AGGREGATE,
+    ORGANISE,
+    TIDY,
+    GlobalInternalEngineConfig,
+    UpkeepSetting,
+)
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.models import (
@@ -288,6 +295,15 @@ class SqlAlchemyAuditRepo:
             return [_audit_to_domain(r) for r in rows]
 
 
+#: Which pair of columns each unattended pass keeps its switch and timer in.
+#: One table rather than a branch per pass, so adding a pass is one entry.
+_UPKEEP_COLUMNS = {
+    AGGREGATE: ("auto_aggregate_enabled", "aggregate_interval_s"),
+    ORGANISE: ("auto_organise_enabled", "organise_interval_s"),
+    TIDY: ("auto_tidy_enabled", "tidy_interval_s"),
+}
+
+
 class SqlAlchemyInternalEngineConfigRepo:
     """Concrete repo for the singleton ``internal_engine_config`` row."""
 
@@ -301,12 +317,7 @@ class SqlAlchemyInternalEngineConfigRepo:
             if row is None:
                 return None
             updated = row.updated_at.replace(tzinfo=UTC) if row.updated_at else datetime.now(tz=UTC)
-            return GlobalInternalEngineConfig(
-                model=row.model,
-                updated_at=updated,
-                auto_tidy_enabled=bool(row.auto_tidy_enabled),
-                tidy_owner_machine_id=row.tidy_owner_machine_id,
-            )
+            return self._to_domain(row, updated)
 
     async def set(
         self,
@@ -314,6 +325,7 @@ class SqlAlchemyInternalEngineConfigRepo:
         model: str | None,
         auto_tidy_enabled: bool | None = None,
         tidy_owner_machine_id: str | None = None,
+        upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig:
         async with self._sm() as session:
             stmt = select(InternalEngineConfigModel).where(InternalEngineConfigModel.id == 1)
@@ -328,6 +340,10 @@ class SqlAlchemyInternalEngineConfigRepo:
             if tidy_owner_machine_id is not None:
                 # The empty string clears it back to "wherever this is read".
                 row.tidy_owner_machine_id = tidy_owner_machine_id or None
+            for name, setting in (upkeep or {}).items():
+                enabled_col, interval_col = _UPKEEP_COLUMNS[name]
+                setattr(row, enabled_col, setting.enabled)
+                setattr(row, interval_col, setting.interval_s)
             row.updated_at = now
             await session.commit()
             await session.refresh(row)
@@ -342,4 +358,9 @@ class SqlAlchemyInternalEngineConfigRepo:
             updated_at=updated_at,
             auto_tidy_enabled=bool(row.auto_tidy_enabled),
             tidy_owner_machine_id=row.tidy_owner_machine_id,
+            auto_aggregate_enabled=bool(row.auto_aggregate_enabled),
+            aggregate_interval_s=row.aggregate_interval_s,
+            auto_organise_enabled=bool(row.auto_organise_enabled),
+            organise_interval_s=row.organise_interval_s,
+            tidy_interval_s=row.tidy_interval_s,
         )

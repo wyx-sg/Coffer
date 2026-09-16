@@ -211,6 +211,24 @@ class SkillValidationError(CofferError):
         self.details = details or {}
 
 
+class UpkeepAlreadyRunning(CofferError):  # noqa: N818
+    """A long upkeep pass over this target is already in flight.
+
+    Memory's organise and knowledge's tidy both rewrite a whole directory with
+    a model in the loop; two of them over the same target at once are two
+    writers racing, not one faster pass. Surfaces map this to 409 — the
+    request is refused, and the caller's own display should already have been
+    saying "running" (``application.upkeep_runs``).
+    """
+
+    code = "UPKEEP_ALREADY_RUNNING"
+
+    def __init__(self, kind: str, name: str) -> None:
+        super().__init__(f"an upkeep pass is already running for {kind}:{name}")
+        self.kind = kind
+        self.name = name
+
+
 class TargetConflict(CofferError):  # noqa: N818
     code = "TARGET_CONFLICT"
 

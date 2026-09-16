@@ -12,6 +12,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { KnowledgeDetailPage } from "./KnowledgeDetailPage";
 import { acceptance } from "@/test/acceptance";
 
+// The page asks the DAEMON whether a tidy pass is running (that is the whole
+// point — a component's own pending flag dies on navigation), so the hook is
+// mocked here the way every other data hook is.
+vi.mock("@/lib/hooks/useUpkeep", () => ({ useUpkeepRunning: vi.fn(() => false) }));
 vi.mock("@/lib/hooks/useKnowledge", () => ({
   useKnowledgeTree: vi.fn(),
   useKnowledgeFile: vi.fn(),
@@ -27,12 +31,28 @@ const {
   useTidyCollection,
   useUploadKnowledgeFile,
 } = await import("@/lib/hooks/useKnowledge");
+const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
+const runningMock = vi.mocked(useUpkeepRunning);
 const treeMock = vi.mocked(useKnowledgeTree);
 const fileMock = vi.mocked(useKnowledgeFile);
 const tidyMock = vi.mocked(useTidyCollection);
 const uploadMock = vi.mocked(useUploadKnowledgeFile);
 
+function stubEmptyTree() {
+  treeMock.mockReturnValue({
+    data: { path: "shopee", directories: [], files: [] },
+    isPending: false,
+    error: null,
+  } as unknown as ReturnType<typeof useKnowledgeTree>);
+  fileMock.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    error: null,
+  } as unknown as ReturnType<typeof useKnowledgeFile>);
+}
+
 function stubInertDefaults() {
+  runningMock.mockReturnValue(false);
   uploadMock.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
@@ -126,6 +146,45 @@ describe("KnowledgeDetailPage", () => {
 
     renderPage();
     expect(screen.getByText(/select a file/i)).toBeInTheDocument();
+  });
+
+  test("spins the Tidy button while a pass this page did not start is running", () => {
+    // The bug: the spinner used to come from the mutation's own `isPending`,
+    // which a remount resets — so leaving the page mid-pass and coming back
+    // showed an idle button and invited a second concurrent rewrite. The
+    // running state is the daemon's answer now, so `isPending: false` and a
+    // running pass must still read as running.
+    stubEmptyTree();
+    tidyMock.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof useTidyCollection>);
+    stubInertDefaults();
+    runningMock.mockReturnValue(true);
+
+    renderPage();
+
+    const button = screen.getByRole("button", { name: /tidy/i });
+    expect(button).toBeDisabled();
+    expect(button.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  test("the Tidy button is idle when nothing is running", () => {
+    stubEmptyTree();
+    const mutate = vi.fn();
+    tidyMock.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof useTidyCollection>);
+    stubInertDefaults();
+
+    renderPage();
+
+    const button = screen.getByRole("button", { name: /tidy/i });
+    expect(button).not.toBeDisabled();
+    expect(button.querySelector(".animate-spin")).toBeNull();
+    fireEvent.click(button);
+    expect(mutate).toHaveBeenCalled();
   });
 
   test("offers the way back to the collection list", () => {

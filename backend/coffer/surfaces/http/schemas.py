@@ -361,10 +361,14 @@ class CredentialSettingsIn(BaseModel):
 
 
 class InternalEngineConfigOut(BaseModel):
-    """The single, global internal-engine model selection (spec provider-switching)."""
+    """Coffer's own operating settings: its model, and its unattended work."""
 
     model: str | None = None
     updated_at: datetime | None = None
+    #: Keyed by pass name (``aggregate`` / ``organise`` / ``tidy``); the value
+    #: shape is ``internal_engine_routes.UpkeepSettingOut``, defined beside the
+    #: route that builds it (this module is at its size ceiling).
+    upkeep: dict[str, Any] = Field(default_factory=dict)
 
 
 class InternalEngineConfigUpdate(BaseModel):

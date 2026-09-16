@@ -89,6 +89,8 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 
 ### Scenario: organize regenerates the summary without an internal connection
 
+### Scenario: a second organise pass over the same partition is refused while the first is running
+
 ### Scenario: deleting the memory tree and re-syncing reproduces the facts
 
 ### Scenario: a partition's own directory is browsable as a file tree
@@ -121,7 +123,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 - **FR-004**: v1 MUST 支持两个 reader。**Claude Code**：它按项目划分的记忆目录下、每条事实一个的 Markdown 文件，frontmatter 里带着这条事实的名称、描述和类型。**Codex**：它 `MEMORY.md` 里的 task group——每组的适用范围、偏好、可复用知识与失败——以及它蒸馏出的 profile 摘要。每个 reader MUST 忽略 agent 自己的索引或汇总文件，因为那个角色由 Coffer 自己重新生成。
 - **FR-005**: 解析不了自己来源的 reader——agent 改了格式——MUST **大声地、就地地**失败：那个 agent 什么也不贡献，surface 上写明路径和原因，另一个 agent 的聚合照常完成，先前聚合出的事实原样留着而不是被删掉。
 - **FR-006**: 聚合 MUST 跳过内容哈希自上一趟以来没有变化的源文件，且 MUST 为每个源记下足够的信息，使这个判断不需要重新解析就能做出。
-- **FR-007**: 聚合 MUST 由后台 worker 按间隔运行，且 MUST 可以手动触发。与知识层的 tidy 不同，它 MAY 默认开启，因为它只读 agent 的文件、只写派生的文件。
+- **FR-007**: 聚合 MUST 由后台 worker 按间隔运行，且 MUST 可以手动触发。与知识层的 tidy 不同，它 MAY 默认开启，因为它只读 agent 的文件、只写派生的文件。它的开关与间隔 MUST 都可由操作者设置，且 MUST 每一跳重新读取而不是开机时读一次，这样改动无需重启 daemon 即可生效（spec [provider-switching](../provider-switching/spec.zh.md) E3a）。
 
 ### partition
 
@@ -162,6 +164,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 - **FR-064**: 逐 agent 的投递状态 MUST 呈现在**该 agent 自己的详情页**上，而不是 partition 列表页。投递写的是某一个 agent 的设置文件，因此它是逐 agent 的状态；已经限定到某个 agent 的页面 MUST NOT 再让读者选一次 agent。那个界面只回答一个问题——装没装；触发作为事件在审计界面上读（FR-055、FR-065）。
 - **FR-065**: 本层 MUST NOT 自带审计界面。它的事件在各 kind 共用的全库审计界面上阅读；kind 维度的第二份拷贝属于重复界面，因此本层记录的每一种事件类型 MUST 在那里可读，而不是显示为原始事件码。
 - **FR-063**: 每一个生命周期动作——聚合、organise、投递的安装、移除或触发——MUST 记录一条带 actor 的审计事件。一次 recall MUST 记录照常的那行 `mcp_invocations`，且不记录任何关于它的查询或结果的东西。
+- **FR-066**: 同一个分区上同一时刻 MUST 只有**一次 organise** 在跑，不论是谁发起的。一次 organise 要跑上几分钟并改写该分区的整个目录，所以对同一分区的第二次 organise 不是更快的整理，而是两个写者在同一个目录上打架。一次手动触发若在已有 organise 进行中时到达，MUST 被**拒绝**而不是排队（`UPKEEP_ALREADY_RUNNING`，409）——调用方要的是「开始一次 organise」，而这次并不会开始——定时 worker 则 MUST **跳过**那个已在整理中的分区，而不是等在它后面，反正下一轮扫描还会再来。此刻正在被改写的是哪些分区 MUST 可读，这样一个在 organise 进行中才打开的界面看到的是这次 organise，而不是一个空闲的按钮在邀请第二次点击。这份记录属于单个 daemon 且不比它活得更久：一次 organise 活在被请求的那个进程里，所以重启即终结，读回来就是空的——这是事实，不是丢失的记录。
 
 ### 约束
 

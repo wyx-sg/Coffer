@@ -235,7 +235,11 @@ def test_warm_pass_fills_the_sidecar_and_audits_nothing(
     included."""
     _register_codex_with_transcripts(client, tmp_path)
     sidecar = paths.transcript_summaries_path()
-    assert not sidecar.exists()  # startup ran before the agent existed
+    # The worker's loop is already running — it swept once at startup, when no
+    # agent existed, and sweeps again on its interval. Racing that schedule is
+    # not what this test is about, so it starts from a known-empty sidecar
+    # instead of asserting one: what is under test is the pass FILLING it.
+    sidecar.unlink(missing_ok=True)
     before = len(client.get("/api/v1/audit").json()["entries"])
 
     worker = client.app.state.background_workers.warm_worker  # type: ignore[attr-defined]

@@ -185,6 +185,25 @@ user to answer those questions too early and conflated the account with its uses
   model onto the resolved `internal_default` connection before the engine builds
   its chat model; while the connection still carries a `model` (until E1 lands),
   an empty internal-engine model falls back to the connection's model.
+- **E3a — The same singleton carries what Coffer does unattended.** Coffer runs
+  three passes on its own behalf: aggregation reads the agents' own memory into
+  the derived tree (spec [memory](../memory/spec.md) FR-007), organise lets the
+  model rewrite that derived digest (FR-030), and tidy lets it rewrite the
+  user's own knowledge files (spec [knowledge](../knowledge/spec.md) FR-051).
+  Each MUST carry a **switch and an interval** the operator can see and change,
+  read/written through `PUT /api/v1/internal-engine-config/upkeep` — one pass
+  per request, each half untouched when it is not sent, so a settings surface
+  toggling one row cannot write back a stale copy of the other two. An interval
+  the operator has not chosen MUST be reported as unchosen ALONGSIDE the
+  default that then runs, so the default lives in one place — the worker that
+  owns the pass — and raising it later reaches every vault that never chose.
+  A worker MUST pick a change up without a restart; a pass MUST NOT be
+  schedulable below a floor that would busy-loop a model over the user's files.
+  The two passes that write only derived files ship ON; tidy, which rewrites
+  the only copy of the user's own writing, ships OFF. These settings travel
+  with the model choice (spec [vault-sync](../vault-sync/spec.md) slice 7):
+  switching a rewriter off is exactly the decision a second machine must not be
+  left out of.
 - **E4 — Projection input = connection (endpoint + key + protocol) + the
   binding (model).** Activating/projecting a connection for an agent reads the
   endpoint/key/protocol from the connection and the model(s) from that agent's
@@ -1131,7 +1150,9 @@ the memory organizer, reorg, and distill.
 - `set_internal_default(name)`: clears `internal_default` on all other
   connections, then sets it on the target (sequential clear-then-set, serialised
   by the single-process daemon so the global single-internal-default invariant
-  holds), and emits a `provider_internal_default_set` audit event.
+  holds), and emits a `provider_internal_default_set` audit event. When the
+  connection actually moves, it also clears the internal-engine model unless
+  the newly-chosen connection curates that id (FR-021).
 - `resolve_internal_connection() -> ProviderConfig | None`: returns the
   `internal_default` connection's config, or `None` when no connection is marked.
   When `None`, the internal engine (memory organizer / reorg / distill) is a
@@ -1539,6 +1560,29 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 - **Then** B's `internal_default` becomes true and A's becomes false (global
   single-internal-default invariant).
 
+### Scenario: switching the internal engine's connection drops a model it does not serve
+
+- **Given** connection A is the internal default and the internal-engine model
+  is one of A's models,
+- **When** the user makes connection B the internal default,
+- **Then** the internal-engine model is cleared — so
+  `resolve_internal_connection()` is `None` until a model is picked again —
+  unless B's curated `models` already lists that id, in which case it is kept;
+  nothing is probed over the network, and re-setting A, which is already the
+  internal default, changes nothing.
+
+### Scenario: switch off and re-time the passes Coffer runs unattended
+
+- **Given** a fresh vault, where aggregation and organise run on their own
+  timers and tidy does not,
+- **When** the operator switches one pass on or off, or gives it an interval,
+  or returns it to its own default (`PUT /api/v1/internal-engine-config/upkeep`,
+  one pass per request),
+- **Then** that pass's switch and interval change and no other pass's do, the
+  reported default interval says what runs while none is chosen, an interval
+  below the floor and an unknown pass name are both refused, and the running
+  worker picks the change up without a restart.
+
 ### Scenario: choose the model the internal engine runs on
 
 - **Given** a connection is the internal default,
@@ -1764,6 +1808,20 @@ connection's existing curated selection is left exactly as it was.
   use?" a question with no defined answer. A partial unique index over
   `kind` restricted to flagged provider rows makes a second one
   unrepresentable, whatever writes it.
+
+  A change of connection MUST also DROP the internal-engine model (E3). That
+  model is a global singleton with no link to the connection, so carrying the
+  previous connection's model across left Coffer's own passes aimed at a model
+  the new endpoint has never heard of — the user saw provider "Agnes" paired
+  with `deepseek-flash`. The one model kept is one the newly-chosen connection
+  CURATES: a curated `models` list is that connection's own catalogue, so an id
+  on it is still servable. Nothing is probed to decide — a settings write MUST
+  NOT depend on an endpoint being reachable. Cleared, the model falls to
+  `None`, `resolve_internal_connection()` returns `None` (FR-023's clean
+  no-op), and the model dropdown shows its placeholder over the new
+  connection's models. Setting the connection that is ALREADY the internal
+  default MUST change nothing. The rule lives in `set_internal_default`, so the
+  HTTP route and `coffer provider internal-default` both get it.
 - **FR-022**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
   connection as the internal-engine default (applying FR-021), emit a
   `provider_internal_default_set` audit event, and return the updated

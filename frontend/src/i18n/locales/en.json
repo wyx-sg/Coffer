@@ -575,6 +575,29 @@
       "connectionPlaceholder": "Select a model provider",
       "model": "Model",
       "modelPlaceholder": "Select a model"
+    },
+    "upkeep": {
+      "title": "Automatic upkeep",
+      "subtitle": "The passes Coffer runs on its own, without being asked. Each one can be switched off and re-timed.",
+      "interval": "How often {{pass}} runs",
+      "defaultInterval": "Default ({{interval}})",
+      "everyHours": "Every {{count}}h",
+      "everyMinutes": "Every {{count}} min",
+      "passes": {
+        "aggregate": {
+          "name": "Read from agents",
+          "writes": "Reads your agents' own memory files and writes only Coffer's derived tree. No model involved."
+        },
+        "organise": {
+          "name": "Organise memory",
+          "writes": "The model rewrites the derived digest — merges duplicates, marks superseded facts. Deleting the tree and re-running reproduces it."
+        },
+        "tidy": {
+          "name": "Organise knowledge",
+          "writes": "The model rewrites the knowledge files you wrote.",
+          "caution": "This edits the only copy. Prior versions are kept, but nothing asks you first."
+        }
+      }
     }
   },
   "daemon": {
@@ -684,6 +707,7 @@
     "TARGET_CONFLICT": "A skill already exists at the target location",
     "TOOL_DISABLED": "This capability is disabled — enable it on the server's page",
     "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
+    "UPKEEP_ALREADY_RUNNING": "A pass over this one is already running",
     "UNAUTHENTICATED": "This page was opened by an earlier Coffer. Reload the page — it picks up the running one. If that does not help, restart Coffer.",
     "UNKNOWN_AGENT": "Unknown agent",
     "UNKNOWN_KIND": "Unknown resource kind",

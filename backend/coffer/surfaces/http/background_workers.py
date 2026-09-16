@@ -103,11 +103,11 @@ def start_background_workers(
 
     # The notes tidy pass: on idle after a write, and on a periodic sweep.
     tidy_task = start_tidy_worker(knowledge_service, tidy_pass, resource_svc, engine_config, sync)
-    organise_task = start_organise_worker(organise, resource_svc)
+    organise_task = start_organise_worker(organise, resource_svc, engine_config)
     # Aggregation (FR-007): a catch-up pass now, then hourly. It only reads the
     # agents' own memory and only writes the derived tree, so nothing here has
     # to wait on the vault rewriters above.
-    aggregate_task = start_aggregate_worker(memory_service)
+    aggregate_task = start_aggregate_worker(memory_service, engine_config)
     # The transcript summary cache's warm pass, so the first visit to an
     # agent's Conversations tab is never the one that pays the cold read.
     warm_worker, warm_task = start_transcript_warm_worker(transcript_reader, resource_svc)

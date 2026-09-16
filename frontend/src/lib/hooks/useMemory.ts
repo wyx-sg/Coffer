@@ -13,7 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import {
   getFact,
   installDelivery,
@@ -35,6 +35,7 @@ import {
   memoryPartitionFileKey,
   memoryPartitionFilesKey,
   memoryPartitionsKey,
+  upkeepRunsKey,
 } from "@/lib/api/queryKeys";
 
 /** Aggregation and the organise pass both rewrite whole partitions on disk —
@@ -114,7 +115,15 @@ export function useSyncMemory() {
 }
 
 /** Merge duplicates, propose supersessions/conflicts and rewrite one
- * partition's digest. */
+ * partition's digest.
+ *
+ * The pass is long and the daemon refuses a second one over the same
+ * partition, so this hook keeps the shared run list honest at both ends: it
+ * refreshes on settle (the spinner clears as soon as the pass is gone) and it
+ * treats a 409 as "already running" rather than an error. A 409 is not a
+ * failure the user needs told about — it is the state the button should
+ * already have been showing, so refreshing the run list is the whole
+ * response. */
 export function useOrganisePartition(partition: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
@@ -125,7 +134,11 @@ export function useOrganisePartition(partition: string) {
       invalidateMemory(qc);
       toast.success(t("memory.detail.organiseDone"));
     },
-    onError: (error) => toast.error(translateApiError(t, error)),
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
+      toast.error(translateApiError(t, error));
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
   });
 }
 

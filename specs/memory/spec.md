@@ -89,6 +89,8 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 
 ### Scenario: organize regenerates the summary without an internal connection
 
+### Scenario: a second organise pass over the same partition is refused while the first is running
+
 ### Scenario: deleting the memory tree and re-syncing reproduces the facts
 
 ### Scenario: a partition's own directory is browsable as a file tree
@@ -121,7 +123,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-004**: v1 MUST support two readers. **Claude Code**: per-fact Markdown files under its per-project memory directories, whose frontmatter carries the fact's name, description and type. **Codex**: its `MEMORY.md` task groups — each group's applicability, preferences, reusable knowledge and failures — and its distilled profile summary. Each reader MUST ignore the agent's own index or roll-up file, since Coffer regenerates that role itself.
 - **FR-005**: A reader that cannot parse its source — the agent changed its format — MUST fail **loudly and in isolation**: that agent contributes nothing, the surface says so with the path and the reason, the other agent's aggregation still completes, and previously aggregated facts are left standing rather than deleted.
 - **FR-006**: Aggregation MUST skip a source file whose content hash is unchanged since the last pass, and MUST record enough per source to make that decision without re-parsing.
-- **FR-007**: Aggregation MUST run on a background worker on an interval and MUST be triggerable by hand. Unlike knowledge's tidy it MAY default to on, because it only reads the agents' files and only writes derived ones.
+- **FR-007**: Aggregation MUST run on a background worker on an interval and MUST be triggerable by hand. Unlike knowledge's tidy it MAY default to on, because it only reads the agents' files and only writes derived ones. Its switch and its interval MUST both be settable by the operator and MUST be read per pass rather than at boot, so a change takes effect without a daemon restart (spec [provider-switching](../provider-switching/spec.md) E3a).
 
 ### Partitions
 
@@ -162,6 +164,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-064**: Per-agent delivery state MUST be presented on **that agent's own detail page**, not on the partitions surface. Delivery writes one agent's settings file, so it is per-agent state; a surface that is already scoped to an agent MUST NOT make the reader pick one again. That surface answers one question — installed or not; firing is read as events on the audit surface (FR-055, FR-065).
 - **FR-065**: This layer MUST NOT carry an audit surface of its own. Its events are read on the vault-wide audit surface, which every kind shares; a kind-scoped second copy is a duplicate surface, and every event type this layer records MUST therefore be legible there rather than shown as a raw event code.
 - **FR-063**: Every lifecycle act — aggregation, organise, delivery installed, removed or fired — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
+- **FR-066**: Only **one organise pass per partition** may run at a time, whoever started it. The pass runs for minutes and rewrites the partition's whole directory, so a second pass over the same partition is not a faster organise but two writers over one directory. A manual trigger that arrives while a pass is in flight MUST be **refused** rather than queued (`UPKEEP_ALREADY_RUNNING`, 409) — the caller asked to start a pass, and no pass is going to start — and the interval worker MUST **skip** a partition that is already being organised rather than wait behind it, since its next sweep comes round again anyway. Which partitions are being rewritten right now MUST be readable, so a surface that opens mid-pass shows the pass instead of an idle button that invites the second click. The record is per-daemon and does not outlive it: a pass lives in the process that was asked for it, so a restart ends it and the reading comes back empty, which is the truth rather than a lost record.
 
 ### Constraints
 

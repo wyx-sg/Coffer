@@ -384,6 +384,14 @@ paths:
         `status` is `no_model` when no internal connection is configured (a
         clean no-op), `empty` when the collection holds nothing to tidy, and
         `ok` when a pass ran — `merged` and `rewritten` then count what it did.
+
+        **One pass per collection at a time.** A request that arrives while a
+        pass over the same collection is still running is refused with `409`
+        rather than started: the two would be two writers over one directory,
+        not one faster pass. Which collections are being rewritten right now is
+        readable at `GET /api/v1/upkeep/runs` (spec mcp-gateway's contract), so
+        a surface that mounts mid-pass shows the button as already running
+        instead of inviting the second click.
       operationId: tidyKnowledgeCollection
       tags: [knowledge]
       parameters:
@@ -398,6 +406,8 @@ paths:
                 $ref: "#/components/schemas/TidyOut"
         "404":
           $ref: "#/components/responses/CollectionNotFound"
+        "409":
+          $ref: "#/components/responses/UpkeepAlreadyRunning"
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
@@ -462,6 +472,15 @@ components:
         `directory` or neither. Hidden entries are refused rather than skipped:
         handing back a `.history/` revision would answer with content the live
         file has already replaced.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    UpkeepAlreadyRunning:
+      description: |
+        A tidy pass over this collection is already in flight
+        (`UPKEEP_ALREADY_RUNNING`). Refused rather than queued — the caller
+        asked to start a pass, and no pass is going to start.
       content:
         application/json:
           schema:

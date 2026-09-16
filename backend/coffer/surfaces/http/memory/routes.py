@@ -44,6 +44,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.memory.context import DEFAULT_BUDGET_TOKENS, compose_context
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.application.resource_service import ResourceService
+from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.fact import Fact
 from coffer.domain.resource import ResourceRef
@@ -267,7 +268,14 @@ async def organise(
     actor: str = Depends(_actor),
 ) -> OrganiseResultOut:
     await _require_partition(name, resources)
-    result = await get_organise_runner()(name)
+    # One pass per partition at a time. The pass takes minutes and rewrites the
+    # whole partition directory, so a second request while one is in flight is
+    # refused (409 ``UPKEEP_ALREADY_RUNNING``) rather than started: two of them
+    # are two writers racing, not one faster pass. The registry is also what
+    # `GET /api/v1/upkeep/runs` reads, so a surface that mounts mid-pass can
+    # show the button as already running instead of inviting the second click.
+    with UPKEEP_RUNS.guard(KIND_MEMORY, name):
+        result = await get_organise_runner()(name)
     await audit.record(
         _EVENT_ORGANISED,
         ref=ResourceRef(KIND_MEMORY, name),

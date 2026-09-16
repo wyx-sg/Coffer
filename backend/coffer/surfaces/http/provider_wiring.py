@@ -54,6 +54,15 @@ async def _resolve_internal_model() -> str | None:
     return (await get_internal_engine_config_service().get()).model
 
 
+async def _clear_internal_model(actor: str) -> None:
+    """Forget the internal-engine model — what the provider service calls when
+    the internal default moves to a connection that does not curate the model
+    in force (spec provider-switching E3). Resolved lazily per call for the
+    same reason as the getter above, and audited like any other write of the
+    singleton."""
+    await get_internal_engine_config_service().update(model=None, actor=actor)
+
+
 def wire_provider_kind(
     app: FastAPI,
     resource_svc: ResourceService,
@@ -71,6 +80,7 @@ def wire_provider_kind(
         agents=agent_service,
         audit=audit,
         resolve_internal_model=_resolve_internal_model,
+        clear_internal_model=_clear_internal_model,
     )
     set_provider_service(provider_svc)
 

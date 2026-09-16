@@ -15,6 +15,8 @@ import pathlib
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.application.memory.service import KIND_MEMORY
+from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -169,6 +171,50 @@ def test_organise_with_no_internal_connection_still_writes_a_digest(client, tmp_
 def test_organise_unknown_partition_is_not_found(client) -> None:
     r = client.post("/api/v1/memory/partitions/does-not-exist/organise")
     assert r.status_code == 404
+
+
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a second organise pass over the same partition is refused while the first is running",
+)
+def test_a_second_organise_over_the_same_partition_is_refused(client, tmp_path) -> None:
+    """The bug this is here for: the button's spinner used to live in a browser
+    component, so navigating away mid-pass and back showed an idle button and
+    the next click started a SECOND pass over the same files (FR-066). The
+    daemon now holds that fact, and refuses.
+
+    The in-flight pass is simulated by claiming the partition's key directly —
+    the route is synchronous, so a real second request could only be made from
+    another thread, and what is under test is the refusal, not the threading.
+    """
+    _register_agent(client, "cc")
+    project_root = tmp_path / "proj"
+    project_root.mkdir(parents=True)
+    _write_cc_facts(tmp_path, project_root)
+    _sync(client)
+    partition = next(
+        p["name"]
+        for p in client.get("/api/v1/memory/partitions").json()["partitions"]
+        if p["name"] != "global"
+    )
+
+    assert UPKEEP_RUNS.claim(KIND_MEMORY, partition) is True
+    try:
+        r = client.post(f"/api/v1/memory/partitions/{partition}/organise")
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
+
+        # … and the surface can see it, so the button shows the running pass
+        # instead of inviting that second click.
+        runs = client.get("/api/v1/upkeep/runs").json()["runs"]
+        assert {"memory"} == {run["kind"] for run in runs}
+        assert [run["name"] for run in runs] == [partition]
+    finally:
+        UPKEEP_RUNS.release(KIND_MEMORY, partition)
+
+    # The key is free again, so the real pass runs.
+    assert client.post(f"/api/v1/memory/partitions/{partition}/organise").status_code == 200
+    assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
 
 
 # ----- context + delivery: FR-055's whole point -----------------------------

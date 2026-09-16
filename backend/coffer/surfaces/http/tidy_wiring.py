@@ -23,6 +23,7 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.application.knowledge.tidy import TidyPass
 from coffer.application.knowledge.tidy_worker import TidyWorker
 from coffer.application.resource_service import ResourceService
+from coffer.domain.internal_engine_config import TIDY
 from coffer.infrastructure.llm.agentic_reorg import LangchainAgenticReorg
 from coffer.surfaces.http.knowledge.tidy_state import set_tidy_runner
 from coffer.surfaces.http.sync_wiring import SyncWiring
@@ -83,10 +84,17 @@ def start_tidy_worker(
         # promise.
         return await sync.state.pending() is None
 
+    async def read_interval() -> int | None:
+        """The operator's interval for this pass, re-read while the wait runs
+        (spec provider-switching E3a) — a value captured at boot would be stale
+        the moment another machine's setting converged in."""
+        return (await engine_config.get()).upkeep(TIDY).interval_s
+
     worker = TidyWorker(
         service=knowledge_service,
         tidy=tidy,
         is_enabled=is_enabled,
+        read_interval=read_interval,
         list_collections=list_collections,
         # The same lock a converge round takes. Both rewrite vault content, and
         # an export caught half-way through a pass is a torn snapshot that git

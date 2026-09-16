@@ -134,6 +134,11 @@ _STATUS: dict[str, int] = {
     # before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
     "KNOWLEDGE_ERROR": 400,
+    # Upkeep passes (memory organise, knowledge tidy). A second pass over a
+    # target one is already rewriting is refused, not queued — the surface
+    # that asked should already have been showing the running one
+    # (``application.upkeep_runs``).
+    "UPKEEP_ALREADY_RUNNING": 409,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
