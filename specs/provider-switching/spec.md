@@ -256,9 +256,12 @@ written to `settings.json`, `config.toml`, or any other native config file.
   An unknown `agent_key` is a 404. Contract:
   [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
   where the agent-provider routes live.
-- **H2 — One source of truth.** No surface carries a model list of its own; the
-  catalogue is owned in one place, and owned by the agents themselves, so a
-  newly released model reaches every surface with no Coffer release at all.
+- **H2 — One source of truth.** No surface carries a model list of its own, and
+  none computes one: the catalogue is owned in one place, and owned by the
+  agents themselves, so a newly released model reaches every surface with no
+  Coffer release at all. "Owned in one place" is load-bearing rather than
+  decorative — the one time a surface answered the question for itself, the
+  page and the chat gave the same user two different menus (FR-032).
 - **M1 — For Claude Code the catalogue IS the alias table.** The ids are the
   aliases the CLI itself accepts (`opus`, `sonnet`, `haiku`, `fable` — whatever
   the table holds), and each label is the display name of the model that alias
@@ -723,6 +726,13 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 - **When** the user patches its `protocol` to a different wire,
 - **Then** the request is refused `409` `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`, the stored wire is unchanged, and the message names `coffer provider use-builtin <wire>` as the way out
 - **And** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (FR-034)
+
+### Scenario: every surface offers the same models
+
+- **Given** an agent with an active connection that curates two model ids, and an agent catalogue of its own that names different ones,
+- **When** the model list is read for the web Chat page and for a channel's `/model` card,
+- **Then** both are exactly the connection's curated ids, in the user's order — the agent's own ids are absent, because the turns go to that endpoint and not to the account those ids belong to
+- **And** neither read touches the network, so an unreachable endpoint cannot silently shorten either list (FR-032, H2)
 
 ### Scenario: list provider profiles
 
@@ -1336,7 +1346,15 @@ connection's existing curated selection is left exactly as it was.
 - **FR-032**: What a picker is OFFERED MUST be: the active reaching connection's
   curated `text` ids when it curates any, and otherwise the agent's own
   catalogue. That read MUST NOT touch the network. Levels MUST survive it — an
-  id the agent also reports keeps the levels the agent reported.
+  id the agent also reports keeps the levels the agent reported. **Every surface
+  that offers a model MUST get this answer from the same place**:
+  `GET /api/v1/agent-providers/{agent_key}/models` serves it, and a channel's
+  `/model` card resolves it in-process through the same function. No surface may
+  compute its own. The web picker used to: it pulled the connections into the
+  browser, introspected the endpoint on each first open, and offered the UNION
+  of that and the agent's catalogue — so it listed ids the endpoint would
+  reject, disagreed with the same user's `/model` card, and silently shortened
+  its list whenever the endpoint was unreachable.
 - **FR-033**: Every Coffer surface that chooses a model MUST offer a fixed list
   with no free-text entry, always including the current value. A model name and
   a reasoning level MUST both be passed to the agent verbatim, with no
