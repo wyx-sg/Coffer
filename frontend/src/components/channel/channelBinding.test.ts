@@ -1,4 +1,4 @@
-// frontend/src/kinds/channel/channelBinding.test.ts
+// frontend/src/components/channel/channelBinding.test.ts
 //
 // The two rules the row cell and the detail card share (spec channels, "Where
 // a channel runs"): which of the four things a binding is, and what a picker

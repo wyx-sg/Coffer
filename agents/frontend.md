@@ -187,9 +187,13 @@ return useMutation({
 ## 6. Components & Design System
 
 - **Build from `src/components/ui/` primitives** (shadcn: `Button`, `Dialog`,
-  `Select`, `Textarea`, `Tooltip`, `DropdownMenu`, `Skeleton`, `ConfirmDialog`,
-  …). Don't hand-roll a control a primitive already covers — no native `title=`
-  hints where `Tooltip` fits, no bespoke pulsing block where `Skeleton` does.
+  `Select`, `Textarea`, `Tooltip`, `Skeleton`, `ConfirmDialog`, …). Don't
+  hand-roll a control a primitive already covers — no native `title=` hints
+  where `Tooltip` fits, no bespoke pulsing block where `Skeleton` does. There is
+  deliberately **no `DropdownMenu`**: row actions are explicit buttons
+  (`RowDeleteButton`, `ScopeControl`), the menu that once held them is gone, and
+  a primitive listed here with no caller is a control a reader would reach for
+  and not find. Add it back from shadcn when a surface actually needs one.
 - **Shared surfaces above the primitives**, used the same way everywhere:
   - `PageHeader` is the one page header, list and detail alike: `icon` (list
     pages), `back` (detail pages), `badges` beside the title, `actions` on the

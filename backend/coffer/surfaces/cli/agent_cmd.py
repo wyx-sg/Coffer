@@ -103,6 +103,12 @@ def show(
     else:
         for k in ("name", "type", "config_dir"):
             typer.echo(f"{k}: {data[k]}")
+        # The model binding is what the projector actually writes into the
+        # agent's native config, so `show` is where a terminal-only user reads
+        # back what `edit --model` did. "(unbound)" is a real state, not a
+        # missing value: an unbound agent runs on its own default.
+        for k in ("model", "fast_model", "wire_api"):
+            typer.echo(f"{k}: {data.get(k) or '(unbound)'}")
 
 
 @app.command("edit")
@@ -111,17 +117,51 @@ def edit(
     name: str = typer.Argument(...),
     config_dir: str | None = typer.Option(None, "--config-dir"),
     description: str | None = typer.Option(None, "--description"),
+    model: str | None = typer.Option(
+        None, "--model", help="Model this agent answers with (spec provider-switching E3)"
+    ),
+    fast_model: str | None = typer.Option(
+        None, "--fast-model", help="Small/fast model slot (anthropic wire only)"
+    ),
+    clear_fast_model: bool = typer.Option(False, "--clear-fast-model", help="Unbind the fast slot"),
+    wire_api: str | None = typer.Option(
+        None, "--wire-api", help="Codex wire api; `responses` is the only value it still loads"
+    ),
 ) -> None:
-    """Update an agent's fields."""
-    if config_dir is None and description is None:
+    """Update an agent's fields, including the model it answers with.
+
+    The model binding lives on the agent, not on the connection: an unbound
+    agent projects no model and runs on its own default. A change here takes
+    effect on disk the next time that agent's connection is activated
+    (`coffer provider switch <name>`), which is what re-projects the config.
+
+    ``--clear-fast-model`` is how the fast slot is *removed* — the route
+    distinguishes an absent field from an explicit null, and only the second
+    one unbinds.
+    """
+    given = [config_dir, description, model, fast_model, wire_api]
+    if all(v is None for v in given) and not clear_fast_model:
         typer.echo("nothing to update", err=True)
         raise typer.Exit(1)
+    if fast_model is not None and clear_fast_model:
+        typer.echo("give either --fast-model or --clear-fast-model, not both", err=True)
+        raise typer.Exit(2)
     verbose = (ctx.obj or {}).get("verbose", False)
     body: dict[str, object] = {}
     if config_dir is not None:
         body["config_dir"] = config_dir
     if description is not None:
         body["description"] = description
+    if model is not None:
+        body["model"] = model
+    # An explicit null is the clear; omitting the key entirely leaves the slot
+    # alone. Both are sent through `model_fields_set` on the route side.
+    if clear_fast_model:
+        body["fast_model"] = None
+    elif fast_model is not None:
+        body["fast_model"] = fast_model
+    if wire_api is not None:
+        body["wire_api"] = wire_api
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.patch(f"/agents/{name}", json=body)

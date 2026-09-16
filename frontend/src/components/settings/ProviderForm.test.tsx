@@ -109,6 +109,38 @@ describe("ProviderForm no longer writes compatible_agents", () => {
   });
 });
 
+describe("ProviderForm edits the wire, and only when it moved", () => {
+  // The `Props` comment on `initial` used to say "protocol locked", which the
+  // component's own comment and its edit-mode picker both contradicted. The
+  // wire IS editable — a probe that guessed wrong is corrected in place rather
+  // than by re-entering the connection, key and all.
+  //
+  // Whether `protocol` travels in the PATCH is now load-bearing rather than a
+  // nicety: the daemon refuses a wire CHANGE on a connection that is switched
+  // on (409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE), because the wire decides
+  // which agents a connection covers and which `use-builtin` reverts. Sending
+  // the unchanged wire back would turn every "save the endpoint" on a live
+  // connection into that refusal.
+  test("a changed wire travels in the patch", async () => {
+    const onUpdate = renderEdit();
+    pickOption(/protocol/i, "Anthropic");
+    save();
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    const patch = onUpdate.mock.calls[0][0] as Record<string, unknown>;
+    expect(patch).toMatchObject({ protocol: "anthropic" });
+  });
+
+  test("an unchanged wire does not travel, so editing a live connection is not refused", async () => {
+    const onUpdate = renderEdit();
+    fireEvent.change(screen.getByLabelText(/base url/i), { target: { value: "https://gw2/v1" } });
+    save();
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    const patch = onUpdate.mock.calls[0][0] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty("protocol");
+    expect(patch).toMatchObject({ base_url: "https://gw2/v1" });
+  });
+});
+
 describe("ProviderForm validation", () => {
   test("a blank name and a bare hostname are refused under their fields, and nothing is sent", async () => {
     const onSubmit = renderCreate();

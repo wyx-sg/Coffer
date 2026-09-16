@@ -49,9 +49,10 @@ Every change to any resource or capability is written to the `audit_log` table b
 | Field           | What it tells you                                                                                    |
 | --------------- | ---------------------------------------------------------------------------------------------------- |
 | `event_type`    | Which lifecycle operation occurred (e.g. `resource_created`, `capability_disabled`, `token_rotated`) |
+| `resource_id`   | The affected resource's stable id, which a rename does not change — so a trail stays one trail across `resource_renamed` |
 | `resource_kind` | The kind of the affected resource (e.g. `mcp_server`), or `null` for daemon-level events             |
 | `resource_name` | The specific resource name, or `null` for daemon-level events                                        |
-| `actor`         | Who triggered the change: `cli`, `api`, `ui`, or `system`                                            |
+| `actor`         | Who triggered the change: `cli`, `api`, `ui`, `system`, `user`, `agent`, or `channel`                |
 | `timestamp`     | UTC time of the event                                                                                |
 | `details`       | A structured JSON payload describing the change (e.g. the pre-delete snapshot, the new config diff)  |
 
@@ -238,7 +239,7 @@ One row per registered prunable policy. Default values seeded at first daemon st
 | `conversations_archive` | Auto-archive chats idle for this many days | 7 days   |
 | `conversations`         | Delete archived chats this many days after archival | 30 days |
 
-The user can change any via `PATCH /api/v1/retention/{table_name}`. Setting `retention_days` to `null` means "keep forever". Zero is forbidden. The change is audited as `retention_updated`.
+The user can list them at `GET /api/v1/retention/policies` and change any via `PATCH /api/v1/retention/policies/{table_name}`. Setting `retention_days` to `null` means "keep forever". Zero is forbidden. The change is audited as `retention_updated`.
 
 ### The background worker
 

@@ -143,6 +143,8 @@ export function extractTitle(markdown) {
 }
 
 // Known acronyms to UPPER-CASE when building spec folder labels
+// Words whose casing is not "first letter up": acronyms, and product names
+// that are spelled a particular way everywhere else in the repo.
 const ACRONYMS = {
   mcp: "MCP",
   ui: "UI",
@@ -150,12 +152,30 @@ const ACRONYMS = {
   cli: "CLI",
   adr: "ADR",
   sdd: "SDD",
+  seatalk: "SeaTalk",
 };
 
 /**
- * Turn a spec folder name into a nav label: 'mcp-gateway' → 'MCP Gateway'.
- * Spec directories are named, not numbered, so the folder name is the whole
- * label: title-case each hyphen-separated word, honouring known acronyms.
+ * The spec-folder id a synced destination path belongs to, or `undefined` when
+ * the path is not under the specs area.
+ *
+ * A spec's id is its PATH under `specs/` (agents/sdd.md), so a child spec's is
+ * `<parent>/<child>` — which is why this keeps every segment between
+ * `reference/specs/` and the file name instead of the first one. Capturing
+ * only the first collapsed `channels/telegram` and `channels/seatalk` into one
+ * group whose items were then two files both called "Spec".
+ */
+export function specFolderIdOf(dest) {
+  const m = toPosix(dest).match(/^reference\/specs\/(.+)\/[^/]+$/);
+  return m ? m[1] : undefined;
+}
+
+/**
+ * Turn ONE segment of a spec folder id into a nav label: 'mcp-gateway' →
+ * 'MCP Gateway'. Spec directories are named, not numbered, so the folder name
+ * is the whole label: title-case each hyphen-separated word, honouring the
+ * casings above. One segment rather than the whole id, because a nested spec
+ * gets a group per level rather than one heading spelling out its path.
  */
 export function specFolderLabel(folder) {
   return folder
@@ -215,22 +235,21 @@ export function specFileLabel(base) {
  * Build the reference sidebar array from an array of file descriptors:
  * { area, route, base, specFolder? }
  */
-function buildReferenceSidebar(descriptors) {
-  const byArea = { specs: [], adr: [], project: [], conventions: [] };
-  for (const d of descriptors) {
-    if (byArea[d.area]) byArea[d.area].push(d);
+/**
+ * The sidebar groups for the spec folders directly under `prefix` ("" = top
+ * level), each carrying its own files and then its own child groups.
+ */
+function specGroupsUnder(prefix, specsByFolder) {
+  const depth = prefix === "" ? 0 : prefix.split("/").length;
+  const children = new Set();
+  for (const folder of specsByFolder.keys()) {
+    if (prefix !== "" && !folder.startsWith(prefix + "/")) continue;
+    const segments = folder.split("/");
+    if (segments.length <= depth) continue;
+    children.add(segments.slice(0, depth + 1).join("/"));
   }
-
-  // ---- Specs group ----
-  const specsByFolder = new Map();
-  for (const d of byArea.specs) {
-    const folder = d.specFolder ?? "unknown";
-    if (!specsByFolder.has(folder)) specsByFolder.set(folder, []);
-    specsByFolder.get(folder).push(d);
-  }
-  const sortedFolders = [...specsByFolder.keys()].sort();
-  const specsItems = sortedFolders.map((folder) => {
-    const files = specsByFolder.get(folder);
+  return [...children].sort().map((folder) => {
+    const files = (specsByFolder.get(folder) ?? []).slice();
     files.sort((a, b) => {
       const ai = SPEC_FILE_PRIORITY.indexOf(a.base);
       const bi = SPEC_FILE_PRIORITY.indexOf(b.base);
@@ -240,14 +259,36 @@ function buildReferenceSidebar(descriptors) {
       return a.base.localeCompare(b.base);
     });
     return {
-      text: specFolderLabel(folder),
+      text: specFolderLabel(folder.slice(folder.lastIndexOf("/") + 1)),
       collapsed: true,
-      items: files.map((f) => ({
-        text: specFileLabel(f.base),
-        link: f.route,
-      })),
+      items: [
+        ...files.map((f) => ({ text: specFileLabel(f.base), link: f.route })),
+        ...specGroupsUnder(folder, specsByFolder),
+      ],
     };
   });
+}
+
+export function buildReferenceSidebar(descriptors) {
+  const byArea = { specs: [], adr: [], project: [], conventions: [] };
+  for (const d of descriptors) {
+    if (byArea[d.area]) byArea[d.area].push(d);
+  }
+
+  // ---- Specs group ----
+  //
+  // A spec folder id is a PATH, because a spec may be the child of another
+  // (agents/sdd.md) — so the group is a TREE, not a flat list keyed on one
+  // segment. A parent carries its own files first and then one nested group
+  // per child; a parent that has only children still appears, as the heading
+  // they sit under.
+  const specsByFolder = new Map();
+  for (const d of byArea.specs) {
+    const folder = d.specFolder ?? "unknown";
+    if (!specsByFolder.has(folder)) specsByFolder.set(folder, []);
+    specsByFolder.get(folder).push(d);
+  }
+  const specsItems = specGroupsUnder("", specsByFolder);
 
   // ---- ADRs group ----
   const adrFiles = byArea.adr.slice().sort((a, b) => {
@@ -325,12 +366,7 @@ function run() {
       const routeRaw =
         "/" + c.dest.replace(/\.md$/, "").replace(/\/index$/, "/");
       const baseNoExt = posix.basename(c.dest, ".md");
-      // specFolder: for specs area, the segment right after reference/specs/
-      let specFolder;
-      if (area === "specs") {
-        const m = c.dest.match(/reference\/specs\/([^/]+)\//);
-        specFolder = m ? m[1] : undefined;
-      }
+      const specFolder = area === "specs" ? specFolderIdOf(c.dest) : undefined;
       const titleizedBase = baseNoExt
         .split(/[-_]/)
         .map((w) => {

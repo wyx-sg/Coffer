@@ -87,4 +87,4 @@ The **Agents** page in the [Web UI](/guide/web-ui) covers the same flow without 
 
 See the [Web UI guide](/guide/web-ui#agents) for what each tab holds in detail.
 
-[Connect a client →](/guide/connect-client)
+[Model providers →](/guide/providers)

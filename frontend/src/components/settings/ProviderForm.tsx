@@ -50,7 +50,8 @@ import { PRESETS, PROTOCOL_LABEL_KEY, SELECTABLE_PROTOCOLS } from "./connectionP
 import { providerFormSchema, type ProviderFormValues } from "./providerFormSchema";
 
 interface Props {
-  /** Present → edit an existing connection (protocol locked, secret optional). */
+  /** Present → edit an existing connection (the wire IS editable — see the
+   *  picker below — and the secret is optional: blank keeps the stored key). */
   initial?: Provider;
   submitError?: unknown;
   pending: boolean;
@@ -171,9 +172,11 @@ export function ProviderForm({
       </div>
 
       {/* Provider preset (create only). In edit mode the wire itself is
-          editable instead: the probe that guessed it can be wrong, and nothing
-          keys off it — an endpoint that turns out to speak a different wire is
-          corrected here rather than recreated. */}
+          editable instead: a wrong guess is corrected here rather than
+          re-entered, key and all. The daemon refuses that CHANGE while the
+          connection is switched on (409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE)
+          — the wire decides which agents it covers and which `use-builtin`
+          reverts — so `submit` sends `protocol` only when it actually moved. */}
       {isEdit ? (
         protocolPicker("p-wire-edit")
       ) : (

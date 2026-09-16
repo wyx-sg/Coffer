@@ -114,6 +114,9 @@ _STATUS: dict[str, int] = {
     "SYNC_CANNOT_RETIRE_SELF": 422,
     # provider switching (spec provider-switching)
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": 422,
+    # Not 422: the patch is well-formed, and the same patch succeeds once the
+    # connection is no longer projected — a state conflict, not a bad body.
+    "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
     "NO_ACTIVE_PROVIDER": 404,
     # knowledge (spec knowledge). A collection an agent is not authorized for
     # is NOT FOUND rather than FORBIDDEN: telling an unauthorized caller that

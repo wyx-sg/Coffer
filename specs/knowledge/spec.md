@@ -311,15 +311,21 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 
 ### Scenario: an uploaded original is kept under .raw/ and stays out of retrieval
 
-- **Given** a document uploaded into `shopee` whose bytes carry a marker word
-  the converted Markdown does not
-- **When** the collection's catalogue, its `tree` route and a grep for that
-  marker are read afterwards
+- **Given** a document uploaded into `shopee` carrying a marker word the
+  converter drops, and a phrase that survives into both the original and the
+  conversion
+- **When** the collection's catalogue, its `tree` route and a grep for each of
+  the two are read afterwards
 - **Then** the original sits at the collection's own `.raw/` root under the
   converted file's name, byte-identical to what was sent and with its absolute
   path reported as `raw_path`
-- **And** the catalogue's file list, the collection's file count, the `tree`
-  response and the grep result all carry nothing under `.raw/`
+- **And** the marker that exists only in the original matches **nothing at
+  all**, while the phrase that exists in both is reported **only from the
+  converted file** — the second is what proves the first is exclusion rather
+  than a grep that has stopped working
+- **And** the `tree` response lists the converted file and **no directories**,
+  and the collection's file count counts only it, so `.raw/` is not offered as
+  somewhere to walk into either
 
 ### Scenario: an upload of an unsupported type is refused with its reason
 
@@ -389,12 +395,18 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 
 ### Scenario: the knowledge skill is delivered to a managed agent
 
-- **Given** a fresh installation whose daemon has completed one startup
-- **When** Coffer's master skill store under `~/.coffer/skills/` is inspected
-- **Then** the knowledge skill has a directory there holding a `SKILL.md` that
-  declares the skill's name in its frontmatter and names `coffer__list`,
-  `coffer__read`, `coffer__grep` and `coffer__write` in its body, so
-  catalogue-then-grep is what an agent reads rather than a bare list of tools
+- **Given** a fresh installation whose daemon has completed one startup, so the
+  skill is in Coffer's master store under `~/.coffer/skills/` and no agent is
+  registered yet
+- **When** an agent is registered with its own config directory, and that
+  agent's `<config_dir>/skills/` is read afterwards
+- **Then** Coffer records a binding naming that agent, and the skill's
+  `SKILL.md` is readable **through the agent's own directory** — not merely
+  present in master, and not a dangling link
+- **And** that file declares the skill's name in its frontmatter and names
+  `coffer__list`, `coffer__read`, `coffer__grep` and `coffer__write` in its
+  body, so catalogue-then-grep is what an agent reads rather than a bare list
+  of tools
 
 ### Scenario: the viewer renders content read-only and offers open and reveal
 
@@ -479,7 +491,7 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 ### Surfaces
 
 - **FR-060**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list the catalogue at a path, read a file, search, upload a document, write a file, delete one, and trigger tidy. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source, embedding-configuration or per-scope settings endpoint.
-- **FR-061**: The web UI MUST present a collection as a **two-pane file browser**, the same one a skill's folder gets (spec [skill-manager](../skill-manager/spec.md)): a **single tree** on the left — no lane tabs, opened a directory at a time as FR-021 lists it — and the file chosen from it on the right, rendered **read-only** through the unified file preview with open-in-external-editor and reveal-in-file-manager on it and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view. The page MUST NOT carry a retrieval box of its own: the one input beside the tree narrows the names already on screen, client-side, and reading the files themselves is `search` and `grep`, whose callers are the agents' tools and the CLI. There is nothing to report about index freshness and no rebuild to offer.
+- **FR-061**: The web UI MUST present a collection as a **two-pane file browser**, the same one a skill's folder gets (spec [skill-manager](../skill-manager/spec.md)): a **single tree** on the left — no lane tabs, opened a directory at a time as FR-021 lists it — and the file chosen from it on the right, rendered **read-only** through the unified file preview with open-in-external-editor and reveal-in-file-manager on it and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view, and MUST offer **deleting the file being previewed** — the one write the page carries, since until it existed the UI could delete a whole collection and not one file out of it. That delete MUST name the exact path before it runs, MUST report a refusal in place rather than closing on it, and MUST leave the preview on no file rather than on a path that is gone. The page MUST NOT carry a retrieval box of its own: the one input beside the tree narrows the names already on screen, client-side, and reading the files themselves is `search` and `grep`, whose callers are the agents' tools and the CLI. There is nothing to report about index freshness and no rebuild to offer.
 - **FR-062**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
 
 ### Migration

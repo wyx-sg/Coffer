@@ -1,4 +1,4 @@
-// frontend/src/kinds/memory/MemoryFileViewer.tsx
+// frontend/src/components/memory/MemoryFileViewer.tsx
 //
 // Right pane of the partition file browser: markdown (.md) renders through the
 // shared <FindableMarkdown>, anything else shows raw in <CodeView>.

@@ -32,6 +32,7 @@ import { RefreshCw } from "lucide-react";
 import { FileActions } from "@/components/FileActions";
 import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
 import { cn } from "@/lib/utils";
+import { KnowledgeFileDelete } from "@/components/knowledge/KnowledgeFileDelete";
 import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
@@ -158,7 +159,14 @@ export function KnowledgeDetailPage() {
             <>
               <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
                 <p className="truncate text-sm text-muted-foreground">{file.data.path}</p>
-                <FileActions filePath={file.data.file_path} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <FileActions filePath={file.data.file_path} />
+                  {/* Last, after the actions that take the file elsewhere —
+                      the same order every detail page puts delete in. It is
+                      mounted only while a file is previewed, which is what
+                      makes the path it names certain. */}
+                  <KnowledgeFileDelete path={file.data.path} onDeleted={() => setSelected(null)} />
+                </div>
               </div>
               {/* `overflow-auto` is what keeps a wide table or an unbreakable
                   code span inside this pane: without it the content has no
@@ -173,6 +181,7 @@ export function KnowledgeDetailPage() {
           )}
         </section>
       </div>
+
     </div>
   );
 }

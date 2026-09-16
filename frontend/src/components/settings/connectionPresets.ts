@@ -13,8 +13,11 @@ export interface Preset {
   baseUrl: string;
 }
 
-// OpenAI-compatible gateways (Gemini, DeepSeek, …) use the openai protocol —
-// agent compatibility is decided separately via the checkboxes.
+// OpenAI-compatible gateways (Gemini, DeepSeek, …) use the openai protocol.
+// Which agents a connection reaches is not decided here at all: it is the
+// resource's per-agent scope, set through the shared reach control. (This
+// said "via the checkboxes" — those went with the connection's own
+// compatible_agents field.)
 export const PRESETS: Preset[] = [
   { id: "openai", label: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1" },
   {

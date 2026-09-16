@@ -144,10 +144,14 @@ def test_update_profile(tmp_path, monkeypatch):
 def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
     """The wire is a property of the endpoint, not the connection's identity.
 
-    Nothing keys off it — projection targets come from ``compatible_agents`` —
-    so a probe that guessed wrong is corrected in place rather than by deleting
-    the connection and re-entering its key. ``credential_ref`` stays immutable:
-    that one IS an address.
+    A probe that guessed wrong is corrected in place rather than by deleting the
+    connection and re-entering its key. ``credential_ref`` stays immutable: that
+    one IS an address.
+
+    This connection was never switched on, which is the only state the edit is
+    free in — a live one is refused (``test_protocol_edit_guard``), because the
+    wire decides which agents a connection can cover and which ``use-builtin``
+    reverts.
     """
     app = _app(tmp_path, monkeypatch, 59755)
     with _client(app) as c:

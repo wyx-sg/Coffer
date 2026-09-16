@@ -235,3 +235,85 @@ def test_context_prints_the_composed_text_and_records_a_fire(memory_cli_daemon, 
 
     after = _runner.invoke(cli_app, ["audit", "list", "--json"])
     assert "memory_delivery_fired" in after.output
+
+
+# ----- `ls` / `read`: the partition's own directory from the terminal -------
+#
+# The REST half has existed since FR-062 (GET /memory/partitions/{name}/files
+# and .../files/content) but `coffer memory` could reach facts and partitions
+# and not the files they are stored in, which is the one thing FR-061 names
+# that the group did not do. The verbs are `ls` and `read` so that browsing
+# memory and browsing knowledge are the same two words.
+
+
+def _synced_project_partition(tmp_path) -> str:
+    _register_cc_via_http(tmp_path)
+    _write_cc_fact(tmp_path)
+    synced = _runner.invoke(cli_app, ["memory", "sync", "--json"])
+    assert synced.exit_code == 0, synced.output
+    listed = _runner.invoke(cli_app, ["memory", "partitions", "--json"])
+    partitions = json.loads(_extract_json(listed.output))["partitions"]
+    return next(p["name"] for p in partitions if p["name"] != "global")
+
+
+def test_ls_walks_a_partitions_own_directory(memory_cli_daemon):
+    partition = _synced_project_partition(memory_cli_daemon)
+
+    listed = _runner.invoke(cli_app, ["memory", "ls", partition, "--json"])
+    assert listed.exit_code == 0, listed.output
+    root = json.loads(_extract_json(listed.output))["root"]
+    assert root["path"] == ""
+    children = {child["name"]: child for child in root["children"]}
+    assert "README.md" in children
+    assert children["facts"]["type"] == "dir"
+    assert "facts/python-lockfile.md" in {c["path"] for c in children["facts"]["children"]}
+
+
+def test_ls_renders_the_whole_tree_as_a_table_by_default(memory_cli_daemon):
+    """The default rendering is the tree, not just its top level: a partition
+    is two levels deep by construction (``facts/<slug>.md``), so a listing
+    that stopped at the root would never show a fact file."""
+    partition = _synced_project_partition(memory_cli_daemon)
+
+    listed = _runner.invoke(cli_app, ["memory", "ls", partition])
+    assert listed.exit_code == 0, listed.output
+    assert "facts/python-lockfile.md" in listed.output.replace("\n", "")
+
+
+def test_read_prints_one_file_from_a_partition(memory_cli_daemon):
+    partition = _synced_project_partition(memory_cli_daemon)
+
+    read = _runner.invoke(cli_app, ["memory", "read", partition, "facts/python-lockfile.md"])
+    assert read.exit_code == 0, read.output
+    assert "uv sync --frozen" in read.output
+
+
+def test_read_json_carries_the_paths_the_viewer_needs(memory_cli_daemon):
+    partition = _synced_project_partition(memory_cli_daemon)
+
+    read = _runner.invoke(
+        cli_app, ["memory", "read", partition, "facts/python-lockfile.md", "--json"]
+    )
+    assert read.exit_code == 0, read.output
+    data = json.loads(_extract_json(read.output))
+    assert data["path"] == "facts/python-lockfile.md"
+    assert data["abs_path"].endswith("/facts/python-lockfile.md")
+    assert data["binary"] is False
+
+
+def test_read_of_a_missing_file_exits_not_found_without_a_traceback(memory_cli_daemon):
+    partition = _synced_project_partition(memory_cli_daemon)
+
+    read = _runner.invoke(cli_app, ["memory", "read", partition, "facts/no-such-fact.md"])
+    combined = read.output + (read.stderr or "")
+    assert read.exit_code == 4, combined
+    assert "Traceback" not in combined, combined
+
+
+def test_read_of_a_path_escaping_the_partition_is_refused(memory_cli_daemon):
+    partition = _synced_project_partition(memory_cli_daemon)
+
+    read = _runner.invoke(cli_app, ["memory", "read", partition, "../../../../etc/passwd"])
+    combined = read.output + (read.stderr or "")
+    assert read.exit_code == 6, combined
+    assert "Traceback" not in combined, combined

@@ -662,6 +662,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "Supply exactly one of a saved credential or an inline key",
+    "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "RESOURCE_NOT_FOUND": "Resource not found",
     "SCOPE_INVALID": "That reach isn't valid for this resource kind",
@@ -1003,6 +1004,9 @@
       "tidyDone": "Tidy pass finished.",
       "emptyFolder": "Nothing here yet",
       "selectAFile": "Select a file to read it",
+      "deleteFile": "Delete file",
+      "deleteFileTitle": "Delete this file?",
+      "deleteFileConfirm": "Delete “{{path}}” from disk? The file is the only copy — this cannot be undone.",
       "treeLabel": "Files in this collection"
     },
     "welcome": {
@@ -1423,6 +1427,17 @@
         "modified": "changed · {{path}}",
         "deleted": "deleted · {{path}}"
       }
+    },
+    "rollback": {
+      "action": "Undo this round",
+      "title": "Undo this round?",
+      "description": "This puts the vault back to the state it was in immediately before the round that finished {{when}} applied anything. The undo is an ordinary local change: the next round publishes it to the remote, so the other machines follow.",
+      "willUndo": "What this round applied here — the undo reverses each of these",
+      "morePaths": "…and {{count}} more",
+      "nothingApplied": "This round applied nothing to this vault, so undoing it changes nothing here.",
+      "confirm": "Undo round",
+      "undoing": "Undoing…",
+      "done": "Round undone (+{{added}} ~{{modified}} −{{deleted}} reversed)."
     },
     "history": {
       "description": "Every converge round this machine has run, newest first. The rounds that changed nothing are listed too — they are what shows the vault was still converging.",

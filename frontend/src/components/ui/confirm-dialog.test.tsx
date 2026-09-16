@@ -47,6 +47,14 @@ describe("ConfirmDialog", () => {
     renderDialog({ pending: true });
     expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
   });
+
+  test("renders the detail a sentence cannot carry", () => {
+    // Some destructive actions can only be answered once the user sees WHICH
+    // paths go with them — a list, not a sentence. Without this slot the call
+    // site's only options were a paragraph of joined paths or its own Dialog.
+    renderDialog({ children: <p>knowledge/notes/a.md</p> });
+    expect(screen.getByText("knowledge/notes/a.md")).toBeInTheDocument();
+  });
 });
 
 // The convention: a confirmation closes only on success. Two call sites used to

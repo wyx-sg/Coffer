@@ -99,6 +99,17 @@ Coffer:
    not registered here (`skipped`) — skipping is not an error.
 4. Audits `provider_switched`.
 
+## Put an agent back on its own login
+
+```bash
+coffer provider use-builtin anthropic
+```
+
+The other half of `switch`: it removes Coffer's projection from the native
+config of every agent on that wire and clears the active connection, so the
+agent goes back to whatever login it had before Coffer touched it. It is
+idempotent — running it when nothing is active succeeds and does nothing.
+
 Claude Code gets `apiKeyHelper`, `env.ANTHROPIC_BASE_URL`, and — from the
 agent's binding — `env.ANTHROPIC_MODEL` / `env.ANTHROPIC_SMALL_FAST_MODEL`.
 Codex gets `model`, `model_provider = "coffer"` and a

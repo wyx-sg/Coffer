@@ -119,6 +119,81 @@ def show_fact(
         typer.echo(f"origin: {o['agent']} <- {o['native_path']}")
 
 
+@app.command("ls")
+def list_files(
+    ctx: typer.Context,
+    partition: str = typer.Argument(..., help="Partition name (or 'global')"),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """List a partition's own directory as a tree (FR-062).
+
+    The whole tree rather than one level, unlike `coffer knowledge ls`: a
+    partition is two levels deep by construction (a README, a `facts/` folder,
+    a file per fact), so stopping at the root would never show a fact.
+    """
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/memory/partitions/{partition}/files")
+        _cli_client.check(r, verbose=_verbose(ctx))
+
+    def render(data: dict[str, Any]) -> None:
+        table = Table(title=f"memory:{partition}")
+        table.add_column("path")
+        table.add_column("type")
+        table.add_column("size", justify="right")
+        for node in _walk(data["root"]):
+            size = node.get("size")
+            table.add_row(
+                node["path"] + ("/" if node["type"] == "dir" else ""),
+                node["type"],
+                "" if size is None else str(size),
+            )
+        _console.print(table)
+
+    _echo_json_or(ctx, r.json(), output_json, render)
+
+
+def _walk(node: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every descendant of ``node``, depth-first, excluding the root itself.
+
+    The root's own path is ``""`` — a row for it would say nothing and sort
+    above everything, so it is the one node left out.
+    """
+    out: list[dict[str, Any]] = []
+    for child in node.get("children", []):
+        out.append(child)
+        out.extend(_walk(child))
+    return out
+
+
+@app.command("read")
+def read_file(
+    ctx: typer.Context,
+    partition: str = typer.Argument(..., help="Partition name (or 'global')"),
+    path: str = typer.Argument(..., help="File path inside the partition, e.g. facts/foo.md"),
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Print one file out of a partition's directory.
+
+    Read-only, like the route: everything under ``~/.coffer/memory/`` is
+    derived (FR-023), so there is no matching write for an edit to survive.
+    """
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get(f"/memory/partitions/{partition}/files/content", params={"path": path})
+        _cli_client.check(r, verbose=_verbose(ctx))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    if data["binary"]:
+        typer.echo(f"{data['path']}: binary file, {data['size']} bytes")
+        return
+    typer.echo(data["content"])
+    if data["truncated"]:
+        typer.echo("… truncated", err=True)
+
+
 @app.command("sync")
 def sync(ctx: typer.Context, output_json: bool = typer.Option(False, "--json")) -> None:
     """Run aggregation: read every registered agent's native memory."""

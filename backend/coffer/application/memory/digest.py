@@ -1,4 +1,24 @@
-"""Rendering a partition's facts into the ``summary.md`` delivery reads.
+"""Rendering a partition's facts: one line per fact, for two readers.
+
+This module owns what "one line per fact" looks like, and that one shape is
+delivered to two different readers by two different callers:
+
+* **``summary.md``**, written by ``organise.py`` from ``render_digest``
+  below. Nothing in this codebase reads that file back, and that is not an
+  oversight — its reader is the **person**, who browses a partition as a file
+  tree with a preview beside it (spec memory FR-062). It is the human-facing
+  half, and it is grouped and titled for someone skimming a folder.
+* **L1 of the session-start context**, composed by ``context.py`` from
+  ``fact_line`` below. FR-050 calls L1 "the partition's digest, one line per
+  fact", and it means this module's line — not a second rendering of the
+  same idea. ``context.py`` cannot reuse ``render_digest`` wholesale (it
+  composes from a ``MemoryPort``, spends a token budget line by line, and
+  interleaves two partitions), so it reuses the **line**, which is the part
+  FR-050 actually names.
+
+Keeping both on one renderer is what stops the two from drifting into two
+slightly different ways of writing down the same fact — which is what they
+had done.
 
 Pure and synchronous — no filesystem, no model. That is the point of keeping
 it a separate module from ``organise.py``: FR-032 requires a partition with
@@ -39,8 +59,15 @@ _TYPE_LABELS = {
 }
 
 
-def _recency(fact: Fact) -> str:
+def recency(fact: Fact) -> str:
     """The latest timestamp attached to ``fact``, for a newest-first sort.
+
+    Shared with ``context.py`` for the same reason ``fact_line`` is: the digest
+    and the delivered lines are one concept, and two copies of "newest" drift
+    exactly the way two copies of "one line per fact" did. ``context`` read
+    only ``captured_at``, so a fact an agent timestamped only at the source
+    scored ``""`` and sorted last there while sorting correctly in
+    ``summary.md``.
 
     ISO-8601 strings sort lexically in chronological order. A fact with no
     timestamped origin at all (should not happen in practice, but a
@@ -50,11 +77,20 @@ def _recency(fact: Fact) -> str:
     return max(stamps) if stamps else ""
 
 
-def _line(fact: Fact) -> str:
+def fact_line(fact: Fact) -> str:
+    """One fact as one line — the shape both readers get (module docstring).
+
+    Title, then the one-line description when there is one; never the body,
+    which is what recall is for. A fact whose frontmatter lost its title
+    falls back to its slug: facts are derived from an agent's own memory
+    files, so a blank title is reachable, and naming *which* fact it is beats
+    emphasising nothing.
+    """
+    title = fact.title.strip() or fact.slug
     description = fact.description.strip()
     if description:
-        return f"- **{fact.title}** — {description}"
-    return f"- **{fact.title}**"
+        return f"- **{title}** — {description}"
+    return f"- **{title}**"
 
 
 def _type_order_key(type_: str) -> tuple[int, str]:
@@ -83,12 +119,12 @@ def render_digest(facts: Sequence[Fact], *, partition: str) -> str:
         by_type.setdefault(fact.type, []).append(fact)
 
     for type_ in sorted(by_type, key=_type_order_key):
-        group = sorted(by_type[type_], key=_recency, reverse=True)
+        group = sorted(by_type[type_], key=recency, reverse=True)
         lines.append(f"## {_TYPE_LABELS.get(type_, type_)}")
-        lines.extend(_line(f) for f in group)
+        lines.extend(fact_line(f) for f in group)
         lines.append("")
 
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
-__all__ = ["render_digest"]
+__all__ = ["fact_line", "recency", "render_digest"]

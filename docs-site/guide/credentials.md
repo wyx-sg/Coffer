@@ -34,4 +34,4 @@ coffer credentials storage --set file        # move it back to a 0600 file
 
 In the app, the storage backend is a toggle under **Settings → Security**. Individual secrets are set as you register the models, channels, and MCP servers that reference them.
 
-[Web UI →](/guide/web-ui)
+[Activity →](/guide/activity)

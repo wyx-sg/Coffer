@@ -97,11 +97,28 @@ def show(name: str = typer.Argument(..., help="Profile name")) -> None:
 @app.command("edit")
 def edit(
     name: str = typer.Argument(..., help="Profile name"),
+    protocol: str | None = typer.Option(
+        None,
+        "--protocol",
+        help="Correct the wire format: anthropic | openai | ollama | unknown",
+    ),
     base_url: str | None = typer.Option(None, "--base-url"),
     secret: str | None = typer.Option(None, "--secret", help="Rotate the stored API key"),
 ) -> None:
-    """Edit a provider profile (protocol / credential_ref are immutable)."""
+    """Edit a connection's endpoint, wire format or key.
+
+    `credential_ref` is the immutable one: it is the vault address the
+    connection owns. The WIRE is not — the probe that guessed it can be wrong,
+    and correcting it in place is what saves re-entering the key.
+
+    A wire change is refused while the connection is switched on, because the
+    wire decides which agents a connection can cover and which
+    `coffer provider use-builtin <wire>` reverts. Run `use-builtin` first, edit,
+    then `coffer provider switch <name>` again.
+    """
     patch: dict[str, object] = {}
+    if protocol is not None:
+        patch["protocol"] = protocol
     if base_url is not None:
         patch["base_url"] = base_url
     if secret is not None:
@@ -116,11 +133,46 @@ def edit(
         if r.status_code == 404:
             typer.echo(f"provider {name!r} not found", err=True)
             raise typer.Exit(4)
+        if r.status_code == 409:
+            # The daemon's message already names the connection and the command
+            # that clears the way, so echo it rather than paraphrasing it.
+            envelope = r.json().get("error", {})
+            typer.echo(envelope.get("message", f"provider {name!r} is in use"), err=True)
+            raise typer.Exit(5)
         if r.status_code in (400, 422):
             typer.echo(f"invalid update: {r.text}", err=True)
             raise typer.Exit(6)
         r.raise_for_status()
     typer.echo(f"updated provider {name}")
+
+
+@app.command("rename")
+def rename(
+    name: str = typer.Argument(..., help="Connection to move"),
+    new_name: str = typer.Argument(..., help="The name it should have"),
+) -> None:
+    """Move a connection to a new name.
+
+    Its own verb rather than an `edit` flag, because the name is the
+    connection's IDENTITY: the vault ref it owns, its audit trail and the agent
+    config it is projected into all spell it out, so the rename moves the key
+    and rewrites any live projection along with the row.
+    """
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/providers/{name}/rename", json={"new_name": new_name})
+        if r.status_code == 404:
+            typer.echo(f"provider {name!r} not found", err=True)
+            raise typer.Exit(4)
+        if r.status_code == 409:
+            envelope = r.json().get("error", {})
+            typer.echo(envelope.get("message", f"the name {new_name!r} is taken"), err=True)
+            raise typer.Exit(5)
+        if r.status_code in (400, 422):
+            typer.echo(f"invalid name: {r.text}", err=True)
+            raise typer.Exit(6)
+        r.raise_for_status()
+    typer.echo(f"renamed {name} → {r.json()['name']}")
 
 
 @app.command("rm")
@@ -149,6 +201,33 @@ def switch(name: str = typer.Argument(..., help="Profile to activate")) -> None:
     data = r.json()
     projected = ", ".join(data["projected"]) or "(no matching agent)"
     typer.echo(f"switched to {data['activated']} [{data['protocol']}] → {projected}")
+
+
+@app.command("use-builtin")
+def use_builtin(
+    wire: str = typer.Argument(..., help="Wire format: anthropic | openai"),
+) -> None:
+    """Switch's other half: put this wire's agent(s) back on their OWN login.
+
+    Removes Coffer's projection from the native config and clears the active
+    connection. Idempotent — a no-op when the agent already runs built-in.
+
+    Only the two wires that reach an agent are listed. `ollama` and `unknown`
+    are accepted by the route (they are `Protocol` values) but map to no agent
+    type, so the call reports nothing undone — naming them here would offer a
+    command that cannot do anything.
+    """
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/providers/use-builtin/{wire}")
+        if r.status_code in (400, 422):
+            typer.echo(f"not a wire format: {wire!r}", err=True)
+            raise typer.Exit(6)
+        r.raise_for_status()
+    data = r.json()
+    deprojected = ", ".join(data["deprojected"]) or "(no matching agent)"
+    previous = data["previous"] or "(nothing was active)"
+    typer.echo(f"{data['protocol']} back on its built-in login, was {previous} → {deprojected}")
 
 
 @app.command("internal-default")

@@ -97,6 +97,15 @@ class ResourceApplier:
     that has just arrived takes the framework's own default, because a resource
     nobody on this machine has looked at yet has not been given a reach here
     either.
+
+    A document of a kind that declares ``converges=False`` is ignored outright,
+    upsert and removal alike. The exporter already withholds those, so this end
+    of the rule only matters while the fleet is mixed — but that is exactly
+    when it matters: a machine still on an older build keeps publishing them,
+    and without this the ghost row arrives from the one direction the export
+    fix cannot reach. Removal is skipped for the opposite reason: a derived row
+    here was computed from THIS machine's agents, so a deletion in the tree has
+    no standing over it.
     """
 
     prefix = "resources/"
@@ -123,6 +132,9 @@ class ResourceApplier:
         config: dict[str, object] = dict(raw_config) if isinstance(raw_config, Mapping) else {}
         if self._home:
             config = expand_home(config, self._home)
+
+        if not self._resources.converges(kind):
+            return
 
         gate = self._gates.get(kind)
         if gate is not None:
@@ -163,6 +175,8 @@ class ResourceApplier:
 
     async def remove(self, path: str) -> None:
         kind, name = _ref_from({}, path)
+        if not self._resources.converges(kind):
+            return
         ref = ResourceRef(kind, name)
         if await self._find(ref) is None:
             # Already gone here — two machines deleting the same resource is

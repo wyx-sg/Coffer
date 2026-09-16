@@ -1,4 +1,4 @@
-// frontend/src/kinds/memory/MemoryFileTree.test.tsx
+// frontend/src/components/memory/MemoryFileTree.test.tsx
 //
 // The partition browser's contract is narrow and worth pinning: the tree shows
 // the folder as it is, picking a file previews it, and the preview never offers

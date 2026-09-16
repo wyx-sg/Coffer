@@ -21,7 +21,7 @@
 // A failure never closes silently either way: whatever is shown comes from
 // `error` if the caller supplies one, and from the rejection otherwise, so the
 // dialog is never left open with no explanation for why it did not go through.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -45,6 +45,11 @@ interface Props {
   confirmLabel: string;
   /** Visual intent of the confirm button. */
   variant?: "destructive" | "default";
+  /** Rendered under the description, for the times a sentence cannot say what
+   *  is about to happen — the list of paths a destructive action would take
+   *  with it. Naming them is the difference between a warning and a question
+   *  the user can actually answer. */
+  children?: ReactNode;
   /** Disables the confirm button (e.g. while the mutation is pending). */
   pending?: boolean;
   /** A failure to show inline — typically a mutation's `error`. While one is
@@ -70,6 +75,7 @@ export function ConfirmDialog({
   pending = false,
   error,
   onConfirm,
+  children,
 }: Props) {
   const { t } = useTranslation();
   // A rejection the caller did not hand us as `error`. Cleared when the dialog
@@ -98,6 +104,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
+        {children}
         {failure ? (
           <div className="flex items-start gap-2 text-sm text-destructive" role="alert">
             <AlertCircle className="mt-0.5 size-4 shrink-0" />

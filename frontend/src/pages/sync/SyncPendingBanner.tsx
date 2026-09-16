@@ -114,15 +114,22 @@ export function SyncPendingBanner({ pending }: { pending: PendingConfirmation })
 
       <ConfirmDialog
         open={confirmRebuild}
-        onOpenChange={setConfirmRebuild}
+        onOpenChange={(next) => {
+          setConfirmRebuild(next);
+          // A refusal read once should not greet the next attempt.
+          if (!next) rebuild.reset();
+        }}
         title={t("sync.pending.rebuildTitle")}
         description={t("sync.pending.rebuildConfirm")}
         confirmLabel={t("sync.pending.rebuild")}
         pending={busy}
-        onConfirm={() => {
-          setConfirmRebuild(false);
-          rebuild.mutate();
-        }}
+        error={rebuild.error}
+        onConfirm={() =>
+          // Closes only in `onSuccess`. It used to close first and fire after,
+          // so a refused rebuild — the most destructive answer on this banner —
+          // vanished as though it had worked.
+          rebuild.mutate(undefined, { onSuccess: () => setConfirmRebuild(false) })
+        }
       />
     </Alert>
   );

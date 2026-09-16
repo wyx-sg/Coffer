@@ -146,4 +146,4 @@ Agents both read and write here: a file one agent records is what the next agent
 
 Knowledge is one page under **Resources**. `/knowledge` lists your collections with a description and a file count, and **New collection** creates one. `/knowledge/:collection` opens one collection: a folder tree you walk a level at a time with a filter box that matches names as you type, the selected file rendered beside it, a search box over that collection, and two buttons — **Upload** to convert a document into the tree, **Tidy** to run the tidy pass on demand.
 
-[Channels →](/guide/channels)
+[Memory →](/guide/memory)
