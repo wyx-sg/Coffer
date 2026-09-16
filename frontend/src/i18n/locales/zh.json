@@ -1357,13 +1357,6 @@
     "bulkReach": "所选项的生效范围"
   },
   "sync": {
-    "title": "同步",
-    "subtitle": "把本机金库与一个你自己的 git 仓库收敛到一致，让你用的每一台机器都持有同样的知识、技能与配置。",
-    "tabs": {
-      "status": "状态",
-      "history": "历史",
-      "machines": "机器"
-    },
     "areas": {
       "knowledge": "知识",
       "skills": "技能",
@@ -1373,71 +1366,12 @@
       "machines": "机器",
       "other": "其他"
     },
-    "remote": {
-      "title": "远端",
-      "description": "一个你自己的 git 仓库。每一轮先把本机金库的内容提交下来，交给 git 与仓库里的内容做三方合并，再把差异应用回来——包括删除。这个仓库只是交汇点，不是事实来源：删掉它，任何一台机器都能重建。",
-      "enabled": "自动收敛",
-      "url": "仓库 URL",
-      "branch": "分支",
-      "interval": "间隔（秒）",
-      "save": "保存远端",
-      "enabledHint": "请先保存远端。",
-      "errors": {
-        "url": "请输入 git 远端地址（https://… 或 git@…）",
-        "interval": "间隔至少 60 秒"
-      },
-      "credentialRef": "推送凭据",
-      "credentialRefHint": "这里填的是 Coffer 凭据库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
-      "includeCredentials": "包含凭据",
-      "includeCredentialsHint": "凭据以密文形式随行；无论如何设置，主密钥都不会被推送。持有密文却没有主密钥的机器会把这些引用标记为已锁定，而不是悄悄解密失败。",
-      "worktree": "工作区：{{path}}",
-      "convergeNow": "立即收敛",
-      "converging": "收敛中…",
-      "notConfigured": "尚未配置远端。在上方填入一个仓库，本机金库就会开始与它收敛。"
-    },
-    "toast": {
-      "roundDone": "本轮已完成：{{status}}（+{{added}} ~{{modified}} −{{deleted}}）"
-    },
-    "round": {
-      "statusLabel": {
-        "ok": "已收敛",
-        "no_change": "没有变化",
-        "conflict": "因冲突中止",
-        "awaiting_confirmation": "已暂停，等你确认",
-        "push_failed": "本地已应用，推送失败",
-        "failed": "失败",
-        "disabled": "已关闭"
-      },
-      "join": {
-        "new": "以新机器身份加入——远端持有的内容全部添加过来，本机金库原有的内容也全部保留。",
-        "returning": "以回归机器身份重新加入——基线从它自己的描述文件恢复，所以它离线期间被删掉的东西不会复活。"
-      },
-      "agentResolved": "由 Agent 代为合并",
-      "agentResolvedHint": "内部模型在工作区里解决了这些路径上的冲突。如果是你自己的笔记，值得回头看一眼。",
-      "failures": "本机无法应用",
-      "failure": "{{path}}——{{reason}}",
-      "lockedRefs": "本机无法解密的凭据",
-      "lockedRefsHint": "本机金库拿到了它们的密文，却没有能打开它的主密钥。请从持有主密钥的那台机器导出，并在下方导入。",
-      "applied": "应用到本机",
-      "appliedHint": "这一轮往本机金库里写了什么。",
-      "published": "发布到远端",
-      "publishedHint": "这一轮往共享树里写了什么。",
-      "change": {
-        "added": "新增 · {{path}}",
-        "modified": "修改 · {{path}}",
-        "deleted": "删除 · {{path}}"
-      }
-    },
-    "rollback": {
-      "action": "撤销这一轮",
-      "title": "撤销这一轮？",
-      "description": "这会把本机金库恢复到 {{when}} 结束的那一轮开始写入之前的状态。撤销本身是一次普通的本地改动：下一轮会把它发布到远端，其他机器随之跟上。",
-      "willUndo": "这一轮在本机写入的内容——撤销会把每一条都反向还原",
-      "morePaths": "…还有 {{count}} 条",
-      "nothingApplied": "这一轮没有往本机金库里写任何内容，撤销它在本机不会改变什么。",
-      "confirm": "撤销这一轮",
-      "undoing": "正在撤销…",
-      "done": "已撤销这一轮（回退 +{{added}} ~{{modified}} −{{deleted}}）。"
+    "conflict": {
+      "title": "本轮因冲突中止",
+      "body": "两台机器改动了同一个文档的同一段。什么都没有应用，也什么都没有发布——金库和指针都停在原地。",
+      "paths": "冲突路径",
+      "resolve": "请在下面这个工作区里用你自己的 git 工具解决，下一轮会从那里继续。",
+      "worktree": "工作区：{{path}}"
     },
     "history": {
       "description": "这台机器执行过的每一轮收敛，最新的在最前。什么都没变的那些轮次也会列出来——正是它们说明金库一直在收敛。",
@@ -1460,33 +1394,6 @@
         "published": "发布到远端",
         "commit": "提交"
       }
-    },
-    "conflict": {
-      "title": "本轮因冲突中止",
-      "body": "两台机器改动了同一个文档的同一段。什么都没有应用，也什么都没有发布——金库和指针都停在原地。",
-      "paths": "冲突路径",
-      "resolve": "请在下面这个工作区里用你自己的 git 工具解决，下一轮会从那里继续。",
-      "worktree": "工作区：{{path}}"
-    },
-    "pending": {
-      "bodyApply": "把远端的改动应用到本机，会删掉超过删除保护阈值的文档数量。只有当你确信另一台机器真的删了这么多时才确认。",
-      "bodyPublish": "本机这一轮会把这些删除发布到远端，之后其他每一台机器都会照做。",
-      "breach": "{{area}}：{{total}} 个文档中的 {{deleted}} 个",
-      "breaches": "将要删除的内容",
-      "confirm": "确认",
-      "confirming": "确认中…",
-      "morePaths": "…另有 {{count}} 条",
-      "paths": "路径",
-      "raisedAt": "暂停于 {{when}}",
-      "rebuild": "以远端重建本机",
-      "rebuildTitle": "从远端重建本机金库？",
-      "rebuildConfirm": "这会用远端的内容替换本机金库，并丢弃只有这台机器持有的东西。只在本机文件确实已经丢失时使用。继续？",
-      "rebuilding": "正在重建…",
-      "reinstallWarning": "如果这台机器刚刚重装过，或刚从备份恢复，诚实的答案是「拒绝」：这些文档是本机缺失，不是被删除，确认会连累其他所有机器。",
-      "reject": "拒绝",
-      "rejecting": "拒绝中…",
-      "titleApply": "本轮已暂停：远端会删掉本机金库的很大一部分",
-      "titlePublish": "本轮已暂停：本机金库会删掉远端的很大一部分"
     },
     "key": {
       "title": "主密钥",
@@ -1528,6 +1435,102 @@
       "retireTitle": "下线 {{name}}？",
       "retireBody": "它的描述文件会从注册表里移除，其他任何东西都不会被改写。生效范围是在每台机器上各自设置的，并不指名任何机器，因此不受影响；而绑定在这台机器上的消息渠道仍然指名着它，在你把它重新绑到另一台机器之前不会在任何地方运行。",
       "derivedNote": "本机的 id 保存在本地文件里，而不是从宿主机派生的，所以删掉 ~/.coffer 之后它会以一台新机器的身份重新出现，这一行需要手动下线。"
+    },
+    "pending": {
+      "bodyApply": "把远端的改动应用到本机，会删掉超过删除保护阈值的文档数量。只有当你确信另一台机器真的删了这么多时才确认。",
+      "bodyPublish": "本机这一轮会把这些删除发布到远端，之后其他每一台机器都会照做。",
+      "breach": "{{area}}：{{total}} 个文档中的 {{deleted}} 个",
+      "breaches": "将要删除的内容",
+      "confirm": "确认",
+      "confirming": "确认中…",
+      "morePaths": "…另有 {{count}} 条",
+      "paths": "路径",
+      "raisedAt": "暂停于 {{when}}",
+      "rebuild": "以远端重建本机",
+      "rebuildTitle": "从远端重建本机金库？",
+      "rebuildConfirm": "这会用远端的内容替换本机金库，并丢弃只有这台机器持有的东西。只在本机文件确实已经丢失时使用。继续？",
+      "rebuilding": "正在重建…",
+      "reinstallWarning": "如果这台机器刚刚重装过，或刚从备份恢复，诚实的答案是「拒绝」：这些文档是本机缺失，不是被删除，确认会连累其他所有机器。",
+      "reject": "拒绝",
+      "rejecting": "拒绝中…",
+      "titleApply": "本轮已暂停：远端会删掉本机金库的很大一部分",
+      "titlePublish": "本轮已暂停：本机金库会删掉远端的很大一部分"
+    },
+    "remote": {
+      "title": "远端",
+      "description": "一个你自己的 git 仓库。每一轮先把本机金库的内容提交下来，交给 git 与仓库里的内容做三方合并，再把差异应用回来——包括删除。这个仓库只是交汇点，不是事实来源：删掉它，任何一台机器都能重建。",
+      "enabled": "自动收敛",
+      "url": "仓库 URL",
+      "branch": "分支",
+      "interval": "间隔（秒）",
+      "save": "保存远端",
+      "enabledHint": "请先保存远端。",
+      "errors": {
+        "url": "请输入 git 远端地址（https://… 或 git@…）",
+        "interval": "间隔至少 60 秒"
+      },
+      "credentialRef": "推送凭据",
+      "credentialRefHint": "这里填的是 Coffer 凭据库中的条目名称，不是密钥本身。守护进程只在推送那一刻解析它，所以密钥不会出现在本页面、仓库的 git config，或任何错误文本里。",
+      "includeCredentials": "包含凭据",
+      "includeCredentialsHint": "凭据以密文形式随行；无论如何设置，主密钥都不会被推送。持有密文却没有主密钥的机器会把这些引用标记为已锁定，而不是悄悄解密失败。",
+      "worktree": "工作区：{{path}}",
+      "convergeNow": "立即收敛",
+      "converging": "收敛中…",
+      "notConfigured": "尚未配置远端。在上方填入一个仓库，本机金库就会开始与它收敛。"
+    },
+    "rollback": {
+      "action": "撤销这一轮",
+      "title": "撤销这一轮？",
+      "description": "这会把本机金库恢复到 {{when}} 结束的那一轮开始写入之前的状态。撤销本身是一次普通的本地改动：下一轮会把它发布到远端，其他机器随之跟上。",
+      "willUndo": "这一轮在本机写入的内容——撤销会把每一条都反向还原",
+      "morePaths": "…还有 {{count}} 条",
+      "nothingApplied": "这一轮没有往本机金库里写任何内容，撤销它在本机不会改变什么。",
+      "confirm": "撤销这一轮",
+      "undoing": "正在撤销…",
+      "done": "已撤销这一轮（回退 +{{added}} ~{{modified}} −{{deleted}}）。"
+    },
+    "round": {
+      "statusLabel": {
+        "ok": "已收敛",
+        "no_change": "没有变化",
+        "conflict": "因冲突中止",
+        "awaiting_confirmation": "已暂停，等你确认",
+        "push_failed": "本地已应用，推送失败",
+        "failed": "失败",
+        "disabled": "已关闭"
+      },
+      "join": {
+        "new": "以新机器身份加入——远端持有的内容全部添加过来，本机金库原有的内容也全部保留。",
+        "returning": "以回归机器身份重新加入——基线从它自己的描述文件恢复，所以它离线期间被删掉的东西不会复活。"
+      },
+      "agentResolved": "由 Agent 代为合并",
+      "agentResolvedHint": "内部模型在工作区里解决了这些路径上的冲突。如果是你自己的笔记，值得回头看一眼。",
+      "failures": "本机无法应用",
+      "failure": "{{path}}——{{reason}}",
+      "lockedRefs": "本机无法解密的凭据",
+      "lockedRefsHint": "本机金库拿到了它们的密文，却没有能打开它的主密钥。请从持有主密钥的那台机器导出，并在下方导入。",
+      "applied": "应用到本机",
+      "appliedHint": "这一轮往本机金库里写了什么。",
+      "published": "发布到远端",
+      "publishedHint": "这一轮往共享树里写了什么。",
+      "change": {
+        "added": "新增 · {{path}}",
+        "modified": "修改 · {{path}}",
+        "deleted": "删除 · {{path}}"
+      }
+    },
+    "runs": {
+      "folded": "×{{count}}",
+      "quietDetail": "{{from}} 到 {{to}} 之间的 {{count}} 轮。本机和远端都没有任何变化。"
+    },
+    "subtitle": "把本机金库与一个你自己的 git 仓库收敛到一致，让你用的每一台机器都持有同样的知识、技能与配置。",
+    "tabs": {
+      "runs": "记录",
+      "setup": "配置"
+    },
+    "title": "同步",
+    "toast": {
+      "roundDone": "本轮已完成：{{status}}（+{{added}} ~{{modified}} −{{deleted}}）"
     }
   }
 }

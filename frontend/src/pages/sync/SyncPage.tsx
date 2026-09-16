@@ -6,31 +6,37 @@
 // so it is a page under System, not a Settings tab. `/settings/sync` redirects
 // here.
 //
-// Three tabs: **Status** (the remote, the master key, and anything waiting on
-// the user), **History** (every round this machine has run) and **Machines**
-// (the registry). Status answers "what is it doing"; History answers "what has
-// it been doing", which one round's worth of prose on Status never could.
+// Two tabs: **Runs** (every round this machine has run, and anything one of
+// them is waiting on) and **Setup** (the remote, the master key, the machine
+// registry). Runs is the landing tab, because what a person opens Sync to find
+// out is whether it is working.
 //
-// Conflicts and held rounds stay BANNERS on Status rather than becoming a tab
-// of their own — they are states the vault passes through, and a permanent tab
-// for them would read as a place you are meant to visit.
+// There were three. **Status** is gone, and its two banners with it: a conflict
+// and a held round are not states beside the history, they are the newest row
+// OF it — a held round is a round. Keeping them apart put one situation in two
+// places and made it actionable in only one, so the answers now sit on the row
+// that is waiting (`SyncHeldRoundActions`), gated on the vault actually
+// waiting rather than on a row that merely ended held.
 //
-// Only the tab in front queries: Radix unmounts the others, and History is
-// handed `enabled` besides, so nothing is fetched and thrown away.
+// **Machines** folded into Setup for the opposite reason: pointing at a
+// remote, carrying the key over and watching the second machine appear are one
+// errand, and the last step is how you know the first two worked.
 //
-// The active tab lives in the URL (`?tab=`), so a link can land on History
-// and a reload comes back where it was.
+// Only the tab in front queries: Radix unmounts the other, and Runs is handed
+// `enabled` besides, so nothing is fetched and thrown away.
+//
+// The active tab lives in the URL (`?tab=`), so a link can land on Setup and a
+// reload comes back where it was.
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SyncHistoryTab } from "./SyncHistoryTab";
-import { SyncMachinesTab } from "./SyncMachinesTab";
-import { SyncStatusTab } from "./SyncStatusTab";
+import { SyncRunsTab } from "./SyncRunsTab";
+import { SyncSetupTab } from "./SyncSetupTab";
 
-const TABS = ["status", "history", "machines"] as const;
+const TABS = ["runs", "setup"] as const;
 type SyncTab = (typeof TABS)[number];
 
 function isSyncTab(value: string | null): value is SyncTab {
@@ -41,10 +47,12 @@ export function SyncPage() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const requested = params.get("tab");
-  const tab: SyncTab = isSyncTab(requested) ? requested : "status";
+  const tab: SyncTab = isSyncTab(requested) ? requested : "runs";
   const setTab = (next: string) => {
     const search = new URLSearchParams(params);
-    if (next === "status") search.delete("tab");
+    // The landing tab carries no parameter, so the page's own URL is the
+    // shortest one and a stale `?tab=status` link lands somewhere real.
+    if (next === "runs") search.delete("tab");
     else search.set("tab", next);
     setParams(search, { replace: true });
   };
@@ -55,18 +63,14 @@ export function SyncPage() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="status">{t("sync.tabs.status")}</TabsTrigger>
-          <TabsTrigger value="history">{t("sync.tabs.history")}</TabsTrigger>
-          <TabsTrigger value="machines">{t("sync.tabs.machines")}</TabsTrigger>
+          <TabsTrigger value="runs">{t("sync.tabs.runs")}</TabsTrigger>
+          <TabsTrigger value="setup">{t("sync.tabs.setup")}</TabsTrigger>
         </TabsList>
-        <TabsContent value="status" className="pt-6">
-          <SyncStatusTab />
+        <TabsContent value="runs" className="pt-6">
+          <SyncRunsTab enabled={tab === "runs"} />
         </TabsContent>
-        <TabsContent value="history" className="pt-6">
-          <SyncHistoryTab enabled={tab === "history"} />
-        </TabsContent>
-        <TabsContent value="machines" className="pt-6">
-          <SyncMachinesTab />
+        <TabsContent value="setup" className="pt-6">
+          <SyncSetupTab />
         </TabsContent>
       </Tabs>
     </div>

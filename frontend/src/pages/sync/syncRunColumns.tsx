@@ -18,7 +18,9 @@ import type { Column } from "@/components/DataTable";
 import type { DiffCounts, RunRecord } from "@/lib/api/sync";
 import { toneClass, type Tone } from "@/lib/statusColors";
 import { formatDateTime } from "@/lib/utils";
+import { SyncHeldRoundActions } from "./SyncHeldRoundActions";
 import { SyncRollbackAction } from "./SyncRollbackAction";
+import { quietSpan, type SyncRunRow } from "./syncRunRows";
 
 /**
  * A round's status in the badge vocabulary the rest of the app uses.
@@ -49,8 +51,26 @@ function countsLabel(t: TFunction, counts: DiffCounts): string {
   return t("sync.history.countsShort", { ...counts });
 }
 
-/** What a free-text search on a history row matches against. */
-export function runSearchHaystack(t: TFunction, run: RunRecord): string {
+/** What a free-text search matches against, for either kind of row.
+ *
+ * A folded row answers for the stretch it stands in for — its own span and the
+ * words "no change" — not its members' fields. Searching for a commit should
+ * not surface a fold that merely contains one, because the fold does not show
+ * it and clicking it would not reveal it. */
+export function rowSearchHaystack(t: TFunction, row: SyncRunRow): string {
+  if (row.kind === "quiet") {
+    const span = quietSpan(row.runs);
+    return [formatDateTime(span.from), formatDateTime(span.to), statusLabel(t, "no_change")]
+      .join(" ")
+      .toLowerCase();
+  }
+  return runSearchHaystack(t, row.run);
+}
+
+/** What a free-text search on one round matches against. Not exported: every
+ *  caller goes through `rowSearchHaystack`, which knows about folds too, and a
+ *  second entry point is how a search that ignores them creeps back. */
+function runSearchHaystack(t: TFunction, run: RunRecord): string {
   return [
     formatDateTime(run.finished_at),
     statusLabel(t, run.status),
@@ -67,73 +87,62 @@ export function runSearchHaystack(t: TFunction, run: RunRecord): string {
     .toLowerCase();
 }
 
-/**
- * Statuses that prove a round reached step 4 and tagged a pre-apply snapshot
- * (`convergence.py` `--- 4 guard + snapshot ---`): it applied, or it had
- * nothing to apply, or it applied here and only the push failed.
- */
-const SNAPSHOTTED = new Set(["ok", "no_change", "push_failed"]);
-
-/**
- * Statuses that prove a round stopped BEFORE the snapshot — a conflict stops
- * at the merge, a held round at the guard, and a disabled one never ran. Such
- * a round left no snapshot, so the round underneath it is still the one a
- * rollback undoes.
- */
-const PRE_SNAPSHOT = new Set(["conflict", "awaiting_confirmation", "disabled"]);
-
-/**
- * The id of the one round `POST /sync/rollback` would undo, or null.
- *
- * The route takes no argument: it reverses the round that left the NEWEST
- * pre-apply snapshot. So the surface has to work out which row that is rather
- * than offering the same call from every row under a different name.
- *
- * `failed` deliberately ends the walk with no target. A failed round may have
- * died before the snapshot or after it — the status cannot say which — and
- * guessing the wrong way would put "Undo" on a round that is not the one the
- * daemon would reverse. No button is the honest answer; `coffer sync rollback`
- * is still there for someone who knows what happened.
- *
- * @param runs the history, newest first, exactly as the daemon returns it.
- */
-export function rollbackTargetId(runs: RunRecord[]): number | null {
-  for (const run of runs) {
-    if (SNAPSHOTTED.has(run.status)) return run.id;
-    if (!PRE_SNAPSHOT.has(run.status)) return null;
-  }
-  return null;
+/** The status a folded row answers the filter with: every round inside it
+ *  ended `no_change`, so filtering to that outcome should find it. */
+export function rowStatus(row: SyncRunRow): string {
+  return row.kind === "quiet" ? "no_change" : row.run.status;
 }
 
-/**
- * @param rollbackTarget the id from `rollbackTargetId` — the single row that
- *   carries the Undo action, or null when no round can be undone.
- */
-export function syncRunColumns(t: TFunction, rollbackTarget: number | null): Column<RunRecord>[] {
+interface ColumnArgs {
+  /** From `rollbackTargetId` — the single round that carries Undo, or null. */
+  rollbackTarget: number | null;
+  /** From `heldRoundId` — the single round that carries the held-round
+   *  answers, or null when the vault is not waiting on one. */
+  heldTarget: number | null;
+}
+
+export function syncRunColumns(t: TFunction, args: ColumnArgs): Column<SyncRunRow>[] {
+  const { rollbackTarget, heldTarget } = args;
   return [
     {
       key: "when",
       header: t("sync.history.table.when"),
-      className: "w-44 whitespace-nowrap text-xs text-muted-foreground",
+      className: "w-44 text-xs text-muted-foreground",
       // When it FINISHED, not when it started: that is the moment the vault
-      // and the remote were last in the state this row describes.
-      cell: (run) => formatDateTime(run.finished_at),
+      // and the remote were last in the state this row describes. A folded row
+      // reports its stretch instead, which is the whole reason it is allowed
+      // to stand in for its members: a gap in convergence then reads as the
+      // distance between two spans rather than as fourteen timestamps to scan.
+      cell: (row) => {
+        if (row.kind === "run") return formatDateTime(row.run.finished_at);
+        const span = quietSpan(row.runs);
+        return (
+          <span className="whitespace-nowrap">
+            {formatDateTime(span.from)} → {formatDateTime(span.to)}
+          </span>
+        );
+      },
     },
     {
       key: "outcome",
       header: t("sync.history.table.outcome"),
       className: "w-52",
-      cell: (run) => (
+      cell: (row) => (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge variant="outline" className={toneClass(STATUS_TONE[run.status] ?? "muted")}>
-            {statusLabel(t, run.status)}
+          <Badge variant="outline" className={toneClass(STATUS_TONE[rowStatus(row)] ?? "muted")}>
+            {statusLabel(t, rowStatus(row))}
           </Badge>
+          {row.kind === "quiet" ? (
+            <Badge variant="outline" className={toneClass("muted")}>
+              {t("sync.runs.folded", { count: row.runs.length })}
+            </Badge>
+          ) : null}
           {/* A join is the one thing about a round that is not in its counts:
               the same "322 published" means something entirely different on
               the round where this machine first met the remote. */}
-          {run.join ? (
+          {row.kind === "run" && row.run.join ? (
             <Badge variant="outline" className={toneClass("muted")}>
-              {t(`sync.history.joinShort.${run.join}`)}
+              {t(`sync.history.joinShort.${row.run.join}`)}
             </Badge>
           ) : null}
         </div>
@@ -143,13 +152,15 @@ export function syncRunColumns(t: TFunction, rollbackTarget: number | null): Col
       key: "applied",
       header: t("sync.history.table.applied"),
       className: "w-40 whitespace-nowrap text-xs",
-      cell: (run) => countsLabel(t, run.applied),
+      // A folded row moved nothing by construction, so it shows the dash an
+      // absent value shows rather than a tally of zeroes repeated N times.
+      cell: (row) => (row.kind === "run" ? countsLabel(t, row.run.applied) : "—"),
     },
     {
       key: "published",
       header: t("sync.history.table.published"),
       className: "w-40 whitespace-nowrap text-xs",
-      cell: (run) => countsLabel(t, run.published),
+      cell: (row) => (row.kind === "run" ? countsLabel(t, row.run.published) : "—"),
     },
     {
       key: "commit",
@@ -157,15 +168,25 @@ export function syncRunColumns(t: TFunction, rollbackTarget: number | null): Col
       className: "w-28 font-mono text-xs text-muted-foreground",
       // A dash, never a blank: a round that landed no commit (nothing changed,
       // or it never got that far) is saying something, not missing a value.
-      cell: (run) => (run.commit ? run.commit.slice(0, 10) : "—"),
+      cell: (row) => (row.kind === "run" && row.run.commit ? row.run.commit.slice(0, 10) : "—"),
     },
     {
-      key: "undo",
-      // No header text: one action on one row, and a column heading over
-      // mostly-empty cells reads as a value that is missing everywhere else.
+      key: "actions",
+      // No header text: at most one row carries anything here, and a column
+      // heading over mostly-empty cells reads as a value that is missing
+      // everywhere else.
       header: "",
-      className: "w-36 text-right",
-      cell: (run) => (run.id === rollbackTarget ? <SyncRollbackAction run={run} /> : null),
+      className: "w-64 text-right",
+      cell: (row) => {
+        if (row.kind !== "run") return null;
+        // A held round's answers outrank Undo — there is nothing to undo yet,
+        // and the round is waiting on the reader. Each is gated on its own
+        // single target, so in practice the two never land on one row.
+        if (row.run.id === heldTarget && row.run.pending) {
+          return <SyncHeldRoundActions pending={row.run.pending} />;
+        }
+        return row.run.id === rollbackTarget ? <SyncRollbackAction run={row.run} /> : null;
+      },
     },
   ];
 }
