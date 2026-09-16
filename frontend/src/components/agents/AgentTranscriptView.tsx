@@ -11,6 +11,12 @@
 // plain text: a prompt is what the person typed, and markdown-rendering it
 // would quietly restructure their words.
 //
+// A user turn also carries whatever its harness prepended — reminders, task
+// notifications, environment blocks — and a page asked to read like a real
+// back-and-forth cannot open every other turn with eight lines of machinery.
+// Those blocks are folded away rather than dropped (`splitTurnText`): the
+// reader sees the question, and the record is still one click from complete.
+//
 // Everything here is already safe by the time it arrives: the server scrubs
 // secrets out of every turn and cuts an over-long one before it crosses the
 // wire, so this component never has to decide what may be shown.
@@ -20,7 +26,35 @@ import { turnDomId } from "@/components/agents/AgentTranscriptOutline";
 import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
+import { splitTurnText } from "@/lib/transcriptText";
 import { cn } from "@/lib/utils";
+
+function UserTurnText({ text }: { text: string }) {
+  const { t } = useTranslation();
+  const { harness, human } = splitTurnText(text);
+
+  return (
+    <>
+      {harness ? (
+        <details className="mb-2">
+          <summary className="cursor-pointer text-xs text-muted-foreground">
+            {t("agents.conversationDetail.harnessPrefix")}
+          </summary>
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+            {harness.trim()}
+          </p>
+        </details>
+      ) : null}
+      {/* A turn that was nothing BUT harness still renders its own emptiness
+          honestly rather than as a blank card. */}
+      {human.trim() ? (
+        <p className="whitespace-pre-wrap break-words">{human.trim()}</p>
+      ) : harness ? null : (
+        <p className="whitespace-pre-wrap break-words">{text}</p>
+      )}
+    </>
+  );
+}
 
 function Turn({ message, index }: { message: TranscriptMessage; index: number }) {
   const { t } = useTranslation();
@@ -54,7 +88,7 @@ function Turn({ message, index }: { message: TranscriptMessage; index: number })
         )}
       >
         {isUser ? (
-          <p className="whitespace-pre-wrap break-words">{message.text}</p>
+          <UserTurnText text={message.text} />
         ) : (
           <FindableMarkdown>{message.text}</FindableMarkdown>
         )}

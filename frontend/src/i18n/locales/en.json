@@ -920,7 +920,8 @@
       "earlier": "Earlier turns",
       "later": "Later turns",
       "outline": "Contents",
-      "outlineEmpty": "No prompts in this window."
+      "outlineEmpty": "No prompts in this window.",
+      "harnessPrefix": "Harness context"
     },
     "memoryStore": {
       "tree": "Files",

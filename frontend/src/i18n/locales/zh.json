@@ -920,7 +920,8 @@
       "earlier": "更早的轮次",
       "later": "更晚的轮次",
       "outline": "目录",
-      "outlineEmpty": "这一段里没有人的发言。"
+      "outlineEmpty": "这一段里没有人的发言。",
+      "harnessPrefix": "工具注入的上下文"
     },
     "memoryStore": {
       "tree": "文件",

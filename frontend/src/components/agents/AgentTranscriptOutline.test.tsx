@@ -44,6 +44,42 @@ describe("outlineOf", () => {
     expect(outlineOf([turn("user", "   \n\n ")])).toEqual([]);
   });
 
+  test("indexes a turn by the question, not by the reminder in front of it", () => {
+    // What made the list useless on a real transcript: twelve of its fifteen
+    // entries read `<task-notification>`, because the harness prepends its
+    // blocks to the same turn the person typed into.
+    const messages = [
+      turn(
+        "user",
+        "<system-reminder>\nYou are operating in a git worktree.\n</system-reminder>\n\n" +
+          "only show whether it is installed",
+      ),
+    ];
+
+    expect(outlineOf(messages)).toEqual([
+      { index: 0, label: "only show whether it is installed" },
+    ]);
+  });
+
+  test("drops a turn the person did not write at all", () => {
+    // A notification the harness delivered into the transcript is not a
+    // question anybody is scanning the contents list to find again.
+    const messages = [
+      turn("user", "<task-notification>\nbuild finished\n</task-notification>"),
+      turn("user", "ship it"),
+    ];
+
+    expect(outlineOf(messages)).toEqual([{ index: 1, label: "ship it" }]);
+  });
+
+  test("prose that merely contains an angle bracket is left alone", () => {
+    // The rule is the tag SHAPE, not a list of names — and a comparison is not
+    // a tag, however much it looks like the start of one.
+    expect(outlineOf([turn("user", "assert a < b for every row")])[0].label).toBe(
+      "assert a < b for every row",
+    );
+  });
+
   test("the index is the turn's position in the window, not among the prompts", () => {
     // It is what `turnDomId` is built from, so an outline counting only its
     // own entries would scroll to the wrong turn.
