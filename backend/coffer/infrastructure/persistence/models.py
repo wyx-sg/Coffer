@@ -258,6 +258,15 @@ class InternalEngineConfigModel(Base):
     #: spans several (spec vault-sync ``## Unattended rewriters``). NULL means
     #: "wherever this is read", which is correct for a single-machine vault.
     tidy_owner_machine_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    #: The other two unattended passes' switches, and all three timers. An
+    #: interval of NULL means "the pass's own default", so the default stays in
+    #: the worker that owns the pass and raising it later reaches every vault
+    #: that never chose one (spec memory FR-007, spec knowledge FR-051).
+    auto_aggregate_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    aggregate_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    auto_organise_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    organise_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tidy_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
     __table_args__ = (CheckConstraint("id = 1", name="ck_internal_engine_config_singleton"),)

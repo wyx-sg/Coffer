@@ -123,7 +123,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-004**: v1 MUST support two readers. **Claude Code**: per-fact Markdown files under its per-project memory directories, whose frontmatter carries the fact's name, description and type. **Codex**: its `MEMORY.md` task groups — each group's applicability, preferences, reusable knowledge and failures — and its distilled profile summary. Each reader MUST ignore the agent's own index or roll-up file, since Coffer regenerates that role itself.
 - **FR-005**: A reader that cannot parse its source — the agent changed its format — MUST fail **loudly and in isolation**: that agent contributes nothing, the surface says so with the path and the reason, the other agent's aggregation still completes, and previously aggregated facts are left standing rather than deleted.
 - **FR-006**: Aggregation MUST skip a source file whose content hash is unchanged since the last pass, and MUST record enough per source to make that decision without re-parsing.
-- **FR-007**: Aggregation MUST run on a background worker on an interval and MUST be triggerable by hand. Unlike knowledge's tidy it MAY default to on, because it only reads the agents' files and only writes derived ones.
+- **FR-007**: Aggregation MUST run on a background worker on an interval and MUST be triggerable by hand. Unlike knowledge's tidy it MAY default to on, because it only reads the agents' files and only writes derived ones. Its switch and its interval MUST both be settable by the operator and MUST be read per pass rather than at boot, so a change takes effect without a daemon restart (spec [provider-switching](../provider-switching/spec.md) E3a).
 
 ### Partitions
 

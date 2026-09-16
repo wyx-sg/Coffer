@@ -30,8 +30,10 @@ vi.mock("@/lib/api/providers", async (orig) => {
 // The internal-engine section reads/writes its own singleton config, and the
 // model dropdown lists the chosen endpoint's models — both hit the network.
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
-  useInternalEngineConfig: () => ({ data: { model: null, updated_at: null } }),
+  useInternalEngineConfig: () => ({ data: { model: null, updated_at: null, upkeep: {} } }),
   useSetInternalEngineModel: () => ({ isPending: false, mutate: vi.fn() }),
+  // The upkeep card sits on this page too; its own suite covers its behaviour.
+  useSetUpkeep: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
@@ -83,13 +85,15 @@ describe("EngineSettings", () => {
     vi.clearAllMocks();
   });
 
-  test("/settings/engine renders the internal-engine card and nothing else", async () => {
+  test("/settings/engine renders the engine card and the upkeep card", async () => {
     apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
     renderPage();
     expect(await screen.findByText("Coffer's model")).toBeInTheDocument();
     // The embedding card went with vector retrieval: there is no index left
     // for an embedding model to feed (ADR knowledge-is-plain-files).
     expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
+    // The passes Coffer runs on its own belong beside the model they run on.
+    expect(screen.getByText("Automatic upkeep")).toBeInTheDocument();
   });
 
   acceptance("provider-switching", "set a connection as the internal engine default", async () => {

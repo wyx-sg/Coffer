@@ -20,6 +20,7 @@ from collections.abc import Awaitable, Callable
 
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
+from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,12 @@ EnabledCheck = Callable[[], Awaitable[bool]]
 CollectionLister = Callable[[], Awaitable[list[str]]]
 
 
+async def _unset_interval() -> int | None:
+    """No interval chosen — the constant above applies. The composition root
+    injects a reader of the operator's setting instead."""
+    return None
+
+
 class TidyWorker:
     def __init__(
         self,
@@ -42,6 +49,7 @@ class TidyWorker:
         list_collections: CollectionLister,
         start_delay_s: float = DEFAULT_START_DELAY_S,
         interval_s: float = DEFAULT_INTERVAL_S,
+        read_interval: IntervalReader = _unset_interval,
         lock: asyncio.Lock | None = None,
         runs: UpkeepRunRegistry = UPKEEP_RUNS,
     ) -> None:
@@ -51,6 +59,7 @@ class TidyWorker:
         self._list_collections = list_collections
         self._start_delay_s = start_delay_s
         self._interval_s = interval_s
+        self._read_interval = read_interval
         # The vault-write lock a converge round also takes (spec vault-sync
         # ``## Unattended rewriters``): a pass and a round both rewrite vault
         # content, and an export taken half-way through a rewrite is a torn
@@ -73,7 +82,10 @@ class TidyWorker:
                 # A failed sweep must never end the loop: the next one is
                 # a fresh attempt over the same idempotent pass.
                 logger.warning("knowledge.tidy_worker.sweep_failed", exc_info=True)
-            await asyncio.sleep(self._interval_s)
+            # The operator's interval is re-read as the wait runs, so a change
+            # in Settings lands within a slice rather than at the end of a wait
+            # this worker committed to hours ago.
+            await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:
         """One sweep over every collection, or nothing at all when disabled."""

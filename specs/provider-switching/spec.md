@@ -185,6 +185,25 @@ user to answer those questions too early and conflated the account with its uses
   model onto the resolved `internal_default` connection before the engine builds
   its chat model; while the connection still carries a `model` (until E1 lands),
   an empty internal-engine model falls back to the connection's model.
+- **E3a — The same singleton carries what Coffer does unattended.** Coffer runs
+  three passes on its own behalf: aggregation reads the agents' own memory into
+  the derived tree (spec [memory](../memory/spec.md) FR-007), organise lets the
+  model rewrite that derived digest (FR-030), and tidy lets it rewrite the
+  user's own knowledge files (spec [knowledge](../knowledge/spec.md) FR-051).
+  Each MUST carry a **switch and an interval** the operator can see and change,
+  read/written through `PUT /api/v1/internal-engine-config/upkeep` — one pass
+  per request, each half untouched when it is not sent, so a settings surface
+  toggling one row cannot write back a stale copy of the other two. An interval
+  the operator has not chosen MUST be reported as unchosen ALONGSIDE the
+  default that then runs, so the default lives in one place — the worker that
+  owns the pass — and raising it later reaches every vault that never chose.
+  A worker MUST pick a change up without a restart; a pass MUST NOT be
+  schedulable below a floor that would busy-loop a model over the user's files.
+  The two passes that write only derived files ship ON; tidy, which rewrites
+  the only copy of the user's own writing, ships OFF. These settings travel
+  with the model choice (spec [vault-sync](../vault-sync/spec.md) slice 7):
+  switching a rewriter off is exactly the decision a second machine must not be
+  left out of.
 - **E4 — Projection input = connection (endpoint + key + protocol) + the
   binding (model).** Activating/projecting a connection for an agent reads the
   endpoint/key/protocol from the connection and the model(s) from that agent's
@@ -1551,6 +1570,18 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   unless B's curated `models` already lists that id, in which case it is kept;
   nothing is probed over the network, and re-setting A, which is already the
   internal default, changes nothing.
+
+### Scenario: switch off and re-time the passes Coffer runs unattended
+
+- **Given** a fresh vault, where aggregation and organise run on their own
+  timers and tidy does not,
+- **When** the operator switches one pass on or off, or gives it an interval,
+  or returns it to its own default (`PUT /api/v1/internal-engine-config/upkeep`,
+  one pass per request),
+- **Then** that pass's switch and interval change and no other pass's do, the
+  reported default interval says what runs while none is chosen, an interval
+  below the floor and an unknown pass name are both refused, and the running
+  worker picks the change up without a restart.
 
 ### Scenario: choose the model the internal engine runs on
 

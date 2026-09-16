@@ -575,6 +575,29 @@
       "connectionPlaceholder": "选择模型提供商",
       "model": "模型",
       "modelPlaceholder": "选择模型"
+    },
+    "upkeep": {
+      "title": "自动整理",
+      "subtitle": "Coffer 不用你开口、自己按时跑的几件事。每一件都可以关掉，也可以改跑的频率。",
+      "interval": "{{pass}} 的运行频率",
+      "defaultInterval": "默认（{{interval}}）",
+      "everyHours": "每 {{count}} 小时",
+      "everyMinutes": "每 {{count}} 分钟",
+      "passes": {
+        "aggregate": {
+          "name": "从 agent 读取",
+          "writes": "读你的 agent 自己的记忆文件，只写 Coffer 的派生目录树。不经过模型。"
+        },
+        "organise": {
+          "name": "整理记忆",
+          "writes": "模型重写派生出来的摘要——合并重复、标记被推翻的事实。删掉这棵树再跑一遍就能复现。"
+        },
+        "tidy": {
+          "name": "整理知识",
+          "writes": "模型重写的是你自己写的知识文件。",
+          "caution": "它改的是唯一的一份。历史版本会留着，但不会事先问你。"
+        }
+      }
     }
   },
   "daemon": {

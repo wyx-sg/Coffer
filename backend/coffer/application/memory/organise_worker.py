@@ -24,6 +24,7 @@ from collections.abc import Awaitable, Callable
 
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
+from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,12 @@ async def _always_enabled() -> bool:
     return True
 
 
+async def _unset_interval() -> int | None:
+    """No interval chosen — the constant above applies. The composition root
+    injects a reader of the operator's setting instead."""
+    return None
+
+
 class OrganiseWorker:
     def __init__(
         self,
@@ -49,6 +56,7 @@ class OrganiseWorker:
         is_enabled: EnabledCheck = _always_enabled,
         start_delay_s: float = DEFAULT_START_DELAY_S,
         interval_s: float = DEFAULT_INTERVAL_S,
+        read_interval: IntervalReader = _unset_interval,
         runs: UpkeepRunRegistry = UPKEEP_RUNS,
     ) -> None:
         self._organise = organise
@@ -56,6 +64,7 @@ class OrganiseWorker:
         self._is_enabled = is_enabled
         self._start_delay_s = start_delay_s
         self._interval_s = interval_s
+        self._read_interval = read_interval
         # The same table the button's route claims against. A timer pass and a
         # button pass over one partition are two writers over one directory,
         # so whichever gets there first holds the key and the other stands
@@ -73,7 +82,10 @@ class OrganiseWorker:
                 # A failed sweep must never end the loop: the next one is a
                 # fresh attempt over the same idempotent, derived tree.
                 logger.warning("memory.organise_worker.sweep_failed", exc_info=True)
-            await asyncio.sleep(self._interval_s)
+            # Not a plain sleep: the operator's interval is re-read as the wait
+            # runs, so shortening it in Settings does not go unnoticed until
+            # the six hours this worker already committed to are up.
+            await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:
         """One sweep over every partition, or nothing at all when disabled."""

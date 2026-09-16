@@ -123,7 +123,7 @@ Coffer 之前建过记忆闭环的两半，又都删掉了。**Transcript 蒸馏
 - **FR-004**: v1 MUST 支持两个 reader。**Claude Code**：它按项目划分的记忆目录下、每条事实一个的 Markdown 文件，frontmatter 里带着这条事实的名称、描述和类型。**Codex**：它 `MEMORY.md` 里的 task group——每组的适用范围、偏好、可复用知识与失败——以及它蒸馏出的 profile 摘要。每个 reader MUST 忽略 agent 自己的索引或汇总文件，因为那个角色由 Coffer 自己重新生成。
 - **FR-005**: 解析不了自己来源的 reader——agent 改了格式——MUST **大声地、就地地**失败：那个 agent 什么也不贡献，surface 上写明路径和原因，另一个 agent 的聚合照常完成，先前聚合出的事实原样留着而不是被删掉。
 - **FR-006**: 聚合 MUST 跳过内容哈希自上一趟以来没有变化的源文件，且 MUST 为每个源记下足够的信息，使这个判断不需要重新解析就能做出。
-- **FR-007**: 聚合 MUST 由后台 worker 按间隔运行，且 MUST 可以手动触发。与知识层的 tidy 不同，它 MAY 默认开启，因为它只读 agent 的文件、只写派生的文件。
+- **FR-007**: 聚合 MUST 由后台 worker 按间隔运行，且 MUST 可以手动触发。与知识层的 tidy 不同，它 MAY 默认开启，因为它只读 agent 的文件、只写派生的文件。它的开关与间隔 MUST 都可由操作者设置，且 MUST 每一跳重新读取而不是开机时读一次，这样改动无需重启 daemon 即可生效（spec [provider-switching](../provider-switching/spec.zh.md) E3a）。
 
 ### partition
 

@@ -290,6 +290,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal-engine-config/upkeep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change one unattended pass's switch or timer
+         * @description Coffer runs three passes on its own behalf — `aggregate` (spec memory
+         *     FR-007), `organise` (FR-030) and `tidy` (spec knowledge FR-051) — each
+         *     with a switch and an interval. One pass per request, and each half left
+         *     alone when it is not sent: a settings page toggles one row at a time,
+         *     and a body carrying all three would make every toggle a chance to write
+         *     back a stale copy of the other two. `use_default_interval` returns a
+         *     pass to its own built-in interval, which a null `interval_s` cannot
+         *     express. Emits an `internal_engine_model_set` audit event.
+         */
+        put: operations["updateUpkeep"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/models/list-models": {
         parameters: {
             query?: never;
@@ -499,12 +526,36 @@ export interface components {
             /** @description The decrypted provider API key. */
             value: string;
         };
-        /** @description The single, global internal-engine model selection. The connection used is the `internal_default` (endpoint + key); only the model lives here. */
+        /** @description Coffer's own operating settings: the model its internal engine runs on (the connection used is the `internal_default` — endpoint + key), and the switch and timer of every pass it runs unattended. */
         InternalEngineConfigOut: {
             /** @description The chosen model id, or null when unset. */
             model?: string | null;
             /** Format: date-time */
             updated_at?: string | null;
+            /** @description Keyed by pass name (`aggregate`, `organise`, `tidy`). */
+            upkeep?: {
+                [key: string]: components["schemas"]["UpkeepSettingOut"];
+            };
+        };
+        /** @description One unattended pass's switch and timer. */
+        UpkeepSettingOut: {
+            enabled: boolean;
+            /** @description The chosen interval, or null while none has been chosen. */
+            interval_s?: number | null;
+            /** @description What runs while `interval_s` is null — reported so a settings surface can name the default rather than show a blank. */
+            default_interval_s: number;
+        };
+        /** @description Change one pass. An omitted field leaves that half of the pass alone. */
+        UpkeepUpdate: {
+            /** @enum {string} */
+            pass: "aggregate" | "organise" | "tidy";
+            enabled?: boolean | null;
+            interval_s?: number | null;
+            /**
+             * @description Return this pass to its own built-in interval.
+             * @default false
+             */
+            use_default_interval: boolean;
         };
         /** @description Set the internal-engine model; null/empty clears it. */
         InternalEngineConfigUpdate: {
@@ -925,6 +976,33 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateUpkeep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpkeepUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEngineConfigOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
     };

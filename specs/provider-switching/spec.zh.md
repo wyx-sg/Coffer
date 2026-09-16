@@ -68,6 +68,17 @@ OpenAI，所以协议在投射时由 agent 决定；模型则按 agent 槽 / 内
   `GET`/`PUT /api/v1/internal-engine-config` 读写，审计为 `internal_engine_model_set`；
   `resolve_internal_connection()` 在内部引擎构建 chat model 前，把该模型覆盖到解析出的
   `internal_default` 连接上；过渡期内（E1 落地前）连接仍带 `model`，内部引擎模型为空时回退到连接的 model。
+- **E3a — 同一个单例还承载 Coffer 无人值守做的事。** Coffer 有三个自己跑的通道：聚合把 agent
+  自己的记忆读进派生树（spec [memory](../memory/spec.zh.md) FR-007）、organise 让模型重写那棵
+  派生摘要（FR-030）、tidy 让模型重写用户自己的知识文件（spec
+  [knowledge](../knowledge/spec.zh.md) FR-051）。每一个都 MUST 带一个操作者看得见也改得动的
+  **开关与间隔**，经 `PUT /api/v1/internal-engine-config/upkeep` 读写——一次一个通道，未发送的
+  那一半保持不动，这样设置页切换一行时不会把另外两个通道的陈旧副本写回去。操作者未选择的间隔
+  MUST 被报告为「未选择」并**同时**给出此时实际生效的默认值，这样默认值只存在一处——拥有该通道
+  的 worker——日后调高它能抵达每一个从未做过选择的 vault。worker MUST 无需重启即可读到改动；
+  通道 MUST NOT 被设到一个会让模型在用户文件上空转的下限之下。两个只写派生文件的通道默认**开**；
+  tidy 重写的是用户自己作品的唯一副本，默认**关**。这些设置随模型选择一起外传（spec
+  [vault-sync](../vault-sync/spec.zh.md) slice 7）：把一个重写器关掉，正是第二台机器不能被瞒着的决定。
 - **E4 — 投射输入 = 连接（endpoint + key + protocol）+ 绑定（模型）。** 为某 agent 激活/投射
   时，从连接读 endpoint/key/protocol，从该 agent 的绑定读模型。某 agent 无绑定则不投射。
 - **E5 — 兼容性过滤 + 诚实兜底。** Agent 页只列出探测 `protocol` 与该 agent wire 匹配的连接；
@@ -1000,6 +1011,14 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **Then** 内部引擎模型被清空——因此在重新选定模型之前 `resolve_internal_connection()`
   为 `None`——除非 B 策展出的 `models` 里已列有该 id，此时予以保留；判断过程不走网络探测，
   而把本就是内部默认的 A 再设一次不改变任何东西。
+
+### Scenario: switch off and re-time the passes Coffer runs unattended
+
+- **Given** 一个全新的 vault，其中聚合与 organise 各自按自己的定时器运行，而 tidy 不运行，
+- **When** 操作者打开或关闭某一个通道、给它一个间隔、或让它回到自己的默认值（`PUT
+  /api/v1/internal-engine-config/upkeep`，一次一个通道），
+- **Then** 该通道的开关与间隔改变而其他通道的不变，报告出的默认间隔说明「未选择时实际按多久跑」，
+  低于下限的间隔与未知的通道名都被拒绝，并且正在运行的 worker 无需重启即可读到这次改动。
 
 ### Scenario: choose the model the internal engine runs on
 

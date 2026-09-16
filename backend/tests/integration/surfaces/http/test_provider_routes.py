@@ -599,6 +599,79 @@ async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
         assert resolved.model == "picked-model"
 
 
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="switch off and re-time the passes Coffer runs unattended",
+)
+async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
+    """The three passes Coffer runs on its own behalf, made visible.
+
+    Two of them had no switch anywhere, the third's could only be changed by
+    hand-editing a synced document, and all three intervals were constants
+    compiled into the workers.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    app = _app(tmp_path, monkeypatch, 59884)
+    set_active_token(TOKEN)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(
+            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
+        ) as c,
+    ):
+        # Out of the box: the two derived-file passes run, the one that
+        # rewrites the user's own writing does not, and none has a chosen
+        # interval — so each reports the default it actually runs at.
+        upkeep = (await c.get("/api/v1/internal-engine-config")).json()["upkeep"]
+        assert [upkeep[k]["enabled"] for k in ("aggregate", "organise", "tidy")] == [
+            True,
+            True,
+            False,
+        ]
+        assert all(upkeep[k]["interval_s"] is None for k in upkeep)
+        assert upkeep["aggregate"]["default_interval_s"] == 3600
+
+        # One pass at a time, and each half independent of the other.
+        r = await c.put(
+            "/api/v1/internal-engine-config/upkeep", json={"pass": "tidy", "enabled": True}
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["upkeep"]["tidy"] == {
+            "enabled": True,
+            "interval_s": None,
+            "default_interval_s": 21600,
+        }
+
+        r = await c.put(
+            "/api/v1/internal-engine-config/upkeep",
+            json={"pass": "aggregate", "interval_s": 900},
+        )
+        assert r.json()["upkeep"]["aggregate"]["interval_s"] == 900
+        # ...and the pass it did not name is exactly as it was left.
+        assert r.json()["upkeep"]["tidy"]["enabled"] is True
+
+        # Back to the pass's own interval — which a null cannot say.
+        r = await c.put(
+            "/api/v1/internal-engine-config/upkeep",
+            json={"pass": "aggregate", "use_default_interval": True},
+        )
+        assert r.json()["upkeep"]["aggregate"]["interval_s"] is None
+
+        # A pass this vault does not run is a 422, not a silently ignored write.
+        r = await c.put("/api/v1/internal-engine-config/upkeep", json={"pass": "vacuum"})
+        assert r.status_code == 422, r.text
+
+        # And an interval below the floor is refused rather than busy-looping
+        # the model over the user's files.
+        r = await c.put(
+            "/api/v1/internal-engine-config/upkeep",
+            json={"pass": "organise", "interval_s": 5},
+        )
+        assert r.status_code == 422, r.text
+
+
 @pytest.mark.acceptance(
     spec="provider-switching",
     scenario="curate which of a connection's models are offered downstream",

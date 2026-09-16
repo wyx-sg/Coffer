@@ -7,12 +7,16 @@ from this singleton — the connection no longer owns a model. The wiring overla
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Protocol
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
+from coffer.domain.internal_engine_config import (
+    GlobalInternalEngineConfig,
+    UpkeepSetting,
+)
 
 
 class InternalEngineConfigRepo(Protocol):
@@ -23,6 +27,7 @@ class InternalEngineConfigRepo(Protocol):
         model: str | None,
         auto_tidy_enabled: bool | None = None,
         tidy_owner_machine_id: str | None = None,
+        upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig: ...
 
 
@@ -39,12 +44,35 @@ class InternalEngineConfigService:
             model=None, updated_at=datetime.now(tz=UTC)
         )
 
+    async def set_upkeep(
+        self, pass_name: str, setting: UpkeepSetting, *, actor: str = "api"
+    ) -> GlobalInternalEngineConfig:
+        """Change one unattended pass's switch or timer, leaving the rest.
+
+        A settings page toggles one row at a time, and an update that carried
+        the whole config would make every such toggle a chance to write back a
+        stale copy of the other two — the classic lost update, on settings the
+        operator may also be changing on another machine (they converge through
+        vault sync).
+
+        ``auto_tidy_enabled`` is one of these passes, so writing it here rather
+        than through the separate argument keeps one path to it.
+        """
+        current = await self.get()
+        return await self.update(
+            model=current.model,
+            tidy_owner_machine_id=None,
+            upkeep={pass_name: setting},
+            actor=actor,
+        )
+
     async def update(
         self,
         *,
         model: str | None,
         auto_tidy_enabled: bool | None = None,
         tidy_owner_machine_id: str | None = None,
+        upkeep: Mapping[str, UpkeepSetting] | None = None,
         actor: str = "api",
     ) -> GlobalInternalEngineConfig:
         cleaned = model.strip() if model and model.strip() else None
@@ -52,6 +80,7 @@ class InternalEngineConfigService:
             model=cleaned,
             auto_tidy_enabled=auto_tidy_enabled,
             tidy_owner_machine_id=tidy_owner_machine_id,
+            upkeep=upkeep,
         )
         await self._audit.record(
             AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
@@ -60,6 +89,11 @@ class InternalEngineConfigService:
                 "model": cleaned,
                 "auto_tidy_enabled": saved.auto_tidy_enabled,
                 "tidy_owner_machine_id": saved.tidy_owner_machine_id,
+                "auto_aggregate_enabled": saved.auto_aggregate_enabled,
+                "aggregate_interval_s": saved.aggregate_interval_s,
+                "auto_organise_enabled": saved.auto_organise_enabled,
+                "organise_interval_s": saved.organise_interval_s,
+                "tidy_interval_s": saved.tidy_interval_s,
             },
         )
         return saved

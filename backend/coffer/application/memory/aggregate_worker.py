@@ -26,6 +26,8 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
+
 logger = logging.getLogger(__name__)
 
 #: Frequent enough that a fact an agent learned this morning is here by the
@@ -33,6 +35,18 @@ logger = logging.getLogger(__name__)
 DEFAULT_INTERVAL_S = 60 * 60.0
 
 AggregateCallable = Callable[..., Awaitable[object]]
+EnabledCheck = Callable[[], Awaitable[bool]]
+
+
+async def _always_enabled() -> bool:
+    return True
+
+
+async def _unset_interval() -> int | None:
+    """No interval chosen — the constant above applies. The composition root
+    injects a reader of the operator's setting instead."""
+    return None
+
 
 #: The actor recorded on an unattended pass's audit event, so the log can tell
 #: a scheduled aggregation apart from one the user asked for (FR-063).
@@ -46,10 +60,14 @@ class AggregateWorker:
         self,
         *,
         aggregate: AggregateCallable,
+        is_enabled: EnabledCheck = _always_enabled,
         interval_s: float = DEFAULT_INTERVAL_S,
+        read_interval: IntervalReader = _unset_interval,
     ) -> None:
         self._aggregate = aggregate
+        self._is_enabled = is_enabled
         self._interval_s = interval_s
+        self._read_interval = read_interval
 
     async def run_forever(self) -> None:
         while True:
@@ -63,10 +81,15 @@ class AggregateWorker:
                 # fresh attempt — and FR-005 already isolates one unreadable
                 # agent from the rest.
                 logger.warning("memory.aggregate_worker.pass_failed", exc_info=True)
-            await asyncio.sleep(self._interval_s)
+            # The operator's interval is re-read as the wait runs, so changing
+            # it in Settings takes effect within a slice rather than an hour.
+            await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
 
     async def run_once(self) -> None:
-        """One aggregation pass over every registered, enabled agent."""
+        """One aggregation pass over every registered, enabled agent, or
+        nothing at all when the operator has switched this pass off."""
+        if not await self._is_enabled():
+            return
         await self._aggregate(actor=WORKER_ACTOR)
 
 
@@ -75,4 +98,5 @@ __all__ = [
     "WORKER_ACTOR",
     "AggregateCallable",
     "AggregateWorker",
+    "EnabledCheck",
 ]
