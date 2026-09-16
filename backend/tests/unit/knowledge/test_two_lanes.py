@@ -19,7 +19,7 @@ import pytest
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.infrastructure.knowledge import catalogue, fs, paths
-from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
+from coffer.infrastructure.knowledge.frontmatter import render_frontmatter, split_frontmatter
 
 
 @pytest.fixture(autouse=True)
@@ -243,3 +243,29 @@ def test_a_second_original_of_the_same_name_does_not_overwrite(knowledge_root) -
     assert first != second
     assert paths.resolve(first).read_bytes() == b"one"
     assert paths.resolve(second).read_bytes() == b"two"
+
+
+def test_a_description_containing_a_rule_does_not_end_the_frontmatter() -> None:
+    """A fence only closes the block at column 0.
+
+    PyYAML writes a long or multi-line string as an *indented* continuation, so
+    a description whose text contains a horizontal rule puts ``  ---`` inside
+    the block. A scan that stripped each line before comparing ended the
+    frontmatter there — and because the truncated YAML is then an unterminated
+    quote, the mapping degraded to empty and the rest of the metadata leaked
+    into the body, where an agent reading the file would be handed it as prose.
+    Nothing in the vault trips this today only because every field a knowledge
+    file carries is short; a derived document's generated description is the
+    one with no such guarantee.
+    """
+    description = "How the ingest pipeline splits a doc:\n---\nthen re-titles it."
+    raw = render_frontmatter(
+        {"title": "Ingest", "description": description, "actor": "user"}, "body"
+    )
+    assert "\n  ---\n" in raw  # the indented continuation this guards against
+
+    frontmatter, body = split_frontmatter(raw)
+
+    assert set(frontmatter) == {"title", "description", "actor"}
+    assert frontmatter["description"] == description
+    assert body.strip() == "body"
