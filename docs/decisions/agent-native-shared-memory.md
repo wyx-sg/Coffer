@@ -1,7 +1,5 @@
 # One Shared Knowledge Store: One Shared Knowledge Store Across Agents
 
-> 中文版: [agent-native-shared-memory.zh.md](./agent-native-shared-memory.zh.md)
-
 **Status**: Partially superseded by [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) (2026-06-18) — the native-projection half of the decision below was removed; Coffer never writes an agent's own native memory files. The shared-store half stands, and is what this ADR records. Re-expressed in knowledge-layer vocabulary 2026-09-10 and narrowed to two lanes 2026-09-11. The store's SHAPE — lanes, scopes, the tool list — is superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) (2026-09-12); read the body below for the decision, not for the layout (see Revision history).
 **Date**: 2026-06-09 (revised 2026-09-11; see Revision history)
 **Deciders**: Yuxing Wu

@@ -1,7 +1,5 @@
 # Data Model — Knowledge Layer
 
-> 中文版: [data-model.zh.md](./data-model.zh.md)
-
 The layer's state is a directory. This document describes what is on disk —
 the tree, the frontmatter contract, the naming rule — plus the one database row
 a collection still occupies and the in-memory value objects the surfaces answer

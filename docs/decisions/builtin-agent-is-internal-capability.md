@@ -1,7 +1,5 @@
 # The Built-in Agent Is an Internal Capability, Not a Chat Persona
 
-> 中文版: [builtin-agent-is-internal-capability.zh.md](./builtin-agent-is-internal-capability.zh.md)
-
 - **Status:** Accepted
 - **Date:** 2026-06-14
 - **Deciders:** Yuxing Wu

@@ -1,7 +1,5 @@
 # Competitive Research — Unified Multi-Agent Config & Rules Management
 
-> English: this file · 中文版: [agent-config-management.zh.md](./agent-config-management.zh.md)
->
 > Internal competitive-research report for Coffer's agent registry + config-file
 > management (spec agent-registry). **Date:** 2026-06-16. **Method:** deep-research harness.
 > **Provenance caveat:** 1 claim (Ruler's MCP propagation) survived full 3-vote

@@ -1,7 +1,5 @@
 # Persist channel attachments as a reference block, re-materialise from history
 
-> 中文版: [persisted-attachment-reference.zh.md](persisted-attachment-reference.zh.md)
-
 **Status**: Accepted
 **Date**: 2026-07-09
 **Deciders**: Yuxing Wu

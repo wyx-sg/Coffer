@@ -1,7 +1,5 @@
 # Skill Content Trust Layer (Heuristic Scan, Warn-Don't-Block)
 
-> 中文版: [skill-content-trust-layer.zh.md](./skill-content-trust-layer.zh.md)
-
 - **Status:** Reverted (2026-06-20) — see the revert note below
 - **Date:** 2026-06-19
 - **Deciders:** Yuxing Wu

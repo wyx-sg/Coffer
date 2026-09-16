@@ -1,7 +1,5 @@
 # Data Model: Channels
 
-> 中文版: [data-model.zh.md](./data-model.zh.md)
-
 ## Resource: `channel:<name>`
 
 Channels are rows in the existing `resources` table (kind = `channel`).

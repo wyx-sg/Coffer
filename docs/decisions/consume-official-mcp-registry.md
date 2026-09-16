@@ -1,7 +1,5 @@
 # Consume the official MCP Registry for server discovery
 
-> 中文版: [consume-official-mcp-registry.zh.md](./consume-official-mcp-registry.zh.md)
-
 - **Status:** Reverted (2026-06-20) — see the revert note below
 - **Date:** 2026-06-19
 - **Deciders:** Yuxing Wu

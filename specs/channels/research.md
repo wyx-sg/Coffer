@@ -1,7 +1,5 @@
 # Research: Channels
 
-> 中文版: [research.zh.md](./research.zh.md)
-
 Background gathered before design: how mature open-source agents integrate
 messaging channels, and what the Telegram and SeaTalk platforms actually
 require. Sources: OpenClaw docs and channel-plugin SDK, NousResearch

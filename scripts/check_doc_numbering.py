@@ -53,12 +53,8 @@ def tracked_files() -> list[str]:
 
 
 def adr_files() -> list[Path]:
-    """Every English ADR, which is one per decision."""
-    return sorted(
-        p
-        for p in DECISIONS.glob("*.md")
-        if not p.name.endswith(".zh.md") and p.name != "README.md"
-    )
+    """Every ADR, which is one per decision."""
+    return sorted(p for p in DECISIONS.glob("*.md") if p.name != "README.md")
 
 
 def check_no_numbers(files: list[str]) -> list[str]:
@@ -118,11 +114,8 @@ def check_links() -> list[str]:
 
 def check_index() -> list[str]:
     errors: list[str] = []
-    english = {p.name for p in adr_files()}
-    for readme, expected in (
-        (DECISIONS / "README.md", english),
-        (DECISIONS / "README.zh.md", {n.replace(".md", ".zh.md") for n in english}),
-    ):
+    expected = {p.name for p in adr_files()}
+    for readme in (DECISIONS / "README.md",):
         listed = {
             match.group(1)
             for line in readme.read_text(encoding="utf-8").splitlines()

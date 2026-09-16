@@ -1,7 +1,5 @@
 # Competitive Research — Agent Skill Management & Distribution
 
-> English: this file · 中文版: [agent-skills.zh.md](./agent-skills.zh.md)
->
 > Internal competitive-research report for Coffer's skill manager (spec skill-manager).
 > **Date:** 2026-06-16. **Method:** deep-research harness (fan-out web search →
 > source fetch → adversarial claim verification). **Provenance caveat:** the run

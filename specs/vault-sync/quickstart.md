@@ -1,7 +1,5 @@
 # Quickstart — Vault Sync
 
-> 中文版: [quickstart.zh.md](./quickstart.zh.md)
-
 Keep one vault across your machines. You point each of them at a git repository
 you own; a background worker converges them. The master key never enters the
 repository — you bring it over once, out-of-band.

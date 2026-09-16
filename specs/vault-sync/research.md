@@ -1,7 +1,5 @@
 # Research — Vault Sync
 
-> 中文版: [research.zh.md](./research.zh.md)
-
 > **Historical record.** This file captures the research that led to
 > **continuous multi-machine sync over a user-owned git repository**. That
 > approach has since been withdrawn: spec vault-sync now ships a one-shot vault

@@ -1,7 +1,5 @@
 # Feature Specification: Channels
 
-> 中文版: [spec.zh.md](./spec.zh.md)
-
 **Feature Branch**: `feature/channels`
 **Created**: 2026-06-12
 **Status**: Accepted

@@ -1,7 +1,5 @@
 # Feature Specification: Knowledge Layer
 
-> 中文版: [spec.zh.md](./spec.zh.md)
-
 **Created**: 2026-05-22 (as *Memory*) · **Merged with the Knowledge Base**: 2026-09-10 · **Reduced to plain files**: 2026-09-12 · **Ingestion restored**: 2026-09-12 · **Ranked retrieval removed**: 2026-09-14
 **Status**: Accepted
 **Folder name**: this spec lives at `specs/knowledge/`, the spec id every inbound link and `scripts/audit_acceptance.py` keys on.

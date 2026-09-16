@@ -1,7 +1,5 @@
 # The knowledge layer is a directory of files, not an index
 
-> 中文版: [knowledge-is-plain-files.zh.md](./knowledge-is-plain-files.zh.md)
-
 **Status**: Accepted — twice revised (see Revision history). The 2026-09-12 revision reinstated document upload, conversion to Markdown with the original under `.raw/`, and ranked semantic retrieval with a sixth tool `coffer__search`. The 2026-09-14 revision removes the ranking again — `coffer__search` stays, as a literal search. Everything else below stands.
 **Date**: 2026-09-12 (revised 2026-09-12 and 2026-09-14; see Revision history)
 **Deciders**: Yuxing Wu

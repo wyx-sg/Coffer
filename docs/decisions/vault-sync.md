@@ -1,7 +1,5 @@
 # Vault Sync
 
-> 中文版: [vault-sync.zh.md](./vault-sync.zh.md)
-
 - **Status:** Accepted
 - **Spec:** [vault-sync](../../specs/vault-sync/spec.md)
 - **Constitution:** Principle I (0.6.0 — bidirectional convergence with a user-owned sync remote)

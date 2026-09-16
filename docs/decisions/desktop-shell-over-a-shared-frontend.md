@@ -1,7 +1,5 @@
 # The Desktop Shell Returns, Owning Only What a Browser Cannot Do
 
-> 中文版: [desktop-shell-over-a-shared-frontend.zh.md](./desktop-shell-over-a-shared-frontend.zh.md)
-
 - **Status:** Proposed
 - **Date:** 2026-09-12
 - **Deciders:** Yuxing Wu

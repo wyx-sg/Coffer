@@ -1,7 +1,5 @@
 # Quickstart: Channels
 
-> 中文版: [quickstart.zh.md](./quickstart.zh.md)
-
 Talk to your Coffer agents from Telegram or SeaTalk, and let Coffer push
 notifications to you.
 

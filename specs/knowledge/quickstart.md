@@ -1,7 +1,5 @@
 # Quickstart — Knowledge Layer
 
-> 中文版: [quickstart.zh.md](./quickstart.zh.md)
-
 Knowledge is a directory of Markdown files under
 `~/.coffer/knowledge/<collection>/`. An agent finds what it needs by reading a
 generated catalogue and grepping, the way it navigates a codebase; you find it

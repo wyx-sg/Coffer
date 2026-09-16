@@ -1,7 +1,5 @@
 # Competitive Research — MCP Gateways, Aggregators & Registries
 
-> English: this file · 中文版: [mcp-ecosystem.zh.md](./mcp-ecosystem.zh.md)
->
 > Internal competitive-research report for Coffer's MCP gateway (spec mcp-gateway).
 > **Date:** 2026-06-16. **Method:** deep-research harness (24/25 claims
 > 3-vote confirmed; the two headline findings below survived full adversarial

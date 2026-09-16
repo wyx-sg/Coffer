@@ -1,7 +1,5 @@
 # Feature Specification: Memory
 
-> 中文版: [spec.zh.md](./spec.zh.md)
-
 **Created**: 2026-09-12
 **Status**: Draft
 **Folder name**: this spec lives at `specs/memory/`, the spec id every inbound link and `scripts/audit_acceptance.py` keys on.

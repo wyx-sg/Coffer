@@ -1,7 +1,5 @@
 # The Daemon Serves Its Token in the Page, Guarded by the Host Header
 
-> 中文版: [daemon-serves-the-token-in-the-page.zh.md](./daemon-serves-the-token-in-the-page.zh.md)
-
 - **Status:** Accepted
 - **Date:** 2026-09-11
 - **Deciders:** Yuxing Wu

@@ -1,7 +1,5 @@
 # Channel Entrypoint Differentiation Layer
 
-> 中文版: [channel-entrypoint-differentiation.zh.md](./channel-entrypoint-differentiation.zh.md)
-
 **Status**: Accepted
 **Spec**: [channels](../../specs/channels/spec.md)
 

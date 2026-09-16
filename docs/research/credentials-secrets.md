@@ -1,7 +1,5 @@
 # Competitive Research — Credential & Secret Management for Agents & MCP
 
-> English: this file · 中文版: [credentials-secrets.zh.md](./credentials-secrets.zh.md)
->
 > Internal competitive-research report for Coffer's credential store (constitution
 > Principle; [Envelope-Encrypted Credentials](../decisions/envelope-encrypted-credential-store.md)).
 > **Date:** 2026-06-16. **Method:** deep-research harness.

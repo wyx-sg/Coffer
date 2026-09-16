@@ -1,7 +1,5 @@
 # Competitive Research — Local-First AI-Agent / MCP Control Planes
 
-> English: this file · 中文版: [local-first-control-plane.zh.md](./local-first-control-plane.zh.md)
->
 > Internal competitive-research report on Coffer's overall positioning as a
 > local-first vault. **Date:** 2026-06-16. **Method:** deep-research harness
 > (this run's verification mostly succeeded — several claims 3-0 confirmed).

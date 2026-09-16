@@ -1,7 +1,5 @@
 # Harness — Agent Control Layer
 
-> 中文版: [harness.zh.md](./harness.zh.md)
-
 Coffer ships a checked-in control layer so the agent-facing harness is enforced, not just documented. See [Harness in Layers](../docs/decisions/industrial-grade-harness-in-layers.md) for the five-layer model.
 
 ## What is wired (`.claude/`)

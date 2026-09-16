@@ -1,7 +1,5 @@
 # SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK
 
-> 中文版: [seatalk-websocket-inbound.zh.md](./seatalk-websocket-inbound.zh.md)
-
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu

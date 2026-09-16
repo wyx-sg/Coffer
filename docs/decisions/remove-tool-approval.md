@@ -1,7 +1,5 @@
 # Remove the Tool-Approval System; Owner-Pairing Is the Gate
 
-> 中文版: [remove-tool-approval.zh.md](./remove-tool-approval.zh.md)
-
 - **Status:** Accepted
 - **Date:** 2026-06-18
 - **Deciders:** Yuxing Wu

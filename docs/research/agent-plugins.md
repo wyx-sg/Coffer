@@ -1,7 +1,5 @@
 # Competitive Research — AI Coding Agent Plugin / Extension Ecosystems
 
-> English: this file · 中文版: [agent-plugins.zh.md](./agent-plugins.zh.md)
->
 > Internal competitive-research report for Coffer's plugin facet (spec agent-registry
 > workspace amendment). **Date:** 2026-06-16. **Method:** deep-research harness.
 > **Provenance caveat:** 3 claims 3-vote/partial confirmed; the rest are

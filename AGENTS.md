@@ -1,7 +1,5 @@
 # AGENTS.md
 
-> 中文版: [AGENTS.zh.md](./AGENTS.zh.md)
-
 Operating manual for AI agents (Claude Code, Codex, future ones) entering Coffer. Read at session start.
 
 ## 1. At a Glance
@@ -88,43 +86,15 @@ Split a topic file into a subfolder ONLY when **both** of these hold:
 
 Until both hit, keep flat. Example: split `stack.md` into a subfolder only when it outgrows ~300 lines AND its sections are independently long-form; update §2's links accordingly.
 
-## 7. Bilingual Docs Rule
+## 7. Docs Language
 
-Every prose doc in this repo ships as a pair: the English source of truth next to a Chinese translation companion. Every existing English doc already has its `.zh.md` companion; new docs MUST be created in pairs.
+Every doc in this repo is written in **English only**. There are no translation
+companions: no `.zh.md` files, no per-language mirror under `docs-site/`. A doc
+that needs to change is changed in place, in English.
 
-**Path convention.** Strip the `.md` extension, append `.zh.md`. The companion lives in the same directory. NEVER append `.zh.md` to a filename that still ends in `.md` (no `CLAUDE.md.zh.md` — it is `CLAUDE.zh.md`).
-
-```
-AGENTS.md            ↔  AGENTS.zh.md
-CLAUDE.md            ↔  CLAUDE.zh.md        (not CLAUDE.md.zh.md)
-README.md            ↔  README.zh.md
-agents/sdd.md        ↔  agents/sdd.zh.md
-specs/001-…/spec.md  ↔  specs/001-…/spec.zh.md
-```
-
-**Scope — applies to.**
-
-- `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `SECURITY.md`.
-- Everything under `agents/`.
-- `docs/**/*.md` (quickstart, decisions/ADRs, etc.).
-- `specs/**/*.md` EXCEPT `tasks.md` (spec.md, plan.md, research.md, data-model.md, quickstart.md).
-- `.specify/memory/*.md` (constitution, architecture, roadmap).
-
-**Scope — does NOT apply to.**
-
-- Code, code comments, identifiers, JSON/YAML config.
-- Conventional Commit messages, branch names, PR titles/descriptions — stay English (see [`agents/workflow.md`](./agents/workflow.md)).
-- Auto-generated artifacts (OpenAPI yaml, lockfiles, build output).
-- Tool scaffolding meant to be filled in by automation, not read end-to-end as prose — e.g. `.specify/templates/*.md` (Speckit scaffold templates), `specs/*/tasks.md` (AI/coder task checklist), `.github/PULL_REQUEST_TEMPLATE.md` (GitHub auto-prefill).
-- Trivial pointer / marker files with no substantive content — e.g. `CLAUDE.md` (one-liner pointing at `AGENTS.md`).
-- Anything outside the repo (Claude Code skills, harness configs, etc.).
-
-**Authoring rules.**
-
-1. English file is the source of truth. Edit it first; translate after.
-2. Any commit that adds or changes an English doc MUST update its `.zh.md` companion in the same commit. Reviewers MUST reject commits that drift the two out of sync.
-3. Any commit that adds a NEW English doc MUST also add the `.zh.md` companion. No "translate later" stubs.
-4. Headings, anchors, and link targets stay in sync — link to the English file from prose; readers switch languages via the companion file, not via deep links.
-5. Keep code blocks, file paths, command snippets, and identifiers verbatim in the Chinese version — only translate the prose.
-
-**Discoverability.** Cross-link the pair at the top of each file: English file says `中文版: [<name>.zh.md](./<name>.zh.md)`; Chinese file says `English: [<name>.md](./<name>.md)`.
+This applies to prose docs (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`,
+`SECURITY.md`, `agents/**`, `docs/**`, `specs/**`, `.specify/memory/**`) and to
+the published site (`docs-site/**`). It does **not** apply to the Coffer web
+UI's own interface copy — the app ships English and 中文 through
+`frontend/src/i18n/locales/`, and that language switcher is a product feature
+(see [`agents/frontend.md`](./agents/frontend.md)).

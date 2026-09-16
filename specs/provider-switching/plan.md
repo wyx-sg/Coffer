@@ -45,14 +45,13 @@ subcommands, a minimal frontend DataTable page, and sync / audit wiring.
 
 ```
 specs/provider-switching/
-  spec.md / spec.zh.md
-  data-model.md / data-model.zh.md
-  plan.md / plan.zh.md             (this file)
-  quickstart.md / quickstart.zh.md
-  research.md / research.zh.md
+  spec.md
+  data-model.md
+  plan.md                          (this file)
+  quickstart.md
+  research.md
   contracts/api.openapi.yaml
 docs/decisions/provider-switching.md
-docs/decisions/provider-switching.zh.md
 ```
 
 ### New backend modules

@@ -1,7 +1,5 @@
 # Chat Is a Single-Owner Live Mirror
 
-> 中文版: [chat-single-owner-live-mirror.zh.md](chat-single-owner-live-mirror.zh.md)
-
 **Status**: Accepted
 **Date**: 2026-06-20 (page removed 2026-09-10, restored 2026-09-12; see Revision history)
 **Deciders**: Yuxing Wu

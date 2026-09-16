@@ -1,7 +1,5 @@
 # Spec — Vault Sync
 
-> 中文版: [spec.zh.md](./spec.zh.md)
-
 Keep one vault across the user's own machines by converging each of them with a
 git repository the user owns. A background worker commits what this vault
 holds, lets git three-way-merge it against what the remote holds, and applies

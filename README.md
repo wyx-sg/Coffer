@@ -1,10 +1,6 @@
 # Coffer
 
 <p align="center">
-  <b>English</b> · <a href="./README.zh.md">简体中文</a>
-</p>
-
-<p align="center">
   <a href="https://wyx-sg.github.io/Coffer/"><img alt="Docs" src="https://img.shields.io/badge/docs-coffer-C96442"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">

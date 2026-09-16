@@ -1,7 +1,5 @@
 # Feature Specification: Provider Switching
 
-> 中文版: [spec.zh.md](./spec.zh.md)
-
 **Feature Branch**: `feature/G9-provider-switching`
 **Created**: 2026-06-21
 **Status**: Draft

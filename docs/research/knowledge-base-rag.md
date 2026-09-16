@@ -1,7 +1,5 @@
 # Competitive Research — Local-First Knowledge Base / RAG for Agents
 
-> English: this file · 中文版: [knowledge-base-rag.zh.md](./knowledge-base-rag.zh.md)
->
 > Internal competitive-research report for Coffer's knowledge base (the
 > Knowledge Base spec, [Files as Truth](../decisions/files-as-truth-sqlite-retrieval.md)). **Date:** 2026-06-16. **Method:** deep-research harness (this run
 > also read Coffer's own KB code to verify the comparison).

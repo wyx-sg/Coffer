@@ -1,7 +1,5 @@
 # Platform-Level Direct Competitors — the blind-spot re-sweep
 
-> English: this file · 中文版: [platform-competitors.zh.md](./platform-competitors.zh.md)
->
 > Produced **2026-06-20** by two parallel sweeps (a stars-first sweep that
 > explicitly included the Chinese ecosystem, and a capability-matrix sweep),
 > each verified against the live GitHub API. This report exists because the

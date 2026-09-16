@@ -1,7 +1,5 @@
 # Research — Knowledge Layer
 
-> 中文版: [research.zh.md](./research.zh.md)
-
 The questions this layer had to answer, and what each was decided to be. Most
 of the original research — mem0 versus a shared store, the FTS5/sqlite-vec
 retrieval stack, embedding-provider selection, scope resolution from an agent's

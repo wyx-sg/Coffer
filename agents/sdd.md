@@ -36,12 +36,12 @@ specs/<short-name>/
 
 When a change alters behavior, update the spec **and every related doc in the same PR** — before or alongside the code, never as a follow-up. Spec-first: the spec is the source of truth and the code conforms to it. "Related docs" is the whole set, not just `spec.md`:
 
-- `specs/<short-name>/spec.md` (+ its `spec.zh.md` companion) — the user-visible contract and its acceptance scenarios.
+- `specs/<short-name>/spec.md` — the user-visible contract and its acceptance scenarios.
 - `specs/<short-name>/contracts/api.openapi.yaml` — the wire contract; add/rename/remove endpoints and schemas to match the code.
-- `specs/<short-name>/data-model.md`, `plan.md`, `quickstart.md` (+ each `.zh.md` companion) — entities, plan, and usage prose.
+- `specs/<short-name>/data-model.md`, `plan.md`, `quickstart.md` — entities, plan, and usage prose.
 - Cross-cutting docs the change touches: the relevant `docs/decisions/` ADR, `.specify/memory/architecture.md`, and any affected `agents/*` convention such as `agents/visual-language.md`.
 
-Every prose `.md` has a `.zh.md` companion that must be updated in the same commit (the only exemptions are `tasks.md` and the OpenAPI YAML). The acceptance audit (`scripts/audit_acceptance.py`, run by `make verify`) ties each `spec.md` scenario name to a test marker, so renaming/adding/removing a scenario means updating its `@pytest.mark.acceptance(... scenario=...)` / `acceptance(...)` marker too. A pure refactor or a frontend-only change with no contract impact needs no spec edit — but if behavior, an endpoint, a schema, or the IA changes, the docs change with it.
+The acceptance audit (`scripts/audit_acceptance.py`, run by `make verify`) ties each `spec.md` scenario name to a test marker, so renaming/adding/removing a scenario means updating its `@pytest.mark.acceptance(... scenario=...)` / `acceptance(...)` marker too. A pure refactor or a frontend-only change with no contract impact needs no spec edit — but if behavior, an endpoint, a schema, or the IA changes, the docs change with it.
 
 ## Acceptance Scenarios — In `spec.md`, Gherkin-Style
 

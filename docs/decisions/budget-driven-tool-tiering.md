@@ -1,7 +1,5 @@
 # Budget-Driven Tool Tiering at the Gateway
 
-> 中文版: [budget-driven-tool-tiering.zh.md](budget-driven-tool-tiering.zh.md)
-
 **Status**: Accepted
 **Date**: 2026-09-09
 **Deciders**: Yuxing Wu

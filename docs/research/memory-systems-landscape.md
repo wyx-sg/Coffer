@@ -1,7 +1,5 @@
 # Memory Systems Landscape — How Mainstream AI Agent Memory Is Built
 
-> 中文版: [memory-systems-landscape.zh.md](./memory-systems-landscape.zh.md)
-
 **Type**: Research note (competitive landscape)
 **Date**: 2026-06-17
 **Purpose**: Benchmark Coffer's memory design ([spec knowledge](../../specs/knowledge/spec.md), [Files as Truth](../decisions/files-as-truth-sqlite-retrieval.md), [One Shared Knowledge Store](../decisions/agent-native-shared-memory.md)) against how the rest of the field builds agent memory, to judge whether Coffer's choices are sound and whether its "shared memory + native projection" claim of novelty holds.

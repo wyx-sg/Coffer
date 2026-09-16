@@ -1,7 +1,5 @@
 # Implementation Plan: Channels
 
-> 中文版: [plan.zh.md](./plan.zh.md)
-
 ## Summary
 
 Add a `channel` resource kind that connects IM accounts (Telegram, SeaTalk)

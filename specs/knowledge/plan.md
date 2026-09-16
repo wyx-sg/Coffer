@@ -1,7 +1,5 @@
 # Implementation Plan: Knowledge Layer
 
-> 中文版: [plan.zh.md](./plan.zh.md)
-
 **Spec**: [./spec.md](./spec.md)
 **ADR**: [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)
 **Status**: Accepted — reduced to plain files 2026-09-12

@@ -1,7 +1,5 @@
 # Per-Agent Resource Scope
 
-> 中文版: [per-agent-resource-scope.zh.md](./per-agent-resource-scope.zh.md)
-
 - **Status:** Accepted
 - **Spec:** [vault-sync](../../specs/vault-sync/spec.md) (also amends
   [mcp-gateway](../../specs/mcp-gateway/spec.md) and

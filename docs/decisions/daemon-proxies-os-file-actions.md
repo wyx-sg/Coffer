@@ -1,7 +1,5 @@
 # Local Daemon Proxies OS File Actions
 
-> 中文版: [daemon-proxies-os-file-actions.zh.md](./daemon-proxies-os-file-actions.zh.md)
-
 - **Status:** Accepted
 - **Date:** 2026-06-21
 - **Deciders:** Yuxing Wu

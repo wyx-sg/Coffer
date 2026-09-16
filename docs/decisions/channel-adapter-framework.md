@@ -1,7 +1,5 @@
 # Channel Adapter Framework
 
-> 中文版: [channel-adapter-framework.zh.md](./channel-adapter-framework.zh.md)
-
 **Status**: Accepted
 **Spec**: [channels](../../specs/channels/spec.md)
 

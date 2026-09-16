@@ -1,7 +1,5 @@
 # Implementation Plan: Vault Sync
 
-> 中文版: [plan.zh.md](./plan.zh.md)
-
 Sync is a **cross-cutting service**, not a resource kind (see
 [Vault Sync](../../docs/decisions/vault-sync.md)). It follows the
 retention/credentials pattern across the four layers, and the only user-entered
@@ -281,8 +279,8 @@ the lock is injectable rather than private.
     set, that it applies to this machine only and is not synced, and says when a
     resource is dormant here.
 15. **Docs** — architecture.md cross-cutting row, roadmap status, docs-site
-    guide and architecture pages, bilingual companions; acceptance markers tie
-    each `spec.md` scenario to a test.
+    guide and architecture pages; acceptance markers tie each `spec.md`
+    scenario to a test.
 
 ## API shapes
 

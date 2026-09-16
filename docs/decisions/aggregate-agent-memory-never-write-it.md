@@ -1,7 +1,5 @@
 # Aggregate the agents' memory; never write it
 
-> 中文版: [aggregate-agent-memory-never-write-it.zh.md](aggregate-agent-memory-never-write-it.zh.md)
-
 **Status**: Proposed
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu

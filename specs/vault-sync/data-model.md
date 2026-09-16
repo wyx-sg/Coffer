@@ -1,7 +1,5 @@
 # Data Model — Vault Sync
 
-> 中文版: [data-model.zh.md](./data-model.zh.md)
-
 Sync persists in three places, and which one holds what is the whole design:
 
 | Where | What | Why there |

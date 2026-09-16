@@ -1,7 +1,5 @@
 # Frontend — React / TypeScript / Vite
 
-> 中文版: [frontend.zh.md](./frontend.zh.md)
-
 Coffer's frontend is the daemon-served web UI (`frontend/`): built to static
 assets that the daemon serves at its own loopback origin in production, and
 run from the Vite dev server (`make dev`) in development with `COFFER_DEV_CORS`
