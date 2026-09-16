@@ -727,7 +727,7 @@ ollama connection 不投影到任何 agent 配置：`target_for(WireFormat.ollam
 
 与按 agent 激活分开，全局 `internal_default` 标志（所有 connection 中 ≤1）选择 Coffer 自身内部 LLM 引擎使用的 connection——memory organizer、reorg 和 distill。
 
-- `set_internal_default(name)`：清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化，保证全局单一内部默认不变量），并发出 `provider_internal_default_set` 审计事件。
+- `set_internal_default(name)`：清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化，保证全局单一内部默认不变量），并发出 `provider_internal_default_set` 审计事件。当连接确实发生更换时，除非新选中的连接策展了该 id，否则它还会清空内部引擎模型（FR-021）。
 - `resolve_internal_connection() -> ProviderConfig | None`：返回 `internal_default` connection 的 config，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill）是干净的 no-op 而非报错。
 - `build_chat_model(connection, ...)`：内部引擎根据解析出的 connection 构建其 chat model，按 `wire_format`（anthropic / openai / ollama）分派。这取代了已退役 `ModelConfig` 注册表的模型选择。
 
@@ -993,6 +993,14 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **When** 用户将 connection B 设为内部默认，
 - **Then** B 的 `internal_default` 变为 true，A 的变为 false（全局单一内部默认不变量）。
 
+### Scenario: switching the internal engine's connection drops a model it does not serve
+
+- **Given** connection A 为内部默认，且内部引擎模型是 A 的模型之一，
+- **When** 用户将 connection B 设为内部默认，
+- **Then** 内部引擎模型被清空——因此在重新选定模型之前 `resolve_internal_connection()`
+  为 `None`——除非 B 策展出的 `models` 里已列有该 id，此时予以保留；判断过程不走网络探测，
+  而把本就是内部默认的 A 再设一次不改变任何东西。
+
 ### Scenario: choose the model the internal engine runs on
 
 - **Given** 某条 connection 为内部默认，
@@ -1160,6 +1168,8 @@ export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"
 - **FR-021**：全局最多一条 connection 的 `internal_default=true`。`set_internal_default` 必须先清除所有其他 connection 的 `internal_default`，再设置目标（顺序 clear-then-set，由单进程 daemon 串行化）。导入时若有 >1 内部默认，则归一化：保留最近更新的，清除其余。
 
   这条不变量必须由**数据库**来保证，而不是只靠那个方法。`internal_default` 就是一个普通的 config 字段，因此通用的资源更新路由、`coffer provider edit`、以及被导入的文档都能绕过 clear-then-set 直接写它——而实测发现一个线上金库里有两条 connection 同时被标记，这让「内部引擎到底用哪条连接」变成一个没有定义的问题。一个作用在 `kind` 上、仅覆盖被标记的 provider 行的部分唯一索引，使第二条在存储层就无法表示，无论是谁写的。
+
+  连接发生更换时，还必须**丢弃内部引擎模型**（E3）。该模型是一个与连接毫无关联的全局单例，把上一条连接的模型带过来，会让 Coffer 自身的各趟内部处理指向新端点从未听说过的模型——用户看到 provider「Agnes」配着 `deepseek-flash`。唯一被保留的情形，是新选中的那条连接**策展**了这个 id：策展出的 `models` 列表就是这条连接自己的目录，列在其中的 id 依然可服务。判断时不做任何探测——一次设置写入不得依赖某个端点可达。清空后模型落为 `None`，`resolve_internal_connection()` 返回 `None`（即 FR-023 的干净 no-op），模型下拉框显示占位符，并列出新连接的模型。把**本来就是**内部默认的那条连接再设一次，必须什么都不改变。这条规则落在 `set_internal_default` 里，因此 HTTP 路由和 `coffer provider internal-default` 都能拿到。
 - **FR-022**：`POST /api/v1/providers/{name}/internal-default` 必须将所命名的 connection 设为内部引擎默认（应用 FR-021），发出 `provider_internal_default_set` 审计事件，并返回更新后的 `ProviderOut`。
 - **FR-023**：`resolve_internal_connection()` 必须返回 `internal_default` connection 的 `ProviderConfig`，或在无 connection 被标记时返回 `None`。为 `None` 时，内部引擎（memory organizer / reorg / distill）必须是干净的 no-op 而非报错。
 - **FR-024**：独立的 `ModelConfig` 注册表（model CRUD REST + `coffer model` CLI）必须退役。内部引擎必须通过 `build_chat_model(connection, ...)`（按 `wire_format` 分派）从内部默认 connection 构建其 chat model。provider introspection 路由（`POST /api/v1/models/list-models`、`/api/v1/models/test-connection`）必须保留。

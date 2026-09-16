@@ -20,6 +20,9 @@ from typing import Protocol as _Protocol
 from uuid import uuid4
 
 from coffer.application.audit_service import AuditService
+from coffer.application.provider.internal_default_ops import (
+    set_internal_default as _set_internal_default_op,
+)
 from coffer.application.provider.projection_ops import deproject_connection, project_connection
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.rename_ops import rename as _rename_op
@@ -74,6 +77,7 @@ class ProviderService:
         agents: _AgentLister,
         audit: AuditService,
         resolve_internal_model: Callable[[], Awaitable[str | None]] | None = None,
+        clear_internal_model: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
@@ -83,6 +87,10 @@ class ProviderService:
         # Resolves the internal-engine model (spec provider-switching E3), overlaid onto the
         # internal_default connection. None ⇒ no overlay (connection's own model).
         self._resolve_internal_model = resolve_internal_model
+        # Clears that model. The model singleton belongs to another kind, so the
+        # two directions arrive as ports rather than as an imported service;
+        # both are optional so a test may construct the service without either.
+        self._clear_internal_model = clear_internal_model
 
     # --- helpers -------------------------------------------------------------
 
@@ -342,27 +350,14 @@ class ProviderService:
 
     async def set_internal_default(self, name: str, *, actor: str = "api") -> Resource:
         """Make ``name`` the global internal-engine default — the connection
-        Coffer's own LLM engine uses. Clears the flag on every other connection
-        first, then sets this one; the single-process daemon serialises the
-        clear-then-set so it never interleaves (mirrors ``activate``)."""
-        resource = await self.get(name)
-        previous: str | None = None
-        for r in await self.list():
-            if r.name == name:
-                continue
-            rc = self._cfg(r)
-            if rc.internal_default:
-                await self._set_internal_default_flag(r, value=False, actor=actor)
-                previous = r.name
-        if not self._cfg(resource).internal_default:
-            await self._set_internal_default_flag(resource, value=True, actor=actor)
-        await self._audit.record(
-            AuditEventType.PROVIDER_INTERNAL_DEFAULT_SET.value,
-            ref=self._ref(name),
-            actor=actor,
-            details={"from": previous, "to": name},
-        )
-        return await self.get(name)
+        Coffer's own LLM engine uses.
+
+        A thin delegate: the flag's single-global invariant and the fate of the
+        internal-engine model when the connection moves both live in
+        ``internal_default_ops``, so BOTH callers — the HTTP route and
+        ``coffer provider internal-default`` — get them.
+        """
+        return await _set_internal_default_op(self, name, actor=actor)
 
     async def resolve_internal_connection(self) -> ResolvedConnection | None:
         """The connection + model Coffer's internal LLM engine runs on: the

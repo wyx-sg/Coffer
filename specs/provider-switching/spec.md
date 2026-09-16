@@ -1131,7 +1131,9 @@ the memory organizer, reorg, and distill.
 - `set_internal_default(name)`: clears `internal_default` on all other
   connections, then sets it on the target (sequential clear-then-set, serialised
   by the single-process daemon so the global single-internal-default invariant
-  holds), and emits a `provider_internal_default_set` audit event.
+  holds), and emits a `provider_internal_default_set` audit event. When the
+  connection actually moves, it also clears the internal-engine model unless
+  the newly-chosen connection curates that id (FR-021).
 - `resolve_internal_connection() -> ProviderConfig | None`: returns the
   `internal_default` connection's config, or `None` when no connection is marked.
   When `None`, the internal engine (memory organizer / reorg / distill) is a
@@ -1539,6 +1541,17 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 - **Then** B's `internal_default` becomes true and A's becomes false (global
   single-internal-default invariant).
 
+### Scenario: switching the internal engine's connection drops a model it does not serve
+
+- **Given** connection A is the internal default and the internal-engine model
+  is one of A's models,
+- **When** the user makes connection B the internal default,
+- **Then** the internal-engine model is cleared — so
+  `resolve_internal_connection()` is `None` until a model is picked again —
+  unless B's curated `models` already lists that id, in which case it is kept;
+  nothing is probed over the network, and re-setting A, which is already the
+  internal default, changes nothing.
+
 ### Scenario: choose the model the internal engine runs on
 
 - **Given** a connection is the internal default,
@@ -1764,6 +1777,20 @@ connection's existing curated selection is left exactly as it was.
   use?" a question with no defined answer. A partial unique index over
   `kind` restricted to flagged provider rows makes a second one
   unrepresentable, whatever writes it.
+
+  A change of connection MUST also DROP the internal-engine model (E3). That
+  model is a global singleton with no link to the connection, so carrying the
+  previous connection's model across left Coffer's own passes aimed at a model
+  the new endpoint has never heard of — the user saw provider "Agnes" paired
+  with `deepseek-flash`. The one model kept is one the newly-chosen connection
+  CURATES: a curated `models` list is that connection's own catalogue, so an id
+  on it is still servable. Nothing is probed to decide — a settings write MUST
+  NOT depend on an endpoint being reachable. Cleared, the model falls to
+  `None`, `resolve_internal_connection()` returns `None` (FR-023's clean
+  no-op), and the model dropdown shows its placeholder over the new
+  connection's models. Setting the connection that is ALREADY the internal
+  default MUST change nothing. The rule lives in `set_internal_default`, so the
+  HTTP route and `coffer provider internal-default` both get it.
 - **FR-022**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
   connection as the internal-engine default (applying FR-021), emit a
   `provider_internal_default_set` audit event, and return the updated
