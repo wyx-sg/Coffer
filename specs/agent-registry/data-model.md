@@ -275,7 +275,7 @@ back. `ConfigFileContent.memory_block` is true when the text still contains the
 **legacy** memory-projection block marker (FR-030). Nothing writes that block
 any more — native projection was retired
 ([Aggregate Agent Memory, Never Write It](../../docs/decisions/aggregate-agent-memory-never-write-it.md);
-spec memory FR-037 forbids reintroducing it) and migration `0024` dropped the
+spec memory FR-045 forbids reintroducing it) and migration `0024` dropped the
 `projection_bindings` table behind it — so the flag exists only so
 the editor can annotate a leftover block as safe to delete. It is never parsed.
 

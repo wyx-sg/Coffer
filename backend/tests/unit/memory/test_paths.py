@@ -2,6 +2,10 @@
 the same way knowledge's is: no I/O, just "does this build the path the
 contract promises, and does the guard refuse what it should."
 
+A partition holds four things with one writer each — ``MEMORY.md``,
+``notes/``, ``RETIRED.md`` and the hidden ``.raw/`` — and ``paths.py`` is the
+sole owner of every one of those names (spec memory FR-044).
+
 The root itself is already pinned to ``tmp_path`` by the suite-wide
 ``_isolated_memory_root`` fixture in ``backend/tests/conftest.py`` — every
 test here runs against that, never a developer's real ``~/.coffer/memory``.
@@ -37,24 +41,34 @@ def test_partition_dir_is_one_segment_under_root() -> None:
     assert paths.partition_dir("coffer") == paths.memory_root() / "coffer"
 
 
-def test_facts_dir_is_under_the_partition() -> None:
-    assert paths.facts_dir("global") == paths.partition_dir("global") / "facts"
-
-
-def test_fact_path_is_under_facts_dir_with_md_suffix() -> None:
-    assert paths.fact_path("global", "worktree-development") == (
-        paths.facts_dir("global") / "worktree-development.md"
+def test_notes_live_in_their_own_directory_under_the_partition() -> None:
+    assert paths.notes_dir("coffer") == paths.partition_dir("coffer") / "notes"
+    assert paths.note_path("coffer", "worktree-development") == (
+        paths.notes_dir("coffer") / "worktree-development.md"
     )
 
 
-def test_summary_and_readme_paths_are_under_the_partition() -> None:
-    assert paths.summary_path("coffer") == paths.partition_dir("coffer") / "summary.md"
-    assert paths.readme_path("coffer") == paths.partition_dir("coffer") / "README.md"
+def test_raw_entries_live_in_the_partitions_hidden_directory() -> None:
+    """``.raw/`` is the one hidden name the layer owns (FR-008).
+
+    ``check_segment`` refuses a dot-prefixed *caller-supplied* segment, so the
+    only way this directory is reachable is through the constant — which is
+    what keeps a note slug from ever addressing it.
+    """
+    assert paths.raw_dir("coffer") == paths.partition_dir("coffer") / ".raw"
+    assert paths.raw_path("coffer", "3f2a91c4de55b071") == (
+        paths.raw_dir("coffer") / "3f2a91c4de55b071.md"
+    )
+
+
+def test_index_and_retirement_record_sit_beside_the_notes_directory() -> None:
+    assert paths.index_path("coffer") == paths.partition_dir("coffer") / "MEMORY.md"
+    assert paths.retired_path("coffer") == paths.partition_dir("coffer") / "RETIRED.md"
 
 
 def test_relative_of_strips_the_root() -> None:
-    target = paths.fact_path("global", "a-fact")
-    assert paths.relative_of(target) == str(pathlib.Path("global") / "facts" / "a-fact.md")
+    target = paths.note_path("global", "a-note")
+    assert paths.relative_of(target) == str(pathlib.Path("global") / "notes" / "a-note.md")
 
 
 def test_relative_of_a_path_outside_the_root_returns_it_unchanged(
@@ -66,7 +80,7 @@ def test_relative_of_a_path_outside_the_root_returns_it_unchanged(
 
 @pytest.mark.parametrize(
     "segment",
-    ["", ".", "..", "...", ".hidden", "has/slash", "has\\backslash", "trailing.$"],
+    ["", ".", "..", "...", ".hidden", ".raw", "has/slash", "has\\backslash", "trailing.$"],
 )
 def test_check_segment_refuses_unsafe_names(segment: str) -> None:
     with pytest.raises(paths.UnsafeMemoryPath):
@@ -83,6 +97,19 @@ def test_partition_dir_rejects_an_unsafe_name() -> None:
         paths.partition_dir("../escape")
 
 
-def test_fact_path_rejects_an_unsafe_slug() -> None:
+def test_note_path_rejects_an_unsafe_slug() -> None:
     with pytest.raises(paths.UnsafeMemoryPath):
-        paths.fact_path("global", "../escape")
+        paths.note_path("global", "../escape")
+
+
+def test_raw_path_rejects_an_unsafe_entry_id() -> None:
+    with pytest.raises(paths.UnsafeMemoryPath):
+        paths.raw_path("global", "../escape")
+
+
+def test_unsafe_path_error_carries_the_segment_and_the_reason() -> None:
+    with pytest.raises(paths.UnsafeMemoryPath) as caught:
+        paths.check_segment(".hidden")
+    assert caught.value.segment == ".hidden"
+    assert caught.value.reason
+    assert caught.value.code == "MEMORY_UNSAFE_PATH"

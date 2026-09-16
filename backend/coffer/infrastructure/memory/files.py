@@ -1,12 +1,24 @@
-"""Reading a partition's directory as a file tree (spec memory FR-029).
+"""Reading a partition's directory as a file tree (spec memory FR-037).
 
-The partition surface shows what is actually on disk: the ``README.md`` that
-says which project the partition was named from, the ``summary.md`` organise
-rewrites, and the ``facts/`` folder of one Markdown file per fact. There is
-nothing to edit here — the whole tree is derived (FR-016) and the next
-aggregation pass would overwrite an edit anyway — so this module reads and
-never writes. That is also why a file's content carries no fingerprint: a
-fingerprint exists to make a later write conditional, and there is no write.
+The partition surface shows what is actually on disk: ``MEMORY.md``, the
+``notes/`` folder of one Markdown file per topic, ``RETIRED.md`` when anything
+has been retired, and the hidden ``.raw/`` that aggregation wrote. All four are
+reachable, because the surface's whole claim is that a partition *is* a folder
+of derived Markdown; ``.raw/`` is the only one flagged
+(:attr:`FileNode.derived`), so a reader can tell the verbatim input apart from
+Coffer's own writing without having to know which directory means which.
+
+There is nothing to edit here — the whole tree is derived (FR-019) and the next
+pass would overwrite an edit anyway — so this module reads and never writes.
+That is also why a file's content carries no fingerprint: a fingerprint exists
+to make a later write conditional, and there is no write.
+
+Hidden entries other than ``.raw/`` are left out of the tree and refused on
+read, because the only ones that occur are the ``.<name>.tmp`` files an atomic
+write leaves for a few milliseconds. Listing a half-written file as though it
+were content, or serving its truncated bytes to the preview pane, would make
+the surface lie about the partition at exactly the moment a pass is rewriting
+it.
 
 Why memory grows its own reader rather than borrowing the skill kind's
 ``application/skill/file_ops.py``, which walks a directory the same way: the
@@ -20,7 +32,7 @@ to one coupling (``application/memory/recall.py``'s own docstring makes the
 same call about knowledge's ripgrep).
 
 Containment is enforced the way ``paths.check_segment`` guards a partition
-name (FR-036): every candidate is resolved and must stay inside the resolved
+name (FR-044): every candidate is resolved and must stay inside the resolved
 partition directory. A symlink whose target escapes is skipped from the tree
 and refused on read, and symlinked directories are never descended into, so a
 cycle cannot send the walk into a loop.
@@ -32,9 +44,9 @@ import pathlib
 from dataclasses import dataclass, field
 
 from coffer.domain.error_base import CofferError
-from coffer.infrastructure.memory.paths import UnsafeMemoryPath
+from coffer.infrastructure.memory.paths import RAW_DIR_NAME, UnsafeMemoryPath
 
-#: Cap on a single read. A fact file is a few hundred bytes and a digest a few
+#: Cap on a single read. A note is a few hundred bytes and a raw entry a few
 #: kilobytes, so this is never reached in practice; it is here so that a file
 #: something else dropped into the tree cannot make the response unbounded.
 MAX_FILE_BYTES = 256 * 1024
@@ -73,6 +85,12 @@ class FileNode:
     #: Set on a directory whose descendants were clipped at ``MAX_TREE_DEPTH``,
     #: so the surface can say the tree was cut rather than show it as empty.
     truncated: bool = False
+    #: Set on ``.raw/`` — what was read out of the agents, verbatim, and the
+    #: distil pass's input rather than its output (FR-008). Everything under a
+    #: partition is derived in the FR-019 sense; this flag marks the narrower
+    #: thing a reader actually needs to know, which is that these are somebody
+    #: else's words and no note is written the way they are.
+    derived: bool = False
 
 
 @dataclass(frozen=True)
@@ -125,6 +143,8 @@ def _children(directory: pathlib.Path, root: pathlib.Path, *, depth: int) -> lis
         return nodes
 
     for entry in entries:
+        if not _is_listable(entry.name, depth=depth):
+            continue
         try:
             if entry.is_symlink() and not _is_within(entry.resolve(strict=False), root):
                 continue
@@ -133,7 +153,7 @@ def _children(directory: pathlib.Path, root: pathlib.Path, *, depth: int) -> lis
             continue
 
         if entry.is_dir() and not entry.is_symlink():
-            child = FileNode(name=entry.name, path=rel, type="dir")
+            child = FileNode(name=entry.name, path=rel, type="dir", derived=rel == RAW_DIR_NAME)
             if depth + 1 >= MAX_TREE_DEPTH:
                 child.truncated = True
             else:
@@ -148,12 +168,33 @@ def _children(directory: pathlib.Path, root: pathlib.Path, *, depth: int) -> lis
         # Sockets, fifos and symlinked directories are deliberately omitted:
         # only real files and real directories are addressable here.
 
-    nodes.sort(key=lambda n: (n.type != "dir", n.name))
+    # Directories first, then the derived one last within its group, then by
+    # name: a reader opening a partition should meet ``notes/`` before
+    # ``.raw/``, because one is the product and the other is the input.
+    nodes.sort(key=lambda n: (n.type != "dir", n.derived, n.name))
     return nodes
+
+
+def _is_listable(name: str, *, depth: int) -> bool:
+    """Is this entry addressable through the tree at all?
+
+    ``.raw/`` is, at the partition root, because FR-037 requires it reachable.
+    Every other hidden name is not: the ones that occur are the ``.<name>.tmp``
+    files an atomic write leaves behind for a moment, and a surface that lists
+    them shows the partition mid-rewrite as though that were its content.
+    """
+    if not name.startswith("."):
+        return True
+    return depth == 0 and name == RAW_DIR_NAME
 
 
 def read_file(partition: str, partition_dir: pathlib.Path, relpath: str) -> FileContent:
     """Read one file under ``partition_dir``.
+
+    ``notes/x.md``, ``MEMORY.md``, ``RETIRED.md`` and anything under ``.raw/``
+    all read; any other hidden segment is refused as absent, so the tree and
+    the read agree on what exists rather than the preview reaching a
+    half-written temp file the tree never offered.
 
     Raises:
         UnsafeMemoryPath: ``relpath`` resolves outside the partition — checked
@@ -166,6 +207,9 @@ def read_file(partition: str, partition_dir: pathlib.Path, relpath: str) -> File
     if not _is_within(candidate, root):
         raise UnsafeMemoryPath(relpath, "path escapes the partition directory")
     if candidate == root or not candidate.is_file():
+        raise MemoryFileNotFound(partition, relpath)
+    segments = candidate.relative_to(root).parts
+    if any(not _is_listable(part, depth=i) for i, part in enumerate(segments)):
         raise MemoryFileNotFound(partition, relpath)
 
     size = candidate.stat().st_size

@@ -630,7 +630,7 @@ async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
         # none of them is the exception the tidy pass used to be — and none has
         # a chosen interval, so each reports the default it actually runs at.
         upkeep = (await c.get("/api/v1/internal-engine-config")).json()["upkeep"]
-        assert [upkeep[k]["enabled"] for k in ("aggregate", "organise", "curate")] == [
+        assert [upkeep[k]["enabled"] for k in ("aggregate", "distil", "curate")] == [
             True,
             True,
             True,
@@ -668,7 +668,7 @@ async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
         # the model over the user's files.
         r = await c.put(
             "/api/v1/internal-engine-config/upkeep",
-            json={"pass": "organise", "interval_s": 5},
+            json={"pass": "distil", "interval_s": 5},
         )
         assert r.status_code == 422, r.text
 

@@ -135,11 +135,13 @@ def test_no_memory_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_eleven_routes(spec_doc: dict[str, Any]) -> None:
-    """The contract's own ``info.description`` says eleven routes and that this
-    is the whole management plane (FR-028). A twelfth arriving is a decision,
-    not an accident, so the count is pinned."""
-    assert len(_declared_operations(spec_doc)) == 11
+def test_the_management_plane_is_twelve_routes(spec_doc: dict[str, Any]) -> None:
+    """The contract's own ``info.description`` says twelve routes and that this
+    is the whole management plane (FR-036). A thirteenth arriving is a
+    decision, not an accident, so the count is pinned. It was eleven until
+    ``/partitions/{name}/retired`` joined it: a retirement record is not a
+    detail of the distil pass but a thing a person reads (FR-025)."""
+    assert len(_declared_operations(spec_doc)) == 12
 
 
 def test_deleting_a_partition_is_not_on_this_surface(spec_doc: dict[str, Any]) -> None:
@@ -222,7 +224,7 @@ def test_the_read_only_file_shape_carries_no_fingerprint(
 def test_delivery_status_answers_only_installed_or_not(
     generated_schema: dict[str, Any],
 ) -> None:
-    """A fire is an event, not a property of an agent (FR-026, FR-030): there is
+    """A fire is an event, not a property of an agent (FR-033, FR-039): there is
     deliberately no last-fired field, so a hook installed a minute ago is not
     flagged for its own normal state."""
     delivery = generated_schema["components"]["schemas"]["DeliveryStatusOut"]
@@ -235,18 +237,32 @@ def test_delivery_status_answers_only_installed_or_not(
 # ---------------------------------------------------------------------------
 
 
-def test_the_fact_type_and_status_values_are_the_domains(spec_doc: dict[str, Any]) -> None:
+def test_the_note_type_values_are_the_domains(spec_doc: dict[str, Any]) -> None:
     """The yaml's ``enum`` lists have no generated counterpart (the wire models
     type these as plain ``str``), so the domain's own vocabulary is the oracle."""
-    from coffer.domain.memory.fact import FACT_TYPES, STATUS_ACTIVE, STATUS_SUPERSEDED
+    from coffer.domain.memory.note import NOTE_TYPES
 
-    fact_summary = spec_doc["components"]["schemas"]["FactSummaryOut"]["properties"]
-    assert set(fact_summary["type"]["enum"]) == set(FACT_TYPES)
-    assert set(fact_summary["status"]["enum"]) == {STATUS_ACTIVE, STATUS_SUPERSEDED}
+    note_summary = spec_doc["components"]["schemas"]["NoteSummaryOut"]["properties"]
+    assert set(note_summary["type"]["enum"]) == set(NOTE_TYPES)
 
 
-def test_the_context_layers_are_l0_and_l1(spec_doc: dict[str, Any]) -> None:
-    """A tiny budget can ship L0 alone; it can never ship half of L0 (FR-021).
-    Two layers, and the contract says which two."""
-    layers = spec_doc["components"]["schemas"]["ComposedContextOut"]["properties"]["layers"]
-    assert set(layers["items"]["enum"]) == {"L0", "L1"}
+def test_a_note_carries_no_status_of_its_own(spec_doc: dict[str, Any]) -> None:
+    """A note this layer removes leaves ``notes/`` and is recorded in
+    ``RETIRED.md`` (FR-025) — it does not sit in place marked dead. The
+    previous design kept a ``status`` / ``superseded_by`` / ``conflicts_with``
+    trio on every fact and then went on serving superseded ones from
+    ``recall`` anyway, so the absence of those fields from the wire is the
+    shape of that bug's fix and is pinned here."""
+    note_summary = spec_doc["components"]["schemas"]["NoteSummaryOut"]["properties"]
+    assert not {"status", "superseded_by", "conflicts_with"} & set(note_summary)
+
+
+def test_the_composed_context_has_no_layers(spec_doc: dict[str, Any]) -> None:
+    """Delivery is the whole index plus a directory path (FR-028), so there is
+    nothing left to report layers of. ``layers`` described a budgeted digest
+    that shipped L0 alone when L1 did not fit; on the live vault it shipped 8
+    of 189 lines every session. Its absence is pinned so the field cannot
+    return without the design returning with it."""
+    composed = spec_doc["components"]["schemas"]["ComposedContextOut"]
+    assert "layers" not in composed["properties"]
+    assert set(composed["required"]) == {"text", "partition", "notes_included", "notes_omitted"}

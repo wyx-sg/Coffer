@@ -1,4 +1,4 @@
-"""Per-agent adapters for Coffer's own session-start-like hook (spec memory FR-025/FR-026): which
+"""Per-agent adapters for Coffer's own session-start-like hook (spec memory FR-021/FR-022): which
 config-file key holds it, which event it sits on, and
 how to build/find/remove the installed entry.
 

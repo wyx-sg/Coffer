@@ -1,6 +1,6 @@
 """Global internal-engine model service (spec provider-switching amendment 2026-06-22b).
 
-Coffer's internal LLM engine (aggregation / organise / knowledge curation)
+Coffer's internal LLM engine (aggregation / distil / knowledge curation)
 takes its endpoint + key from the ``internal_default`` connection but its MODEL
 from this singleton — the connection no longer owns a model. The wiring overlays
 ``get().model`` onto the resolved connection before building the chat model."""
@@ -89,8 +89,8 @@ class InternalEngineConfigService:
                 "curate_owner_machine_id": saved.curate_owner_machine_id,
                 "auto_aggregate_enabled": saved.auto_aggregate_enabled,
                 "aggregate_interval_s": saved.aggregate_interval_s,
-                "auto_organise_enabled": saved.auto_organise_enabled,
-                "organise_interval_s": saved.organise_interval_s,
+                "auto_distil_enabled": saved.auto_distil_enabled,
+                "distil_interval_s": saved.distil_interval_s,
                 "curate_interval_s": saved.curate_interval_s,
             },
         )

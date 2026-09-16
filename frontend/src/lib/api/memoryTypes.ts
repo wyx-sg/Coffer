@@ -1,12 +1,16 @@
 // frontend/src/lib/api/memoryTypes.ts
 //
-// Wire types for the `memory` kind. Memory is Coffer's read-only aggregation
-// of the agents' own native memories, normalised into files partitioned by
-// project (plus `global`) — see docs/decisions/aggregate-agent-memory-never-write-it.md
-// and specs/memory/spec.md. Coffer never writes an agent's native memory, and
-// the UI no longer writes Coffer's own copy either: a partition is shown as
-// what it literally is on disk, a folder under `~/.coffer/memory/`, so the
-// file types below carry no fingerprint and there is no write shape to send.
+// Wire types for the `memory` kind. Memory is Coffer's own distillation of the
+// agents' native memories — it reads them, never writes them, and what it
+// writes instead is a folder per repository holding `MEMORY.md` (the index),
+// `notes/` (Coffer's own notes, one topic per file), `RETIRED.md` (what left
+// and why) and a hidden `.raw/` of the verbatim entries it read. See
+// specs/memory/spec.md and
+// docs/decisions/aggregate-agent-memory-never-write-it.md.
+//
+// The UI writes none of it: a partition is shown as what it literally is on
+// disk, a folder under `~/.coffer/memory/`, so the file types below carry no
+// fingerprint and there is no write shape to send.
 //
 // These are hand-written rather than generated: `specs/memory`'s contract
 // names the file shapes `FileNodeOut` / `FileTreeOut` / `FileContentOut`,
@@ -15,12 +19,22 @@
 // `scripts/codegen.mjs` until that rename is made. Field names match
 // `backend/coffer/surfaces/http/memory/schemas.py` exactly.
 
-/** One partition: a project's slug, or `global` for facts about the person. */
+/** One partition: a repository's slug, or `global` for notes about the person.
+ *
+ *  Keyed on a REPOSITORY, not a working directory — a worktree and a second
+ *  clone of the same repo resolve to one partition (FR-014). */
 export interface PartitionOut {
   name: string;
-  /** Absolute project root this partition was named from; empty for `global`. */
-  project_root: string;
-  fact_count: number;
+  /** Absolute path of the repository's main working tree; empty for `global`. */
+  repository_path: string;
+  /** What the repository was resolved to: `remote:<host>/<path>` when it has an
+   *  `origin`, `path:<abs>` when it has none. Empty for `global`. */
+  repository_key: string;
+  note_count: number;
+  /** True when `repository_path` is no longer on disk. Surfaced rather than
+   *  hidden: such a partition is delivered to nobody, and only the developer
+   *  can decide to delete it (FR-016). */
+  unresolvable: boolean;
 }
 
 export interface PartitionListOut {
@@ -38,6 +52,11 @@ export interface MemoryFileNode {
   /** Absolute on-disk path of the containing folder. */
   folder_abs_path?: string;
   type: "file" | "dir";
+  /** True for `.raw/` and everything under it: the verbatim entries
+   *  aggregation read out of the agents, not Coffer's own writing. The server
+   *  decides — the path convention is only a fallback for a node that predates
+   *  the field. */
+  derived: boolean;
   size: number | null;
   /** True on a dir whose children were clipped at the max tree depth. */
   truncated: boolean;
@@ -64,7 +83,8 @@ export interface MemoryFileContentOut {
 
 export interface AggregationResultOut {
   partitions: string[];
-  facts_written: number;
+  /** Verbatim entries written under the partitions' `.raw/` this pass. */
+  entries_written: number;
   sources_read: number;
   sources_skipped: number;
   /** Native source paths that failed to parse (FR-005) — the other agent's
@@ -72,17 +92,22 @@ export interface AggregationResultOut {
   failures: string[];
 }
 
-export interface OrganiseResultOut {
+/** What one distil pass did to a partition: the four actions its routing stage
+ *  is confined to. A note it rewrote is `merged`, a note it wrote fresh is
+ *  `opened`, a note it took out of `notes/` and recorded in `RETIRED.md` is
+ *  `retired`, and an entry it judged not worth a note is `dropped`. */
+export interface DistilResultOut {
   partition: string;
   merged: number;
-  superseded: number;
-  conflicts: number;
+  opened: number;
+  retired: number;
+  dropped: number;
   model_used: boolean;
 }
 
 /** Per-agent delivery state — whether Coffer's hook is written into that
  *  agent's settings. Whether it has fired is read from the audit log, one
- *  entry per fire (FR-026), not from here. */
+ *  entry per fire (FR-022), not from here. */
 export interface DeliveryStatusOut {
   agent: string;
   installed: boolean;

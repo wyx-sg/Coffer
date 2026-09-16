@@ -307,7 +307,7 @@
       "memory_delivery_fired": "{{resource}} 的记忆投递 hook 已触发",
       "memory_delivery_installed": "已为 {{resource}} 安装记忆投递",
       "memory_delivery_removed": "已移除 {{resource}} 的记忆投递",
-      "memory_organised": "整理了记忆分区 {{resource}}",
+      "memory_distilled": "提炼了记忆分区 {{resource}}",
       "provider_internal_default_set": "把 {{resource}} 设为内部引擎的默认模型提供商",
       "provider_projection_refused": "拒绝把 {{resource}} 投射到 Agent",
       "provider_switched": "切换到了模型提供商 {{resource}}",
@@ -570,9 +570,9 @@
           "name": "从 agent 读取",
           "writes": "读你的 agent 自己的记忆文件，只写 Coffer 的派生目录树。不经过模型。"
         },
-        "organise": {
-          "name": "整理记忆",
-          "writes": "模型重写派生出来的摘要——合并重复、标记被推翻的事实。删掉这棵树再跑一遍就能复现。"
+        "distil": {
+          "name": "提炼记忆",
+          "writes": "模型把从 Agent 读到的原始条目提炼成 Coffer 自己的笔记，并重写索引。删掉这棵树再跑一遍，能复现出等价的一组笔记。"
         },
         "curate": {
           "name": "从源材料提炼文档",
@@ -650,7 +650,8 @@
     "MCP_INSTALL_UNSUPPORTED": "该 Agent 不支持安装 Coffer 的 MCP 条目",
     "MEMORY_DELIVERY_CONFIG_INVALID": "该 Agent 的设置文件不是 Coffer 可以编辑的格式",
     "MEMORY_DELIVERY_UNSUPPORTED": "该 Agent 类型没有记忆投递钩子",
-    "MEMORY_FACT_NOT_FOUND": "未找到该记忆条目",
+    "MEMORY_NOTE_NOT_FOUND": "没有找到这条记忆笔记",
+    "MEMORY_RAW_ENTRY_NOT_FOUND": "没有找到这条原始记忆条目",
     "MEMORY_FILE_NOT_FOUND": "该分区里没有这个文件",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
@@ -1068,19 +1069,21 @@
   },
   "memory": {
     "title": "记忆",
-    "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），按项目归一化为一组事实，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。它会自己定时重读；按钮只是让它立刻跑一次。",
+    "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），提炼成 Coffer 自己的笔记：一个主题一个文件，按仓库归档，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。它会自己定时重读；按钮只是让它立刻跑一次。",
     "readFromAgents": "读取 Agent 记忆",
     "reading": "读取中…",
-    "syncDone": "已读取 {{partitions}} 个分区，共 {{count}} 条事实。",
+    "syncDone": "已读取 {{partitions}} 个分区，共 {{count}} 条原始条目。",
     "syncFailures": "{{count}} 个来源解析失败——详见活动页面。",
     "loadFailed": "加载分区失败",
     "empty": "还没有分区。点「读取 Agent 记忆」，把 Agent 已经掌握的内容导入进来。",
     "searchPlaceholder": "搜索分区…",
     "cols": {
       "name": "分区",
-      "project": "项目",
+      "repository": "仓库",
       "global": "全局——关于你本人，而非某个项目",
-      "facts": "事实数"
+      "notes": "笔记数",
+      "unresolvable": "仓库已不在",
+      "unresolvableHint": "该分区对应的仓库已不在磁盘上，因此它不会投递给任何 Agent。之所以仍然列出，是因为要不要删掉由你决定。"
     },
     "delivery": {
       "title": "投递",
@@ -1088,7 +1091,7 @@
       "installed": "已安装",
       "notInstalled": "未安装",
       "installedHint": "Coffer 的 {{event}} 钩子已写入该 Agent 的设置。每一次触发都会记在活动页面。",
-      "notInstalledHint": "安装 Coffer 的钩子，以在会话开始时投递一份有预算限制的摘要。",
+      "notInstalledHint": "安装 Coffer 的钩子，在会话开始时把记忆索引交给该 Agent。",
       "install": "安装",
       "remove": "移除",
       "removeConfirmTitle": "移除 {{agent}} 的投递？",
@@ -1101,12 +1104,14 @@
       "tree": "文件",
       "selectFile": "选择一个文件查看。",
       "binary": "二进制文件（{{size}} 字节）",
-      "truncated": "内容已截断——只显示文件开头。"
+      "truncated": "内容已截断——只显示文件开头。",
+      "derivedBadge": "派生输入",
+      "derivedHint": "这是派生输入，不是 Coffer 自己写的内容：它们是 Coffer 原样读到的 Agent 自己的措辞，保留下来是为了在笔记读着不对时能回溯核对。Coffer 自己的笔记在 notes/ 下，索引是 MEMORY.md。"
     },
     "detail": {
-      "organise": "整理",
-      "organiseHint": "合并重复的事实，提议取代与冲突关系，并重写该分区的摘要。",
-      "organiseDone": "整理已完成。"
+      "distil": "提炼",
+      "distilHint": "把该分区新增的原始条目提炼进 Coffer 自己的笔记——并入已有笔记、新开一篇，或退役到 RETIRED.md——并重写索引。",
+      "distilDone": "提炼已完成。"
     }
   },
   "chat": {

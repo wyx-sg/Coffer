@@ -1,6 +1,6 @@
 // frontend/src/pages/MemoryPage.test.tsx
 //
-// The Memory page is a list page and must read as one (spec memory FR-029):
+// The Memory page is a list page and must read as one (spec memory FR-037):
 // a table, in the same shape whether the vault holds partitions or none, and
 // nothing else. Two surfaces that used to render above and below that table
 // are asserted ABSENT here, because both were duplicates of somewhere better:
@@ -12,6 +12,7 @@ import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryPage } from "./MemoryPage";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 
@@ -49,17 +50,30 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <MemoryPage />
-      </MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter>
+          <MemoryPage />
+        </MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>,
   );
 }
 
 const COFFER: PartitionOut = {
   name: "coffer",
-  project_root: "/Users/dev/coffer",
-  fact_count: 34,
+  repository_path: "/Users/dev/coffer",
+  repository_key: "remote:github.com/wyx-sg/coffer",
+  note_count: 34,
+  unresolvable: false,
+};
+
+/** A partition whose repository has been deleted from disk (FR-016). */
+const GONE: PartitionOut = {
+  name: "old-api",
+  repository_path: "/Users/dev/old-api",
+  repository_key: "path:/Users/dev/old-api",
+  note_count: 3,
+  unresolvable: true,
 };
 
 describe("MemoryPage", () => {
@@ -74,7 +88,7 @@ describe("MemoryPage", () => {
     const headers = within(table)
       .getAllByRole("columnheader")
       .map((h) => h.textContent);
-    expect(headers).toEqual(expect.arrayContaining(["Partition", "Project", "Facts", "Reach"]));
+    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes", "Reach"]));
 
     // The empty state is a row INSIDE that table, not a card replacing it.
     expect(within(table).getByText(/no partitions yet/i)).toBeInTheDocument();
@@ -98,6 +112,18 @@ describe("MemoryPage", () => {
     expect(within(table).getByText("coffer")).toBeInTheDocument();
     expect(within(table).getByText("/Users/dev/coffer")).toBeInTheDocument();
     expect(within(table).getByText("34")).toBeInTheDocument();
+  });
+
+  test("a partition whose repository is gone is listed, not hidden", () => {
+    // FR-016: it is delivered to nobody, and only the developer can decide
+    // whether to delete it — which they cannot do from a list it is missing
+    // from. So it is on the page, marked.
+    stubPartitions([COFFER, GONE]);
+    renderPage();
+
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("old-api")).toBeInTheDocument();
+    expect(within(table).getByTestId("partition-unresolvable-badge")).toBeInTheDocument();
   });
 
   test("no audit-log section — the Activity page holds the vault's whole trail", () => {

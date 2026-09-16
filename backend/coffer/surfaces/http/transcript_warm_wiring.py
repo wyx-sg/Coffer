@@ -1,7 +1,7 @@
 """Wiring for the transcript summary cache's warm pass (spec agent-registry FR-041).
 
-Mirrors ``memory_wiring.py``'s ``start_organise_worker`` /
-``stop_organise_worker`` pair: the worker itself is pure application code, and
+Mirrors ``memory_wiring.py``'s ``start_distil_worker`` /
+``stop_distil_worker`` pair: the worker itself is pure application code, and
 this is the one place that knows how to turn registered agents into the
 ``(type, config_dir)`` pairs it warms.
 

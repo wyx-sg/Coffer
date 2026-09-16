@@ -343,13 +343,13 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
 
 @pytest.mark.acceptance(
     spec="memory",
-    scenario="a channel turn carries the memory context without a hook",
+    scenario="a channel turn carries the index without a hook",
 )
 @pytest.mark.asyncio
 async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """A channel-driven turn gets its memory digest through this same
-    system-prompt append — no session-start hook, no install (spec memory FR-024). The provider
-    never builds the digest itself: it calls the
+    """A channel-driven turn gets the memory index through this same
+    system-prompt append — no session-start hook, no install (spec memory
+    FR-053). The provider never builds the payload itself: it calls the
     injected composer, the same seam ``list_models`` already uses, so the
     chat/provider layer never reaches into the memory kind directly."""
     repo, engine = await _repo(tmp_path)
@@ -360,11 +360,13 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
 
     async def _memory(agent_key: str, cwd: str) -> str | None:
         calls.append((agent_key, cwd))
-        # The real composer's shape (application/memory/digest.fact_line).
-        # "(pinned first)" used to sit in this stub, describing an ordering
-        # that went with the per-fact overrides — a stub nothing compares
-        # against still teaches a reader the wrong payload.
-        return "## Coffer memory\nKnown about you:\n- **Likes tabs** — Two spaces are not a tab."
+        # The real composer's shape (application/memory/index.index_line): a
+        # line per note naming the file its body is in, not a budgeted digest.
+        # A stub that keeps the old shape teaches a reader the wrong payload.
+        return (
+            "## Coffer memory\nKnown about you:\n"
+            "- **Likes tabs** (`likes-tabs.md`) — Two spaces are not a tab."
+        )
 
     provider = ClaudeSdkProvider(
         conversations=repo, session_factory=factory, compose_memory_context=_memory
@@ -376,7 +378,7 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
 
     append = captured[0].system_prompt["append"]
     assert "## Coffer memory" in append
-    assert "Likes tabs" in append
+    assert "- **Likes tabs** (`likes-tabs.md`)" in append
     # Resolved lazily per turn, keyed by this agent and the conversation's cwd —
     # never guessed or hardcoded (mirrors how ``list_models`` is called).
     assert calls == [("claude_code", str(tmp_path))]
@@ -411,9 +413,9 @@ async def test_no_memory_to_deliver_appends_no_header(tmp_path) -> None:  # type
 
 @pytest.mark.asyncio
 async def test_web_conversation_never_gets_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """A non-channel (web UI) turn is not the "channel-driven turn" spec memory FR-024 names — even
-    a wired composer must not be consulted for it (the
-    agent's own hook, spec chat FR-020, is the delivery path there instead)."""
+    """A non-channel (web UI) turn is not the "channel-driven turn" spec memory
+    FR-053 names — even a wired composer must not be consulted for it (the
+    agent's own hook, FR-054, is the delivery path there instead)."""
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())  # no channel_name
     factory, captured = _make_factory(_simple_messages())

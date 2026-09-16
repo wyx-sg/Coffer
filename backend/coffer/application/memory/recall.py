@@ -1,20 +1,38 @@
-"""``coffer__recall`` — memory's L2 layer (spec memory FR-023, FR-027).
+"""``coffer__recall`` — a locator, not a reader (spec memory FR-035, FR-034).
 
-L0/L1 (``context.py``) are a small, budgeted push; this is the pull that
-answers whatever they left out. It used to reuse knowledge's ranked-retrieval
-loop — embed the query, rank facts by cosine, degrade to literal matching when
-no embedder was available. That loop is **gone**, deliberately removed along
-with every other use of embeddings in Coffer. What is left is the tier that was
-previously the fallback, promoted to being the whole answer: a plain
-case-insensitive substring scan over the facts this caller may see, already
-loaded in memory.
+Delivery hands a session the **whole index** of the partition it was opened
+in, plus ``global``'s (``context.py``), so for that partition there is
+nothing left to search: the lines are already in front of the caller and the
+bodies are files. What is left over is one narrow question — *where is the
+note about X, in a partition this session was not opened in* — and this
+answers exactly that: a path, a title and a description per match.
 
-That scan stays memory's own rather than borrowing knowledge's ripgrep: at the
-corpus size spec memory assumes — "hundreds of facts per partition" — the facts
-are in hand already and shelling out buys nothing, and the memory kind has no
-standing import of the knowledge kind's search substrate regardless. It never
-raises and never returns empty for want of a connection, because there is no
-connection left for it to want (FR-023).
+**Not the body.** A note is an ordinary Markdown file (FR-022) and every
+caller is a local process that can read one, so returning bodies here would
+spend a tool result on what a file read does better, and would quietly
+recreate the thing this layer just removed: a tool standing between an agent
+and a file. The previous version returned whole bodies, and was called five
+times in its lifetime.
+
+**No score, no mode, no connection.** Matching is a case-insensitive literal
+scan over the notes this caller may see. There is no ranking to explain and
+no embedder to be missing; an installation with no internal connection gets
+the same recall as any other (FR-024).
+
+**And never a retired note.** That is FR-025, and it is a bug being fixed
+rather than a property being restated: the previous version filtered nothing
+at all, so on the maintainer's live vault 11 facts that had been marked
+superseded — and were correctly withheld from delivery — were still
+answerable here as if current. The mechanism now is structural rather than a
+check: a retirement takes the note's file out of ``notes/`` and records it in
+``RETIRED.md``, and this reads only what ``list_notes`` returns, which is
+``notes/``. ``.raw/`` is excluded by the same fact (FR-008): it is aggregation's
+verbatim input, not a note, and nothing here can reach it.
+
+The scan stays memory's own rather than borrowing knowledge's ripgrep: at the
+corpus size this layer assumes the notes are in hand already, shelling out
+buys nothing, and the memory kind has no standing import of the knowledge
+kind's search substrate.
 """
 
 from __future__ import annotations
@@ -23,48 +41,54 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from coffer.domain.memory.fact import Fact
+from coffer.domain.memory.note import Note
 from coffer.infrastructure.memory import paths as memory_paths
 
-#: Facts returned per call — the same ceiling knowledge's ``search`` uses, kept
-#: as its own constant rather than imported so the two kinds' pull tools do not
-#: import each other over one integer.
-DEFAULT_TOP_K = 8
+#: Locations returned per call. Higher than a reader's page would be, because
+#: a location is three short fields rather than a body — the caller narrows by
+#: reading the one it wants, not by asking again.
+DEFAULT_TOP_K = 10
 
 
 class MemoryPort(Protocol):
     """The slice of ``MemoryService`` recall needs: scope and reads, never
-    aggregation. Matches ``MemoryService``'s real signatures structurally,
-    so a unit test can fake it with no database at all."""
+    aggregation. Matches ``MemoryService``'s real signatures structurally, so
+    a unit test can fake it with no database at all.
+
+    ``list_notes`` answers from the partition's ``notes/`` directory only.
+    That is what keeps a retired note and a raw entry out of this answer
+    (FR-025, FR-008), so it is a promise the port makes, not a filter this
+    module applies afterwards.
+    """
 
     async def visible_partitions(self, agent: str | None) -> Sequence[str]: ...
 
-    async def list_facts(self, partition: str, *, agent: str | None = None) -> Sequence[Fact]: ...
+    async def list_notes(self, partition: str, *, agent: str | None = None) -> Sequence[Note]: ...
 
 
 @dataclass(frozen=True)
-class RecalledFact:
-    """One fact ``recall`` answers with — its origins intact (FR-023)."""
+class RecalledNote:
+    """One located note: where it is, and enough to decide whether to open it.
+
+    The **absolute** path (FR-035), because the caller's next move is an
+    ordinary file read and a vault-relative path would make it guess a root.
+    """
 
     path: str
     title: str
     description: str
-    body: str
     type: str
     partition: str
-    #: ``(agent, native_path)`` per place this fact was seen.
-    origins: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
 class RecallOutcome:
-    facts: tuple[RecalledFact, ...]
+    notes: tuple[RecalledNote, ...]
 
 
-def _relpath(fact: Fact) -> str:
-    """The fact file's memory-root-relative path — recall's identity for a
-    fact, the same role a knowledge file's own path plays in ``search``."""
-    return memory_paths.relative_of(memory_paths.fact_path(fact.partition, fact.slug))
+def _abspath(note: Note) -> str:
+    """The note file's absolute path — recall's whole answer to "where"."""
+    return str(memory_paths.note_path(note.partition, note.slug))
 
 
 class RecallService:
@@ -74,45 +98,48 @@ class RecallService:
     async def recall(
         self, query: str, *, agent: str | None = None, top_k: int = DEFAULT_TOP_K
     ) -> RecallOutcome:
+        """Locate the notes matching ``query``, within ``agent``'s scope."""
         visible = await self._memory.visible_partitions(agent)
-        by_path: dict[str, Fact] = {}
+        by_path: dict[str, Note] = {}
         for partition in visible:
-            for fact in await self._memory.list_facts(partition, agent=agent):
-                by_path[_relpath(fact)] = fact
+            for note in await self._memory.list_notes(partition, agent=agent):
+                by_path[_abspath(note)] = note
 
         if not by_path or not query.strip():
-            return RecallOutcome(facts=())
+            return RecallOutcome(notes=())
         return self._literal(query.strip(), by_path, top_k)
 
-    def _literal(self, query: str, by_path: Mapping[str, Fact], top_k: int) -> RecallOutcome:
-        """A substring scan over the facts already in hand (FR-023).
+    def _literal(self, query: str, by_path: Mapping[str, Note], top_k: int) -> RecallOutcome:
+        """A substring scan over the notes already in hand (FR-035).
 
-        A fact matches on its body first; failing that, on its title or
-        description, so a fact whose one-line summary is the only place the
-        words appear is still recallable.
+        A note matches on its body, on its title or description, or on the
+        search terms its source supplied (FR-004) — which are the words the
+        source itself expected this lookup to be made with, so ignoring them
+        here would waste the one hint the corpus carries about its own
+        vocabulary. Results are sorted by path so the same query answers the
+        same way twice; there is no score to sort by and none is invented.
         """
         needle = query.lower()
         matched: list[str] = []
-        for path, fact in by_path.items():
-            lines = fact.body.splitlines()
-            found = any(needle in line.lower() for line in lines)
-            if found or needle in f"{fact.title} {fact.description}".lower():
+        for path, note in by_path.items():
+            haystack = "\n".join(
+                (note.body, note.title, note.description, " ".join(note.search_terms))
+            ).lower()
+            if needle in haystack:
                 matched.append(path)
         matched.sort()
         return RecallOutcome(
-            facts=tuple(self._recalled(by_path[path], path) for path in matched[:top_k])
+            notes=tuple(self._recalled(by_path[path], path) for path in matched[:top_k])
         )
 
     @staticmethod
-    def _recalled(fact: Fact, path: str) -> RecalledFact:
-        return RecalledFact(
+    def _recalled(note: Note, path: str) -> RecalledNote:
+        return RecalledNote(
             path=path,
-            title=fact.title,
-            description=fact.description,
-            body=fact.body,
-            type=fact.type,
-            partition=fact.partition,
-            origins=tuple((o.agent, o.native_path) for o in fact.origins),
+            title=note.title,
+            description=note.description,
+            type=note.type,
+            partition=note.partition,
         )
 
 
@@ -121,5 +148,5 @@ __all__ = [
     "MemoryPort",
     "RecallOutcome",
     "RecallService",
-    "RecalledFact",
+    "RecalledNote",
 ]

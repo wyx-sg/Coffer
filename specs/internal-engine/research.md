@@ -119,7 +119,7 @@ and then publishing nothing.
 ## Why `tidy` ships off and the other two ship on
 
 The dividing line is what a pass WRITES, not how expensive or how clever it is.
-`aggregate` and `organise` write derived files: delete them, run again, and you
+`aggregate` and `distil` write derived files: delete them, run again, and you
 have them back. `tidy` rewrites the user's own knowledge files, which are the
 only copy. An unattended rewriter of the only copy is something an operator
 switches on deliberately, not something they discover running.

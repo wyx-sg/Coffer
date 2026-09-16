@@ -267,8 +267,8 @@ class InternalEngineConfigModel(Base):
     #: that never chose one (spec memory FR-007, spec knowledge FR-032).
     auto_aggregate_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     aggregate_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    auto_organise_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    organise_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    auto_distil_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    distil_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     curate_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 

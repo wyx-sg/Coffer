@@ -21,7 +21,7 @@ SINGLETON_ID = 1
 #: interval lives. Named here rather than in the workers so a surface can offer
 #: exactly these three without importing three application modules.
 AGGREGATE = "aggregate"
-ORGANISE = "organise"
+DISTIL = "distil"
 CURATE = "curate"
 
 
@@ -79,11 +79,11 @@ class GlobalInternalEngineConfig:
     #: REWRITE here for an operator to consent to.
     auto_aggregate_enabled: bool = True
     aggregate_interval_s: int | None = None
-    #: The organise pass (spec memory FR-030): the model rewrites the derived
+    #: The distil pass (spec memory FR-030): the model rewrites the derived
     #: digest, which FR-023 makes reproducible by deleting and re-running, so
     #: this defaults ON for the same reason.
-    auto_organise_enabled: bool = True
-    organise_interval_s: int | None = None
+    auto_distil_enabled: bool = True
+    distil_interval_s: int | None = None
     #: Curation's own timer. Its SWITCH is ``auto_curate_enabled`` above.
     curate_interval_s: int | None = None
 
@@ -96,8 +96,8 @@ class GlobalInternalEngineConfig:
         """
         if pass_name == AGGREGATE:
             return UpkeepSetting(self.auto_aggregate_enabled, self.aggregate_interval_s)
-        if pass_name == ORGANISE:
-            return UpkeepSetting(self.auto_organise_enabled, self.organise_interval_s)
+        if pass_name == DISTIL:
+            return UpkeepSetting(self.auto_distil_enabled, self.distil_interval_s)
         if pass_name == CURATE:
             return UpkeepSetting(self.auto_curate_enabled, self.curate_interval_s)
         raise ValueError(f"unknown upkeep pass: {pass_name}")

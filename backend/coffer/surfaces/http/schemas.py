@@ -362,7 +362,7 @@ class InternalEngineConfigOut(BaseModel):
 
     model: str | None = None
     updated_at: datetime | None = None
-    #: Keyed by pass name (``aggregate`` / ``organise`` / ``curate``); the value
+    #: Keyed by pass name (``aggregate`` / ``distil`` / ``curate``); the value
     #: shape is ``internal_engine_routes.UpkeepSettingOut``, defined beside the
     #: route that builds it (this module is at its size ceiling).
     upkeep: dict[str, Any] = Field(default_factory=dict)

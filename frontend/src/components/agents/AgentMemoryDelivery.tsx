@@ -1,6 +1,6 @@
 // frontend/src/components/agents/AgentMemoryDelivery.tsx
 //
-// ONE agent's memory-delivery state (spec memory FR-025/FR-026, ADR
+// ONE agent's memory-delivery state (spec memory FR-032/FR-033, ADR
 // aggregate-agent-memory-never-write-it), rendered on that agent's own detail
 // page. Delivery installs a hook into THIS agent's own settings file, so it is
 // per-agent state and belongs beside the agent — it used to sit on the
@@ -14,7 +14,7 @@
 // This card answers one question — is the hook written into that agent's
 // settings or not. Whether it has actually fired is a stream of events, not a
 // property of the agent, so it is read where every other stream of events is
-// read: the Activity page's audit log, one entry per fire (spec memory FR-026).
+// read: the Activity page's audit log, one entry per fire (spec memory FR-033).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2 } from "lucide-react";

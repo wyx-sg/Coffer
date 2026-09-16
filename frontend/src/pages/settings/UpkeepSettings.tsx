@@ -3,7 +3,7 @@
 // Settings → Engine: the work Coffer does when nobody asked it to.
 //
 // Three passes run on a timer — aggregation reads the agents' own memory into
-// the derived tree (spec memory FR-007), organise lets the model rewrite that
+// the derived tree (spec memory FR-007), distil lets the model rewrite that
 // derived digest (FR-030), and curation reads the knowledge sources the user
 // writes and derives the topic documents agents read (spec knowledge FR-021).
 // Until now none of them was visible: two had no switch at all, the third's
@@ -43,8 +43,8 @@ import type { UpkeepPass, UpkeepSetting } from "@/lib/api/internalEngine";
 const INTERVAL_CHOICES = [15 * 60, 30 * 60, 60 * 60, 3 * 60 * 60, 6 * 60 * 60, 12 * 60 * 60, 86400];
 
 /** The passes, in the order they actually run: memory is aggregated, then
- *  organised; knowledge is curated on its own schedule. */
-const PASSES: UpkeepPass[] = ["aggregate", "organise", "curate"];
+ *  distilled; knowledge is curated on its own schedule. */
+const PASSES: UpkeepPass[] = ["aggregate", "distil", "curate"];
 
 /** `null` is "this pass's own default" — the server tells us what that is, so
  *  the option can say so rather than showing a blank. */

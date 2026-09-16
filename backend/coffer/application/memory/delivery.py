@@ -1,5 +1,5 @@
 """DeliveryService — install / status / remove Coffer's own session-start-like
-hook for an agent the developer drives themselves (spec memory FR-025/FR-026).
+hook for an agent the developer drives themselves (spec memory FR-021/FR-022).
 
 **Explicit only.** Nothing installs this as a side effect of registering an
 agent, moving its config dir, or aggregating memory — only a direct call to
@@ -23,7 +23,7 @@ The actual JSON edit is delegated to `coffer.domain.memory.delivery` (the
 marker and the pure text transform) through one `DeliveryAdapter` per agent
 type in `coffer.infrastructure.memory.delivery` — which event, which config
 key, and, for Codex, the once-per-session guard. `record_fired` is the other
-half of FR-026: it is called by whatever actually serves the context (the
+half of FR-022: it is called by whatever actually serves the context (the
 `coffer memory context` CLI), never by this service itself, so each audited
 fire is a real one.
 """
@@ -49,7 +49,7 @@ from coffer.domain.resource import Resource, ResourceRef
 from coffer.infrastructure.memory.delivery import CLAUDE_CODE_ADAPTER, CODEX_ADAPTER
 
 #: One adapter per agent type Coffer knows how to deliver into (spec memory
-#: FR-025 covers exactly the two agents Coffer already reads native memory
+#: FR-021 covers exactly the two agents Coffer already reads native memory
 #: from). A type with no entry here raises `DeliveryUnsupported`.
 _ADAPTERS: dict[AgentType, DeliveryAdapter] = {
     AgentType.CLAUDE_CODE: CLAUDE_CODE_ADAPTER,
@@ -119,7 +119,7 @@ class DeliveryService:
         """Call `fn(*args)`, re-raising `MalformedDeliveryConfig` with the
         file's path attached — a domain function only ever sees text, never
         a path, so this is the one place that can say WHERE parsing failed
-        (spec memory FR-025's "fails loudly" requirement)."""
+        (spec memory FR-021's "fails loudly" requirement)."""
         try:
             return fn(*args)
         except MalformedDeliveryConfig as e:
@@ -195,7 +195,7 @@ class DeliveryService:
         return await self._status_for(agent, cfg)
 
     async def record_fired(self, agent: str) -> None:
-        """Record that `agent`'s hook just fired (spec memory FR-026).
+        """Record that `agent`'s hook just fired (spec memory FR-022).
 
         Called by whatever actually serves the context — never by
         `install()`, `status()`, or anything else in this class — so every

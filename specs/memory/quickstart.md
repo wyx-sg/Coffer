@@ -1,16 +1,16 @@
 # Quickstart — Memory
 
-Coffer reads each agent's own memory, never writes it, and hands every agent
-back what the others already learned. You do not file anything here: the
-partitions, the facts and the digests all appear on their own from what your
-agents distilled. What you do is install delivery, and occasionally look. See
-[`spec.md`](./spec.md) and
+Coffer reads each agent's own memory, never writes it, distils it into **notes
+of its own**, and hands every agent the index of that set at session start. You
+do not file anything here: the partitions, the notes and the index all appear
+on their own from what your agents learned. What you do is install delivery,
+and occasionally look. See [`spec.md`](./spec.md) and
 [Aggregate Agent Memory, Never Write It](../../docs/decisions/aggregate-agent-memory-never-write-it.md).
 
 ## Nothing to create
 
-A **partition** — one per project, plus one named `global` — is created by an
-aggregation pass, not by you. The pass runs on the daemon's own interval and
+A **partition** — one per repository, plus one named `global` — is created by
+an aggregation pass, not by you. The pass runs on the daemon's own interval and
 starts one immediately when the daemon comes up, so on a machine with a
 registered agent there is usually something to look at already:
 
@@ -25,63 +25,89 @@ coffer memory sync
 ```
 
 That reads every **registered and enabled** agent's native memory, skips any
-source file whose content has not changed, and writes the facts into their
-partitions. It never touches an agent's own memory files. If one agent's
-format has changed under Coffer, that agent's failing sources are reported by
-path and the other agent's pass still completes.
+source file whose content has not changed, and writes what it read — verbatim —
+into each partition's hidden `.raw/`. It never touches an agent's own memory
+files. If one agent's format has changed under Coffer, that agent's failing
+sources are reported by path and the other agent's pass still completes.
+
+**A partition is a repository, not a directory.** A worktree, a second clone
+and the main checkout all contribute to one partition; a working directory that
+is not inside a repository at all — a dated scratch folder a session happened
+to run in — gets no partition, and what was learned there is judged on its
+merits by the distil pass and either kept in `global` or not kept.
 
 ## Looking at what is there
 
 ```bash
-coffer memory facts coffer                    # every fact in the `coffer` partition
-coffer memory facts global
-coffer memory fact coffer python-lockfile     # one fact: body, origins, conflicts
+coffer memory notes coffer                     # every note in the `coffer` partition
+coffer memory notes global
+coffer memory note coffer python-lockfile      # one note: body and the entries behind it
+coffer memory retired coffer                   # what was retired, and why
 coffer memory partitions --json
 ```
 
-`fact` prints the fact's own words plus each origin — which agent, and the
-absolute path of the native file it came from — so a fact that looks wrong is
-always traceable back to the thing that said it.
+`note` prints Coffer's own text plus each origin — which agent, and the
+absolute path of the native file it came from — so a note that reads wrong is
+always traceable back to the thing that said it. The note is a **paraphrase**;
+the agent's own words are in `.raw/`, which is what the origins point at.
 
 A partition is also just a folder, and you can read it as one — the same two
 verbs `coffer knowledge` uses:
 
 ```bash
-coffer memory ls coffer                       # the partition's own directory
-coffer memory read coffer facts/python-lockfile.md
-coffer memory read coffer README.md --json    # paths for an editor to open
+coffer memory ls coffer                        # the partition's own directory
+coffer memory read coffer notes/python-lockfile.md
+coffer memory read coffer MEMORY.md --json     # paths for an editor to open
 ```
 
-`ls` prints the whole tree rather than one level, because a partition is two
-levels deep by construction: a `README.md` naming the project root, and a
-`facts/` folder holding one Markdown file per fact. Both commands are
-read-only — everything under `~/.coffer/memory/` is derived, so an edit here
-would survive only until the next sync.
+A partition holds four things:
 
-The files themselves are plain Markdown on your own disk, laid out as
-[`data-model.md`](./data-model.md) describes, so `ls ~/.coffer/memory/coffer/facts/`
+| | |
+|---|---|
+| `MEMORY.md` | the index — one line per note, and what a session is given |
+| `notes/` | Coffer's own notes, one topic per file |
+| `RETIRED.md` | what was retired and why |
+| `.raw/` | what was read out of the agents, verbatim and hidden |
+
+Everything under `~/.coffer/memory/` is derived, so all of it is read-only
+through Coffer: an edit here would survive only until the next pass. The files
+are plain Markdown on your own disk, so `ls ~/.coffer/memory/coffer/notes/`
 works too. The web UI presents a partition as a file tree with a read-only
-preview beside it; there is no in-app editor, because the whole tree is
-derived and an edit would survive only until the next pass.
+preview beside it; there is no in-app editor, for the same reason.
 
-## Merging duplicates and surfacing contradictions
+## Turning what was read into notes
 
-The **organise** pass merges what two agents said twice, marks a fact
-superseded when a later one contradicts it, flags a pair it cannot settle, and
-rewrites the partition's `summary.md` digest. It runs unattended too, and you
-can run it over one partition by hand:
+The **distil** pass is where the layer earns its keep. It reads the entries
+aggregation left under `.raw/` and, for each one, does exactly one of four
+things: folds it into a note that already covers the subject, opens a new note,
+retires a note it contradicts, or keeps nothing from it. It runs unattended
+too, and you can run it over one partition by hand:
 
 ```bash
-coffer memory organise coffer
+coffer memory distil coffer
 ```
+
+It is what merges what two agents said twice. That merge is a judgement about
+**meaning**, not about words: Claude Code and Codex never phrase anything the
+same way, so the literal comparison the previous design used matched nothing at
+all — 378 facts, zero merges.
 
 Only one pass per partition may run at a time. A second request while one is in
 flight is refused rather than queued — the pass rewrites the whole directory,
-so two of them are two writers, not one faster organise.
+so two of them are two writers, not one faster pass.
 
 With no internal connection configured the pass still produces a usable
-digest, mechanically: facts grouped by type, newest first, one line each. What
-it loses is the merging and the supersession, not the feature.
+partition, mechanically: each raw entry becomes a note of its own and the index
+is written from their frontmatter. What you lose is the merging, the rewriting
+and the retirement — thinner, not absent.
+
+### Why retirement is written down
+
+A retired note leaves `notes/` and gains a record in `RETIRED.md` saying what
+replaced it and why. That file is not a bin. The material the note was built
+from still lives in your agent's own memory, so **without the record the next
+pass would simply re-open the note the last one removed**. `RETIRED.md` is part
+of every pass's input, which is what makes a removal stick.
 
 ## Scoping a partition
 
@@ -96,6 +122,12 @@ coffer scope set memory:coffer --agents claude-code
 coffer scope clear memory:coffer            # back to every agent
 ```
 
+Scope governs **what Coffer serves**, not what a process on your machine can
+open. Delivery hands an agent an absolute directory path, and an agent holding
+a path can read the file. That is the same thing spec
+[knowledge](../knowledge/spec.md) says about collections, and it is stated
+rather than implied.
+
 Deleting a partition goes through the Resource framework, not a memory route,
 so it runs the same lifecycle, audit and cascade as any other resource — and
 takes the directory with it:
@@ -105,7 +137,9 @@ coffer resource delete memory:coffer
 ```
 
 Deleting it is safe in the sense that matters: the tree is derived, so the next
-sync rebuilds it from the agents' own files.
+sync and distil rebuild it from the agents' own files. What comes back covers
+the same subjects, in wording that may differ — the notes are a distillation,
+not a copy.
 
 ## Installing delivery
 
@@ -122,12 +156,12 @@ The entry carries Coffer's own marker, so installing twice leaves one entry and
 removing takes out only Coffer's — every hook you or another tool wired up on
 the same event is left exactly as it was.
 
-Claude Code gets it on `SessionStart`. Codex has no session-start event, so it
-gets its earliest per-session event with a once-per-session guard: the digest
-arrives once rather than on every prompt.
+Claude Code gets it on `SessionStart`. Codex gets its earliest per-session
+event with a once-per-session guard, so the index arrives once rather than on
+every prompt.
 
 **A channel-driven turn needs none of this.** Coffer composes that turn's
-system prompt itself, so the digest travels with it and there is nothing to
+system prompt itself, so the index travels with it and there is nothing to
 install.
 
 ### Has it actually run?
@@ -147,17 +181,24 @@ absence of a fire — the log answers it instead.
 
 ## What an agent sees
 
-At session start, a few hundred tokens:
+The **whole index** of this repository's partition, plus what is known about
+you, plus the absolute path of the directory the bodies live in:
 
-- **L0**, always — who you are, what this project's memory holds, and how to
-  ask for more.
-- **L1**, when it fits the budget — the current project's digest, one line per
-  fact.
+```
+## Coffer memory
+Known about you:
+- **Reply in Chinese** (`reply-in-chinese.md`) — this project's conversations are answered in 简体中文.
+...
+Project 'coffer' — /Users/you/WorkEnv/AI/Coffer
+- **Worktree development** (`worktree-development.md`) — always develop in a git worktree; a shared checkout is edited by other sessions concurrently.
+...
+Bodies are files: read /Users/you/.coffer/memory/coffer/notes/<name>.md
+```
 
-The payload is bounded by an explicit token budget, spent on `global` facts
-about you first and then this project's most recent. When facts are left out it
-says how many and how to reach them. You can see exactly what an agent would
-get:
+It names no tool, because it does not need one: every agent that receives this
+reads files already — including a channel-driven turn, which drives a local
+Claude Code or Codex rather than answering from the daemon. You can see exactly
+what an agent would get:
 
 ```bash
 coffer memory context --agent claude-code --cwd "$PWD"
@@ -167,17 +208,22 @@ This is the same command the installed hook runs, which is why it fails
 silently by design: if the daemon is not running or is slow to answer, it
 prints nothing and exits 0 rather than breaking a real session.
 
-- **L2**, on request — `coffer__recall`, the one MCP tool this layer adds:
+A ceiling applies, sized for an index rather than for a handful of lines. When
+it binds, this repository's lines are kept in preference to `global`'s, the
+oldest go first, and the payload says how many were dropped and which directory
+holds them — a small loss, because every dropped line is still a file.
+
+### Finding a note in another project
 
 ```
 coffer__recall(query: "unreachable internal mirror")
 ```
 
-It takes a word or phrase, spans only the partitions the calling agent is
-scoped to, and returns the matching facts **whole**, with their origins.
-Matching is a **case-insensitive literal substring** scan over each fact's
-body, title and description — no score, no mode, no ranking — so give it a
-distinctive phrase rather than a whole question. It needs no internal
+The one MCP tool this layer adds, and it is a **locator**: it answers with the
+absolute paths of the notes that match, and you read the file. Use it for a
+partition your session was *not* opened in — this one's whole index is already
+in front of you. Matching is a case-insensitive literal substring scan, so give
+it a distinctive word or phrase rather than a question. It needs no internal
 connection and sends nothing anywhere.
 
 There is no `remember` tool. An agent records something by recording it the way
@@ -185,7 +231,7 @@ it already does; Coffer reads that on its next pass.
 
 ## The REST surface
 
-Everything above is also `/api/v1/memory/*` — eleven routes, specified in
+Everything above is also `/api/v1/memory/*`, specified in
 [`contracts/api.openapi.yaml`](./contracts/api.openapi.yaml). Partition
 deletion is not among them: it is the kind-agnostic
 `DELETE /api/v1/resources/memory/{name}`.
