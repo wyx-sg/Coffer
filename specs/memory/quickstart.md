@@ -72,7 +72,7 @@ rewrites the partition's `summary.md` digest. It runs unattended too, and you
 can run it over one partition by hand:
 
 ```bash
-coffer memory organize coffer
+coffer memory organise coffer
 ```
 
 Only one pass per partition may run at a time. A second request while one is in

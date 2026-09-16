@@ -96,7 +96,7 @@ A change is "done" only when **all** of the following hold:
 - The relevant `spec.md` is updated to match the code.
 - Acceptance scenarios in `spec.md` cover the new behavior and pass.
 - `make verify` passes locally and in CI.
-- File-size limits hold (see `agents/stack.md`).
+- File-size limits hold (see `.agents/stack.md`).
 - Architectural boundaries are not violated.
 
 ## Governance
@@ -146,7 +146,7 @@ change respects (or formally amends) them.
 > Architecture constraint. Motivation: it wrote the layers as
 > `surfaces → application → domain → infrastructure`, which reads as `domain`
 > importing `infrastructure` — the one edge the very next sentence forbids, and
-> the opposite of what [`agents/stack.md`](../../agents/stack.md) states
+> the opposite of what [`.agents/stack.md`](../../.agents/stack.md) states
 > ("`infrastructure` adapts to ports defined in `application`") and of what the
 > import-linter contracts enforce (Contract 3: `domain` imports nothing;
 > Contract 2b: `application` does not import `infrastructure`). Current

@@ -38,7 +38,7 @@ class AdapterCallbacks:
     on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
     # A non-message event about the bot's own standing in a chat (removed from a
     # group, group turned external), and the platform's own stop control being
-    # pressed (FR-063). Both optional exactly like ``on_callback``: transports
+    # pressed (FR-048). Both optional exactly like ``on_callback``: transports
     # and test fakes that never emit one leave it unset, and adapters skip the
     # call when it is ``None``.
     on_lifecycle: Callable[[InboundLifecycle], Awaitable[None]] | None = None
@@ -46,7 +46,7 @@ class AdapterCallbacks:
 
 
 class LiveText(Protocol):
-    """A surface the core can keep updating while a turn runs (FR-037).
+    """A surface the core can keep updating while a turn runs (FR-039).
 
     One handle == one message that grows in place. ``text`` is ALWAYS the full
     accumulated snapshot, never a delta: the transport underneath may render
@@ -121,8 +121,8 @@ class ChannelAdapter(Protocol):
         ``chat_id`` from a direct one (SeaTalk's group/DM APIs differ; Telegram
         has one path), ``thread_id`` threads the message, ``reply_to_message_id``
         attaches it as a platform-level reply so a busy group can tell which
-        question an answer belongs to (FR-068), and ``ephemeral`` asks for it to
-        be shown only to that member (FR-064) — never a guarantee, since a
+        question an answer belongs to (FR-053), and ``ephemeral`` asks for it to
+        be shown only to that member (FR-049) — never a guarantee, since a
         platform that refuses delivers an ordinary message instead.
         """
         ...
@@ -130,7 +130,7 @@ class ChannelAdapter(Protocol):
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> LiveText | None:
-        """Open a surface the core can keep updating for this turn (FR-037), or
+        """Open a surface the core can keep updating for this turn (FR-039), or
         ``None`` when this transport has none — the caller then falls back to
         sending the finished reply. Only called when the transport declares
         ``capabilities.supports_live_text``; the mechanism (edit vs streaming)
@@ -173,7 +173,7 @@ class ChannelAdapter(Protocol):
         ...
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
-        """Set an emoji reaction on ``message_id`` (FR-036: 👀 on receipt, ✅ on
+        """Set an emoji reaction on ``message_id`` (FR-038: 👀 on receipt, ✅ on
         completion). Only called when the transport declares
         ``capabilities.supports_reactions`` — others may raise; the core never
         reaches them (SeaTalk uses its typing signal for the same receipt cue).
@@ -211,7 +211,7 @@ class ChannelBinding:
     default_agent: str
     default_agent_config: dict[str, Any] | None
     adapter: ChannelAdapter
-    # Group inbound gating (FR-035), sourced from the channel config.
+    # Group inbound gating (FR-037), sourced from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
     # The channel's framework-level ``scope`` off the resource row (ADR
@@ -286,7 +286,7 @@ class ChannelPeerRepoPort(Protocol):
 class ChannelThreadConversation:
     """The per-thread conversation binding (one row in
     ``channel_thread_conversations``): conversation identity is keyed by
-    ``(resource_id, chat_id, thread_id)`` (FR-032), not by the peer alone.
+    ``(resource_id, chat_id, thread_id)`` (FR-033), not by the peer alone.
 
     ``thread_id=""`` is the DM (or a group's main chat); each thread in a group
     is an independent row with its own active conversation and its own sticky
@@ -306,7 +306,7 @@ class ChannelThreadConversation:
 
 
 class ChannelThreadConversationRepoPort(Protocol):
-    """Persistence for per-thread conversation bindings (FR-032).
+    """Persistence for per-thread conversation bindings (FR-033).
 
     The source of truth for driving a turn: which conversation a
     ``(resource_id, chat_id, thread_id)`` resolves to, and the sticky agent it
@@ -382,7 +382,7 @@ class ContextFetchPort(Protocol):
     ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
         """Return the thread's ``(text items, downloaded attachments)``: the
         flattened text of each thread message plus the images/files those
-        messages carry, already fetched to local paths (FR-029) so an in-thread
+        messages carry, already fetched to local paths (FR-030) so an in-thread
         @mention reaches the turn with the real pictures, not dead file links.
         Degrades to ``([], ())`` on any error."""
         ...

@@ -7,7 +7,7 @@
 //
 // Every `path` here is RELATIVE to the knowledge root (`shopee/account/gw.md`).
 // The two ABSOLUTE paths — `file_path` and `folder_path` on a read — exist only
-// so the viewer can hand them to the OS file actions (FR-062).
+// so the viewer can hand them to the OS file actions (FR-036).
 //
 // The catalogue, file and tidy shapes are the knowledge contract's generated
 // schemas (`specs/knowledge/contracts/api.openapi.yaml` → `generated/knowledge.ts`)
@@ -48,7 +48,7 @@ export interface CollectionListOut {
 
 /** A Markdown file at the listed level, with its frontmatter metadata. */
 
-/** One level of the catalogue — the tree descends a level per request (FR-021). */
+/** One level of the catalogue — the tree descends a level per request (FR-013). */
 export type TreeOut = Schemas["TreeOut"];
 
 /**

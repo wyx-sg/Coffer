@@ -53,7 +53,7 @@ Coffer:
 5. Audits `resource_created`.
 
 No model is chosen here. The model is picked where it is used — the per-agent
-binding, the internal-engine selector, or the conversation.
+binding, the conversation, or Coffer's own engine settings.
 
 ## Reuse an existing credential
 
@@ -187,11 +187,11 @@ passes run on:
 coffer provider internal-default local-ollama
 ```
 
-The model those passes use is a separate global setting
-(`PUT /api/v1/internal-engine-config`), not a field on the connection; changing
-the connection drops a model the new one does not curate rather than aiming
-Coffer at a model that endpoint never heard of. With no connection marked, the
-internal passes are a clean no-op.
+That flag is where this spec stops. Which model those passes run on, what they
+are allowed to do unattended, and what happens to the model when you change the
+connection are all in
+[internal-engine's quickstart](../internal-engine/quickstart.md). With no
+connection marked, every internal pass is a clean no-op.
 
 ## List and inspect
 

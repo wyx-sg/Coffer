@@ -34,14 +34,14 @@ MARKDOWN_SUFFIX = ".md"
 
 def _visible(entry: pathlib.Path) -> bool:
     """Excludes any dot-prefixed entry — ``.history/`` and ``.raw/`` included,
-    with nothing naming either specifically (FR-005, FR-035)."""
+    with nothing naming either specifically (FR-005, FR-024)."""
     return not entry.name.startswith(".")
 
 
 def _is_content(name: str) -> bool:
     """Whether a file name is knowledge rather than a folder's own description.
 
-    ``README.md`` describes the directory it sits in (FR-013). Listing it as
+    ``README.md`` describes the directory it sits in (FR-010). Listing it as
     content would put a folder's blurb in the same list as the files it
     introduces, and counting it would inflate every count by one.
     """
@@ -70,7 +70,7 @@ def count_files(directory: pathlib.Path) -> int:
 def readme_description(collection: str) -> str:
     """A collection's one-line description: its README's first paragraph.
 
-    Deliberately read from the file rather than stored (FR-013) — the person
+    Deliberately read from the file rather than stored (FR-010) — the person
     browsing the folder must be able to see and change it in place.
     """
     readme = paths.readme_path(collection)
@@ -240,7 +240,7 @@ def delete_file(relpath: str) -> None:
 
 
 def remove_raw_original(relpath: str) -> None:
-    """Remove the ``.raw/`` original behind a converted file, if any (FR-035).
+    """Remove the ``.raw/`` original behind a converted file, if any (FR-024).
 
     ``.raw/`` mirrors a converted file's directory structure but keeps the
     original's own extension, not ``.md`` (see ``paths.raw_path``), so the
@@ -266,7 +266,7 @@ def archive(relpath: str) -> pathlib.Path:
     """Copy a file's current contents into its collection's ``.history/``.
 
     Called before tidy overwrites or merges anything: the pass runs with no
-    review step, so this copy is the entire safety net (FR-050).
+    review step, so this copy is the entire safety net (FR-030).
     """
     source = paths.resolve(relpath)
     if not source.is_file():

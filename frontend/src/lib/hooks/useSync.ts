@@ -153,7 +153,7 @@ export function useRebuildFromRemote() {
  * an ordinary local change the NEXT round publishes — which is why this
  * invalidates everything a round can move, exactly as running one does.
  *
- * No `onError` toast, against the default (agents/frontend.md §5): this is
+ * No `onError` toast, against the default (.agents/frontend.md §5): this is
  * only ever reached from a ConfirmDialog, which renders the failure in place
  * and stays open so it can be read and retried. A toast as well would report
  * the same refusal twice.

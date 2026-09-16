@@ -29,13 +29,23 @@ export const GENERATED_DIR = path.join(FRONTEND_ROOT, "src", "lib", "api", "gene
  * generated module mirrors it: `generated/<id>.ts`, i.e.
  * `generated/channels/telegram.ts`. Always spell an id with forward slashes —
  * `specPath()` splits on them so the same list works on Windows.
+ *
+ * `memory` is the one contract under `specs/` deliberately left out: its
+ * client (`src/lib/api/memory.ts`) reads hand-written wire types from
+ * `memoryTypes.ts`, so generating a module for it would produce an orphan
+ * nothing imports. Add it the day that client switches to generated types.
  */
 export const CONTRACTS = [
-  "mcp-gateway",
   "agent-registry",
   "channels",
+  "chat",
+  "credentials",
+  "daemon",
+  "internal-engine",
   "knowledge",
+  "mcp-gateway",
   "provider-switching",
+  "resource-framework",
   "skill-manager",
   "vault-sync",
 ];

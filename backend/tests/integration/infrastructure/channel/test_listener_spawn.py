@@ -74,7 +74,7 @@ def test_listener_command_resolves_module_entrypoint_for_source_installs() -> No
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="the callback listener answers the verification handshake"
+    spec="channels/seatalk", scenario="the callback listener answers the verification handshake"
 )
 async def test_spawned_listener_answers_verification_handshake(home: Path) -> None:
     port = free_port()

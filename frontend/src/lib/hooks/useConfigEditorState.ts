@@ -49,8 +49,9 @@ export function useConfigEditorState(name: string) {
   const file = useAgentConfigFile(name, selectedChild || isDirSelected ? null : selectedKey);
   const child = useAgentConfigChild(name, selectedKey ?? "", selectedChild ?? "");
 
-  // The curated allowlist (FR-014 / User Story 7), filtered to entries that
-  // exist on disk — not-yet-created files and empty directories are hidden.
+  // The curated allowlist (spec agent-registry FR-010 / User Story 7), filtered
+  // to entries that exist on disk — not-yet-created files and empty directories
+  // are hidden.
   const allFiles = visibleConfigFiles(files.data ?? []);
 
   const activeQuery = selectedChild ? child : file;

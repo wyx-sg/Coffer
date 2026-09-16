@@ -24,7 +24,7 @@ vi.mock("@/lib/api/chat", () => ({
   },
 }));
 
-// onError → toast is the default for every mutation (agents/frontend.md §5):
+// onError → toast is the default for every mutation (.agents/frontend.md §5):
 // a failed mutation must announce itself, not fail silently. Spy the toast.
 const errorToast = vi.fn();
 vi.mock("@/components/ui/toast", async (importOriginal) => {

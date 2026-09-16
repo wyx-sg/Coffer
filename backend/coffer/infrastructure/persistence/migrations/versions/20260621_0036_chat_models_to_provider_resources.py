@@ -91,10 +91,11 @@ def upgrade() -> None:
         .all()
     )
 
-    # Single internal-default invariant (FR-021: normalise on import). The legacy
-    # registry kept at most one is_default row via the app layer, but the table
-    # had no UNIQUE guard — so if a divergent DB holds >1, keep only the
-    # most-recently-updated as internal_default (ISO timestamps sort lexically).
+    # Single internal-default invariant (spec provider-switching FR-024:
+    # normalise on import). The legacy registry kept at most one is_default row
+    # via the app layer, but the table had no UNIQUE guard — so if a divergent
+    # DB holds >1, keep only the most-recently-updated as internal_default
+    # (ISO timestamps sort lexically).
     default_name: str | None = None
     latest = ""
     for row in rows:

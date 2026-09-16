@@ -40,7 +40,10 @@ async def test_status_false_when_absent(agent_bundle, tmp_path, monkeypatch):
     assert st.command is None
 
 
-@pytest.mark.acceptance(spec="agent-registry", scenario="install Coffer's MCP into an agent")
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="install Coffer's MCP into an agent",
+)
 async def test_install_claude_writes_entry_with_backup_and_audit(
     agent_bundle, tmp_path, monkeypatch
 ):
@@ -53,7 +56,7 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert st.installed is True
     assert st.command == SHIM
     data = json.loads(claude_json.read_text())
-    # Agent Registry FR-019 (amended): install threads the agent's own name through
+    # spec agent-registry FR-015 (amended): install threads the agent's own name through
     # as `--agent <name>` so the shim self-reports its identity at handshake.
     assert data["mcpServers"]["coffer"] == {"command": SHIM, "args": ["--agent", "cc"]}
     # Untouched neighbouring state preserved; prior file backed up.
@@ -67,7 +70,10 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert rows[0].details.get("command") == SHIM
 
 
-@pytest.mark.acceptance(spec="agent-registry", scenario="install Coffer's MCP into an agent")
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="install Coffer's MCP into an agent",
+)
 async def test_install_codex_writes_toml(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     await _register_codex(agent_bundle, tmp_path)

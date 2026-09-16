@@ -223,7 +223,7 @@ async def test_owner_mention_in_a_thread_folds_fetched_history_into_the_turn(
 async def test_thread_image_reaches_the_turn_as_an_attachment(
     env: ChannelEnv, tmp_path: Any
 ) -> None:
-    """FR-029: when the @mention lands inside a thread, an image the thread's
+    """FR-030: when the @mention lands inside a thread, an image the thread's
     own messages carry (downloaded by the transport's ``fetch_thread``) is
     merged into the turn's attachments so it reaches the agent — even when the
     @mention itself carries no text of its own, which must still drive a turn."""
@@ -341,12 +341,12 @@ async def test_dm_still_pairs_and_drives_a_turn(env: ChannelEnv) -> None:
 
 
 # ---------------------------------------------------------------------------
-# FR-037: the turn's first typing receipt is routed by chat kind
+# FR-039: the turn's first typing receipt is routed by chat kind
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a group turn is acknowledged by typing in the group"
+    spec="channels/seatalk", scenario="a group turn is acknowledged by typing in the group"
 )
 async def test_group_turn_types_into_the_group_thread_not_the_dm_endpoint(
     env: ChannelEnv,

@@ -72,7 +72,7 @@ coffer agent edit codex-work --config-dir /opt/codex-work-v2
 ```
 
 `edit` is also where the model an agent answers with is bound — the binding
-lives on the agent, not on the connection (spec provider-switching FR-009):
+lives on the agent, not on the connection (FR-031):
 
 ```bash
 coffer agent edit codex-work --model gpt-5-codex
@@ -279,6 +279,37 @@ single-session read, secret-scrubbed, capped per turn and paged. Nothing is
 written and nothing is retained — a cold parse may just be slower than a warm
 one.
 
+## See what an agent can be put on
+
+```bash
+curl -s -H "X-Coffer-Token: $COFFER_TOKEN" \
+  http://127.0.0.1:8000/api/v1/agent-providers/claude_code/models | jq
+```
+
+```json
+{
+  "models": [
+    {
+      "id": "opus",
+      "label": "Claude Opus 5",
+      "description": "Most capable",
+      "efforts": ["low", "medium", "high"],
+      "default_effort": null
+    }
+  ]
+}
+```
+
+Every entry is read back from the installed agent on the spot — Coffer writes no
+model list down anywhere, so a model released after Coffer shipped shows up
+without a Coffer release (FR-032/FR-033). Where an entry comes from is per
+type: see `agent-registry/claude-code` and `agent-registry/codex`. If one source
+is unavailable — the CLI is not installed, the agent is not signed in — you lose
+exactly that source's entries and the request still succeeds. The reasoning
+levels travel beside the id, never folded into it, so a model with four levels
+is still one row (FR-036); an agent whose runtime publishes no default reports
+`null` rather than guessing one (FR-038).
+
 ## Install Coffer's MCP into an agent
 
 Wire Coffer's aggregated MCP server into an agent in one command:
@@ -300,7 +331,7 @@ web Agents page. Restart your agent afterward to pick up Coffer's tools.
 
 - Each agent is stored as a Resource of kind `agent` in Coffer's SQLite
   database, identified by `agent:<name>`. The kind-agnostic Resource framework
-  (introduced in spec mcp-gateway) provides CRUD, validation, and audit.
+  (spec resource-framework) provides CRUD, validation, and audit.
 - Audit events are recorded for every add / edit / remove and queryable from
   `coffer audit list`.
 - The agent's `<config_dir>/skills` becomes the target directory used by future

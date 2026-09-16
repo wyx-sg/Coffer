@@ -1,4 +1,4 @@
-"""The frozen daemon's sidecar deployment (spec mcp-gateway FR-026).
+"""The frozen daemon's sidecar deployment (spec daemon FR-027).
 
 The desktop shell used to place these binaries in ``~/.coffer/bin``; the daemon
 does it now. Each build lands in its own ``<version>/`` directory and the public
@@ -118,7 +118,7 @@ def test_legacy_in_place_binary_forces_a_deploy(tmp_path: Path) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="a frozen daemon deploys its sibling binaries on start",
 )
 def test_deploy_is_atomic_executable_and_reached_by_the_public_name(tmp_path: Path) -> None:
@@ -207,7 +207,7 @@ def _frozen_at(monkeypatch: pytest.MonkeyPatch, bundle: Path, home: Path) -> Non
 
 
 def test_no_op_when_not_frozen() -> None:
-    """A source install already has these on PATH via pip (FR-018)."""
+    """A source install already has these on PATH via pip (spec daemon FR-024)."""
     assert deploy_frozen_sidecars() == []
 
 

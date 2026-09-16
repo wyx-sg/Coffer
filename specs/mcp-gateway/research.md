@@ -13,11 +13,10 @@ build-time tooling decisions.
 | `sqlalchemy[asyncio]` | `>=2.0,<3.0`                            | Async ORM matches FastAPI's async story; SQLAlchemy 2.0 has cleaner typed declarative. Considered raw `sqlite3` + handwritten queries — rejected because four kinds × CRUD + retention + audit would be enough hand-written SQL to justify an ORM.                                                                                                         |
 | `aiosqlite`           | `>=0.20`                                | Async SQLite driver SQLAlchemy uses under the hood for async sessions.                                                                                                                                                                                                                                                                                     |
 | `alembic`             | `>=1.13`                                | Schema migrations. Considered code-managed schema (call `Base.metadata.create_all`) — rejected because the constitution requires schema evolution to be reviewed in PRs and reversible.                                                                                                                                                                    |
-| `keyring`             | `>=25.0`                                | OS keychain access. Only `infrastructure/credentials/` imports this (Contract 4).                                                                                                                                                                                                                                                                          |
 | `httpx`               | `>=0.27`                                | Already a dev dep; promote to runtime. Used for HTTP MCP upstreams and (in tests) the in-process FastAPI test client.                                                                                                                                                                                                                                      |
 | `typer`               | `>=0.12`                                | CLI framework. Considered Click — Typer wraps Click and adds Pydantic-friendly type-hint-driven argument parsing, which matches the existing FastAPI/Pydantic code style.                                                                                                                                                                                  |
 | `rich`                | `>=13.7`                                | CLI output rendering (Typer recommends it; tables + tree views needed by `coffer mcp list`).                                                                                                                                                                                                                                                               |
-| `structlog`           | `>=24.1`                                | Structured JSON logging. Considered stdlib `logging` + a JSON formatter — rejected because structlog's contextvars integration is needed for the trace-id propagation required by FR-014.                                                                                                                                                                  |
+| `structlog`           | `>=24.1`                                | Structured JSON logging. Considered stdlib `logging` + a JSON formatter — rejected because structlog's contextvars integration is needed for the trace-id propagation the audit trail needs.                                                                                                                                                                  |
 | `mcp`                 | `>=1.0` (official Anthropic Python SDK) | Used for: (a) the test oracle in contract tests; (b) the framing helpers (`stdio_server`, `streamable_http_server`) coffer wraps. Considered handwriting the JSON-RPC framing — rejected because the SDK already implements protocol-level corner cases (cancellation, progress tokens, initialize negotiation) we'd otherwise re-discover.                |
 | `psutil`              | `>=5.9`                                 | PID liveness + command-line verification for orphan subprocess cleanup ([Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md)). Considered POSIX-only `os.kill(pid, 0)` — rejected because the orphan sweep needs to verify the process is actually a coffer-spawned MCP server, not an unrelated process that happens to have reused the PID. |
 
@@ -83,52 +82,11 @@ PRAGMA temp_store = MEMORY;
 
 Set via SQLAlchemy `event.listens_for(engine.sync_engine, "connect")` so they apply to every new connection (WAL mode is per-database but the rest are per-connection).
 
-## Daemon discovery file format
+## The daemon underneath
 
-`~/.coffer/daemon.json` (mode `0600`):
-
-```json
-{
-  "version": 1,
-  "pid": 12345,
-  "port": 8000,
-  "token": "<32-char URL-safe random>",
-  "started_at": "2026-05-20T12:34:56Z",
-  "binary_path": "/Applications/Coffer.app/Contents/.../coffer-daemon"
-}
-```
-
-`version` allows future schema evolution. Clients tolerate unknown fields. Mismatched `version` → client re-reads after a respawn.
-
-Discovery sequence (used by shim, CLI):
-
-1. Open `~/.coffer/daemon.json`; if missing → spawn flow.
-2. Parse JSON; if invalid → backup file + spawn flow.
-3. Check `pid` liveness via `psutil.pid_exists`; if dead → spawn flow.
-4. Verify `psutil.Process(pid).name()` contains `coffer-daemon`; if not → spawn flow (PID has been recycled).
-5. Open a TCP connection to `127.0.0.1:port`; if refused → spawn flow.
-6. Otherwise: connected.
-
-Spawn flow uses `flock` on `~/.coffer/daemon.lock` to serialise concurrent detect-or-spawn races.
-
-## Port allocation
-
-The daemon binds **exactly one** port: `8000` by default, or whatever
-`~/.coffer/daemon-config.json` names (FR-028). It never scans for an
-alternative — a drifting origin breaks a bookmark and silently resets
-origin-keyed browser state, which is the whole reason the port is fixed. When
-that port cannot be bound the daemon refuses to start, naming the process that
-holds it and the commands that resolve it, and exits non-zero.
-
-The original design scanned `8000`–`8009`, first free wins. That scan survives
-in `infrastructure/daemon/port_alloc.py` as `bind_free_socket`, reachable ONLY
-through the `COFFER_PORT_RANGE_*` override — the hook the test suite uses to
-give each of its daemons a disjoint range, well away from the real 8000. A
-user's daemon never reaches it.
-
-The bind hands its already-bound socket's fd to uvicorn rather than closing and
-re-binding, so there is no gap in which another process could steal the port
-after `daemon.json` has published the live token against it.
+Discovery (`~/.coffer/daemon.json`), the detect-or-spawn sequence the shim and
+the CLI run, and the fixed-port bind are spec daemon's; its research records
+their formats. This spec's shim is one of their callers.
 
 ## Test fixtures
 

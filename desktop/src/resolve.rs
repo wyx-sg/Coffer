@@ -7,7 +7,7 @@
 //!      over, never re-spawned
 //!   2. inside the app bundle (`externalBin`, staged by `make desktop`)
 //!   3. `~/.coffer/bin/coffer-daemon` (where the daemon's own frozen-start
-//!      path, spec mcp-gateway FR-026, deploys it)
+//!      path, spec daemon FR-027, deploys it)
 //!   4. `coffer-daemon` on `$PATH`
 //!   5. otherwise: a message telling the user to install the Coffer CLI
 //!
@@ -16,7 +16,7 @@
 //! binary would we spawn — while step 1 answers a different one: whether to
 //! spawn at all. Ask them the other way round and a bundled build opens a
 //! second daemon beside the one the user already started from the CLI. Under
-//! the fixed-port default (spec mcp-gateway FR-028) that second daemon cannot
+//! the fixed-port default (spec daemon FR-011) that second daemon cannot
 //! bind and refuses to start, so the symptom is an error on an app that should
 //! simply have attached to what was already there.
 //!
@@ -111,7 +111,7 @@ pub fn daemon_exe_name() -> &'static str {
 }
 
 /// Step 3's path, given the user's home dir. Pure so the layout is testable.
-/// Mirrors where the daemon's own frozen-start deploy (FR-026) puts it.
+/// Mirrors where the daemon's own frozen-start deploy (spec daemon FR-027) puts it.
 pub fn user_bin_daemon_path(home: &str) -> PathBuf {
     PathBuf::from(home)
         .join(".coffer")
@@ -129,7 +129,7 @@ pub fn daemon_source(app: &AppHandle) -> Result<DaemonSource, String> {
         || read_daemon_info().filter(|(port, _)| daemon_responds_ok(*port)),
         // (2) staged by `externalBin` into the .app.
         || resolve_sidecar(app, &["coffer-daemon"]).ok(),
-        // (3) ~/.coffer/bin, where FR-026's frozen-start deploy puts it.
+        // (3) ~/.coffer/bin, where spec daemon FR-027's frozen-start deploy puts it.
         || {
             let home = env::var("HOME")
                 .ok()
@@ -167,6 +167,7 @@ mod tests {
     /// The one ordering that is correctness rather than preference: a bundled
     /// build must attach to the daemon the user already started, not spawn a
     /// rival for its port.
+    // acceptance(spec = "desktop-app", scenario = "the shell takes over a running daemon instead of spawning a second")
     #[test]
     fn a_running_daemon_wins_over_everything_else_including_the_bundle() {
         let got = resolved(
@@ -242,7 +243,10 @@ mod tests {
 
     /// Later probes must not run once an earlier one hits — steps 2-4 walk the
     /// filesystem and the merged `$PATH`, which an already-attached app should
-    /// never pay for.
+    /// never pay for. The user-visible half is that the three probes that
+    /// answer "which binary would we spawn" never even run, so no spawn can
+    /// follow from them.
+    // acceptance(spec = "desktop-app", scenario = "the shell takes over a running daemon instead of spawning a second")
     #[test]
     fn later_probes_are_not_evaluated_once_a_step_hits() {
         use std::cell::Cell;

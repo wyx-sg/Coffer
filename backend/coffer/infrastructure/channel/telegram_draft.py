@@ -1,4 +1,4 @@
-"""Telegram's own streaming surface: a message draft (FR-062).
+"""Telegram's own streaming surface: a message draft (FR-047).
 
 Before Bot API 10.1 the only way to show a reply growing was to send a message
 and keep rewriting it — which meant a status message to delete afterwards, an
@@ -8,7 +8,7 @@ already delivered to the chat.
 ``sendMessageDraft`` is the purpose-built alternative: a partial message streamed
 to the user as a temporary preview while it is being generated, never persisted,
 and replaced by the real ``sendMessage`` once the text is final. It also carries
-``can_stop``, which makes the platform draw the stop control that FR-063 routes
+``can_stop``, which makes the platform draw the stop control that FR-048 routes
 back into Coffer's interrupt path.
 
 The handle here is therefore *simpler* than the edit-based one it replaces: it
@@ -110,7 +110,7 @@ class TelegramDraftLiveText(LiveTextSurface):
             "chat_id": int(self._chat_id),
             "draft_id": self._draft_id,
             "text": clip_stream_preview(text, DRAFT_TEXT_LIMIT),
-            # FR-063: let the platform draw the stop control. Only safe to
+            # FR-048: let the platform draw the stop control. Only safe to
             # advertise because the stopped_message_generation update is routed
             # to the same interrupt path /stop takes.
             "can_stop": True,
@@ -125,7 +125,7 @@ class TelegramDraftLiveText(LiveTextSurface):
         except Exception as e:
             # An older Bot API server has never heard of this; latch it off so
             # the next turn opens the edit-based surface instead of paying for
-            # a doomed round trip (FR-059).
+            # a doomed round trip (FR-044).
             self._feature.note_failure(self._channel, e)
             raise
 

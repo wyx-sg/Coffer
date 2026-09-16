@@ -7,7 +7,7 @@
 // often wants out of a reply). The highlight.js theme is imported once in
 // main.tsx; the code-block background override lives in index.css
 // (`.markdown-body`). Element styles use semantic tokens + the type scale (no
-// prose plugin is installed); see agents/frontend.md §6.
+// prose plugin is installed); see .agents/frontend.md §6.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy } from "lucide-react";

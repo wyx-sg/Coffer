@@ -126,7 +126,7 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
     "KNOWLEDGE_PATH_UNSAFE": 400,
-    # Ingestion (spec knowledge FR-033..FR-037): named the limit, refused
+    # Ingestion (spec knowledge FR-022..FR-026): named the limit, refused
     # before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
     "KNOWLEDGE_ERROR": 400,

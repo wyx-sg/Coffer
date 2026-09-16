@@ -126,7 +126,7 @@ def _attachment_block(att: Attachment) -> dict[str, Any]:
 
     A supported image becomes a native base64 ``image`` block Claude sees directly;
     the base64 lives only in this outbound request, never the DB. Documents are
-    text-extracted upstream (FR-030) and never reach here, so anything else (audio,
+    text-extracted upstream (FR-031) and never reach here, so anything else (audio,
     a document whose extraction failed, an odd image format, …) becomes a text
     pointer to the on-disk path so the agent can open it with its own tools. An
     unreadable file degrades to a text note rather than failing the turn.
@@ -296,7 +296,7 @@ class ClaudeSdkAgentAdapter:
     ) -> AsyncIterator[AgentEvent]:
         # Claude cannot hear audio: transcribe any voice attachment to text and
         # fold it into the prompt. A document (PDF/office file) is text-extracted
-        # and folded in too (FR-030) so it goes as text, not a vision/binary block;
+        # and folded in too (FR-031) so it goes as text, not a vision/binary block;
         # the rest are materialised as content blocks.
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber

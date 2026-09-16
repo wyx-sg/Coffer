@@ -110,6 +110,10 @@ async def test_get_scope_reports_kinds_without_scope(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="set a resource's reach from the kind-agnostic surface",
+)
 async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_path):
     """The agent allow-list rides the wire as one object."""
     c, engine, svc = await _client(tmp_path)
@@ -170,8 +174,8 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
 
 @pytest.mark.asyncio
 async def test_put_scope_on_knowledge_kind_narrows_the_collection(tmp_path):
-    """A collection IS a Resource so that it can be authorized (spec knowledge
-    FR-012): per-agent scope is the only reason the kind is in the framework."""
+    """A collection IS a Resource so that it can be authorized (spec knowledge FR-009): per-agent
+    scope is the only reason the kind is in the framework."""
     c, engine, svc = await _client(tmp_path)
     async with c:
         await svc.register(
@@ -191,6 +195,10 @@ async def test_put_scope_on_knowledge_kind_narrows_the_collection(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="set a resource's reach from the kind-agnostic surface",
+)
 async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
     """The `agent` kind declares no scope: scope names the agents a resource
     is active for, so an agent scoping itself is meaningless."""

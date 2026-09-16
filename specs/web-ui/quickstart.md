@@ -1,4 +1,4 @@
-# Quickstart — Coffer UI Shell
+# Quickstart — Coffer Web UI
 
 A 5-minute path from a fresh checkout to seeing the redesigned UI in your
 browser, registering an MCP server through the GUI, and watching its first
@@ -28,8 +28,9 @@ make dev
 `make dev` boots two processes:
 
 - The daemon (`coffer daemon start`) on port 8000 — fixed, not scanned; it
-  refuses to start rather than moving if something else holds it (FR-028) —
-  writing `~/.coffer/daemon.json`.
+  refuses to start rather than moving if something else holds it (spec daemon
+  FR-TBD — see [`spec.md`](./spec.md) `## Assumptions`) — writing
+  `~/.coffer/daemon.json`.
 - The Vite dev server on `http://localhost:5173/`. Vite's dev-only
   token-injection plugin (`frontend/vite.config.ts`) reads
   `~/.coffer/daemon.json` and injects the daemon token into the page so

@@ -14,8 +14,10 @@ write fails with "no such table: documents" (reproduced on a real install).
 This revision converges both worlds idempotently: every statement is
 ``IF (NOT) EXISTS``, so a fresh DB (where 0006 already built the schema) is a
 no-op and a legacy-stamped DB gets the unified schema created and the legacy
-tables dropped (FR-019: legacy data is abandoned, files are the source of
-truth — ``reindex`` rebuilds all SQLite state from the markdown files).
+tables dropped — legacy data is abandoned deliberately, because the markdown
+files are the source of truth and ``reindex`` rebuilds all SQLite state from
+them. The requirement that said so belonged to the numbered memory spec of the
+day; it is retired, as are the unified schema and ``reindex`` themselves.
 """
 
 from __future__ import annotations

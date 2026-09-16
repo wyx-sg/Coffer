@@ -213,6 +213,26 @@ absolute path, or an escaping symlink) is rejected with `400`. Files larger
 than 256 KiB come back with `truncated: true`; non-text files come back with
 `binary: true` and empty `content`.
 
+## Let an agent read the library itself
+
+An agent connected to Coffer's MCP endpoint sees two built-in tools beside the
+management surfaces above:
+
+- `coffer__list_skills` — no arguments; returns every registered skill as a
+  `name` and a `description`, so the agent can see what is available without
+  the user pasting a list.
+- `coffer__load_skill` — takes a skill `name`; returns the verbatim text of
+  that skill's `SKILL.md`. It reads that one file in that one master folder and
+  nothing else, and it delivers nothing: a skill an agent loads this way is not
+  linked into its config directory.
+
+Both are reads, recorded in the MCP invocation log rather than the audit log.
+Both are also **global**: the catalogue they answer with is the whole library,
+including skills that are disabled or scoped away from the calling agent. That
+is what ships and it is recorded as a known defect in
+[`spec.md`](./spec.md) `## Assumptions` — a skill's `enabled` flag and scope
+decide **delivery**, not what these two tools will read out.
+
 ## Remove a skill
 
 ```bash

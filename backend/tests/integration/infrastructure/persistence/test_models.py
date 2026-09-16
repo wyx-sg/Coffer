@@ -148,3 +148,30 @@ async def test_retention_policy_check_constraint(tmp_path):
         row = (await s.execute(select(RetentionPolicyModel))).scalar_one()
     assert row.retention_days is None
     await engine.dispose()
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="a second engine settings row is unrepresentable",
+)
+@pytest.mark.asyncio
+async def test_internal_engine_config_refuses_a_second_row(tmp_path):
+    """ "Which settings does the engine use?" must not become a question with
+    two answers — the table itself refuses the second row rather than trusting
+    every writer to remember the singleton is a singleton."""
+    from sqlalchemy.exc import IntegrityError
+
+    from coffer.infrastructure.persistence.models import InternalEngineConfigModel
+
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    async with sm() as s:
+        s.add(InternalEngineConfigModel(id=1, model="m", updated_at=_now()))
+        await s.commit()
+    async with sm() as s:
+        s.add(InternalEngineConfigModel(id=2, model="other", updated_at=_now()))
+        with pytest.raises(IntegrityError):
+            await s.commit()
+    await engine.dispose()

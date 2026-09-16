@@ -211,7 +211,7 @@ async def adopt_mcp_entry(
             actor=actor,
         )
     except ResourceAlreadyExists as e:
-        # Spec FR-028: the conflict response carries a suggested alternative
+        # Spec FR-021: the conflict response carries a suggested alternative
         # name. Derived from the agent's type so it stays stable + readable.
         agent = await agent_svc.get(name)
         agent_type = AgentConfig.model_validate(agent.config).type.value

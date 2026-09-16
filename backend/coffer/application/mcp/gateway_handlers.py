@@ -174,7 +174,7 @@ async def _invoke(
 
     resource = await resources.get(ResourceRef("mcp_server", server_name))
 
-    # Activation scope (FR-020): tools/list already hides a server this
+    # Activation scope (FR-012): tools/list already hides a server this
     # session's scope excludes (gateway._enabled_mcp_servers),
     # but that is only a listing-side filter — nothing on the call-routing
     # path re-checked it, so a caller that already knows (or guesses) a
@@ -193,7 +193,7 @@ async def _invoke(
             status="denied",
             error_message=None,
         )
-        # Same "indistinguishable from a disabled capability" shape FR-020
+        # Same "indistinguishable from a disabled capability" shape FR-012
         # specifies for a hidden server: ToolDisabled, not UpstreamUnavailable
         # (that stays reserved for an upstream that genuinely won't start).
         raise ToolDisabled(f"{server_name!r} is not in scope here")

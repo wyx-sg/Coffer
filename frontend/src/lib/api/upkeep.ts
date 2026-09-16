@@ -1,7 +1,7 @@
 // frontend/src/lib/api/upkeep.ts
 //
 // The one read for "what is this daemon rewriting right now" (`/api/v1/upkeep/
-// runs`, contract `specs/mcp-gateway`).
+// runs`, contract `specs/resource-framework`).
 //
 // An *upkeep pass* is one of the long, model-driven rewrites the vault does to
 // itself: memory's organise over a partition, knowledge's tidy over a
@@ -13,11 +13,11 @@
 // One endpoint answers for every kind, so a page filters the list for its own
 // target rather than each kind carrying a near-identical per-target route.
 //
-// Transport via the shared `call` (agents/frontend.md §4); wire types are the
+// Transport via the shared `call` (.agents/frontend.md §4); wire types are the
 // generated ones.
 
 import { call } from "@/lib/api/call";
-import type { components } from "@/lib/api/generated/mcp-gateway";
+import type { components } from "@/lib/api/generated/resource-framework";
 
 export type UpkeepRunOut = components["schemas"]["UpkeepRunOut"];
 export type UpkeepRunListOut = components["schemas"]["UpkeepRunListOut"];

@@ -4,7 +4,7 @@ supports_live_text → ONE surface the renderer keeps updating for the whole tur
 Telegram's is a message it edits (deleted when the turn ends, the final reply
 sent after it); SeaTalk's is a stream that finishes as the reply itself. A
 transport with neither sends no interim traffic at all. Every turn that ends
-abnormally closes with a compact completion summary (FR-015),
+abnormally closes with a compact completion summary (FR-012),
 capability-agnostic.
 """
 
@@ -140,7 +140,7 @@ async def test_error_turn_ends_with_a_failed_summary() -> None:
     assert adapter.sent[-1] == ("owner", "⚠️ failed · 0 tools · 0.0s")
 
 
-@pytest.mark.acceptance(spec="channels", scenario="an errored turn still delivers what it streamed")
+@pytest.mark.acceptance(spec="chat", scenario="an errored turn still delivers what it streamed")
 async def test_error_turn_still_delivers_what_was_streamed_before_it() -> None:
     # A turn that streamed half an answer and then died (stream_ended, a
     # timeout, a provider error) owes the user that half: it is delivered
@@ -333,13 +333,13 @@ async def test_sentinel_path_with_spaces_is_delivered(tmp_path) -> None:  # type
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="SeaTalk outbound media is delivered into the originating thread",
 )
 async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     tmp_path,  # type: ignore[no-untyped-def]
 ) -> None:
-    """FR-031: a file the agent returns during a group-thread turn is uploaded
+    """FR-032: a file the agent returns during a group-thread turn is uploaded
     back into that same chat_kind + thread — send_media is called with the
     renderer's thread_id and chat_kind, so a generated chart lands in the
     originating thread, not the group main chat."""
@@ -373,12 +373,12 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
 
 
 # ---------------------------------------------------------------------------
-# FR-037: streaming the reply into one editable status message (supports_edit)
+# FR-039: streaming the reply into one editable status message (supports_edit)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/telegram",
     scenario="reply text streams into the editable status message as it arrives",
 )
 async def test_reply_text_streams_into_the_status_message() -> None:
@@ -435,7 +435,7 @@ async def test_streamed_preview_is_clipped_to_the_platform_limit() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/telegram",
     scenario="a slow text-only reply streams into a status message",
 )
 async def test_slow_text_only_reply_opens_and_streams_a_status_message() -> None:
@@ -462,7 +462,7 @@ async def test_slow_text_only_reply_opens_and_streams_a_status_message() -> None
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/telegram",
     scenario="a fast text-only reply opens no status message",
 )
 async def test_fast_text_only_reply_opens_no_status_message() -> None:
@@ -484,12 +484,12 @@ async def test_fast_text_only_reply_opens_no_status_message() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FR-037: typing heartbeat on a supports_typing-only transport (SeaTalk)
+# FR-039: typing heartbeat on a supports_typing-only transport (SeaTalk)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="a supports_typing-only DM keeps the typing indicator alive during a long turn",
 )
 async def test_typing_heartbeat_re_sends_on_a_supports_typing_only_dm() -> None:
@@ -570,7 +570,7 @@ async def test_typing_heartbeat_re_sends_in_a_group_thread_when_group_typing_is_
 
 
 async def test_no_typing_heartbeat_on_a_transport_that_reacts() -> None:
-    """FR-036: a transport with reactions (Telegram) already acked the user's
+    """FR-038: a transport with reactions (Telegram) already acked the user's
     message with 👀 — the heartbeat is gated on the RECEIPT mechanism, so it
     stays off there even in a group where group typing is available."""
     adapter = FakeChannelAdapter(
@@ -653,7 +653,7 @@ async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> Non
 
 
 # ---------------------------------------------------------------------------
-# FR-037: a transport that cannot edit but CAN stream (SeaTalk)
+# FR-039: a transport that cannot edit but CAN stream (SeaTalk)
 # ---------------------------------------------------------------------------
 
 
@@ -813,7 +813,7 @@ def test_the_typing_heartbeat_outpaces_the_indicator_it_refreshes() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FR-070: a group reply opens by @mentioning whoever asked
+# FR-055: a group reply opens by @mentioning whoever asked
 # ---------------------------------------------------------------------------
 
 #: The fake's mention spelling, shaped like SeaTalk's real one so a test reads
@@ -981,7 +981,7 @@ async def test_no_path_mentions_twice_when_tool_progress_opens_the_surface() -> 
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="a sender with no id is mentioned by address instead",
 )
 async def test_a_sender_with_no_id_is_mentioned_by_email_where_the_platform_allows() -> None:

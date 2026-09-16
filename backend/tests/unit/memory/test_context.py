@@ -125,7 +125,7 @@ async def test_composed_context_says_how_many_facts_it_left_out() -> None:
 
 
 async def test_the_pointer_asks_for_the_kind_of_query_recall_can_actually_answer() -> None:
-    """FR-060: recall matches LITERALLY, and its own tool description says so.
+    """FR-027: recall matches LITERALLY, and its own tool description says so.
 
     The pointer is the first thing an agent reads every session, and it used to
     ask for "a natural-language query" — the one shape a case-insensitive
@@ -157,7 +157,7 @@ async def test_the_pointer_asks_for_the_kind_of_query_recall_can_actually_answer
 
 
 async def test_the_budget_is_spent_on_the_most_recent_facts_first() -> None:
-    """FR-051's whole within-partition order, now that pinning is gone.
+    """FR-022's whole within-partition order, now that pinning is gone.
 
     Pinning used to sit in front of recency; the developer's overrides were
     deleted with the per-fact surface, so recency is the only preference left
@@ -267,7 +267,7 @@ def test_composed_context_is_a_frozen_dataclass() -> None:
 # one renderer, two outputs
 # ---------------------------------------------------------------------------
 #
-# FR-050 calls L1 "the partition's digest, one line per fact" — the same
+# FR-021 calls L1 "the partition's digest, one line per fact" — the same
 # concept `summary.md` is made of. These two tests are the guard against the
 # two ever drifting apart again: they render the same facts through
 # `render_digest` and through `compose_context` and demand the fact lines come
@@ -291,7 +291,7 @@ async def test_a_fact_timestamped_only_by_its_source_still_sorts_by_that() -> No
     `digest._recency` falls back to `source_written_at` when `captured_at` is
     absent; this module's did not, so such a fact scored `""` and sorted last
     here while sorting correctly in `summary.md` — the same drift as the line
-    shape, one layer down. Nothing in FR-032 or FR-051 distinguishes the two
+    shape, one layer down. Nothing in FR-019 or FR-022 distinguishes the two
     timestamps, so neither should the code.
     """
     newest_by_source = Fact(

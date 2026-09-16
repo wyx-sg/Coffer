@@ -29,7 +29,7 @@ class RetentionPolicyView:
 
 _logger = logging.getLogger(__name__)
 
-# Result key for the non-table channel-media dir sweep (FR-033).
+# Result key for the non-table channel-media dir sweep (spec channels FR-033).
 MEDIA_RESULT_KEY = "channel_media"
 
 

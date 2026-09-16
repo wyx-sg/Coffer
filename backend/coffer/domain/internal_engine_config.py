@@ -47,7 +47,7 @@ class GlobalInternalEngineConfig:
     ``auto_tidy_enabled`` lives here rather than on a collection because it
     governs the engine, not a directory: it decides whether Coffer's own model
     may rewrite the user's knowledge files on a timer with no review step
-    (spec knowledge FR-051). It ships **off**, so an unattended rewriter is
+    (spec knowledge FR-031). It ships **off**, so an unattended rewriter is
     something the operator switches on rather than something they discover
     running.
 
@@ -74,9 +74,9 @@ class GlobalInternalEngineConfig:
     #: REWRITE here for an operator to consent to.
     auto_aggregate_enabled: bool = True
     aggregate_interval_s: int | None = None
-    #: The organise pass (spec memory FR-030): the model rewrites the derived
-    #: digest, which FR-023 makes reproducible by deleting and re-running, so
-    #: this defaults ON for the same reason.
+    #: The organise pass (spec memory FR-017): the model rewrites the derived
+    #: digest, which spec memory FR-016 makes reproducible by deleting and
+    #: re-running, so this defaults ON for the same reason.
     auto_organise_enabled: bool = True
     organise_interval_s: int | None = None
     #: Tidy's own timer. Its SWITCH is ``auto_tidy_enabled`` above and ships

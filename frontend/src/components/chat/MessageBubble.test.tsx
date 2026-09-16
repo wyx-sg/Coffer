@@ -57,7 +57,7 @@ describe("MessageBubble", () => {
   });
 
   test("renders an attachment chip for a user message with an attachment block", () => {
-    // FR-033: a channel-media attachment reference shows as a compact chip on
+    // FR-034: a channel-media attachment reference shows as a compact chip on
     // the user bubble (filename · mime), never a path.
     render(
       <MessageBubble

@@ -246,7 +246,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     publish_daemon_identity()
 
-    # Frozen builds only; no-op from source (FR-026, see binary_deploy).
+    # Frozen builds only; no-op from source (spec daemon FR-027, see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
     workers = start_background_workers(
@@ -259,7 +259,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         resource_svc=resource_svc,
         audit=audit,
         engine_config=internal_engine_config_svc,
-        provider_service=kinds.provider.service,
+        internal_connection=kinds.provider.internal_connection,
         credential_resolver=credential_resolver,
         db_path=db_path,
         sm=sm,

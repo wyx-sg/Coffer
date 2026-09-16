@@ -74,7 +74,7 @@ def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
     channel media: map each of its ``AttachmentBlock`` references back to an
     ``Attachment`` VO the adapter materialises. Reading them back from history
     (rather than threading a param down) means the reference survives a daemon
-    restart and stays consistent with what the web Chat page shows (FR-033)."""
+    restart and stays consistent with what the web Chat page shows (FR-034)."""
     for msg in reversed(history):
         if msg.role is Role.USER:
             return [
@@ -111,7 +111,7 @@ async def run_turn_task(
     """Async task body: drive the adapter, publish events, persist the result.
 
     The turn's attachments (channel media) are derived from ``history``'s last
-    user message (FR-033) and handed to the adapter, which materialises them in
+    user message (FR-034) and handed to the adapter, which materialises them in
     its own native shape."""
     bus = active.bus
 
@@ -136,7 +136,7 @@ async def run_turn_task(
         turn_attachments = _attachments_from_history(history)
         # Write a ``streaming`` placeholder assistant row BEFORE the first event.
         # A daemon crash mid-turn then leaves a row the startup sweep flips to
-        # ``failed`` (FR-022). It is finalised in place on completion (one row, no
+        # ``failed`` (FR-020). It is finalised in place on completion (one row, no
         # dup). The write runs as a shielded task: a cancellation landing between
         # the row's commit and the id assignment leaves the task running, and the
         # CancelledError handler recovers the id.

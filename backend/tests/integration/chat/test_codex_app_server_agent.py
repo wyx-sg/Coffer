@@ -498,7 +498,7 @@ async def test_cancel_interrupts_and_closes_and_persists_thread():
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="channels", scenario="an agent stream that ends without a terminal is a turn error"
+    spec="chat", scenario="an agent stream that ends without a terminal is a turn error"
 )
 async def test_stream_end_without_terminal_is_a_stream_ended_error():
     # The peer closes its stream without a turn/completed: codex went away
@@ -583,12 +583,16 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
 
 
 # ---------------------------------------------------------------------------
-# FR-030 — a document reaches a path-native agent as extracted text
+# FR-031 — a document reaches a path-native agent as extracted text
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
     spec="channels",
+    scenario="a PDF reaches a path-native agent as extracted text",
+)
+@pytest.mark.acceptance(
+    spec="chat",
     scenario="a PDF reaches a path-native agent as extracted text",
 )
 @pytest.mark.asyncio

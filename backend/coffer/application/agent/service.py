@@ -137,8 +137,9 @@ class AgentService:
         #   config dir moves, so the old links aren't orphaned and the new
         #   dir isn't left empty.
         # - reconcile_skill_delivery: bring a newly registered agent's
-        #   delivered set in line with the delivery predicate (FR-012a) —
-        #   every enabled skill whose scope names this agent.
+        #   delivered set in line with the delivery predicate (spec
+        #   skill-manager FR-012) — every enabled skill whose scope names this
+        #   agent.
         self._on_config_dir_changed = on_config_dir_changed
         self._reconcile_skill_delivery = reconcile_skill_delivery
 
@@ -184,9 +185,9 @@ class AgentService:
             actor=actor,
             allow_lifecycle_kind=True,  # CODE-REG: config dir detected/validated above
         )
-        # Deliver everything this agent is granted right now (FR-012a): every
-        # enabled skill whose scope names it. Per-skill failures are tolerated
-        # inside the hook.
+        # Deliver everything this agent is granted right now (spec skill-manager
+        # FR-012): every enabled skill whose scope names it. Per-skill failures
+        # are tolerated inside the hook.
         if self._reconcile_skill_delivery is not None:
             await self._reconcile_skill_delivery(name)
         return registered

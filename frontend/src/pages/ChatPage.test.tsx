@@ -4,6 +4,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ChatPage } from "./ChatPage";
+import { acceptance } from "@/test/acceptance";
 import type { Conversation } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
 
@@ -156,7 +157,7 @@ describe("ChatPage", () => {
     );
   });
 
-  test("sending the first message in the draft creates a conversation", async () => {
+  acceptance("chat", "the draft creates the conversation on first send", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
@@ -213,7 +214,7 @@ describe("ChatPage", () => {
     expect(chatApiMock.deleteConversation).not.toHaveBeenCalled();
   });
 
-  test("/chat/:id for an archived conversation opens it read-only with a restore CTA", async () => {
+  acceptance("chat", "an archived conversation opens read-only", async () => {
     // P0-3: archived rows are not in the active list — the thread must still
     // open (by-id fetch), read-only, instead of falling through to the draft.
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
@@ -257,7 +258,7 @@ describe("ChatPage", () => {
     expect(await screen.findByRole("textbox", { name: /message input/i })).toBeInTheDocument();
   });
 
-  test("an unknown /chat/:id shows a not-found state, not the silent draft surface", async () => {
+  acceptance("chat", "a stale conversation link says so", async () => {
     // P0-3: a stale deep-link must say so explicitly — typing into the draft
     // here would silently create a NEW conversation.
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });

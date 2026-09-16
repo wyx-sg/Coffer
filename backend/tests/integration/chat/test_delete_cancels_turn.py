@@ -1,4 +1,4 @@
-"""Integration test: deleting a conversation cancels and DISCARDS its turn (FR-022).
+"""Integration test: deleting a conversation cancels and DISCARDS its turn (FR-020).
 
 - The DELETE route forwards ``orchestrator.cancel_turn`` to ``ChatService``.
 - ``delete_conversation``, given ``cancel_turn_fn``, cancels the in-flight turn

@@ -1,4 +1,4 @@
-"""Translating between the two names an agent has (spec channels FR-013).
+"""Translating between the two names an agent has (spec channels FR-010).
 
 A channel's ``default_agent`` is a turn-platform **agent key** — ``claude_code``,
 ``codex`` — because that is what the turn platform routes on

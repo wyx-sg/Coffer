@@ -18,7 +18,7 @@ import type { ChannelStatus, PairingCode } from "@/lib/api/channels";
 // useChannels rides the generic resources API (openapi-fetch client) …
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 
-// onError → toast is the default for every mutation (agents/frontend.md §5):
+// onError → toast is the default for every mutation (.agents/frontend.md §5):
 // a failed pairing-code issue must announce itself, not fail silently.
 const errorToast = vi.fn();
 vi.mock("@/components/ui/toast", async (importOriginal) => {

@@ -1,4 +1,4 @@
-"""Skill-delivery reconciliation for SkillService (FR-012a / FR-025).
+"""Skill-delivery reconciliation for SkillService (FR-012 / FR-019).
 
 Extracted to keep ``service.py`` under the file-size limit. Free functions
 that take the SkillService instance and reach into its (private) attributes —

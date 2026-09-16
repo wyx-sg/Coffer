@@ -1,7 +1,7 @@
 # Feature Specification: MCP Gateway
 
 **Status**: Accepted
-**Scope note**: This spec owns the backend layer — the daemon, MCP gateway, REST API, and `coffer` CLI.
+**Scope note**: This spec owns the MCP gateway — aggregating upstream MCP servers behind one namespaced surface, curating what that surface exposes, and the `coffer mcp` / shim surfaces over it. The kind-agnostic resource lifecycle an `mcp_server` is otherwise managed through, and the audit and retention records it writes into, are spec resource-framework's; the daemon that hosts it is spec daemon's; the secrets an upstream is configured with are spec credentials'.
 **Input**: User description: "Coffer's first feature — an MCP server gateway. Like mcpjungle / metamcp: one MCP client (Claude Code / Codex) connects to coffer; coffer aggregates many upstream MCP servers and re-exposes their tools, resources, and prompts as a single namespaced surface. Coffer will later manage other resource kinds (skills, memory, channels, agents) — design the first feature on top of a generic Resource framework so follow-on kinds plug in cleanly."
 
 ## User Scenarios & Testing
@@ -42,38 +42,7 @@ The developer doesn't want every upstream tool exposed to AI. Some are dangerous
 
 ---
 
-### User Story 3 — Same operations from the command line (Priority: P2)
-
-The developer scripts setup and bulk operations from a terminal — adding servers from a dotfile, automating CI-friendly enable/disable.
-
-**Why this priority**: Coffer's audience is developers. A full CLI is table stakes for scripted workflows and remote machines.
-
-**Independent Test**: From a fresh install, register two servers, toggle several tools, and view audit/invocation logs entirely from the terminal — no GUI needed.
-
-**Covering scenarios**:
-
-- command line covers every visual operation
-- command line surfaces same errors
-
----
-
-### User Story 4 — Auditing & activity logs with retention controls (Priority: P3)
-
-The developer wants to see what happened — when a server was added, when a tool was disabled, what tools were called when — without those logs growing unbounded.
-
-**Why this priority**: Necessary for trust and debugging, but not blocking the gateway's basic operation. Retention defaults are sensible enough that most users never touch them.
-
-**Independent Test**: Make several changes, view audit; run several tool calls, view invocations; change a retention period to a short value, wait for the next cleanup, confirm older entries are gone and newer ones remain.
-
-**Covering scenarios**:
-
-- audit lifecycle changes
-- invocation log records calls without arguments
-- configure retention per log
-
----
-
-### User Story 5 — Find the right tool under aggregation overload (Priority: P2)
+### User Story 3 — Find the right tool under aggregation overload (Priority: P2)
 
 Once a developer has registered many upstream servers, the aggregated surface can exceed 150 tools. A coding agent's tool-selection accuracy degrades sharply past ~30–50 tools, so dumping the whole catalogue into every request both wastes context tokens and makes the agent pick wrong. The developer wants the agent to _search_ the live aggregated catalogue for the few tools that match its current intent and call them directly, instead of reasoning over the entire list.
 
@@ -142,54 +111,49 @@ come from the server that never connected.
 
 ---
 
-### User Story 6 — Install and open Coffer without a source checkout (Priority: P3)
+### User Story 4 — See what the gateway has been called (Priority: P3)
 
-A user who is not working from a Git clone downloads one archive, extracts it, starts the daemon, and runs `coffer open` to land in Coffer's UI in their browser — already authenticated, with no token to paste and no second application to install and keep up to date.
+The developer wants to know which upstream capability was called, when, how
+long it took and whether it worked — without the gateway keeping a copy of what
+was said. That record is the gateway's own; who changed a server's
+configuration, and how long either record is kept, are spec
+resource-framework's.
 
-**Why this priority**: P3 — distribution is the gate that turns a local-dev product into something a teammate or an open-source contributor can try without cloning the repo. It changes nothing about how the gateway itself works.
+**Why this priority**: Necessary for trust and debugging, but not blocking the
+gateway's basic operation.
 
-**Independent Test**: On a clean machine with no Python and no Coffer checkout, download `coffer-cli-<triple>.tar.gz`, verify it against `SHA256SUMS`, extract it, run `coffer daemon start`, then `coffer open` — the browser lands on Coffer's UI already authenticated, and `coffer-mcp-shim` resolves from a fresh shell.
+**Independent Test**: Call a tool several times through an MCP client, then read
+the invocation log from the terminal and confirm every call is there with its
+outcome and no arguments or results.
 
 **Covering scenarios**:
 
-- release tag produces the CLI archive and SHA256SUMS
-- a page served by the daemon is authenticated by the daemon
-- a rebound page is refused before it can read the token
-- a frozen daemon deploys its sibling binaries on start
-
-#### Why Coffer ships both a web UI and a desktop shell
-
-Coffer's UI used to be wrapped in a Tauri desktop shell that supervised the daemon, sat in the system tray, and deployed the shim on every launch. It was retired on 2026-09-09 over **the operating cost of every update**: a desktop update meant a rebuild _plus_ a reinstall, and the built artifact kept drifting from source — twice on record, once from a build made before fetching, once from a separately pinned build directory that made UI bug reports untrustworthy until re-verified against `main`.
-
-**The shell is restored on 2026-09-12**, because that judgement priced the update cost and not the access cost. The shell was also the only thing that made Coffer reachable: without it Coffer is one `127.0.0.1` tab among dozens, with no Dock icon and nothing in Cmd-Tab, and the only route to the UI starts by knowing whether a daemon is running and on which port. That is a fair ask of a CLI user mid-session and an unfair one of anybody else ([The Desktop Shell Returns](../../docs/decisions/desktop-shell-over-a-shared-frontend.md)).
-
-The restored shell is smaller than the one removed, because its two load-bearing jobs stayed where they went. Deploying the sibling binaries remains the daemon's frozen-start path (FR-026) — the shell must not duplicate it, or two processes race to write `~/.coffer/bin/`. Native file actions remain daemon HTTP routes, which a webview reaches exactly as a browser tab does, so the shell reimplements none of them. What is left is the four things a browser cannot do for itself: a window with a Dock icon, a resident tray, detect-or-spawn at launch, and the credential handshake a locally-hosted page has no other way to make (FR-029 – FR-032).
-
-The retirement's failure mode is bounded rather than gone: a stale `.app` can still carry a stale `frontend/dist`. It is bounded to the UI, and the daemon half is made visible by the version-skew check in FR-031. The two hosts consume one `frontend/dist`, so neither can drift from the other.
+- invocation log records calls without arguments
 
 ---
 
 ### Edge Cases
 
-These cases are tracked by integration tests, not by the acceptance audit, except where promoted to `## Acceptance Scenarios` below — tool-name collision, the daemon port conflict, concurrent clients and the mid-session upstream crash each have a scenario of their own down there.
+These cases are tracked by integration tests, not by the acceptance audit, except where promoted to `## Acceptance Scenarios` below — tool-name collision, concurrent clients and the mid-session upstream crash each have a scenario of their own down there.
 
 - **Upstream unreachable on register**: Registration must succeed (config saved); discovery and health report the failure; the server is marked unhealthy until reachable, and there is no silent retry storm.
 - **Upstream crashes mid-call**: The in-flight call returns an error; the server is marked unhealthy; a subsequent call respawns the upstream with bounded retries; the user sees the failure in the invocation log.
-- **Credential missing or master key unavailable**: Registration fails with a message naming the missing credential and pointing the user at the credential setup path. No partial state is persisted. (If ciphertext exists but the master key cannot be resolved, the daemon refuses to start with `MasterKeyMissing` rather than silently lose access.)
+- **Credential missing on register**: Registration fails with a message naming the missing credential and pointing the user at the credential setup path. No partial state is persisted. What "missing" means, and what happens when ciphertext exists but its key cannot be resolved, are spec credentials'.
 - **Duplicate registration**: Registering a server with an existing name in the same kind is rejected with a clear error; partial-write is impossible.
 - **Tool-name collision across servers**: Prevented by the `<server>__<tool>` namespace; never visible to clients.
 - **Tools-only upstream**: An upstream that implements only `tools` and replies with JSON-RPC `-32601` (METHOD_NOT_FOUND) for `resources/list` or `prompts/list` is treated as having no resources / no prompts. The per-server capability view and the aggregate lists return that server's tools with an empty resources/prompts set (HTTP 200), not an error — so the management / Web-UI capability view works for tools-only servers.
-- **Daemon port conflict**: The daemon's port is taken. It refuses to start rather than moving (FR-028), naming the process that holds the port and the commands that resolve it — the same treatment whether the port is the default 8000 or one the user fixed, because silently landing somewhere else is what the fixed port exists to prevent. The chosen port is still written to the discovery file that clients (shim, CLI, desktop shell) read.
-- **Daemon crash**: running shim sessions return a clean error to their MCP clients rather than hanging; a supervising surface can detect the crash and restart the daemon.
+- **Daemon crash**: running shim sessions return a clean error to their MCP clients rather than hanging on a socket that will never answer.
 - **Concurrent clients**: Multiple MCP clients (e.g., Claude Code + Codex at the same time) connect simultaneously without one disturbing the other; each gets an independent upstream subprocess set.
 
 ## Gateway exposure scope ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))
 
 An `mcp_server` resource carries a framework-level `scope` — one allow-list of
 agents, `null` meaning unrestricted (spec vault-sync, "Scope has no machine
-axis, because reach does not travel"); `None` for "every agent" — which the
-gateway consults at its own existing choke point, the per-session capability
-listing. There is no new central gate: scope selects *who* may see a server,
+axis, because reach does not travel"); `None` for "every agent". Its value, its
+validation and the routes that write it are spec
+[resource-framework](../resource-framework/spec.md) FR-004; what this spec adds
+is the enforcement, at the gateway's own existing choke point — the per-session
+capability listing. There is no new central gate: scope selects *who* may see a server,
 never *whether* the process is allowed to start once something past that gate
 asks for it.
 
@@ -233,10 +197,11 @@ asks for it.
   one before widening its scope.
 - **Trust boundary.** Identity is SELF-REPORTED by the shim process at
   handshake, not cryptographically verified — acceptable under the
-  single-user, loopback-only posture (FR-012). Any local process able to
-  open the loopback MCP connection and set `_meta` could claim any agent
-  name; this is documented explicitly rather than implying a stronger
-  isolation boundary than exists.
+  single-user, loopback-only posture the daemon holds (spec daemon: every
+  surface binds loopback and every management call carries a local token). Any
+  local process able to open the loopback MCP connection and set `_meta` could
+  claim any agent name; this is documented explicitly rather than implying a
+  stronger isolation boundary than exists.
 
 `skill` scope is enforced at its own kind's seam (spec skill-manager, delivery),
 and so is every other scoped kind: `channel`, `knowledge`, `memory` and
@@ -247,7 +212,7 @@ narrow.
 
 ## Acceptance Scenarios
 
-Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is referenced by at least one test marked `@pytest.mark.acceptance(spec="mcp-gateway", scenario="…")` (Python) or `acceptance("mcp-gateway", "…", …)` (TypeScript). Coverage is audited by `make verify-acceptance`.
+Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is referenced by at least one test marked `@pytest.mark.acceptance(spec="mcp-gateway", scenario="…")` (Python) or `acceptance("mcp-gateway", "…", …)` (TypeScript). Coverage is audited by `make verify-acceptance`.
 
 ### Scenario: register a stdio MCP server
 
@@ -331,40 +296,13 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Given** a registered server whose capabilities have already been discovered,
 - **When** an upgrade adds a new tool to that server,
-- **Then** the new tool is enabled, the event is recorded in the audit log, and the user can disable it through the per-capability toggle (FR-008).
-
-### Scenario: command line covers every visual operation
-
-- **Given** the daemon is running,
-- **When** the CLI's live command tree is read,
-- **Then** it is **exactly** the reviewed table of every group the composition root registers and every subcommand under each — `daemon`, `open`, `resource`, `scope`, `audit`, `retention`, `mcp`, `credentials`, `agent`, `channel`, `skill`, `knowledge`, `memory`, `provider`, `sync`, with their nested groups — asserted in both directions, so a UI operation cannot ship a CLI counterpart without a reviewer seeing it here and a CLI command cannot appear without someone deciding it belongs,
-- **And** the groups whose surface is options rather than subcommands are claimed by those options instead, since an empty subcommand set would assert nothing about them,
-- **And** every group's `--help` renders, so an import-time error in one command module cannot wait for a user to reach for it,
-- **And** machine-readable JSON output is available for scripting.
-
-### Scenario: command line surfaces same errors
-
-- **Given** any failure surfaced by the management API,
-- **When** triggered through the command line,
-- **Then** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.
-
-### Scenario: audit lifecycle changes
-
-- **Given** the user performs any add / enable / disable / update / delete on a server or capability,
-- **When** they open the audit view (CLI or UI),
-- **Then** they see one row per change with actor, timestamp, and a payload describing what changed.
+- **Then** the new tool is enabled, the event is recorded in the audit log, and the user can disable it through the per-capability toggle (FR-007).
 
 ### Scenario: invocation log records calls without arguments
 
 - **Given** an MCP client has invoked tools,
 - **When** the user views the invocation log,
 - **Then** every call is present with timestamp, target capability, duration, and outcome, and **no call arguments or return contents are stored**.
-
-### Scenario: configure retention per log
-
-- **Given** the audit and invocation logs grow over time,
-- **When** the user sets a retention period for a log (in days, or "keep forever"),
-- **Then** entries older than that period are removed by the next periodic cleanup, and the change itself is audited.
 
 ### Scenario: search the aggregated catalogue for matching tools
 
@@ -384,41 +322,11 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** the subcommand is invoked with `--json`,
 - **Then** stdout is a parseable JSON document with stable top-level keys (`resources` for `list`, `invocations` for `invocations`) and no human-readable framing.
 
-### Scenario: store and reference a credential
-
-- **Given** the user has not yet stored an HTTP credential,
-- **When** the user issues `POST /api/v1/credentials` (or the equivalent CLI) with `ref` and the secret `value` in the request body, then registers an HTTP MCP server whose `credential_refs` cites `{ref}`,
-- **Then** the credential value is written only as Fernet ciphertext in the `credentials` table (its plaintext never reaches the SQLite DB, any log, or the audit), and the server registration succeeds with the credential resolved (decrypted) at upstream-spawn time.
-
-### Scenario: delete a credential frees the reference
-
-- **Given** a credential `{ref}` exists and is cited by zero MCP servers,
-- **When** the user issues `DELETE /api/v1/credentials/{ref}` (or the equivalent CLI),
-- **Then** the ciphertext row is removed, the deletion is audited, and a later registration may reuse `{ref}` without conflict.
-
-### Scenario: daemon status reflects ready state
-
-- **Given** the daemon has just been started,
-- **When** `GET /api/v1/daemon/status` is called,
-- **Then** the response reports `status: "ready"`, a non-zero `port`, a `started_at` timestamp, the daemon's `version` and its `executable` — and the same port and start time are written to `~/.coffer/daemon.json`. A CLI or shim whose own version differs from the reported one prints a one-line warning naming both builds and the executable, and carries on (ADR daemon-detect-or-spawn: detection, not refusal).
-
-### Scenario: rotating the daemon token invalidates the previous one
-
-- **Given** the daemon has issued an auth token,
-- **When** the user invokes the rotate-token operation,
-- **Then** subsequent management API calls with the previous token are rejected with 401, calls with the new token succeed, and the rotation is recorded as a `token_rotated` audit entry.
-
 ### Scenario: gateway overhead stays under budget
 
 - **Given** an in-process fast tool reachable through coffer and directly,
 - **When** the same tool is called 100 times via coffer and 100 times directly,
 - **Then** the median per-call gateway overhead (coffer-mediated latency minus direct latency) is at most 50 ms.
-
-### Scenario: credentials never leak to logs or audit
-
-- **Given** an MCP server registered with a credential reference,
-- **When** the server is spawned, exercised, and torn down through one representative session,
-- **Then** an automated scan of every database row, audit entry, invocation record, and log file under `~/.coffer/logs/` reveals zero occurrences of the credential's literal value.
 
 ### Scenario: tool-name collision across servers is prevented
 
@@ -426,69 +334,17 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **When** an MCP client lists tools through coffer,
 - **Then** the client sees `<server-a>__search` and `<server-b>__search` as distinct, non-colliding entries — neither upstream name is surfaced unprefixed.
 
-### Scenario: the daemon binds the same port every start
-
-- **Given** no port has been configured, so the daemon's default of 8000 applies,
-- **When** the daemon is stopped and started again — by the user, by the CLI, or auto-spawned by an MCP shim, which inherits no shell profile,
-- **Then** it binds 8000 every time and records it in `~/.coffer/daemon.json`, so a browser bookmark to Coffer's UI keeps working and nothing the browser stored against that origin is lost.
-
-### Scenario: a configured daemon port survives restarts
-
-- **Given** the user has moved the daemon's port with `coffer daemon port set <n>`,
-- **When** the daemon is stopped and started again by any of those routes,
-- **Then** it binds that same port every time and records it in `~/.coffer/daemon.json`.
-
-### Scenario: a port that is taken refuses to start and says what holds it
-
-- **Given** the port the daemon would bind — its 8000 default, or one the user configured — is already held by another process,
-- **When** the daemon starts,
-- **Then** it refuses to start rather than binding a different port, and the message names the process holding the port and the commands that resolve it — free that process, or `coffer daemon port set <other>`.
-
 ### Scenario: a missing stdio launcher is named in the server status
 
 - **Given** a stdio server (e.g. imported from another machine) whose launcher command does not resolve on this machine,
 - **When** the server's status is read,
-- **Then** it reports `missing <runner>` instead of a bare failing state, and the UI tells the user which command to install rather than installing it (FR-019).
+- **Then** it reports `missing <runner>` instead of a bare failing state, and the UI tells the user which command to install rather than installing it (FR-011).
 
 ### Scenario: an out-of-scope server is invisible to a session
 
 - **Given** an `mcp_server` resource whose `scope` names one agent only,
 - **When** a shim session reporting a different agent identity (or no identity at all) lists tools,
 - **Then** the server's tools are absent from that session's `tools/list`, and a call attempt against its namespaced tool name is rejected exactly as if the server were never registered — while a session reporting the named agent sees and may call it.
-
-### Scenario: release tag produces the CLI archive and SHA256SUMS
-
-- **Given** a release tag matching `v*` is pushed,
-- **When** `.github/workflows/release.yml` finishes,
-- **Then** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries,
-- **And** it contains the second, desktop tier built from those same binaries — a macOS arm64 `.dmg` (FR-022) — and no third tier and no other platform,
-- **And** the release contains a single aggregated `SHA256SUMS` file covering every artifact.
-
-### Scenario: a page served by the daemon is authenticated by the daemon
-
-- **Given** a daemon that has restarted since the browser last loaded the UI, and therefore minted a new token on a possibly different port,
-- **When** the browser opens any page the daemon serves — the bare `/`, a client-side route such as `/agents`, a bookmark, or a plain reload — whether it got there through `coffer open` or by typing the address,
-- **Then** the served `index.html` carries that daemon's live token as `window.__COFFER_TOKEN__`, the UI renders authenticated with no user action, and the token appears in no URL and in no browser storage,
-- **And** the document is served `no-store` with no validators, so the browser can never revalidate its way back to a previous daemon's token.
-
-### Scenario: a rebound page is refused before it can read the token
-
-- **Given** a page on an attacker-controlled origin whose hostname resolves to `127.0.0.1`, which the browser therefore treats as same-origin with the daemon,
-- **When** it fetches any daemon URL, including `/`,
-- **Then** the daemon refuses the request with `421 HOST_NOT_LOOPBACK` because the `Host` header still names the attacker's hostname — while the same request addressed to `127.0.0.1`, `localhost` or `::1` is served normally.
-
-### Scenario: a frozen daemon deploys its sibling binaries on start
-
-- **Given** a frozen `coffer-daemon` started from an extracted release archive, with `coffer-mcp-shim` and `coffer-callback` beside it,
-- **When** the daemon starts,
-- **Then** each sibling binary is reachable and executable at `~/.coffer/bin/<name>` — a symlink into `~/.coffer/bin/<version>/`, where the file was copied atomically through a temp sibling and a rename, and the symlink itself was flipped atomically,
-- **And** a second start with nothing changed leaves those files untouched, while a version change deploys the new build into its own `<version>/` directory and re-points the symlinks — as decided by the byte-size and version-sentinel staleness check — keeping the previous version's directory on disk so the upgrade can be undone by pointing the links back; only the two newest version directories are kept.
-
-### Scenario: a schema upgrade keeps a copy of the vault
-
-- **Given** a daemon starting against a `coffer.db` whose Alembic revision is behind this build's head,
-- **When** the migrations run at startup,
-- **Then** `coffer.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
 
 ## Requirements
 
@@ -503,66 +359,37 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 **Resource lifecycle**
 
-- **FR-005**: Users MUST be able to register, list, view, update, enable, disable, and delete MCP servers as resources with stable identifiers of the form `<kind>:<name>`.
-- **FR-006**: System MUST validate every registration against a kind-specific schema, reject duplicates within a kind, and persist nothing on validation failure.
-- **FR-007**: System MUST support both stdio and HTTP MCP transports for upstream servers.
+- **FR-005**: Users MUST be able to register, list, view, update, enable, disable, and delete MCP servers as resources with stable identifiers of the form `<kind>:<name>`. Validating that registration against the kind's schema, rejecting a duplicate name within the kind, and persisting nothing on a validation failure are spec [resource-framework](../resource-framework/spec.md) FR-002, which every kind inherits; this requirement is what brings `mcp_server` under it, and the kind-agnostic surface those operations are served through is that spec's too.
+- **FR-006**: System MUST support both stdio and HTTP MCP transports for upstream servers.
 
 **Capability curation**
 
-- **FR-008**: Users MUST be able to enable or disable individual tools, resources, and prompts on a per-server basis.
-- **FR-009**: System MUST preserve the user's enable/disable decisions across daemon restarts, upstream upgrades, and upstream temporary disappearances.
-- **FR-010**: System MUST enable a previously unseen capability by default when it is discovered, leaving it to FR-008 to curate. There is no per-server auto-enable policy: the setting existed as a config field with no UI to change it, every registered server carried the default, and a choice that is never made is not a policy.
+- **FR-007**: Users MUST be able to enable or disable individual tools, resources, and prompts on a per-server basis.
+- **FR-008**: System MUST preserve the user's enable/disable decisions across daemon restarts, upstream upgrades, and upstream temporary disappearances.
+- **FR-009**: System MUST enable a previously unseen capability by default when it is discovered, leaving it to FR-007 to curate. There is no per-server auto-enable policy: the setting existed as a config field with no UI to change it, every registered server carried the default, and a choice that is never made is not a policy.
 
-**Credentials and safety**
+**Invocation record**
 
-- **FR-011**: System MUST store all upstream-server credentials only as Fernet ciphertext in the `credentials` table (envelope encryption), referenced from configuration by name; credential plaintext MUST never be written to the database, any log, or the audit. The Fernet master key MUST be managed solely by `infrastructure/credentials/` — a `0600` file beside the DB by default, the OS keychain opt-in. The management API MUST expose credential endpoints so a UI can manage a secret without its plaintext landing in any persisted config: write (`POST /api/v1/credentials`), delete (`DELETE /api/v1/credentials/{ref}`), an existence check (`GET /api/v1/credentials/{ref}/exists`), and an audited read (`GET /api/v1/credentials/{ref}`). The read endpoint returns the secret value and emits a `credential_read` audit event so every secret read is recorded.
-- **FR-012**: System MUST bind all HTTP endpoints (management API and MCP protocol endpoint) to the loopback interface only.
-- **FR-013**: System MUST require an authentication token on every management API call; the token is generated locally at daemon startup, stored with user-only file permissions, and rotatable.
-
-**Auditing & activity logs**
-
-- **FR-014**: System MUST record an audit entry for every lifecycle change to any resource or capability, including the actor (CLI / API / UI / system).
-- **FR-015**: System MUST record an invocation entry for every tool call, resource read, and prompt fetch — without recording arguments or return contents.
-- **FR-016**: System MUST provide per-table retention configuration (in days, or "keep forever") for audit and invocation logs, and a periodic background cleanup that prunes older entries.
-
-**Surfaces**
-
-- **FR-017**: Users MUST be able to perform every management operation through both (a) a REST API and (b) a `coffer` command-line interface, sharing the same underlying daemon and a consistent error model.
-
-**Distribution**
-
-- **FR-018**: Installing from source (`pip install ./backend`) MUST place the `coffer` CLI and the `coffer-mcp-shim` stdio entry point on the user's `PATH` as console scripts, so the daemon and shim are usable with no separate deployment step.
-- **FR-022**: The release pipeline MUST produce, per `v*` tag, a single download tier for **macOS arm64 only**: a `coffer-cli-<triple>.tar.gz` archive containing `coffer` (the management CLI), `coffer-daemon`, `coffer-mcp-shim`, and the runtime helper binary the daemon spawns (`coffer-callback`). The binaries MUST stay co-located inside the archive so the frozen detect-or-spawn resolution ([Detect-or-Spawn](../../docs/decisions/daemon-detect-or-spawn.md)) finds `coffer-daemon` next to `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never validated end to end. This archive carries the "no system Python required" promise on its own (SC-011). The packaging decision behind it is [PyInstaller Distribution](../../docs/decisions/distribution-pyinstaller.md). The pipeline MUST also produce a **second, desktop tier** — a macOS arm64 `.dmg` containing the Tauri shell (FR-029) with those same four binaries embedded as Tauri `externalBin`. The desktop leg MUST reuse the artifacts the CLI leg already built rather than running PyInstaller a second time; the freezing is the expensive half and it is done once. Both tiers ship per tag: the archive is the terminal install, the `.dmg` is the double-click one, and neither is a substitute for the other.
-- **FR-023**: The release pipeline MUST produce one aggregated `SHA256SUMS` file — generated in CI and concatenated across matrix legs in the release job — covering every artifact, so downloaders can verify integrity without trusting the GitHub Release UI alone.
-- **FR-024**: The daemon MUST serve the built web UI itself, as static files, at its own loopback origin, so the UI is same-origin with the management API. Cross-origin access MUST therefore be off by default; the Vite dev-server origins stay reachable only behind the existing `COFFER_DEV_CORS` opt-in.
-- **FR-025**: The daemon MUST hand the browser its API token in the `index.html` it serves, as a `window.__COFFER_TOKEN__` global injected into the document head, sourced from the same in-process token FR-013's header check compares against so the two cannot drift. It MUST do so for **every** route that resolves to that document — the bare `/` and every client-side route served through the SPA fallback alike — and MUST serve it `Cache-Control: no-store` with no ETag or Last-Modified, because the document now carries a per-daemon secret and a cached copy would hand a restarted daemon's browser the previous daemon's dead token. The page MUST NOT persist the token: a stored token outlives the daemon that minted it, and the daemon mints a new one on every start. The API token MUST NOT appear in a URL at any point — a URL lands in browser history, which would contradict the loopback-plus-token posture of FR-012 / FR-013; the response body is subject to none of that. `coffer open` MUST therefore carry no credential of its own: it reads the daemon's real port from `~/.coffer/daemon.json` (which moves between restarts) and opens the browser at that origin.
-- **FR-026**: When the daemon detects that it is running as a frozen build, it MUST idempotently deploy its sibling binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-callback` — into `~/.coffer/bin/` at startup. `coffer` is in that list so that a user who installed only the desktop `.dmg` (FR-022) has the management CLI on disk after the first launch, and `coffer-daemon` so the frozen shim can resolve it as a sibling. Each build MUST land in its own `~/.coffer/bin/<version>/` directory, with the public `~/.coffer/bin/<name>` paths being symlinks into it that are flipped atomically, so that a deploy never overwrites a binary in place and the previous version's directory stays on disk for a rollback (the two newest version directories are kept; older ones are pruned). The copy MUST be atomic (temp sibling in the same directory, executable bit set, then rename, with the version sentinel written last) so that a crash or a concurrently executing binary never observes a truncated file, and staleness MUST be decided by two signals — byte size and the version sentinel — never mtime, which says when a build was extracted rather than what it contains. Before `alembic upgrade head` changes an on-disk `coffer.db`, the daemon MUST copy it (and any `-wal`/`-shm` companions) to `coffer.db.pre-<revision>`, keeping the three newest copies; an already-current schema or an in-memory database MUST NOT be copied. A source install MUST NOT do any of this: `pip install` already puts the console scripts on `PATH` (FR-018). The daemon owns the deployment because it is the process that spawns `coffer-callback` at runtime.
-
-- **FR-027**: The daemon MUST refuse any request whose `Host` header does not name a loopback authority — `127.0.0.1`, `localhost` or `::1`, with or without a port — answering `421` with error code `HOST_NOT_LOOPBACK` instead of serving it. This is what makes FR-025 safe: binding to loopback (FR-012) stops a remote host, but not a **browser** on a page whose hostname an attacker re-resolves to `127.0.0.1` — DNS rebinding, which the browser then treats as same-origin, so CORS does not apply. Rebinding does not change the `Host` header, so a rebound request still names the attacker's own hostname and is refused before it can read a token out of the served document. The rule MUST hold for every surface the daemon exposes. It does not reach the separate `coffer-callback` listener, which is a different process on a different port and is the only thing a tunnel is ever pointed at.
-- **FR-028**: The daemon's listening port MUST be **fixed by default and settable**, so a browser bookmark to Coffer's UI keeps working across restarts. With nothing configured the daemon MUST bind exactly `8000` and MUST NOT scan for an alternative; a drifting origin is not merely a broken bookmark, because browser `localStorage` is keyed by origin, so the UI language, sidebar state, page size and preferred editor silently reset when the port moves and nothing connects the two events for the user. Fixing a default port and allowing it to be changed is also what comparable local services with a web UI do. The setting MUST live in a file the daemon reads **before** it binds — `~/.coffer/daemon-config.json`, mode `0600` — because the port is chosen before the database is opened and before migrations run, so no database-backed setting can carry it. It MUST NOT be an environment variable: the daemon is spawned detached by whichever surface first needs one (CLI, MCP shim), inheriting that caller's environment, which a shell profile does not reach and a GUI-launched agent never had. When a port is configured the daemon MUST bind exactly that port and MUST NOT fall back to another — silently moving is the behaviour the setting exists to stop. When it cannot be bound the daemon MUST refuse to start and MUST report which process holds the port and the exact commands that resolve it. Users MUST be able to read and change the setting **from the CLI**; it MUST work with no daemon running, because a daemon that cannot bind its port is exactly the state the setting has to be fixable from. It MUST NOT have a REST endpoint or a Settings panel: a port that is correct by default does not earn a place in the UI, and the escape hatch belongs where a squatted port is diagnosed. A change takes effect at the next start, so the CLI MUST offer `coffer daemon restart` to apply it in one command. This setting is deliberately **outside FR-014's audit requirement**: it is neither a resource nor a capability but process configuration read before the database opens, and the CLI that owns it must work with no daemon running — so the audit table is unreachable on exactly the path that matters most. Recording a change only when a daemon happens to be up would be less honest than recording none.
-
-- **FR-029**: Coffer MUST ship a macOS desktop shell that hosts the built web UI **as a local asset**, not as a page loaded from the daemon's origin. Hosting it locally is what distinguishes an application from a bookmarked browser window: the UI is rendered before the daemon answers, so a daemon that is slow, absent or wedged yields an actionable screen rather than a connection error, and the daemon's port is never visible in an address bar. The shell MUST present a window the OS treats as an application — Dock icon, Cmd-Tab entry — and a resident tray offering at least open, restart daemon, and quit; closing the window MUST hide to the tray rather than exit, and re-activating from the Dock MUST restore it. The shell MUST be distributed as the `.dmg` of FR-022, with the four frozen binaries embedded, so that installing it requires nothing installed beforehand.
-- **FR-030**: The shell MUST supply the frontend with the running daemon's base URL and live API token through an IPC command, and MUST NOT hold up the first render waiting for it. Blocking would contradict FR-029: the handshake spawns a daemon and polls when none is running, so awaiting it would leave every launch-after-reboot on an empty window for as long as that takes, which is the failure hosting the UI locally exists to prevent. Queries issued before it resolves come back `UNAUTHENTICATED`, which the offline banner already reads as "daemon not ready"; the frontend MUST therefore refetch them once the handshake lands, or they keep a 401 nothing else will clear. FR-025's injection cannot reach a locally-hosted page — nobody served that document — so this is the only channel, and it MUST resolve to the same `window.__COFFER_BASE_URL__` / `window.__COFFER_TOKEN__` globals the browser host receives, so the frontend gains a second *supplier* and not a second *code path*. When the handshake fails the frontend MUST still render and surface the failure in the offline banner; a blank window is not an acceptable report of "no daemon".
-- **FR-031**: The shell MUST locate a daemon by a fixed resolution order — a live daemon named by `~/.coffer/daemon.json`, then its own bundle, then `~/.coffer/bin/`, then `PATH` — taking over an already-running daemon rather than spawning a second one. The liveness probe MUST come first: the other three answer which binary to spawn, while it answers whether to spawn at all, and reversing them makes a bundled app race the daemon the user already started for its port. When no daemon can be found or started it MUST say so in terms a user who has never opened a terminal can act on. It MUST offer a restart that stops the running daemon and spawns a replacement, rate-limited against repeat invocation, reachable from both the tray and the offline banner — an affordance the browser host cannot have, because a daemon that is down cannot serve the page the control would live on. It MUST detect version skew between itself and the daemon it is talking to, since a previous installation's daemon may still be listening.
-- **FR-032**: The shell MUST NOT reimplement any capability the daemon already exposes over HTTP. Native folder selection, opening a file in the user's editor and revealing it in the file manager are daemon routes, and a webview reaches them exactly as a browser tab does; duplicating them in the shell would reintroduce a host-conditional branch in the frontend for no user-visible gain. The shell MUST NOT deploy binaries into `~/.coffer/bin/` — that is FR-026's job, and two processes writing that directory race.
+- **FR-010**: System MUST record an invocation entry for every tool call, resource read, and prompt fetch — without recording arguments or return contents. How long those entries are kept, and the background pass that prunes them, are spec [resource-framework](../resource-framework/spec.md) FR-007 — the retention contract every log-writing kind inherits — not this spec's own rule. This spec contributes `mcp_invocations` to that registry with a 30-day default.
 
 **Missing launcher**
 
-- **FR-019**: A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause, and the UI MUST name the command to install. Coffer MUST NOT install it. Detection turns an uninformative failure into an actionable one, which is the whole of the value here; running a package manager from a long-lived daemon would widen Coffer's remit from managing configuration to installing software on the user's machine, a line the deliberately-minimal runner→formula map could not hold once pip, cargo, and go were asked for — and it only ever worked on macOS.
+- **FR-011**: A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g. `uvx` where `uv` is not installed) MUST be surfaced as such — `missing <runner>` in the server status — instead of a bare "failing" with no cause, and the UI MUST name the command to install. Coffer MUST NOT install it. Detection turns an uninformative failure into an actionable one, which is the whole of the value here; running a package manager from a long-lived daemon would widen Coffer's remit from managing configuration to installing software on the user's machine, a line the deliberately-minimal runner→formula map could not hold once pip, cargo, and go were asked for — and it only ever worked on macOS.
 
 **Scope enforcement ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))**
 
-- **FR-020**: System MUST filter `mcp_server` exposure by its framework-level `scope` — one allow-list, `agents`, `null` meaning unrestricted — at the gateway's per-session choke point: the session's self-reported agent identity gates `tools/list` / `resources/list` / `prompts/list` and call routing. A server the scope excludes is indistinguishable from a disabled capability to that session, while staying registered, listed in the management surface and editable. The identity of the asking session is the only input the gate takes; scope names agents and nothing else, because a server's reach is machine-local and never arrives from elsewhere (spec vault-sync `## What does not sync`) — a server that should not run here is simply not enabled here. Scope MUST NOT gate spawning: the supervisor holds no policy and has no session identity to test, so the decision is enforced above it. Every spawn path runs downstream of that gate (the listing fan-out spawns only from the already-filtered set; a call is re-checked at the invocation seam), so a scoped server starts like any other enabled server but no session can start one it may not see. The management routes (including `POST /{name}/test`) are administrative operations rather than agent sessions and MUST NOT be scope-gated — so the owner can always test a server no session here is allowed to see.
-- **FR-021**: System MUST accept a self-reported agent identity at MCP handshake (`params._meta["coffer/agent"]`, alongside the existing `coffer/cwd` key), written into a managed agent's shim invocation as `coffer-mcp-shim --agent <name>` by the Coffer-MCP install (spec agent-registry FR-019). A session with no reported identity MUST be treated as `agent=None`, matching only servers that carry no scope. Identity is self-reported, not cryptographically verified — a documented trust boundary, acceptable under the loopback-only, single-user posture (FR-012). It is reported **once, at the handshake**, and nowhere else: when the gateway threads the identity into a Coffer built-in tool call (as the `agent` argument the knowledge and memory tools authorize by), it MUST overwrite any `agent` the client put in the call's arguments with the session's, and MUST drop the argument entirely when the session reported none — so a client cannot pick a different identity per call, and no built-in tool advertises `agent` in its input schema.
+- **FR-012**: System MUST filter `mcp_server` exposure by its framework-level `scope` — one allow-list, `agents`, `null` meaning unrestricted — at the gateway's per-session choke point: the session's self-reported agent identity gates `tools/list` / `resources/list` / `prompts/list` and call routing. A server the scope excludes is indistinguishable from a disabled capability to that session, while staying registered, listed in the management surface and editable. The identity of the asking session is the only input the gate takes; scope names agents and nothing else, because a server's reach is machine-local and never arrives from elsewhere (spec vault-sync `## What does not sync`) — a server that should not run here is simply not enabled here. Scope MUST NOT gate spawning: the supervisor holds no policy and has no session identity to test, so the decision is enforced above it. Every spawn path runs downstream of that gate (the listing fan-out spawns only from the already-filtered set; a call is re-checked at the invocation seam), so a scoped server starts like any other enabled server but no session can start one it may not see. The management routes (including `POST /{name}/test`) are administrative operations rather than agent sessions and MUST NOT be scope-gated — so the owner can always test a server no session here is allowed to see.
+- **FR-013**: System MUST accept a self-reported agent identity at MCP handshake (`params._meta["coffer/agent"]`, alongside the existing `coffer/cwd` key), written into a managed agent's shim invocation as `coffer-mcp-shim --agent <name>` by the Coffer-MCP install (spec agent-registry FR-019). A session with no reported identity MUST be treated as `agent=None`, matching only servers that carry no scope. Identity is self-reported, not cryptographically verified — a documented trust boundary, acceptable under the loopback-only, single-user posture spec daemon holds. It is reported **once, at the handshake**, and nowhere else: when the gateway threads the identity into a Coffer built-in tool call (as the `agent` argument the knowledge and memory tools authorize by), it MUST overwrite any `agent` the client put in the call's arguments with the session's, and MUST drop the argument entirely when the session reported none — so a client cannot pick a different identity per call, and no built-in tool advertises `agent` in its input schema.
+
+**Sync state area**
+
+- **FR-014**: The `state/mcp-preferences/<server>` sync state area is this spec's, so this spec defines what deleting one of its documents means — spec [vault-sync](../vault-sync/spec.md) FR-058 requires that of every area and interprets none of them itself. A document exists only while something on that server is disabled; deleting it therefore means "nothing is disabled here", and Coffer MUST re-enable every capability on that server. The preference rows MUST stay — enabled is their default, and their seen-timestamps are this machine's own record of what the server offered, not a decision another machine took back. A rel naming a server this machine does not register MUST be ignored: the deletion cannot have been about anything here. For the same reason this spec MUST NOT publish a document for a server with nothing disabled, or a machine that re-enabled everything and a machine that never disabled anything would add and delete the same document at each other every round.
 
 ### Key Entities
 
-- **Resource**: A user-managed entity inside coffer, identified by `(kind, name)`. This spec registers one kind, `mcp_server`. Each resource carries kind-specific configuration, an enabled flag, description, and timestamps. The framework is kind-agnostic so additional kinds can be added by later specs without re-modelling.
 - **MCP Server** (a resource of kind `mcp_server`): Configuration for one upstream MCP server — its transport (stdio command-line or HTTP URL), credential references, and per-server timeouts.
 - **Capability**: A tool, resource, or prompt exposed by an MCP server. Discovered live from the upstream; only the user's enable/disable preference and last-seen timestamp are persisted.
-- **Audit Event**: A record of a lifecycle change to any resource or capability. Includes the actor, target, event type, timestamp, and a structured payload.
 - **Invocation Record**: A record of a single capability call through the gateway. Includes target, timestamp, duration, and outcome — no arguments or return content.
-- **Retention Policy**: A per-log-table setting controlling how long entries are kept. Audit defaults to 365 days, invocations to 30 days; either can be set to "keep forever".
 
 ## Success Criteria
 
@@ -573,20 +400,18 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 - **SC-003**: A tool call routed through coffer adds no more than 50 ms of overhead compared to the same call made by the client directly to the upstream, measured over 100 calls of a fast in-process tool.
 - **SC-004**: With two MCP clients (e.g., Claude Code and Codex) connected at the same time, both successfully discover and call tools without interference, for a 30-minute interactive session.
 - **SC-005**: Disabling a tool causes it to disappear from any client's next tool-list response and to reject any in-flight call attempt with a tool-disabled error.
-- **SC-006**: Audit and invocation logs older than their configured retention period are removed by the periodic cleanup, while newer entries are retained, and the cleanup does not block concurrent API calls.
+- **SC-006**: Invocation records older than their configured retention period are removed by spec resource-framework's periodic cleanup while newer entries are retained, and the cleanup does not block concurrent API calls.
 - **SC-007**: Every Acceptance Scenario in this document is covered by at least one test marked with `acceptance(spec="mcp-gateway", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-008**: The full `make verify` suite (lint + unit + integration + contract + acceptance audit) passes locally and in CI; `make verify-all` (adding e2e) passes locally on macOS and in CI on Linux.
-- **SC-009**: After installing from source (`pip install ./backend`, requiring Python 3.12+), `coffer` and `coffer-mcp-shim` are both available on the user's `PATH`, and the daemon reaches the "ready" state with no manual steps beyond `pip install`.
-- **SC-010**: No upstream-server credential value ever appears in any database table, log file, audit entry, or invocation record — verified by an automated scan of those artifacts after a representative session.
-- **SC-011**: On a machine with no system Python, extracting `coffer-cli-<triple>.tar.gz` and running `coffer daemon start` reaches `status: ready`, and `coffer open` renders the UI authenticated in the browser — with no runtime to install and no second application to keep up to date.
 
 ## Assumptions
 
 - The single user runs coffer on their own machine. There is no multi-tenant or remote-access requirement.
 - The MCP client (Claude Code, Codex, etc.) supports either an `stdio` MCP server configuration or an `http`/`sse` MCP server configuration; coffer ships both entry points.
 - Upstream MCP servers behave according to the public MCP protocol specification. Misbehaving upstreams are handled as faults, not modelled as features.
-- The Fernet master key is resolvable at coffer startup (a readable `~/.coffer/master.key` by default, or an unlocked OS keychain in keychain mode), or the user is shown a clear message when it isn't (ciphertext with no resolvable key is a fatal `MasterKeyMissing` startup error).
-- This spec ships with one resource kind (`mcp_server`). The Resource framework is designed so additional kinds can be added by later specs without re-modelling existing data.
+- An upstream's secrets are resolvable when it is spawned. The encrypted store behind them, the master key that opens it, and what a user is told when that key is unavailable are spec credentials'; this spec persists refs and never holds a key.
+- The daemon this gateway is served from — its port, its discovery file, its token, its loopback posture and the browser host it serves — is spec daemon's. This spec assumes a running daemon rather than specifying one.
+- The kind-agnostic half of what an `mcp_server` is — the `<kind>:<name>` identity, the lifecycle surface, per-agent reach, the audit log and retention — is spec resource-framework's. This spec contributes one `Kind` descriptor to it and owns everything MCP-specific above it.
 - Concurrent MCP client load is small (low single digits); coffer is not a fleet-scale gateway.
 
 ## Deliberately out of scope

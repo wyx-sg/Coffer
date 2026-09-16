@@ -182,6 +182,7 @@ def test_live_daemon_is_none_for_a_bound_but_not_serving_socket(
         held.close()
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="two racing spawns produce one daemon")
 def test_concurrent_acquire_blocks_racer_until_first_is_serving(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1,12 +1,12 @@
 """Wiring for the one ``knowledge`` kind.
 
 One service for the directory itself, plus ``SearchService`` (literal search,
-FR-024..FR-027) and ``IngestService`` (document upload, FR-033..FR-037).
+FR-016..FR-018) and ``IngestService`` (document upload, FR-022..FR-026).
 ``SearchService`` needs nothing but the knowledge service — search is ripgrep
 over the files, with no model, key or connection behind it. ``IngestService``
 takes an optional ``completion`` port and so cannot fail to build either: with
 no internal connection configured it falls back to the document's own opening
-prose (FR-034).
+prose (FR-023).
 """
 
 from __future__ import annotations
@@ -34,26 +34,7 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
     from coffer.application.audit_service import AuditService
-    from coffer.application.provider.service import ProviderService
     from coffer.application.resource_service import ResourceService
-    from coffer.domain.provider.config import ResolvedConnection
-
-
-class _InternalModelSelector:
-    """Structural ``ModelSelectorPort`` adapter over ``ProviderService``.
-
-    ``IngestService`` (like ``TidyPass``) reaches the internal connection
-    through a port with one method, ``get_default``, rather than
-    ``ProviderService``'s own ``resolve_internal_connection`` — the port
-    belongs to this layer, not to the provider kind, and mirrors the shape
-    ``application.engine_ports.ModelSelectorPort`` already declares.
-    """
-
-    def __init__(self, provider_service: ProviderService) -> None:
-        self._provider_service = provider_service
-
-    async def get_default(self) -> ResolvedConnection | None:
-        return await self._provider_service.resolve_internal_connection()
 
 
 @dataclass(frozen=True)
@@ -73,7 +54,7 @@ def wire_knowledge_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     builtin_tools: BuiltinToolRegistry,
-    provider_service: ProviderService,
+    models: ModelSelectorPort,
     credential_resolver: Callable[[str], str],
 ) -> KnowledgeWiring:
     """Wire the ``knowledge`` kind into the app and return what it built."""
@@ -83,7 +64,6 @@ def wire_knowledge_kind(
     search_service = SearchService(knowledge=service)
     set_search_service(search_service)
 
-    models = _InternalModelSelector(provider_service)
     ingest_service = IngestService(
         knowledge=service,
         registry=default_registry(),

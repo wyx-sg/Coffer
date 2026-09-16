@@ -15,7 +15,6 @@ that holds the write lock (mirrors ``mcp_entry_service``).
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 from typing import Protocol as _Protocol
 from uuid import uuid4
 
@@ -23,6 +22,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.provider.internal_default_ops import (
     set_internal_default as _set_internal_default_op,
 )
+from coffer.application.provider.ports import EngineNotifyPort
 from coffer.application.provider.projection_ops import deproject_connection, project_connection
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.rename_ops import rename as _rename_op
@@ -75,21 +75,19 @@ class ProviderService:
         config_store: ProjectionConfigStore,
         agents: _AgentLister,
         audit: AuditService,
-        resolve_internal_model: Callable[[], Awaitable[str | None]] | None = None,
-        clear_internal_model: Callable[[str], Awaitable[None]] | None = None,
+        engine: EngineNotifyPort | None = None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._agents = agents
         self._audit = audit
         self._projector = ProviderProjector(config_store)
-        # Resolves the internal-engine model (spec provider-switching E3), overlaid onto the
-        # internal_default connection. None ⇒ no overlay (connection's own model).
-        self._resolve_internal_model = resolve_internal_model
-        # Clears that model. The model singleton belongs to another kind, so the
-        # two directions arrive as ports rather than as an imported service;
-        # both are optional so a test may construct the service without either.
-        self._clear_internal_model = clear_internal_model
+        # Coffer's internal engine, told when the connection it runs on moves
+        # (spec internal-engine FR-005). The engine's model is not this kind's
+        # to reason about, so what happens to it arrives as a port the
+        # composition root satisfies; ``None`` is the test-convenience
+        # construction, where there is no engine to tell.
+        self._engine = engine
 
     # --- helpers -------------------------------------------------------------
 
@@ -358,15 +356,15 @@ class ProviderService:
         """
         return await _set_internal_default_op(self, name, actor=actor)
 
-    async def resolve_internal_connection(self) -> ResolvedConnection | None:
-        """The connection + model Coffer's internal LLM engine runs on: the
-        ``internal_default`` connection paired with the global internal-engine
-        model (spec provider-switching E3). ``None`` when no connection is marked OR no model is
-        set — either way the internal engine is a clean no-op (the model no
-        longer lives on the connection, so there is no fallback)."""
-        model = await self._resolve_internal_model() if self._resolve_internal_model else None
-        if not model:
-            return None
+    async def internal_default_connection(self, model: str) -> ResolvedConnection | None:
+        """The connection marked ``internal_default``, paired with ``model``.
+
+        Satisfies ``application.engine.resolve.InternalDefaultConnectionPort``
+        structurally. This kind answers only WHICH connection carries the flag
+        and mints the pairing — ``ResolvedConnection`` is its own value object.
+        Whether there is a model to pair at all, and what a missing half means,
+        are the internal engine's rule and live in ``application.engine``.
+        """
         for r in await self.list():
             rc = self._cfg(r)
             if rc.internal_default:

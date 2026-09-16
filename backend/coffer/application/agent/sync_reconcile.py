@@ -12,7 +12,7 @@ skill's reach — its ``enabled`` flag and its ``scope`` — is this machine's o
 and never arrives with the document, but the set of skill ROWS does change, and
 the registry upsert alone performs no on-disk delivery. After every import each
 agent's delivered set is reconciled idempotently against the delivery predicate
-(FR-012a) from the converged rows and this machine's reach.
+(spec skill-manager FR-012) from the converged rows and this machine's reach.
 """
 
 from __future__ import annotations

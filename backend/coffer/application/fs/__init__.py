@@ -1,1 +1,1 @@
-"""Read-only local filesystem helpers (spec agent-registry, FR-024)."""
+"""Read-only local filesystem helpers (spec daemon FR-019)."""

@@ -56,7 +56,7 @@ export function McpServerDetailTabs({
   const overview = extractOverview(config);
   // The open tab lives in the URL (`?tab=`), so a reload or a shared link
   // lands on the same tab — addressable state belongs to the router, not to
-  // component state (agents/frontend.md).
+  // component state (.agents/frontend.md).
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "overview";
   const setTab = (next: string) => {

@@ -81,7 +81,7 @@ class _StallingAdapter:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a silent turn is cancelled by the idle watchdog")
+@pytest.mark.acceptance(spec="chat", scenario="a silent turn is cancelled by the idle watchdog")
 async def test_a_turn_with_no_event_for_the_idle_window_is_cancelled_as_a_timeout() -> None:
     adapter = _StallingAdapter()
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
@@ -166,6 +166,7 @@ async def test_an_interrupt_during_the_window_is_still_an_interrupt() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.acceptance(spec="chat", scenario="turn state is released when nothing needs it")
 async def test_finishing_a_turn_releases_the_conversation_state() -> None:
     orchestrator, _conv, _msg, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
@@ -179,6 +180,7 @@ async def test_finishing_a_turn_releases_the_conversation_state() -> None:
     assert orchestrator.pending(conv.id) == []
 
 
+@pytest.mark.acceptance(spec="chat", scenario="turn state is released when nothing needs it")
 async def test_a_subscriber_keeps_the_state_until_it_detaches() -> None:
     orchestrator, _conv, _msg, _prov = make_orchestrator([TextDelta(text="x"), _DONE])
     conv = await orchestrator._chat.create_conversation(agent_key="builtin")
@@ -271,6 +273,7 @@ async def test_a_channel_message_queues_behind_a_web_turn_and_gets_its_own_strea
     orchestrator.unsubscribe(conv.id, observer)
 
 
+@pytest.mark.acceptance(spec="chat", scenario="a reordered queue keeps each message's attachments")
 async def test_reordering_the_queue_from_the_web_keeps_a_channel_message_whole() -> None:
     release = asyncio.Event()
 
@@ -301,6 +304,10 @@ async def test_reordering_the_queue_from_the_web_keeps_a_channel_message_whole()
     orchestrator.cancel_turn(conv.id)  # cleanup
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a queued turn that fails to start is held, not lost",
+)
 async def test_a_channel_message_that_cannot_start_hears_the_failure() -> None:
     from coffer.domain.chat.errors import AgentConfigRejected
 

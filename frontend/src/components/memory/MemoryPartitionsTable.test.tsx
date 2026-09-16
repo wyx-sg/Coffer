@@ -2,7 +2,7 @@
 //
 // The partitions list: each row carries its fact count and the same
 // ScopeControl the mcp-servers/skills lists render per row (spec memory
-// FR-062/FR-014) — ONE button whose label states the partition's reach,
+// FR-029/FR-012) — ONE button whose label states the partition's reach,
 // opening a panel where the states are the choices. ScopeControl's own hooks
 // are mocked, mirroring `components/mcp/McpServersTable.test.tsx` — this suite only
 // exercises the table.

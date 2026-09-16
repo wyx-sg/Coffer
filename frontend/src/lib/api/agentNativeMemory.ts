@@ -12,7 +12,7 @@
 //
 // Its own module rather than a section of api/agents.ts, so this surface can
 // move independently. Wire types from the agent-registry contract; transport
-// via the shared `call` (agents/frontend.md §4).
+// via the shared `call` (.agents/frontend.md §4).
 import { call, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/generated/agent-registry";
 

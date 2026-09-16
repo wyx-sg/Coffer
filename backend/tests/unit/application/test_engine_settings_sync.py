@@ -104,6 +104,10 @@ def _chosen() -> GlobalInternalEngineConfig:
     )
 
 
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the engine's settings converge and a deletion means the defaults",
+)
 async def test_a_non_default_choice_is_published_as_the_one_doc() -> None:
     state, _repo, _audit = _state(_chosen())
     docs = await state.export_docs()
@@ -121,6 +125,10 @@ async def test_a_non_default_choice_is_published_as_the_one_doc() -> None:
     ]
 
 
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the engine's settings converge and a deletion means the defaults",
+)
 async def test_deleting_the_doc_resets_to_defaults_and_publishes_nothing_after() -> None:
     state, repo, audit = _state(_chosen())
 
@@ -190,6 +198,10 @@ async def test_a_switched_off_rewriter_travels_to_the_other_machines() -> None:
     }
 
 
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the engine's settings converge and a deletion means the defaults",
+)
 async def test_upkeep_at_its_defaults_publishes_no_document() -> None:
     # The area publishes a DECISION: a row holding only the defaults says the
     # same thing as no row, and publishing it would be re-adding a document

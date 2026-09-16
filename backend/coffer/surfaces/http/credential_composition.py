@@ -130,8 +130,8 @@ async def run_legacy_keychain_migration(
 
     No-op once migrated.  Best-effort: failures must not block startup.
     Every citer is a resource now — the global embedding config was the last
-    non-resource owner of a ref, and it reads its key from the connection it
-    names (spec knowledge FR-077).
+    non-resource owner of a ref, and it went with the rest of the embedding
+    layer (spec knowledge FR-037).
     """
     try:
         moved = await migrate_legacy_keychain(

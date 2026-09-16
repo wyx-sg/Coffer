@@ -34,7 +34,7 @@ deferred piece of this one.
 
 **No second retrieval surface on the web page.** A collection *is* a folder, so
 its page browses it and nothing else: one tree on the left, one read-only
-preview on the right, the same two panes a skill's Files tab is (FR-061). A
+preview on the right, the same two panes a skill's Files tab is (FR-035). A
 search box sitting where the tree should be would be a second way to reach a
 file, with its own rules, stacked on top of the folder it was querying. The
 `search` route itself keeps the callers it was built for — `coffer__search` for
@@ -46,18 +46,19 @@ cwd-derived scope, no auto-provisioning and no scope display labels. A collectio
 is a folder the human made on purpose, and the nesting inside it is theirs.
 
 **No source tracking around an ingested document.** The original is kept under
-`.raw/` so a bad conversion can be redone (FR-035) and that is all: no
+`.raw/` so a bad conversion can be redone (FR-024) and that is all: no
 `source_mode`, no re-conversion lock, no external-source table, no re-conversion
 on a schedule.
 
 **Ingestion is an additional entrance, never a required one.** Putting a Markdown
-file in the directory stays a complete way to add knowledge (FR-032). Upload
+file in the directory stays a complete way to add knowledge (FR-021). Upload
 exists because the filesystem is only reachable while the user is sitting at the
 machine, and their live entrance is a phone: a channel already accepts
-attachments and already extracts them for a turn (spec
-[channels](../channels/spec.md) FR-030), so sending a document to Coffer from
-that chat and having it land in a collection is the entrance this layer would
-otherwise lack — and it makes the Web upload the same path's other end.
+attachments (spec [channels](../channels/spec.md)) and the turn platform
+already extracts them for a turn (spec [chat](../chat/spec.md) FR-046), so sending a
+document to Coffer from that chat and having it land in a collection is the
+entrance this layer would otherwise lack — and it makes the Web upload the same
+path's other end.
 
 ## User Scenarios & Testing
 
@@ -99,7 +100,7 @@ Notes accumulate and duplicate. The developer triggers a tidy pass that merges a
 
 ### User Story 7 — A document gets into the vault from wherever the user is (Priority: P1)
 
-The developer is handed a PDF in a chat. They forward it to their Coffer channel, say which collection it belongs in, and it lands there as Markdown with its title and description filled in, the original kept aside. At the desk they do the same thing by dropping the file on the Knowledge page. Either way it is a file in a collection afterwards, indistinguishable from one they wrote by hand.
+The developer is handed a PDF in a chat. They forward it to their Coffer channel, say which collection it belongs in, and it lands there as Markdown with its title and description filled in, the original kept aside. At the desk they do the same thing by dropping the file on the Knowledge page. Either way it is a file in a collection afterwards, indistinguishable from one they wrote by hand. The chat side of that — the command, the confirmation, the refusal for anyone but the owner — is spec [channels](../channels/spec.md)'s; what this layer owes is one conversion path that a caller other than the Web page can reach.
 
 **Independent Test**: upload a non-Markdown document through the REST surface and confirm a Markdown file appears in the collection with frontmatter, the original under `.raw/`, and the converted text readable by `read`.
 
@@ -345,16 +346,6 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 - **Then** the upload is refused with the reason naming the document type, and
   neither the converted file nor the original is written
 
-### Scenario: a document forwarded to a channel lands in a collection
-
-- **Given** a paired channel whose owner has just sent `note.txt` as an
-  attachment, and one existing collection named `research`
-- **When** the owner follows it with the plain text `/save research`
-- **Then** the ingest service is called exactly once — that collection, that
-  file name, those bytes, `actor` `user` and the channel's own default agent —
-  and the channel replies with a confirmation naming both the file and the
-  collection
-
 ### Scenario: tidy archives the prior revision before rewriting
 
 - **Given** a collection holding one file whose body is
@@ -445,64 +436,77 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 
 ### Collections
 
-- **FR-010**: A **collection** is a top-level subdirectory of the knowledge root and is one `knowledge` Resource. It MUST be created deliberately — through the REST/CLI/UI surface — and MUST NOT be provisioned by a read, a write, or an agent's working directory.
-- **FR-011**: The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `global` scope, no `project-<ULID>` naming, no git-root resolution and no scope-to-project-root mapping table.
-- **FR-012**: A collection MUST support the Resource framework's **per-agent scope**: an agent sees, greps, reads and writes only the collections activated for it. An agent's calls MUST span **every** collection it is authorized for — there MUST be no rule that leaves an authorized collection out of a default. The identity a call is authorized as MUST be the session's handshake identity (spec [mcp-gateway](../mcp-gateway/spec.md) FR-021), written into the call by the gateway as an `agent` argument that no tool advertises in its input schema; a value a client supplies under that name MUST be discarded, never honoured.
-- **FR-013**: A collection's one-line description MUST be the first paragraph of a `README.md` in its directory, absent when there is none. It MUST NOT be stored in the database.
-- **FR-014**: Per-agent authorization is enforced at the MCP tool surface only, and the system MUST describe it as such: it prevents mistaken retrieval, not deliberate filesystem access.
+- **FR-007**: A **collection** is a top-level subdirectory of the knowledge root and is one `knowledge` Resource. It MUST be created deliberately — through the REST/CLI/UI surface — and MUST NOT be provisioned by a read, a write, or an agent's working directory.
+- **FR-008**: The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `global` scope, no `project-<ULID>` naming, no git-root resolution and no scope-to-project-root mapping table.
+- **FR-009**: A collection MUST support the Resource framework's **per-agent scope**: an agent sees, greps, reads and writes only the collections activated for it. An agent's calls MUST span **every** collection it is authorized for — there MUST be no rule that leaves an authorized collection out of a default. The identity a call is authorized as MUST be the session's handshake identity (spec [mcp-gateway](../mcp-gateway/spec.md)), written into the call by the gateway as an `agent` argument that no tool advertises in its input schema; a value a client supplies under that name MUST be discarded, never honoured.
+- **FR-010**: A collection's one-line description MUST be the first paragraph of a `README.md` in its directory, absent when there is none. It MUST NOT be stored in the database.
+- **FR-011**: Per-agent authorization is enforced at the MCP tool surface only, and the system MUST describe it as such: it prevents mistaken retrieval, not deliberate filesystem access.
 
 ### Retrieval
 
-- **FR-020**: The catalogue MUST be **generated at call time** by walking the directory and reading frontmatter. The system MUST NOT materialize it to a file or a table.
-- **FR-021**: `list` MUST walk **one level at a time**: with no path it returns every collection the caller may see, each with its README description and its file count; with a path it returns that directory's immediate subdirectories and files, each file with its `title` and `description`.
-- **FR-022**: `grep` MUST run ripgrep over the files of the collections the caller may see, matching literally or by regex, recursively, and returning file, line number and matching line. Matches MUST be bounded and the response MUST flag truncation. Ripgrep is preferred, not required: on a machine with no `rg` on the `PATH` the same search MUST run in a built-in Python walk over the same files with the same semantics — hidden entries skipped, regex per line, the same bounds and the same truncation flag — so a caller sees no difference beyond speed, and the daemon MUST log the fallback once.
-- **FR-023**: `read` MUST return a file's full text by path. There MUST be no chunking, no passage granularity and no `top_k`.
-- **FR-024**: `search` MUST answer a text query with the **files** the query appears in, each with its path, `title`, `description` and the lines that matched, bounded to a handful of files and a few matched lines each. It MUST use the same matcher `grep` uses — a regular expression, case-sensitive — over the same files; the two tools differ only in what they report, `grep` a line at a time and `search` a file at a time. There MUST be no score, no ranking, no heading, no retrieval *mode* on any surface and no second way an answer can be reached. Because matching is literal, `search` MUST say so where a caller reads it: the tool's own description MUST tell the agent to give it a distinctive word or exact phrase rather than a question in its own words.
-- **FR-028**: A file MUST be searchable the instant it lands, with no reindex step — not because a freshness rule keeps an index level with the disk, but because there is no index to keep level. `search` reads the files themselves at call time, so a file written by an editor, a channel, `write` or `git` is found by the next call.
-- **FR-029**: `search` MUST be confined to the files under the collections the caller may see and MUST skip hidden directories (`.history/`, `.raw/`). It MUST NOT send a file's content anywhere: search runs entirely on this machine and needs no connection of any kind.
+- **FR-012**: The catalogue MUST be **generated at call time** by walking the directory and reading frontmatter. The system MUST NOT materialize it to a file or a table.
+- **FR-013**: `list` MUST walk **one level at a time**: with no path it returns every collection the caller may see, each with its README description and its file count; with a path it returns that directory's immediate subdirectories and files, each file with its `title` and `description`.
+- **FR-014**: `grep` MUST run ripgrep over the files of the collections the caller may see, matching literally or by regex, recursively, and returning file, line number and matching line. Matches MUST be bounded and the response MUST flag truncation. Ripgrep is preferred, not required: on a machine with no `rg` on the `PATH` the same search MUST run in a built-in Python walk over the same files with the same semantics — hidden entries skipped, regex per line, the same bounds and the same truncation flag — so a caller sees no difference beyond speed, and the daemon MUST log the fallback once.
+- **FR-015**: `read` MUST return a file's full text by path. There MUST be no chunking, no passage granularity and no `top_k`.
+- **FR-016**: `search` MUST answer a text query with the **files** the query appears in, each with its path, `title`, `description` and the lines that matched, bounded to a handful of files and a few matched lines each. It MUST use the same matcher `grep` uses — a regular expression, case-sensitive — over the same files; the two tools differ only in what they report, `grep` a line at a time and `search` a file at a time. There MUST be no score, no ranking, no heading, no retrieval *mode* on any surface and no second way an answer can be reached. Because matching is literal, `search` MUST say so where a caller reads it: the tool's own description MUST tell the agent to give it a distinctive word or exact phrase rather than a question in its own words.
+- **FR-017**: A file MUST be searchable the instant it lands, with no reindex step — not because a freshness rule keeps an index level with the disk, but because there is no index to keep level. `search` reads the files themselves at call time, so a file written by an editor, a channel, `write` or `git` is found by the next call.
+- **FR-018**: `search` MUST be confined to the files under the collections the caller may see and MUST skip hidden directories (`.history/`, `.raw/`). It MUST NOT send a file's content anywhere: search runs entirely on this machine and needs no connection of any kind.
 
 ### Writing and ingestion
 
-- **FR-030**: `write` MUST create a file from `title`, `description` and body text, or replace one when given an existing path. A write MUST be a plain file write — no LLM, no conversion, no indexing step.
-- **FR-031**: `delete` MUST remove a file from disk.
-- **FR-032**: Placing a Markdown file in the directory MUST remain a complete way to add knowledge — no import, no registration, no conversion step. Ingestion below is an additional entrance for the cases where the filesystem is out of reach, never a required one.
-- **FR-033**: The system MUST accept a document upload into a named collection and convert it to Markdown. Supported inputs MUST be exactly what `markitdown` handles plus plain text and CSV; an unsupported type MUST be refused with the type named, never stored half-converted.
-- **FR-034**: A converted document MUST land as an ordinary Markdown file, indistinguishable afterwards from one written by hand: a readable slug for a name, and FR-003's frontmatter — `title` from the document (falling back to its file name) and `description` filled in, by the internal connection when one is configured and from the document's opening prose when not.
-- **FR-035**: The uploaded original MUST be kept under a single hidden `.raw/` directory at the **collection's root**, at the converted file's path relative to that root, so a bad conversion can be redone from the bytes the user sent. `.raw/` MUST be excluded from the catalogue, from grep and from search, and MUST be removed when its converted file is deleted. Coffer MUST NOT re-convert it on a schedule or track it as an external source; both mechanisms existed once and neither was ever used.
-- **FR-036**: A document sent to a Coffer channel MUST be ingestible into a collection through the same conversion path, so the phone and the Knowledge page are two ends of one entrance (spec [channels](../channels/spec.md)). The channel MUST confirm the collection with the owner before storing, and MUST NOT store anything from a non-owner.
-- **FR-037**: Upload MUST be bounded: one file per call, a size ceiling, and a refusal that names the limit. A conversion failure MUST leave neither a Markdown file nor a `.raw/` original behind.
+- **FR-019**: `write` MUST create a file from `title`, `description` and body text, or replace one when given an existing path. A write MUST be a plain file write — no LLM, no conversion, no indexing step.
+- **FR-020**: `delete` MUST remove a file from disk.
+- **FR-021**: Placing a Markdown file in the directory MUST remain a complete way to add knowledge — no import, no registration, no conversion step. Ingestion below is an additional entrance for the cases where the filesystem is out of reach, never a required one.
+- **FR-022**: The system MUST accept a document upload into a named collection and convert it to Markdown. Supported inputs MUST be exactly what `markitdown` handles plus plain text and CSV; an unsupported type MUST be refused with the type named, never stored half-converted.
+- **FR-023**: A converted document MUST land as an ordinary Markdown file, indistinguishable afterwards from one written by hand: a readable slug for a name, and FR-003's frontmatter — `title` from the document (falling back to its file name) and `description` filled in, by the internal connection when one is configured and from the document's opening prose when not.
+- **FR-024**: The uploaded original MUST be kept under a single hidden `.raw/` directory at the **collection's root**, at the converted file's path relative to that root, so a bad conversion can be redone from the bytes the user sent. `.raw/` MUST be excluded from the catalogue, from grep and from search, and MUST be removed when its converted file is deleted. Coffer MUST NOT re-convert it on a schedule or track it as an external source; both mechanisms existed once and neither was ever used.
+- **FR-025**: The ingest path MUST be reachable by a caller that is **not the Web page** — `coffer knowledge upload`, and any in-process caller that reaches it through a port rather than an import — and MUST apply exactly the conversion, naming, frontmatter, `.raw/` and refusal rules of FR-022, FR-023, FR-024 and FR-026 whichever caller invoked it. There MUST be exactly **one** conversion path and no caller-specific ingest variant, so the phone and the Knowledge page stay two ends of one entrance. What a chat caller does *before* reaching it — recognising the command, confirming the collection with the owner, refusing a non-owner — is that surface's own requirement (spec [channels](../channels/spec.md)), not this layer's.
+- **FR-026**: Upload MUST be bounded: one file per call, a size ceiling, and a refusal that names the limit. A conversion failure MUST leave neither a Markdown file nor a `.raw/` original behind.
 
 ### Tools and delivery
 
-- **FR-040**: Coffer's MCP gateway MUST expose exactly **six** built-in knowledge tools under the `coffer__` prefix: `list`, `grep`, `read`, `search`, `write`, `delete`. Upload is not among them — a document enters through a human surface (the Knowledge page or a channel), not through an agent's tool call.
-- **FR-041**: Built-in invocations MUST continue to record one `mcp_invocations` row (tool, actor, duration, outcome — no arguments, no content). A write or delete MUST additionally record an audit event with the agent as actor.
-- **FR-042**: Coffer MUST deliver a **knowledge skill** through the existing skill-delivery channel (spec [skill-manager](../skill-manager/spec.md)), teaching the catalogue-then-grep motion and when to reach for `search` instead. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
+- **FR-027**: Coffer's MCP gateway MUST expose exactly **six** built-in knowledge tools under the `coffer__` prefix: `list`, `grep`, `read`, `search`, `write`, `delete`. Upload is not among them — a document enters through a human surface (the Knowledge page or a channel), not through an agent's tool call.
+- **FR-028**: Built-in invocations MUST continue to record one `mcp_invocations` row (tool, actor, duration, outcome — no arguments, no content). A write or delete MUST additionally record an audit event with the agent as actor.
+- **FR-029**: Coffer MUST deliver a **knowledge skill** through the existing skill-delivery channel (spec [skill-manager](../skill-manager/spec.md)), teaching the catalogue-then-grep motion and when to reach for `search` instead. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
 
 ### Tidy
 
-- **FR-050**: The system MUST provide a bounded agentic **tidy** pass over a collection, driven by the internal model connection, whose tool surface is the four file operations — `list`, `read`, `write`, `delete`. It MUST copy a file's prior revision into `.history/` before any overwrite or merge. With no internal connection configured it MUST be a clean no-op.
-- **FR-051**: Tidy MUST be triggerable by hand from the UI and from `coffer knowledge organize`. A background worker MAY run it on an interval, governed by one **installation-wide setting that is off by default**, and that setting MUST **name a machine**. It is a pair on the singleton `internal_engine_config` row: `auto_tidy_enabled`, the switch, and `tidy_owner_machine_id`, a `machine_id` from the sync machine registry (spec [vault-sync](../vault-sync/spec.md)) that is null until an owner is chosen. The worker MUST read both on every tick, so the switch reads as *on, here* rather than merely *on*. Both the switch and the interval MUST be settable by the operator and MUST be read per pass rather than at boot, so a change takes effect without a daemon restart (spec [provider-switching](../provider-switching/spec.md) E3a).
-- **FR-052**: `.history/` MUST be dot-prefixed and therefore excluded from the catalogue and from grep.
-- **FR-053**: The tidy setting MUST be **synced state**, travelling with the vault in the `internal-engine` document that already carries it, so every machine agrees on who the owner is. A pass MUST run only on the machine the setting names and MUST be a clean no-op on every other. Without that rule two machines rewrite one corpus independently: each merges the same pair of notes into a topic document, but into a *different* one, and git merges the result cleanly — both machines agree the originals are deleted, and the two topic documents are additions at different paths — so the vault ends up holding the same knowledge twice with nothing reported as a conflict. If the owner machine is off, no tidy happens at all, which is the accepted trade for a background nicety.
-- **FR-054**: A tidy pass and a converge round MUST NOT overlap. Both write the vault, and an export taken mid-rewrite is a torn snapshot, so they MUST take the same lock. A pass MUST additionally be skipped while a conflict or a pending confirmation is outstanding, so a rewrite is never piled onto an unresolved divergence.
-- **FR-055**: Where the owner's pass deleted a file that another machine edited, the **edit MUST win**: the file survives with its edit, the deletion is dropped, and the round MUST NOT report a conflict. A fresh edit is something a person or an agent just decided; the deletion is a housekeeping judgement the next pass will simply make again.
-- **FR-056**: Only **one tidy pass per collection** may run at a time, whoever started it. The pass runs for minutes and rewrites the collection's files, so a second pass over the same collection is not a faster tidy but two writers over one directory. A manual trigger that arrives while a pass is in flight MUST be **refused** rather than queued (`UPKEEP_ALREADY_RUNNING`, 409) — the caller asked to start a pass, and no pass is going to start — and the interval worker MUST **skip** a collection that is already being tidied rather than wait behind it, since its next sweep comes round again anyway. Which collections are being rewritten right now MUST be readable, so a surface that opens mid-pass shows the pass instead of an idle button that invites the second click. The record is per-daemon and does not outlive it: a pass lives in the process that was asked for it, so a restart ends it and the reading comes back empty, which is the truth rather than a lost record.
+- **FR-030**: The system MUST provide a bounded agentic **tidy** pass over a collection, driven by the internal model connection, whose tool surface is the four file operations — `list`, `read`, `write`, `delete`. It MUST copy a file's prior revision into `.history/` before any overwrite or merge. With no internal connection configured it MUST be a clean no-op.
+- **FR-031**: Tidy MUST be triggerable by hand from the UI and from `coffer knowledge tidy` — the CLI spells the pass the way this spec spells it, so a reader who knows one knows the other. A background worker MAY run it on an interval, governed by one **installation-wide setting that is off by default**, and that setting MUST **name a machine**. It is a pair on the singleton `internal_engine_config` row: `auto_tidy_enabled`, the switch, and `tidy_owner_machine_id`, a `machine_id` from the sync machine registry (spec [vault-sync](../vault-sync/spec.md)) that is null until an owner is chosen. The worker MUST read both on every tick, so the switch reads as *on, here* rather than merely *on*. Both the switch and the interval MUST be settable by the operator and MUST be read per pass rather than at boot, so a change takes effect without a daemon restart (spec [internal-engine](../internal-engine/spec.md)). What that named machine then means once the vault is synced — that the setting travels with the vault, that a pass and a converge round never overlap, and that an edit made elsewhere beats the owner's deletion — is spec [vault-sync](../vault-sync/spec.md)'s, which owns that rule across every tree it syncs rather than for this one alone.
+- **FR-032**: `.history/` MUST be dot-prefixed and therefore excluded from the catalogue and from grep.
+- **FR-033**: Only **one tidy pass per collection** may run at a time, whoever started it. The pass runs for minutes and rewrites the collection's files, so a second pass over the same collection is not a faster tidy but two writers over one directory. A manual trigger that arrives while a pass is in flight MUST be **refused** rather than queued (`UPKEEP_ALREADY_RUNNING`, 409) — the caller asked to start a pass, and no pass is going to start — and the interval worker MUST **skip** a collection that is already being tidied rather than wait behind it, since its next sweep comes round again anyway. Which collections are being rewritten right now MUST be readable, so a surface that opens mid-pass shows the pass instead of an idle button that invites the second click. The record is per-daemon and does not outlive it: a pass lives in the process that was asked for it, so a restart ends it and the reading comes back empty, which is the truth rather than a lost record.
 
 ### Surfaces
 
-- **FR-060**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list the catalogue at a path, read a file, search, upload a document, write a file, delete one, and trigger tidy. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source, embedding-configuration or per-scope settings endpoint.
-- **FR-061**: The web UI MUST present a collection as a **two-pane file browser**, the same one a skill's folder gets (spec [skill-manager](../skill-manager/spec.md)): a **single tree** on the left — no lane tabs, opened a directory at a time as FR-021 lists it — and the file chosen from it on the right, rendered **read-only** through the unified file preview with open-in-external-editor and reveal-in-file-manager on it and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view, and MUST offer **deleting the file being previewed** — the one write the page carries, since until it existed the UI could delete a whole collection and not one file out of it. That delete MUST name the exact path before it runs, MUST report a refusal in place rather than closing on it, and MUST leave the preview on no file rather than on a path that is gone. The page MUST NOT carry a retrieval box of its own: the one input beside the tree narrows the names already on screen, client-side, and reading the files themselves is `search` and `grep`, whose callers are the agents' tools and the CLI. There is nothing to report about index freshness and no rebuild to offer.
-- **FR-062**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
-
-### Migration
-
-- **FR-070**: One migration MUST drop every knowledge-specific table — `documents`, `chunks`, the six `documents_fts*` tables, `embedding_config`, `knowledge_scope_labels`, `knowledge_scope_project_roots` — guarded so a database missing any of them still upgrades.
-- **FR-071**: Before those tables are dropped, a data migration MUST rewrite the on-disk corpus: each document's `title`, which lived only in the database, becomes its file name and its frontmatter, files move out of `notes/` and `docs/` into collections, and `.raw/` is deleted. Existing scopes land as two collections: `shopee` for the documents about internal systems and `coffer` for the project's own. The migration MUST be one-way, with **no compatibility shim left behind**.
+- **FR-034**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list the catalogue at a path, read a file, search, upload a document, write a file, delete one, and trigger tidy. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source, embedding-configuration or per-scope settings endpoint.
+- **FR-035**: The web UI MUST present a collection as a **two-pane file browser**, the same one a skill's folder gets (spec [skill-manager](../skill-manager/spec.md)): a **single tree** on the left — no lane tabs, opened a directory at a time as FR-013 lists it — and the file chosen from it on the right, rendered **read-only** through the unified file preview with open-in-external-editor and reveal-in-file-manager on it and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view, and MUST offer **deleting the file being previewed** — the one write the page carries, since until it existed the UI could delete a whole collection and not one file out of it. That delete MUST name the exact path before it runs, MUST report a refusal in place rather than closing on it, and MUST leave the preview on no file rather than on a path that is gone. The page MUST NOT carry a retrieval box of its own: the one input beside the tree narrows the names already on screen, client-side, and reading the files themselves is `search` and `grep`, whose callers are the agents' tools and the CLI. There is nothing to report about index freshness and no rebuild to offer.
+- **FR-036**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
 
 ### Constraints
 
-- **FR-080**: This layer MUST carry **no vector-store or embedding-model dependency**: `sqlite-vec`, `fastembed`, mem0, chroma and LlamaIndex MUST NOT appear in the dependency set, and no vector may be computed, fetched or stored anywhere. Search is ripgrep where the machine has it and the built-in literal walk of FR-022 where it does not — neither is an index. `markitdown` is this layer's converter as well as the channel's; the importlinter contract MUST admit exactly those two consumers and no others.
-- **FR-081**: The knowledge layer MUST NOT add any table to `coffer.db`, and MUST NOT create a directory of its own outside the knowledge root. A collection is a row in the kind-agnostic `resources` table like every other Resource; everything else this layer holds is a file the human can open.
+- **FR-037**: This layer MUST carry **no vector-store or embedding-model dependency**: `sqlite-vec`, `fastembed`, mem0, chroma and LlamaIndex MUST NOT appear in the dependency set, and no vector may be computed, fetched or stored anywhere. Search is ripgrep where the machine has it and the built-in literal walk of FR-014 where it does not — neither is an index. `markitdown` is this layer's converter as well as the channel's; the importlinter contract MUST admit exactly those two consumers and no others.
+- **FR-038**: The knowledge layer MUST NOT add any table to `coffer.db`, and MUST NOT create a directory of its own outside the knowledge root. A collection is a row in the kind-agnostic `resources` table like every other Resource; everything else this layer holds is a file the human can open.
+
+## Migration history
+
+The move to plain files was one guarded migration, and it has run: it is not a
+standing obligation, so it is recorded here rather than as a requirement.
+
+That migration dropped every knowledge-specific table — `documents`, `chunks`,
+the six `documents_fts*` tables, `embedding_config`, `knowledge_scope_labels`,
+`knowledge_scope_project_roots` — guarded so a database missing any of them
+still upgraded. Before the tables went, a data migration rewrote the on-disk
+corpus: each document's `title`, which lived only in the database, became its
+file name and its frontmatter; files moved out of `notes/` and `docs/` into
+collections; `.raw/` was deleted. The scopes of the day landed as two
+collections, `shopee` for the documents about internal systems and `coffer` for
+the project's own. It is **one-way, with no compatibility shim left behind** —
+`downgrade` raises, because the id-shaped names and the `.raw/` copies cannot be
+reconstructed.
+
+The rewrite module is still shipped and still covered: the acceptance scenario
+"migration rewrites ULID documents into named files in collections" guards it,
+which is why the scenario outlives the requirements.
 
 ## Success Criteria
 
@@ -512,11 +516,11 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 - **SC-004**: The layer holds no knowledge-specific table in `coffer.db` and keeps no derived copy of a file's content anywhere.
 - **SC-005**: A grep over the corpus returns matching file and line, including for CJK content, without a tokenizer.
 - **SC-006**: A file added out-of-band is returned by the next `search` with nothing rebuilt in between: the installation holds no index directory, no sidecar and no reindex command to find.
-- **SC-007**: A document sent from a channel is a Markdown file in the intended collection afterwards, with its original recoverable, and the agent reads it the same way as any other file.
+- **SC-007**: A document handed to the ingest path by a caller other than the Web page is a Markdown file in the intended collection afterwards, with its original recoverable, and the agent reads it the same way as any other file.
 - **SC-008**: `search` works on a fresh installation with nothing configured at all — no connection, no index, no setting.
 
 ## Assumptions
 
 - The corpus stays in the hundreds of files. The catalogue still fits an agent's context at that size and ripgrep over that many files is instant, so `search` is an addition to catalogue-then-grep rather than a replacement. Tens of thousands of files, or a corpus an agent genuinely cannot navigate by name, would be a different design and a different decision — and the place embeddings would be reconsidered.
 - Tidy rewrites files with no review step, so `.history/` is the whole safety net. It ships off by default for that reason.
-- The internal connection is the one place user content may leave the machine, exactly as spec [channels](../channels/spec.md) FR-022 already establishes for voice. Search never uses it — it reads no further than the disk — so the only knowledge text that goes there is what a tidy pass (FR-050) or an ingested document's generated description (FR-034) sends.
+- The internal connection is the one place user content may leave the machine, exactly as spec [chat](../chat/spec.md) FR-045 already establishes for voice transcription. Search never uses it — it reads no further than the disk — so the only knowledge text that goes there is what a tidy pass (FR-030) or an ingested document's generated description (FR-023) sends.

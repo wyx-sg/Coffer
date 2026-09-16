@@ -2,7 +2,7 @@
 // for /api/v1/agents/{name}/transcripts: the browse list, and the single-session
 // read behind one conversation's page. Split from agents.ts for file-size. Wire
 // types from the agent-registry contract; transport via the shared `call`
-// (agents/frontend.md §4).
+// (.agents/frontend.md §4).
 //
 // The two are separate calls because the wire shapes are deliberately different:
 // a listing of a thousand sessions carries no message text at all, and the body

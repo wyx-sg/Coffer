@@ -1,5 +1,5 @@
 """Non-message Telegram updates: what the poll subscribes to, and what a
-membership change means (FR-058)."""
+membership change means (FR-043)."""
 
 from __future__ import annotations
 

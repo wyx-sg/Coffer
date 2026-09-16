@@ -223,7 +223,7 @@ def test_requires_a_token(tmp_path: pathlib.Path, monkeypatch) -> None:
 
 
 # ---------------------------------------------------------------------------
-# The boot-time warm pass (FR-047) — the first visit must not be the slow one
+# The boot-time warm pass (FR-040) — the first visit must not be the slow one
 # ---------------------------------------------------------------------------
 
 
@@ -231,7 +231,7 @@ def test_warm_pass_fills_the_sidecar_and_audits_nothing(
     client: TestClient, tmp_path: pathlib.Path
 ) -> None:
     """The worker is wired into the lifespan, warms the reader the listing uses,
-    and stays a cache pass: FR-011 lets no workspace listing audit, this one
+    and stays a cache pass: FR-048 lets no workspace listing audit, this one
     included."""
     _register_codex_with_transcripts(client, tmp_path)
     sidecar = paths.transcript_summaries_path()
@@ -347,7 +347,7 @@ def test_session_read_refuses_a_path_outside_the_agents_transcripts(
 
 
 def test_session_read_emits_no_audit_event(client: TestClient, tmp_path: pathlib.Path) -> None:
-    """FR-011: a workspace listing does not audit, nor does reading one of its rows."""
+    """FR-048: a workspace listing does not audit, nor does reading one of its rows."""
     sessions = _register_codex_with_transcripts(client, tmp_path)
     before = len(client.get("/api/v1/audit").json()["entries"])
     client.get(

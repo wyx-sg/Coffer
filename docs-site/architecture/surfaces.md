@@ -103,7 +103,7 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ## Callback Listener
 
-**What it is.** The only public-reachable surface. It is a separate signed-callback process that receives inbound webhooks from chat platforms — concretely `POST /seatalk/{channel}` — verifies each request's SeaTalk signature against the channel's signing secret, answers the `event_verification` challenge, and forwards genuine events to the daemon for the channel runtime to handle. It exists because SeaTalk pushes events to a URL rather than letting Coffer long-poll (the model Telegram uses), so a reachable HTTP endpoint is required (spec channels, [Channel Adapter Framework](/reference/adr/channel-adapter-framework)).
+**What it is.** The only public-reachable surface. It is a separate signed-callback process that receives inbound webhooks from chat platforms — concretely `POST /seatalk/{channel}` — verifies each request's SeaTalk signature against the channel's signing secret, answers the `event_verification` challenge, and forwards genuine events to the daemon for the channel runtime to handle. It exists because SeaTalk pushes events to a URL rather than letting Coffer long-poll (the model Telegram uses), so a reachable HTTP endpoint is required.
 
 **Which process.** A daemon-spawned child process, deliberately separate from the daemon. It runs only while at least one SeaTalk channel is enabled. Keeping it out of the main daemon means the public-reachable code path is a small, isolated surface that handles signature verification before anything reaches the stateful core.
 
@@ -117,7 +117,7 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ## Web UI
 
-**What it is.** The browser-based management interface, specified in [spec ui-shell](/reference/specs/ui-shell/spec). The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, reading the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model, in three sidebar groups:
+**What it is.** The browser-based management interface. The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, reading the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model, in three sidebar groups:
 
 - **Agents** — `Agents` (the registry) and `Chat`, the two-column page onto the same conversations whichever surface opened them.
 - **Resources** — one entry per resource kind that has a list UI: MCP servers, Skills, Knowledge, Memory, Model providers, Channels.
@@ -125,25 +125,25 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 No "coming soon" placeholders appear — a kind only appears once it works, and none outlives its feature.
 
-**Which process.** A browser process, served by the daemon. In production the daemon serves the built frontend itself, as static files at its own loopback origin (**FR-024**) — so the page and the API are same-origin. In development, a Vite dev server runs at `http://localhost:5173` and reaches the daemon across origins behind the `COFFER_DEV_CORS` opt-in. All data is fetched from the daemon's REST API. The **desktop shell** below is the second host for this same build.
+**Which process.** A browser process, served by the daemon. In production the daemon serves the built frontend itself, as static files at its own loopback origin — so the page and the API are same-origin. In development, a Vite dev server runs at `http://localhost:5173` and reaches the daemon across origins behind the `COFFER_DEV_CORS` opt-in. All data is fetched from the daemon's REST API. The **desktop shell** below is the second host for this same build.
 
 **Transport.** Browser HTTP/REST to `http://127.0.0.1:<port>/api/v1/`, from a page loaded at `http://127.0.0.1:<port>/`.
 
-**How the token reaches the page.** The daemon injects its live API token into the `index.html` it serves, as a `window.__COFFER_TOKEN__` global in the document head (**FR-025**) — on the bare `/` and on every client-side route served through the SPA fallback alike, `no-store` and without validators so a cached copy can never carry a restarted daemon's dead token. Any page the daemon serves is therefore authenticated by the act of being served; the token appears in no URL and in no browser storage. `coffer open` (**FR-025**) carries no credential — it reads the daemon's real port from `~/.coffer/daemon.json` and opens the browser there.
+**How the token reaches the page.** The daemon injects its live API token into the `index.html` it serves, as a `window.__COFFER_TOKEN__` global in the document head — on the bare `/` and on every client-side route served through the SPA fallback alike, `no-store` and without validators so a cached copy can never carry a restarted daemon's dead token. Any page the daemon serves is therefore authenticated by the act of being served; the token appears in no URL and in no browser storage. `coffer open` carries no credential — it reads the daemon's real port from `~/.coffer/daemon.json` and opens the browser there.
 
 **Lifecycle.** The Web UI session is the lifetime of the browser tab. Closing the tab does not affect the daemon. The UI includes a daemon-offline banner that detects when the daemon is unreachable and displays the `coffer daemon start` command as a copyable affordance; the banner disappears automatically when the daemon comes back online.
 
-**Security boundary.** `X-Coffer-Token` on every REST API call. CORS is same-origin by default; the Vite dev origins are added only under `COFFER_DEV_CORS`. Because the served page now carries the token, the daemon also refuses any request whose `Host` header is not a loopback authority (**FR-027**), which is what closes DNS rebinding — a browser treats a rebound `evil.com` as same-origin, but still sends `Host: evil.com`. Because the daemon binds to loopback and the token is never transmitted to a remote origin, the trust model is equivalent to the CLI: local user account only.
+**Security boundary.** `X-Coffer-Token` on every REST API call. CORS is same-origin by default; the Vite dev origins are added only under `COFFER_DEV_CORS`. Because the served page now carries the token, the daemon also refuses any request whose `Host` header is not a loopback authority, which is what closes DNS rebinding — a browser treats a rebound `evil.com` as same-origin, but still sends `Host: evil.com`. Because the daemon binds to loopback and the token is never transmitted to a remote origin, the trust model is equivalent to the CLI: local user account only.
 
 ---
 
 ## Desktop shell (`Coffer.app`)
 
-**What it is.** A native host for the *same* web UI build — a macOS Tauri 2 application ([The Desktop Shell Returns](/reference/adr/desktop-shell-over-a-shared-frontend), **FR-029** – **FR-032**). It owns exactly four things a browser cannot do for itself: a window the OS treats as an application (Dock icon, Cmd-Tab entry), a resident tray with *Open Coffer* / *Restart daemon* / *Quit*, detect-or-spawn of the daemon at launch, and the credential handshake a locally-hosted page has no other way to make. It reimplements nothing the daemon already exposes over HTTP — folder picking, opening a file in an editor and revealing it in Finder are daemon routes a webview calls exactly as a browser tab does.
+**What it is.** A native host for the *same* web UI build — a macOS Tauri 2 application. It owns exactly four things a browser cannot do for itself: a window the OS treats as an application (Dock icon, Cmd-Tab entry), a resident tray with *Open Coffer* / *Restart daemon* / *Quit*, detect-or-spawn of the daemon at launch, and the credential handshake a locally-hosted page has no other way to make. It reimplements nothing the daemon already exposes over HTTP — folder picking, opening a file in an editor and revealing it in Finder are daemon routes a webview calls exactly as a browser tab does.
 
 **Which process.** Its own OS process, with a webview inside it. The app is not served by the daemon; it *finds or starts* one. Closing the window hides to the tray rather than exiting.
 
-**Transport.** The page is a **local asset** (`frontendDist: ../frontend/dist`), not a document fetched from the daemon — which is what makes it an application rather than a bookmarked browser window: the UI renders before the daemon answers, so an absent or wedged daemon produces a real screen with an actionable banner. API calls then go over loopback HTTP to `127.0.0.1:<port>/api/v1/`, with the port read from `~/.coffer/daemon.json`. Because nobody served that document, FR-025's injection cannot reach it; the shell supplies the same `window.__COFFER_BASE_URL__` / `window.__COFFER_TOKEN__` globals through an IPC command instead (**FR-030**), alongside the first render and never before it.
+**Transport.** The page is a **local asset** (`frontendDist: ../frontend/dist`), not a document fetched from the daemon — which is what makes it an application rather than a bookmarked browser window: the UI renders before the daemon answers, so an absent or wedged daemon produces a real screen with an actionable banner. API calls then go over loopback HTTP to `127.0.0.1:<port>/api/v1/`, with the port read from `~/.coffer/daemon.json`. Because nobody served that document, the daemon's injection cannot reach it; the shell supplies the same `window.__COFFER_BASE_URL__` / `window.__COFFER_TOKEN__` globals through an IPC command instead, alongside the first render and never before it.
 
 **Lifecycle.** Started by the user (Dock, Spotlight, Cmd-Tab). Its daemon is resolved in a fixed order — a live daemon named by `daemon.json`, then the app's own bundle, then `~/.coffer/bin/`, then `PATH` — taking over a running daemon rather than spawning a second one. Quitting the app does not stop the daemon, and a restart from the tray or the offline banner is rate-limited against a tight spawn loop.
 
@@ -165,4 +165,4 @@ No "coming soon" placeholders appear — a kind only appears once it works, and 
 
 ---
 
-**See also:** [Architecture reference](/reference/project/architecture), [UI Shell spec](/reference/specs/ui-shell/spec), [Distribution](/architecture/distribution), [The Desktop Shell Returns](/reference/adr/desktop-shell-over-a-shared-frontend)
+**See also:** [Distribution](/architecture/distribution)

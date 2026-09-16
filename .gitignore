@@ -184,9 +184,6 @@ temp/
 # stray worktree dir created by tooling typo (.claire, not .claude)
 .claire/
 
-# --- speckit duplicate skills folder (mirror of .claude/skills/) ---
-.agents/
-
 # Superpowers / AI planning artifacts — never committed to the repo
 docs/superpowers/
 .superpowers/

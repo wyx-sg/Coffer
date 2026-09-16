@@ -75,7 +75,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="the listener runs only while a seatalk channel is enabled"
+    spec="channels/seatalk", scenario="the listener runs only while a seatalk channel is enabled"
 )
 async def test_listener_tracks_the_enabled_seatalk_channel(env: ChannelEnv) -> None:
     env.keyring.set("channel/st/app", "app-secret-value")
@@ -109,10 +109,10 @@ _WEBSOCKET_CONFIG = {
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a websocket channel runs without the listener or a tunnel"
+    spec="channels/seatalk", scenario="a websocket channel runs without the listener or a tunnel"
 )
 async def test_websocket_only_deployment_keeps_the_listener_stopped(env: ChannelEnv) -> None:
-    """FR-071: websocket delivery needs no inbound HTTP surface at all.
+    """spec channels/seatalk FR-004: websocket delivery needs no inbound HTTP surface at all.
 
     The adapter still runs (it sends the replies), and the connection is held —
     but nothing listens on a port and no tunnel is managed, which is the entire

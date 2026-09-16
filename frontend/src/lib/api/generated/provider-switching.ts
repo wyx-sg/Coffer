@@ -158,14 +158,17 @@ export interface paths {
         put?: never;
         /**
          * Set a connection as Coffer's internal-engine default
-         * @description Marks this connection as the one Coffer's internal LLM engine uses
-         *     (memory organizer, reorg, distill). At most one
-         *     connection globally is the internal default; setting one clears the
-         *     previous one (sequential clear-then-set, serialised by the
-         *     single-process daemon).
+         * @description Marks this connection as the one Coffer's own internal engine borrows
+         *     for its endpoint and key. At most one connection globally is the
+         *     internal default; setting one clears the previous one (sequential
+         *     clear-then-set, serialised by the single-process daemon), and the
+         *     database enforces the same invariant against every other writer.
          *
          *     Emits a `PROVIDER_INTERNAL_DEFAULT_SET` audit event with details
-         *     `{from, to}` and returns the updated `ProviderOut`.
+         *     `{from, to}` and returns the updated `ProviderOut`. It also notifies the
+         *     engine, which applies its own rule about the model it was paired with
+         *     (spec internal-engine FR-007); the engine's own settings live under
+         *     `/api/v1/internal-engine-config` and are not this document's.
          */
         post: operations["setInternalDefaultProvider"];
         delete?: never;
@@ -254,63 +257,6 @@ export interface paths {
          *     only when something changed.
          */
         post: operations["useBuiltinProvider"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/internal-engine-config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get the global internal-engine model selection
-         * @description The single, global model Coffer's internal LLM engine (memory organizer,
-         *     reorg, distill) runs on. The engine takes its endpoint +
-         *     key from the `internal_default` connection but its MODEL from this
-         *     singleton (spec provider-switching E3). `model` is `null` until one is chosen.
-         */
-        get: operations["getInternalEngineConfig"];
-        /**
-         * Set the global internal-engine model
-         * @description Sets the model the internal engine runs on (`null`/empty clears it).
-         *     Overlaid onto the resolved `internal_default` connection before the
-         *     engine builds its chat model. Emits an `internal_engine_model_set` audit
-         *     event.
-         */
-        put: operations["updateInternalEngineConfig"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/internal-engine-config/upkeep": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Change one unattended pass's switch or timer
-         * @description Coffer runs three passes on its own behalf — `aggregate` (spec memory
-         *     FR-007), `organise` (FR-030) and `tidy` (spec knowledge FR-051) — each
-         *     with a switch and an interval. One pass per request, and each half left
-         *     alone when it is not sent: a settings page toggles one row at a time,
-         *     and a body carrying all three would make every toggle a chance to write
-         *     back a stale copy of the other two. `use_default_interval` returns a
-         *     pass to its own built-in interval, which a null `interval_s` cannot
-         *     express. Emits an `internal_engine_model_set` audit event.
-         */
-        put: operations["updateUpkeep"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -534,41 +480,6 @@ export interface components {
         ActiveKeyOut: {
             /** @description The decrypted provider API key. */
             value: string;
-        };
-        /** @description Coffer's own operating settings: the model its internal engine runs on (the connection used is the `internal_default` — endpoint + key), and the switch and timer of every pass it runs unattended. */
-        InternalEngineConfigOut: {
-            /** @description The chosen model id, or null when unset. */
-            model?: string | null;
-            /** Format: date-time */
-            updated_at?: string | null;
-            /** @description Keyed by pass name (`aggregate`, `organise`, `tidy`). */
-            upkeep?: {
-                [key: string]: components["schemas"]["UpkeepSettingOut"];
-            };
-        };
-        /** @description One unattended pass's switch and timer. */
-        UpkeepSettingOut: {
-            enabled: boolean;
-            /** @description The chosen interval, or null while none has been chosen. */
-            interval_s?: number | null;
-            /** @description What runs while `interval_s` is null — reported so a settings surface can name the default rather than show a blank. */
-            default_interval_s: number;
-        };
-        /** @description Change one pass. An omitted field leaves that half of the pass alone. */
-        UpkeepUpdate: {
-            /** @enum {string} */
-            pass: "aggregate" | "organise" | "tidy";
-            enabled?: boolean | null;
-            interval_s?: number | null;
-            /**
-             * @description Return this pass to its own built-in interval.
-             * @default false
-             */
-            use_default_interval: boolean;
-        };
-        /** @description Set the internal-engine model; null/empty clears it. */
-        InternalEngineConfigUpdate: {
-            model?: string | null;
         };
         ErrorOut: {
             /** @description Machine-readable error code. */
@@ -937,81 +848,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    getInternalEngineConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    updateInternalEngineConfig: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InternalEngineConfigUpdate"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["InternalError"];
-        };
-    };
-    updateUpkeep: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpkeepUpdate"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InternalEngineConfigOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
     };

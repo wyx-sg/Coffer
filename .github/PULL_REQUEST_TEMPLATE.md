@@ -3,7 +3,7 @@ PR title must follow Conventional Commits (same shape as commit subject):
   <type>(<scope>): <subject>
 Limits come from .commitlintrc.yaml, which the pr-title workflow and the local
 commit-msg hook both read: subject ≤ 120 chars, whole header ≤ 150. Case is not
-enforced. See agents/workflow.md "Commits" for the full rule set.
+enforced. See .agents/workflow.md "Commits" for the full rule set.
 -->
 
 ## What
@@ -40,4 +40,4 @@ enforced. See agents/workflow.md "Commits" for the full rule set.
 - [ ] `make verify-all` is green locally
 - [ ] PR title matches the squashed commit subject (Conventional Commits, within .commitlintrc.yaml's caps)
 - [ ] AI-authored commits carry `Co-authored-by: <Agent> <noreply@...>`
-- [ ] Constitution / agents/ docs updated if conventions changed
+- [ ] Constitution / .agents/ docs updated if conventions changed

@@ -9,13 +9,14 @@
 // both hosts.
 //
 // The logic lives in sibling modules to keep every file under the project's
-// 400-line size cap (see `agents/stack.md`):
+// 400-line size cap (see `.agents/stack.md`):
 //   * `logging`   — where the shell's own log records go
 //   * `sidecar`   — find a binary Tauri staged in the app bundle
 //   * `resolve`   — the five-step "where does a daemon come from" chain
 //   * `discovery` — ~/.coffer/daemon.json + liveness/shutdown probes
 //   * `env_path`  — the $PATH a spawned daemon is handed
 //   * `spawn`     — start a daemon detached from the app
+//   * `restart`   — the pure restart policy: rate limit, stop-then-start
 //   * `daemon`    — the IPC commands and the detect-or-spawn policy
 //   * `tray`      — system tray icon + close-to-tray logic
 
@@ -24,6 +25,7 @@ mod discovery;
 mod env_path;
 mod logging;
 mod resolve;
+mod restart;
 mod sidecar;
 mod spawn;
 mod tray;
@@ -54,7 +56,7 @@ pub fn run() {
     // only widen the capability set for code nothing calls.
     //
     // No binary deployment either. The daemon's own frozen-start path
-    // (spec mcp-gateway FR-026) deploys `coffer`, `coffer-daemon`,
+    // (spec daemon FR-027) deploys `coffer`, `coffer-daemon`,
     // `coffer-mcp-shim` and `coffer-callback` into ~/.coffer/bin — which is
     // also how installing only the .app installs the CLI. Doing it here as
     // well would put two processes in a race to write that directory.

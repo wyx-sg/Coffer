@@ -3,9 +3,9 @@
 // internal engine runs (its endpoint + key come from the `internal_default`
 // connection), and the switch and interval of every pass it runs unattended.
 // Wire types from the provider-switching contract; transport via the shared
-// `call` (agents/frontend.md §4).
+// `call` (.agents/frontend.md §4).
 import { call } from "@/lib/api/call";
-import type { components } from "@/lib/api/generated/provider-switching";
+import type { components } from "@/lib/api/generated/internal-engine";
 
 export type InternalEngineConfig = components["schemas"]["InternalEngineConfigOut"];
 export type UpkeepSetting = components["schemas"]["UpkeepSettingOut"];

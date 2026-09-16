@@ -15,9 +15,9 @@ checkout, register an MCP server, and wire Coffer into your MCP client.
 - One or more MCP servers you want to use. The walk-through below uses the
   public `@modelcontextprotocol/server-filesystem` server, which needs `npx`
   (Node.js 18+).
-- The `coffer` CLI and the `coffer-mcp-shim` binary on your `PATH`. From a
-  source checkout: `pip install ./backend` puts both on `PATH` as
-  console-script entry points.
+- The `coffer` CLI and the `coffer-mcp-shim` binary on your `PATH`. How they
+  get there — a source install, the release archive, or the desktop app — is
+  spec daemon's and spec desktop-app's; either route leaves both on disk.
 
 ## First launch
 
@@ -29,14 +29,11 @@ coffer daemon start
 
 On first launch Coffer:
 
-1. Binds port 8000 and writes `~/.coffer/daemon.json` (mode `0600`) so the CLI
-   and the shim can find each other. The address does not move between
-   restarts, so a browser bookmark to Coffer's UI keeps working. If something
-   else on your machine wants 8000, Coffer refuses to start rather than landing
-   somewhere else, and names the process holding it;
-   `coffer daemon port set <other>` moves Coffer instead.
+1. Binds its port and publishes `~/.coffer/daemon.json` so the CLI and the shim
+   can find each other (spec daemon).
 2. Initialises the SQLite database under `~/.coffer/coffer.db`.
-3. Seeds default retention policies (audit: 365 days, invocations: 30 days).
+3. Seeds the default retention policies every log-writing spec registers —
+   the invocation log below arrives at 30 days (spec resource-framework).
 
 Verify the daemon is up:
 
@@ -54,15 +51,10 @@ Then open the UI:
 coffer open
 ```
 
-The daemon serves the built web UI itself, at its own loopback origin, and hands
-the browser its API token in the page it serves — so landing on that origin is
-all the authentication there is: no token to paste. `coffer open` exists for the
-one part a human cannot do reliably, reading the real port out of
-`~/.coffer/daemon.json`, and it starts a daemon if none is running.
-
-(There is a second way in, for people who would rather not start with a
-terminal: the desktop `.dmg` of the release, which is the same UI in a native
-window with a tray, and which installs the `coffer` CLI on first launch.)
+The daemon serves the web UI at its own loopback origin and authenticates the
+page it serves, so there is no token to paste; `coffer open` reads the real port
+and starts a daemon if none is running (spec daemon). People who would rather
+not start in a terminal have the desktop app instead (spec desktop-app).
 
 ## Add your first MCP server
 
@@ -80,9 +72,9 @@ coffer mcp show filesystem       # the discovered tools, resources and prompts
 coffer mcp refresh filesystem    # re-discover after an upstream upgrade
 ```
 
-Add an HTTP MCP server (with credentials) the same way. `credentials set` takes
-the **ref** as its only argument and reads the secret from stdin, so it never
-lands in shell history:
+Add an HTTP MCP server (with credentials) the same way. `coffer credentials set`
+is spec credentials'; it takes the **ref** as its only argument and reads the
+secret from stdin, so the secret never lands in shell history:
 
 ```bash
 printf 'ghp_xxxxxxxxxxxx' | coffer credentials set github-token
@@ -129,8 +121,8 @@ Restart the client.
 }
 ```
 
-(If you moved Coffer's port with `coffer daemon port set` — see
-`~/.coffer/daemon.json` for the actual one — substitute it here.)
+(If you moved Coffer's port, `~/.coffer/daemon.json` names the actual one —
+substitute it here.)
 
 ## Verify it works
 
@@ -160,19 +152,12 @@ Restart the MCP client; the disabled tool no longer appears.
 Repeat the steps above. Tool calls in the client now appear prefixed by their
 respective server names — no collisions.
 
-### See what changed and when
+### See what changed and when, or how long logs are kept
 
-```bash
-coffer audit list --kind mcp_server --name filesystem
-```
-
-### Change how long logs are kept
-
-```bash
-coffer retention list
-coffer retention set mcp_invocations --days 7
-coffer retention set audit_log --forever
-```
+`coffer audit list --kind mcp_server --name filesystem` and
+`coffer retention set mcp_invocations --days 7` both work here, but they are
+spec resource-framework's commands and its quickstart covers them — including
+reach, deletion and the rest of what any resource can be told to do.
 
 ### Update a credential
 
@@ -180,9 +165,8 @@ coffer retention set audit_log --forever
 printf '<new value>' | coffer credentials set github-token
 ```
 
-(`--value <secret>` is accepted too, and documented as unsafe — it lands in
-shell history. No need to update the server config either way: it already
-references the credential by ref.)
+No need to update the server config: it already references the credential by
+ref. The command itself is spec credentials'.
 
 ## Troubleshooting
 
@@ -191,9 +175,9 @@ references the credential by ref.)
 | `Cannot connect to coffer daemon` from the client | Daemon not running            | `coffer daemon start`                                                              |
 | `command not found: coffer-mcp-shim`              | PATH not updated              | Use the absolute path to the binary, or add its directory to your `PATH`.          |
 | Server registered but capabilities empty          | Upstream failed to initialize | `~/.coffer/logs/upstream-<name>.log` has stderr from the upstream.                 |
-| `CREDENTIAL_LOCKED` error                         | OS keychain is locked         | Unlock the keychain (macOS: log in to GUI; Linux: unlock GNOME-keyring / KWallet). |
+| `CREDENTIAL_LOCKED` error                         | OS keychain is locked         | Unlock the keychain; the credential store's own troubleshooting is spec credentials'. |
 | Disabled tool still appears in client             | Client cached the tool list   | Restart the client, or look for a "reload MCP servers" option.                     |
-| `port <n> is configured as Coffer's fixed daemon port` | Something else holds the port Coffer binds — 8000 by default | The message names the process. Free it, or move Coffer with `coffer daemon port set <other>`. |
+| The daemon will not start, or its port is held    | Another process holds the port | Spec daemon's quickstart covers the port and its diagnosis.                        |
 
 ## Where things live
 
@@ -226,8 +210,6 @@ Coffer ships no backup command of its own — to keep a vault on two machines,
 point spec vault-sync's bidirectional convergence at a git remote you own; for a
 plain copy, `cp -r ~/.coffer/ <dest>` with the daemon stopped.
 
-**Master key.** `master.key` decrypts the credential ciphertext in
-`coffer.db`. Bundling it next to that ciphertext defeats the encryption, so
-keep it out of anything you copy off-machine; a vault without it works for
-everything except *reading* previously-stored credentials, which can be
-re-entered with `coffer credentials set`.
+**Master key.** `master.key` decrypts the credential ciphertext in `coffer.db`.
+Keep it out of anything you copy off-machine — spec credentials' quickstart
+explains why and what a vault without it can still do.

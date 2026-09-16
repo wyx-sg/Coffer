@@ -4,7 +4,7 @@ Four operations over ONE collection — list, read, write, delete — and the
 boundary that makes "stay inside this collection" a fact rather than an
 instruction in a prompt. Every handler that can overwrite or retire a file
 archives the prior revision first: the pass runs unattended with no review
-step, so ``.history/`` is the entire safety net (spec knowledge FR-050).
+step, so ``.history/`` is the entire safety net (spec knowledge FR-030).
 
 Split out of ``tidy.py`` for the file-size ceiling; the pass itself owns when
 the loop runs and what it reports.

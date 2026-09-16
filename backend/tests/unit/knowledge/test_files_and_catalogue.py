@@ -66,7 +66,7 @@ def test_catalogue_lists_one_level_only(knowledge_root) -> None:  # type: ignore
     level = fs.list_level("shopee")
     assert [f.title for f in level.files] == ["Top"]
     assert [d.name for d in level.directories] == ["account"]
-    # The nested file is counted but not listed: one level at a time (FR-021).
+    # The nested file is counted but not listed: one level at a time (FR-013).
     assert level.directories[0].file_count == 1
 
 
@@ -82,7 +82,7 @@ def test_catalogue_walks_into_a_nested_directory(knowledge_root) -> None:  # typ
     spec="knowledge", scenario="a file added out-of-band is visible to the next call"
 )
 def test_a_hand_placed_file_needs_no_import(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    """The filesystem is the ingestion surface (FR-032): no index means nothing
+    """The filesystem is the ingestion surface (FR-021): no index means nothing
     to reconcile, so a file dropped in by hand is simply there."""
     dropped = knowledge_root / "shopee" / "dropped-by-hand.md"
     dropped.write_text(
@@ -151,7 +151,7 @@ def test_readme_is_a_description_not_a_listed_file(knowledge_root) -> None:  # t
 
 def test_a_file_may_be_all_title_and_description(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     """An empty body is legitimate — a pointer whose whole content is what it
-    is and where it sits. Both write surfaces agree on this (FR-030); only the
+    is and where it sits. Both write surfaces agree on this (FR-019); only the
     description is required, because that is what makes it findable (FR-003).
     """
     written = fs.write_file(

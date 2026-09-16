@@ -15,7 +15,7 @@ entries by cwd into one read-only store row per project; memory aggregation's
 reader (``infrastructure.memory.readers.codex``) turns each group's and the
 profile's own bullets into normalised facts. Which sections count as facts,
 how a bullet gets a title, and how a fact's identity anchor is built are that
-reader's own policy (spec memory FR-020/021/022), not this module's — this
+reader's own policy (spec memory FR-013/021/022), not this module's — this
 module only knows Codex's file *format*.
 """
 

@@ -1,4 +1,4 @@
-"""Wiring for the transcript summary cache's warm pass (FR-047).
+"""Wiring for the transcript summary cache's warm pass (spec agent-registry FR-041).
 
 Mirrors ``memory_wiring.py``'s ``start_organise_worker`` /
 ``stop_organise_worker`` pair: the worker itself is pure application code, and
@@ -40,8 +40,8 @@ def start_transcript_warm_worker(
     async def _list_targets() -> list[AgentTarget]:
         # Registered agents, enabled or not: the Conversations tab reads an
         # agent's own past sessions, which a disabled agent still has. Listing
-        # resources is a read — it emits no audit event, which is what FR-011
-        # requires of anything behind a workspace listing.
+        # resources is a read — it emits no audit event, which is what spec
+        # agent-registry FR-048 requires of anything behind a workspace listing.
         targets: list[AgentTarget] = []
         for resource in await resource_svc.list(kind="agent"):
             cfg = AgentConfig.model_validate(resource.config)

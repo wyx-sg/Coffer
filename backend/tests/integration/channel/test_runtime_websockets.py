@@ -1,4 +1,4 @@
-"""ChannelRuntime._reconcile_websockets: hold/drop/retry per channel (FR-071).
+"""ChannelRuntime._reconcile_websockets: hold/drop/retry per channel (spec channels/seatalk FR-004).
 
 Drives the reconcile step directly with the recording stub controller and a fake
 materialize — no SDK, no socket, no DB. The real connector's threading lives in

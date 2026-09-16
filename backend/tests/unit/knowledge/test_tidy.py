@@ -1,7 +1,7 @@
 """The tidy pass, and the one guarantee that makes it acceptable.
 
 Tidy rewrites files a human and an agent manage together, unattended and with
-no diff to approve (spec knowledge FR-050). ``.history/`` is therefore the whole
+no diff to approve (spec knowledge FR-030). ``.history/`` is therefore the whole
 safety net, and the first test here is the one that matters: nothing is
 overwritten before its prior revision is on disk.
 """
@@ -148,7 +148,7 @@ async def test_the_prior_revision_is_archived_before_an_overwrite(  # type: igno
 @pytest.mark.acceptance(spec="knowledge", scenario="the tidy worker stays off unless enabled")
 async def test_the_worker_does_nothing_until_switched_on(service) -> None:  # type: ignore[no-untyped-def]
     """An unattended rewriter of a jointly managed corpus is something the
-    operator turns on, never something they discover running (FR-051)."""
+    operator turns on, never something they discover running (FR-031)."""
     ran: list[str] = []
 
     async def _tidy(svc, collection, *, actor):  # type: ignore[no-untyped-def]

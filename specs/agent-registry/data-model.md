@@ -1,7 +1,7 @@
 # Data Model — Agent Registry
 
 Entities, fields, relationships, and storage notes for the agent registry.
-Builds on the kind-agnostic Resource framework from spec mcp-gateway — agents are rows
+Builds on the kind-agnostic Resource framework from spec resource-framework — agents are rows
 in the generic `resources` table, so spec agent-registry adds no table of its own.
 
 ## Domain entities (`backend/coffer/domain/agent/`)
@@ -49,15 +49,16 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `type`              | `AgentType`    | required; enum value                                                                                                                |
 | `config_dir`        | `Path \| None` | optional absolute-path override; defaults to `type.default_config_dir()` at read time                                               |
-| `model`             | `str \| None`  | the model this agent runs on (projected as `ANTHROPIC_MODEL` / Codex `model`); `None` = the agent's own default                      |
-| `fast_model`        | `str \| None`  | `ANTHROPIC_SMALL_FAST_MODEL` (anthropic only)                                                                                       |
-| `wire_api`          | `str \| None`  | the Codex wire choice; validated against the one value Codex still accepts (`responses`)                                            |
+| `model`             | `str \| None`  | the model this agent runs on; `None` = the agent's own default (FR-031)                                                              |
+| `fast_model`        | `str \| None`  | the binding's fast slot; an explicit null unbinds it (FR-031)                                                                       |
+| `wire_api`          | `str \| None`  | the binding's wire; only `responses` is accepted (agent-registry/codex FR-011)                                                       |
 
 Those are the whole schema — the model is `extra="forbid"` and declares nothing
-else. The three model fields are owned by
-[spec provider-switching](../provider-switching/spec.md) (amendment 2026-06-22b,
-E3) and documented there. A `models` curated-set field existed briefly and is
-gone: migration `0060` backfilled it and migration `0063` dropped it again.
+else. The three model fields are the agent's own binding (FR-031): they live
+here because the model is chosen at the point of use. Projecting them into an
+agent's native config is [spec provider-switching](../provider-switching/spec.md)'s.
+A `models` curated-set field existed briefly and is gone: migration `0060`
+backfilled it and migration `0063` dropped it again.
 
 Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`. The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields this table once carried are gone, stripped from stored configs by migration `0058`.
 
@@ -76,7 +77,7 @@ in place behind an explicit Edit**, with the unsaved draft guarded three ways
 (switching file, switching tab, leaving the page); it also offers
 open-in-external-editor / reveal for the edits that want a real editor (the
 HTTP `ConfigFileInfo` / `ConfigFileContent` views carry both the file `path`
-and its containing-folder `folder_path` for those affordances, FR-038). The
+and its containing-folder `folder_path` for those affordances, FR-047). The
 REST API and CLI expose the same write.
 
 `ConfigFileFormat` — `StrEnum` of `json`, `toml`, `yaml`, `markdown`, `text`.
@@ -85,7 +86,7 @@ Drives save-time validation: `json` parses with `json.loads`, `toml` with
 valid.
 
 `ConfigFileKind` — `StrEnum` of `file`, `directory`. A `directory` entry
-(FR-034) resolves to a directory of files rather than a single file; its
+(FR-027) resolves to a directory of files rather than a single file; its
 `format` describes the CHILD files.
 
 `ConfigFileSpec` — frozen dataclass describing one allowlisted file:
@@ -127,7 +128,7 @@ protected by the `.bak` backup on every write.
 `spec_for(agent_type, key) -> ConfigFileSpec` raises `ConfigFileNotAllowed`
 when `key` is not in the type's allowlist (drives the 404 + no-FS-access rule).
 
-### Directory Config Entry (FR-034/FR-035)
+### Directory Config Entry (FR-027/FR-028)
 
 An allowlisted entry with `kind=directory` lists its child files instead of
 carrying content; the directory on disk is the source of truth (derived, never
@@ -178,7 +179,7 @@ share the same atomic-write + `.bak` machinery.
 ## SQLite schema additions
 
 **None.** The `agent` kind needs no table of its own — agents are rows in the
-generic `resources` table (kind-agnostic Resource framework from spec mcp-gateway), and
+generic `resources` table (kind-agnostic Resource framework from spec resource-framework), and
 discovery is read-only with no suppression list to persist. Spec agent-registry
 creates no table and so introduces no Alembic revision of its own; the head
 revision is whatever the newest file under
@@ -211,12 +212,12 @@ The workspace amendment adds:
 | Value                       | When emitted                                                                    |
 | --------------------------- | ------------------------------------------------------------------------------- |
 | `agent_config_file_deleted`  | A directory-entry child file was deleted (prior content preserved as `.bak`)    |
-| `agent_mcp_entry_removed`    | A direct MCP entry was removed from the agent's own config (FR-026)             |
-| `agent_mcp_entry_adopted`    | A direct MCP entry was adopted into a registered `mcp_server` resource (FR-028) |
-| `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface (FR-032)             |
-| `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI (FR-033)      |
+| `agent_mcp_entry_removed`    | A direct MCP entry was removed from the agent's own config (FR-020)             |
+| `agent_mcp_entry_adopted`    | A direct MCP entry was adopted into a registered `mcp_server` resource (FR-021) |
+| `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface (FR-025)             |
+| `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI (FR-026)      |
 
-The lifecycle steps required by FR-011 — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected `agent:<name>` reference). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (ref `agent:<name>`, details `{key}`). Agents have no enable/disable concept, and discovery is read-only and registers nothing, so neither emits an audit event of its own.
+The lifecycle steps required by FR-048 — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected `agent:<name>` reference). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (ref `agent:<name>`, details `{key}`). Agents have no enable/disable concept, and discovery is read-only and registers nothing, so neither emits an audit event of its own.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
 
@@ -243,19 +244,16 @@ directory, as a string), and `suggested_name` (the type's `default_name()`).
 A removed agent re-appears as a candidate on the next scan — there is no
 suppression list.
 
-### `BrowseService` (`application/fs/browse_service.py`)
+### The folder picker's backend (spec daemon)
 
-Backs the web folder picker for choosing a custom `config_dir` (FR-023/FR-024).
-Read-only: given a directory path (defaulting to the user's home), it lists the
-directory's immediate subdirectories — never file contents.
-
-| Method                                | Purpose                                                                                                                                                                                                     |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browse(path=None) -> FsBrowseResult` | Resolve `path` (default home); return its resolved path, its parent (or `None` at the filesystem root), and its immediate subdirectories. Unreadable or non-existent path → error, never a partial listing. |
-
-The web UI opens the host's native directory dialog through the daemon and
-falls back to this daemon-backed browser via `GET /api/v1/fs/browse`, surfaced
-in the `FolderPicker.tsx` frontend component.
+FR-050's picker is a CONSUMER of the daemon's filesystem routes, not an owner
+of them. `POST /api/v1/fs/pick-folder` opens the host's native directory
+dialog and `GET /api/v1/fs/browse` is the in-app fallback when the host has no
+such tool; both, with `POST /api/v1/fs/open`, `POST /api/v1/fs/reveal` and the
+installed-editor enumeration behind FR-047, are specified and implemented by
+spec daemon. This spec models only what it does with the absolute path they
+return: validate it per FR-007 and store it as `config_dir`. The
+`FolderPicker.tsx` frontend component is the surface that calls them.
 
 ### `AgentConfigFileService` (`application/agent/config_file_service.py`)
 
@@ -264,20 +262,20 @@ allowlist via a `ConfigFileStorePort`.
 
 | Method                                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_files(name) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, containing-folder `folder_path` (backs the read-only UI's open/reveal, FR-038), format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                         |
-| `read_file(name, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` + `memory_block` (the `path`/`folder_path` pair backs open-in-external-editor / reveal, FR-038). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                   |
-| `write_file(name, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read (FR-036); `store.write_text_atomic` (atomic + `.bak`); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
+| `list_files(name) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, containing-folder `folder_path` (backs the read-only UI's open/reveal, FR-047), format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                         |
+| `read_file(name, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` + `memory_block` (the `path`/`folder_path` pair backs open-in-external-editor / reveal, FR-047). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                   |
+| `write_file(name, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read (FR-029); `store.write_text_atomic` (atomic + `.bak`); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
 | `read_child(name, key, relpath) -> ConfigFileContent`                                             | `validate_child_relpath`, then read one child of a directory entry; same shape as `read_file`.                                                                                                                                                                                                                                                                                                             |
-| `write_child(name, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file` (FR-035).                                                                                                                                                                                                                                                                             |
+| `write_child(name, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file` (FR-028).                                                                                                                                                                                                                                                                             |
 | `delete_child(name, key, relpath, *, actor) -> None`                                              | Delete one child file, preserving the prior content as `.bak`; records `agent_config_file_deleted`.                                                                                                                                                                                                                                                                                                        |
 
 `ConfigFileContent.fingerprint` is a content fingerprint used for
-optimistic-concurrency writes (FR-036) — reads return it, writes carry it
+optimistic-concurrency writes (FR-029) — reads return it, writes carry it
 back. `ConfigFileContent.memory_block` is true when the text still contains the
-**legacy** memory-projection block marker (FR-037). Nothing writes that block
+**legacy** memory-projection block marker (FR-030). Nothing writes that block
 any more — native projection was retired
 ([Aggregate Agent Memory, Never Write It](../../docs/decisions/aggregate-agent-memory-never-write-it.md);
-spec memory FR-073 forbids reintroducing it) and migration `0024` dropped the
+spec memory FR-037 forbids reintroducing it) and migration `0024` dropped the
 `projection_bindings` table behind it — so the flag exists only so
 the editor can annotate a leftover block as safe to delete. It is never parsed.
 
@@ -294,10 +292,10 @@ through the same store. Reuses `domain/agent/mcp_install.py`.
 
 ## Workspace amendment — derived entities (never stored)
 
-The workspace facets (FR-025..FR-031) operate on the agent's own config files;
+The workspace facets (FR-019..FR-024) operate on the agent's own config files;
 the files on disk stay the source of truth and Coffer keeps no copy. Both
 entities below are read-time projections, and the only write any of them
-performs is the source-entry removal that FR-028's adoption owns.
+performs is the source-entry removal that FR-021's adoption owns.
 
 ### Agent MCP Entry (`domain/agent/mcp_entries.py` — `McpEntry`)
 
@@ -324,7 +322,7 @@ removal step of an adoption), `secret_env_keys`
 patterns), and `to_transport_config` (entry → `mcp_server` transport config
 with secret keys moved to `credential_refs` for adoption). Malformed files
 raise `AgentConfigParseError`, which the listing degrades to a `parse_errors`
-item instead of failing the view (FR-030).
+item instead of failing the view (FR-023).
 
 ### `PluginCapability` / `PluginModel` (`domain/agent/plugin_capability.py`)
 
@@ -337,8 +335,8 @@ service to dispatch without an `AgentType` switch:
 | -------------------- | ------------------- | ---------------------------------------------------------------------------------------------- |
 | `model`              | `PluginModel`       | parse strategy                                                                                 |
 | `config_key`         | `str \| None`       | allowlist key of the file the enabled state is read from and the writes go to (`None` = list-only) |
-| `can_toggle`         | `bool`              | whether FR-032's enable/disable is offered (default `True`)                                    |
-| `can_uninstall`      | `bool`              | whether FR-033's uninstall is offered (default `False`)                                        |
+| `can_toggle`         | `bool`              | whether FR-025's enable/disable is offered (default `True`)                                    |
+| `can_uninstall`      | `bool`              | whether FR-026's uninstall is offered (default `False`)                                        |
 | `uninstall_strategy` | `UninstallStrategy` | `CONFIG_EDIT` (edit the documented surface) or `CLI` (delegate to the agent's own command)      |
 
 `AgentDescriptor.plugins` is `PluginCapability | None`. The per-agent mapping:
@@ -350,8 +348,8 @@ report `can_uninstall=false`); Codex `CODEX`/`config`, toggle + uninstall by
 ### Agent Plugin (`domain/agent/plugin_state.py` — `PluginInfo` / `MarketplaceInfo`)
 
 One installed plugin, id `<name>@<marketplace>`. The *internal inventory* files
-are read-only — Coffer parses them and never writes them; the writes of FR-032 /
-FR-033 touch only the documented surfaces (`settings.json` `enabledPlugins`,
+are read-only — Coffer parses them and never writes them; the writes of FR-025 /
+FR-026 touch only the documented surfaces (`settings.json` `enabledPlugins`,
 `config.toml` `[plugins."…"]`) or delegate to the agent's own CLI. Codex state lives in
 `config.toml` (`[plugins."…"]` + `[marketplaces.*]`). Claude Code splits state
 across the internal inventory files `installed_plugins.json` /
@@ -368,18 +366,18 @@ across the internal inventory files `installed_plugins.json` /
 
 `MarketplaceInfo` carries `name`, `source_type`, `source` (read-only). The
 HTTP view (`PluginView`) replaces `installed` with `cache_present` — whether
-the plugin's cache directory exists on disk (no repair is attempted, FR-031).
+the plugin's cache directory exists on disk (no repair is attempted, FR-024).
 
 ### `AgentMcpEntryService` (`application/agent/mcp_entry_service.py`)
 
 | Method                                                                | Purpose                                                                                                                                                                                                                                                                     |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_entries(name)`                                                  | Parse all MCP-bearing files of the agent's type; mark `is_coffer` and `matches_resource`; collect per-file `parse_errors`.                                                                                                                                                  |
-| `remove_entry(name, entry, source=None, actor)`                       | FR-026 removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + `.bak`, drop any credential refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
-| `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-028 promotion: secret-looking keys MUST map to keychain refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
+| `remove_entry(name, entry, source=None, actor)`                       | FR-020 removal: edit only the entry's source file (`source` disambiguates when claude_code carries the name in both, else `McpEntrySourceAmbiguous`), atomic write + `.bak`, drop any credential refs it owned, audit `agent_mcp_entry_removed`. Coffer's own entry is refused. |
+| `adopt(name, entry, source=None, new_name=None, secrets=None, actor)` | FR-021 promotion: secret-looking keys MUST map to keychain refs (`AdoptSecretUnresolved` lists unresolved keys); register the `mcp_server` resource → verify it reads back → remove the source entry (atomic + `.bak`; `source` disambiguates when claude_code carries the name in both files, else `McpEntrySourceAmbiguous`), with rollback on any later failure; audits `agent_mcp_entry_adopted`. |
 
 There is no `set_enabled`: a per-entry enable toggle was removed (see the
-"Not provided" note after spec FR-030) because claude_code's format has no such
+"Not provided" note after spec FR-023) because claude_code's format has no such
 flag and codex's duplicates a switch its own UI owns. Removal and adoption stay,
 because each is a write Coffer alone has a reason to make. Both are exposed as
 `DELETE /api/v1/agents/{name}/mcp-entries/{entry}` and
@@ -390,8 +388,8 @@ because each is a write Coffer alone has a reason to make. Both are exposed as
 | Method                                         | Purpose                                                                                                                                                                                                                                  |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_plugins(name)`                           | Dispatch on `descriptor.plugins.model`; parse plugin + marketplace state from the documented file(s); compute `cache_present`; read best-effort manifest detail from the plugin's install path; collect `parse_errors`. No capability → empty listing. |
-| `set_enabled(name, plugin_id, enabled, actor)`  | FR-032: write the enabled flag to the capability's `config_key` file (atomic + `.bak`); `PluginToggleUnsupported` (422) when the capability declares `can_toggle=False`; audit `agent_plugin_toggled`. |
-| `uninstall(name, plugin_id, actor)`             | FR-033: by `uninstall_strategy` — `CONFIG_EDIT` removes the `config.toml` entry and its cache dir; `CLI` runs the agent's own uninstall command through a `PluginCliRunner` and never hand-writes the internal inventory. `PluginUninstallUnsupported` (422) when unavailable; audit `agent_plugin_uninstalled`. |
+| `set_enabled(name, plugin_id, enabled, actor)`  | FR-025: write the enabled flag to the capability's `config_key` file (atomic + `.bak`); `PluginToggleUnsupported` (422) when the capability declares `can_toggle=False`; audit `agent_plugin_toggled`. |
+| `uninstall(name, plugin_id, actor)`             | FR-026: by `uninstall_strategy` — `CONFIG_EDIT` removes the `config.toml` entry and its cache dir; `CLI` runs the agent's own uninstall command through a `PluginCliRunner` and never hand-writes the internal inventory. `PluginUninstallUnsupported` (422) when unavailable; audit `agent_plugin_uninstalled`. |
 
 The listing writes nothing; the two writes above are the whole of what this
 service changes, and each goes through a documented surface. `PluginCliRunner`
@@ -399,6 +397,29 @@ and `PluginDetailReader` are application-layer ports (`plugin_views.py`)
 satisfied at the composition root. The surfaces are
 `PATCH`/`DELETE /api/v1/agents/{name}/plugins/{plugin_id}` and
 `coffer agent plugin enable|disable|uninstall`.
+
+### `AgentModel` + `AgentModelCatalogueService` (`domain/agent/model_catalogue.py`, `application/agent/model_catalogue.py`)
+
+Derived, never stored. One `AgentModel` is one entry of what an installed agent
+can be put on (FR-032): `id` (passed to the agent verbatim), `label`,
+`description`, `efforts: tuple[str, ...]` and `default_effort`. The levels sit
+BESIDE the id rather than inside it (FR-036), so one model is one entry however
+many levels it runs at, and a reported default survives only when it is one of
+the levels that entry offers.
+
+| Method               | Purpose                                                                                                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `catalogue(agent)`   | FR-033: ask each of that type's sources in picker order and concatenate what they answer. A source that raises, finds nothing, or no longer matches its anchor contributes nothing and the others still answer; an unknown agent key is a 404. |
+
+The sources themselves live in `infrastructure/agent/` — one reader per source,
+each named by the type's child spec (`claude_binary_models.py` and
+`claude_effort.py` for agent-registry/claude-code FR-010/FR-011/FR-012,
+`codex_rpc_models.py` for agent-registry/codex FR-009/FR-010), behind
+`model_discovery.py`. Nothing here is written to SQLite, to the vault, or to
+the agent: the catalogue is re-derived on every request, which is the whole
+point of FR-034's single source of truth. What a PICKER is offered — the
+narrowing an active connection applies — is spec provider-switching's read over
+this same service, not a second list.
 
 ### `ConfigFileStorePort` (Protocol, defined in application)
 
@@ -415,7 +436,7 @@ import infrastructure directly).
   `None` when `root` is not a directory.
 - `delete_with_backup(path) -> bool` — copy content to `<path>.bak`, then
   remove the file.
-- `fingerprint(text) -> str` — content fingerprint backing the FR-036
+- `fingerprint(text) -> str` — content fingerprint backing the FR-029
   staleness check.
 
 ## Kind wiring (`backend/coffer/application/agent/kind.py`)
@@ -433,7 +454,7 @@ The agent kind is wired by `surfaces/http/agent_skill_wiring.py`
 (`wire_agent_and_skill_kinds`), called from `surfaces/http/kind_wiring.py`;
 the routers are mounted in `surfaces/http/routing.py`. Together they:
 
-1. Build `AgentService` + `AutoDetectService` + `BrowseService`.
+1. Build `AgentService` + `AutoDetectService`.
 2. Build `AgentConfigFileService` + `AgentMcpService` + `AgentMcpEntryService` +
    `AgentPluginService` + the native-memory and transcript readers over a
    `ConfigFileStore`.
@@ -443,7 +464,8 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
 5. Mount `agent_routes` (registry + candidates), `agent_config_routes` (config
    files + MCP install), `agent_workspace_routes` (MCP entries + plugins),
    `agent_native_memory_routes`, `agent_transcript_routes`,
-   `agent_unmanaged_skill_routes`, and `fs_routes` (folder browse + open/reveal).
+   and `agent_unmanaged_skill_routes`. The `/fs/*` routes the picker and the
+   open/reveal affordances call are mounted by spec daemon, not here.
 
 Discovery is read-only and is **not** run on startup — no agent is ever
 auto-registered. The user runs discovery on demand and confirms which
@@ -455,10 +477,10 @@ The `on_delete` hook is bound to a callable supplied by the skill module (spec s
 
 - All HTTP routes bind `127.0.0.1`, share `X-Coffer-Token` auth (per spec mcp-gateway).
 - No new credential-store entries — `agent` config has no credentials. Config-file
-  reads do not parse or extract secrets; `~/.codex/auth.json` is excluded from
-  the allowlist.
+  reads do not parse or extract secrets; each type's credential file is excluded
+  from its allowlist (see agent-registry/codex FR-003).
 - Config files are editable through Coffer. All writes to an agent's own config
-  files (under `~/.claude/`, `~/.codex/`, and `~/.claude.json`) — whether a user
+  files — whichever files the type's child spec allowlists — whether a user
   save or a Coffer-MCP install/uninstall — are addressable **only** by
   allowlisted `key`, never by a caller-supplied path, and each is protected by an
   atomic write and a `.bak` backup. User saves additionally validate content

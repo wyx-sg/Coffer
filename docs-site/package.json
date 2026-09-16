@@ -4,13 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync": "node scripts/sync-reference.mjs",
-    "predev": "npm run sync",
     "dev": "vitepress dev",
-    "prebuild": "npm run sync",
     "build": "vitepress build",
-    "preview": "vitepress preview",
-    "test": "node --test"
+    "preview": "vitepress preview"
   },
   "devDependencies": {
     "vitepress": "^1.6.3",

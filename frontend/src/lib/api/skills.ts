@@ -2,7 +2,7 @@
 //
 // Wire types are hand-written here; the skill-manager contract also generates
 // into `generated/skill-manager.ts` (`npm run codegen`, `scripts/codegen.mjs`).
-// Transport via the shared `call` (agents/frontend.md §4).
+// Transport via the shared `call` (.agents/frontend.md §4).
 
 import { call, enc } from "@/lib/api/call";
 import type { Scope } from "@/lib/hooks/useScope";

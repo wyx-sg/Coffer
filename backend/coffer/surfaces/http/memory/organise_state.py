@@ -7,7 +7,7 @@ composition root (``memory_wiring.py``) is what stops the port leaking into
 the surface layer. Unlike knowledge's ``TidyPass`` (a stateful object the
 route calls with ``(svc, name, actor=actor)``), the runner here is a bare
 ``partition -> OrganiseResult`` coroutine: ``organise_partition`` is a plain
-function, not a class, and the route supplies its own audit call (FR-063 —
+function, not a class, and the route supplies its own audit call (FR-032 —
 ``organise_partition`` itself never touches ``AuditService``, see
 ``memory_wiring.py``'s module docstring).
 """

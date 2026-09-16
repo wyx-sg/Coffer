@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-20 (revised 2026-05-30; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: spec `mcp-gateway` (FR-017, FR-018), [Session Subprocess Model](session-subprocess-model.md)
+**Related**: spec resource-framework FR-009, spec daemon FR-024, [Session Subprocess Model](session-subprocess-model.md)
 
 ## Context
 

@@ -1,4 +1,4 @@
-"""Skill-delivery semantics (FR-012a / FR-025, User Story 11).
+"""Skill-delivery semantics (FR-012 / FR-019, User Story 11).
 
 One rule decides delivery and nothing else does::
 

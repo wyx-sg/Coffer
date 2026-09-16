@@ -332,7 +332,7 @@ def test_collect_image_urls_direct_and_nested_forwarded() -> None:
 
 
 def test_collect_media_covers_image_file_generic_and_forwarded() -> None:
-    """FR-028: the media collector returns a downloadable ref for an image, a
+    """spec channels/seatalk FR-014: the media collector returns a downloadable ref for an image, a
     directly-sent file (with its filename + a non-image mime), and — best
     effort — any other tag whose sub-dict carries a file-URL content
     (voice/video), recursing forwarded records. A plain text message yields
@@ -488,11 +488,12 @@ async def test_handle_event_forwarded_record_downloads_images(
     assert att.mime == "image/png"
 
 
-@pytest.mark.acceptance(spec="channels", scenario="an inbound SeaTalk file drives a turn")
+@pytest.mark.acceptance(spec="channels/seatalk", scenario="an inbound SeaTalk file drives a turn")
 async def test_handle_event_direct_file_downloads_attachment(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
-    """FR-028: a directly-sent file (not an image) is fetched (authenticated) and
+    """spec channels/seatalk FR-014: a directly-sent file (not an image) is fetched (authenticated)
+    and
     attached with its real filename + a non-image mime, so it drives a turn like
     a photo does instead of hitting the "unsupported message" branch. Uses the
     live-captured shape: ``message.file.content`` is the auth-gated URL and
@@ -604,13 +605,13 @@ async def test_send_text_group_without_thread_id_omits_thread_field(
     assert "thread_id" not in body["message"]  # and not in the message body
 
 
-# -- outbound media (FR-031) --------------------------------------------------
+# -- outbound media (FR-032) --------------------------------------------------
 
 
 async def test_send_media_image_posts_group_image_with_thread_in_body(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
-    """FR-031: a returned image during a group-thread turn is uploaded as a
+    """FR-032: a returned image during a group-thread turn is uploaded as a
     SeaTalk ``image`` message (base64 content) to group_chat, with thread_id
     INSIDE the message body so it lands in the originating thread."""
     import base64
@@ -699,7 +700,7 @@ async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk
 async def test_send_text_direct_with_thread_id_threads_the_reply(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
-    """FR-026: a DM reply sent inside a thread must carry thread_id on the
+    """spec channels/seatalk FR-018: a DM reply sent inside a thread must carry thread_id on the
     single_chat message body so SeaTalk threads it — documented wire
     placement, not yet live-verified against the real platform."""
     adapter = make_seatalk_adapter(fake_seatalk)
@@ -767,7 +768,7 @@ async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: Fak
 async def test_interactive_message_click_in_group_routes_as_group_callback(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
-    """FR-034: a card tapped in a GROUP arrives with a ``group_id`` (mirroring
+    """FR-036: a card tapped in a GROUP arrives with a ``group_id`` (mirroring
     the group @mention event) and the tapper under ``sender`` — the adapter
     normalizes it to a group callback (chat_kind="group", chat_id=group_id,
     thread_id set, sender_id = the tapper's employee_code) so the core
@@ -800,7 +801,7 @@ async def test_interactive_message_click_in_group_routes_as_group_callback(
     assert cb.platform_message_id == "card-9"
 
 
-# -- inbound de-duplication (FR-039) ------------------------------------------
+# -- inbound de-duplication (FR-040) ------------------------------------------
 
 
 def _subscriber_text_envelope(*, event_id: str, message_id: str, text: str) -> dict[str, Any]:
@@ -818,7 +819,7 @@ def _subscriber_text_envelope(*, event_id: str, message_id: str, text: str) -> d
 
 @pytest.mark.acceptance(spec="channels", scenario="a redelivered event is processed once")
 async def test_handle_event_dedups_redelivered_event_id(fake_seatalk: FakeSeaTalk) -> None:
-    """FR-039: SeaTalk retries a slow callback, so the SAME event_id can arrive
+    """FR-040: SeaTalk retries a slow callback, so the SAME event_id can arrive
     twice — the second delivery must be dropped, driving the turn once. Two
     DIFFERENT event_ids remain two turns."""
     adapter = make_seatalk_adapter(fake_seatalk)
@@ -963,7 +964,7 @@ async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
 async def test_fetch_thread_downloads_thread_images(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
-    """FR-029: when the @mention lands inside a thread, the images the thread's
+    """FR-030: when the @mention lands inside a thread, the images the thread's
     own messages carry — a directly-sent image AND one buried in a forwarded
     record — are downloaded (authenticated) and returned as the second tuple
     element, so a picture in the thread reaches the vision agent as real bytes
@@ -1437,7 +1438,7 @@ async def test_group_converted_to_external_reaches_on_lifecycle(
 
 
 async def test_redelivered_lifecycle_event_fires_once(fake_seatalk: FakeSeaTalk) -> None:
-    """FR-039 covers these like every other event — a retried callback must not
+    """FR-040 covers these like every other event — a retried callback must not
     report the same removal twice."""
     adapter = make_seatalk_adapter(fake_seatalk)
     recorder = LifecycleRecorder()
@@ -1503,7 +1504,7 @@ async def test_fetch_thread_degrades_to_empty_list_on_error(
         await adapter.stop()
 
 
-# -- live text: the message-streaming API (FR-037) ----------------------------
+# -- live text: the message-streaming API (FR-039) ----------------------------
 
 
 def _ticking(step: float = 1.0) -> Any:
@@ -1524,7 +1525,7 @@ def _live(adapter: Any, chat_id: str = "emp-1", **kwargs: Any) -> SeaTalkLiveTex
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="each seatalk stream update carries the full reply so far",
 )
 async def test_stream_opens_once_and_updates_carry_full_snapshots(
@@ -1546,7 +1547,7 @@ async def test_stream_opens_once_and_updates_carry_full_snapshots(
     assert fake_seatalk.init_stream_calls[0][1] == {
         "employee_code": "emp-1",
         # format 1 even for this opening snapshot: the message must be able to
-        # carry an @mention the instant it is created (FR-070), and a tag in a
+        # carry an @mention the instant it is created (FR-055), and a tag in a
         # format-2 message shows as its own source. Partial text stays literal
         # because it is ESCAPED, not because the format is plain.
         "message": {"tag": "text", "text": {"format": 1, "content": "I found"}},
@@ -1590,7 +1591,7 @@ async def test_stream_updates_are_buffered_not_sent_per_token(fake_seatalk: Fake
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="a terminated seatalk stream is never reused",
 )
 async def test_a_terminated_stream_is_never_reused_and_the_reply_is_handed_back(
@@ -1633,7 +1634,7 @@ async def test_a_stream_that_never_opened_hands_the_whole_reply_back(
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="a reply past the stream budget finishes the stream and sends the rest",
 )
 async def test_reply_past_the_stream_budget_finishes_at_the_limit_and_returns_the_rest(
@@ -1769,11 +1770,11 @@ async def test_a_silent_stream_is_kept_alive_inside_the_30_second_limit(
     assert leftover == ""
 
 
-# -- FR-070: @mentioning the asker in a group reply ---------------------------
+# -- FR-055: @mentioning the asker in a group reply ---------------------------
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="a cross-organisation sender is still identified for a mention",
 )
 async def test_group_mention_keeps_the_seatalk_id_when_employee_code_and_email_are_empty(

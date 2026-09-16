@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { UpkeepSettings } from "./UpkeepSettings";
+import { acceptance } from "@/test/acceptance";
 import type { InternalEngineConfig } from "@/lib/api/internalEngine";
 
 const mutate = vi.fn();
@@ -71,7 +72,7 @@ describe("UpkeepSettings", () => {
     expect(screen.getByText("Every 15 min")).toBeInTheDocument();
   });
 
-  test("toggling one pass sends that pass alone", () => {
+  acceptance("internal-engine", "Settings → Engine shows and changes both halves", () => {
     // One pass per write: a body carrying all three would make every toggle a
     // chance to write back a stale copy of the other two.
     stub(CONFIG);

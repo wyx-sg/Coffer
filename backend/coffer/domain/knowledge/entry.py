@@ -1,8 +1,8 @@
 """Value objects for the knowledge layer.
 
 Everything here describes what is on disk. Nothing is persisted: a catalogue
-level is produced by walking the directory at call time (spec knowledge
-FR-020), so these types are the shape of an answer, never the shape of a row.
+level is produced by walking the directory at call time (spec knowledge FR-012), so these types are
+the shape of an answer, never the shape of a row.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class FileEntry:
 
 @dataclass(frozen=True)
 class CatalogueLevel:
-    """One level of the catalogue — never the whole tree (FR-021)."""
+    """One level of the catalogue — never the whole tree (FR-013)."""
 
     path: str
     directories: tuple[DirectoryEntry, ...] = field(default_factory=tuple)
@@ -65,7 +65,7 @@ class KnowledgeFile:
     created_at: str
     updated_at: str
     body: str
-    #: Absolute path of the ``.md`` file (spec knowledge FR-062).
+    #: Absolute path of the ``.md`` file (spec knowledge FR-036).
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str

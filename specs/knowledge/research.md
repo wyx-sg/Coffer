@@ -101,7 +101,7 @@ for that need, not a re-enabling of the component that was never switched on.
 
 **That matcher is two tools, not one.** `grep` reports it a line at a time, and
 `search` reports it a file at a time — the path, its `title`, its `description`
-and the lines that matched (FR-024). They share the matcher and the file set
+and the lines that matched (FR-016). They share the matcher and the file set
 deliberately: `search` is not a second retrieval mode, and there is no score, no
 ranking and no way an answer can be reached that the other tool could not reach.
 It exists because an agent that already knows a distinctive phrase should not
@@ -117,7 +117,7 @@ phrase rather than a question in its own words.
 **Decision**: **someone puts a Markdown file in the directory — and, when they
 cannot, they upload one and Coffer converts it.**
 
-The filesystem is the primary way and remains a complete one (FR-032): adding
+The filesystem is the primary way and remains a complete one (FR-021): adding
 knowledge by hand costs one file copy, which is cheaper than any upload surface
 could be.
 
@@ -129,14 +129,15 @@ with the 50 `.raw/` files byte-identical to their converted counterparts. What
 that finding did not weigh is **where the user is**. "Put a file in the
 directory" is an entrance that exists only while they are sitting at the
 machine, and their live entrance is a phone. A channel already accepts
-attachments and already extracts them for a turn (spec
-[channels](../channels/spec.md) FR-030), so a document forwarded to a Coffer
+attachments (spec [channels](../channels/spec.md)) and the turn platform
+already extracts them for a turn (spec [chat](../chat/spec.md) FR-046), so a document
+forwarded to a Coffer
 channel landing in a collection is an entrance the filesystem cannot be, and
 that makes the Web upload worth having as the same path's other end.
 
 So conversion is back, and only conversion: `markitdown` plus plain text and
 CSV, the original kept under one `.raw/` at the collection root purely so a bad
-conversion can be redone by hand (FR-035). The mechanisms the audit condemned —
+conversion can be redone by hand (FR-024). The mechanisms the audit condemned —
 re-conversion on a schedule, the `source_mode` lock, the external-source table —
 stay gone. A converted file is an ordinary Markdown file afterwards, which is
 what keeps the entrance from becoming a second kind of knowledge.
@@ -181,10 +182,12 @@ the shared file helpers and unchanged since; the helper itself is the record.
   [vault-sync](../vault-sync/spec.md) converges the vault bidirectionally with a
   git remote the user owns — but nothing here knows about it. The one thing this
   layer owes that mechanism is that an unattended rewriter runs on exactly one
-  machine (FR-053).
+  machine — a rule spec [vault-sync](../vault-sync/spec.md) owns, because it
+  holds across every tree that layer syncs.
 - Categorize beyond what a file's own `title` and `description` say.
 - Rank, score, or offer a retrieval *mode*. `search` returns the files a literal
   match hit, in no particular order; judging them is the agent's job.
 - Accept a document as an agent tool call. Upload is a human surface — the
-  Knowledge page, the CLI, or a channel confirming the collection with its
-  paired owner (FR-040).
+  Knowledge page, the CLI, or a channel (FR-027). What a channel asks its owner
+  before handing a document over is spec [channels](../channels/spec.md)'s
+  business; this layer owes one conversion path any of them can reach (FR-025).

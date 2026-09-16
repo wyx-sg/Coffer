@@ -76,7 +76,7 @@ def _connector(
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a websocket channel receives an event with no public url"
+    spec="channels/seatalk", scenario="a websocket channel receives an event with no public url"
 )
 async def test_an_event_on_the_socket_reaches_ingest(sdk: FakeSeaTalkSdk) -> None:
     body = envelope()
@@ -194,7 +194,7 @@ async def test_an_event_without_a_data_dict_is_ignored(sdk: FakeSeaTalkSdk) -> N
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="the websocket connection backs off when another process takes it over",
 )
 async def test_a_kick_backs_off_a_flat_sixty_seconds(sdk: FakeSeaTalkSdk) -> None:
@@ -282,7 +282,7 @@ async def test_a_recovered_socket_reports_connected_again(sdk: FakeSeaTalkSdk) -
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a websocket channel without the sdk says what is missing"
+    spec="channels/seatalk", scenario="a websocket channel without the sdk says what is missing"
 )
 async def test_without_the_sdk_the_state_says_what_is_missing() -> None:
     missing = build_fake_sdk()

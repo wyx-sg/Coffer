@@ -3,7 +3,7 @@
 Coffer runs three passes on its own behalf — aggregation, organise, tidy — and
 each one used to wait with a single ``asyncio.sleep(interval)`` over a constant
 compiled into the worker. Both halves of that are now the operator's to choose
-(spec memory FR-007, spec knowledge FR-051), and a long sleep is exactly how a
+(spec memory FR-007, spec knowledge FR-031), and a long sleep is exactly how a
 choice goes unnoticed: a worker that went to sleep for six hours does not learn
 that the interval is now fifteen minutes until the six hours are up, so the
 setting appears not to work at all for most of a day.

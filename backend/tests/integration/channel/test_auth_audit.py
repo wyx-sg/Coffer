@@ -1,4 +1,4 @@
-"""Sender-identity owner gate + first-class channel-driven audit (FR-014)."""
+"""Sender-identity owner gate + first-class channel-driven audit (FR-011)."""
 
 from __future__ import annotations
 

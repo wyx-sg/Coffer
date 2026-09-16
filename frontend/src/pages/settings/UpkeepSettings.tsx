@@ -4,11 +4,11 @@
 //
 // Three passes run on a timer — aggregation reads the agents' own memory into
 // the derived tree (spec memory FR-007), organise lets the model rewrite that
-// derived digest (FR-030), and tidy lets it rewrite the user's own knowledge
-// files (spec knowledge FR-051). Until now none of them was visible: two had no
-// switch at all, the third's switch could only be changed by editing a synced
-// settings document, and all three intervals were constants compiled into the
-// workers. Something that rewrites your files on a timer should be something
+// derived digest (spec memory FR-017), and tidy lets it rewrite the user's own
+// knowledge files (spec knowledge FR-031). Until now none of them was visible:
+// two had no switch at all, the third's switch could only be changed by editing
+// a synced settings document, and all three intervals were constants compiled
+// into the workers. Something that rewrites your files on a timer should be something
 // you can see and stop, which is the whole reason this card exists.
 //
 // Each row says what its pass actually WRITES, because that is the difference

@@ -245,11 +245,11 @@ async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachi
 async def test_export_withholds_a_kind_whose_rows_are_derived_on_each_machine(
     vault: VaultMachine,
 ) -> None:
-    """A ``memory`` partition row does not travel (spec memory FR-023).
+    """A ``memory`` partition row does not travel (spec memory FR-016).
 
     The tree under ``~/.coffer/memory/`` was already left behind — it is not a
     mirrored tree — but the partition's Resource ROW was exported like any
-    other, which produces on the second machine exactly the thing FR-023
+    other, which produces on the second machine exactly the thing memory FR-016
     forbids: a partition that appears there, naming a project root that machine
     may not have, with no facts behind it because the facts stayed home.
 
@@ -415,6 +415,10 @@ async def test_credentials_are_opt_in_and_the_master_key_never_enters_the_bundle
         assert b"s3cret" not in payload, rel
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a path under the home directory applies on a machine with a different home",
+)
 async def test_home_paths_leave_the_vault_as_a_portable_token(vault: VaultMachine) -> None:
     home = str(vault.home)
     await vault.register(
@@ -791,7 +795,7 @@ async def test_a_channel_deletion_in_the_tree_deletes_the_channel(
 async def test_resource_applier_ignores_a_document_of_a_kind_that_does_not_converge(
     vault: VaultMachine,
 ) -> None:
-    """The import side of spec memory FR-023, and it is not redundant.
+    """The import side of spec memory FR-016, and it is not redundant.
 
     Withholding on export only binds machines running this build. A machine
     still on the older one keeps publishing ``memory`` documents, and this end

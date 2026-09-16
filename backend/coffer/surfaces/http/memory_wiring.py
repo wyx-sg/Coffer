@@ -1,16 +1,14 @@
-"""Wiring for the one ``memory`` kind (spec memory FR-060..FR-063).
+"""Wiring for the one ``memory`` kind (spec memory FR-027..FR-032).
 
 Mirrors ``knowledge_wiring.py`` + ``tidy_wiring.py`` combined: one service for
 the derived tree itself (``MemoryService``), the one table it adds
 the L2 pull tool (``RecallService`` /
 ``coffer__recall``), and the explicit-install delivery half
 (``DeliveryService``). The organise pass rides the same internal connection
-every other internal-LLM consumer in this layer uses; the model resolver below
-is deliberately re-derived here rather than imported from
-``knowledge_wiring.py`` — its own equivalent is private, and this project's
-own convention (``application.memory.builtin_recall_tool``'s module
-docstring) is to duplicate a few lines rather than let two kind's wiring
-modules import each other.
+every other internal-LLM consumer in this layer uses — handed in as a
+``ModelSelectorPort`` rather than re-derived here, now that resolving it is
+Coffer's own engine's job (``application.engine.resolve``) and not something
+each kind's wiring works out from the provider service for itself.
 
 The kind is wired before the MCP kind so the gateway advertises
 ``coffer__recall``; the organise sweep it starts is on by default, because
@@ -20,8 +18,8 @@ the agents' own memories (see ``organise_worker.py``).
 Nothing here can fail to build: with no internal connection configured the
 model factory just resolves to ``None`` per call, and ``RecallService``/
 ``MemoryService``/``DeliveryService`` need no internal
-connection at all — recall is a literal scan over facts on disk (FR-032,
-FR-052).
+connection at all — recall is a literal scan over facts on disk (FR-019,
+FR-023).
 """
 
 from __future__ import annotations
@@ -34,6 +32,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.agent.service import AgentService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
@@ -58,9 +57,7 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
     from coffer.application.audit_service import AuditService
-    from coffer.application.provider.service import ProviderService
     from coffer.application.resource_service import ResourceService
-    from coffer.domain.provider.config import ResolvedConnection
     from coffer.domain.resource import Resource
 
 logger = logging.getLogger(__name__)
@@ -78,17 +75,6 @@ def _agent_source(resource: Resource) -> AgentSource:
     )
 
 
-class _InternalModelSelector:
-    """Structural ``ModelSelectorPort`` adapter over ``ProviderService`` —
-    what ``organise_partition`` needs to reach the internal connection."""
-
-    def __init__(self, provider_service: ProviderService) -> None:
-        self._provider_service = provider_service
-
-    async def get_default(self) -> ResolvedConnection | None:
-        return await self._provider_service.resolve_internal_connection()
-
-
 @dataclass(frozen=True)
 class MemoryWiring:
     """What the memory kind hands back: its three services and the organise
@@ -104,7 +90,7 @@ def wire_memory_kind(
     resource_svc: ResourceService,
     audit: AuditService,
     builtin_tools: BuiltinToolRegistry,
-    provider_service: ProviderService,
+    models: ModelSelectorPort,
     credential_resolver: Callable[[str], str],
     agent_service: AgentService,
 ) -> MemoryWiring:
@@ -128,7 +114,6 @@ def wire_memory_kind(
     )
     set_memory_delivery_service(delivery_service)
 
-    models = _InternalModelSelector(provider_service)
     completion = LangchainLlmCompletion()
 
     async def _organise(partition: str) -> OrganiseResult:
@@ -209,7 +194,7 @@ def start_organise_worker(
     engine_config: InternalEngineConfigService,
 ) -> asyncio.Task[None]:
     """Start the organise sweep — on by default, because the tree it rewrites is
-    disposable (FR-023: delete it and re-running reproduces it), unlike
+    disposable (FR-016: delete it and re-running reproduces it), unlike
     knowledge's tidy. On by default is not the same as unstoppable, though: the
     operator can switch it off and re-time it like any other pass.
     Returns the task; the lifespan cancels it at shutdown."""

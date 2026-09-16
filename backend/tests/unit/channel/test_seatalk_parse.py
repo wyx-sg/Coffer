@@ -1,4 +1,4 @@
-"""Unit tests for the pure SeaTalk parsing helpers: FR-035 mention gating and
+"""Unit tests for the pure SeaTalk parsing helpers: FR-037 mention gating and
 the interactive-card element limits SeaTalk documents."""
 
 from coffer.domain.channel.envelopes import ChoiceButton

@@ -64,7 +64,7 @@ def main() -> int:
     lines = [
         f"Coffer session — branch: {branch}" + (" (worktree)" if in_worktree else ""),
         f"Uncommitted changes: {dirty_count} file(s).",
-        "Session protocol: confirm scope, work in small committable chunks, run `make verify` before opening a PR. See agents/harness.md.",
+        "Session protocol: confirm scope, work in small committable chunks, run `make verify` before opening a PR. See .agents/harness.md.",
     ]
     if _verify_stale():
         lines.append(

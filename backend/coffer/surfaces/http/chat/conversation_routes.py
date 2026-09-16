@@ -248,7 +248,7 @@ async def delete_conversation(
 
     Any in-flight turn for this conversation is cancelled (and discarded)
     before deletion so the background task does not keep running after the row
-    is gone (FR-016 / FR-021).
+    is gone (spec chat FR-016 / FR-020).
     """
     await svc.delete_conversation(id, cancel_turn_fn=orchestrator.cancel_turn)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

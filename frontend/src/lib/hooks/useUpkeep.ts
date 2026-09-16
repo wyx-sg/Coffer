@@ -1,7 +1,7 @@
 // frontend/src/lib/hooks/useUpkeep.ts
 //
 // Whether a long, model-driven pass is running over one target — asked of the
-// SERVER, not of a component (agents/frontend.md §3).
+// SERVER, not of a component (.agents/frontend.md §3).
 //
 // This exists because the obvious alternative is wrong. A button whose spinner
 // comes from its own mutation's `isPending` is telling you about a react-query

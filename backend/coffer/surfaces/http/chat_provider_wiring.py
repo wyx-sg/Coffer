@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.chat.registry import AgentProviderRegistry
+from coffer.application.engine.resolve import resolve_internal_connection
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
@@ -21,6 +22,7 @@ from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
 from coffer.surfaces.http.agent_dependencies import get_agent_model_catalogue
+from coffer.surfaces.http.engine_config_composition import read_internal_engine_model
 from coffer.surfaces.http.provider_dependencies import get_provider_service
 
 if TYPE_CHECKING:
@@ -41,7 +43,7 @@ def build_agent_provider_registry(
     machine. That is the default.
 
     ``compose_memory_context`` is the memory kind's own third system-prompt
-    append (spec memory FR-053) for a channel-driven turn — a plain callable
+    append (spec memory FR-024) for a channel-driven turn — a plain callable
     so this module, like ``claude_sdk_provider``, never imports anything from
     ``application.memory`` itself. Its real closure over
     ``MemoryService``/``OverrideRepository`` is built one level up, where
@@ -56,7 +58,9 @@ def build_agent_provider_registry(
     # Returns None whenever transcription must not happen.
     transcriber_factory = (
         remote_transcriber_factory(
-            lambda: get_provider_service().resolve_internal_connection(),
+            lambda: resolve_internal_connection(
+                read_model=read_internal_engine_model, connections=get_provider_service()
+            ),
             credential_resolver,
         )
         if credential_resolver is not None

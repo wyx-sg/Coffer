@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeUploadButton.tsx
 //
 // Upload one file into the collection (and folder, when the caller names one)
-// currently in view (spec knowledge FR-060/FR-061). A hidden
+// currently in view (spec knowledge FR-034/FR-035). A hidden
 // `<input type="file">` behind a visible button, mirroring
 // SyncMasterKeyCard's key import: the browser reads the bytes directly, so
 // there is no native dialog to drive. On success the tree refreshes itself —

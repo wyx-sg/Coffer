@@ -6,8 +6,8 @@ WHICH MODEL Coffer thinks with, and WHAT IT DOES unattended. The model comes
 from here while the endpoint and key come from the ``internal_default``
 connection (spec provider-switching amendment 2026-06-22b); the unattended work
 is the three passes Coffer runs on a timer — aggregation (spec memory FR-007),
-organise (FR-030) and tidy (spec knowledge FR-051) — each with a switch and an
-interval the operator can see and change.
+organise (spec memory FR-017) and tidy (spec knowledge FR-031) — each with a
+switch and an interval the operator can see and change.
 
 That last part is why the surface exists at all: two of the three had no switch
 anywhere, the third's could only be changed by hand-editing a synced settings

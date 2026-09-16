@@ -79,6 +79,7 @@ def test_client_or_exit_spawns_when_daemon_absent(
     assert info.port == 9876
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="a stale discovery file does not stop a start")
 def test_client_or_exit_respawns_when_daemon_json_is_stale(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

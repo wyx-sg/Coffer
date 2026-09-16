@@ -3,8 +3,8 @@
 A thin read-only query service: resolve the agent to its type + config dir, then
 hand the search/sort/page — or the single-session read behind one conversation's
 page — to the reader adapter. It writes nothing and reads nothing but the
-agent's own ``.jsonl`` files, and (like every other workspace listing, spec
-agent-registry FR-011) it records no audit event for either.
+agent's own ``.jsonl`` files, and (like every other workspace listing, spec agent-registry FR-048)
+it records no audit event for either.
 """
 
 from __future__ import annotations

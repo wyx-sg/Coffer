@@ -1,4 +1,4 @@
-"""Capabilities the deployed Bot API server may or may not have (FR-059).
+"""Capabilities the deployed Bot API server may or may not have (FR-044).
 
 Rich messages, streamed drafts and ephemeral messages arrived in Bot API 10.1
 through 10.3. The server a user's bot token actually reaches is not guaranteed
@@ -95,9 +95,9 @@ class Feature:
 class FeatureSet:
     """The Bot API 10.x capabilities one adapter probes for itself."""
 
-    #: sendRichMessage / editMessageText(rich_message) — Bot API 10.1 (FR-061).
+    #: sendRichMessage / editMessageText(rich_message) — Bot API 10.1 (FR-046).
     rich_messages: Feature = field(default_factory=lambda: Feature("rich_messages"))
-    #: sendMessageDraft — Bot API 10.1, can_stop in 10.3 (FR-062/FR-063).
+    #: sendMessageDraft — Bot API 10.1, can_stop in 10.3 (FR-047/FR-048).
     message_drafts: Feature = field(default_factory=lambda: Feature("message_drafts"))
-    #: ephemeral_message_parameters on sendMessage — Bot API 10.2/10.3 (FR-064).
+    #: ephemeral_message_parameters on sendMessage — Bot API 10.2/10.3 (FR-049).
     ephemeral_messages: Feature = field(default_factory=lambda: Feature("ephemeral_messages"))

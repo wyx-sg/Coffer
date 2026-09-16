@@ -226,7 +226,7 @@ def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any
 
 
 def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any) -> None:
-    # FR-030: documents are text-extracted upstream, so a PDF that reaches
+    # FR-031: documents are text-extracted upstream, so a PDF that reaches
     # _build_content (extraction absent/failed) degrades to a path note — not a
     # base64 ``document`` block (uniform text-or-path across all agents).
     pdf = tmp_path / "report.pdf"
@@ -243,7 +243,7 @@ def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any
 
 @pytest.mark.asyncio
 async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_path: Any) -> None:
-    # FR-030: a PDF is text-extracted and folded into the prompt as a labelled
+    # FR-031: a PDF is text-extracted and folded into the prompt as a labelled
     # text block; it is NOT sent as a base64 ``document`` block. An image on the
     # same turn stays vision-inlined — only documents go through extraction.
     pdf = tmp_path / "report.pdf"
@@ -270,7 +270,7 @@ async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_pat
     assert "Quarterly revenue was $4.2M." in joined
     # …no document/binary block was sent for the PDF…
     assert not any(b.get("type") == "document" for b in content)
-    # …and the image stays vision-inlined (images are untouched by FR-030).
+    # …and the image stays vision-inlined (images are untouched by FR-031).
     assert any(b.get("type") == "image" for b in content)
 
 
@@ -692,7 +692,7 @@ async def test_cancel_interrupts_disconnects_and_persists_session():
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="channels", scenario="an agent stream that ends without a terminal is a turn error"
+    spec="chat", scenario="an agent stream that ends without a terminal is a turn error"
 )
 async def test_stream_end_without_terminal_is_a_stream_ended_error():
     # No ResultMessage in the stream: the claude process went away mid-turn.
@@ -850,6 +850,10 @@ class _ResumeThenFreshFactory:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a resume id the agent has forgotten retries once as a fresh session",
+)
 async def test_resume_failure_falls_back_to_fresh_session():
     factory = _ResumeThenFreshFactory(_basic_messages())
     saved: list[str] = []
@@ -883,6 +887,10 @@ class _AlwaysFailFactory:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a resume id the agent has forgotten retries once as a fresh session",
+)
 async def test_connect_failure_without_resume_yields_turn_error():
     factory = _AlwaysFailFactory()
     adapter = _adapter(factory, resume=None)

@@ -1,4 +1,4 @@
-// frontend/src/pages/AgentMemoryStorePage.tsx — spec agent-registry FR-040.
+// frontend/src/pages/AgentMemoryStorePage.tsx — spec agent-registry/codex FR-012.
 // One of the agent's OWN native memory stores, reached by clicking its row on
 // the Memory tab: a file tree of the store directory and a read-only preview of
 // the selected file, with open-in-editor / reveal on the file.

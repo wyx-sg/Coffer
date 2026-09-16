@@ -113,7 +113,7 @@ def vault_kinds() -> dict[str, Kind]:
     survives the trip untouched — needs a real row and a real document.
 
     ``memory`` is the opposite case and the only kind here that does NOT
-    converge (``converges=False``, spec memory FR-023): a partition row is
+    converge (``converges=False``, spec memory FR-016): a partition row is
     derived from the agents installed on THIS machine. Its
     ``generic_create_allowed`` is left at the default here, unlike production,
     because what these tests exercise is travel, not creation.

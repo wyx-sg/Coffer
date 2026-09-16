@@ -61,7 +61,9 @@ describe("SkillAddDialog", () => {
     expect(screen.getByPlaceholderText(/\.claude\/skills/i)).toBeInTheDocument();
   });
 
-  test("offers a folder picker beside the path display (spec skill-manager FR-030)", () => {
+  test("offers a folder picker beside the path display", () => {
+    // No skill-manager requirement states the picker any more; what it reuses
+    // is the daemon's own native folder dialog (spec daemon FR-020).
     stub({});
     render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
       wrapper: wrap(null),

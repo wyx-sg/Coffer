@@ -1,7 +1,7 @@
 import animate from "tailwindcss-animate";
 
 /** @type {import('tailwindcss').Config} */
-// No `darkMode` key: the shell is light-only (spec ui-shell, the same reason
+// No `darkMode` key: the shell is light-only (spec web-ui, the same reason
 // docs-site/.vitepress/config.mts sets `appearance: false`). There is not one
 // `dark:` utility, `.dark` selector or `prefers-color-scheme` rule in src/, so
 // the class strategy the shadcn template ships with only ever configured a

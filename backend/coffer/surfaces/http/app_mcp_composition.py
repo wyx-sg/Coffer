@@ -219,8 +219,8 @@ def build_retention_service(
     sm: async_sessionmaker[AsyncSession], *, audit: AuditService
 ) -> RetentionService:
     """Compose the ``RetentionService`` (registry + repo + audit) and bind the
-    channel-media dir sweep (FR-033) at composition root, so the application
-    layer never imports the infrastructure prune. The caller runs
+    channel-media dir sweep (spec channels FR-033) at composition root, so the
+    application layer never imports the infrastructure prune. The caller runs
     ``initialize_defaults`` and drives the worker cadence."""
     from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
     from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry

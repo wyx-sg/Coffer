@@ -110,7 +110,7 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=chat.model_catalogue,
-        # `/save` (spec knowledge FR-036): both already satisfy the channel
+        # `/save` (spec channels FR-014): both already satisfy the channel
         # core's Protocol shape structurally (``CollectionCatalogPort`` /
         # ``IngestPort``), so the knowledge kind's own services go in
         # directly — the channel core never imports the knowledge kind itself
@@ -139,7 +139,7 @@ def wire_channel_kind(
         pairing=pairing,
         listener=listener,
         tunnel=TunnelController(),
-        # FR-071: websocket-delivery channels converge the same way, and their
+        # spec channels/seatalk FR-004: websocket-delivery channels converge the same way, and their
         # inbound events land on the same seam the webhook route uses —
         # ``ChannelService.ingest_event``, which does not exist yet at this point
         # in the wiring, so it is resolved at call time exactly as the daemon's

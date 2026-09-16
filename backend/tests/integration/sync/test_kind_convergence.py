@@ -56,14 +56,18 @@ def kinds(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, 
     return registered
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a kind that declares itself derived never reaches the tree",
+)
 def test_memory_is_the_one_kind_whose_rows_do_not_converge(kinds) -> None:  # type: ignore[no-untyped-def]
-    """spec memory FR-023, asserted where the kinds are actually built.
+    """spec memory FR-016, asserted where the kinds are actually built.
 
     A partition row is derived from the agents installed on THIS machine. Sent
     to a second one it becomes a partition naming a project root that machine
     may not have, holding no facts — because the derived tree under
     ``~/.coffer/memory/`` is not mirrored either — until the next local pass
-    recomputes it away. FR-023 forbids exactly that.
+    recomputes it away. memory FR-016 forbids exactly that.
     """
     withheld = {name for name, kind in kinds.items() if not kind.converges}
     assert withheld == _NON_CONVERGING, (

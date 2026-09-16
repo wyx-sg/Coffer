@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useMemory.ts
 //
-// ALL queries + mutations for the `memory` kind (agents/frontend.md §3). Keys
+// ALL queries + mutations for the `memory` kind (.agents/frontend.md §3). Keys
 // are hierarchical under one `["memory"]` root so a write with cross-cutting
 // effects — a sync, an organise pass — can invalidate the whole subtree with a
 // prefix, mirroring `lib/hooks/useKnowledge.ts`.
@@ -121,7 +121,7 @@ export function useOrganisePartition(partition: string) {
 }
 
 /** Per-agent delivery state — whether installed, and when it last actually
- * fired (FR-055). Omit `agent` to list every agent delivery can install for. */
+ * fired (FR-026). Omit `agent` to list every agent delivery can install for. */
 export function useMemoryDelivery(agent?: string) {
   return useQuery({
     queryKey: agent ? memoryAgentDeliveryKey(agent) : memoryDeliveryKey,
@@ -144,7 +144,7 @@ export function useInstallDelivery() {
 }
 
 /** Removal only takes out Coffer's own marker-scoped entry — nothing else in
- * the agent's own settings file is touched (spec memory FR-054). */
+ * the agent's own settings file is touched (spec memory FR-025). */
 export function useRemoveDelivery() {
   const qc = useQueryClient();
   const { t } = useTranslation();

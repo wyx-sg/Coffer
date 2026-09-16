@@ -3,7 +3,9 @@
 ``embedding_config`` used to restate an endpoint — its own ``provider``,
 ``base_url`` and ``credential_ref``, a second place to type what the Connections
 page already holds. It now carries ``connection``: the NAME of a ``provider``
-resource (spec knowledge FR-077). The connection the stored row MEANT is the one
+resource. (No requirement states this any more: embeddings were removed
+outright afterwards, so what is left is the migration itself — see spec
+knowledge ``## Migration history``.) The connection the stored row MEANT is the one
 pointing at the same place, so the mapping matches on ``base_url`` first
 (normalised for a trailing slash and case) and falls back to a shared
 ``credential_ref``. When nothing matches, the row keeps its dimensions and chunk

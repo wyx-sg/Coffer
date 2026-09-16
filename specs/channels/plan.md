@@ -3,19 +3,25 @@
 ## Summary
 
 A `channel` resource kind connects IM accounts (Telegram, SeaTalk)
-to the turn platform this spec owns. The channel core (pairing, routing, commands,
+to the turn platform (spec `chat`). The channel core (pairing, routing, commands,
 queueing, rendering policy, notify) is kind-agnostic over
 an adapter protocol; Telegram and SeaTalk are its two adapters.
 A separate callback-listener process gives SeaTalk its webhook ingress, per
 the constitution's public-surface rule. The frontend carries a Channels page in
-the Agents nav group and a Chat page onto the same conversations.
+the Agents nav group.
 
-SeaTalk has a second inbound transport (FR-071): a channel on
+The two platforms this kind varies by have their own child specs
+([`channels/telegram`](./telegram/spec.md), [`channels/seatalk`](./seatalk/spec.md)),
+each of which carries a `spec.md` only: their implementation lands in the file
+families named below, so there is one plan and not three.
+
+SeaTalk has a second inbound transport (spec channels/seatalk FR-002): a channel on
 `delivery: "websocket"` holds one outbound connection instead, so it needs
 neither the listener nor a tunnel nor a signature. It is supervised inside the
 daemon — a per-channel connector reconciled the way the managed tunnel is — over
 the platform's own client library, which the operator supplies in
-`~/.coffer/vendor` and which this repository never vendors or declares (FR-081,
+`~/.coffer/vendor` and which this repository never vendors or declares
+(spec channels/seatalk FR-007,
 [SeaTalk Inbound Over WebSocket](../../docs/decisions/seatalk-websocket-inbound.md)).
 Both transports meet at the same ingest entry point, so nothing downstream of
 ingress is aware of the difference.
@@ -25,7 +31,7 @@ ingress is aware of the difference.
 - **Drives the platform in-process** — `ChatService.create_conversation`,
   `TurnOrchestrator.enqueue_message` (its `on_start` hook hands the channel
   the turn's event queue, drained to the `None` sentinel), `interrupt_turn`. No HTTP between channel
-  core and chat platform.
+  core and turn platform.
 - **No new SDKs.** Telegram and SeaTalk are spoken with `httpx` against fixed
   hosts (`api.telegram.org`, `openapi.seatalk.io`). No user-controlled URLs
   exist in channel config, so the SSRF guard (used for provider-URL checks) is not in this
@@ -35,8 +41,8 @@ ingress is aware of the difference.
   are this machine's to run and diffs that answer against the running adapter
   tasks, starting, stopping and restarting on enable, disable, config change and
   delete. The answer is **three gates**, not one — `enabled`, then the machine
-  binding (`runs_on` names this machine, FR-080), then scope (the channel may
-  drive its own `default_agent`, FR-079) — and they are asked in that order so a
+  binding (`runs_on` names this machine, FR-026), then scope (the channel may
+  drive its own `default_agent`, FR-025) — and they are asked in that order so a
   channel that belongs to another machine is never weighed against this one's
   agent registry. The gate also carries the two things a reader needs out of it:
   each live channel's scope rewritten into agent keys, and a memory of which
@@ -74,9 +80,9 @@ backend/coffer/
 │   ├── config.py        # ChannelConfig discriminated union + ref validation
 │   ├── envelopes.py     # InboundMessage/Callback/Lifecycle/Stop, ChannelCapabilities
 │   ├── commands.py      # COMMAND_ROSTER — the one list the menu, the help
-│   │                    #   text and the FR-064 privacy flag all render from
+│   │                    #   text and the FR-048 privacy flag all render from
 │   ├── dedup.py         # seen-event ids (FR-039)
-│   ├── rich_content.py  # markdown → the platform's own rich format (FR-061)
+│   ├── rich_content.py  # markdown → the platform's own rich format (FR-045)
 │   ├── media_retention.py # which media files are past the prune window
 │   ├── signing.py       # seatalk_signature(body, secret) — pure hashlib
 │   └── errors.py
@@ -97,7 +103,7 @@ backend/coffer/
 │       ├── commands.py / agent_routing.py / model_switch.py / effort_switch.py
 │       │                # the slash commands and the switches they perform
 │       ├── selection_cards.py / card_delivery.py / ephemeral.py
-│       │                # FR-018 cards, their in-place rewrite, FR-064 delivery
+│       │                # FR-015 cards, their in-place rewrite, FR-048 delivery
 │       ├── agent_vocabulary.py
 │       │                # the one translation between scope's agent RESOURCE
 │       │                #   names and the turn platform's agent KEYS
@@ -105,7 +111,8 @@ backend/coffer/
 │       ├── turn_driver.py / turn_render.py / turn_progress.py /
 │       │   turn_text.py / turn_media.py
 │       │                # one message → one turn → the reply, rendered live
-│       ├── document_save.py / save_ports.py   # `/save` (spec knowledge FR-036)
+│       ├── document_save.py / save_ports.py   # `/save` (FR-014, into spec
+│       │                #   knowledge's own ingest path)
 │       └── sync_state.py # pairing identity as a synced state area
 ├── infrastructure/channel/    # the transports, ~30 modules, grouped:
 │   ├── persistence.py   # ChannelPeerModel, ChannelThreadConversationModel, repos
@@ -130,9 +137,8 @@ backend/coffer/
     │   ├── channel_routes.py   # pairing-code, status, notify, callback-test,
     │   │                       #   events ingest
     │   ├── channel_wiring.py   # wire_channel_kind(): kind, service, runtime
-    │   ├── chat/               # the turn platform's own routes (section E) and
-    │   │                       #   the Chat page's (section G)
-    │   └── chat_wiring.py / chat_provider_wiring.py
+    │   └── chat/               # the turn platform's own routes (spec chat),
+    │                           #   which a channel turn drives in-process
     └── cli/channel_cmd.py      # list/register/bind/pair/status/notify
 ```
 
@@ -146,15 +152,15 @@ Key seams:
   `supports_typing`, `supports_reactions`, `supports_media`, `supports_groups`,
   `supports_history_fetch`, plus `max_message_chars`. The core consults
   capabilities, never adapter type, and `supports_live_text` / `supports_edit`
-  are deliberately independent (FR-037).
+  are deliberately independent (FR-038).
 - `LiveText` protocol: the ONE surface a turn grows in place — opened once,
   offered every snapshot, closed carrying the final text. Each transport buffers
   updates to what it can sustain; the core adds no throttle of its own.
 - `AdapterCallbacks` (given to adapters): `on_message(InboundMessage)`, plus
   three optional ones a transport supplies only where it has them —
-  `on_callback` (a selection-card tap, FR-018), `on_lifecycle` (the bot's own
-  standing in a chat, FR-058) and `on_stop` (the platform's own stop control,
-  FR-063). Adapters never import chat modules.
+  `on_callback` (a selection-card tap, FR-015), `on_lifecycle` (the bot's own
+  standing in a chat, FR-042) and `on_stop` (the platform's own stop control,
+  FR-047). Adapters never import turn-platform modules.
 - The SeaTalk adapter has no poll loop. On webhook delivery the daemon's
   events-ingest route feeds the adapter through the runtime's registry; on
   websocket delivery a supervised connector feeds the same entry point from the
@@ -166,7 +172,7 @@ Key seams:
   `daemon_spawn_command`).
 - `agent_vocabulary` is the one place a channel's `scope` (agent **resource**
   names) is translated into the turn platform's agent **keys**. Every
-  comparison between the two goes through it (FR-079).
+  comparison between the two goes through it (FR-025).
 
 ## Module layout — frontend
 
@@ -188,30 +194,12 @@ frontend/src/
 └── lib/hooks/useChannels.ts          # queries + mutations
 ```
 
-The Chat page (section G) is the turn platform's own surface and sits beside it:
-
-```
-frontend/src/
-├── pages/ChatPage.tsx                # the two columns (FR-072)
-├── components/chat/                  # ConversationList + ConversationListItem,
-│                                     #   MessageThread + MessageBubble +
-│                                     #   MarkdownContent, ToolCallCard (FR-077),
-│                                     #   Composer + DraftThread + PendingQueue
-│                                     #   (FR-075), AgentModelBar + ModelPicker +
-│                                     #   EffortPicker (FR-078), ChatErrorBanner
-├── lib/api/chat.ts                   # conversations, messages, pending, SSE
-└── lib/hooks/                        # useChatController (the page's state),
-                                      #   useChatTurn + chatTurnEvents (the
-                                      #   SSE subscription and its reducer)
-```
-
 Nav: `Channels` joins the `nav.group.agents` group (the slot
 [Everything Is a Resource Kind](../../docs/decisions/everything-is-a-resource-kind.md)
-reserved); `Chat` is its own top-level entry. Secrets flow through the existing
-keychain routes before resource
+reserved). Secrets flow through the existing keychain routes before resource
 creation, with rollback on partial failure (AddMcpServerDialog pattern).
-i18n: `channels` and `chat` namespaces in `en.json`/`zh.json` (parity test
-enforces) — the UI is bilingual even though the documentation is not.
+i18n: a `channels` namespace in `en.json`/`zh.json` (parity test enforces) —
+the UI is bilingual even though the documentation is not.
 
 ## Tests
 
@@ -227,11 +215,13 @@ enforces) — the UI is bilingual even though the documentation is not.
   backoff; callback listener app: challenge echo, good/bad signature,
   forwarding; channel routes + CLI commands; runtime reconciler
   (enable/disable/delete/config-change).
-- **Contract**: `/openapi.json` conformance for every channel and chat route
-  against `contracts/api.openapi.yaml`.
-- **Acceptance**: every spec.md scenario carries a
-  `@pytest.mark.acceptance(spec="channels", scenario=...)` (or frontend
-  `acceptance(...)`) marker; audited by `make verify-acceptance`.
+- **Contract**: `/openapi.json` conformance for every channel route against
+  `contracts/api.openapi.yaml`. The turn-platform routes a channel drives are
+  spec chat's contract, not this one's.
+- **Acceptance**: every scenario carries a marker naming the spec that holds
+  it — `@pytest.mark.acceptance(spec="channels", ...)` for the parent's, and
+  `spec="channels/telegram"` / `spec="channels/seatalk"` for a child's (or the
+  frontend `acceptance(...)`); audited by `make verify-acceptance`.
 
 The fake channel adapter used by the suite doubles as the proof of SC-003
 (new channel = adapter + schema only); the scripted second provider proves
@@ -255,7 +245,7 @@ SC-004 (any agent reachable).
 - **Rate limits on the live surface** — each transport buffers its own
   updates to what it can sustain (SeaTalk ~100 ms, Telegram far slower since it
   edits a real message) and the core adds no throttle on top, which is what
-  FR-037 requires. Every update, close and heartbeat is best-effort: a refused
+  FR-038 requires. Every update, close and heartbeat is best-effort: a refused
   one leaves the final reply to carry the answer, and never fails the turn.
 - **Listener port collisions** — port is env-configurable
   (`COFFER_CALLBACK_PORT`, default 8787) and surfaced in channel status so

@@ -38,7 +38,7 @@ class FactSummaryOut(BaseModel):
     type: str
     status: str
     superseded_by: str
-    #: Keys of facts organise flagged this one as disagreeing with (FR-033).
+    #: Keys of facts organise flagged this one as disagreeing with (FR-020).
     #: Nothing settles a conflict any more, so this is the model's finding and
     #: only ever that.
     conflicts_with: list[str]
@@ -80,7 +80,7 @@ class ComposedContextOut(BaseModel):
 
 
 class FileNodeOut(BaseModel):
-    """One entry in a partition's own directory (FR-062).
+    """One entry in a partition's own directory (FR-029).
 
     Same shape as the skill kind's file tree so the two surfaces render
     through one component on the frontend. ``path`` is POSIX and relative to
@@ -110,7 +110,7 @@ class FileContentOut(BaseModel):
 
     No fingerprint, unlike the skill kind's equivalent: a fingerprint exists
     to make a later write conditional, and this family has no write. The tree
-    under ``~/.coffer/memory/`` is derived (FR-023) — an edit here would be
+    under ``~/.coffer/memory/`` is derived (FR-016) — an edit here would be
     overwritten by the next aggregation pass, so the surface does not offer
     one.
     """
@@ -137,7 +137,7 @@ class DeliveryStatusListOut(BaseModel):
 
 
 class ContextQuery(BaseModel):
-    """Body for composing a session-start context (FR-050, FR-051).
+    """Body for composing a session-start context (FR-021, FR-022).
 
     A GET-with-body would be unusual for this surface's own conventions
     (knowledge's ``search`` is a POST for the same reason: the query is
@@ -149,7 +149,7 @@ class ContextQuery(BaseModel):
     cwd: str = Field(default="")
     agent: str | None = None
     budget_tokens: int | None = None
-    #: Whether serving this payload counts as a real delivery (FR-055).
+    #: Whether serving this payload counts as a real delivery (FR-026).
     #: The installed hook always sets this; a management-surface preview
     #: should not, so it never records a fire that did not happen.
     record_fired: bool = False

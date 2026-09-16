@@ -47,7 +47,7 @@ class TunnelControllerPort(Protocol):
 
 
 class WebSocketControllerPort(Protocol):
-    """Lifecycle of per-channel SeaTalk WebSocket connections (FR-071).
+    """Lifecycle of per-channel SeaTalk WebSocket connections (spec channels/seatalk FR-004).
 
     The websocket sibling of ``TunnelControllerPort``, with the same reconcile
     shape — one supervised connection per websocket-delivery channel, held

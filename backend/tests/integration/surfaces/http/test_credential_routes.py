@@ -82,7 +82,7 @@ def _build_app(
     return app
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="store and reference a credential")
+@pytest.mark.acceptance(spec="credentials", scenario="store and reference a credential")
 @pytest.mark.asyncio
 async def test_set_credential_stores_value() -> None:
     fake = _FakeCredentialStore()
@@ -99,7 +99,8 @@ async def test_set_credential_stores_value() -> None:
         )
         assert r.status_code == 204
     assert fake.store["github.GITHUB_TOKEN"] == "ghp_secret"
-    # FR-014: every credential lifecycle change is audited; secret value MUST NOT
+    # spec resource-framework FR-006: every credential lifecycle change is audited; secret value
+    # MUST NOT
     # appear in the audit row — only the ref.
     assert len(audit_repo.entries) == 1
     set_entry = audit_repo.entries[0]
@@ -193,7 +194,7 @@ async def test_set_credential_requires_token() -> None:
     assert fake.store == {}
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="delete a credential frees the reference")
+@pytest.mark.acceptance(spec="credentials", scenario="delete a credential frees the reference")
 @pytest.mark.asyncio
 async def test_delete_credential_removes_value() -> None:
     fake = _FakeCredentialStore()
@@ -224,6 +225,7 @@ async def test_delete_credential_removes_value() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="credentials", scenario="a credential in use cannot be deleted")
 async def test_delete_referenced_credential_returns_409_with_citations() -> None:
     """Deleting a credential that a resource config still references must be
     refused with 409 and the citing resource names — otherwise the deletion

@@ -8,11 +8,14 @@ override, and no override at all (where guessing a version is the failure mode).
 
 from __future__ import annotations
 
+import pytest
+
 from coffer.infrastructure.chat.adapter_support import model_system_context
 
 _AVAILABLE = ["fable", "opus", "sonnet"]
 
 
+@pytest.mark.acceptance(spec="chat", scenario="every turn tells the agent which model it is on")
 def test_names_the_model_coffer_selected() -> None:
     text = model_system_context("opus", _AVAILABLE)
 
@@ -20,6 +23,7 @@ def test_names_the_model_coffer_selected() -> None:
     assert "trust this note" in text.lower()
 
 
+@pytest.mark.acceptance(spec="chat", scenario="every turn tells the agent which model it is on")
 def test_no_override_says_the_cli_default_and_forbids_guessing() -> None:
     text = model_system_context(None, _AVAILABLE)
 

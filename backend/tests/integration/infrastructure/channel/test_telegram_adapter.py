@@ -116,13 +116,13 @@ def _album_update(update_id: int, *, media_group_id: str, caption: str | None = 
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/telegram",
     scenario="a Telegram album is handled as one turn",
 )
 async def test_album_debounces_to_one_turn_with_all_attachments(
     fake_telegram: FakeTelegram, tmp_path, monkeypatch
 ) -> None:
-    """FR-038: three photos sharing one media_group_id (caption on the first)
+    """spec channels/telegram FR-015: three photos sharing one media_group_id (caption on the first)
     debounce into EXACTLY ONE turn carrying all three attachments + the caption,
     not one turn per photo."""
     monkeypatch.setenv("HOME", str(tmp_path))  # media dir resolves under tmp
@@ -161,7 +161,8 @@ async def test_album_debounces_to_one_turn_with_all_attachments(
 async def test_single_photo_without_media_group_id_dispatches_immediately(
     fake_telegram: FakeTelegram, tmp_path, monkeypatch
 ) -> None:
-    """FR-038: a lone photo (no media_group_id) is NOT debounced — it drives a
+    """spec channels/telegram FR-015: a lone photo (no media_group_id) is NOT debounced — it drives
+    a
     turn immediately, exactly as before."""
     monkeypatch.setenv("HOME", str(tmp_path))
     adapter = make_telegram_adapter(fake_telegram)
@@ -180,7 +181,7 @@ async def test_single_photo_without_media_group_id_dispatches_immediately(
 async def test_two_interleaved_media_groups_flush_as_two_turns(
     fake_telegram: FakeTelegram, tmp_path, monkeypatch
 ) -> None:
-    """FR-038: two different albums interleaved keep separate buffers — each
+    """spec channels/telegram FR-015: two different albums interleaved keep separate buffers — each
     flushes its own turn with only its own attachments."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr("coffer.infrastructure.channel.telegram._ALBUM_DEBOUNCE_SECONDS", 0.2)
@@ -243,7 +244,7 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
 
 
 async def test_redelivered_update_id_is_processed_once(fake_telegram: FakeTelegram) -> None:
-    """FR-039: the poll offset normally prevents replays, but a reconnect race
+    """FR-040: the poll offset normally prevents replays, but a reconnect race
     can re-deliver an update. The same update_id delivered twice must drive the
     turn once — a redelivered message never doubles the reply."""
     adapter = make_telegram_adapter(fake_telegram)
@@ -397,7 +398,7 @@ async def test_send_text_without_thread_id_omits_message_thread_id(
 async def test_send_media_with_thread_id_includes_message_thread_id(
     fake_telegram: FakeTelegram, tmp_path: pathlib.Path
 ) -> None:
-    """FR-031: a file returned during a forum-topic turn is uploaded into that
+    """FR-032: a file returned during a forum-topic turn is uploaded into that
     topic — sendPhoto carries ``message_thread_id`` (mirroring send_text)."""
     img = tmp_path / "chart.png"
     img.write_bytes(b"PNG")
@@ -518,7 +519,7 @@ async def test_callback_query_routes_to_on_callback_and_acks(
 async def test_callback_query_from_supergroup_routes_as_group_callback(
     fake_telegram: FakeTelegram,
 ) -> None:
-    """FR-034: a card tapped in a supergroup forum topic yields a group callback
+    """FR-036: a card tapped in a supergroup forum topic yields a group callback
     (chat_kind="group" + the topic's message_thread_id) so the switch reply
     lands back in the group thread, not a DM."""
     adapter = make_telegram_adapter(fake_telegram)
@@ -761,7 +762,7 @@ async def test_a_non_list_getupdates_result_backs_off_instead_of_spinning(
     assert len(fake_telegram.calls_for("getUpdates")) <= 3
 
 
-# -- live text: the editable surface (FR-037) ---------------------------------
+# -- live text: the editable surface (FR-039) ---------------------------------
 
 
 async def test_live_text_sends_once_then_edits_and_deletes_on_close(
@@ -812,7 +813,7 @@ async def test_live_text_stops_writing_once_the_platform_rejects_an_update(
 
 
 async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram) -> None:
-    """FR-065: the menu the platform shows lists every command that exists."""
+    """FR-050: the menu the platform shows lists every command that exists."""
     adapter = make_telegram_adapter(fake_telegram)
     await adapter.start(RecordingCallbacks().as_callbacks())
     try:
@@ -838,7 +839,7 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
 async def test_start_probes_identity_including_privacy_mode(
     fake_telegram: FakeTelegram,
 ) -> None:
-    """FR-059/FR-060: privacy mode is read at start-up, not assumed."""
+    """FR-044/spec channels/telegram FR-004: privacy mode is read at start-up, not assumed."""
     fake_telegram.results["getMe"] = {
         "id": 4242,
         "username": "cofferbot",
@@ -950,7 +951,7 @@ async def test_oversized_attachment_is_reported_in_the_turn_text(
 
 
 async def test_a_removal_reaches_the_lifecycle_callback(fake_telegram: FakeTelegram) -> None:
-    """FR-058: a removal must arrive, which means it must be subscribed to —
+    """FR-043: a removal must arrive, which means it must be subscribed to —
     Telegram withholds my_chat_member unless it is named in allowed_updates."""
     recorder = RecordingCallbacks()
     adapter = await _start_bot_adapter(fake_telegram, recorder)
@@ -977,7 +978,7 @@ async def test_a_removal_reaches_the_lifecycle_callback(fake_telegram: FakeTeleg
     assert "my_chat_member" in fake_telegram.calls_for("getUpdates")[0]["allowed_updates"]
 
 
-# -- rich messages (FR-061) ---------------------------------------------------
+# -- rich messages (FR-046) ---------------------------------------------------
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a rich reply keeps its markdown structure")
@@ -1011,7 +1012,7 @@ async def test_a_platform_without_rich_messages_still_delivers_the_reply(
 
 
 async def test_an_unsupported_rich_send_is_tried_only_once(fake_telegram: FakeTelegram) -> None:
-    """FR-059: latched off for the process, not retried before every reply."""
+    """FR-044: latched off for the process, not retried before every reply."""
     adapter = make_telegram_adapter(fake_telegram)
     await adapter.start(RecordingCallbacks().as_callbacks())
     try:
@@ -1081,7 +1082,7 @@ async def test_a_rich_send_carries_buttons_and_the_reply_pointer(
     assert sent["rich_message"]["markdown"].startswith("## Agent")
 
 
-# -- streamed drafts and the platform stop control (FR-062 / FR-063) ----------
+# -- streamed drafts and the platform stop control (FR-047 / FR-048) ----------
 
 
 async def test_a_live_reply_streams_as_a_draft(fake_telegram: FakeTelegram) -> None:
@@ -1135,7 +1136,7 @@ async def test_drafts_fall_back_to_the_edited_message_surface(
         await second.update("partial")
     finally:
         await adapter.stop()
-    # The next turn must not pay for another doomed round trip (FR-059).
+    # The next turn must not pay for another doomed round trip (FR-044).
     assert isinstance(second, TelegramLiveText)
     assert len(fake_telegram.calls_for("sendMessageDraft")) == 1
     # The edit surface opens by sending the message it will then rewrite.
@@ -1176,7 +1177,7 @@ async def test_the_stop_control_reaches_the_stop_callback(fake_telegram: FakeTel
     )
 
 
-# -- ephemeral group answers (FR-064) -----------------------------------------
+# -- ephemeral group answers (FR-049) -----------------------------------------
 
 
 async def test_an_ephemeral_answer_is_addressed_to_one_member(

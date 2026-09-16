@@ -58,7 +58,7 @@ class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
 
 
 class UploadTooLarge(KnowledgeError):  # noqa: N818
-    """An ingest upload past the size ceiling (FR-037).
+    """An ingest upload past the size ceiling (FR-026).
 
     Refused before any conversion or write is attempted, naming the limit so
     the caller knows exactly what to shrink below.

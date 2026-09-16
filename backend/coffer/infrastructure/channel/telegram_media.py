@@ -30,8 +30,9 @@ __all__ = [
 ]
 
 #: Bots may only download files up to this size (Bot API ``getFile``). A larger
-#: one is not a transient failure — it can never be fetched — so FR-067 says so
-#: in the chat instead of dropping it silently.
+#: one is not a transient failure — it can never be fetched — so
+#: spec channels/telegram FR-014 says so in the chat instead of dropping
+#: it silently.
 _DOWNLOAD_LIMIT_BYTES = 20 * 1024 * 1024
 
 _logger = logging.getLogger(__name__)
@@ -47,8 +48,9 @@ def default_media_dir() -> pathlib.Path:
 
 
 #: Every non-photo media field a Telegram message can carry, with the mime and
-#: filename to fall back on when the payload names neither (FR-067). Ordered so
-#: a message carrying several lands its attachments predictably.
+#: filename to fall back on when the payload names neither
+#: (spec channels/telegram FR-014). Ordered so a message carrying several
+#: lands its attachments predictably.
 _MEDIA_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("document", "application/octet-stream", "file"),
     ("voice", "audio/ogg", "voice.ogg"),
@@ -68,7 +70,7 @@ _MEDIA_FIELDS: tuple[tuple[str, str, str], ...] = (
 def media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
     """Extract ``(file_id, mime, filename)`` for each attachment on a Telegram
     message — largest photo size, plus every other media field the platform can
-    attach (FR-067). Absent media yields nothing (a plain text message)."""
+    attach (spec channels/telegram FR-014). Absent media yields nothing (a plain text message)."""
     specs: list[tuple[str, str, str]] = []
     seen: set[str] = set()
     photo = message.get("photo")
@@ -93,7 +95,7 @@ def media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
 
 
 def _oversized(message: dict[str, Any]) -> list[str]:
-    """Human labels for attachments too large for a bot to download (FR-067).
+    """Human labels for attachments too large for a bot to download (spec channels/telegram FR-014).
 
     ``file_size`` rides on the media object itself, so the cap is known before
     ``getFile`` is ever called — the user can be told exactly which file was
@@ -113,7 +115,7 @@ def _oversized(message: dict[str, Any]) -> list[str]:
 def inline_keyboard(buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
     """One button per row (selection menus stay readable on a phone).
 
-    FR-069: the option already in effect is rendered with the platform's own
+    FR-054: the option already in effect is rendered with the platform's own
     button states — coloured as the successful choice and disabled — so the card
     stops offering something that tapping cannot change. Both fields arrived in
     Bot API 10.3; an older client ignores what it does not know and shows an
@@ -132,7 +134,7 @@ def _button(button: ChoiceButton) -> dict[str, Any]:
 
 def routing_params(thread_id: str = "", reply_to_message_id: str = "") -> dict[str, Any]:
     """The parameters that place a message: its forum topic and the message it
-    answers (FR-068).
+    answers (FR-053).
 
     ``allow_sending_without_reply`` matters: the message being answered can be
     gone by the time the turn finishes (deleted, or expired in a topic), and a
@@ -162,7 +164,7 @@ async def upload_media(
 ) -> SentMessage:
     """Upload a local file via ``sendPhoto`` (inline image) or ``sendDocument``
     (multipart, so the platform stores + serves the bytes). A non-empty
-    ``thread_id`` posts into that forum topic (FR-031), mirroring send_text.
+    ``thread_id`` posts into that forum topic (FR-032), mirroring send_text.
     Split out of ``telegram.py`` to keep it under the file-size limit."""
     method, field = ("sendPhoto", "photo") if as_photo else ("sendDocument", "document")
     file = pathlib.Path(path)
@@ -203,7 +205,7 @@ class FetchedMedia:
     """What came off one inbound message: the attachments that downloaded, and
     human-readable notes about the ones that did not.
 
-    FR-067: a file a bot may never download is not a silent no-op — the note
+    spec channels/telegram FR-014: a file a bot may never download is not a silent no-op — the note
     rides into the turn text so the answer can acknowledge it.
     """
 

@@ -9,6 +9,13 @@ holds, lets git three-way-merge it against what the remote holds, and applies
 the resulting difference back — deletions included. Background and alternatives
 in [Vault Sync](../../docs/decisions/vault-sync.md).
 
+**This spec also owns machine identity.** The name says "sync", but `machine_id`
+— how it is derived, that it survives a reinstall, what travels in its place,
+and the registry that lists it — is specified here and nowhere else
+(FR-021 … FR-031). Other specs key on it: a channel's machine binding in spec
+[channels](../channels/spec.md) and the tidy owner in spec
+[knowledge](../knowledge/spec.md) both name a `machine_id` this spec defines.
+
 ## Why
 
 A developer works the same project from a laptop and a desktop. Both produce
@@ -17,73 +24,67 @@ credentials. Without convergence each machine is an island, and the fix — expo
 here, carry the directory, import there — is a chore nobody performs often
 enough for the two to stay alike.
 
-Convergence with a user-owned git remote is a bounded exception to the
-constitution's local-first principle (0.6.0): the remote is a **rendezvous, not
-a system of record**. Every machine's vault stays complete and authoritative, so
-the remote can be deleted and rebuilt from any single machine without losing
-anything.
+- **FR-001**: Convergence with a user-owned git remote is a bounded exception to
+  the constitution's local-first principle (0.6.0): the remote MUST be a
+  **rendezvous, not a system of record**. Every machine's vault MUST stay
+  complete and authoritative, so the remote can be deleted and rebuilt from any
+  single machine without losing anything.
 
 ## What syncs
 
-- **Knowledge** — the markdown files under `~/.coffer/knowledge/<collection>/`.
-- **Skills** — the master skill store under `~/.coffer/skills/`.
-
-  Both trees are mirrored as regular files. A symlink is skipped, not followed
-  — its target is not vault content, and a link to a file outside the vault
-  would otherwise be published — and anything under a nested `.git` directory
-  is skipped as another repository's internals. What was skipped is logged
-  once per round. In the other direction, a symlink the working tree holds is
-  refused rather than read into the vault.
-- **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`,
-  `provider`, `channel` definitions (system of record is SQLite; serialized to
-  text). A resource document is identity, description and config — what the
-  resource *is*. What it reaches is not in it; see below.
-
-  Every kind travels **except one it declares for itself**: a kind sets
-  `converges=False` when its rows are derived on each machine rather than
-  authored by the user, and `memory` is the only kind that does (spec
-  [memory](../memory/spec.md) FR-023). The rule lives on the kind rather than
-  as a list in the sync layer, because whether a row is derived is a fact about
-  the kind; the exporter withholds such rows and the applier ignores such a
-  document, so a machine still on an older build cannot deliver one either.
-
-  `channel` is not that case — it travels. A channel is an inbound surface —
-  a port, a tunnel, a webhook URL a platform has been told to call — so two
-  machines answering one conversation is a real danger, and the document names
-  the one machine that may: a channel carries `runs_on`, the `machine_id` of
-  the single machine whose daemon starts its adapter (spec channels FR-080).
-  The document travels; the adapter does not. The second machine therefore
-  holds the channel's configuration, its credential references and its
-  pairings, so taking over a bot is a rebind rather than a re-registration and
-  a machine that died is not a machine that took a bot with it.
-- **Shared state** — module-owned areas that belong to the vault rather than to
-  one machine: MCP capability preferences, internal engine settings, the agent
-  plugin inventory, and channel peer pairings.
-
-  Channel peer pairings travel because a channel does: a channel that moved to
-  another machine without its pairings would make the owner re-pair from their
-  phone on every rebind. What travels is platform identity — chat id, sender
-  id, display name, the chat's sticky agent. The **active conversation pointer
-  does not**: conversations are machine-local, and a published pointer would
-  name a conversation the other machine does not have.
-
-  The plugin inventory is an **inventory, not a replicator**: it records which
-  plugins each agent has on each machine and writes nothing into any agent's
-  configuration.
-- **Credentials** — Fernet **ciphertext only**, and only when the user opts in.
-- **Machine descriptors** — one small document per machine, described below.
+- **FR-002**: The markdown files under `~/.coffer/knowledge/<collection>/` and
+  the master skill store under `~/.coffer/skills/` MUST converge, mirrored as
+  regular files.
+- **FR-003**: Outbound, a symlink MUST be skipped rather than followed — its
+  target is not vault content, and a link to a file outside the vault would
+  otherwise be published — and anything under a nested `.git` directory MUST be
+  skipped as another repository's internals. What was skipped MUST be logged
+  once per round. Inbound, a symlink the working tree holds MUST be refused
+  rather than read into the vault.
+- **FR-004**: `mcp_server`, `agent`, `skill`, `knowledge`, `provider` and
+  `channel` definitions MUST converge, serialized to text from SQLite, which
+  stays the system of record. A resource document is identity, description and
+  config — what the resource *is*. What it reaches is not in it (FR-014).
+- **FR-005**: Every kind MUST travel **except one it declares for itself**: a
+  kind sets `converges=False` when its rows are derived on each machine rather
+  than authored by the user, and `memory` is the only kind that does (spec
+  [memory](../memory/spec.md) FR-023). The rule MUST live on the kind rather
+  than as a list in the sync layer; the exporter MUST withhold such rows and the
+  applier MUST ignore such a document, so a machine on an older build cannot
+  deliver one either.
+- **FR-006**: A `channel` document MUST travel while its adapter does not. A
+  channel is an inbound surface — a port, a tunnel, a webhook URL a platform has
+  been told to call — so the document names the one machine that may answer:
+  `runs_on`, the `machine_id` whose daemon starts the adapter (spec
+  [channels](../channels/spec.md) FR-080). The other machine therefore holds the
+  channel's configuration, its credential references and its pairings, so taking
+  over a bot is a rebind rather than a re-registration.
+- **FR-007**: Module-owned shared state areas that belong to the vault rather
+  than to one machine MUST converge: MCP capability preferences, internal engine
+  settings, the agent plugin inventory, and channel peer pairings.
+- **FR-008**: Channel peer pairings MUST travel as **platform identity** — chat
+  id, sender id, display name, the chat's sticky agent — because a channel that
+  moved to another machine without its pairings would make the owner re-pair
+  from their phone on every rebind.
+- **FR-009**: The active conversation pointer MUST NOT travel. Conversations are
+  machine-local, and a published pointer would name a conversation the other
+  machine does not have.
+- **FR-010**: The plugin inventory MUST be an **inventory, not a replicator**:
+  it records which plugins each agent has on each machine and MUST write nothing
+  into any agent's configuration.
+- **FR-011**: Credentials MUST travel as Fernet **ciphertext only**, and only
+  when the remote is configured to carry it.
+- **FR-012**: One machine descriptor document per machine MUST travel (FR-026).
 
 ## What does not sync (machine-local)
 
-Logs, `coffer.db` itself, `daemon-config.json`, PID files, port allocations,
-chat history, conversations, the audit log, MCP invocation records, the whole
-of `~/.coffer/memory/` **and the `memory` partition rows derived from it**, and
-any runtime artifact. The master key is **never** written into the repository.
-
-One entry in this list is a decision rather than mechanics, and it says what a
-machine *does* with the vault belongs to that machine.
-
-- **Reach** — a resource's `enabled` flag and its `scope`. They read like two
+- **FR-013**: Logs, `coffer.db` itself, `daemon-config.json`, PID files, port
+  allocations, chat history, conversations, the audit log, MCP invocation
+  records, the whole of `~/.coffer/memory/` **and the `memory` partition rows
+  derived from it**, and any runtime artifact MUST stay machine-local. The
+  master key MUST **never** be written into the repository (FR-077).
+- **FR-014**: **Reach** — a resource's `enabled` flag and its `scope` — is
+  machine-local and MUST NOT travel in either direction. They read like two
   fields but they are one thing, written by one control: whether this resource
   is live here, and for which agents. Reach is set on the machine it applies to
   and each machine sets its own. Publishing it would let one machine silently
@@ -92,433 +93,399 @@ machine *does* with the vault belongs to that machine.
   desktop's next round, with nothing in the history that reads like a decision
   anyone made.
 
-Conversations and the audit log are deliberately excluded: they are records of
+Conversations and the audit log are excluded deliberately: they are records of
 what happened *on a machine*, and a merged history of two machines' activity
 would be a different feature with a different shape (see `/activity`).
 
 ## Concepts
 
-- **Sync remote** — at most one git repository, owned by the user, that this
-  vault converges with. Configured with a URL, a branch, a push credential
-  reference, an interval, and whether credential ciphertext rides along.
-  Disabled until the user configures it. The URL and the branch become
-  arguments to `git`, so neither may begin with `-` (git would read it as an
-  option, and `--receive-pack=<cmd>` is a command), and the branch is held to
-  `git check-ref-format --branch`. Both are refused at the API and CLI and
-  again by the domain object; the adapter fences every positional argument
-  git lets it fence with `--` and pushes an explicit `refs/heads/` refspec.
-- **Working tree** — the directory the vault is serialized into, which is also
-  the git working tree. Default `~/.coffer/sync`. Every round mirrors the vault
-  *into* it and may `reset --hard` it, so it may not be at, inside or above
-  any vault directory (knowledge, skills, memory), nor at or above `~/.coffer`
-  itself; inside `~/.coffer` only the default location is accepted, and a
-  relative path is refused. An existing repository there is adopted with its
-  history intact — unless it has commits and an `origin` that is not the
-  configured remote and was not created by Coffer, in which case it is
-  someone's checkout of something else and is refused rather than repointed.
-  A tree Coffer made is marked in its local git config and can be repointed
-  when the remote's URL changes.
-- **Vault document** — the serialized form of one piece of vault state at one
-  path in the working tree: a knowledge file, a skill file, a resource YAML, a
-  state YAML, a credential blob, a machine descriptor.
-- **Converge round** — one full cycle: serialize local state, merge with the
-  remote, apply what the merge brought in, push. Specified below.
-- **Pointer** — the commit this vault has provably absorbed, stored locally.
-  It is the base of every diff and the only machine identity the algorithm
-  needs. It never travels.
-- **Retry set** — paths the working tree holds that this vault has not absorbed.
-  Stored locally beside the pointer. The exporter must not delete them.
-- **Machine** — one installation of Coffer, identified by a stable id derived
-  from the host, carrying a display name the user may change freely.
+A **vault document** is the serialized form of one piece of vault state at one
+path in the working tree: a knowledge file, a skill file, a resource YAML, a
+state YAML, a credential blob, a machine descriptor. A **converge round** is one
+full cycle (FR-035). The **retry set** is the paths the working tree holds that
+this vault has not absorbed, stored locally beside the pointer. A **machine** is
+one installation of Coffer.
+
+- **FR-015**: A vault MUST have **at most one** sync remote: a git repository
+  the user owns, configured with a URL, a branch, a push credential reference,
+  an interval, and whether credential ciphertext rides along. Sync MUST be
+  disabled until the user configures it.
+- **FR-016**: The URL and the branch become arguments to `git`, so neither MAY
+  begin with `-` (git would read it as an option, and `--receive-pack=<cmd>` is
+  a command) and the branch MUST pass `git check-ref-format --branch`. Both MUST
+  be refused at the API, at the CLI and again by the domain object. The git
+  adapter MUST fence every positional argument git lets it fence with `--` and
+  MUST push an explicit `refs/heads/` refspec.
+- **FR-017**: The working tree defaults to `~/.coffer/sync`. Every round mirrors
+  the vault into it and may `reset --hard` it, so it MUST NOT be at, inside or
+  above any vault directory (knowledge, skills, memory), nor at or above
+  `~/.coffer` itself; inside `~/.coffer` only the default location is accepted,
+  and a relative path MUST be refused.
+- **FR-018**: An existing repository at that location MUST be adopted with its
+  history intact — unless it has commits and an `origin` that is neither the
+  configured remote nor one Coffer created, in which case it is someone's
+  checkout of something else and MUST be refused rather than repointed.
+- **FR-019**: A tree Coffer made MUST be marked in its local git config and MAY
+  be repointed when the remote's URL changes.
+- **FR-020**: The **pointer** is the commit this vault has provably absorbed,
+  stored locally. It is the base of every diff and the only machine identity the
+  algorithm needs, and it MUST NOT travel as an input to the algorithm.
 
 ## The machine dimension
 
 ### Identity is derived, the name is a label
 
-A machine has two separate things:
-
-| | `machine_id` | `machine_name` |
-| --- | --- | --- |
-| Origin | derived from the host OS | chosen by the user, defaults from hostname |
-| Is it a key? | **yes** — descriptor filename, tidy-owner reference, table key | no |
-| Mutable? | no | **yes, at any time, at no cost** |
-| Stored | cached in `daemon-config.json`, recomputed if lost | inside the machine's descriptor, so it syncs |
-
-`machine_id` MUST survive reinstalling and uninstalling Coffer, because a
-machine that comes back under a new identity becomes a ghost: it rejoins as a
-stranger rather than as itself, its old descriptor lingers in the registry with
-nobody to update it, and anything that named it — the tidy owner, its own
-recovered pointer — silently stops meaning this machine. It is therefore derived
-from the host, not generated by Coffer:
-
-- **macOS** — `IOPlatformUUID` from `IOPlatformExpertDevice`.
-- **Linux** — `/etc/machine-id`, falling back to `/var/lib/dbus/machine-id`.
-- **Fallback** — when neither is readable, a UUID generated once and stored at
-  `~/.coffer/machine-id` (mode `0600`). This one does **not** survive deleting
-  `~/.coffer`, and the machine page says so, because such a machine reappears
-  under a new id and the old descriptor must be removed by hand.
-
-The raw host identifier MUST NOT be written into the repository — it is a
-hardware identifier. What travels is `sha256("coffer-machine:" + raw)`
-truncated to 16 hex characters.
+- **FR-021**: `machine_id` MUST survive reinstalling and uninstalling Coffer. A
+  machine that comes back under a new identity becomes a ghost: it rejoins as a
+  stranger, its old descriptor lingers in the registry with nobody to update it,
+  and anything that named it — the tidy owner, its own recovered pointer —
+  silently stops meaning this machine.
+- **FR-022**: `machine_id` MUST therefore be derived from the host, not
+  generated by Coffer: on macOS, `IOPlatformUUID` from `IOPlatformExpertDevice`;
+  on Linux, `/etc/machine-id` falling back to `/var/lib/dbus/machine-id`. It
+  MUST be cached in `daemon-config.json` and recomputed if that cache is lost.
+- **FR-023**: Where neither host identifier is readable, a UUID MUST be
+  generated once and stored at `~/.coffer/machine-id` (mode `0600`). This one
+  does **not** survive deleting `~/.coffer`, and the machine surface MUST say
+  so, because such a machine reappears under a new id and the old descriptor
+  must be removed by hand.
+- **FR-024**: The raw host identifier MUST NOT be written into the repository —
+  it is a hardware identifier. What travels MUST be
+  `sha256("coffer-machine:" + raw)` truncated to 16 hex characters.
+- **FR-025**: `machine_name` is a label, not a key: chosen by the user,
+  defaulting from the hostname, changeable at any time at no cost, and stored
+  inside the machine's own descriptor so it syncs.
 
 ### The registry is a derived view, not a synced table
 
-Each machine writes exactly one document, at `machines/<machine_id>.yaml`, and
-**writes no other machine's**. Because every machine owns a disjoint path, these
-documents cannot conflict; git merges them trivially. The registry is whatever
-`machines/*.yaml` currently holds.
-
-A descriptor carries: `name`, `os`, `hostname`, `coffer_version`,
-`last_converged_at`, `last_converged_commit`, `key_fingerprint`, and the names
-of the agents registered on that machine.
-
-`last_converged_commit` is this machine's pointer, published so the remote can
-hand it back. The pointer itself is local state and may be lost — to a
-reinstall, a wiped `~/.coffer`, a restored-from-elsewhere disk — and a machine
-that rejoins without it is the dangerous case the next section handles.
-
-`key_fingerprint` is the same short hash `GET /sync/key/fingerprint` returns, so
-the machines table can state directly that another machine's credentials cannot
-be decrypted here, instead of the user comparing fingerprints by hand.
-
-`last_converged_at` is restamped **at most once per calendar day**, so a machine
-that is running but idle does not commit a heartbeat every round. It therefore
-means "last day this machine converged", and the UI says so.
+- **FR-026**: Each machine MUST write exactly one document, at
+  `machines/<machine_id>.yaml`, and MUST write no other machine's. Every machine
+  owning a disjoint path is what makes these documents unable to conflict.
+- **FR-027**: The registry MUST be whatever `machines/*.yaml` currently holds —
+  a derived view, never a synced table of its own.
+- **FR-028**: A descriptor MUST carry `name`, `os`, `hostname`,
+  `coffer_version`, `last_converged_at`, `last_converged_commit`,
+  `key_fingerprint`, and the names of the agents registered on that machine.
+- **FR-029**: `last_converged_commit` MUST publish this machine's pointer, so
+  the remote can hand it back to a machine that lost it (FR-044).
+- **FR-030**: `key_fingerprint` MUST be the same short hash
+  `GET /sync/key/fingerprint` returns, so the machines table can state directly
+  that another machine's credentials cannot be decrypted here instead of the
+  user comparing fingerprints by hand.
+- **FR-031**: `last_converged_at` MUST be restamped **at most once per calendar
+  day**, so a machine that is running but idle does not commit a heartbeat every
+  round. It therefore means "last day this machine converged", and the UI MUST
+  say so.
 
 ### Scope has no machine axis, because reach does not travel
 
-`scope` names agents and nothing else:
+- **FR-032**: `scope` MUST name agents and nothing else — `{ agents: [...] }`.
+  `null` means every agent, a list restricts to it, `[]` matches nothing and is
+  dormant, and an unknown agent name is legal and simply never matches. There
+  MUST be no machine axis: reach is machine-local (FR-014), so a machine already
+  names the resources it activates by *holding* that scope, and machine ids
+  inside the scope would record the same fact a second time with two ways to
+  disagree.
+- **FR-033**: Removing the axis MUST NOT widen anything. A stored scope that
+  named machines was, on this machine, either admitted by that list or dormant
+  because of it; the migration MUST resolve each row against the machine id the
+  daemon was actually using and write the answer that machine already saw,
+  taking `agents: []` — dormant — whenever it cannot tell. Narrowing is visible
+  and one click to undo; widening is a resource silently reaching an agent it
+  was kept from.
+- **FR-034**: A scope editor MUST state, where the user sets reach, that reach
+  applies to this machine only and is not synced, and MUST say where a resource
+  is dormant here.
 
-```yaml
-scope:
-  agents: [claude-code]
-```
-
-`null` means every agent, a list restricts to it, and `[]` matches nothing —
-dormant. An unknown agent name is legal and simply never matches.
-
-There is no machine axis and there is nothing for one to say. Reach is
-machine-local (`## What does not sync`), so a machine already names the
-resources it activates by *holding* that scope; machine ids inside the scope
-would record the same fact a second time, in a second place, with two ways to
-disagree. "Live on the desktop, dark on the laptop" is expressed by setting it
-that way on each — which is also the only expression the user can verify from
-the machine they are sitting at.
-
-**A channel's machine binding is not this axis coming back.** `runs_on` (spec
-channels FR-080) and reach answer different questions and belong in different
-places for the same reason. Reach is "which agents, here" — a local answer each
-machine gives itself, so it stays on the row and never travels. The binding is
-"which machine runs the adapter" — one answer the machines share, so it lives in
-the channel's config and travels with it. The withdrawn machine axis was neither
-of those: it recorded, in a travelling field, a fact each machine already stated
-by holding its own reach. A binding records a fact no machine can state alone,
-because it is about which of them acts.
-
-Removing the axis MUST NOT widen anything. A stored scope that named machines
-was, on this machine, either admitted by that list or dormant because of it; the
-migration resolves each row against the machine id the daemon was actually using
-and writes the answer that machine already saw, taking `agents: []` — dormant —
-whenever it cannot tell. Narrowing is visible and one click to undo; widening is
-a resource silently reaching an agent it was kept from.
-
-A scope editor MUST state, where the user sets reach, that reach applies to this
-machine only and is not synced. Where a resource is dormant here, it MUST say so.
+A channel's machine binding is not this axis coming back. Reach is "which
+agents, here" — a local answer each machine gives itself. The binding is "which
+machine runs the adapter" — one answer the machines share, so it lives in the
+channel's config and travels with it (FR-006). A binding records a fact no
+machine can state alone, because it is about which of them acts.
 
 ## The converge round
 
-A round is seven steps, and the order is the specification's most important
-content: it is what prevents the mutual deletion of 2026-07-10.
+- **FR-035**: A round MUST be these seven steps **in this order**:
 
-```
-0  Repair    — if the working tree's HEAD is not the pointer, reset to the pointer
-1  Serialize — export the vault into the tree (differentially), commit as L
-2  Merge     — fetch, then merge origin/<branch> into L with base merge-base(L, R) → M
-3  Diff      — D := git diff L..M
-4  Guard     — circuit-breaker check on D; tag L as the pre-apply snapshot
-5  Apply     — apply D to the vault, path by path
-6  Publish   — push M; pointer := M; unapplied paths join the retry set
-```
+  ```
+  0  Repair    — if the working tree's HEAD is not the pointer, reset to the pointer
+  1  Serialize — export the vault into the tree (differentially), commit as L
+  2  Merge     — fetch, then merge origin/<branch> into L with base merge-base(L, R) → M
+  3  Diff      — D := git diff L..M
+  4  Guard     — circuit-breaker check on D; tag L as the pre-apply snapshot
+  5  Apply     — apply D to the vault, path by path
+  6  Publish   — push M; pointer := M; unapplied paths join the retry set
+  ```
 
-### Why local state is committed before the merge
-
-Pulling first and then applying would lose local edits. With the tree at the
-pointer and no local commit, a fetch fast-forwards, git is never given the
-chance to three-way-merge, and applying the remote's changes overwrites whatever
-the vault changed on the same path.
-
-Committing local state first gives git the three inputs it needs — base `P`,
-local `L`, remote `R` — so different hunks of one file merge, the same hunk
-conflicts, and the diff `L..M` contains **exactly what the remote contributed**.
-The vault equals `L` at that moment, so applying `L..M` lands it on `M` with
-local edits intact.
+- **FR-036**: Step 0 MUST run first: where the working tree's HEAD is not the
+  pointer, it MUST be reset to the pointer before anything else happens.
 
 ### Why deletion is safe
 
-Deletion is only ever applied when it appears in `D` as a deletion, and a
-deletion can only reach `D` because some machine actually deleted that document
-relative to a shared base. A machine that merely *lacks* a document makes no
-change relative to its own base, and git treats "unchanged" as an assertion
-about nothing.
-
-This is the guarantee the 0.3.0 design could not make, because its export
-rewrote the tree from local state wholesale — which made "I never had it" and
-"I deleted it" indistinguishable in the diff git saw.
-
-Two rules preserve the honesty of that diff, and both are normative:
-
-- **Export writes differentially.** It writes changed documents and removes
-  documents the vault no longer holds. It MUST NOT clear and rewrite a
-  directory.
-- **Export never deletes a path in the retry set.** A document this vault failed
-  to absorb is pending, not deleted.
+- **FR-037**: A deletion MUST be applied only when it appears in `D` as a
+  deletion. A machine that merely *lacks* a document makes no change relative to
+  its own base, and that MUST NOT be read as a deletion.
+- **FR-038**: Export MUST write **differentially** — writing changed documents
+  and removing documents the vault no longer holds — and MUST NOT clear and
+  rewrite a directory.
+- **FR-039**: Export MUST NOT delete a path in the retry set. A document this
+  vault failed to absorb is pending, not deleted.
 
 ### The pointer advances only on absorption
 
-The pointer may advance to `M` when the round completes. Any path whose
-application failed joins the retry set instead, is re-attempted next round, and
-leaves the set on success. A path that fails because it cannot apply on this
-machine at all — an `agent` whose `config_dir` does not exist here — is recorded
-as **not applicable here** rather than pending: it is preserved like a retry-set
-path, but it is not retried and not reported as an error, and the UI says so
-rather than presenting it as a failure the user has to chase.
+- **FR-040**: The pointer MAY advance to `M` only when the round completes. Any
+  path whose application failed MUST join the retry set instead, MUST be
+  re-attempted next round, and MUST leave the set on success.
+- **FR-041**: A path that fails because it cannot apply on this machine at all —
+  an `agent` whose `config_dir` does not exist here — MUST be recorded as **not
+  applicable here** rather than pending: preserved like a retry-set path, not
+  retried, not reported as an error, and said to be so on the surfaces rather
+  than presented as a failure the user has to chase.
 
 ### Joining a remote
 
-A machine with no pointer is joining. There are two kinds of joiner and they
-need opposite treatment, so the round MUST tell them apart before it does
-anything. It can: the remote's registry either holds this machine's id or it
-does not, which is what a **derived** machine id buys.
-
-**A new machine takes the union.** Its id is absent from the registry. The
-pointer is set to git's empty tree, so `D` is a diff from nothing and can only
-contain additions. The machine takes everything the remote holds, keeps
-everything it already had, and the next round publishes both. Deletion is
-structurally impossible here, not merely avoided.
-
-**A returning machine recovers its base.** Its id is present, so it has
-converged before and its descriptor names the commit it reached. That commit
-becomes the pointer, and the round proceeds as an ordinary stale-machine
-round: the three-way merge takes the remote's deletions, keeps this machine's
-edits, and nothing resurrects.
-
-Treating a returning machine as new is the failure this rule exists to prevent.
-Its vault still holds what it held before it lost its pointer, so a union
-republishes state the other machines deleted while it was away — every deletion
-undone at once, and no conflict raised, because a union has no base to disagree
-with.
-
-**A returning machine whose vault is gone must not publish the loss.** The
-recovered base is only correct if the vault still holds roughly what that commit
-held. A reinstall that took `~/.coffer` with it leaves an empty vault and a valid
-pointer, and the merge would read that as "this machine deleted everything" —
-the 2026-07-10 shape, reached from the other direction. Coffer cannot tell a
-wiped disk from a deliberate purge, so it does not try: the publish-side
-circuit breaker below stops the round and asks.
-
-Joining is therefore an explicit, reported act. Whichever kind it is, the surfaces
-state what was found before anything is applied — which case it is, when this
-machine last converged, how many documents the remote has changed since, and how
-many this vault has.
-
-**A damaged machine gets a third answer.** Where the publish-side guard holds a
-round, confirm and reject are both wrong for a vault that lost its files:
-confirming spreads the loss to every other machine, rejecting refuses the same
-round forever. **Rebuild** replaces this vault with the remote's, discarding
-documents only this machine holds and pushing nothing. It is destructive on
-purpose and is never reached without the user asking for it by name.
-
-A returning machine whose recorded base is no longer in the remote's history has
-no safe default either — joining as new would resurrect what the others deleted,
-rebuilding would discard what only this one has — so that case is refused until
-the user picks one.
-
-The same detection runs whenever a round starts with no pointer, not only under
-`coffer sync adopt`, so configuring a remote on a machine that has forgotten its
-pointer cannot skip it.
+- **FR-042**: A machine with no pointer is **joining**, and the round MUST tell
+  a new machine from a returning one — out of the remote's registry, which
+  either holds this machine's id or does not — before it does anything.
+- **FR-043**: A **new machine** MUST take the union: its pointer is set to git's
+  empty tree, so `D` is a diff from nothing and can structurally contain only
+  additions. It takes everything the remote holds, keeps everything it already
+  had, and the next round publishes both.
+- **FR-044**: A **returning machine** MUST recover its base from its own
+  descriptor's `last_converged_commit` and proceed as an ordinary stale-machine
+  round: the three-way merge takes the remote's deletions, keeps this machine's
+  edits, and nothing resurrects.
+- **FR-045**: A returning machine whose vault is gone MUST NOT publish the loss.
+  A reinstall that took `~/.coffer` with it leaves an empty vault and a valid
+  pointer, which the merge would read as "this machine deleted everything";
+  Coffer cannot tell a wiped disk from a deliberate purge, so the publish-side
+  guard (FR-068) MUST stop the round and ask rather than guess.
+- **FR-046**: Joining MUST be explicit and reported: whichever kind it is, the
+  surfaces MUST state, before anything is applied, which case it is, when this
+  machine last converged, how many documents the remote has changed since, and
+  how many this vault has.
+- **FR-047**: **Rebuild** MUST replace this vault with the remote's, discarding
+  documents only this machine holds and pushing nothing. It is destructive on
+  purpose and MUST NOT be reached without the user asking for it by name. It is
+  the third answer a damaged machine needs, because confirming spreads the loss
+  and rejecting refuses the same round forever.
+- **FR-048**: A returning machine whose recorded base is no longer in the
+  remote's history MUST be refused until the user picks: joining as new would
+  resurrect what the others deleted, rebuilding would discard what only this one
+  has, and there is no safe default.
+- **FR-049**: The join detection MUST run whenever a round starts with no
+  pointer, not only under `coffer sync adopt`, so configuring a remote on a
+  machine that has forgotten its pointer cannot skip it.
 
 ## Applying a diff
 
-| Path | Added / Modified | Deleted |
-| --- | --- | --- |
-| `knowledge/**`, `skills/**` | write the file | remove the file |
-| `resources/<kind>/<name>.yaml` | upsert through the resource service, with `${HOME}` expanded and the kind's import gate run; the local resource's reach is **not** touched | delete the resource |
-| `state/<area>/**` | the area's provider applies the document | the area's provider removes it |
-| `credentials/<ref>.enc` | write the ciphertext, subject to the freshness rule below | delete the credential |
-| `machines/*.yaml` | nothing — the registry is read from the tree | nothing |
-| `manifest.json` | ignored | ignored |
+- **FR-050**: For `knowledge/**` and `skills/**`, an addition or a modification
+  MUST write the file and a deletion MUST remove it.
+- **FR-051**: For `resources/<kind>/<name>.yaml`, an addition or a modification
+  MUST upsert through the kind-agnostic resource service with `${HOME}` expanded
+  and the kind's import gate run, leaving the local resource's reach untouched
+  (FR-014); a deletion MUST delete the resource.
+- **FR-052**: For `state/<area>/**`, the area's provider MUST apply the document
+  and MUST remove it on deletion (FR-058).
+- **FR-053**: For `credentials/<ref>.enc`, an addition or a modification MUST
+  write the ciphertext subject to the freshness rule (FR-060); a deletion MUST
+  delete the credential.
+- **FR-054**: `machines/*.yaml` and `manifest.json` MUST NOT be applied in
+  either direction — the registry is read from the tree, never projected into
+  anything local, and the manifest is metadata about the tree.
+- **FR-055**: Deleting a resource MUST release the credentials no remaining
+  resource cites, as any other deletion does.
+- **FR-056**: After the diff is applied, each kind's post-import hook MUST
+  re-apply its machine-local side effects — native config projections, shims,
+  skill deliveries — from current state.
+- **FR-057**: A `channel` is upserted by the same row as every other kind, and
+  its arrival MUST start nothing: what it carries is a machine binding, and a
+  machine that is not the one named simply holds the document. The channel
+  kind's own registration checks MUST be relaxed for exactly that case (spec
+  [channels](../channels/spec.md) FR-080), because a channel bound elsewhere is
+  not judged here against agents this machine happens to have.
+- **FR-058**: A state document reaches the working tree only while there is a
+  **decision to carry**, so its deletion is that decision being taken back. Each
+  state area's provider MUST define what deleting its own document means in that
+  area's terms and MUST honour it; sync MUST apply the deletion through the
+  provider and MUST NOT interpret it for any area. The same rule binds the other
+  direction: an area MUST NOT publish a document for its own defaults, or a
+  machine that took its choice back and a machine that never made one would add
+  and delete the same document at each other every round. The areas that exist
+  today state their own terms in spec [mcp-gateway](../mcp-gateway/spec.md)
+  (capability preferences), spec [internal-engine](../internal-engine/spec.md)
+  (engine settings) and spec [agent-registry](../agent-registry/spec.md) (the
+  plugin inventory).
+- **FR-059**: Per-path failures MUST be reported and MUST NOT abort the round.
 
-Deleting a resource releases the credentials no remaining resource cites, as any
-other deletion does. After the diff is applied, each kind's post-import hook
-re-applies its machine-local side effects — native config projections, shims,
-skill deliveries — from current state.
-
-A `channel` is upserted by the same row as every other kind, and its arrival
-starts nothing: what it carries is a machine binding, and a machine that is not
-the one named simply holds the document. The channel kind's own registration
-checks are relaxed for exactly that case (spec channels FR-080) — a channel
-bound elsewhere is not judged here against agents this machine happens to have,
-because it is not this machine that will drive them.
-
-`runs_on` is a field that MUST be right, so a binding naming a machine nobody
-claims is **reported as a fault** rather than read as permission for any
-machine to start the adapter (spec channels FR-080): a channel running nowhere
-is a visible problem, and a channel running twice is not.
-
-A state document reaches the tree only while there is a decision to carry, so
-its deletion is that decision being taken back, and each area honours it in its
-own terms:
-
-- **`state/mcp-preferences/<server>`** — a document exists only while something
-  on that server is disabled, so its deletion re-enables every capability on
-  that server. The preference rows stay: enabled is their default, and their
-  seen-timestamps are this machine's own. A server not registered here is
-  ignored.
-- **`state/settings/internal-engine`** — the singleton is reset to its defaults
-  (no model, no tidy owner, aggregate and organise on, tidy off, and every
-  pass back on its own default interval). The defaults publish **no** document —
-  neither a machine that never chose nor one whose choice was taken back writes
-  one — which is what stops a fresh machine, which never persists a default it
-  already has, from deleting the document again every round.
-- **`state/agent-plugins/<agent>`** — nothing is dropped locally: the inventory
-  has no local store beyond the document itself, and Coffer has no
-  uninstall-by-sync path any more than it has an install one. What this
-  machine's agent holds is a fact about this machine, and the next export
-  republishes it if it is still there.
-
-Per-path failures are reported and never abort the round.
+A binding that names no machine any registry claims is a fault on the channel,
+not permission for this one to start its adapter: spec
+[channels](../channels/spec.md) FR-080 owns that rule and the fail-closed
+startup behaviour behind it.
 
 ## Conflicts
 
 Most concurrent edits are not conflicts: git merges different hunks of one file
 without help. What follows governs the remainder.
 
-1. **Credential blobs never reach a text merge.** A Fernet token carries its
-   encryption time in cleartext, so two ciphertexts for one ref can be ordered
-   without the key. The fresher encryption wins. This rule applies to
-   `credentials/*.enc` and to nothing else.
-2. **An agent may attempt the rest.** When an internal model is configured, a
-   bounded pass resolves the remaining conflicts **in the working tree only**,
-   never against the live vault. Its output MUST pass a validation gate — the
-   document parses, a resource document validates, and no conflict marker
-   remains — before it is treated as an ordinary merge result. Resolutions are
-   always reported with their paths, whether or not they succeeded, because a
-   silent machine merge of the user's own notes is precisely what the user would
-   want to know about.
-3. **Otherwise the round stops.** With no model configured, or when the pass
-   fails or its output fails the gate, the round aborts: the vault is not
-   touched, the pointer does not move, and the surfaces name the conflicted
-   paths and the working tree that holds them. The user resolves with their own
-   git tools and the next round proceeds.
-
-A conflict blocks convergence on both machines until it is resolved. That is
-intended: two machines quietly disagreeing about one document is worse than two
-machines waiting.
+- **FR-060**: Credential blobs MUST NOT reach a text merge. A Fernet token
+  carries its encryption time in cleartext, so two ciphertexts for one ref can
+  be ordered without the key, and the **fresher encryption wins**. This rule
+  applies to `credentials/*.enc` and to nothing else.
+- **FR-061**: Where an internal model is configured, a bounded agent pass MAY
+  resolve the remaining conflicts **in the working tree only**, and MUST NOT run
+  against the live vault.
+- **FR-062**: That pass's output MUST pass a validation gate — the document
+  parses, a resource document validates, and no conflict marker remains — before
+  it is treated as an ordinary merge result.
+- **FR-063**: Resolutions MUST always be reported with their paths, whether or
+  not they succeeded: a silent machine merge of the user's own notes is
+  precisely what the user would want to know about.
+- **FR-064**: Otherwise the round MUST abort — with no model configured, or when
+  the pass fails or its output fails the gate. The vault MUST NOT be touched,
+  the pointer MUST NOT move, and the surfaces MUST name the conflicted paths and
+  the working tree that holds them.
 
 ## Safety
 
 Bidirectional convergence writes the vault without a human in the loop, so two
 guards are normative.
 
-- **Pre-apply snapshot.** Step 4 tags `L`, whose tree is by construction the
-  vault's state immediately before the apply. Rollback is the same machinery run
-  backwards — apply `M..L`. The most recent ten snapshots are kept.
-- **Circuit breaker, in both directions.** A round whose diff would delete more
-  than 20% of the documents in an area, or 20 or more documents in one area,
-  does not proceed. The two thresholds are fixed, not configured. It is
-  recorded as needing confirmation, the surfaces list what it would remove, and
-  the user accepts or rejects it. On the apply side the guard runs over
-  everything the round is about to apply — the incoming diff **and** the retry
-  set, since a held path the tree has since dropped is absorbed as a deletion.
-
-  The guard applies to what the round would **apply to the vault** and, equally,
-  to what the round's own export would **publish as a deletion**. The second
-  direction is the one that matters when this machine is the damaged one: a
-  vault that lost its files to a reinstall, a failed restore or a stray
-  `rm -rf` would otherwise publish that loss as an ordinary deletion and take
-  the other machines down with it. A machine joining as new has no deletions in
-  either direction and is unaffected.
+- **FR-065**: Step 4 MUST tag `L` as the pre-apply snapshot, whose tree is by
+  construction the vault's state immediately before the apply. Rollback MUST be
+  the same machinery run backwards — applying `M..L`. The most recent **ten**
+  snapshots MUST be kept.
+- **FR-066**: A round whose diff would delete more than **20%** of the documents
+  in an area, or **20 or more** documents in one area, MUST NOT proceed. Both
+  thresholds are fixed and MUST NOT be configurable.
+- **FR-067**: A tripped breaker MUST be recorded as needing confirmation, the
+  surfaces MUST list what it would remove, and the user accepts or rejects it.
+- **FR-068**: The guard MUST run in **both directions** — over what the round
+  would apply to the vault, and equally over what the round's own export would
+  publish as a deletion. The second direction is what stops a vault that lost
+  its files to a reinstall, a failed restore or a stray `rm -rf` from publishing
+  that loss and taking the other machines down with it.
+- **FR-069**: On the apply side the guard MUST run over everything the round is
+  about to apply — the incoming diff **and** the retry set, since a held path
+  the tree has since dropped is absorbed as a deletion.
 
 Neither guard replaces the diff-based apply; they bound the damage of a defect
-in it.
+in it. A machine joining as new has no deletions in either direction and is
+unaffected.
 
 ## Unattended rewriters
 
 A worker that rewrites vault content with no human approving the diff is safe on
-one machine and unsafe on several. The knowledge **tidy** pass is the case that
-exists today: it merges duplicate notes, splits overgrown ones, and deletes the
-file whose content now lives elsewhere.
+one machine and unsafe on several. Two machines rewriting one corpus each merge
+the same pair of documents into a *different* result, and git merges that
+cleanly — both agree the originals are deleted, the two results are additions at
+different paths — so the vault holds the same content twice with nothing
+reported as a conflict.
 
-Run on two machines over one corpus, it produces a failure git cannot see. Each
-machine merges notes `n1` and `n2` into a topic document, but into *different*
-documents — `t1` here, `t2` there. The merge is clean: both machines agree `n1`
-and `n2` are deleted, and `t1` and `t2` are additions at different paths. The
-vault ends up holding the same knowledge twice, and nothing was in conflict.
-
-Three rules follow, and they are normative.
-
-- **An unattended rewriter of synced content names one owner machine.** The tidy
-  setting gains an owner, becomes synced state, and a pass is a no-op on every
-  other machine. Tidy is off by default and installation-wide already, so this
-  costs a field rather than a concept. If the owner machine is off, no tidy
-  happens, which is the correct trade for a background nicety.
-- **A pass and a converge round never overlap.** They both write the vault, and
-  an export taken mid-rewrite is a torn snapshot. They take the same lock. A
-  pass is also skipped while a conflict or a pending confirmation is
-  outstanding, so rewrites are never piled onto an unresolved divergence.
-- **Delete-versus-edit resolves toward the edit.** When the owner's pass deleted
-  a document that another machine edited, the edit is kept and the deletion is
-  dropped. A fresh edit is something a person or an agent just decided; the
-  deletion is a housekeeping judgement the next pass will simply make again.
-
-The retention worker needs none of this: it prunes the audit log, MCP invocation
-records and conversations, none of which sync.
+- **FR-070**: An unattended rewriter of synced vault content MUST name **one
+  owner machine**, MUST run only on the machine that setting names, and MUST be
+  a clean no-op on every other. The owner MUST be **synced state**, so every
+  machine agrees who it is; the knowledge **tidy** pass is the case that exists
+  today and its owner travels in the `internal-engine` state document that
+  already carries its switch. If the owner machine is off, no pass happens,
+  which is the accepted trade for a background nicety. The retention worker is
+  exempt: it prunes the audit log, MCP invocation records and conversations,
+  none of which sync.
+- **FR-071**: A tidy pass and a converge round MUST NOT overlap. Both write the
+  vault and an export taken mid-rewrite is a torn snapshot, so they MUST take
+  the same lock. A pass MUST additionally be skipped while a conflict or a
+  pending confirmation is outstanding, so a rewrite is never piled onto an
+  unresolved divergence.
+- **FR-072**: Where the owner's pass deleted a document another machine edited,
+  the **edit MUST win**: the document survives with its edit, the deletion is
+  dropped, and the round MUST NOT report a conflict. A fresh edit is something a
+  person or an agent just decided; the deletion is a housekeeping judgement the
+  next pass will simply make again.
 
 ## Determinism and path portability
 
-Resource and state serialization MUST be deterministic — sorted keys, normalized
-timestamps, machine-local fields stripped — so that an unchanged vault produces
-an unchanged tree. Determinism is what makes a round with nothing to say produce
-no commit, and what makes the history readable with the user's own git tools.
-
-Absolute paths under `$HOME` are stored against a `${HOME}` sentinel and
-expanded against each machine's home — in resource documents and in state
-documents alike. Paths outside `$HOME` are stored verbatim and may fail to
-apply on another machine, which surfaces as a per-path failure.
+- **FR-073**: Resource and state serialization MUST be deterministic — sorted
+  keys, normalized timestamps, machine-local fields stripped — so that an
+  unchanged vault produces an unchanged tree.
+- **FR-074**: A round with nothing to say MUST produce **no commit**, and MUST
+  still be recorded as successful.
+- **FR-075**: Absolute paths under `$HOME` MUST be stored against a `${HOME}`
+  sentinel and expanded against each machine's home — in resource documents and
+  in state documents alike.
+- **FR-076**: Paths outside `$HOME` MUST be stored verbatim. They may fail to
+  apply on another machine, which MUST surface as a per-path failure (FR-059).
 
 ## Credentials
 
-Credential ciphertext travels only when the remote is configured to carry it.
-The master key is never written into the repository; it is bootstrapped onto
-another machine out-of-band with `coffer sync key export` / `coffer sync key
-import`, and a machine holding ciphertext without the key reports those refs
-locked rather than failing decryption silently.
-
-The push credential is resolved from the credential store at push time, named by
-reference and never by value. It never enters the repository's git config, never
-appears in a command line, and is redacted from any recorded error.
+- **FR-077**: The master key MUST never be written into the repository. It is
+  bootstrapped onto another machine out-of-band with `coffer sync key export` /
+  `coffer sync key import`.
+- **FR-078**: A machine holding ciphertext without the key MUST report those
+  refs **locked** rather than failing decryption silently.
+- **FR-079**: The push credential MUST be resolved from the credential store at
+  push time, named by reference and never by value. It MUST NOT enter the
+  repository's git config, MUST NOT appear in a command line, and MUST be
+  redacted from any recorded error.
 
 ## Restore
 
-The remote's history is also the vault's backup. `coffer sync restore [--at
-<rev|date>]` moves the working tree to a revision and applies the difference
-from the current pointer, so a document deleted last week returns without
-discarding anything the vault gained since. Restore is always explicit; a round
-never reaches back into history on its own.
+- **FR-080**: `coffer sync restore [--at <rev|date>]` MUST move the working tree
+  to a revision and apply the difference from the current pointer, so a document
+  deleted last week returns without discarding anything the vault gained since.
+- **FR-081**: Restore MUST always be explicit; a round MUST NOT reach back into
+  history on its own.
 
 ## Surfaces
 
-| Surface | Operation |
-| --- | --- |
-| CLI | `coffer sync now` · `coffer sync adopt [<url>] [--keep-local]` · `coffer sync status` · `coffer sync history [--limit]` · `coffer sync restore [--at <rev\|date>]` · `coffer sync confirm` · `coffer sync reject` · `coffer sync rebuild [--yes]` · `coffer sync rollback` |
-| CLI (remote) | `coffer sync remote set <url> [--branch] [--interval <seconds>] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` |
-| CLI (machines) | `coffer sync machine list` · `coffer sync machine rename <name>` · `coffer sync machine remove <id>` |
-| CLI (key) | `coffer sync key export <file>` · `coffer sync key import <file>` · `coffer sync key fingerprint` |
-| HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `GET /api/v1/sync/runs` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
-| HTTP (machines) | `GET /api/v1/sync/machines` · `PATCH /api/v1/sync/machines/self` · `DELETE /api/v1/sync/machines/{id}` |
-| HTTP (key) | `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
-| UI | A top-level **Sync** page with two tabs. **Runs** (the landing tab): every round this machine has run, as a table — when, outcome, what it applied here, what it published, the commit. **Setup**: the remote, the master key, and the machine registry, which are one errand rather than three screens. There is deliberately no Status tab: what a vault is *doing* is the newest row of what it has *been* doing, and a separate tab for it put one situation in two places and made it actionable in only one. **A round waiting on the user carries its answers on its own row** — confirm (which names the direction, the breached areas and the paths before it runs), reject, and, on a `publish` hold, rebuild-from-remote. Only the round the vault is **currently** waiting on may carry them: `POST /sync/confirm` acts on the vault's present pending state rather than a round named in the request, and rows keep `awaiting_confirmation` as their outcome forever — the timer re-raises one unanswered situation as a new round each pass, and answering it produces a further round rather than rewriting the held ones. A **conflict** stays a banner above the table, because its paths have to be resolved with the user's own git in a working tree the table has no column for. The row whose round a rollback would reverse — the newest one that reached its pre-apply snapshot — carries an **Undo** action naming the paths it would take back; no other row does, because `POST /sync/rollback` names no round and an Undo on every row would run the same call from each. Restoring at a point in time stays a CLI operation: `at` names a revision in the REMOTE's history, which no route exposes, so a page could only offer a blind date box with no preview of what would come back. Consecutive rounds that changed **nothing** — no documents either way, no join, no failure, no locked ref — are **folded into one row** reporting the span and the count. They are the majority (14 of 27 on the machine this was specified against) and one row each buries everything that matters; they are not dropped, because they are the only evidence that a vault which stopped converging on Tuesday is not simply a vault with nothing to do, and a fold that states its span keeps exactly that. A round that failed once is noise; a round that has failed every hour since Tuesday is the answer. |
+- **FR-082**: The CLI MUST cover the round and the vault's lifecycle —
+  `coffer sync now`, `adopt [<url>] [--keep-local]`, `status`,
+  `history [--limit]`, `restore [--at <rev|date>]`, `confirm`, `reject`,
+  `rebuild [--yes]`, `rollback` — and its administration:
+  `remote set <url> [--branch] [--interval <seconds>] [--with-credentials] [--credential-ref]`,
+  `remote show`, `remote clear`, `machine list`, `machine rename <name>`,
+  `machine remove <id>`, `key export <file>`, `key import <file>`,
+  `key fingerprint`.
+- **FR-083**: The HTTP API MUST cover the same operations under `/api/v1/sync`:
+  `GET|PUT|DELETE /sync/remote`, `POST /sync/run`, `POST /sync/adopt`,
+  `GET /sync/status`, `GET /sync/runs`, `POST /sync/restore`,
+  `POST /sync/confirm`, `POST /sync/reject`, `POST /sync/rebuild`,
+  `POST /sync/rollback`, `GET /sync/machines`, `PATCH /sync/machines/self`,
+  `DELETE /sync/machines/{id}`, `GET /sync/key/fingerprint`,
+  `POST /sync/key/export`, `POST /sync/key/import`.
+- **FR-084**: The web UI MUST present a top-level **Sync** page with **two**
+  tabs. **Runs**, the landing tab: every round this machine has run, as a table
+  — when, outcome, what it applied here, what it published, the commit.
+  **Setup**: the remote, the master key and the machine registry, which are one
+  errand rather than three screens. There MUST be no Status tab — what a vault
+  is *doing* is the newest row of what it has *been* doing, and a separate tab
+  for it put one situation in two places and made it actionable in only one.
+- **FR-085**: A round waiting on the user MUST carry its answers on **its own
+  row** — confirm (naming the direction, the breached areas and the paths before
+  it runs), reject, and, on a `publish` hold, rebuild-from-remote. Only the round
+  the vault is **currently** waiting on may carry them: `POST /sync/confirm` acts
+  on the vault's present pending state rather than on a round named in the
+  request, so rows keep `awaiting_confirmation` as their outcome forever — the
+  timer re-raises one unanswered situation as a new round each pass, and
+  answering it produces a further round rather than rewriting the held ones.
+- **FR-086**: A **conflict** MUST stay a banner above the table, because its
+  paths have to be resolved with the user's own git in a working tree the table
+  has no column for.
+- **FR-087**: Exactly one row — the newest that reached its pre-apply snapshot,
+  which is the round a rollback would reverse — MUST carry an **Undo** action
+  naming the paths it would take back, and no other row may, because
+  `POST /sync/rollback` names no round and an Undo on every row would run the
+  same call from each.
+- **FR-088**: Restoring at a point in time MUST stay a CLI operation and no page
+  may offer it: `--at` names a revision in the *remote's* history, which no route
+  exposes, so a page could only offer a blind date box with no preview of what
+  would come back.
+- **FR-089**: Consecutive rounds that changed **nothing** — no documents either
+  way, no join, no failure, no locked ref — MUST be folded into one row reporting
+  the span and the count. They are the majority, and one row each buries
+  everything that matters; they MUST NOT be dropped, because they are the only
+  evidence that a vault which stopped converging on Tuesday is not simply a vault
+  with nothing to do. A round that failed once is noise; a round that has failed
+  every hour since Tuesday is the answer.
 
 ## Acceptance Scenarios
 
@@ -566,6 +533,29 @@ never reaches back into history on its own.
 - **When** that machine runs its first round after being offline,
 - **Then** the deletion is applied rather than reverted, because the machine
   made no change to that path relative to its own base.
+
+### Scenario: a symlink in the vault is skipped rather than published
+
+- **Given** a knowledge collection holding a symlink to a file outside the
+  vault,
+- **When** a round serializes the vault,
+- **Then** the working tree holds no copy of that file, the link is not
+  followed, and the round logs once what it skipped.
+
+### Scenario: a kind that declares itself derived never reaches the tree
+
+- **Given** a vault with `memory` partition rows, whose kind declares
+  `converges=False`,
+- **When** a round exports the vault,
+- **Then** no `resources/memory/*.yaml` document is written, and a document of
+  that kind arriving from the remote is ignored rather than applied.
+
+### Scenario: a working tree pointed inside the vault is refused
+
+- **Given** a request to configure the working tree at a knowledge directory, or
+  at `~/.coffer` itself, or at a relative path,
+- **When** the remote is configured over REST or from the CLI,
+- **Then** each is refused with the reason named and no repository is created.
 
 ### Scenario: concurrent edits to different parts of one document merge
 
@@ -647,6 +637,15 @@ never reaches back into history on its own.
 - **Then** that document is still present in the working tree, it is not
   committed as a deletion, and the round retries it.
 
+### Scenario: a state area decides what its own document's deletion means
+
+- **Given** a state document whose area is the MCP capability preferences, and
+  the other machine has taken that decision back and pushed the deletion,
+- **When** a round applies the diff here,
+- **Then** the area's own provider is what performs the removal, sync applies no
+  meaning of its own, and the area publishes no document for its defaults, so
+  the next round has nothing to delete again.
+
 ### Scenario: an oversized deletion is held for confirmation
 
 - **Given** a diff that would delete more documents than the circuit breaker
@@ -672,6 +671,14 @@ never reaches back into history on its own.
   still disabled, the restricted one still restricted — and a later edit to the
   server's configuration on either machine reaches the other without carrying
   its reach along.
+
+### Scenario: a path under the home directory applies on a machine with a different home
+
+- **Given** a resource whose config names a path under this machine's home,
+- **When** the document reaches a machine whose home directory has a different
+  name,
+- **Then** the stored document carries the `${HOME}` sentinel rather than either
+  literal path, and the applied resource names the second machine's own home.
 
 ### Scenario: a channel travels and runs only on the machine it names
 
@@ -720,6 +727,13 @@ never reaches back into history on its own.
 - **When** it adopts the remote again,
 - **Then** it returns under the same machine id and its descriptor is updated
   rather than duplicated, so it rejoins as itself rather than as a stranger.
+
+### Scenario: the raw host identifier never reaches the repository
+
+- **Given** a machine whose id is derived from a host identifier,
+- **When** it publishes its descriptor,
+- **Then** the working tree holds only the truncated hash of that identifier and
+  the raw value appears nowhere in the repository.
 
 ### Scenario: tidy runs only on its owner machine
 
@@ -781,7 +795,7 @@ never reaches back into history on its own.
 - **Merging two unrelated vaults into one.** First contact takes the union of
   documents; it does not reconcile two histories that never shared a base.
 - **A machine × agent pair matrix.** `scope` has one list, `agents`, and no
-  machine axis to pair it with. Expressing "these agents on the desktop, those
-  on the laptop" inside one travelling field is not supported and is not
-  wanted: reach is machine-local, so each machine already answers that question
-  for itself by holding its own scope (`## What does not sync`).
+  machine axis to pair it with (FR-032). Expressing "these agents on the
+  desktop, those on the laptop" inside one travelling field is not supported and
+  is not wanted: reach is machine-local (FR-014), so each machine already
+  answers that question for itself by holding its own scope.

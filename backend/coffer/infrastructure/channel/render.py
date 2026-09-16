@@ -72,7 +72,7 @@ _BARE_URL = re.compile(r"https?://\S+")
 # `*` / `+` bullets → the `-` form; a bullet needs trailing whitespace, so
 # **bold** at line start is never mistaken for one.
 _ALT_BULLET = re.compile(r"^([ \t]*)[*+]([ \t]+)", re.MULTILINE)
-#: A SeaTalk @mention (FR-070): markup Coffer put there itself, and the ONE span
+#: A SeaTalk @mention (FR-055): markup Coffer put there itself, and the ONE span
 #: no escaping pass may touch. A single backslash inside it is enough to turn a
 #: rendered name into visible tag source, and the target legitimately carries
 #: characters this module escapes — an id may contain `_`, and the email form of

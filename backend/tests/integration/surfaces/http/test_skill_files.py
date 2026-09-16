@@ -8,7 +8,7 @@ Imports a skill with a nested folder, then exercises the endpoints:
 - ``GET /skills/{name}/files/content`` — single-file read, path-escape
   rejection, binary detection, oversize truncation, content fingerprint.
 - ``PUT /skills/{name}/files/content`` — save, guards, and the optimistic
-  ``expected_fingerprint`` concurrency check (FR-028). The master folder is
+  ``expected_fingerprint`` concurrency check (FR-025). The master folder is
   also the user's own working copy, so the stale case is exercised by mutating
   the file on disk behind the API — exactly what an external editor does.
 """
@@ -341,7 +341,7 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
 
 
 def test_write_without_fingerprint_is_unconditional(tmp_path, monkeypatch):
-    """Programmatic clients that never read first keep working (FR-028)."""
+    """Programmatic clients that never read first keep working (FR-025)."""
     app = _app(tmp_path, monkeypatch, 59800)
     src = tmp_path / "src"
     _write_nested_skill_folder(src, name="uncond-skill")

@@ -12,7 +12,7 @@ Three things shape this module (ADR knowledge-is-plain-files):
   file moves and the next ``grep`` sees it. The old pass bracketed itself with
   two reindex calls, and both are gone rather than kept as no-ops.
 * **``.history/`` is the entire safety net.** The pass rewrites a jointly
-  managed artifact with no review step (spec knowledge FR-050), so every tool
+  managed artifact with no review step (spec knowledge FR-030), so every tool
   that can overwrite or retire a file calls :func:`fs.archive` first. That is
   the one invariant in here worth defending.
 * **langgraph stays out.** The loop is reached only through the injected

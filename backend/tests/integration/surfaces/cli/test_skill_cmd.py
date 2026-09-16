@@ -167,8 +167,8 @@ def _register_agent(home: pathlib.Path, name: str) -> pathlib.Path:
 def test_skill_list_json_lists_only_coffers_own_seeded_skill(skill_cli_daemon):
     """`skill list --json` before the user imports anything.
 
-    It is not empty: Coffer seeds its own knowledge skill at boot (spec
-    knowledge FR-042). What this pins is that nothing else is there.
+    It is not empty: Coffer seeds its own knowledge skill at boot (spec knowledge FR-029). What this
+    pins is that nothing else is there.
     """
     result = _runner.invoke(cli_app, ["skill", "list", "--json"])
     assert result.exit_code == 0, result.output

@@ -1,5 +1,5 @@
 """``POST /knowledge/collections/{name}/tidy`` refuses a concurrent pass, and
-``GET /api/v1/upkeep/runs`` says what is in flight (spec knowledge FR-056).
+``GET /api/v1/upkeep/runs`` says what is in flight (spec knowledge FR-033).
 
 The bug both exist for: the Tidy button's disabled state used to live in a
 browser component, so leaving the page mid-pass and coming back showed an idle
@@ -40,7 +40,7 @@ def test_a_second_tidy_over_the_same_collection_is_refused(client) -> None:
 
         # Per collection, not vault-wide: a different collection is unaffected.
         # No internal connection is configured here, so the pass is the clean
-        # no-op FR-050 promises rather than a model call.
+        # no-op spec knowledge FR-030 promises rather than a model call.
         other = client.post("/api/v1/knowledge/collections/other/tidy")
         assert other.status_code == 200, other.text
         assert other.json()["status"] == "no_model"
@@ -50,6 +50,10 @@ def test_a_second_tidy_over_the_same_collection_is_refused(client) -> None:
     assert client.post("/api/v1/knowledge/collections/shopee/tidy").status_code == 200
 
 
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="the daemon names the passes in flight",
+)
 def test_upkeep_runs_names_every_kind_in_flight_and_empties_out(client) -> None:
     assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
 

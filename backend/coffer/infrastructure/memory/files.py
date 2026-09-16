@@ -1,9 +1,9 @@
-"""Reading a partition's directory as a file tree (spec memory FR-062).
+"""Reading a partition's directory as a file tree (spec memory FR-029).
 
 The partition surface shows what is actually on disk: the ``README.md`` that
 says which project the partition was named from, the ``summary.md`` organise
 rewrites, and the ``facts/`` folder of one Markdown file per fact. There is
-nothing to edit here — the whole tree is derived (FR-023) and the next
+nothing to edit here — the whole tree is derived (FR-016) and the next
 aggregation pass would overwrite an edit anyway — so this module reads and
 never writes. That is also why a file's content carries no fingerprint: a
 fingerprint exists to make a later write conditional, and there is no write.
@@ -20,7 +20,7 @@ to one coupling (``application/memory/recall.py``'s own docstring makes the
 same call about knowledge's ripgrep).
 
 Containment is enforced the way ``paths.check_segment`` guards a partition
-name (FR-072): every candidate is resolved and must stay inside the resolved
+name (FR-036): every candidate is resolved and must stay inside the resolved
 partition directory. A symlink whose target escapes is skipped from the tree
 and refused on read, and symlinked directories are never descended into, so a
 cycle cannot send the walk into a loop.

@@ -1,7 +1,7 @@
 """The one thing the layer adds on top of a directory: authorization.
 
-A collection is a Resource so that it can be narrowed to some agents (spec
-knowledge FR-012). These tests hold the service to that: what an agent may not
+A collection is a Resource so that it can be narrowed to some agents (spec knowledge FR-009). These
+tests hold the service to that: what an agent may not
 see must be absent from its catalogue and unreadable by name — and reported as
 absent rather than forbidden, because naming a collection the caller may not
 have is itself a disclosure.

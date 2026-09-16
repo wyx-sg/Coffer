@@ -66,7 +66,7 @@ def _one_line(value: str) -> str:
 
 
 def format_origin(msg: InboundMessage, *, platform: str) -> str:
-    """Render a turn's own provenance as a context block (FR-042).
+    """Render a turn's own provenance as a context block (FR-035).
 
     The agent otherwise sees only the message text and cannot tell which group,
     thread, or platform it is answering in — "which group is this?" becomes a

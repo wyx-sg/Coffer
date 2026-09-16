@@ -40,7 +40,7 @@ async def list_provider_models(
 
     Each id comes back with a GUESSED modality so the connection's model table
     pre-fills a sensible kind; the user corrects it and the curated set stores
-    the answer (spec provider-switching FR-030).
+    the answer (spec provider-switching FR-032).
     """
     result = await svc.list_models(
         provider=body.provider,

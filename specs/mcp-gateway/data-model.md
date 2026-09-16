@@ -1,150 +1,42 @@
 # Data Model — MCP Gateway
 
-Entities, fields, relationships, and the SQLite schema for the MCP gateway.
-ORM models follow these names exactly; OpenAPI schemas match the same field
-names. This spec's own tables were created by the first three Alembic
-revisions; the lineage has grown well past them as later specs landed, so the
-head revision is whatever the newest file under
+Entities, fields, relationships, and the SQLite schema for the `mcp_server`
+kind. ORM models follow these names exactly; OpenAPI schemas match the same
+field names.
+
+The kind-agnostic half — `Resource`, `ResourceRef`, `Kind`, `Scope`,
+`AuditEntry`, `RetentionPolicy`, `PrunableTable`, and the `resources`,
+`audit_log` and `retention_policies` tables — is modelled by spec
+[resource-framework](../resource-framework/data-model.md). This document covers
+only what the MCP kind adds on top, and the `credentials` table in the same
+database belongs to spec credentials.
+
+This spec's own tables were created by two early Alembic revisions; the lineage
+has grown well past them as later specs landed, so the head revision is whatever
+the newest file under
 `backend/coffer/infrastructure/persistence/migrations/versions/` declares rather
-than a number written down here. The three that matter to this document:
+than a number written down here.
 
 | Revision | File                                 | What it creates                                 |
 | -------- | ------------------------------------ | ----------------------------------------------- |
-| `0001`   | `20260520_0001_initial.py`           | `resources`, `audit_log`, `retention_policies`  |
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-Later revisions add columns the DDL below shows in place: `scope_json` on
-`resources` (migration `0046`) and `resource_id` on `audit_log`. The
-`credentials` table FR-011 names arrived with the encrypted credential store.
-## Domain entities (`backend/coffer/domain/`)
+## What this kind contributes to the framework
 
-### `ResourceRef` (`domain/resource.py`)
+`make_mcp_kind()` (`application/mcp/kind.py`) returns one frozen `Kind`
+descriptor, which is the whole of this spec's plug into spec
+resource-framework:
 
-Frozen dataclass / Pydantic value object. The external identifier for a Resource.
-
-| Field  | Type  | Notes                                                             |
-| ------ | ----- | ----------------------------------------------------------------- |
-| `kind` | `str` | matches a registered `Kind.name`, e.g. `"mcp_server"`             |
-| `name` | `str` | kind-internally unique; matches `^[a-zA-Z0-9_.-]+$`; max 64 chars |
-
-Behaviour:
-
-- `__str__` → `f"{kind}:{name}"`
-- `ResourceRef.parse("mcp_server:filesystem")` → `ResourceRef(kind="mcp_server", name="filesystem")`
-- `parse` raises `ValueError` if input lacks a single `:` separator or either side is empty
-- Equality and hashing implied by `frozen=True`
-
-### `Resource` (`domain/resource.py`)
-
-Plain Python dataclass; **not** a Pydantic model (domain stays pure).
-
-| Field         | Type             | Notes                                                                      |
-| ------------- | ---------------- | -------------------------------------------------------------------------- |
-| `id`          | `int`            | DB surrogate; internal only, never serialised externally                   |
-| `kind`        | `str`            | matches `Kind.name`                                                        |
-| `name`        | `str`            | kind-internally unique                                                     |
-| `description` | `str \| None`    | optional free text                                                         |
-| `config`      | `dict[str, Any]` | kind-specific config, already validated against the kind's `config_schema` |
-| `enabled`     | `bool`           | user-controlled enable/disable flag                                        |
-| `created_at`  | `datetime`       | UTC, set on insert, never updated                                          |
-| `updated_at`  | `datetime`       | UTC, updated on every mutation                                             |
-| `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local — it does not travel with the vault. |
-
-Derived: `Resource.ref` returns `ResourceRef(self.kind, self.name)`.
-
-### `Kind` (`domain/resource.py`)
-
-Frozen dataclass. Pure descriptor of a resource kind. Domain only — does not
-hold references to routers, services, or any framework-level adapters.
-
-| Field                       | Type                                                                       | Notes                                                                                                   |
-| --------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `name`                      | `str`                                                                      | unique within process, e.g. `"mcp_server"`                                                              |
-| `display_name`              | `str`                                                                      | UI label                                                                                                |
-| `config_schema`             | `type[pydantic.BaseModel]`                                                 | Pydantic schema used to validate `Resource.config`                                                      |
-| `generic_create_allowed`    | `bool`                                                                     | whether the kind-agnostic `POST /resources` may create this kind; False for kinds that own a creation invariant beyond config validation (a skill's master folder, an agent's on-disk detection) |
-| `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for every kind but `agent` |
-| **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
-| `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule (`mcp_server` reserves the `__` namespace separator)                            |
-| `validate_config`           | `Callable[[dict], None] \| None`                                           | semantic config validation at REGISTRATION only, beyond the schema's shape                              |
-| `on_update_config`          | `Callable[[ResourceRef, dict, dict], Awaitable[None] \| None] \| None`     | pre-write hook for `update_config`, which knows WHICH resource is being edited                           |
-| `validate_scope_for`        | `Callable[[Resource, Scope \| None], Awaitable[None] \| None] \| None`     | pre-write hook for `update_scope`; only `channel` supplies one                                           |
-| `credential_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any DB write                          |
-| `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
-| `default_scope`             | `Callable[[dict], Scope \| None] \| None`                                  | the scope a new row is created with, consulted once at register (`provider` pre-fills the wire's own default) |
-| **Post-write reactions**    |                                                                            | run AFTER persistence + audit; cannot reject                                                            |
-| `on_delete`                 | `Callable[[ResourceRef], Awaitable[None] \| None] \| None`                 | cleanup hook, awaited BEFORE the row is removed so it can still resolve it; a reaction, not a veto       |
-| `on_scope_changed`          | `Callable[[ResourceRef], Awaitable[None] \| None] \| None`                 | keeps delivery/reclaim in step with a scope edit                                                        |
-| `on_enabled_changed`        | `Callable[[ResourceRef], Awaitable[None] \| None] \| None`                 | the exact mirror, for a kind whose `enabled` flag has an on-disk consequence (`skill`)                   |
-
-Surface artefacts (routers, Typer groups) are deliberately NOT carried here:
-the composition root registers them through its own per-kind wiring modules, so
-the domain layer never references a surface.
-
-### `AuditEntry` (`domain/audit.py`)
-
-Plain dataclass.
-
-| Field           | Type             | Notes                                                  |
-| --------------- | ---------------- | ------------------------------------------------------ |
-| `id`            | `int \| None`    | DB surrogate, `None` before insert                     |
-| `timestamp`     | `datetime`       | UTC, default `utcnow()`                                |
-| `event_type`    | `str`            | one of the enumerated `AuditEventType` strings (below) |
-| `resource_id`   | `int \| None`    | the resource's stable row id — what makes a trail survive a rename; `None` for an event naming no resource, and for rows written before the column existed |
-| `resource_kind` | `str \| None`    | nullable; the LABEL the resource carried at the time    |
-| `resource_name` | `str \| None`    | nullable; daemon-lifecycle events have no resource     |
-| `actor`         | `str`            | `"cli" \| "api" \| "ui" \| "system"`                   |
-| `details`       | `dict[str, Any]` | JSON-serialisable payload                              |
-
-### `AuditEventType` (`domain/audit.py`)
-
-String-valued enum (use `StrEnum`):
-
-| Value                                                       | When emitted                                                            |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `"resource_created"`                                        | After `ResourceService.register`                                        |
-| `"resource_updated"`                                        | After config or description change                                      |
-| `"resource_enabled"`                                        | After `set_enabled(True)` when state flipped                            |
-| `"resource_disabled"`                                       | After `set_enabled(False)` when state flipped                           |
-| `"resource_deleted"`                                        | After `delete` (includes pre-delete snapshot in `details`)              |
-| `"resource_renamed"`                                        | After a rename — identity changed, config did not                       |
-| `"resource_scope_updated"`                                  | After `update_scope` persisted a new per-agent scope                    |
-| `"capability_enabled"`                                      | When a user enables a capability that was disabled                      |
-| `"capability_disabled"`                                     | When a user disables a capability                                       |
-| `"token_rotated"`                                           | After `POST /api/v1/daemon/rotate-token`                                |
-| `"retention_updated"`                                       | When a retention policy is changed                                      |
-| `"credential_set"`                                          | After `POST /api/v1/credentials` stores a secret                        |
-| `"credential_read"`                                         | After `GET /api/v1/credentials/{ref}` reads a secret                    |
-| `"credential_deleted"`                                      | After `DELETE /api/v1/credentials/{ref}` removes a secret               |
-| `"credential_migrated"`                                     | Per ref, when a legacy keychain secret migrates into the store          |
-| `"master_key_relocated"`                                    | After `PUT /api/v1/settings/credentials` moves the master key           |
-
-### `RetentionPolicy` (`domain/retention.py`)
-
-Plain dataclass.
-
-| Field              | Type               | Notes                                             |
-| ------------------ | ------------------ | ------------------------------------------------- |
-| `table_name`       | `str`              | PK; must match a registered `PrunableTable.name`  |
-| `retention_days`   | `int \| None`      | `None` = keep forever; `>0` = days; `0` forbidden |
-| `last_pruned_at`   | `datetime \| None` | last successful prune                             |
-| `last_pruned_rows` | `int`              | rows deleted in last prune                        |
-| `updated_at`       | `datetime`         | last policy mutation                              |
-
-### `PrunableTable` (`infrastructure/persistence/retention.py`)
-
-This is the **registry entry** used at composition root — declared here for
-completeness even though the type lives in `infrastructure/` (it parameterises
-SQL execution).
-
-| Field                    | Type          | Notes                                                                          |
-| ------------------------ | ------------- | ------------------------------------------------------------------------------ |
-| `name`                   | `str`         | DB table name; must appear in the SQL allowlist set                            |
-| `timestamp_column`       | `str`         | column name to compare against the cutoff; must appear in the column allowlist |
-| `default_retention_days` | `int \| None` | seeded into `retention_policies` on first daemon boot                          |
-| `display_name`           | `str`         | UI label                                                                       |
-| `description`            | `str`         | UI tooltip                                                                     |
+| Field on `Kind`            | What `mcp_server` supplies                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| `config_schema`            | `MCPServerConfig` (below)                                                                    |
+| `generic_create_allowed`   | True — an MCP server is fully described by its config, so the kind-agnostic create may make one |
+| `supports_scope`           | True — reach is enforced at the gateway's per-session listing                                 |
+| `validate_name`            | reserves the `__` namespace separator, which the prefixing scheme depends on                  |
+| `credential_ref_extractor` | the transport's `credential_refs`, so refs are probed before any write and released after a delete |
+| `audit_redactor`           | an audit-safe copy of a transport config                                                     |
+| `on_delete`                | tears down any running upstream for that server before its row goes                          |
 
 ## MCP kind value objects (`backend/coffer/domain/mcp/`)
 
@@ -184,12 +76,12 @@ Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server
 | `idle_timeout_seconds`    | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
 
 All three are editable in the web UI's edit-server dialog, not only over the
-API. They had no UI at all until 2026-09-10, so every registered server ran on
-the defaults regardless of its upstream — and measured latency across one
-vault's servers spanned three orders of magnitude (9ms to 10.9s average), with
-the slowest routinely exceeding 60s against a 120s default. A timeout error
-names the server and the elapsed limit, so an agent waiting one out can tell a
-slow upstream from a broken gateway.
+API. Before they had a UI every registered server ran on the defaults
+regardless of its upstream — and measured latency across one vault's servers
+spanned three orders of magnitude (9ms to 10.9s average), with the slowest
+routinely exceeding 60s against a 120s default. A timeout error names the
+server and the elapsed limit, so an agent waiting one out can tell a slow
+upstream from a broken gateway.
 
 ### `MCPTool` / `MCPResource` / `MCPPrompt` (`domain/mcp/capability.py`)
 
@@ -248,51 +140,11 @@ persisted (per [Capability State Model](../../docs/decisions/capability-state-mo
 
 ## SQLite schema
 
-The DDL below is the shape these tables have today, columns added by later
-revisions included.
+The DDL below is the shape these tables have today. The kind-agnostic
+`resources`, `audit_log` and `retention_policies` tables they sit beside are in
+spec resource-framework's data model.
 
 ```sql
--- Resources: kind-agnostic core
-CREATE TABLE resources (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    kind          TEXT      NOT NULL,
-    name          TEXT      NOT NULL,
-    description   TEXT,
-    config_json   TEXT      NOT NULL,                       -- validated JSON
-    enabled       BOOLEAN   NOT NULL DEFAULT 1,
-    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    scope_json    TEXT,              -- per-agent scope; NULL = unscoped (migration 0046)
-    UNIQUE (kind, name)
-);
-CREATE INDEX idx_resources_kind_enabled ON resources(kind, enabled);
-
--- Audit log: kind-agnostic
-CREATE TABLE audit_log (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    event_type      TEXT      NOT NULL,
-    resource_id     INTEGER,                                -- stable row id; survives a rename (migration 0067)
-    resource_kind   TEXT,                                   -- nullable; the label carried at the time
-    resource_name   TEXT,
-    actor           TEXT      NOT NULL,
-    details_json    TEXT                                    -- nullable JSON payload
-);
-CREATE INDEX idx_audit_resource    ON audit_log(resource_kind, resource_name, timestamp DESC);
-CREATE INDEX idx_audit_resource_id ON audit_log(resource_id, timestamp DESC);
-CREATE INDEX idx_audit_time      ON audit_log(timestamp DESC);
-CREATE INDEX idx_audit_eventtype ON audit_log(event_type, timestamp DESC);
-
--- Retention policy: kind-agnostic
-CREATE TABLE retention_policies (
-    table_name        TEXT PRIMARY KEY,
-    retention_days    INTEGER,                              -- NULL = forever; >0 = days
-    last_pruned_at    TIMESTAMP,
-    last_pruned_rows  INTEGER NOT NULL DEFAULT 0,
-    updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (retention_days IS NULL OR retention_days > 0)
-);
-
 -- MCP-specific: user's capability preferences
 CREATE TABLE mcp_capability_preferences (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -322,14 +174,6 @@ CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_name, timestam
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);
 CREATE INDEX idx_invocations_session  ON mcp_invocations(session_id, timestamp);
 
--- Credentials: Fernet ciphertext, never plaintext (FR-011, migration 0016)
-CREATE TABLE credentials (
-    ref         TEXT PRIMARY KEY,
-    ciphertext  BLOB NOT NULL,                            -- produced by EncryptedCredentialStore
-    created_at  TEXT NOT NULL,                            -- ISO-8601, written by the sync store
-    updated_at  TEXT NOT NULL
-);
-
 -- MCP-specific: persisted upstream health (revision 0003)
 CREATE TABLE mcp_server_health (
     resource_name  TEXT      PRIMARY KEY,
@@ -341,19 +185,15 @@ CREATE TABLE mcp_server_health (
 
 ## SQLAlchemy mapping (summary)
 
-ORM models live under `backend/coffer/infrastructure/persistence/models.py`
-(kind-agnostic) and `backend/coffer/infrastructure/mcp/persistence.py`
-(MCP-specific), all registered against the same `Base.metadata`:
+This kind's ORM models live under `backend/coffer/infrastructure/mcp/`,
+registered against the same `Base.metadata` as every other spec's:
 
-| ORM class                      | Table                        | Lives in                                    |
-| ------------------------------ | ---------------------------- | ------------------------------------------- |
-| `ResourceModel`                | `resources`                  | `infrastructure/persistence/models.py`      |
-| `AuditLogModel`                | `audit_log`                  | `infrastructure/persistence/models.py`      |
-| `RetentionPolicyModel`         | `retention_policies`         | `infrastructure/persistence/models.py`      |
-| `CredentialModel`              | `credentials`                | `infrastructure/persistence/models.py`      |
-| `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`         |
-| `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/invocation_writer.py`   |
-| `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/health_repo.py`         |
+| ORM class                      | Table                        | Lives in                                  |
+| ------------------------------ | ---------------------------- | ----------------------------------------- |
+| `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`       |
+| `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/invocation_writer.py` |
+| `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/health_repo.py`       |
+
 Each ORM model provides:
 
 - `to_domain() -> <DomainEntity>` for conversion outward
@@ -361,54 +201,39 @@ Each ORM model provides:
 
 ## Cascade and integrity rules
 
-| Action                              | Effect                                                                                                                                                           |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DELETE FROM resources WHERE id=?`  | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `audit_log` or `mcp_invocations` (history preserved).                                 |
-| `UPDATE resources SET kind=?`       | forbidden — application layer never updates `kind`.                                                                                                              |
-| `UPDATE resources SET name=?`       | allowed, through `ResourceService.rename` only — it moves the row and records `resource_renamed`. The audit trail needs no repointing: rows carry the resource's stable `resource_id`, so history follows the resource while each row keeps saying what it was called then. |
-| `DELETE FROM retention_policies`    | forbidden — policies are upserted at startup, never deleted.                                                                                                     |
+| Action                                    | Effect                                                                                                                                                               |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DELETE FROM resources WHERE id=?`        | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does. |
+| `DELETE FROM mcp_capability_preferences`  | never done directly: a preference is flipped, not removed, which is what makes a decision survive an upstream upgrade (FR-008).                                       |
+| `mcp_server_health`                       | keyed by server NAME rather than row id, so a rename leaves a stale row that the next health check replaces.                                                          |
 
-## Default retention policy seed (run on first daemon startup)
+The kind-agnostic rules these sit under — what `rename` does to the audit trail,
+why `kind` is never updated, why a retention policy is never deleted — are spec
+resource-framework's.
 
-These defaults are seeded at the **composition root** (in `surfaces/http/app.py`,
-when `RetentionService.initialize_defaults()` is invoked at daemon startup) —
-**not** in Alembic migrations. Migrations create the `retention_policies` table
-but leave it empty; the daemon upserts the per-table defaults at boot so that
-new prunable tables introduced by later specs can register their own defaults
-without requiring a new migration.
+## Retention
 
-```python
-defaults = [
-    ("audit_log",         365),
-    ("mcp_invocations",    30),
-]
-for table_name, days in defaults:
-    if not exists(table_name):
-        upsert(table_name=table_name, retention_days=days, updated_at=utcnow())
-```
+`mcp_invocations` registers with spec resource-framework's prunable-table
+registry, carrying a 30-day default that the daemon seeds at startup. The
+policy row, the periodic pass that reads it and the surfaces that change it are
+that spec's; all this one does is contribute the table, its timestamp column
+and the default.
 
 ## API authentication
 
-Every route under `/api/v1/*` requires the `X-Coffer-Token` header. The only
-intentional exception is:
-
-| Endpoint                    | Why unauthenticated                                                                                                                                                                                                                                                                |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/v1/daemon/status` | Used by the CLI and the `coffer-mcp-shim` as a cheap readiness probe before any token has been read from `~/.coffer/daemon.json`. Returns only lifecycle phase, version, port, started-at, the daemon's own `executable` (so a CLI or shim can name both builds when it detects version skew — ADR daemon-detect-or-spawn), and an aggregate upstream summary — no secrets, no per-resource details, no audit data. |
-
-All mutating endpoints (including `/daemon/rotate-token` and
-`/daemon/shutdown`) require the token. The `/mcp` JSON-RPC surface also
-requires the token. Clients SHOULD set the optional `X-Coffer-Actor` header
-(`cli` | `api` | `ui` | `system`) so audit entries carry the originating
-surface; absent header defaults to `"api"`.
+Every route in this spec's contract — and the `/mcp` JSON-RPC surface — requires
+the `X-Coffer-Token` header. The token, where it comes from and which routes are
+deliberately exempt from it are spec daemon's. Clients SHOULD set the optional
+`X-Coffer-Actor` header (`cli` | `api` | `ui` | `system`) so audit entries carry
+the originating surface; absent header defaults to `"api"`.
 
 ## Invariants enforced by importlinter
 
 These re-state `tool.importlinter.contracts` in `backend/pyproject.toml`. The
-first four predate this spec; the last two came with it. The file now carries
-twenty contracts in total — the cross-kind fence below is written once per kind
-as kinds land, so it reads as nine near-identical contracts rather than the one
-generic rule its wording suggests:
+first four are the layering rules every spec lives under; contract 5 is this
+kind's own. The file now carries twenty contracts in total — the cross-kind
+fence below is written once per kind as kinds land, so it reads as nine
+near-identical contracts rather than the one generic rule its wording suggests:
 
 | Contract | Subject                                                                                                                                                                                                                                                                                                   |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -417,8 +242,8 @@ generic rule its wording suggests:
 | 3        | `domain` is pure (no infra/surfaces/sdks)                                                                                                                                                                                                                                                                 |
 | 4        | `keyring` confined to infrastructure                                                                                                                                                                                                                                                                      |
 | **5**    | cross-kind imports forbidden: `coffer.{domain,application,infrastructure,surfaces}.mcp.*` does not import another kind's package. Written from day one against one kind, so it bit the first time a second kind landed — and is now repeated per kind (`agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync`) |
-| **6**    | kind-agnostic core does not import kind-specific code: `coffer.application.resource_service` does not import any kind's `domain`/`application` package                                                                                                                                                    |
 
-The contracts beyond these are later specs' own fences (engine confinement, the
-banned dropped engines, where the Claude Agent SDK and LangGraph may be
-imported).
+Contract 6 — the kind-agnostic core importing no kind — is spec
+resource-framework's, and the contracts beyond these are later specs' own
+fences (engine confinement, the banned dropped engines, where the Claude Agent
+SDK and LangGraph may be imported).

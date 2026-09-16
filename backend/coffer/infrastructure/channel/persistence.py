@@ -210,7 +210,7 @@ def _thread_to_domain(row: ChannelThreadConversationModel) -> ChannelThreadConve
 
 
 class ChannelThreadConversationRepo:
-    """SQLAlchemy implementation of ``ChannelThreadConversationRepoPort`` (FR-032).
+    """SQLAlchemy implementation of ``ChannelThreadConversationRepoPort`` (FR-033).
 
     Conversation identity is keyed by ``(resource_id, chat_id, thread_id)`` so
     each group thread (and the DM, ``thread_id=""``) drives its own conversation

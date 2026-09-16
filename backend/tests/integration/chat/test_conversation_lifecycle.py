@@ -80,7 +80,7 @@ def _msg(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="channels", scenario="reply survives a restart")
+@pytest.mark.acceptance(spec="chat", scenario="reply survives a restart")
 async def test_conversation_and_messages_survive_a_restart(tmp_path):  # type: ignore[no-untyped-def]
     """A genuine restart: write a conversation + a completed assistant reply,
     dispose the engine (close the DB), then open a brand-new engine on the same
@@ -139,7 +139,7 @@ async def test_conversation_and_messages_survive_a_restart(tmp_path):  # type: i
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="channels", scenario="manage conversations")
+@pytest.mark.acceptance(spec="chat", scenario="manage conversations")
 async def test_create_and_get_conversation(tmp_path):  # type: ignore[no-untyped-def]
     engine, conv_repo, _ = await _setup(tmp_path)
     try:
@@ -165,7 +165,10 @@ async def test_get_missing_conversation_returns_none(tmp_path):  # type: ignore[
         await engine.dispose()
 
 
-@pytest.mark.acceptance(spec="channels", scenario="reply survives a restart")
+@pytest.mark.acceptance(spec="chat", scenario="reply survives a restart")
+@pytest.mark.acceptance(
+    spec="chat", scenario="the conversation list is ordered by activity, not by creation"
+)
 async def test_list_conversations_newest_first(tmp_path):  # type: ignore[no-untyped-def]
     engine, conv_repo, _ = await _setup(tmp_path)
     try:
@@ -196,6 +199,10 @@ async def test_rename_conversation(tmp_path):  # type: ignore[no-untyped-def]
         await engine.dispose()
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="the conversation list is ordered by activity, not by creation",
+)
 async def test_touch_conversation(tmp_path):  # type: ignore[no-untyped-def]
     engine, conv_repo, _ = await _setup(tmp_path)
     try:

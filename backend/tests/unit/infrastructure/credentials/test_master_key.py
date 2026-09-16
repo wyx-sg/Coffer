@@ -75,6 +75,10 @@ def test_returns_none_when_missing_and_create_disallowed(key_path: pathlib.Path)
     assert mgr.location is None
 
 
+@pytest.mark.acceptance(
+    spec="credentials",
+    scenario="relocating the master key verifies the destination before removing the source",
+)
 def test_relocate_to_keychain_moves_key(key_path: pathlib.Path) -> None:
     kr = FakeKeyring()
     mgr = MasterKeyManager(key_path=key_path, keyring=kr)

@@ -1,7 +1,10 @@
 # Quickstart: Channels
 
 Talk to your Coffer agents from Telegram or SeaTalk, and let Coffer push
-notifications to you.
+notifications to you. What each platform can and cannot do is specified in its
+own child spec ([`channels/telegram`](./telegram/spec.md),
+[`channels/seatalk`](./seatalk/spec.md)); this page is the one set of steps
+that gets either of them working.
 
 ## Telegram
 
@@ -39,7 +42,7 @@ Messages from anyone else are ignored silently.
 Send any message — it lands in a conversation with the channel's default
 agent (a Coffer-managed agent such as Claude Code or Codex) and the
 reply comes back to Telegram. The same conversation is visible on the Chat
-page.
+page (spec `chat`).
 
 > Per [Built-in Agent Is Internal](../../docs/decisions/builtin-agent-is-internal-capability.md),
 > channels route to managed agents only; the built-in "Coffer Assistant" is no
@@ -113,8 +116,8 @@ inbound:  websocket (connected)
 
 with a verbatim `ws error:` line when there is one. On a websocket channel it
 prints no listener port, no path and no tunnel line: those are the webhook
-path's facts, and FR-071 requires the absent ones to read as absent rather
-than as a zero rendered like an address.
+path's facts, and spec channels/seatalk FR-005 requires the absent ones to read
+as absent rather than as a zero rendered like an address.
 
 Two things to know about this path. **One connection per SeaTalk app**: if the
 same app is registered from somewhere else — a second machine, a colleague

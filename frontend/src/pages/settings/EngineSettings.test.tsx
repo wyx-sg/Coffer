@@ -4,7 +4,7 @@
 // connection + model. It moved here off the
 // model-provider page, which is now purely the connection library agents draw
 // from — internal configuration is not a resource.
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -85,7 +85,7 @@ describe("EngineSettings", () => {
     vi.clearAllMocks();
   });
 
-  test("/settings/engine renders the engine card and the upkeep card", async () => {
+  acceptance("internal-engine", "Settings → Engine shows and changes both halves", async () => {
     apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
     renderPage();
     expect(await screen.findByText("Coffer's model")).toBeInTheDocument();

@@ -1,4 +1,4 @@
-"""Infrastructure sweep for the channel-media dir (spec channels — FR-033).
+"""Infrastructure sweep for the channel-media dir (spec channels — FR-034).
 
 The pure decision (which files are too old) lives in
 ``coffer.domain.channel.media_retention``; this module does the I/O: stat every
@@ -62,7 +62,7 @@ def prune_media_dir(
 def default_media_sweep(now: datetime) -> list[str]:
     """Prune the default channel-media dir (``~/.coffer/channel-media``) with the
     30-day window. Bound at composition root into ``RetentionService`` so the
-    application layer stays free of infrastructure imports (FR-033)."""
+    application layer stays free of infrastructure imports (FR-034)."""
     return prune_media_dir(default_media_dir(), max_age_days=MEDIA_RETENTION_DAYS, now=now)
 
 

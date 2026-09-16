@@ -82,7 +82,7 @@ def _reset_turns() -> Generator[None, None, None]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="channels", scenario="manage conversations")
+@pytest.mark.acceptance(spec="chat", scenario="manage conversations")
 def test_conversation_crud_roundtrip() -> None:
     chat_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, orchestrator)
@@ -128,7 +128,7 @@ def test_conversation_crud_roundtrip() -> None:
     set_active_token(None)
 
 
-@pytest.mark.acceptance(spec="channels", scenario="archive and restore a conversation")
+@pytest.mark.acceptance(spec="chat", scenario="archive and restore a conversation")
 def test_archive_and_unarchive_filter_the_list() -> None:
     chat_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, orchestrator)
@@ -251,7 +251,7 @@ def test_unauthenticated_request_returns_401() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="channels", scenario="model selection is recorded")
+@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 def test_agent_config_set_and_get_model_roundtrip() -> None:
     chat_svc, orchestrator = _make_services()
     app = _build_app(chat_svc, orchestrator)

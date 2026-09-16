@@ -129,6 +129,7 @@ def test_codex_catalogue_comes_from_the_agents_own_config(tmp_path: pathlib.Path
     assert [m["id"] for m in resp.json()["models"]] == ["some-codex-model", "some-other-model"]
 
 
+@pytest.mark.acceptance(spec="chat", scenario="an unknown agent is a missing path, not a bad turn")
 def test_unknown_agent_key_is_404(client_no_agents: TestClient) -> None:
     resp = client_no_agents.get("/api/v1/agent-providers/no-such-agent/models", headers=_HEADERS)
 
@@ -178,7 +179,7 @@ def test_discovered_models_from_the_agents_own_config(tmp_path: pathlib.Path) ->
 
 # --- the retired per-agent selection -----------------------------------------
 #
-# Model curation lives on the CHANNEL now (spec channels FR-071), not on the
+# Model curation lives on the CHANNEL now (spec channels/seatalk FR-004), not on the
 # agent. The agent answers one question — what can this agent be put on — and
 # these pin that the second question no longer has a route to ask it from.
 

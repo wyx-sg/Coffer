@@ -2,7 +2,7 @@
 
 ``markitdown`` is imported only inside ``markitdown_converter.py`` — nowhere
 else in this package, and nowhere outside ``infrastructure.knowledge`` /
-``infrastructure.chat`` (spec knowledge FR-080, enforced by the import-linter
+``infrastructure.chat`` (spec knowledge FR-037, enforced by the import-linter
 contract in ``backend/pyproject.toml``).
 """
 

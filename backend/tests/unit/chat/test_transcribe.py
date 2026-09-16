@@ -1,4 +1,4 @@
-"""Voice transcription seam (spec channels FR-022).
+"""Voice transcription seam (spec channels FR-019).
 
 A text-only agent (Claude Code, Codex) receives a voice attachment as a
 transcript rather than an opaque audio file. The engine is behind the
@@ -28,6 +28,10 @@ class _FakeTranscriber:
 
 @pytest.mark.acceptance(
     spec="channels",
+    scenario="an inbound voice message is transcribed for a text-only agent",
+)
+@pytest.mark.acceptance(
+    spec="chat",
     scenario="an inbound voice message is transcribed for a text-only agent",
 )
 async def test_audio_is_transcribed_and_other_files_are_kept() -> None:

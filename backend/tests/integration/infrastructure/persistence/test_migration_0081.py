@@ -1,4 +1,4 @@
-"""0081 rewrites a channel's scope into agent resource names (spec channels FR-079).
+"""0081 rewrites a channel's scope into agent resource names (spec channels FR-025).
 
 The reader changed underneath the data. Until 0081's revision a channel's scope
 was compared straight against its ``default_agent``, so the only value it could

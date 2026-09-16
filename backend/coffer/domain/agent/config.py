@@ -38,7 +38,7 @@ class AgentConfig(BaseModel):
     config_dir: str | None = None
     # NOTE: the agent carries NO skill-delivery policy. Which skills reach this
     # agent is decided entirely on the skill resource (``enabled`` + ``scope``,
-    # spec skill-manager FR-012a) — the same single mechanism ``mcp_server`` uses.
+    # spec skill-manager FR-012) — the same single mechanism ``mcp_server`` uses.
     # Per-agent model binding (spec provider-switching amendment 2026-06-22b, E3). The model the
     # agent projects comes from HERE, not the connection: ``model`` →
     # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →

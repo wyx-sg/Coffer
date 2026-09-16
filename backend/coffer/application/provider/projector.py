@@ -131,7 +131,7 @@ class ProviderProjector:
         # `codex_model_catalog_json` for why guessing one is not allowed.
         # Only the `text` entries: this catalogue IS Codex's model picker, and an
         # embedding or image model offered there could only be rejected by the
-        # turn that picked it (spec provider-switching FR-030).
+        # turn that picked it (spec provider-switching FR-032).
         catalog_path = codex_model_catalog_path(spec.path.parent)
         catalog = codex_model_catalog_json(cfg.model_ids(Modality.TEXT))
         if catalog is not None:

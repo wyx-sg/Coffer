@@ -46,7 +46,8 @@ HEAD_REVISION = "0084"
 # (asserted in the stepwise test).
 # 0025 adds NO table — it ADDs the ``documents.locked``
 # column for the co-management lock; 0026 adds ``memory_store_labels``
-# (a store's user-set display name, 007 FR-017c); 0027 DROPs ``documents.locked``
+# (a store's user-set display name — a table no current requirement names,
+# kept here because the revision still creates it); 0027 DROPs ``documents.locked``
 # again (per-document lock removed, simplification 5.7), so EXPECTED_TABLES is
 # unchanged and the column is ABSENT at head (asserted separately below). 0028
 # DROPs ``channel_peers.preferred_workspace`` (channel workspace switching
@@ -124,7 +125,8 @@ HEAD_REVISION = "0084"
 # ``config_json`` (a channel curates no models — the bound agent's CLI default
 # opens a conversation and ``/model`` offers that agent's whole catalogue) — no
 # 0070 CREATEs ``memory_overrides`` — the developer's hide/pin/supersede/settle
-# decisions about a fact, the one table spec memory adds (FR-040/FR-070);
+# decisions about a fact, the one table that revision adds for memory (spec
+# memory FR-034 now forbids the layer any table of its own);
 # present at head, dropped by its own downgrade, and absent from every revision
 # below it. 0072 is DATA-only: it wraps every ``resources.scope_json`` agent
 # list in the two-axis object (``["a"]`` -> ``{"agents": ["a"], "machines":
@@ -590,7 +592,8 @@ def test_0036_migrates_chat_models_to_provider_resources(tmp_path, monkeypatch):
 def test_0036_normalises_multiple_legacy_defaults(tmp_path, monkeypatch):
     """The legacy registry had no UNIQUE guard on is_default. If a divergent DB
     holds >1 is_default row, 0036 keeps only the most-recently-updated one as
-    internal_default (FR-021 normalise-on-import), preserving the global
+    internal_default (spec provider-switching FR-024, normalise-on-import),
+    preserving the global
     single-internal-default invariant."""
     db_path = tmp_path / "multi_default.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
@@ -1065,7 +1068,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
 
     # 0028 drops channel_peers.preferred_workspace (channel workspace switching
     # removed, 8.4) and 0027 drops documents.locked (5.7), so both columns are
-    # ABSENT at head; 0026 adds the memory_store_labels table (007 FR-017c),
+    # ABSENT at head; 0026 adds the memory_store_labels table (no current
+    # requirement names it — it is this revision's own artifact),
     # present at head.
     assert "preferred_workspace" not in _channel_peers_columns()
     assert "locked" not in _documents_columns()

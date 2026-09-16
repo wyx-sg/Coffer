@@ -1,4 +1,4 @@
-"""Ports the ``provider`` kind's application layer defines for infrastructure.
+"""Ports the ``provider`` kind's application layer declares for others to satisfy.
 
 ``ProviderIntrospectionPort`` is the outbound seam for "test this connection"
 and "list this endpoint's models": the OpenAI-compatible client, the Anthropic
@@ -6,10 +6,17 @@ REST shape and the SSRF guard all live behind it in
 ``infrastructure.provider.introspector``, per the engine-confinement and
 application-no-infrastructure contracts. The service that drives the port is
 ``application.provider.introspection.ModelIntrospectionService``.
+
+``EngineNotifyPort`` is the outbound seam onto Coffer's own engine, declared
+HERE, by the caller, rather than imported from ``application.engine``: this kind
+must not acquire an import of the engine, or every consumer of the engine would
+acquire one of this kind in return and four cross-kind contracts would fail.
+The composition root satisfies it with the engine's own guard.
 """
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -66,3 +73,12 @@ class ProviderIntrospectionPort(Protocol):
         Conservative: only assert anthropic/openai when a probe clearly succeeds;
         ambiguity returns 'unknown' so the agent page falls back to user choice.
         """
+
+
+class EngineNotifyPort(Protocol):
+    """What this kind tells Coffer's internal engine when the connection the
+    engine runs on moves (spec internal-engine FR-005)."""
+
+    async def drop_model_unless_curated(
+        self, curated_ids: Collection[str], *, actor: str
+    ) -> None: ...

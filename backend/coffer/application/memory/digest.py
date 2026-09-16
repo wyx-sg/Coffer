@@ -6,22 +6,22 @@ delivered to two different readers by two different callers:
 * **``summary.md``**, written by ``organise.py`` from ``render_digest``
   below. Nothing in this codebase reads that file back, and that is not an
   oversight — its reader is the **person**, who browses a partition as a file
-  tree with a preview beside it (spec memory FR-062). It is the human-facing
+  tree with a preview beside it (spec memory FR-029). It is the human-facing
   half, and it is grouped and titled for someone skimming a folder.
 * **L1 of the session-start context**, composed by ``context.py`` from
-  ``fact_line`` below. FR-050 calls L1 "the partition's digest, one line per
+  ``fact_line`` below. FR-021 calls L1 "the partition's digest, one line per
   fact", and it means this module's line — not a second rendering of the
   same idea. ``context.py`` cannot reuse ``render_digest`` wholesale (it
   composes from a ``MemoryPort``, spends a token budget line by line, and
   interleaves two partitions), so it reuses the **line**, which is the part
-  FR-050 actually names.
+  FR-021 actually names.
 
 Keeping both on one renderer is what stops the two from drifting into two
 slightly different ways of writing down the same fact — which is what they
 had done.
 
 Pure and synchronous — no filesystem, no model. That is the point of keeping
-it a separate module from ``organise.py``: FR-032 requires a partition with
+it a separate module from ``organise.py``: FR-019 requires a partition with
 no internal connection configured to still get a **usable** digest, grouped
 and readable, not a placeholder. Making the render itself incapable of I/O is
 what guarantees that path is always taken, in tests and in an installation
@@ -103,7 +103,7 @@ def render_digest(facts: Sequence[Fact], *, partition: str) -> str:
     """The ``summary.md`` body for one partition's ``facts``.
 
     Superseded facts are omitted entirely: they are still on disk (organise
-    never deletes a fact, FR-031) but a digest is read for what is current,
+    never deletes a fact, FR-018) but a digest is read for what is current,
     and a fact a later one replaced is exactly what "current" excludes.
     Within a type, newest first, by each fact's latest origin timestamp.
     """

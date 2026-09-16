@@ -36,6 +36,10 @@ def test_tree_files_lists_regular_files_including_hidden_ones(tmp_path: pathlib.
     }
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a symlink in the vault is skipped rather than published",
+)
 def test_symlinks_are_skipped_not_followed(tmp_path: pathlib.Path) -> None:
     outside = _write(tmp_path / "outside", "secret.txt", "not vault content\n")
     live = tmp_path / "live"
@@ -63,6 +67,10 @@ def test_a_nested_git_directory_is_skipped(tmp_path: pathlib.Path) -> None:
     assert skipped == ["skills/demo/.git"]
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a symlink in the vault is skipped rather than published",
+)
 def test_mirror_tree_never_copies_a_symlink_target_and_reports_it(
     tmp_path: pathlib.Path,
 ) -> None:

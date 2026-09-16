@@ -19,16 +19,16 @@ make dev                           # backend (:8000) + frontend (:5173)
 
 ## Workflow
 
-1. Branch off `main` (see [`agents/workflow.md`](./agents/workflow.md) for naming).
-2. Write or update `specs/<short-name>/spec.md` **first** if the change is user-visible (see [`agents/sdd.md`](./agents/sdd.md)).
-3. Implement, with tests in the right tier (see [`agents/testing.md`](./agents/testing.md)).
+1. Branch off `main` (see [`.agents/workflow.md`](./.agents/workflow.md) for naming).
+2. Write or update `specs/<short-name>/spec.md` **first** if the change is user-visible (see [`.agents/sdd.md`](./.agents/sdd.md)).
+3. Implement, with tests in the right tier (see [`.agents/testing.md`](./.agents/testing.md)).
 4. `make verify-all` locally.
 5. Open a PR; title must be Conventional Commits.
 6. Wait for review + merge. Branch is squash-merged.
 
 ## Testing
 
-Four tiers, see [`agents/testing.md`](./agents/testing.md):
+Four tiers, see [`.agents/testing.md`](./.agents/testing.md):
 
 ```bash
 make verify-unit          # < 5s

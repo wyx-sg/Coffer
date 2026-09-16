@@ -9,7 +9,7 @@
 //
 // What is NOT copied is the fetch. A skill's whole folder arrives in a single
 // response, so that tree can afford to open its first two levels on mount. The
-// catalogue descends a level per request (FR-021), so each expanded directory
+// catalogue descends a level per request (FR-013), so each expanded directory
 // mounts another level and fetches its own listing — and directories therefore
 // start CLOSED: pre-opening them would fire one request per child folder for a
 // subtree nobody has asked to see.

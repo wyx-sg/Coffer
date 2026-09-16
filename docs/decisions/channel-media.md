@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-07-04
 **Deciders**: Yuxing Wu
-**Related**: spec `channels` (FR-020); builds on [Channel Adapter Framework](channel-adapter-framework.md) (channel adapter framework); superseded in part by [Persisted Attachment Reference](persisted-attachment-reference.md)
+**Related**: spec `channels` (FR-018); builds on [Channel Adapter Framework](channel-adapter-framework.md) (channel adapter framework); superseded in part by [Persisted Attachment Reference](persisted-attachment-reference.md)
 
 ## Context
 
@@ -77,7 +77,7 @@ agent at send time.**
 - The design is modality-agnostic: audio, zip, etc. are the same reference; a new
   type is a new `mime`, not a new schema. A future **audio-native** agent is one
   more `run_turn` branch (inline audio block vs. transcribe-then-text vs. hand off
-  the path), keyed on the agent's capability — this is the seam spec `009` FR-022
+  the path), keyed on the agent's capability — this is the seam spec `009` FR-020
   (voice) builds on.
 - An attachment is materialised per turn; it is not persisted as message content,
   so a follow-up that re-reads full history (no session resume) sees the note, not

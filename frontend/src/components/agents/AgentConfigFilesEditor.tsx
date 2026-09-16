@@ -4,7 +4,7 @@
 // excluded), and a right pane showing the selected file's on-disk content,
 // editable behind an explicit Edit. The right pane also carries a FileActions
 // bar (open-in-editor / reveal) for the edits that want a real editor, and the
-// managed-block notice (FR-037) warns that the block may be rewritten.
+// managed-block notice (FR-030) warns that the block may be rewritten.
 //
 // Directory-backed config keys (kind === "directory", e.g. a memory dir)
 // render as expandable nodes whose children come from the list response; a

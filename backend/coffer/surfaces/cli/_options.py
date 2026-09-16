@@ -1,6 +1,6 @@
 """Shared CLI options + exit code conventions.
 
-Exit codes match the convention in agents/workflow.md / the rest of the
+Exit codes match the convention in .agents/workflow.md / the rest of the
 CLI surface: 0 success, 1 generic, 2 invalid usage (Typer's default),
 3 daemon unreachable, 4 not found, 5 conflict, 6 invalid input,
 7 upstream test failed, 8 credential issue.

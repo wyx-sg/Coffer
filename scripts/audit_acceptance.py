@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit acceptance-scenario coverage across spec.md files and test markers.
 
-Convention (see agents/testing.md "Acceptance Scenarios — Cross-Tier Markers"):
+Convention (see .agents/testing.md "Acceptance Scenarios — Cross-Tier Markers"):
   * Spec scenarios live in `specs/<id>/spec.md` under '## Acceptance Scenarios'
     as `### <title>` (or `### Scenario: <title>`) headings.
   * Spec ID is the spec directory's path relative to `specs/`, so it is the
@@ -10,10 +10,26 @@ Convention (see agents/testing.md "Acceptance Scenarios — Cross-Tier Markers")
     (`specs/channels/telegram/spec.md` → 'channels/telegram').
   * Python tests carry `@pytest.mark.acceptance(spec="...", scenario="...")`.
   * TS tests use `test.acceptance("spec", "scenario", ...)`.
+  * Rust tests carry a line comment directly above the test's attributes:
+
+        // acceptance(spec = "desktop-app", scenario = "...")
+        #[test]
+        fn a_running_daemon_is_taken_over() { ... }
+
+    Rust has no user-defined test attribute without a proc-macro crate, so the
+    marker is a comment: read here, invisible to `cargo test`. It counts only
+    when a `#[test]` / `#[tokio::test]` attribute follows it before the next
+    `fn`, so a marker that drifts off its test stops counting rather than
+    silently reporting a scenario covered. Stack several comments to cover
+    several scenarios with one test. These tests run under `make desktop-test`,
+    which `.github/workflows/desktop.yml` gates on every PR touching `desktop/`.
 
 Exits non-zero on:
   * any scenario in spec.md without a matching marker (missing coverage)
   * any marker referring to a scenario / spec id that doesn't exist (orphan)
+  * any marker on a test that can never run - `@pytest.mark.skip` (function,
+    class or module level) in Python, `#[ignore]` in Rust - which would report
+    a scenario covered while nothing ever executes
 
 Stdlib-only; no install required.
 """
@@ -38,12 +54,16 @@ FRONTEND_TS_ROOTS = [
     REPO_ROOT / "e2e",
 ]
 TS_SKIP_DIRS = {"node_modules", "dist", "build", ".next", "test-results"}
+# The desktop shell is a Rust crate whose tests are `#[cfg(test)] mod tests`
+# blocks inside the source files themselves, so the marker sweep is over
+# `desktop/src/`, not a separate test tree.
+RUST_ROOTS = [REPO_ROOT / "desktop" / "src"]
 
 ACCEPTANCE_HEADER_RE = re.compile(r"^##\s+Acceptance\s+Scenarios\s*$", re.IGNORECASE)
 NEXT_H2_RE = re.compile(r"^##\s+(?!Acceptance\s+Scenarios)", re.IGNORECASE)
 SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORECASE)
 # Matches the standalone acceptance helper exported from
-# frontend/src/test/acceptance.ts. See agents/testing.md.
+# frontend/src/test/acceptance.ts. See .agents/testing.md.
 #
 # The lookbehind (?<![.\w]) ensures we don't false-match method calls or
 # identifiers — only the bare acceptance() call counts.
@@ -69,6 +89,26 @@ TS_ACCEPTANCE_RE = re.compile(
 # always live in plain top-level statements.
 TS_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
 TS_LINE_COMMENT_RE = re.compile(r"//[^\n]*")
+
+# Rust marker: a `//` line comment carrying the same (spec, scenario) pair the
+# other two tiers spell as a call. Named arguments (`spec = "..."`) mirror
+# Python's keyword form rather than TS's positional one, because that is how a
+# Rust attribute would have been written if one existed to write.
+#
+# Rust string literals are double-quoted only, so there is no single-quoted
+# alternative to handle: a scenario title containing an apostrophe (e.g. "a
+# Finder-launched app finds the user's real PATH") needs no special care.
+#
+# `^\s*//` (not `///`) keeps doc comments out: after `//` a doc comment has a
+# third `/`, which matches neither `\s` nor `acceptance`.
+RUST_ACCEPTANCE_RE = re.compile(
+    r'^\s*//\s*acceptance\s*\(\s*'
+    r'spec\s*=\s*"(?P<spec>[^"]+)"\s*,\s*'
+    r'scenario\s*=\s*"(?P<scenario>[^"]+)"\s*,?\s*\)\s*$'
+)
+RUST_ATTR_RE = re.compile(r"^\s*#\[")
+RUST_TEST_ATTR_RE = re.compile(r"^\s*#\[\s*(?:tokio::)?test\s*\]")
+RUST_IGNORE_ATTR_RE = re.compile(r"^\s*#\[\s*ignore\b")
 
 
 def _strip_ts_comments(text: str) -> str:
@@ -250,6 +290,74 @@ def collect_python_markers_and_dead(
     return markers, dead
 
 
+def _rust_marker_target(lines: list[str], start: int) -> tuple[bool, bool, str]:
+    """Walk from a marker line to the item it annotates.
+
+    Returns `(is_test, ignored, fn_name)`. Blank lines, further comments and
+    other attributes (`#[cfg(unix)]`, a second acceptance marker) are skipped;
+    the walk stops at the first line that is neither, which is the `fn`.
+    """
+    is_test = False
+    ignored = False
+    fn_name = ""
+    for line in lines[start + 1 :]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        if RUST_ATTR_RE.match(line):
+            if RUST_TEST_ATTR_RE.match(line):
+                is_test = True
+            if RUST_IGNORE_ATTR_RE.match(line):
+                ignored = True
+            continue
+        m = re.match(r"^\s*(?:pub\s+)?(?:async\s+)?fn\s+(?P<name>\w+)", line)
+        fn_name = m.group("name") if m else stripped
+        break
+    return is_test, ignored, fn_name
+
+
+def collect_rust_markers_and_dead(
+    roots: list[Path],
+) -> tuple[set[tuple[str, str]], list[tuple[str, str, str]]]:
+    """Single sweep over the Rust sources -> (all markers, dead markers).
+
+    A Rust marker is dead when its test carries `#[ignore]` - `cargo test`
+    skips it, so the scenario would be reported covered while nothing runs.
+    That is the same failure `@pytest.mark.skip` causes on the Python side.
+
+    A marker with no `#[test]` beneath it is not recorded at all: it covers
+    nothing, so its scenario resurfaces as missing coverage.
+    """
+    markers: set[tuple[str, str]] = set()
+    dead: list[tuple[str, str, str]] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        for src in sorted(root.rglob("*.rs")):
+            try:
+                lines = src.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeDecodeError):
+                continue
+            for i, line in enumerate(lines):
+                m = RUST_ACCEPTANCE_RE.match(line)
+                if m is None:
+                    continue
+                is_test, ignored, fn_name = _rust_marker_target(lines, i)
+                if not is_test:
+                    continue
+                pair = (m.group("spec"), m.group("scenario"))
+                markers.add(pair)
+                if ignored:
+                    dead.append(
+                        (
+                            pair[0],
+                            pair[1],
+                            f"{src.relative_to(REPO_ROOT)}::{fn_name}",
+                        )
+                    )
+    return markers, dead
+
+
 def collect_ts_markers(roots: list[Path]) -> set[tuple[str, str]]:
     markers: set[tuple[str, str]] = set()
     for root in roots:
@@ -310,7 +418,9 @@ def main() -> int:
         return 1
 
     py_markers, dead = collect_python_markers_and_dead(BACKEND_TESTS)
-    all_markers = py_markers | collect_ts_markers(FRONTEND_TS_ROOTS)
+    rs_markers, rs_dead = collect_rust_markers_and_dead(RUST_ROOTS)
+    dead += rs_dead
+    all_markers = py_markers | collect_ts_markers(FRONTEND_TS_ROOTS) | rs_markers
 
     markers_by_spec: dict[str, set[str]] = defaultdict(set)
     for spec_id, scenario in all_markers:

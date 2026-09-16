@@ -23,11 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.agent.transcript_warm_worker import TranscriptWarmWorker
 from coffer.application.audit_service import AuditService
+from coffer.application.engine.resolve import InternalEngineConnection
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.knowledge.tidy import TidyPass
 from coffer.application.memory.service import MemoryService
-from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
@@ -71,7 +71,7 @@ def start_background_workers(
     resource_svc: ResourceService,
     audit: AuditService,
     engine_config: InternalEngineConfigService,
-    provider_service: ProviderService,
+    internal_connection: InternalEngineConnection,
     credential_resolver: Callable[[str], str],
     db_path: pathlib.Path,
     sm: async_sessionmaker[AsyncSession],
@@ -95,8 +95,9 @@ def start_background_workers(
         credential_store,
         sync_contributions,
         # The conflict resolver rides the same internal connection every other
-        # internal-LLM consumer uses; ``ProviderService`` IS its model port.
-        models=provider_service,
+        # internal-LLM consumer uses — Coffer's own engine, not the provider
+        # kind's service, is what answers for it.
+        models=internal_connection,
         credential_resolver=credential_resolver,
     )
     converge_worker = start_converge_worker(sync, sm)
@@ -104,9 +105,9 @@ def start_background_workers(
     # The notes tidy pass: on idle after a write, and on a periodic sweep.
     tidy_task = start_tidy_worker(knowledge_service, tidy_pass, resource_svc, engine_config, sync)
     organise_task = start_organise_worker(organise, resource_svc, engine_config)
-    # Aggregation (FR-007): a catch-up pass now, then hourly. It only reads the
-    # agents' own memory and only writes the derived tree, so nothing here has
-    # to wait on the vault rewriters above.
+    # Aggregation (spec memory FR-007): a catch-up pass now, then hourly. It
+    # only reads the agents' own memory and only writes the derived tree, so
+    # nothing here has to wait on the vault rewriters above.
     aggregate_task = start_aggregate_worker(memory_service, engine_config)
     # The transcript summary cache's warm pass, so the first visit to an
     # agent's Conversations tab is never the one that pays the cold read.

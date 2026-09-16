@@ -309,7 +309,7 @@ def test_shim_spec_includes_anyio_backend_hidden_import() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_release_workflow_produces_platform_artifact_matrix() -> None:
@@ -353,7 +353,7 @@ def test_release_workflow_packages_the_cli_archive() -> None:
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
     deploys `coffer-mcp-shim` and `coffer-callback` out of its
-    own directory (spec mcp-gateway FR-026) and finds `coffer-daemon` as a sibling
+    own directory (spec daemon FR-027) and finds `coffer-daemon` as a sibling
     (ADR daemon-detect-or-spawn), so an archive missing any of them ships a build whose helper
     processes cannot start.
     """
@@ -370,7 +370,7 @@ def test_release_workflow_packages_the_cli_archive() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_release_workflow_packages_the_desktop_dmg_tier() -> None:
@@ -404,7 +404,7 @@ def test_release_workflow_packages_the_desktop_dmg_tier() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_release_workflow_checksums_cover_both_tiers() -> None:
@@ -516,7 +516,7 @@ def test_release_workflow_smoke_test_runs_on_all_legs() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="release tag produces the CLI archive and SHA256SUMS",
 )
 def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
@@ -577,11 +577,12 @@ def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
     )
 
 
+@pytest.mark.acceptance(spec="desktop-app", scenario="a release tag produces the desktop tier")
 def test_release_workflow_publishes_the_desktop_tier() -> None:
     """The release produces a second tier beside the CLI archive: the `.dmg`.
 
     Restoring the desktop shell put a self-contained app back in the release
-    (spec mcp-gateway FR-022, ADR desktop-shell-over-a-shared-frontend). Every
+    (spec daemon FR-025, ADR desktop-shell-over-a-shared-frontend). Every
     invariant that tier depends on is a filename or a path, none of which any
     other test pins, and the feedback loop for getting one wrong is a tagged
     release — the same reason the CLI tier is pinned here.
@@ -604,6 +605,7 @@ def test_release_workflow_publishes_the_desktop_tier() -> None:
     assert ".dmg" in text, "release.yml must collect a .dmg"
 
 
+@pytest.mark.acceptance(spec="desktop-app", scenario="a release tag produces the desktop tier")
 def test_desktop_tier_reuses_the_already_frozen_binaries() -> None:
     """The desktop leg must copy out of `dist/`, not freeze a second time.
 

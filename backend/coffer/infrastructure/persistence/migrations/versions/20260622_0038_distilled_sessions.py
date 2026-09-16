@@ -1,4 +1,4 @@
-"""distilled_sessions: auto-distill catch-up sweep idempotency ledger (007 FR-046)
+"""distilled_sessions: auto-distill catch-up sweep idempotency ledger
 
 Revision ID: 0038
 Revises: 0037
@@ -10,6 +10,10 @@ into the journal lane. One row per ``(agent_name, session_id, content_sha256)``;
 a material content change yields a new sha and is therefore eligible to
 re-distill. This ledger is the idempotency key the future SessionEnd hook
 (slice 6) will share.
+
+Both the sweep and that hook are gone: transcript distillation was removed on
+2026-09-09, 0050 drops this table, and the requirement that mandated automatic
+recording is retired — spec memory FR-037 now forbids reintroducing the path.
 
 Idempotent on a DB that already has the table (the roundtrip suite stamps back
 and replays the chain tail). Reversible (drops the table).

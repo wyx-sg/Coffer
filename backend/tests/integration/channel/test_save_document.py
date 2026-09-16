@@ -1,5 +1,5 @@
-"""`/save`: the phone forwards a document into a knowledge collection (spec
-knowledge FR-036, spec channels FR-030/FR-033).
+"""`/save`: the phone forwards a document into a knowledge collection (spec channels FR-014, spec
+channels FR-031/FR-034).
 
 The trigger is a plain TEXT `/save [collection]`, sent as its own message
 after the document — never a caption. A caption starting with "/" alongside an
@@ -57,7 +57,7 @@ async def _card_channel(env: ChannelEnv, *, sender_id: str = "owner-1") -> FakeC
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="a document forwarded to a channel lands in a collection"
+    spec="channels", scenario="a document sent to a channel is saved into a collection"
 )
 async def test_named_existing_collection_saves_directly(env: ChannelEnv, tmp_path: Any) -> None:
     _resource, adapter = await env.paired_channel(sender_id="owner-1")
@@ -104,10 +104,11 @@ async def test_save_with_nothing_pending_is_refused(env: ChannelEnv) -> None:
     assert env.ingest.calls == []
 
 
+@pytest.mark.acceptance(spec="channels", scenario="a save that names no collection asks which one")
 async def test_unnamed_save_offers_a_card_even_for_a_single_collection(
     env: ChannelEnv, tmp_path: Any
 ) -> None:
-    """FR-036: confirm, never guess — even a lone collection is offered as a
+    """FR-038: confirm, never guess — even a lone collection is offered as a
     tap, not applied automatically."""
     adapter = await _card_channel(env)
     env.collections.names = ["only-one"]

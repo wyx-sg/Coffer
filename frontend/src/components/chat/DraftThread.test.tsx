@@ -113,7 +113,7 @@ describe("DraftThread", () => {
     expect(onModelChange).toHaveBeenCalledWith("opus");
   });
 
-  acceptance("channels", "chat runs on the built-in model when no connection", () => {
+  acceptance("chat", "chat runs on the built-in model when no connection", () => {
     // A Coffer LLM connection is an OPTIONAL override: with none configured the
     // agent runs on its own built-in login (chat shells out to its SDK/CLI), so
     // the draft must NOT block — the composer is available and there is no

@@ -19,14 +19,14 @@ In order:
 
 1. **`.specify/memory/constitution.md`** — lasting principles + invariants.
 2. **`AGENTS.md`** (this file).
-3. The relevant **`agents/<topic>.md`** for today's scope:
-   - [`agents/sdd.md`](./agents/sdd.md) — spec folder layout, acceptance scenarios, end-to-end deliverable rule.
-   - [`agents/workflow.md`](./agents/workflow.md) — branches, Conventional Commits, AI signatures, PR flow, merge policy.
-   - [`agents/stack.md`](./agents/stack.md) — backend (Python / FastAPI / SQLite). Includes file-size limits, layered-architecture import rules, wire-contract rule.
-   - [`agents/frontend.md`](./agents/frontend.md) — frontend (React / TypeScript / Vite). State management, API layer, query keys, hooks, design-system and i18n conventions.
-   - [`agents/visual-language.md`](./agents/visual-language.md) — the UI's visual language: the Tailwind-config tokens for spacing, colour, radius, typography and container width, and the conventions for reusing them instead of ad-hoc values.
-   - [`agents/testing.md`](./agents/testing.md) — 4 test tiers (unit / integration / contract / e2e), acceptance markers, mocking philosophy.
-   - [`agents/harness.md`](./agents/harness.md) — agent control layer: `.claude/` hooks, permissions, and repo skills.
+3. The relevant **`.agents/<topic>.md`** for today's scope:
+   - [`.agents/sdd.md`](./.agents/sdd.md) — spec folder layout, acceptance scenarios, end-to-end deliverable rule.
+   - [`.agents/workflow.md`](./.agents/workflow.md) — branches, Conventional Commits, AI signatures, PR flow, merge policy.
+   - [`.agents/stack.md`](./.agents/stack.md) — backend (Python / FastAPI / SQLite). Includes file-size limits, layered-architecture import rules, wire-contract rule.
+   - [`.agents/frontend.md`](./.agents/frontend.md) — frontend (React / TypeScript / Vite). State management, API layer, query keys, hooks, design-system and i18n conventions.
+   - [`.agents/visual-language.md`](./.agents/visual-language.md) — the UI's visual language: the Tailwind-config tokens for spacing, colour, radius, typography and container width, and the conventions for reusing them instead of ad-hoc values.
+   - [`.agents/testing.md`](./.agents/testing.md) — 4 test tiers (unit / integration / contract / e2e), acceptance markers, mocking philosophy.
+   - [`.agents/harness.md`](./.agents/harness.md) — agent control layer: `.claude/` hooks, permissions, and repo skills.
 4. The relevant **`specs/<short-name>/spec.md`** — for any spec-touching work.
 
 If sources disagree: **constitution wins.** Flag inconsistency to the user.
@@ -35,7 +35,7 @@ If sources disagree: **constitution wins.** Flag inconsistency to the user.
 
 ```
 1. confirm today's scope back to the user
-2. open the right branch (see agents/workflow.md)
+2. open the right branch (see .agents/workflow.md)
 3. work in small, committable chunks (one logical change per commit)
 4. before opening PR: make verify
 5. squash to one commit before final push
@@ -60,7 +60,7 @@ The user has delegated architectural authority. **Default to deciding and explai
 | Releasing a tag                                                             | **Pause.** User confirmation.                                                                                                                              |
 | Force push / rebase published branches / delete branches with unmerged work | **Pause.** Always confirm.                                                                                                                                 |
 | `git push origin main` (direct)                                             | **Never.** Always go through PR.                                                                                                                           |
-| Merging an open PR                                                          | **Pause** unless user explicitly authorized ("merge it" / equivalent direct instruction). See [`agents/workflow.md`](./agents/workflow.md) "Merge Policy". |
+| Merging an open PR                                                          | **Pause** unless user explicitly authorized ("merge it" / equivalent direct instruction). See [`.agents/workflow.md`](./.agents/workflow.md) "Merge Policy". |
 
 ## 5. Common Commands
 
@@ -76,9 +76,9 @@ git push -u origin feature/<short-name>
 gh pr create --fill --base main
 ```
 
-Detail under [`agents/workflow.md`](./agents/workflow.md) and [`agents/testing.md`](./agents/testing.md).
+Detail under [`.agents/workflow.md`](./.agents/workflow.md) and [`.agents/testing.md`](./.agents/testing.md).
 
-## 6. Maintaining `agents/`
+## 6. Maintaining `.agents/`
 
 Split a topic file into a subfolder ONLY when **both** of these hold:
 
@@ -94,8 +94,8 @@ companions: no `.zh.md` files, no per-language mirror under `docs-site/`. A doc
 that needs to change is changed in place, in English.
 
 This applies to prose docs (`README.md`, `AGENTS.md`, `CONTRIBUTING.md`,
-`SECURITY.md`, `agents/**`, `docs/**`, `specs/**`, `.specify/memory/**`) and to
+`SECURITY.md`, `.agents/**`, `docs/**`, `specs/**`, `.specify/memory/**`) and to
 the published site (`docs-site/**`). It does **not** apply to the Coffer web
 UI's own interface copy — the app ships English and 中文 through
 `frontend/src/i18n/locales/`, and that language switcher is a product feature
-(see [`agents/frontend.md`](./agents/frontend.md)).
+(see [`.agents/frontend.md`](./.agents/frontend.md)).

@@ -4,14 +4,18 @@ Revision ID: 0067
 Revises: 0066
 Create Date: 2026-09-12
 
-Spec memory FR-040/FR-070, ADR ``aggregate-agent-memory-never-write-it``.
-Everything under ``~/.coffer/memory/`` is a file aggregation can delete and
-rebuild; the developer's hide/pin/supersede/settle decisions are the one
-thing that is not, so they get the one table this layer is allowed to add.
+Spec memory FR-034 ("this layer MUST add no table of its own"), ADR
+``aggregate-agent-memory-never-write-it``. Everything under
+``~/.coffer/memory/`` is a file aggregation can delete and rebuild; the
+developer's hide/pin/supersede/settle decisions are the one thing that is not,
+so they get the one table this layer is allowed to add. That exception is since
+withdrawn: the requirements granting those decisions are retired and 0078 drops
+this table, leaving FR-034 with no exception.
 
 Keyed by ``fact_key`` — ``Fact.key``, derived from the fact's origins — rather
 than a surrogate id, because that identity is built to survive a rebuild that
-renames or regroups every file underneath it (FR-022, FR-041).
+renames or regroups every file underneath it (spec memory FR-015; the
+requirement that reapplied the decisions after every pass is retired).
 
 Guarded so a database that somehow already has this table upgrades cleanly,
 matching every other migration in this file.

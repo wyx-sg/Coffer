@@ -128,7 +128,7 @@ async def register_from_validated(
             service._store.delete(name)
             raise
         audit_event = event
-        # Deliver to every agent the new skill's own state grants (FR-012a).
+        # Deliver to every agent the new skill's own state grants (FR-012).
         # On overwrite the skill is already bound; skip auto-bind to avoid
         # disturbing existing bindings.
         await auto_bind_all(service=service, skill=r, actor=actor)
@@ -145,7 +145,7 @@ async def register_from_validated(
 async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -> None:
     """Deliver a freshly imported skill to the agents its own state grants.
 
-    The delivery predicate (FR-012a): a disabled skill goes nowhere, and an
+    The delivery predicate (FR-012): a disabled skill goes nowhere, and an
     enabled one goes exactly to the agents its scope names. A DISABLED AGENT is
     skipped regardless — the predicate decides which agents a skill is *for*,
     not whether Coffer may write into an agent the user has switched off.

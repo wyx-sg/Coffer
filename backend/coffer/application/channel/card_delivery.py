@@ -109,8 +109,8 @@ async def dispatch_card_tap(
     index we do not render) is dropped rather than falling through to the code
     path that applies a choice.
 
-    ``session`` is only read by the ``collection:`` branch (spec knowledge
-    FR-036): the pending document a `/save` card tap saves lives there, keyed
+    ``session`` is only read by the ``collection:`` branch (spec channels FR-014): the pending
+    document a `/save` card tap saves lives there, keyed
     by this same ``(channel, chat, thread)``, exactly like the queue and the
     running-turn bookkeeping every other tap ignores.
     """
@@ -316,7 +316,7 @@ async def _current_card(
         )
     if kind == "collection":
         # No conversation/model state to re-read — just the same visibility
-        # check `/save` itself makes (spec knowledge FR-036).
+        # check `/save` itself makes (spec channels FR-014).
         visible = await commands._collections.visible_collections(agent_key)
         return collection_card(choices=visible, page=page) if visible else None
     if kind not in ("model", "effort"):

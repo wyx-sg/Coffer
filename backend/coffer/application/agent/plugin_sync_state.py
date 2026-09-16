@@ -7,7 +7,7 @@ them with the vendor's own CLI.
 
 That asymmetry is deliberate, not a shortcut. Coffer removed its plugin write
 paths precisely because hand-writing another tool's private config format
-corrupts it silently when the format moves (spec agent-registry FR-032/FR-033), and it
+corrupts it silently when the format moves (spec agent-registry FR-025/FR-026), and it
 never had an *install* path at all — the retired code could only toggle and
 uninstall. "Keep the writes so sync can use them later" was never a real
 argument: installing is the one action sync would need, and it would have had

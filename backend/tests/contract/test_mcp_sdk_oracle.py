@@ -35,7 +35,7 @@ _FAKE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
 _TOKEN = "test-oracle-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
 
-#: FR-040: the gateway exposes EXACTLY six built-in knowledge tools. Upload is
+#: spec knowledge FR-027: the gateway exposes EXACTLY six built-in knowledge tools. Upload is
 #: not among them — a document enters through a human surface, not an agent's
 #: tool call.
 _KNOWLEDGE_TOOLS = frozenset(
@@ -239,10 +239,10 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the knowledge tools specifically. FR-040 says EXACTLY six, so
+        # And the knowledge tools specifically. knowledge FR-027 says EXACTLY six, so
         # this is an equality and not the `issubset` it used to be: a subset
         # check let a seventh knowledge tool — an agent-callable `upload`, say,
-        # which FR-040 rules out by name — ship without anything going red.
+        # which knowledge FR-027 rules out by name — ship without anything going red.
         #
         # The knowledge-owned half of the roster is isolated by subtracting the
         # five built-ins other slices own, so this asserts about one kind
@@ -250,7 +250,7 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         coffer_tools = {n for n in tool_names if n.startswith("coffer__")}
         knowledge_on_the_wire = coffer_tools - _NON_KNOWLEDGE_BUILTIN_TOOLS
         assert knowledge_on_the_wire == set(_KNOWLEDGE_TOOLS), (
-            f"the knowledge tools in tools/list are not exactly the six FR-040 "
+            f"the knowledge tools in tools/list are not exactly the six FR-027 "
             f"names; unexpected={sorted(knowledge_on_the_wire - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - knowledge_on_the_wire)}"
         )
@@ -260,7 +260,7 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         declared = _tools_declared_under(_APPLICATION_ROOT / "knowledge")
         assert declared == set(_KNOWLEDGE_TOOLS), (
             f"backend/coffer/application/knowledge declares "
-            f"{len(declared)} built-in tool(s), not the six FR-040 allows; "
+            f"{len(declared)} built-in tool(s), not the six FR-027 allows; "
             f"unexpected={sorted(declared - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - declared)}"
         )
@@ -276,7 +276,7 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         # 4. tools/call of a coffer__ BUILT-IN end-to-end through the daemon:
         # write files a note, grep finds it (review gap: builtins were only
         # ever listed, never called over the wire). The collection has to exist
-        # first — nothing auto-provisions one (spec knowledge FR-010).
+        # first — nothing auto-provisions one (spec knowledge FR-007).
         await _create_collection("oracle")
         write_result = await session.call_tool(
             "coffer__write",

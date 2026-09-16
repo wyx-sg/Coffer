@@ -1,12 +1,12 @@
 // frontend/src/lib/api/memory.ts
 //
 // Request helpers for the `memory` kind's REST family (`/api/v1/memory/*`,
-// spec memory FR-061). Partition lifecycle (delete) is deliberately absent: a
+// spec memory FR-028). Partition lifecycle (delete) is deliberately absent: a
 // partition is one `memory` Resource, so it goes through the kind-agnostic
 // `DELETE /api/v1/resources/memory/{name}`, exactly like knowledge's
 // collections.
 //
-// Transport via the shared `call` (agents/frontend.md §4); wire types in
+// Transport via the shared `call` (.agents/frontend.md §4); wire types in
 // `memoryTypes.ts`.
 
 import { call, enc } from "@/lib/api/call";
@@ -47,7 +47,7 @@ export function organise(partition: string): Promise<OrganiseResultOut> {
   });
 }
 
-// --- a partition's own files (FR-062) ----------------------------------------
+// --- a partition's own files (FR-029) ----------------------------------------
 
 /** The partition directory as a tree — what the detail page browses. */
 export function listPartitionFiles(partition: string): Promise<MemoryFileTreeOut> {
@@ -63,7 +63,7 @@ export function readPartitionFile(
     `${ROOT}/partitions/${enc(partition)}/files/content?path=${enc(path)}`,
   );
 }
-// --- delivery (FR-054/FR-055) ------------------------------------------------
+// --- delivery (FR-025/FR-026) ------------------------------------------------
 
 /** Every agent delivery can be installed for, and whether it is. Omit
  * `agent` to list all of them. */

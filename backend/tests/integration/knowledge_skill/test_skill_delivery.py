@@ -5,7 +5,7 @@ the redesign found a tool's own description does not achieve that — every
 knowledge call in a month's history came from the session that built the corpus.
 A skill does: Coffer already delivers skills into each managed agent's own
 directory, and a skill's name and description sit in the agent's context
-(spec knowledge FR-042).
+(spec knowledge FR-029).
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ def _app(tmp_path, monkeypatch, *, port_start: int):  # type: ignore[no-untyped-
     spec="knowledge", scenario="the knowledge skill is delivered to a managed agent"
 )
 def test_the_knowledge_skill_is_delivered_to_a_managed_agent(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """FR-042 end to end: seeded into master, then DELIVERED to an agent.
+    """spec knowledge FR-029 end to end: seeded into master, then DELIVERED to an agent.
 
     This used to boot the app and assert only that the file existed under
     ``~/.coffer/skills/`` — Coffer's master store. That is seeding. No agent
@@ -89,7 +89,7 @@ def test_the_knowledge_skill_is_delivered_to_a_managed_agent(tmp_path, monkeypat
     assert f"name: {SKILL_NAME}" in text
     # The body has to teach catalogue-then-grep, not just announce the tools:
     # descending one level at a time is what keeps a large corpus readable.
-    # `coffer__search` is in this list because FR-042 requires the skill to
+    # `coffer__search` is in this list because knowledge FR-029 requires the skill to
     # teach "when to reach for `search` instead" — it was the one tool the
     # loop omitted, which is how the delivered skill could have stopped
     # mentioning the file-at-a-time half without anything noticing.
@@ -101,7 +101,7 @@ def test_the_knowledge_skill_is_delivered_to_a_managed_agent(tmp_path, monkeypat
         "coffer__write",
     ):
         assert tool in text, f"{tool} is not named in the skill body"
-    # FR-024 + User Story 8: the delivered skill is one of the two places the
+    # FR-018 + User Story 8: the delivered skill is one of the two places the
     # literal-matching caveat must be stated, because an agent that phrases a
     # question in its own words gets nothing back and no error to explain why.
     # Matched against whitespace-collapsed prose: the asset is hard-wrapped, so

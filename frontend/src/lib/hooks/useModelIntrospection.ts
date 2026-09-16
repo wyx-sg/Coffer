@@ -3,7 +3,7 @@
 // Provider introspection (specs channels and knowledge): list a provider's models + test a
 // connection, so the model forms offer a fetched dropdown (with manual
 // fallback) and a Test button — DevPilot-style. Requests go through the shared
-// `call` (agents/frontend.md §4).
+// `call` (.agents/frontend.md §4).
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { call } from "@/lib/api/call";
@@ -28,7 +28,7 @@ export interface TestResult {
 const post = <T>(path: string, body: unknown) => call<T>(path, { method: "POST", body });
 
 /** What an endpoint reports it serves. Each id carries the modality Coffer
- *  INFERRED from its name (provider-switching FR-030) — a pre-fill for the
+ *  INFERRED from its name (spec provider-switching FR-032) — a pre-fill for the
  *  connection's model table, never a stored fact: once an entry is curated, the
  *  modality the user left on it is the truth. */
 export interface EndpointModelsOut {

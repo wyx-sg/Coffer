@@ -1,7 +1,7 @@
 """What one remembered fact is, once it has been read out of an agent.
 
 Every value here is **derived**: it came out of some agent's own memory and can
-be produced again from it (spec memory FR-023). Nothing about a fact is stored
+be produced again from it (spec memory FR-016). Nothing about a fact is stored
 anywhere else, which is what makes the whole tree disposable — delete it, run
 aggregation again, and the same facts come back.
 
@@ -19,7 +19,7 @@ import hashlib
 from dataclasses import dataclass, field
 
 #: A fact about the person — a preference, a standing instruction. Lands in
-#: ``global`` whichever project it was learned in (FR-012).
+#: ``global`` whichever project it was learned in (FR-010).
 TYPE_USER = "user"
 #: Guidance the developer gave about how to work. Also about the person.
 TYPE_FEEDBACK = "feedback"
@@ -29,7 +29,7 @@ TYPE_PROJECT = "project"
 FACT_TYPES = frozenset({TYPE_USER, TYPE_FEEDBACK, TYPE_PROJECT})
 
 #: Types that belong to the person rather than to any one project, and so are
-#: filed in ``global`` regardless of where they were learned (FR-012).
+#: filed in ``global`` regardless of where they were learned (FR-010).
 PERSONAL_TYPES = frozenset({TYPE_USER, TYPE_FEEDBACK})
 
 STATUS_ACTIVE = "active"
@@ -85,24 +85,24 @@ class Fact:
     #: One of :data:`FACT_TYPES`.
     type: str
     #: The source's own words. Never a paraphrase — summarising happens in the
-    #: derived digest, so a fact stays quotable back to its origin (FR-021).
+    #: derived digest, so a fact stays quotable back to its origin (FR-014).
     body: str
     #: ``global`` or a project partition's slug.
     partition: str
     #: Every place this fact was seen. Two agents that learned the same thing
-    #: produce one fact with two origins, not two facts (FR-022).
+    #: produce one fact with two origins, not two facts (FR-015).
     origins: tuple[Origin, ...] = field(default_factory=tuple)
     status: str = STATUS_ACTIVE
     #: The ``key`` of the fact that replaced this one, when one did.
     superseded_by: str = ""
     #: Keys of facts this one disagrees with. Organise flags the pair when it
     #: cannot decide between them; nothing settles it afterwards, so the flag
-    #: stands until a later pass has grounds to withdraw it (FR-033).
+    #: stands until a later pass has grounds to withdraw it (FR-020).
     conflicts_with: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def key(self) -> str:
-        """How one fact names another across a recomputation (FR-022).
+        """How one fact names another across a recomputation (FR-015).
 
         The smallest origin key wins, so a fact that gains a second origin on
         a later pass keeps the identity it had — a merge must not silently

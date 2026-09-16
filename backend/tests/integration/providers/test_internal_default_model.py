@@ -6,10 +6,12 @@ connection used to leave the old connection's model standing — the user saw
 "Agnes" paired with ``deepseek-flash`` — and Coffer's own background passes
 then ran against a model the endpoint has never heard of.
 
-Real ``ProviderService`` over a real SQLite file with the two model ports the
-composition root wires, so the rule is exercised where it is enforced: in the
-service, which is what BOTH the HTTP route and ``coffer provider
-internal-default`` go through.
+Real ``ProviderService`` over a real SQLite file, wired to the real engine
+guard and resolver the composition root ties, so the rule is exercised across
+the seam it actually crosses: the provider kind reports the move, Coffer's own
+engine (``application.engine``) decides the model's fate and answers what the
+engine runs on. Both the HTTP route and ``coffer provider internal-default`` go
+through this path.
 """
 
 from __future__ import annotations
@@ -20,6 +22,8 @@ from collections.abc import AsyncIterator
 import pytest
 
 from coffer.application.audit_service import AuditService
+from coffer.application.engine.internal_default import InternalDefaultModelGuard
+from coffer.application.engine.resolve import InternalEngineConnection
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
@@ -54,28 +58,37 @@ class _NoAgents:
 
 
 class _ModelSingleton:
-    """The internal-engine model singleton, narrowed to the two ports the
-    provider service is given: read it, and forget it."""
+    """``engine.internal_default.InternalEngineModelStore`` — the internal-engine
+    model narrowed to what the engine does with it: read it, and forget it."""
 
     def __init__(self, model: str | None) -> None:
         self.model = model
         self.cleared_by: list[str] = []
 
-    async def resolve(self) -> str | None:
+    async def get_model(self) -> str | None:
         return self.model
 
-    async def clear(self, actor: str) -> None:
+    async def clear_model(self, *, actor: str) -> None:
         self.model = None
         self.cleared_by.append(actor)
 
 
 class _Env:
-    def __init__(self, providers: ProviderService, engine_model: _ModelSingleton) -> None:
+    def __init__(
+        self,
+        providers: ProviderService,
+        engine_model: _ModelSingleton,
+        engine: InternalEngineConnection,
+    ) -> None:
         self.providers = providers
         self.engine_model = engine_model
+        # What every internal consumer asks: the connection Coffer's own engine
+        # runs on. Not the provider service — that only says which row is
+        # flagged (spec internal-engine FR-005).
+        self.engine = engine
 
 
-async def _env(tmp_path: pathlib.Path, *, model: str | None, wire_clear: bool = True) -> _Env:
+async def _env(tmp_path: pathlib.Path, *, model: str | None, wire_engine: bool = True) -> _Env:
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -97,10 +110,13 @@ async def _env(tmp_path: pathlib.Path, *, model: str | None, wire_clear: bool = 
         config_store=ConfigFileStore(),
         agents=_NoAgents(),
         audit=audit,
-        resolve_internal_model=singleton.resolve,
-        clear_internal_model=singleton.clear if wire_clear else None,
+        engine=InternalDefaultModelGuard(singleton) if wire_engine else None,
     )
-    return _Env(providers, singleton)
+    return _Env(
+        providers,
+        singleton,
+        InternalEngineConnection(read_model=singleton.get_model, connections=providers),
+    )
 
 
 @pytest.fixture()
@@ -128,7 +144,7 @@ async def two_connections(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
 
 
 @pytest.mark.acceptance(
-    spec="provider-switching",
+    spec="internal-engine",
     scenario="switching the internal engine's connection drops a model it does not serve",
 )
 async def test_switching_the_connection_drops_a_model_it_does_not_serve(
@@ -142,7 +158,7 @@ async def test_switching_the_connection_drops_a_model_it_does_not_serve(
     assert two_connections.engine_model.cleared_by == ["cli"]
     # Cleared, the internal engine is the documented clean no-op rather than a
     # pass aimed at a model the endpoint will reject.
-    assert await two_connections.providers.resolve_internal_connection() is None
+    assert await two_connections.engine.get_default() is None
 
 
 async def test_switching_keeps_a_model_the_new_connection_curates(two_connections: _Env) -> None:
@@ -154,7 +170,7 @@ async def test_switching_keeps_a_model_the_new_connection_curates(two_connection
 
     assert two_connections.engine_model.model == "deepseek-flash"
     assert two_connections.engine_model.cleared_by == []
-    resolved = await two_connections.providers.resolve_internal_connection()
+    resolved = await two_connections.engine.get_default()
     assert resolved is not None
     assert resolved.config.base_url == "https://agnes.example"
     assert resolved.model == "deepseek-flash"
@@ -167,12 +183,13 @@ async def test_re_setting_the_same_internal_default_changes_nothing(two_connecti
     assert two_connections.engine_model.cleared_by == []
 
 
-async def test_the_model_is_untouched_when_no_clear_port_is_wired(
+async def test_the_model_is_untouched_when_no_engine_port_is_wired(
     tmp_path: pathlib.Path,
 ) -> None:
-    """The ports are optional so a test may build the service without them;
-    without one there is nothing to clear, and nothing is."""
-    env = await _env(tmp_path, model="deepseek-flash", wire_clear=False)
+    """The port is optional so a test may build the service without it; with no
+    engine to tell, there is nothing to decide the model's fate, and nothing
+    does."""
+    env = await _env(tmp_path, model="deepseek-flash", wire_engine=False)
     await env.providers.create(
         "agnes",
         protocol=Protocol.OPENAI,
@@ -183,3 +200,42 @@ async def test_the_model_is_untouched_when_no_clear_port_is_wired(
     await env.providers.set_internal_default("agnes")
 
     assert env.engine_model.model == "deepseek-flash"
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="nothing configured makes every internal pass a clean no-op",
+)
+async def test_either_missing_half_answers_none_rather_than_raising(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Both halves are required, and a missing one is an answer, not a failure.
+
+    No connection flagged `internal_default`, and a flagged connection with no
+    model chosen, resolve to the same `None` — the pass that asked simply does
+    not run, and nothing is raised for a caller to have to swallow.
+    """
+    # Half one: a model is chosen, but no connection is the internal default.
+    (tmp_path / "a").mkdir()
+    env = await _env(tmp_path / "a", model="deepseek-flash")
+    await env.providers.create(
+        "deepseek",
+        protocol=Protocol.OPENAI,
+        base_url="https://deepseek.example",
+        secret_value="k1",
+        models=[CuratedModel(id="deepseek-flash")],
+    )
+    assert await env.engine.get_default() is None
+
+    # Half two: a connection is the internal default, but no model is chosen.
+    (tmp_path / "b").mkdir()
+    env2 = await _env(tmp_path / "b", model=None)
+    await env2.providers.create(
+        "deepseek",
+        protocol=Protocol.OPENAI,
+        base_url="https://deepseek.example",
+        secret_value="k1",
+        models=[CuratedModel(id="deepseek-flash")],
+    )
+    await env2.providers.set_internal_default("deepseek")
+    assert await env2.engine.get_default() is None

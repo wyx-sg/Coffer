@@ -66,10 +66,15 @@ _OPERATION_METHODS = frozenset({"get", "post", "put", "patch", "delete"})
 _CONTRACTS: dict[str, str | None] = {
     "specs/agent-registry/contracts/api.openapi.yaml": None,
     "specs/channels/contracts/api.openapi.yaml": "test_channel_contract.py",
+    "specs/chat/contracts/api.openapi.yaml": "test_chat_openapi.py",
+    "specs/credentials/contracts/api.openapi.yaml": None,
+    "specs/daemon/contracts/api.openapi.yaml": None,
+    "specs/internal-engine/contracts/api.openapi.yaml": None,
     "specs/knowledge/contracts/api.openapi.yaml": "test_knowledge_openapi.py",
     "specs/mcp-gateway/contracts/api.openapi.yaml": "test_schemas_match_openapi.py",
     "specs/memory/contracts/api.openapi.yaml": "test_memory_openapi.py",
     "specs/provider-switching/contracts/api.openapi.yaml": None,
+    "specs/resource-framework/contracts/api.openapi.yaml": None,
     "specs/skill-manager/contracts/api.openapi.yaml": None,
     "specs/vault-sync/contracts/api.openapi.yaml": "test_sync_openapi.py",
 }

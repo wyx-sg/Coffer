@@ -73,7 +73,7 @@ real usage ─▶ [honest invocation log] ─▶ [capture sink] ─▶ [curate] 
   model-bearing routing suite on PRs touching prompts/agents/retrieval/catalogue,
   gating on **relative regression vs baseline** (reusing `run.py`). Document the
   closed loop (production failure → capture → curate → regression caught → fix →
-  re-baseline) in `agents/harness.md`.
+  re-baseline) in `.agents/harness.md`.
 - **Adjuncts (parallelisable).** The verify-before-commit hook Harness in Layers
   promised but did not build; per-branch dev DB path (fixes the cross-branch
   `~/.coffer/coffer.db` corruption).

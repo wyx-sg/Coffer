@@ -287,7 +287,9 @@ a round never reaches back into history on its own.
 
 Logs, `coffer.db`, `daemon-config.json`, PID and port files, chat history,
 conversations, the audit log, MCP invocation records — and the master key,
-which is never written into the repository under any setting.
+which is never written into the repository under any setting (FR-013). A
+resource's **reach** — its `enabled` flag and its `scope` — does not travel
+either: each machine sets its own (FR-014).
 
 Conversations and the audit log are excluded on purpose: they record what
 happened *on a machine*, and merging two machines' activity would be a different

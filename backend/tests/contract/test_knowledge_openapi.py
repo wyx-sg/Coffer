@@ -15,7 +15,7 @@ from coffer.surfaces.http.knowledge import schemas
 
 #: Every route the knowledge kind serves, as (method, path). Deleting a
 #: collection goes through the kind-agnostic Resource route, so it is
-#: deliberately absent (spec knowledge FR-060).
+#: deliberately absent (spec knowledge FR-034).
 _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/collections"),
     ("POST", "/api/v1/knowledge/collections"),
@@ -29,7 +29,7 @@ _EXPECTED_ROUTES = {
     ("POST", "/api/v1/knowledge/upload"),
 }
 
-#: Exactly six: ``search`` joins the five file operations (FR-024, FR-040).
+#: Exactly six: ``search`` joins the five file operations (FR-016, FR-027).
 #: Upload is deliberately not among them — a document enters through a human
 #: surface (the Knowledge page, a channel, or this CLI), not an agent's tool
 #: call.
@@ -71,7 +71,7 @@ def test_every_builtin_tool_describes_itself(builtin_registry) -> None:  # type:
 
 def test_no_builtin_tool_takes_a_scope_or_a_mode(builtin_registry) -> None:  # type: ignore[no-untyped-def]
     """Both axes are gone: there are no retrieval modes, and a caller never
-    names a scope — it sees every collection it is authorized for (FR-012)."""
+    names a scope — it sees every collection it is authorized for (FR-009)."""
     for tool in builtin_registry.list():
         properties = set(tool.input_schema.get("properties", {}))
         assert not properties & {"scope", "mode", "top_k", "cwd"}, tool.name
@@ -86,7 +86,7 @@ def test_a_write_payload_requires_a_description() -> None:
 
 def test_collection_config_carries_nothing() -> None:
     """A collection has no settings at all, and unknown keys are refused rather
-    than quietly stored (FR-081)."""
+    than quietly stored (FR-038)."""
     from coffer.domain.knowledge.config import KnowledgeConfig
 
     assert KnowledgeConfig().model_dump() == {}

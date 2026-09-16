@@ -1,6 +1,6 @@
 """Ship the knowledge skill into Coffer's own skill store at boot.
 
-This is the layer's delivery half (spec knowledge FR-042). Knowledge reaches a
+This is the layer's delivery half (spec knowledge FR-029). Knowledge reaches a
 session only when an agent asks for it, and the audit that led to this design
 found agents never ask on their own: a tool's own description does not make a
 model remember the tool exists. A skill does — its name and description sit in

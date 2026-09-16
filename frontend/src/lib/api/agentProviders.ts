@@ -6,11 +6,11 @@
 // to offer the agents a channel may be bound to. It carried a `/chat` prefix
 // while a web chat page existed; the registry outlived the page.
 //
-// Wire types from the channels contract (where the route lives); transport via
-// the shared `call` (agents/frontend.md §4).
+// Wire types from the chat contract (where the route lives); transport via
+// the shared `call` (.agents/frontend.md §4).
 
 import { call } from "@/lib/api/call";
-import type { components } from "@/lib/api/generated/channels";
+import type { components } from "@/lib/api/generated/chat";
 
 /** One agent the turn platform offers. */
 export type AgentProviderInfo = components["schemas"]["AgentProviderOut"];

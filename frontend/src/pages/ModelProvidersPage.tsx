@@ -7,7 +7,7 @@
 // of the endpoint's models are offered at all) lives on its detail page.
 //
 // It lives under RESOURCES rather than Settings because `provider` is a
-// resource kind like any other, and spec ui-shell's rule is that RESOURCES holds
+// resource kind like any other, and spec web-ui's rule is that RESOURCES holds
 // the kinds with a list UI. It was the only one of the five filed elsewhere.
 //
 // The page is now nothing but that connection library, rendered through the

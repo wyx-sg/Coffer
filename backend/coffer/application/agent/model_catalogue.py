@@ -14,8 +14,9 @@ endpoint the agent's turns actually go to.
 Two different answers live here, and confusing them is the bug this module is
 shaped to prevent:
 
-* ``catalogue()`` — everything the installed agent reports. It is the full
-  truth, and it is what the agent detail page renders. Nothing narrows it.
+* ``catalogue()`` — everything the installed agent reports about its OWN login.
+  It is the full truth and nothing narrows it, which is also why no picker reads
+  it directly: ``offered()`` is the only way out to a surface.
 * ``offered()`` / ``suggest()`` — what a PICKER should show. Usually the same
   list: the agent's catalogue is what the agent itself can run, and nothing
   narrows it — not the agent, and not the surface doing the asking. Curation
@@ -139,14 +140,20 @@ class AgentModelCatalogueService:
         that carries the better label leads).
 
         Always the AGENT's own answer, even while a connection is active: this
-        is the full truth the agent detail page renders, and what a picker does
-        with it is ``offered()``'s business.
+        is the full truth, and what a picker is shown of it is ``offered()``'s
+        business — including the levels ``offered()`` carries back across a
+        connection's ids.
         """
         config_dir = await self._config_dir(agent_key)
         return _deduped(await self._discover(agent_key, config_dir))
 
     async def offered(self, agent_key: str) -> list[AgentModel]:
-        """What a PICKER should show.
+        """What a PICKER should show — every one of them, wherever it renders.
+
+        Served to the web pickers over ``GET
+        /api/v1/agent-providers/{agent_key}/models`` (the chat kind takes this
+        method as its ``ModelCatalogPort``) and read in-process by a channel's
+        ``/model`` and ``/effort`` cards, so the two cannot answer differently.
 
         An ACTIVE connection answers outright: its curated ids ARE the list, in
         the user's order, and the agent's catalogue is not consulted. The

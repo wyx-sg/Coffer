@@ -32,7 +32,7 @@ _DAEMON_BOOT_TIMEOUT = 10  # seconds
 #: MCP-reserved extension key the daemon reads the launch cwd from.
 _CWD_META_KEY = "coffer/cwd"
 #: MCP-reserved extension key the daemon reads the shim's self-reported
-#: ``--agent`` identity from (spec mcp-gateway FR-021, amended).
+#: ``--agent`` identity from (spec mcp-gateway FR-013, amended).
 _AGENT_META_KEY = "coffer/agent"
 
 

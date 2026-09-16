@@ -141,9 +141,9 @@ registry that keyed it was going away.
 
 > The machine axis came back and was withdrawn again the same day. The reason
 > this time is not that machines stopped existing: a resource's *reach* — its
-> `enabled` flag and its `scope` — was declared machine-local instead, so each
-> machine answers "what does this reach here?" for itself and the axis had
-> nothing left to express. See
+> `enabled` flag and its `scope` — was declared machine-local instead (FR-014),
+> so each machine answers "what does this reach here?" for itself and the axis
+> had nothing left to express (FR-032). See
 > [Per-agent resource scope](../../docs/decisions/per-agent-resource-scope.md).
 
 ### 3. What replaced it did not answer the question, and half of it came back anyway
@@ -157,20 +157,23 @@ back within the same week, for a strictly weaker purpose.
 
 ### What this changed in the design
 
-- The base is a **pointer**, kept locally and never travelling. A pointer that
+- The base is a **pointer**, kept locally and never travelling (FR-020). A pointer that
   travelled would be another machine's assertion read as your own.
-- Export is **differential**, normatively. It is the single root cause, so it is
-  a rule in the spec rather than a property of an implementation.
-- Deletions come from the diff, which makes **tombstones, their TTL and
-  timestamp arbitration unnecessary** — the majority of the 0.3.0 machinery.
-- `machine_id` is **derived from the host**, so the registry can answer "have I
-  been here before?" with no local state at all. That is what separates a new
+- Export is **differential**, normatively (FR-038). It is the single root
+  cause, so it is a rule in the spec rather than a property of an
+  implementation.
+- Deletions come from the diff (FR-037), which makes **tombstones, their TTL
+  and timestamp arbitration unnecessary** — the majority of the 0.3.0
+  machinery.
+- `machine_id` is **derived from the host** (FR-022), so the registry can
+  answer "have I been here before?" with no local state at all. That is what separates a new
   machine (take the union) from a returning one (recover the base), and it is
   the reason the join check can be trusted after a reinstall.
-- The **Fernet freshness comparator returns verbatim** from `ad430204`. It was
+- The **Fernet freshness comparator returns verbatim** from `ad430204`
+  (FR-060). It was
   correct, it is cheap, and it is the only rule that can order two ciphertexts
   without the key.
-- The circuit breaker guards **both directions**. The apply side was always
+- The circuit breaker guards **both directions** (FR-068). The apply side was always
   obvious; the publish side is what stops a wiped vault from exporting its own
   loss — the 2026-07-10 shape reached from the other end.
 

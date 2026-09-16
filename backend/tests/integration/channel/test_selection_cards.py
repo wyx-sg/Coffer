@@ -1,4 +1,4 @@
-"""Interactive selection cards for /agent and /model (P3, FR-013/FR-017).
+"""Interactive selection cards for /agent and /model (P3, FR-010/FR-013).
 
 When a channel ``supports_buttons``, the no-arg command renders a selection
 card; a tap is owner-gated and routed to the same switch the text command
@@ -191,7 +191,7 @@ async def test_tap_from_unbound_channel_is_ignored(env: ChannelEnv) -> None:
     await env.processor.on_callback(tap_event("ghost", "owner", "agent:codex"))
 
 
-# -- group card taps (FR-034) --------------------------------------------------
+# -- group card taps (FR-036) --------------------------------------------------
 
 
 async def _group_card_channel(
@@ -356,7 +356,7 @@ async def test_a_failed_card_rewrite_does_not_break_the_switch(env: ChannelEnv) 
     await wait_until(lambda: any("codex" in text for _chat, text in adapter.sent))
 
 
-# -- Prev/Next turns the page inside the one card (FR-043) -----------------------
+# -- Prev/Next turns the page inside the one card (spec chat FR-001) -----------------------
 
 
 CATALOGUE = [f"model-{i}" for i in range(29)]

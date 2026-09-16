@@ -1,5 +1,5 @@
-"""`/save`: land a chat attachment in a knowledge collection (spec knowledge
-FR-036 — the phone and the Knowledge page are two ends of one entrance).
+"""`/save`: land a chat attachment in a knowledge collection (spec channels FR-014 — the phone and
+the Knowledge page are two ends of one entrance).
 
 Free functions beside ``commands.py``, split out purely for that file's size
 budget, exactly like ``card_delivery.py`` was: they take the owning
@@ -42,7 +42,7 @@ async def cmd_save(
     exactly like every other slash word — see ``inbound.py``), so it always
     follows the document as its own message, optionally naming the collection.
 
-    The collection is confirmed, never guessed (FR-036): a name that is both
+    The collection is confirmed, never guessed (FR-038): a name that is both
     known and visible to this thread's agent is used outright — the owner
     already confirmed it by typing it — anything else (no name, or one that
     doesn't resolve) falls back to a selection card so the tap itself is the

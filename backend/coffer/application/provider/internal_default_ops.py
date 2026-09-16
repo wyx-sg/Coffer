@@ -3,23 +3,20 @@
 Two things happen when the internal engine's connection changes, and the second
 is why this is its own module rather than three lines inside the service.
 
-The flag: at most one connection globally carries ``internal_default`` (FR-021),
-so the target is set only after the flag is cleared everywhere else — sequential
-clear-then-set, serialised by the single-process daemon.
+The flag (FR-024/FR-025, this kind's own): at most one connection globally
+carries ``internal_default``, so the target is set only after the flag is
+cleared everywhere else — sequential clear-then-set, serialised by the
+single-process daemon — and the move is audited.
 
-The model: the internal engine's model is a global singleton (E3) with no link
-to the connection, so switching the connection used to leave the previous
-connection's model standing — the user saw provider "Agnes" paired with
-``deepseek-flash`` — and Coffer's own background passes then ran against a model
-the endpoint has never heard of. A move therefore forgets the model, unless the
-newly-chosen connection CURATES it: a curated list is that connection's own
-catalogue, so an id on it is still servable. Nothing is probed to decide —
-a settings write must not depend on an endpoint being reachable.
-
-The model singleton belongs to another kind, so both directions (read it, forget
-it) arrive as ports the composition root satisfies rather than as an imported
-service. Either being absent means the test-convenience construction: there is
-nothing to read and nothing to clear, so the model is left alone.
+The model (spec internal-engine FR-005, NOT this kind's): the internal engine's
+model is a global singleton with no link to the connection, and a move that
+left the old model standing aimed Coffer's own passes at a model the new
+endpoint has never heard of. What to do about that is the engine's rule and
+lives in ``application.engine.internal_default``; this module supplies the
+trigger and the new connection's curated ids, through a port declared on this
+side (``ports.EngineNotifyPort``) so neither package imports the other.
+``None`` there is the test-convenience construction: no engine to tell, so the
+model is left alone.
 """
 
 from __future__ import annotations
@@ -47,7 +44,12 @@ async def set_internal_default(service: ProviderService, name: str, *, actor: st
         # Only a real move rewrites the model; re-setting the connection that is
         # already the internal default changes nothing.
         await service._set_internal_default_flag(resource, value=True, actor=actor)
-        await _drop_model_unless_curated(service, resource, actor=actor)
+        if service._engine is not None:
+            # The connection now in force publishes its own catalogue; the
+            # engine decides from it whether the model it holds still stands.
+            await service._engine.drop_model_unless_curated(
+                {m.id for m in service._cfg(resource).models}, actor=actor
+            )
     await service._audit.record(
         AuditEventType.PROVIDER_INTERNAL_DEFAULT_SET.value,
         ref=service._ref(name),
@@ -55,22 +57,3 @@ async def set_internal_default(service: ProviderService, name: str, *, actor: st
         details={"from": previous, "to": name},
     )
     return await service.get(name)
-
-
-async def _drop_model_unless_curated(
-    service: ProviderService, resource: Resource, *, actor: str
-) -> None:
-    """Forget the internal-engine model unless ``resource`` curates it.
-
-    Cleared, ``resolve_internal_connection()`` returns ``None`` — already the
-    documented clean no-op (FR-023) — and the operator picks a model from the
-    connection now in force.
-    """
-    if service._resolve_internal_model is None or service._clear_internal_model is None:
-        return
-    model = await service._resolve_internal_model()
-    if not model:
-        return
-    if model in {m.id for m in service._cfg(resource).models}:
-        return
-    await service._clear_internal_model(actor)

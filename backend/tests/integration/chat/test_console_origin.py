@@ -25,7 +25,7 @@ from coffer.surfaces.http.chat.conversation_routes import _conv_out
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="chat",
     scenario="observe a turn started from another surface",
 )
 @pytest.mark.asyncio

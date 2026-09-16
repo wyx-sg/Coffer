@@ -2,7 +2,7 @@
 
 ``daemon_port_set`` leaves ``AuditEventType`` with the route that was its only
 writer: the daemon's port stops being reachable over HTTP and is set from the
-CLI alone (spec mcp-gateway FR-028). The CLI cannot take the event over,
+CLI alone (spec daemon FR-011). The CLI cannot take the event over,
 either — it has to work with no daemon running, which is exactly the state a
 port that will not bind leaves you in, and the audit table is the daemon's.
 So the event is not moved, it ends.

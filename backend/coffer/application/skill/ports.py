@@ -75,7 +75,7 @@ class SkillBindingRepoPort(Protocol):
 
 
 class WorkspaceScanPort(Protocol):
-    """Directory scanning for unmanaged-skill discovery (FR-022).
+    """Directory scanning for unmanaged-skill discovery (FR-016).
 
     Builds ``ScanEntry`` values from one agent skill location; the pure
     classification (managed vs. unmanaged vs. foreign) happens in

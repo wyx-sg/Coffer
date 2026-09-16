@@ -571,7 +571,7 @@ async def test_deleting_the_tree_and_resyncing_reproduces_the_facts() -> None:
     # Delete the partition directories but — deliberately — not the
     # source-digest cache, to prove the digest match alone never suppresses a
     # reparse: a rebuild must work even when only part of the derived tree
-    # was cleared by hand (FR-023).
+    # was cleared by hand (FR-016).
     for name in store.list_partitions():
         store.delete_partition(name)
 

@@ -89,23 +89,23 @@ its three mixins.
 
 Six units carry the weight, and each is named for exactly what it does:
 
-- **`ConvergeRound`** (`application/sync/convergence.py`) owns steps 0–6 and
-  nothing else owns any of them. It takes an already-prepared working tree and
+- **`ConvergeRound`** (`application/sync/convergence.py`) owns the seven steps
+  of FR-035 and nothing else owns any of them. It takes an already-prepared working tree and
   no database, which is what lets the algorithm be tested against a fake mirror.
-  Join detection sits in its `_base` step, **not in the adopt command**: the
-  spec requires it on *any* pointer-less round, so a `remote set` on a machine
+  Join detection sits in its `_base` step, **not in the adopt command**:
+  FR-049 requires it on *any* pointer-less round, so a `remote set` on a machine
   that has forgotten its pointer gets the same treatment as an explicit `adopt`.
 - **`ConvergeService`** owns policy: the remote's configuration, the lock, the
   audit trail, the push-credential resolution, the master-key bootstrap, and
   what `confirm` / `reject` / `rollback` mean. The split from `ConvergeRound` is
   the reason either can be read on its own.
 - **The four appliers** are the only writers into the live vault, one per bundle
-  area, each owning a `prefix` and exactly two operations — `upsert` and
-  `remove`. Two rather than one "sync this path" because **removal is the
+  area (FR-050 … FR-054), each owning a `prefix` and exactly two operations —
+  `upsert` and `remove`. Two rather than one "sync this path" because **removal is the
   operation that had to be authorised**; it belongs at the seam, not inside a
   branch. Each raises `CofferError` to report a per-path failure the round
   catches.
-- **`JoinResolver`** reads the remote's registry and returns a `Join`. It is a
+- **`JoinResolver`** reads the remote's registry (FR-042) and returns a `Join`. It is a
   separate unit because the decision it makes — new versus returning — is the
   one place where getting it wrong loses data silently.
 - **`MachineRegistry`** reads and writes descriptors through `BundlePort`;
@@ -114,7 +114,7 @@ Six units carry the weight, and each is named for exactly what it does:
   cannot exist without one.
 - **`ConflictArbiter`** is a working-tree-only unit: it takes paths and a
   mirror, and returns `(resolved_by_agent, unresolved)`. It never sees the
-  vault, which is what makes the spec's rule structural rather than remembered.
+  vault, which is what makes FR-061 structural rather than remembered.
 
 Nothing from the 0.3.0 convergence attempt is resurrected: no tombstone table,
 no TTL, no timestamp arbitration, no quarantine table. The diff is the ledger.
@@ -154,7 +154,8 @@ separates the retry set from the not-applicable set.
 raised against. A confirmed round is **re-derived, not resumed** —
 serialization is deterministic, so an unchanged vault against an unchanged
 remote yields exactly the diff the user was shown — and `ConvergeRound.run`
-waives the deletion guard only when `confirmed_tip` equals the current tip. If
+waives the deletion guard (FR-066, FR-067) only when `confirmed_tip` equals the
+current tip. If
 the remote moved in the meantime, the guard runs again and the round is held
 afresh.
 
@@ -168,7 +169,7 @@ pointer.
 ### One lock
 
 `ConvergeService.lock` is exposed as a property and **shared with the knowledge
-tidy worker**. Both rewrite vault content, and an export taken half-way through
+tidy worker** (FR-071). Both rewrite vault content, and an export taken half-way through
 a rewrite is a torn snapshot that git reads as a deliberate change. That is why
 the lock is injectable rather than private.
 
@@ -262,8 +263,7 @@ Error codes and their HTTP mappings: `BACKUP_REMOTE_INVALID` (422),
 - `domain/sync` stays pure (no sqlalchemy, no fs, no subprocess) — including
   `machine.py`, which hashes but does not read the host.
 - `ConflictArbiter` never receives a handle to the vault — the working tree is
-  its whole world, which makes the spec's rule structural rather than
-  remembered.
+  its whole world, which makes FR-061 structural rather than remembered.
 - **Network egress is a bounded exception** (constitution 0.6.0): the only
   outbound traffic is `git fetch` / `git push` against the user's own remote,
   from the single subprocess adapter, with the credential resolved for the

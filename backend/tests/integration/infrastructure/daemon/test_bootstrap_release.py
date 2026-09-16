@@ -35,6 +35,7 @@ def _info(pid: int, port: int = 8000) -> DaemonInfo:
     )
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="stopping the daemon leaves no discovery file")
 def test_release_unlinks_when_daemon_json_records_our_pid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

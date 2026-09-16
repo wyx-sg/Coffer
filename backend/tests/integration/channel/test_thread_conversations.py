@@ -1,5 +1,5 @@
-"""FR-032: each group thread is its own conversation (its own history and its
-own turn lock), and FR-040's foundation — one bot runs a different agent in
+"""FR-033: each group thread is its own conversation (its own history and its
+own turn lock), and FR-028's foundation — one bot runs a different agent in
 each thread.
 
 Conversation identity is keyed ``(resource_id, chat_id, thread_id)``: two

@@ -1,6 +1,6 @@
-"""FR-048: a channel conversation is named after what the person typed.
+"""spec chat FR-011: a channel conversation is named after what the person typed.
 
-Every turn's text opens with context blocks the channel folds in — the FR-042
+Every turn's text opens with context blocks the channel folds in — the FR-035
 origin block, and a thread's fetched history — which are the same on every turn
 of every chat. Naming a conversation from that text gave the chat list a column
 of identical `[Message origin] platform: …` titles. The channel passes the
@@ -25,9 +25,7 @@ async def _title(env: ChannelEnv) -> str:
     return conversations[0].title
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="a channel conversation is named by what the person typed"
-)
+@pytest.mark.acceptance(spec="chat", scenario="a conversation the owner named keeps its name")
 async def test_a_channel_conversation_is_named_by_the_message_body(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel()
 

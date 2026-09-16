@@ -118,6 +118,10 @@ def daemon(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="credentials",
+    scenario="the command line stores a secret without it reaching shell history",
+)
 def test_set_writes_through_daemon(daemon):
     result = runner.invoke(app, ["credentials", "set", "my_token", "--value", "supersecret"])
     assert result.exit_code == 0, result.output
@@ -133,6 +137,10 @@ def test_get_show_reads_through_daemon(daemon):
     assert "supersecret" in result.output
 
 
+@pytest.mark.acceptance(
+    spec="credentials",
+    scenario="the command line redacts a secret unless asked, and an asked-for read is audited",
+)
 def test_get_without_show_redacts(daemon):
     daemon.store["tok"] = "s3cr3t"
     result = runner.invoke(app, ["credentials", "get", "tok"])

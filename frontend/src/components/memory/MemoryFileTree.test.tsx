@@ -4,7 +4,7 @@
 // the folder as it is, picking a file previews it, and the preview never offers
 // a way to write — aggregation owns these bytes, so an Edit button here would
 // promise something the next sync would take back. Only the network boundary
-// (the hooks) is mocked, per agents/frontend.md §8.
+// (the hooks) is mocked, per .agents/frontend.md §8.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 

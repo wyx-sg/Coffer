@@ -1,5 +1,4 @@
-"""``coffer memory …`` — the memory layer from the terminal (spec memory
-FR-061).
+"""``coffer memory …`` — the memory layer from the terminal (spec memory FR-028).
 
 Every command but one is a thin HTTP shell over the daemon, matching
 ``knowledge_cmd.py``. ``context`` is the exception: it is the exact command
@@ -7,7 +6,7 @@ an agent's own session-start hook invokes
 (``domain.memory.delivery.hook_command``), so it must be fast and must never
 fail a session — no detect-or-spawn, a short timeout, and any failure at all
 (daemon not running, a slow response, a malformed one) degrades to printing
-nothing and exiting 0. FR-055 exists precisely because the previous injection
+nothing and exiting 0. FR-026 exists precisely because the previous injection
 layer had no such safety net and nothing said so for two months; this command
 must not repeat that by crashing a real session over its own plumbing.
 """
@@ -125,7 +124,7 @@ def list_files(
     partition: str = typer.Argument(..., help="Partition name (or 'global')"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """List a partition's own directory as a tree (FR-062).
+    """List a partition's own directory as a tree (FR-029).
 
     The whole tree rather than one level, unlike `coffer knowledge ls`: a
     partition is two levels deep by construction (a README, a `facts/` folder,
@@ -176,7 +175,7 @@ def read_file(
     """Print one file out of a partition's directory.
 
     Read-only, like the route: everything under ``~/.coffer/memory/`` is
-    derived (FR-023), so there is no matching write for an edit to survive.
+    derived (FR-016), so there is no matching write for an edit to survive.
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -204,8 +203,8 @@ def sync(ctx: typer.Context, output_json: bool = typer.Option(False, "--json")) 
     typer.echo(_json.dumps(r.json(), indent=2) if output_json else r.text)
 
 
-@app.command("organize")
-def organize(
+@app.command("organise")
+def organise(
     ctx: typer.Context,
     partition: str = typer.Argument(..., help="Partition to organise"),
 ) -> None:
@@ -257,7 +256,7 @@ def delivery_status(
     agent: str = typer.Option("", "--agent", help="Restrict to one agent"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Show per-agent delivery installation state (FR-054)."""
+    """Show per-agent delivery installation state (FR-025)."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/memory/delivery", params={"agent": agent} if agent else None)
@@ -277,7 +276,7 @@ def delivery_status(
 
 @app.command("delivery-install")
 def delivery_install(ctx: typer.Context, agent: str = typer.Argument(...)) -> None:
-    """Install Coffer's session-start hook for an agent (FR-054)."""
+    """Install Coffer's session-start hook for an agent (FR-025)."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(f"/memory/delivery/{agent}/install")

@@ -68,7 +68,7 @@ async def test_ensure_conversation_sets_active_conversation_on_the_matching_thre
     env: ChannelEnv,
 ) -> None:
     """``ensure_conversation`` binds the conversation to the per-thread row
-    keyed ``(resource_id, chat_id, thread_id)`` (FR-032): opening one thread's
+    keyed ``(resource_id, chat_id, thread_id)`` (FR-033): opening one thread's
     conversation must not disturb another chat's/thread's."""
     resource = await env.register_channel("tg")
     env.bind(resource)

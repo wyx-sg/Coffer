@@ -206,12 +206,12 @@ async def test_eleventh_queued_message_is_dropped_with_a_busy_notice(env: Channe
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="a channel message waits in the conversation's own queue"
+    spec="chat", scenario="a channel message waits in the conversation's own queue"
 )
 async def test_channel_messages_queued_mid_turn_ride_the_conversation_queue(
     env: ChannelEnv,
 ) -> None:
-    # FR-050: the channel keeps no queue of its own. A message sent from the
+    # spec chat FR-018: the channel keeps no queue of its own. A message sent from the
     # phone while a turn runs waits on the SAME pending queue a web send would,
     # so the web's pending chips show it and both surfaces drain one FIFO.
     gated = GatedAdapter()
@@ -241,9 +241,9 @@ async def test_channel_messages_queued_mid_turn_ride_the_conversation_queue(
     env.orchestrator.unsubscribe(conversation_id, observer)
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a stop from the chat holds the queued messages")
+@pytest.mark.acceptance(spec="chat", scenario="a stop from the chat holds the queued messages")
 async def test_stop_holds_the_queued_messages_until_the_next_message(env: ChannelEnv) -> None:
-    # FR-051 reaches the channel too: /stop pauses the queue rather than letting
+    # spec chat FR-019 reaches the channel too: /stop pauses the queue rather than letting
     # the next message fire into the turn just stopped; the next send resumes it.
     gated = GatedAdapter()
     env.provider.adapter = gated
@@ -275,7 +275,7 @@ def _drain_now(queue: asyncio.Queue[Any]) -> list[Any]:
     return out
 
 
-# -- the platform's own stop control (FR-063) ---------------------------------
+# -- the platform's own stop control (FR-048) ---------------------------------
 
 
 @pytest.mark.acceptance(

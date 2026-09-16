@@ -16,7 +16,7 @@ The daemon is the system's center of gravity. It is a FastAPI application bound 
 
 ### The port is fixed
 
-With nothing configured the daemon binds **exactly 8000**, and when it cannot have that port it **refuses to start** rather than moving — naming the process that holds it and the commands that resolve the conflict (**FR-028**). The old behaviour, a scan forward through 8000–8009, survives only under the `COFFER_PORT_RANGE_*` environment override that the test harness uses.
+With nothing configured the daemon binds **exactly 8000**, and when it cannot have that port it **refuses to start** rather than moving — naming the process that holds it and the commands that resolve the conflict. The old behaviour, a scan forward through 8000–8009, survives only under the `COFFER_PORT_RANGE_*` environment override that the test harness uses.
 
 A drifting origin is not merely a broken bookmark. Browser `localStorage` is keyed by origin, so the UI language, sidebar state, page size and preferred editor silently reset whenever the port moves, and nothing connects the two events for the user. Fixing a default and allowing it to be changed is also what comparable local services with a web UI do (Ollama, Syncthing, Grafana, Home Assistant); the tools that scan forward — Jupyter, Vite — print their real URL on every start and nobody bookmarks them.
 
@@ -58,7 +58,7 @@ The desktop shell is a native macOS process the *user* starts (Dock, Spotlight, 
 
 ### callback listener (coffer-callback)
 
-The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks (spec channels, [Channel Adapter Framework](/reference/adr/channel-adapter-framework)). Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
+The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks. Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
 
 - Runs **only while a SeaTalk channel is enabled**. The channel reconciler starts it when the first SeaTalk channel comes up and stops it when the last one goes away.
 - Serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon.
@@ -77,11 +77,11 @@ Beyond the subprocesses above, the daemon runs a set of in-process background wo
 | Memory organise    | The organise pass over a memory partition.                                                                      |
 | Memory aggregate   | Re-derives Coffer's memory tree from the agents' own native memory: a catch-up pass at startup, then hourly. It only reads the agents' memory and only writes the derived tree, so it waits on none of the vault rewriters above. |
 | Transcript warm    | Warms the transcript-summary cache, so the first visit to an agent's Conversations tab is never the one that pays the cold read. |
-| Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set ([Channel Adapter Framework](/reference/adr/channel-adapter-framework)). REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
+| Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
 
 Three of these — tidy, organise and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Engine**, and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
 
-Vault sync is emphatically *not* a request-scoped operation. `coffer sync now` forces a round, but the converge worker runs rounds on its own, and the vault converges **bidirectionally** with the remote under git's own three-way merge ([Vault Sync](/reference/adr/vault-sync)). One-shot export and import no longer exist.
+Vault sync is emphatically *not* a request-scoped operation. `coffer sync now` forces a round, but the converge worker runs rounds on its own, and the vault converges **bidirectionally** with the remote under git's own three-way merge. One-shot export and import no longer exist.
 
 ## Detect-or-spawn (ADR daemon-detect-or-spawn)
 
@@ -148,7 +148,7 @@ Protocol correctness beats resource efficiency at single-user scale. N × M subp
 
 **Session teardown.** When the downstream client disconnects (shim exits, HTTP/SSE connection closes), the session is disposed and all its upstream subprocesses are reaped. Orphaned upstream subprocesses from a daemon crash are cleaned up at the next daemon startup using PID files in `~/.coffer/upstream-pids/`.
 
-**Capability discovery.** Each session maintains a 60-second in-memory cache of capability lists (tools, resources, prompts) per upstream. Cache invalidation triggers: TTL expiry, an upstream `notifications/*/list_changed` notification, user-initiated refresh, or upstream session restart. Capability names and schemas are never persisted to the database — only user preference flags (enabled/disabled) are stored, keyed on the capability name. See [Capability State Model](/reference/adr/capability-state-model).
+**Capability discovery.** Each session maintains a 60-second in-memory cache of capability lists (tools, resources, prompts) per upstream. Cache invalidation triggers: TTL expiry, an upstream `notifications/*/list_changed` notification, user-initiated refresh, or upstream session restart. Capability names and schemas are never persisted to the database — only user preference flags (enabled/disabled) are stored, keyed on the capability name.
 
 ## Rejected alternatives
 
@@ -159,7 +159,3 @@ Protocol correctness beats resource efficiency at single-user scale. N × M subp
 **Shared upstream subprocess pool.** A daemon-level singleton subprocess shared across all sessions was rejected for the same reasons as the multiplexing approach: protocol-level session semantics cannot be cleanly emulated, notification routing becomes a bug surface, and a daemon restart would invalidate all sessions simultaneously.
 
 **Eager subprocess spawn.** Starting all registered upstream servers when a session opens was rejected because most sessions use only a subset of registered upstreams. Eager spawn adds latency at session start (the moment users notice most) and wastes resources on servers that are never called.
-
----
-
-**See also:** [Daemon detect-or-spawn](/reference/adr/daemon-detect-or-spawn), [Session subprocess model](/reference/adr/session-subprocess-model)

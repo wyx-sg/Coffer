@@ -14,7 +14,7 @@ first:
 
     <body>
 
-`name` and `description` are the fact's own title and description (FR-020 —
+`name` and `description` are the fact's own title and description (FR-013 —
 no derivation needed, unlike Codex's bullets). `metadata.type` picks the
 `Fact` type; `metadata.type: reference` is skipped rather than mapped, because
 Claude Code's own `reference` memories are knowledge the user or the agent

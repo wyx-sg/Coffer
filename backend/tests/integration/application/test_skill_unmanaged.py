@@ -1,4 +1,4 @@
-"""Unmanaged-skill scan / adopt / delete integration coverage (FR-022).
+"""Unmanaged-skill scan / adopt / delete integration coverage (FR-016).
 
 Same construction style as ``test_skill_service.py`` (real sqlite + real
 MasterStore / SyncEngine / WorkspaceScan over tmp_path); the agent scan-

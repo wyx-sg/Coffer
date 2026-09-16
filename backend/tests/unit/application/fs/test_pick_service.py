@@ -1,4 +1,4 @@
-"""Unit coverage for FsPickService — the native folder dialog (FR-042)."""
+"""Unit coverage for FsPickService — the native folder dialog (spec daemon FR-020)."""
 
 from __future__ import annotations
 

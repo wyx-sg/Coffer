@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-11
 **Deciders**: Yuxing Wu
-**Spec**: [mcp-gateway](../../specs/mcp-gateway/spec.md) FR-024 / FR-025 / FR-027
+**Spec**: [daemon](../../specs/daemon/spec.md) FR-016 / FR-017 / FR-015
 **Related**: [Detect-or-Spawn](./daemon-detect-or-spawn.md) (the daemon's port moves between restarts, which is the other half of why a browser could not find its way back)
 **Amended by**: [The Desktop Shell Returns](./desktop-shell-over-a-shared-frontend.md) (2026-09-12) — a third case now exists; the decision below is unchanged for browsers
 
@@ -26,7 +26,7 @@ The real recovery was to run `coffer open` again, which nothing told the user.
 
 The original design's premise is stated in the module it justified: "the URL is
 the only channel a freshly-opened browser will read." That premise is wrong.
-The daemon serves the SPA itself (FR-024), so the **response body** is a channel
+The daemon serves the SPA itself (spec daemon FR-016), so the **response body** is a channel
 to that browser — one the URL rules do not touch.
 
 ## Decision
@@ -54,7 +54,7 @@ Three properties make it correct rather than merely convenient:
   `/assets` keep normal caching.
 
 **And the daemon refuses any request whose `Host` header is not a loopback
-authority** (FR-027), answering `421 HOST_NOT_LOOPBACK`. This is not an
+authority** (spec daemon FR-015), answering `421 HOST_NOT_LOOPBACK`. This is not an
 independent tidy-up; it is what makes the injection safe, and neither half
 ships without the other.
 
@@ -96,7 +96,7 @@ browser at that origin.
   hosts the page as a local asset, so nobody served that document and this
   injection cannot reach it; the shell supplies the same two globals over an IPC
   command before first render instead ([The Desktop Shell
-  Returns](./desktop-shell-over-a-shared-frontend.md), spec mcp-gateway FR-030).
+  Returns](./desktop-shell-over-a-shared-frontend.md), spec desktop-app FR-004).
   Nothing above changes: injection remains how browsers are credentialed, and
   the `Host` guard that makes it safe is untouched. What the third case shows is
   that the invariant was never "the daemon serves the token" but "whoever hosts

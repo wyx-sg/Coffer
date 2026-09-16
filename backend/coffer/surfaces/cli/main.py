@@ -10,6 +10,7 @@ from coffer.surfaces.cli import (
     channel_cmd,
     credentials_cmd,
     daemon_cmd,
+    engine_cmd,
     knowledge_cmd,
     memory_cmd,
     open_cmd,
@@ -54,6 +55,7 @@ app.add_typer(skill_cmd.app, name="skill")
 app.add_typer(knowledge_cmd.app, name="knowledge")
 app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")
+app.add_typer(engine_cmd.app, name="engine")
 app.add_typer(sync_cmd.app, name="sync")
 
 

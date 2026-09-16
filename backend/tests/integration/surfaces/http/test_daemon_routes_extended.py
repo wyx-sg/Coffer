@@ -79,7 +79,7 @@ async def test_status_remains_unauthenticated(tmp_path):
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway", scenario="rotating the daemon token invalidates the previous one"
+    spec="daemon", scenario="rotating the daemon token invalidates the previous one"
 )
 @pytest.mark.asyncio
 async def test_rotate_token_returns_new_token_and_updates_daemon_json(tmp_path):
@@ -161,7 +161,7 @@ async def test_shutdown_signals_termination(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# T1 — daemon-lifecycle audit events (FR-014)
+# T1 — daemon-lifecycle audit events (spec resource-framework FR-006)
 # ---------------------------------------------------------------------------
 
 

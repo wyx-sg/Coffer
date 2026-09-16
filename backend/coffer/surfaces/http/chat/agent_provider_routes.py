@@ -115,7 +115,7 @@ async def list_agent_models(
     offer ids the endpoint rejects. A connection that curates nothing falls back
     to the agent's catalogue — Coffer knows where the turns go, not what that
     endpoint serves, and this read never asks over the network (spec
-    provider-switching FR-032). Reasoning levels survive the narrowing, because
+    spec provider-switching FR-033). Reasoning levels survive the narrowing, because
     a level is a setting on the agent's own runtime rather than the endpoint's
     to answer.
 

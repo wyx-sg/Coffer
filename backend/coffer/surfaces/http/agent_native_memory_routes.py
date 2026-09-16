@@ -17,7 +17,8 @@ probe.
 
 Agents with no native memory layout — and agents with no projects dir on disk —
 return an empty list; a non-existent agent name returns 404 via the service's
-agent lookup. Like every workspace listing (FR-011), none of these audits.
+agent lookup. Like every workspace listing (spec agent-registry FR-048), none of
+these audits.
 """
 
 from __future__ import annotations
@@ -70,7 +71,8 @@ class MemoryFileContentOut(BaseModel):
     """One file's contents. No fingerprint — this surface has no write."""
 
     path: str
-    #: Absolute path on disk, so the viewer can offer open / reveal (FR-038).
+    #: Absolute path on disk, so the viewer can offer open / reveal (spec
+    #: agent-registry FR-047).
     abs_path: str
     content: str  # empty when ``binary``
     truncated: bool

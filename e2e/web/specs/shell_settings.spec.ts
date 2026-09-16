@@ -12,7 +12,7 @@ import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
 beforeEachInjectToken();
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "settings layout uses the redesigned tabbed sidebar",
   async ({ page }) => {
     await page.goto("/settings");
@@ -49,7 +49,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "settings drops the confusing controls",
   async ({ page }) => {
     // No Settings tab exposes a daemon-shutdown or token-rotation control
@@ -84,7 +84,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "retention period persists across reload",
   async ({ page }) => {
     const { token, port } = readDaemonToken();
@@ -147,7 +147,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "language switcher round-trips correctly",
   async ({ page }) => {
     await page.goto("/mcp-servers");

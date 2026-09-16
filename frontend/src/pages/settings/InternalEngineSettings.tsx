@@ -38,7 +38,7 @@ export function InternalEngineSettings() {
   const [fetched, setFetched] = useState<string[]>([]);
 
   // The internal engine runs a CHAT model, so both sources are narrowed to
-  // modality `text` (spec provider-switching FR-030): a connection's curated set
+  // modality `text` (spec provider-switching FR-032): a connection's curated set
   // when it has one — that IS its catalogue, and an embedding or image entry is
   // no more a chat model here than in an agent's picker — and otherwise the
   // endpoint's own list, probed below.

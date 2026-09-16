@@ -1,4 +1,4 @@
-"""Inbound media coverage and the oversize notice (FR-067)."""
+"""Inbound media coverage and the oversize notice (spec channels/telegram FR-014)."""
 
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ def test_reply_survives_a_deleted_target() -> None:
     assert params["reply_parameters"]["allow_sending_without_reply"] is True
 
 
-# -- button vocabulary (FR-069) -----------------------------------------------
+# -- button vocabulary (FR-054) -----------------------------------------------
 
 
 def test_a_plain_option_is_an_ordinary_button() -> None:

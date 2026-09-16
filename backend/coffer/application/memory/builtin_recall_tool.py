@@ -1,14 +1,14 @@
 """The recall tool — memory's L2 layer, registered apart like search's own
-(spec memory FR-052, FR-060).
+(spec memory FR-023, FR-027).
 
 Mirrors ``coffer.application.knowledge.builtin_search_tool`` deliberately:
 ``coffer__recall`` is the same shape of thing ``coffer__search`` is — a
 single optional tool wired against its own service rather than the five (six,
 with search) file operations knowledge's ``builtin_tools`` module groups —
-and FR-060 asks for exactly one new tool here, so there is no sibling module
+and FR-027 asks for exactly one new tool here, so there is no sibling module
 to fold it into. A composition root that has not wired the memory layer
 simply never advertises it; one that has needs nothing else configured,
-because recall is a literal scan over facts already on disk (FR-052).
+because recall is a literal scan over facts already on disk (FR-023).
 """
 
 from __future__ import annotations

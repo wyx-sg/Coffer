@@ -1,5 +1,4 @@
-"""``/api/v1/memory/*`` — the human's side of the memory layer (spec memory
-FR-061).
+"""``/api/v1/memory/*`` — the human's side of the memory layer (spec memory FR-028).
 
 List partitions and facts, show one fact with its origins and conflicts, walk
 a partition's own directory and read a file out of it, run a sync, run an
@@ -10,7 +9,7 @@ knowledge's collections — lifecycle is a Resource concern, not this kind's
 own.
 
 **The file family is read-only, and that is the design.** Everything under
-``~/.coffer/memory/`` is derived (FR-023): an edit would survive exactly until
+``~/.coffer/memory/`` is derived (FR-016): an edit would survive exactly until
 the next aggregation pass, so offering one would be offering a lie. It does
 not route through ``/api/v1/fs`` either — that family browses directories and
 deliberately never serves file contents — so the shape here follows
@@ -23,10 +22,10 @@ therefore unscoped: ``list_facts``/``list_partitions`` are called with no
 enforced on the one route a real agent's own session actually reaches —
 ``POST /context`` composes ``MemoryService.visible_partitions(agent)``
 underneath (``application.memory.context.compose_context``) — and on
-``coffer__recall`` (FR-052), which this surface does not expose at all: L2
-is MCP-only (FR-060).
+``coffer__recall`` (FR-023), which this surface does not expose at all: L2
+is MCP-only (FR-027).
 
-Every organise pass is audited here (FR-063): ``organise_partition`` is a
+Every organise pass is audited here (FR-032): ``organise_partition`` is a
 pure layer with no ``AuditService`` of its own (by design — see
 ``memory_wiring.py``'s module docstring), so the record is made at this
 boundary instead. Aggregation and delivery install/remove already audit
@@ -221,7 +220,7 @@ async def list_partition_files(
     name: str,
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> FileTreeOut:
-    """The partition's own directory, as a read-only tree (FR-062)."""
+    """The partition's own directory, as a read-only tree (FR-029)."""
     await _require_partition(name, resources)
     root = memory_paths.partition_dir(name)
     return FileTreeOut(root=_node_out(memory_files.build_tree(root), root))

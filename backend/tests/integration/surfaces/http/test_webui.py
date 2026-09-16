@@ -1,4 +1,4 @@
-"""The daemon serving the built web UI (spec mcp-gateway FR-024/FR-025).
+"""The daemon serving the built web UI (spec daemon FR-016/FR-017).
 
 Two load-bearing properties. Mounting a SPA at ``/`` must not swallow the API.
 And every route that ends at ``index.html`` must carry the daemon's live token,
@@ -64,6 +64,10 @@ def test_serves_hashed_assets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
     assert client.get("/assets/app.js").status_code == 200
 
 
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a client-side route is served the app, an unknown API path is not",
+)
 def test_client_side_routes_fall_back_to_index(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -85,6 +89,10 @@ def test_api_routes_are_not_shadowed_by_the_mount(
     assert r.json() == {"pong": "yes"}
 
 
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a client-side route is served the app, an unknown API path is not",
+)
 def test_api_404s_stay_404(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """An unknown API path must NOT come back as the SPA's index.html — that
     would turn every client bug into a confusing 200 full of HTML."""
@@ -148,12 +156,12 @@ def test_daemon_surfaces_404_rather_than_returning_the_spa(
 
 
 # ---------------------------------------------------------------------------
-# The token the served document carries (spec mcp-gateway FR-025)
+# The token the served document carries (spec daemon FR-017)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="a page served by the daemon is authenticated by the daemon",
 )
 @pytest.mark.parametrize("route", ["/", "/index.html", "/agents", "/mcp-servers/foo"])
