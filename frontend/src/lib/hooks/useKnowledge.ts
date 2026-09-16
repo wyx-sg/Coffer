@@ -9,7 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { useToast } from "@/components/ui/toast";
-import { translateApiError } from "@/lib/api/errors";
+import { ApiError, translateApiError } from "@/lib/api/errors";
 import {
   createCollection,
   deleteFile,
@@ -24,6 +24,7 @@ import {
   knowledgeFileKey,
   knowledgeKey,
   knowledgeTreeKey,
+  upkeepRunsKey,
 } from "@/lib/api/queryKeys";
 
 // re-exported for tests that still import the root key from here; import
@@ -88,6 +89,12 @@ export function useDeleteKnowledgeFile() {
  * Run the tidy pass over one collection. It merges and rewrites files in
  * place (archiving each prior revision into `.history/` first), so every
  * cached level and body under `["knowledge"]` is invalidated afterwards.
+ *
+ * The pass is long and the daemon refuses a second one over the same
+ * collection, so this keeps the shared run list honest at both ends — same
+ * treatment as memory's organise. A 409 is not a failure worth a toast: it
+ * means a pass is already running, which is what the button should already
+ * have been showing, so refreshing the run list is the whole response.
  */
 export function useTidyCollection(collection: string) {
   const qc = useQueryClient();
@@ -99,7 +106,11 @@ export function useTidyCollection(collection: string) {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
       toast.success(t("knowledge.detail.tidyDone"));
     },
-    onError: (error) => toast.error(translateApiError(t, error)),
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
+      toast.error(translateApiError(t, error));
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: upkeepRunsKey }),
   });
 }
 

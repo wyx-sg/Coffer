@@ -301,6 +301,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/upkeep/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What this daemon is rewriting right now
+         * @description Every *upkeep pass* in flight: memory's `organise` over a partition,
+         *     knowledge's `tidy` over a collection. Both take minutes, both rewrite
+         *     files with a model in the loop, and both can be started from a button,
+         *     the CLI or a timer — so whether one is running is a fact about the
+         *     daemon, not about whichever surface started it.
+         *
+         *     One route answers for every kind rather than each kind growing its own
+         *     near-identical "is my pass running?" endpoint, because the fact is one
+         *     table (`coffer.application.upkeep_runs`). A caller asking about one
+         *     partition or collection filters the list; a target not named here has
+         *     no pass running.
+         *
+         *     The registry is **per-process by design**: there is no queue, no row
+         *     and no lease, so a daemon restart ends any pass it was running and this
+         *     list comes back empty. That is the truth, not a lost record.
+         *
+         *     Starting a pass is the kind's own route
+         *     (`POST /memory/partitions/{name}/organise`,
+         *     `POST /knowledge/collections/{name}/tidy`); each refuses a second
+         *     concurrent pass over the same target with `UPKEEP_ALREADY_RUNNING`.
+         */
+        get: operations["listUpkeepRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/daemon/status": {
         parameters: {
             query?: never;
@@ -689,6 +728,27 @@ export interface components {
             tables: {
                 [key: string]: number;
             };
+        };
+        UpkeepRunOut: {
+            /**
+             * @description The kind whose pass this is: `memory` or `knowledge`.
+             * @example memory
+             */
+            kind: string;
+            /**
+             * @description The partition or collection being rewritten.
+             * @example coffer
+             */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When this daemon started the pass.
+             */
+            started_at: string;
+        };
+        UpkeepRunListOut: {
+            /** @description Every pass in flight, oldest first. Empty means nothing is running. */
+            runs: components["schemas"]["UpkeepRunOut"][];
         };
         DaemonStatusOut: {
             /** @enum {string} */
@@ -1278,6 +1338,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PruneResultOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listUpkeepRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpkeepRunListOut"];
                 };
             };
             401: components["responses"]["Unauthorized"];

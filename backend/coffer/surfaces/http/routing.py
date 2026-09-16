@@ -45,6 +45,7 @@ from coffer.surfaces.http.settings_routes import router as settings_router
 from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.sync_routes import router as sync_router
+from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 
 
 def include_all_routers(app: FastAPI) -> None:
@@ -54,6 +55,7 @@ def include_all_routers(app: FastAPI) -> None:
         resource_router,
         audit_router,
         retention_router,
+        upkeep_router,  # what this daemon is rewriting right now (cross-kind)
         credential_router,
         settings_router,
         sync_router,  # spec vault-sync

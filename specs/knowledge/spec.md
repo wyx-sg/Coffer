@@ -142,6 +142,8 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 
 ### Scenario: the tidy worker stays off unless enabled
 
+### Scenario: a second tidy pass over the same collection is refused while the first is running
+
 ### Scenario: the knowledge skill is delivered to a managed agent
 
 ### Scenario: the viewer renders content read-only and offers open and reveal
@@ -202,6 +204,7 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 - **FR-053**: The tidy setting MUST be **synced state**, travelling with the vault in the `internal-engine` document that already carries it, so every machine agrees on who the owner is. A pass MUST run only on the machine the setting names and MUST be a clean no-op on every other. Without that rule two machines rewrite one corpus independently: each merges the same pair of notes into a topic document, but into a *different* one, and git merges the result cleanly — both machines agree the originals are deleted, and the two topic documents are additions at different paths — so the vault ends up holding the same knowledge twice with nothing reported as a conflict. If the owner machine is off, no tidy happens at all, which is the accepted trade for a background nicety.
 - **FR-054**: A tidy pass and a converge round MUST NOT overlap. Both write the vault, and an export taken mid-rewrite is a torn snapshot, so they MUST take the same lock. A pass MUST additionally be skipped while a conflict or a pending confirmation is outstanding, so a rewrite is never piled onto an unresolved divergence.
 - **FR-055**: Where the owner's pass deleted a file that another machine edited, the **edit MUST win**: the file survives with its edit, the deletion is dropped, and the round MUST NOT report a conflict. A fresh edit is something a person or an agent just decided; the deletion is a housekeeping judgement the next pass will simply make again.
+- **FR-056**: Only **one tidy pass per collection** may run at a time, whoever started it. The pass runs for minutes and rewrites the collection's files, so a second pass over the same collection is not a faster tidy but two writers over one directory. A manual trigger that arrives while a pass is in flight MUST be **refused** rather than queued (`UPKEEP_ALREADY_RUNNING`, 409) — the caller asked to start a pass, and no pass is going to start — and the interval worker MUST **skip** a collection that is already being tidied rather than wait behind it, since its next sweep comes round again anyway. Which collections are being rewritten right now MUST be readable, so a surface that opens mid-pass shows the pass instead of an idle button that invites the second click. The record is per-daemon and does not outlive it: a pass lives in the process that was asked for it, so a restart ends it and the reading comes back empty, which is the truth rather than a lost record.
 
 ### Surfaces
 

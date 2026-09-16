@@ -142,6 +142,8 @@ agent 手里有一个有辨识度的词或短语，它要的是这个词句出�
 
 ### Scenario: the tidy worker stays off unless enabled
 
+### Scenario: a second tidy pass over the same collection is refused while the first is running
+
 ### Scenario: the knowledge skill is delivered to a managed agent
 
 ### Scenario: the viewer renders content read-only and offers open and reveal
@@ -202,6 +204,7 @@ agent 手里有一个有辨识度的词或短语，它要的是这个词句出�
 - **FR-053**: tidy 设置 MUST 是**同步状态**，随 vault 走在已经承载它的 `internal-engine` 文档里，让每台机器对 owner 是谁达成一致。一次 tidy MUST 只在设置指名的那台机器上运行，在其它每一台上 MUST 是干净的 no-op。没有这条规则，两台机器会各自改写同一份语料：它们把同一对笔记合并进一篇主题文档，却是*不同*的两篇，而 git 干净地合并了结果——两边都同意原始文件已删除，两篇主题文档又是不同路径上的新增——于是 vault 里同一份知识存了两遍，且没有任何冲突被报出来。如果 owner 机器是关着的，那就根本不会有 tidy 发生；对一个后台的锦上添花功能来说，这是可以接受的取舍。
 - **FR-054**: 一次 tidy 与一轮 converge MUST NOT 重叠。两者都在写 vault，改写进行到一半时取的导出是一份被撕开的快照，所以它们 MUST 取同一把锁。此外，只要还有未解决的冲突或待确认事项，这次 tidy MUST 被跳过，绝不把改写叠在一次没解决的分歧之上。
 - **FR-055**: 当 owner 的 tidy 删掉了一个文件，而另一台机器编辑过它时，**编辑 MUST 胜出**：文件带着它的编辑保留下来，删除被丢弃，且这一轮 MUST NOT 报冲突。一次新鲜的编辑是人或 agent 刚刚做出的决定；而删除只是一个整理上的判断，下一次 tidy 自然会再做一遍。
+- **FR-056**: 同一个集合上同一时刻 MUST 只有**一次 tidy** 在跑，不论是谁发起的。一次 tidy 要跑上几分钟并改写该集合的文件，所以对同一集合的第二次 tidy 不是更快的整理，而是两个写者在同一个目录上打架。一次手动触发若在已有 tidy 进行中时到达，MUST 被**拒绝**而不是排队（`UPKEEP_ALREADY_RUNNING`，409）——调用方要的是「开始一次 tidy」，而这次并不会开始——定时 worker 则 MUST **跳过**那个已在整理中的集合，而不是等在它后面，反正下一轮扫描还会再来。此刻正在被改写的是哪些集合 MUST 可读，这样一个在 tidy 进行中才打开的界面看到的是这次 tidy，而不是一个空闲的按钮在邀请第二次点击。这份记录属于单个 daemon 且不比它活得更久：一次 tidy 活在被请求的那个进程里，所以重启即终结，读回来就是空的——这是事实，不是丢失的记录。
 
 ### Surface
 

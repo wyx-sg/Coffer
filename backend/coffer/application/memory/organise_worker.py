@@ -22,6 +22,9 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from coffer.application.memory.service import KIND_MEMORY
+from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
+
 logger = logging.getLogger(__name__)
 
 #: Long enough that a boot storm (aggregation, other workers) has settled.
@@ -46,12 +49,18 @@ class OrganiseWorker:
         is_enabled: EnabledCheck = _always_enabled,
         start_delay_s: float = DEFAULT_START_DELAY_S,
         interval_s: float = DEFAULT_INTERVAL_S,
+        runs: UpkeepRunRegistry = UPKEEP_RUNS,
     ) -> None:
         self._organise = organise
         self._list_partitions = list_partitions
         self._is_enabled = is_enabled
         self._start_delay_s = start_delay_s
         self._interval_s = interval_s
+        # The same table the button's route claims against. A timer pass and a
+        # button pass over one partition are two writers over one directory,
+        # so whichever gets there first holds the key and the other stands
+        # down — see ``run_once``.
+        self._runs = runs
 
     async def run_forever(self) -> None:
         await asyncio.sleep(self._start_delay_s)
@@ -72,7 +81,18 @@ class OrganiseWorker:
             return
         for partition in await self._list_partitions():
             try:
-                await self._organise(partition)
+                # Skip, never queue: a partition someone is already organising
+                # by hand does not need a second pass behind the first, and the
+                # next sweep comes round to it anyway. Busy is an ordinary
+                # state of a partition, so it is not logged as a failure.
+                async with self._runs.claimed(KIND_MEMORY, partition) as claimed:
+                    if not claimed:
+                        logger.debug(
+                            "memory.organise_worker.partition_busy",
+                            extra={"partition": partition},
+                        )
+                        continue
+                    await self._organise(partition)
             except asyncio.CancelledError:
                 raise
             except Exception:

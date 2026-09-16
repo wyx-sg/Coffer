@@ -18,7 +18,8 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from coffer.application.knowledge.service import KnowledgeService
+from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class TidyWorker:
         start_delay_s: float = DEFAULT_START_DELAY_S,
         interval_s: float = DEFAULT_INTERVAL_S,
         lock: asyncio.Lock | None = None,
+        runs: UpkeepRunRegistry = UPKEEP_RUNS,
     ) -> None:
         self._service = service
         self._tidy = tidy
@@ -55,6 +57,10 @@ class TidyWorker:
         # snapshot that git reads as a deliberate change. None on a vault with
         # no sync wired, where there is nothing to interleave with.
         self._lock = lock
+        # The same table the button's route claims against. The lock above is
+        # vault-wide; this one is per-collection, which is the collision this
+        # worker actually has with a person pressing Tidy — see ``_sweep``.
+        self._runs = runs
 
     async def run_forever(self) -> None:
         await asyncio.sleep(self._start_delay_s)
@@ -82,7 +88,18 @@ class TidyWorker:
     async def _sweep(self) -> None:
         for collection in await self._list_collections():
             try:
-                await self._tidy(self._service, collection, actor="system")
+                # Skip, never queue: a collection someone is already tidying by
+                # hand does not need a second pass behind the first, and the
+                # next sweep comes round to it anyway. Busy is an ordinary
+                # state of a collection, so it is not logged as a failure.
+                async with self._runs.claimed(KIND_KNOWLEDGE, collection) as claimed:
+                    if not claimed:
+                        logger.debug(
+                            "knowledge.tidy_worker.collection_busy",
+                            extra={"collection": collection},
+                        )
+                        continue
+                    await self._tidy(self._service, collection, actor="system")
             except asyncio.CancelledError:
                 raise
             except Exception:

@@ -182,6 +182,16 @@ export const memoryDeliveryKey = ["memory", "delivery"] as const;
 export const memoryAgentDeliveryKey = (agent: string) => ["memory", "delivery", agent] as const;
 
 // ---------------------------------------------------------------------------
+// upkeep — the long rewrites (memory organise, knowledge tidy) in flight
+// ---------------------------------------------------------------------------
+
+/** Deliberately NOT under `memoryKey` or `knowledgeKey`: one read answers for
+ *  every kind, and a pass ending must not drag either kind's whole subtree
+ *  into the same invalidation. */
+export const upkeepKey = ["upkeep"] as const;
+export const upkeepRunsKey = ["upkeep", "runs"] as const;
+
+// ---------------------------------------------------------------------------
 // chat — conversations, their messages and per-conversation agent config
 // ---------------------------------------------------------------------------
 

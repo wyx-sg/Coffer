@@ -27,6 +27,7 @@
 import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { RefreshCw } from "lucide-react";
 
 import { FileActions } from "@/components/FileActions";
 import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
@@ -42,6 +43,7 @@ import { useResource } from "@/lib/hooks/useResources";
 import { KnowledgePreviewBody } from "@/components/knowledge/KnowledgePreviewBody";
 import { KnowledgeTreeLevel } from "@/components/knowledge/KnowledgeTreeLevel";
 import { useKnowledgeFile, useTidyCollection } from "@/lib/hooks/useKnowledge";
+import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 
 export function KnowledgeDetailPage() {
   const { t } = useTranslation();
@@ -62,6 +64,13 @@ export function KnowledgeDetailPage() {
 
   const file = useKnowledgeFile(selected);
   const tidy = useTidyCollection(collection);
+  // Same treatment as memory's organise button, and for the same reason:
+  // whether a pass is running is the DAEMON's answer, so leaving the page
+  // mid-pass and coming back shows the pass, not an idle button inviting a
+  // second concurrent rewrite of the same files. The mutation's own pending
+  // state covers the moment between the click and the first poll.
+  const tidyRunning = useUpkeepRunning("knowledge", collection);
+  const tidying = tidy.isPending || tidyRunning;
   // `enabled` is a generic Resource field, not on /knowledge/collections, so
   // the reach control's required prop comes from the single-resource read.
   const resource = useResource("knowledge", collection);
@@ -97,8 +106,11 @@ export function KnowledgeDetailPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => tidy.mutate()}
-                  disabled={tidy.isPending}
+                  disabled={tidying}
                 >
+                  <RefreshCw
+                    className={tidying ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"}
+                  />
                   {t("knowledge.detail.tidy")}
                 </Button>
               </TooltipTrigger>

@@ -684,6 +684,7 @@
     "TARGET_CONFLICT": "A skill already exists at the target location",
     "TOOL_DISABLED": "This capability is disabled — enable it on the server's page",
     "TURN_IN_PROGRESS": "A turn is already in progress in this conversation",
+    "UPKEEP_ALREADY_RUNNING": "A pass over this one is already running",
     "UNAUTHENTICATED": "This page was opened by an earlier Coffer. Reload the page — it picks up the running one. If that does not help, restart Coffer.",
     "UNKNOWN_AGENT": "Unknown agent",
     "UNKNOWN_KIND": "Unknown resource kind",

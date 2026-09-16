@@ -4,7 +4,7 @@
 // (name + project root), the reach control, and the file browser standing where
 // the fact list used to. Data hooks are mocked, mirroring
 // KnowledgeDetailPage.test.tsx.
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -12,6 +12,10 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
 
+// The page asks the DAEMON whether an organise pass is running (that is the
+// whole point — a component's own pending flag dies on navigation), so the
+// hook is mocked here the way every other data hook is.
+vi.mock("@/lib/hooks/useUpkeep", () => ({ useUpkeepRunning: vi.fn(() => false) }));
 vi.mock("@/lib/hooks/useMemory", () => ({
   useMemoryPartitions: vi.fn(() => ({
     data: [{ name: "coffer", project_root: "/Users/dev/coffer", fact_count: 1 }],
@@ -75,7 +79,12 @@ function renderPage() {
   );
 }
 
+const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
+const runningMock = vi.mocked(useUpkeepRunning);
+
 describe("MemoryDetailPage", () => {
+  beforeEach(() => runningMock.mockReturnValue(false));
+
   test("renders the partition's project root, reach control and its files", () => {
     renderPage();
 
@@ -83,6 +92,29 @@ describe("MemoryDetailPage", () => {
     expect(screen.getByText("/Users/dev/coffer")).toBeInTheDocument();
     expect(screen.getByTestId("scope-control")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
+  });
+
+  test("spins the Organise button while a pass this page did not start is running", () => {
+    // The bug: the spinner used to come from the mutation's own `isPending`,
+    // which a remount resets — so leaving the page mid-pass and coming back
+    // showed an idle button and invited a second concurrent rewrite. The
+    // running state is the daemon's answer now, so `isPending: false` and a
+    // running pass must still read as running.
+    runningMock.mockReturnValue(true);
+
+    renderPage();
+
+    const button = screen.getByRole("button", { name: /organise/i });
+    expect(button).toBeDisabled();
+    expect(button.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  test("the Organise button is idle when nothing is running", () => {
+    renderPage();
+
+    const button = screen.getByRole("button", { name: /organise/i });
+    expect(button).not.toBeDisabled();
+    expect(button.querySelector(".animate-spin")).toBeNull();
   });
 
   test("offers the way back to the partitions list", () => {

@@ -26,7 +26,8 @@ from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, Upl
 
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.search import SearchService
-from coffer.application.knowledge.service import KnowledgeService
+from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.knowledge.converter import UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
@@ -175,13 +176,23 @@ async def tidy(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> TidyOut:
-    # The same lock the timer takes, and for the same reason: a pass and a
-    # converge round both rewrite vault content, and an export caught half-way
-    # through a rewrite is a torn snapshot git reads as a deliberate change
-    # (spec vault-sync "## Unattended rewriters"). The button had been the one
-    # way to start a pass without it.
-    async with vault_write_lock():
-        result = await get_tidy_runner()(svc, name, actor=actor)
+    # Two different guards, in this order on purpose.
+    #
+    # The registry claim is first, and it is about THIS collection: a pass
+    # takes minutes and rewrites the collection's files, so a second request
+    # while one is in flight is refused (409 ``UPKEEP_ALREADY_RUNNING``)
+    # rather than queued behind it — the caller asked to start a pass, and no
+    # pass is going to start. Claiming before the lock is what makes that
+    # refusal immediate instead of a request that blocks until the first pass
+    # finishes and then runs anyway.
+    #
+    # The vault-write lock is second, and it is about the whole vault: a pass
+    # and a converge round both rewrite vault content, and an export caught
+    # half-way through a rewrite is a torn snapshot git reads as a deliberate
+    # change (spec vault-sync "## Unattended rewriters").
+    with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, name):
+        async with vault_write_lock():
+            result = await get_tidy_runner()(svc, name, actor=actor)
     return TidyOut(**{"collection": name, **result})
 
 

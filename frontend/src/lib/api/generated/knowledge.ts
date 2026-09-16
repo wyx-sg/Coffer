@@ -171,6 +171,14 @@ export interface paths {
          *     `status` is `no_model` when no internal connection is configured (a
          *     clean no-op), `empty` when the collection holds nothing to tidy, and
          *     `ok` when a pass ran — `merged` and `rewritten` then count what it did.
+         *
+         *     **One pass per collection at a time.** A request that arrives while a
+         *     pass over the same collection is still running is refused with `409`
+         *     rather than started: the two would be two writers over one directory,
+         *     not one faster pass. Which collections are being rewritten right now is
+         *     readable at `GET /api/v1/upkeep/runs` (spec mcp-gateway's contract), so
+         *     a surface that mounts mid-pass shows the button as already running
+         *     instead of inviting the second click.
          */
         post: operations["tidyKnowledgeCollection"];
         delete?: never;
@@ -356,6 +364,19 @@ export interface components {
          *     file has already replaced.
          */
         UnsafePath: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description A tidy pass over this collection is already in flight
+         *     (`UPKEEP_ALREADY_RUNNING`). Refused rather than queued — the caller
+         *     asked to start a pass, and no pass is going to start.
+         */
+        UpkeepAlreadyRunning: {
             headers: {
                 [name: string]: unknown;
             };
@@ -676,6 +697,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["CollectionNotFound"];
+            409: components["responses"]["UpkeepAlreadyRunning"];
             422: components["responses"]["ValidationFailed"];
         };
     };

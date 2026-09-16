@@ -684,6 +684,7 @@
     "TARGET_CONFLICT": "目标位置已存在一个技能",
     "TOOL_DISABLED": "该功能已被禁用——请在该服务器页面启用它",
     "TURN_IN_PROGRESS": "该对话已有一轮正在进行中",
+    "UPKEEP_ALREADY_RUNNING": "这一项已经在整理中了",
     "UNAUTHENTICATED": "本页面是由上一个 Coffer 打开的。刷新页面即可接上正在运行的那个；若仍无效，请重启 Coffer。",
     "UNKNOWN_AGENT": "未知的 Agent",
     "UNKNOWN_KIND": "未知资源类型",
