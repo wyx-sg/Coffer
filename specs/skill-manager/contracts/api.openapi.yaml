@@ -331,10 +331,6 @@ components:
               type: object
               additionalProperties: true
 
-    SkillSourceType:
-      type: string
-      enum: [local_import]
-
     SkillImportRequest:
       type: object
       required: [path]
@@ -382,13 +378,7 @@ components:
         description: { type: string }
         source: { $ref: "#/components/schemas/SkillSource" }
         enabled: { type: boolean }
-        scope:
-          type: array
-          items: { type: string }
-          nullable: true
-          description: >-
-            Agent names this skill is delivered to (null = every agent,
-            [] = no agent).
+        scope: { $ref: "#/components/schemas/ScopeOut" }
         version_hash: { type: string }
         master_path: { type: string }
         last_synced_from_source_at:
@@ -398,6 +388,27 @@ components:
         bindings:
           type: array
           items: { $ref: "#/components/schemas/SkillBindingOut" }
+
+    ScopeOut:
+      type: object
+      description: >-
+        Which agents this skill is delivered to, on THIS machine. `agents: null`
+        means every agent; `[]` matches nothing, i.e. dormant. Shape is shared
+        with every other kind — it is the resource framework's scope, not a
+        skill-specific one — so it MUST stay identical to `ScopeOut` in
+        `specs/mcp-gateway/contracts/api.openapi.yaml` and to `ScopeOut` in
+        `backend/coffer/surfaces/http/schemas.py`. It was previously declared
+        here as a bare `string[]`, which is the agent list one level down; the
+        wire has always carried the object.
+      required: [agents]
+      additionalProperties: false
+      properties:
+        agents:
+          type: array
+          items: { type: string }
+          nullable: true
+          example: [claude-code]
+      nullable: true
 
     SkillBindingOut:
       type: object

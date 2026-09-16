@@ -11,8 +11,10 @@ a confirmation was checked against a remote ref the round had not refreshed, so
 "has the remote moved?" could only answer no; and one flag waived both guard
 directions, so agreeing to publish deletions also agreed to apply them. The
 rest: a pointer outliving the working tree that gave it meaning, a rollback the
-next round quietly undid, and an export publishing a row it could not render as
-though the user had deleted it.
+next round quietly undid, an export publishing a row it could not render as
+though the user had deleted it, and a manifest written on every round that
+nothing ever read — so the one refusal that kept two Coffer builds from
+trampling each other's layout did not exist.
 """
 
 from __future__ import annotations
@@ -23,9 +25,12 @@ import pytest
 
 from coffer.domain.sync.convergence import ConvergeStatus, GuardDirection
 from coffer.domain.sync.diff import DeletionGuard
+from coffer.domain.sync.errors import SyncBundleTooNew
+from coffer.domain.sync.manifest import MANIFEST_PATH, SCHEMA_VERSION
 from tests.integration.sync.harness import (
     MACHINE_A,
     MACHINE_B,
+    another_coffer_pushes,
     bare_remote,
     build_machine,
     settle,
@@ -320,3 +325,59 @@ async def test_clearing_or_setting_the_remote_waits_for_the_round_in_flight(
     await service.clear_remote()
     assert await a.state.pointer() is None
     assert await service.get_remote() is None
+
+
+# --- two Coffer builds meeting on one remote --------------------------------
+
+
+async def test_a_remote_written_in_a_newer_layout_is_refused_not_applied(
+    tmp_path: pathlib.Path,
+) -> None:
+    """``domain/sync/manifest``: "a build that does not know a newer layout
+    refuses the remote (``SYNC_BUNDLE_TOO_NEW``) rather than applying a
+    partially-understood tree — or publishing into one".
+
+    The manifest was written on every round and read on none, so the sentence
+    describing that refusal described nothing: an older Coffer applied a bumped
+    layout's documents without a word and — the worse half — went on converging
+    the areas it *does* know from its own state, publishing a newer build's
+    documents as deletions nobody made.
+    """
+    a, _b = await _pair(tmp_path)
+    a.write_knowledge("notes", "mine", "my body\n")
+    await settle(a)
+    assert await a.remote_text(MANIFEST_PATH) is not None, "a round writes the manifest"
+
+    another_coffer_pushes(
+        a.remote_url, layout=SCHEMA_VERSION + 1, adding="knowledge/notes/from-a-newer-build.md"
+    )
+    commits = await a.remote_commit_count()
+
+    with pytest.raises(SyncBundleTooNew) as refused:
+        await a.converge()
+
+    assert refused.value.found == SCHEMA_VERSION + 1
+    assert a.read_knowledge("notes", "from-a-newer-build") is None, (
+        "a document written in a layout this build does not understand was applied anyway"
+    )
+    assert await a.remote_commit_count() == commits, (
+        "the refused round published into a tree it cannot read"
+    )
+    assert a.read_knowledge("notes", "mine") == "my body\n", "the vault must be untouched"
+
+
+async def test_a_remote_at_this_layout_is_still_applied(tmp_path: pathlib.Path) -> None:
+    """The gate refuses *newer*, not *foreign*. A tree written at this layout
+    version — which is every other machine, almost always — is an ordinary
+    round, and a gate that stopped those would have stopped sync."""
+    a, _b = await _pair(tmp_path)
+    await settle(a)
+
+    another_coffer_pushes(
+        a.remote_url, layout=SCHEMA_VERSION, adding="knowledge/notes/from-a-peer.md"
+    )
+
+    run = await a.converge()
+
+    assert run.status is ConvergeStatus.OK
+    assert a.read_knowledge("notes", "from-a-peer") == "written by another Coffer\n"

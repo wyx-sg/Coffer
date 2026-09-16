@@ -253,63 +253,6 @@ async def disable_capability(
     )
 
 
-# Legacy (path-based) form — kept for backward compatibility with clients that
-# already shipped against the old URL. Only safe for capability_keys WITHOUT '/'.
-# New code should use the body-based routes above.
-@router.post(
-    "/{name}/capabilities/{capability_type}/{capability_key}/enable",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-    include_in_schema=False,
-)
-async def enable_capability_legacy(
-    name: str,
-    capability_type: CapabilityType,
-    capability_key: str,
-    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> Response:
-    return await _toggle_capability(
-        name=name,
-        capability_type=capability_type,
-        capability_key=capability_key,
-        enabled=True,
-        actor=actor,
-        resource_service=resource_service,
-        prefs=prefs,
-        audit=audit,
-    )
-
-
-@router.post(
-    "/{name}/capabilities/{capability_type}/{capability_key}/disable",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-    include_in_schema=False,
-)
-async def disable_capability_legacy(
-    name: str,
-    capability_type: CapabilityType,
-    capability_key: str,
-    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
-    audit: AuditService = Depends(get_audit_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> Response:
-    return await _toggle_capability(
-        name=name,
-        capability_type=capability_type,
-        capability_key=capability_key,
-        enabled=False,
-        actor=actor,
-        resource_service=resource_service,
-        prefs=prefs,
-        audit=audit,
-    )
-
-
 @router.post("/{name}/refresh", response_model=CapabilityListOut)
 async def refresh_capabilities(
     name: str,

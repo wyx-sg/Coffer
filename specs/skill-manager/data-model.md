@@ -1,4 +1,4 @@
-# Data Model — 005 Skill Manager
+# Data Model — Skill Manager
 
 Entities, fields, relationships, and SQLite additions for the skill manager.
 Depends on the agent kind from spec agent-registry and the kind-agnostic Resource
@@ -299,11 +299,14 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 Stateless helpers beside `service.py` (same pattern as
 `verify_ops.py`) that expose a skill's master folder to
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
-read-only in-app viewer and surface each node's absolute on-disk path so the UI
-can offer open-in-external-editor / reveal-in-file-manager
-affordances (FR-006); the UI viewer never edits content. A separate **write**
-helper (`write_skill_file`) backs the programmatic REST/CLI overwrite (FR-028)
-and is the only mutation here — the in-app UI does not call it to edit content.
+in-app viewer and surface each node's absolute on-disk path so the UI can offer
+open-in-external-editor / reveal-in-file-manager affordances (FR-006). A
+**write** helper (`write_skill_file`) is the only mutation here, and it serves
+the in-app editor and programmatic REST/CLI clients alike (FR-028) — one
+endpoint, one code path. The conditional half of that write (comparing the
+caller's `expected_fingerprint` against the bytes on disk and raising for a 409)
+lives one layer up in `content_ops.py`, so the containment helpers stay free of
+request semantics.
 No DB, no audit; containment is enforced by resolving every candidate path and
 requiring it to stay inside the resolved master folder, reusing the path-escape
 approach from `domain/skill/validator.py`.
@@ -312,7 +315,7 @@ approach from `domain/skill/validator.py`.
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `build_file_tree(master_folder) -> FileNode`                       | Recursively list the master folder; skip symlinks whose real target escapes the folder; never descend symlinked dirs. Each node carries its absolute on-disk path.                                                                                 |
 | `read_skill_file(master_folder, relpath) -> FileContent`           | Resolve `master_folder/relpath`, verify it stays inside the folder (else `ValueError`), read with a size cap, detect binary; returns the file's absolute path and containing folder's absolute path.                                               |
-| `write_skill_file(master_folder, relpath, content) -> FileContent` | FR-028 programmatic (REST/CLI) overwrite of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Not used by the in-app UI viewer. |
+| `write_skill_file(master_folder, relpath, content) -> FileContent` | FR-028 overwrite of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Returns the NEW fingerprint, so an editor holding the buffer open can save again without a re-read. |
 
 #### File-node shape (`FileNode` / `SkillFileNodeOut`)
 
@@ -329,8 +332,8 @@ One node in the recursive tree. The root node has `path == ""`.
 
 #### File-content shape (`FileContent` / `SkillFileContentOut`)
 
-A single file's contents. The in-app viewer renders these read-only; the same
-shape is returned by the programmatic write (FR-028).
+A single file's contents — what the in-app viewer renders and edits, and what
+the write returns (FR-028).
 
 | Field             | Type   | Notes                                                                            |
 | ----------------- | ------ | -------------------------------------------------------------------------------- |
@@ -341,6 +344,7 @@ shape is returned by the programmatic write (FR-028).
 | `truncated`       | `bool` | true when the file exceeded the 256 KiB read cap and only the prefix is returned |
 | `binary`          | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |
 | `size`            | `int`  | true byte size of the file on disk (independent of any truncation)               |
+| `fingerprint`     | `str`  | digest of the file's RAW BYTES on disk — never of the returned `content`, so an oversized or binary file's fingerprint still round-trips and an edit past the truncation point is still detected. A write carries it back to be conditional (409 on mismatch); omitting it stays last-writer-wins |
 
 ### `SyncEngine` (`infrastructure/skill/sync_engine.py`)
 

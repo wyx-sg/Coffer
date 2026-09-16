@@ -53,11 +53,9 @@ class McpPreferenceSyncState:
         self._resources = resources
         self._prefs = prefs
 
-    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
+    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
         docs: list[tuple[str, dict[str, object]]] = []
-        owned: list[str] = []
         for resource in await self._resources.list(kind="mcp_server"):
-            owned.append(resource.name)
             disabled = sorted(
                 (str(p.capability_type), p.capability_key)
                 for p in await self._prefs.list_for(resource.id)
@@ -73,7 +71,7 @@ class McpPreferenceSyncState:
                         },
                     )
                 )
-        return docs, owned
+        return docs
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
         """Make each named server's disabled set exactly what its document says.

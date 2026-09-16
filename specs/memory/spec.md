@@ -1,8 +1,5 @@
 # Feature Specification: Memory
 
-> 中文版: [spec.zh.md](./spec.zh.md)
-
-**Created**: 2026-09-12
 **Status**: Draft
 **Folder name**: this spec lives at `specs/memory/`, the spec id every inbound link and `scripts/audit_acceptance.py` keys on.
 
@@ -57,61 +54,185 @@ Two facts disagree — an older one recorded that a mechanism shipped, a newer o
 
 ### User Story 5 — Delivery is installed on purpose, and visibly (Priority: P1)
 
-Session-start delivery requires touching an agent's own settings, so Coffer never does it silently. The developer installs it from Coffer, sees that it is installed, and — this being the thing that failed last time — sees when it last actually ran.
+Session-start delivery requires touching an agent's own settings, so Coffer never does it silently. The developer installs it from Coffer and sees, on that agent's own page, that it is installed. Whether it has actually fired — this being the thing that failed last time — is a separate question answered separately: every fire is an audit event, so the vault-wide audit surface can say when this agent's hook last ran, while the agent's page answers only installed or not (FR-055, FR-064).
 
-**Independent Test**: install into a fixture agent config, confirm the entry is marker-scoped and removable; confirm the surface reports installed state and the timestamp of the most recent injection, and reports "never fired" until one happens.
+**Independent Test**: install into a fixture agent config, confirm the entry is marker-scoped and removable, and confirm the per-agent status reports installation and carries no last-fired field; then serve one context with `record_fired` set and confirm one audit event names that agent.
 
 ## Acceptance Scenarios
 
 ### Scenario: a Claude Code memory file becomes a normalised fact
 
+- **Given** a Claude Code per-project memory directory holding one fact file whose frontmatter carries `name`, `description` and `type`
+- **When** the Claude Code reader lists its sources and reads that one
+- **Then** exactly one fact comes back: its title is the `name`, its description the `description`, its type `feedback`, its body the prose with the frontmatter fence stripped out, its anchor the file's own stem, and its project root the project that memory directory belongs to
+- **And** the agent's own roll-up file (`MEMORY.md`) is not among the sources at all, since Coffer regenerates that role itself
+
 ### Scenario: a Codex task group becomes normalised facts partitioned by its cwd
+
+- **Given** Codex's `MEMORY.md` holding two task groups, one of which records the working directory it was learned in
+- **When** the Codex reader reads that file
+- **Then** one fact comes back per populated bullet section of each group — preferences typed `user`, reusable knowledge typed `project` — each carrying that group's recorded cwd as its project root, and each with an anchor prefixed by its group and section so one file of many facts yields many stable ones
+- **And** the group's own rollout-reference subsections never surface as facts
 
 ### Scenario: the Codex profile becomes global facts
 
+- **Given** Codex's distilled profile summary beside its `MEMORY.md`
+- **When** the reader reads the summary
+- **Then** the profile and the standing preferences in it come back as facts with an **empty** project root — which files them into `global` (FR-012) — and each typed `user`
+- **And** Codex's own general-tips roll-up of what `MEMORY.md` already holds is not read as facts
+
 ### Scenario: aggregation never modifies an agent's native memory files
+
+- **Given** fixture config directories for both supported agents, snapshotted byte-for-byte with their modification times
+- **When** a full aggregation reads every source out of both
+- **Then** facts are produced from both
+- **And** every file under either config directory is byte-identical, with an unchanged modification time — Coffer created, moved, reformatted and deleted nothing (FR-002)
 
 ### Scenario: aggregation runs unattended, without anyone asking for it
 
+- **Given** the aggregate worker configured with an interval, and nobody having asked for a pass
+- **When** the daemon starts it
+- **Then** a pass runs **immediately**, not after the first interval elapses — a daemon that has just started is when its picture of the agents is most stale
+- **And** the audit actor on that pass is the worker's own, so the log can tell a scheduled pass from a requested one (FR-063)
+
 ### Scenario: an unchanged source file is skipped on the next sync
+
+- **Given** a source already aggregated once, whose content hash has not changed since
+- **When** a second pass runs
+- **Then** the source is counted as skipped and is **not read at all** — a reader rigged to raise if consulted again is never consulted
+- **And** no failure is reported and the facts that source produced are still on disk
 
 ### Scenario: a fact keeps the agent, path and time it came from
 
+- **Given** both supported agents' real native memory in fixture config directories, each holding facts about the same project
+- **When** aggregation runs
+- **Then** that project's partition holds the facts from both, and their origins name both registered agents
+- **And** every origin carries the absolute native path it was read out of and the time Coffer read it (FR-020)
+
 ### Scenario: a preference lands in global regardless of which project it came from
+
+- **Given** a `user`-typed fact — a standing preference about the person — read out of one project's own memory directory
+- **When** aggregation runs
+- **Then** the only partition written is `global`, and the fact is in it
+- **And** nothing lands in that project's partition (FR-012)
 
 ### Scenario: a project partition is named from its root, never from an opaque id
 
+- **Given** a project-typed fact whose source records the absolute project root `/home/dev/coffer`
+- **When** aggregation runs
+- **Then** the partition is named `coffer` — the root's own directory name, readable to anyone browsing `~/.coffer/memory/` — and the fact is in it
+- **And** a name collision is resolved by prefixing a parent path segment, never by falling back to an id (FR-011)
+
 ### Scenario: a partition is registered as a resource scoped to the agents it came from
+
+- **Given** exactly one registered agent contributing one fact about a project
+- **When** aggregation runs
+- **Then** a `memory` Resource exists for that partition, its scope names exactly that one agent, and its config records the absolute project root
+- **And** after the developer narrows the scope by hand, a later pass over a changed source leaves the scope alone (FR-014)
 
 ### Scenario: the same fact learned by two agents is reported as one with two origins
 
+- **Given** both agents' native memory holding the same body of text about the same project, under different titles of their own
+- **When** aggregation runs
+- **Then** the partition holds **one** fact and one fact was written
+- **And** its origins name both agents, so "which of my agents already knows this" is answerable (FR-022)
+
 ### Scenario: two facts with opposite conclusions are reported as a conflict
+
+- **Given** two facts in one partition reaching opposite conclusions on one subject, and an internal connection whose answer flags the pair rather than choosing between them
+- **When** the organise pass runs over that partition
+- **Then** one conflict is reported and each fact names the other in its `conflicts_with`
+- **And** neither body was edited and neither fact was deleted — the flag is the model's finding and stands until a later pass has grounds to withdraw it (FR-033). Where the model can order the pair instead, the older fact is marked superseded and carries the newer one's key
 
 ### Scenario: organize regenerates the summary without an internal connection
 
+- **Given** a partition holding facts and **no** internal connection configured
+- **When** the organise pass runs
+- **Then** the partition's `summary.md` digest is written and names the facts, grouped mechanically from their frontmatter
+- **And** the model is never called, no merge, supersession or conflict is proposed, and no fact is changed — an installation with no internal model still gets delivery (FR-032)
+
 ### Scenario: a second organise pass over the same partition is refused while the first is running
+
+- **Given** a synced partition with an organise pass already in flight
+- **When** a second pass over that same partition is requested
+- **Then** it is **refused** with `UPKEEP_ALREADY_RUNNING` (409) rather than queued — the caller asked to start a pass, and no pass is going to start
+- **And** the in-flight pass is readable on the shared upkeep-runs surface as `memory` on that partition, so a surface mounting mid-pass shows the pass instead of an idle button; once it finishes the runs list is empty again and the next request runs (FR-066)
 
 ### Scenario: deleting the memory tree and re-syncing reproduces the facts
 
+- **Given** an aggregated partition whose directories are then deleted by hand, with the source-digest cache deliberately left behind
+- **When** aggregation runs again
+- **Then** the same facts come back, with the same titles in the same order
+- **And** a digest match alone therefore never suppresses a rebuild: the whole tree is derived and disposable (FR-023, SC-002)
+
 ### Scenario: a partition's own directory is browsable as a file tree
+
+- **Given** a synced partition
+- **When** its file tree is requested, and then one file out of it
+- **Then** the tree's root carries the partition directory's absolute path and holds a `README.md` naming the project root plus a `facts/` directory listing one Markdown file per fact; reading `facts/<slug>.md` returns its text — not binary, not truncated — with the absolute path of the file and of the folder holding it
+- **And** the family is read-only (a write is refused with 405) and a path escaping the partition is refused with `MEMORY_UNSAFE_PATH` (400), because the tree is derived and an edit would survive only until the next pass (FR-062, FR-072)
 
 ### Scenario: the composed context stays within its token budget
 
+- **Given** a partition holding an order of magnitude more facts than the budget admits
+- **When** the session context is composed against an explicit token budget
+- **Then** the payload's estimated token count is at or under that budget, and fewer facts are included than the partition holds
+- **And** the budget is spent on `global` facts about the person first and then the project's most recent, so a trim drops the oldest rather than an arbitrary set (FR-051, SC-003)
+
 ### Scenario: the composed context says how many facts it left out
+
+- **Given** a partition whose facts do not all fit the budget
+- **When** the session context is composed
+- **Then** the omitted count is greater than zero and that number appears in the text itself
+- **And** the text names `coffer__recall` as the way to reach what was left out (FR-051)
 
 ### Scenario: recall returns facts the digest omitted
 
+- **Given** a partition of several dozen facts, one of them carrying a distinctive codeword, and a composed context too small to include it
+- **When** `coffer__recall` is called with that codeword
+- **Then** the omitted fact comes back **whole**, body and all, with its origins (FR-050 L2, FR-052)
+
 ### Scenario: recall matches a phrase in a fact's body
+
+- **Given** a fact whose **body** — not its title and not its description — contains the phrase "unreachable internal mirror"
+- **When** `coffer__recall` is called with that phrase
+- **Then** the fact is returned
+- **And** matching was a case-insensitive substring scan over the facts already in hand, with no score, no mode and no internal connection involved (FR-052)
 
 ### Scenario: recall spans only the partitions the calling agent may see
 
+- **Given** two project partitions each holding a fact with the same codeword, scoped to two different agents
+- **When** one of those agents recalls that codeword
+- **Then** only its own partition's fact comes back
+- **And** the other partition's fact is absent from the answer — scope is enforced on every retrieval path, not only on delivery (FR-014, FR-052)
+
 ### Scenario: a channel turn carries the memory context without a hook
+
+- **Given** a channel-driven conversation on a registered agent with a working directory, and no delivery hook installed anywhere
+- **When** a turn is taken
+- **Then** the digest arrives in the **system-prompt append** the turn platform already composes, resolved once per turn from that agent's key and the conversation's own cwd
+- **And** when there is nothing to deliver the turn carries no memory header at all, rather than an empty one (FR-053)
 
 ### Scenario: hook installation is marker-scoped and removable
 
+- **Given** an agent whose settings file already carries a foreign hook on the same lifecycle event, other events' hooks, and unrelated top-level keys
+- **When** delivery is installed, installed a second time, and then removed
+- **Then** install adds exactly **one** entry carrying Coffer's marker, a second install leaves one entry, and every foreign hook, every other event and every unrelated key is untouched
+- **And** remove takes out only the marked entry — dropping the event array and the top-level hooks key once they are empty — and with nothing installed it is a clean no-op that writes no file and records no audit event (FR-054)
+
 ### Scenario: every hook fire is recorded in the audit log
 
+- **Given** an agent for which delivery has been installed
+- **When** the installed hook fires and the served context is recorded as a delivery
+- **Then** exactly one audit event is written naming that agent as both the resource and the actor — nobody clicked anything, the agent whose session started is the actor
+- **And** the per-agent installed state is unchanged by a fire, and neither installing nor reading status records a fire of its own: "installed" and "has ever run" stay two separate facts read in two separate places (FR-055, FR-064)
+
 ### Scenario: an agent whose native memory shape is unreadable degrades loudly
+
+- **Given** one agent holding a memory file whose frontmatter is missing, unterminated, not a mapping, or missing its name field, and a second agent whose memory is fine
+- **When** aggregation runs
+- **Then** the reader raises for the offending file with that file's own path, and the pass reports one failure naming the agent, the path and the reason
+- **And** the other agent's facts are aggregated as normal, and facts from an earlier pass are left standing rather than deleted (FR-005, SC-006)
 
 ## Requirements
 

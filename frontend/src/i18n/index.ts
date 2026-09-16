@@ -4,8 +4,7 @@ import { initReactI18next } from "react-i18next";
 import en from "./locales/en.json";
 import zh from "./locales/zh.json";
 
-export const SUPPORTED_LANGUAGES = ["en", "zh"] as const;
-export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
+const SUPPORTED_LANGUAGES = ["en", "zh"] as const;
 
 void i18n
   .use(LanguageDetector)

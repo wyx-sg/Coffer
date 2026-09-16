@@ -25,7 +25,7 @@ use tauri::{AppHandle, Manager};
 /// the caller's name(s) plus a `.exe` variant are both tried in each location.
 ///
 /// This is step 2 of the daemon-resolution chain in
-/// [`crate::spawn::resolve_daemon_source`].
+/// [`crate::resolve::resolve_daemon_source`].
 pub fn resolve_sidecar(app: &AppHandle, exe_names: &[&str]) -> Result<PathBuf, String> {
     let resource_dir = app
         .path()

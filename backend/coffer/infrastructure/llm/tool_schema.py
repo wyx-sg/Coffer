@@ -7,8 +7,8 @@ two: :func:`schema_to_pydantic` builds a minimal Pydantic v2 model from an MCP
 ones and :func:`sanitise_name` turning a tool name into a valid identifier
 fragment.
 
-Lives under ``infrastructure.chat`` alongside the LangChain/LangGraph loops
-that consume it (import-linter Contract 9).
+Lives under ``infrastructure.llm`` alongside the LangChain/LangGraph loops
+that consume it (import-linter Contract 9a).
 """
 
 from __future__ import annotations

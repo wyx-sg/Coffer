@@ -1,9 +1,6 @@
 # Channel media — reference in the DB, materialise per agent at send
 
-> 中文版: [channel-media.zh.md](channel-media.zh.md)
-
-**Status**: Accepted (the v1 "defer a persisted attachment block" decision is
-superseded by [Persisted Attachment Reference](persisted-attachment-reference.md) — FR-033)
+**Status**: Accepted
 **Date**: 2026-07-04
 **Deciders**: Yuxing Wu
 **Related**: spec `channels` (FR-020); builds on [Channel Adapter Framework](channel-adapter-framework.md) (channel adapter framework); superseded in part by [Persisted Attachment Reference](persisted-attachment-reference.md)

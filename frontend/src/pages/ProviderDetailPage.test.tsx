@@ -70,7 +70,6 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   },
   useListProviderModels: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
   useTestConnection: () => ({ mutate: vi.fn(), isPending: false, data: undefined }),
-  useDetectProtocol: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 const { probedFor } = vi.hoisted(() => ({ probedFor: [] as string[] }));
 
@@ -86,7 +85,6 @@ const { enableMutate, disableMutate, updateScopeMutate } = vi.hoisted(() => ({
   updateScopeMutate: vi.fn(),
 }));
 vi.mock("@/lib/hooks/useScope", () => ({
-  UNRESTRICTED: { agents: null },
   useResourceScope: () => ({ data: { scope: null, supports_scope: true } }),
   useUpdateResourceScope: () => ({ mutate: updateScopeMutate, isPending: false }),
 }));

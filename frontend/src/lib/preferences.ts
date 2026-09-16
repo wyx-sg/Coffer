@@ -52,7 +52,7 @@ export function getPreferredEditor(): string {
   return localStorage.getItem(PREFERRED_EDITOR_KEY) ?? "";
 }
 
-export function setPreferredEditor(editor: string): void {
+function setPreferredEditor(editor: string): void {
   const trimmed = editor.trim();
   if (trimmed) {
     localStorage.setItem(PREFERRED_EDITOR_KEY, trimmed);

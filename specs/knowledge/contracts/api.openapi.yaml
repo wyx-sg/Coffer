@@ -4,7 +4,7 @@ info:
   version: 0.4.0
   description: |
     REST surface for the one `knowledge` resource kind (spec knowledge,
-    Knowledge Layer). Eight routes, and that is the whole management plane.
+    Knowledge Layer). Ten routes, and that is the whole management plane.
 
     ## The layer is a directory, not an index
 
@@ -40,7 +40,7 @@ info:
     per-agent authorization governs what an agent sees through the MCP tools,
     not what the person who owns the vault sees in their own UI.
 
-    ## Retrieval is a catalogue plus ripgrep
+    ## Retrieval is a catalogue plus a literal matcher
 
     `GET /tree` walks **one level at a time** — a directory's immediate
     subdirectories and its files, each file with the `title` and `description`
@@ -50,34 +50,55 @@ info:
 
     `GET /grep` runs ripgrep over the files and returns file, line number and
     matching line, bounded by `max_matches` and flagging `truncated`. It needs
-    no tokenizer, so CJK matches like any other text.
+    no tokenizer, so CJK matches like any other text. (Ripgrep is preferred,
+    not required: a machine without `rg` runs the same search in a built-in
+    Python walk with the same semantics.)
+
+    `POST /search` is that same matcher over the same files, reported a
+    **file** at a time rather than a line at a time — the path, its `title` and
+    `description`, and the lines that matched. The two differ only in what they
+    report. It is not a second retrieval tier: matching is literal and
+    case-sensitive either way, there is no score, no rank and no retrieval
+    *mode* anywhere on this surface, and nothing derived stands between a query
+    and a file.
 
     `GET /file` returns a whole file. There is no chunking, no passage
-    granularity, no `top_k`, no ranking and **no retrieval mode** anywhere on
-    this surface — and no `search` route, because with no ranked index behind
-    it that would be a second name for grep.
+    granularity and no `top_k`.
 
-    ## Why there is no upload, reindex, check-sources or settings route
+    ## Ingestion: one entrance beside the filesystem
 
-    - **No upload, and no format conversion.** A person adds a document by
-      putting a Markdown file in the directory; the filesystem *is* the
-      ingestion surface, and the next `GET /tree` or `GET /grep` sees it
-      (FR-032). Nothing converts PDFs or docx here, so there is no converter
-      registry, no `.raw/` original to keep and no `source_mode` lock.
+    Putting a Markdown file in the directory stays a complete way to add
+    knowledge, and the next `GET /tree`, `GET /grep` or `POST /search` sees it
+    (FR-032). But the filesystem is only reachable while the person is sitting
+    at the machine, so `POST /upload` converts a document — whatever
+    `markitdown` handles, plus plain text and CSV — into an ordinary Markdown
+    file in a collection, keeping the original under one hidden `.raw/` at the
+    collection's root purely so a bad conversion can be redone (FR-033…FR-037).
+    A channel doing the same thing from the person's phone is the other end of
+    this path.
+
+    Conversion is all that came back with it. There is still no converter
+    registry to configure, no `source_mode` lock, no external-source tracking
+    and no re-conversion on a schedule: a converted file has no `source_path`
+    and no `source_sha256`, and is indistinguishable afterwards from one
+    written by hand.
+
+    ## Why there is no reindex or settings route
+
     - **No reindex.** Nothing is indexed, so nothing can be stale. An edit made
       in the person's own editor is live on the very next call, with no import
       step and nothing to reconcile (FR-001, FR-020).
     - **No check-sources / update-source.** External source tracking is gone
-      with the index that motivated it; a file has no `source_path` and no
-      `source_sha256`.
+      with the index that motivated it.
     - **No embedding or per-scope settings.** A collection carries **no
       configuration at all** — `KnowledgeConfig` is empty and refuses unknown
       keys. There are no retrieval modes to pick, no chunk parameters and no
       embedding config, installation-wide or otherwise.
 
     The one setting the layer still has is installation-wide and lives
-    elsewhere: whether the background tidy worker runs at all
-    (`auto_tidy_enabled` on `internal_engine_config`, **off by default**,
+    elsewhere: whether the background tidy worker runs at all, on what interval,
+    and on which machine (`auto_tidy_enabled`, `tidy_interval_s` and
+    `tidy_owner_machine_id` on `internal_engine_config`, **off by default**,
     reached through the engine settings routes, out of scope for this
     contract).
 
@@ -126,8 +147,9 @@ security:
 tags:
   - name: knowledge
     description: |
-      The single `knowledge` kind: collections, the catalogue, grep over the
-      files, reading and writing one file, and the manual tidy trigger.
+      The single `knowledge` kind: collections, the catalogue, the two reports
+      of one literal matcher (grep and search), reading and writing one file,
+      uploading a document, and the manual tidy trigger.
       Mounted by `coffer.surfaces.http.knowledge` as one router with the prefix
       `/api/v1/knowledge`.
 
@@ -358,10 +380,130 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GrepOut"
+        "400":
+          $ref: "#/components/responses/GrepPatternInvalid"
         "404":
           $ref: "#/components/responses/CollectionNotFound"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/EngineUnavailable"
+
+  # --- search ---------------------------------------------------------------
+
+  /api/v1/knowledge/search:
+    post:
+      summary: The files a phrase appears in
+      description: |
+        The same matcher `GET /grep` uses, over the same files, reported a
+        **file** at a time instead of a line at a time: each hit is a path,
+        the `title` and `description` from its frontmatter, and the lines that
+        matched, so a caller can judge what it found before reading any of it
+        (FR-024).
+
+        There is no score, no ranking, no heading and no retrieval *mode* — no
+        second way an answer can be reached. Matching is **literal and
+        case-sensitive**, so a question phrased in the caller's own words finds
+        nothing; give it a distinctive word or an exact phrase. It is confined
+        to the files the caller may see and skips hidden directories
+        (`.history/`, `.raw/`), and it sends a file's content nowhere: search
+        runs entirely on this machine and needs no connection of any kind
+        (FR-029).
+
+        It is a POST because the query is a body rather than a path, not
+        because anything is written.
+      operationId: searchKnowledge
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: OK — an empty `results` when nothing matched, never an error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchOut"
+        "400":
+          $ref: "#/components/responses/GrepPatternInvalid"
+        "404":
+          $ref: "#/components/responses/CollectionNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/EngineUnavailable"
+
+  # --- ingestion ------------------------------------------------------------
+
+  /api/v1/knowledge/upload:
+    post:
+      summary: Convert a document and file it into a collection
+      description: |
+        The entrance for a document the person did not write as Markdown
+        (FR-033…FR-037). The file is converted, named from a readable slug of
+        its title, given FR-003's frontmatter — `title` from the document
+        falling back to its file name, `description` from the internal
+        connection where one is configured and from the document's opening
+        prose where not — and written into `collection` (optionally into
+        `directory` inside it). Afterwards it is an ordinary Markdown file,
+        indistinguishable from one written by hand.
+
+        The bytes that were sent are kept under a single hidden `.raw/` at the
+        **collection's root**, at the converted file's path relative to that
+        root, so a bad conversion can be redone from the original. `.raw/` is
+        excluded from the catalogue, from grep and from search, and is removed
+        when its converted file is deleted. Coffer never re-converts it on a
+        schedule and never tracks it as an external source.
+
+        Supported inputs are exactly what `markitdown` handles (PDF, `.docx`,
+        `.pptx`, `.xlsx`, `.xls`, HTML, EPUB) plus plain text, Markdown and
+        CSV. The call is bounded: **one file**, a size ceiling, and a
+        refusal that names the limit. All-or-nothing — a conversion failure
+        leaves neither a Markdown file nor a `.raw/` original behind.
+
+        Upload is deliberately **not** an agent tool (FR-040): a document
+        enters through a human surface — this route, the CLI, or a channel that
+        confirms the collection with its paired owner.
+      operationId: uploadKnowledgeDocument
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, collection]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The document to convert. One per call.
+                collection:
+                  type: string
+                  description: The collection it belongs in. Must already exist.
+                directory:
+                  type: string
+                  description: A folder inside that collection. Omitted, the collection's top level.
+      responses:
+        "201":
+          description: Converted and filed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestedDocumentOut"
+        "400":
+          $ref: "#/components/responses/IngestRejected"
+        "404":
+          $ref: "#/components/responses/CollectionNotFound"
+        "413":
+          $ref: "#/components/responses/UploadTooLarge"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          $ref: "#/components/responses/EngineUnavailable"
 
   # --- tidy -----------------------------------------------------------------
 
@@ -370,7 +512,10 @@ paths:
       summary: Run the tidy pass over one collection
       description: |
         One bounded agentic pass, driven by the internal model connection,
-        whose tool surface is the same five operations an agent has. It merges
+        whose tool surface is **four** operations — `list_files`, `read_file`,
+        `write_file`, `delete_file`. A pass rewrites a collection, so it never
+        needs `grep` or `search`, and it is not given the agents' own six. It
+        merges
         duplicate notes and rewrites them into coherent documents, copying each
         prior revision into the hidden `.history/` before any overwrite
         (FR-050). With no index behind it, there is nothing to reconcile
@@ -379,7 +524,9 @@ paths:
         This is the manual trigger — the UI button and `coffer knowledge
         organize` both land here. A background worker may also run the pass on
         an interval, governed by one installation-wide setting that is **off by
-        default** (FR-051).
+        default** and names the one machine allowed to run it (FR-051, FR-053).
+        Only one pass per collection runs at a time, whoever started it
+        (FR-056).
 
         `status` is `no_model` when no internal connection is configured (a
         clean no-op), `empty` when the collection holds nothing to tidy, and
@@ -502,6 +649,47 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     FileNotFound:
       description: No file at that path (`KNOWLEDGE_FILE_NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    IngestRejected:
+      description: |
+        The document could not be converted (`INGEST_REJECTED`). `details`
+        carries a `reason` — `unsupported_type` — and the rejected `doc_type`,
+        so a surface can name the format it will not take instead of failing
+        vaguely. Legacy `.doc`/`.ppt`, `.rtf` and `.odt` reach this case
+        deliberately: no converter claims them, so they are refused cleanly
+        rather than turned into a misleading conversion failure. Nothing
+        half-converted is stored.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    UploadTooLarge:
+      description: |
+        The upload is past the size ceiling (`KNOWLEDGE_UPLOAD_TOO_LARGE`).
+        Refused before any conversion or write is attempted, naming the limit
+        so the caller knows what to shrink below (FR-037).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    GrepPatternInvalid:
+      description: |
+        The matcher rejected the pattern (`GREP_PATTERN_INVALID`) — ripgrep
+        exited 2, or the built-in fallback could not compile the regex. Without
+        its own code this would masquerade as "no matches".
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    EngineUnavailable:
+      description: |
+        A binary or converter library the call needs is absent
+        (`ENGINE_UNAVAILABLE`) — one of MarkItDown's format backends on an
+        upload, or the search binary with no fallback available. The daemon
+        stays up and the answer names the engine.
       content:
         application/json:
           schema:
@@ -724,6 +912,76 @@ components:
         truncated:
           type: boolean
           description: True when `max_matches` cut the result short.
+
+    SearchRequest:
+      type: object
+      description: |
+        A literal, case-sensitive query. `collection` narrows it to one
+        collection; omitted, every collection the caller may see is searched.
+      required: [query]
+      properties:
+        query: { type: string, minLength: 1 }
+        collection:
+          anyOf:
+            - type: string
+            - type: "null"
+
+    SearchLineOut:
+      type: object
+      description: One matching line inside a hit.
+      required: [line_number, line]
+      properties:
+        line_number: { type: integer }
+        line: { type: string }
+
+    SearchHitOut:
+      type: object
+      description: |
+        One matching **file** — its path, the frontmatter that says what it is,
+        and the lines that matched, so a caller can judge it before reading it.
+      required: [path, title, description, lines]
+      properties:
+        path: { type: string, description: Relative to the knowledge root. }
+        title: { type: string }
+        description: { type: string }
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchLineOut"
+
+    SearchOut:
+      type: object
+      description: |
+        One entry per matching file, bounded to a handful of files and a few
+        matched lines each. There is no retrieval mode a caller picks and none
+        the answer reports, and no score or rank on any entry (FR-024).
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchHitOut"
+
+    IngestedDocumentOut:
+      type: object
+      description: |
+        The converted document, as an ordinary file in the collection. Note
+        `converter` is reported here and written **nowhere on disk** — a file
+        that has landed is just a file, and FR-003's frontmatter carries five
+        keys and nothing else.
+      required: [path, title, description, converter, raw_path]
+      properties:
+        path:
+          type: string
+          description: The converted Markdown file, relative to the knowledge root.
+        title: { type: string }
+        description: { type: string }
+        converter:
+          type: string
+          description: Which converter produced this file.
+        raw_path:
+          type: string
+          description: The kept original under the collection's hidden `.raw/` (FR-035).
 
     TidyOut:
       type: object

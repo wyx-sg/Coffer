@@ -12,8 +12,6 @@ import type { components } from "@/lib/api/generated/agent-registry";
 
 type Schemas = components["schemas"];
 
-export type FsEntry = Schemas["FsEntry"];
-
 export type FsBrowseOut = Schemas["FsBrowseOut"];
 
 /** A GUI editor detected as installed (preferred-editor picker, spec ui-shell/004). */

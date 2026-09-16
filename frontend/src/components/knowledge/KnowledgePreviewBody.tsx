@@ -1,6 +1,6 @@
 // frontend/src/components/knowledge/KnowledgePreviewBody.tsx
 //
-// Shared preview body for every knowledge lane + the entry viewer. Splits a leading YAML
+// Shared preview body for every knowledge file view. Splits a leading YAML
 // frontmatter block off the text (so `---` fences don't render as <hr>), shows
 // the parsed `title`/`description` plus a small muted meta line
 // (`updated_at`/`branch`/`period`) as a clean header, and renders ONLY the body

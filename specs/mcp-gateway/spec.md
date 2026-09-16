@@ -1,7 +1,5 @@
 # Feature Specification: MCP Gateway
 
-**Feature Branch**: `feature/mcp-gateway`
-**Created**: 2026-05-20
 **Status**: Accepted
 **Scope note**: This spec owns the backend layer — the daemon, MCP gateway, REST API, and `coffer` CLI.
 **Input**: User description: "Coffer's first feature — an MCP server gateway. Like mcpjungle / metamcp: one MCP client (Claude Code / Codex) connects to coffer; coffer aggregates many upstream MCP servers and re-exposes their tools, resources, and prompts as a single namespaced surface. Coffer will later manage other resource kinds (skills, memory, channels, agents) — design the first feature on top of a generic Resource framework so follow-on kinds plug in cleanly."
@@ -173,7 +171,7 @@ The retirement's failure mode is bounded rather than gone: a stale `.app` can st
 
 ### Edge Cases
 
-These cases are tracked by integration tests, not by the acceptance audit, except where promoted to `## Acceptance Scenarios` below (currently: tool-name collision, daemon port conflict).
+These cases are tracked by integration tests, not by the acceptance audit, except where promoted to `## Acceptance Scenarios` below — tool-name collision, the daemon port conflict, concurrent clients and the mid-session upstream crash each have a scenario of their own down there.
 
 - **Upstream unreachable on register**: Registration must succeed (config saved); discovery and health report the failure; the server is marked unhealthy until reachable, and there is no silent retry storm.
 - **Upstream crashes mid-call**: The in-flight call returns an error; the server is marked unhealthy; a subsequent call respawns the upstream with bounded retries; the user sees the failure in the invocation log.
@@ -240,9 +238,12 @@ asks for it.
   name; this is documented explicitly rather than implying a stronger
   isolation boundary than exists.
 
-`skill` scope is enforced at its own kind's seam (spec skill-manager, delivery); the
-`agent`, `channel`, `knowledge_base` and `memory` kinds declare no scope at
-all and reject a non-null value at validation (422).
+`skill` scope is enforced at its own kind's seam (spec skill-manager, delivery),
+and so is every other scoped kind: `channel`, `knowledge`, `memory` and
+`provider` all declare `supports_scope` and gate at their own seam. `agent` is
+the one kind that declares no scope at all and rejects a non-null value at
+validation (422) — it IS the agent, so there is nothing for a per-agent scope to
+narrow.
 
 ## Acceptance Scenarios
 
@@ -456,7 +457,8 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 - **Given** a release tag matching `v*` is pushed,
 - **When** `.github/workflows/release.yml` finishes,
-- **Then** the release contains exactly one download tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries — and no desktop bundle,
+- **Then** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries,
+- **And** it contains the second, desktop tier built from those same binaries — a macOS arm64 `.dmg` (FR-022) — and no third tier and no other platform,
 - **And** the release contains a single aggregated `SHA256SUMS` file covering every artifact.
 
 ### Scenario: a page served by the daemon is authenticated by the daemon
@@ -586,4 +588,4 @@ Per `agents/sdd.md` and `agents/testing.md`, every scenario in this section is r
 
 ## Deliberately out of scope
 
-- **Vault backup and restore.** Coffer does not bundle its own `.tar.gz` snapshot of `~/.coffer/`. The vault export in spec vault-sync already captures everything that is a system of record — the three file trees, the resources, the credential ciphertext, and the sync state areas. What a backup added on top of that was derived data only: the log tables (which roll off on a 30-day retention anyway), the chat conversation rows, indexes that are rebuilt from the files by design (ADR files-as-truth-sqlite-retrieval), and the `distilled_sessions` idempotency ledger, whose loss costs a re-distill rather than any data. It also wrote its archive to the same machine by default, so it never answered the off-site question it appeared to answer. Users who want a byte-copy have `cp -r ~/.coffer/`; users who want to move a vault have the export.
+- **Vault backup and restore.** Coffer does not bundle its own `.tar.gz` snapshot of `~/.coffer/`. The bidirectional git convergence of spec vault-sync already carries everything that is a system of record — the file trees, the resources, and the credential ciphertext — to a remote the user owns, and brings another machine's copy back. What a backup added on top of that was local-only data: the log tables (which roll off on a 30-day retention anyway) and the chat conversation rows. It also wrote its archive to the same machine by default, so it never answered the off-site question it appeared to answer. Users who want a byte-copy have `cp -r ~/.coffer/` with the daemon stopped; users who want a vault on two machines have convergence.

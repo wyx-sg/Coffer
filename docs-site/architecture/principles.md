@@ -10,7 +10,7 @@ The result is credential sprawl, config drift between clients, and an identity p
 
 Coffer's answer to this slice is a long-lived local daemon that registers upstream MCP servers once, exposes all of them through a single namespaced surface (every tool appears as `<server-name>__<tool-name>`), and handles all client connections through that one point. Configure once; every client sees the same tools, the same names, the same policies.
 
-The MCP gateway, though, is only one capability of a broader vault. Coffer is a local-first AI agent vault: the same daemon and the same kind-agnostic Resource framework also manage registered coding agents, master skill bundles, the shared knowledge store, and messaging channels — five resource kinds in all — plus the cross-cutting turn platform that drives those agents behind the channels, and one-shot vault export/import. The principles below govern the whole vault, with the gateway as the founding kind rather than the entire system.
+The MCP gateway, though, is only one capability of a broader vault. Coffer is a local-first AI agent vault: the same daemon and the same kind-agnostic Resource framework also manage registered coding agents, master skill bundles, the shared knowledge store, aggregated agent memory, model providers, and messaging channels — **seven** resource kinds in all — plus the cross-cutting turn platform that drives those agents behind the channels, and bidirectional vault sync against a git remote you own. The principles below govern the whole vault, with the gateway as the founding kind rather than the entire system.
 
 ## The three principles
 

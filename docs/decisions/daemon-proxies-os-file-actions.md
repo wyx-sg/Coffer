@@ -1,12 +1,10 @@
 # Local Daemon Proxies OS File Actions
 
-> 中文版: [daemon-proxies-os-file-actions.zh.md](./daemon-proxies-os-file-actions.zh.md)
-
-- **Status:** Accepted
-- **Date:** 2026-06-21
-- **Deciders:** Yuxing Wu
-- **Spec:** [agent-registry](../../specs/agent-registry/spec.md) owns the `/fs` router and the shared FileActions bar (FR-038, FR-039 new); touches the open/reveal fallback clause in [skill-manager](../../specs/skill-manager/spec.md) FR-006 / FR-030 (new) and [knowledge](../../specs/knowledge/spec.md) FR-020 / FR-021 (the Knowledge Layer spec, which now owns both the document and the entry surfaces) — no new spec; the `spec.md` files are updated before implementation.
-- **Supersedes:** the "on the web, open/reveal falls back to copy-path" stance in agent-registry FR-009/FR-038, skill-manager FR-006, the retired Knowledge Base spec's FR-020 and knowledge FR-021.
+**Status**: Accepted
+**Date**: 2026-06-21
+**Deciders**: Yuxing Wu
+**Spec**: [agent-registry](../../specs/agent-registry/spec.md) owns the `/fs` router and the shared FileActions bar (FR-038, FR-039 new); touches the open/reveal fallback clause in [skill-manager](../../specs/skill-manager/spec.md) FR-006 / FR-030 (new) and [knowledge](../../specs/knowledge/spec.md) FR-020 / FR-021 (the Knowledge Layer spec, which now owns both the document and the entry surfaces) — no new spec; the `spec.md` files are updated before implementation.
+**Supersedes**: the "on the web, open/reveal falls back to copy-path" stance in agent-registry FR-009/FR-038, skill-manager FR-006, the retired Knowledge Base spec's FR-020 and knowledge FR-021.
 
 ## Context
 

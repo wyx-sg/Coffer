@@ -1,11 +1,9 @@
 # SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK
 
-> 中文版: [seatalk-websocket-inbound.zh.md](./seatalk-websocket-inbound.zh.md)
-
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: spec [channels](../../specs/channels/spec.md) (FR-071, FR-072);
+**Related**: spec [channels](../../specs/channels/spec.md) (FR-071, FR-081);
 [Channel Adapter Framework](channel-adapter-framework.md);
 [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md)
 

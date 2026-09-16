@@ -26,9 +26,12 @@ interface Props {
   title: string;
   description: string;
   pending?: boolean;
-  /** Runs the deletion; the dialog closes once it settles, whatever the
-   *  outcome — the caller's summary toast reports partial failure, so the bar
-   *  never sits stuck with no explanation. */
+  /** Runs the deletion. Handed straight to ConfirmDialog, so the convention
+   *  applies here too: the dialog closes when this RESOLVES and stays open
+   *  with the reason if it rejects. A bulk run settles every row and resolves
+   *  with counts (`useBulkMutate`), reporting partial failure in its own
+   *  summary toast — so in practice it closes and the toast explains. A run
+   *  that rejects outright is the case this used to close on regardless. */
   onConfirm: () => void | Promise<void>;
 }
 
@@ -57,9 +60,7 @@ export function BulkDeleteButton({ title, description, pending = false, onConfir
         description={description}
         confirmLabel={pending ? t("common.deleting") : t("common.bulk.delete")}
         pending={pending}
-        onConfirm={() => {
-          void Promise.resolve(onConfirm()).finally(() => setOpen(false));
-        }}
+        onConfirm={() => Promise.resolve(onConfirm())}
       />
     </>
   );

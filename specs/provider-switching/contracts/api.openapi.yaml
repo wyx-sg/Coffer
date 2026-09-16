@@ -5,15 +5,16 @@ info:
   description: |
     Provider registry endpoints. Merged into the main Coffer Management API at
     runtime; this document scopes only the provider-specific routes added by
-    the 011-provider-switching spec.
+    the provider-switching spec.
 
     All routes use the same `X-Coffer-Token` authentication from
     `specs/mcp-gateway/contracts/api.openapi.yaml`.
 
     Hand-written; NOT contract-test-gated. Sync with the implementation manually.
 
-    Security note: `ProviderOut` never includes the raw secret. `credential_ref`
-    and `is_active` are always present.
+    Security note: `ProviderOut` never includes the raw secret. `credential_ref`,
+    `compatible_agents`, `enabled`, `is_active` and `internal_default` are
+    always present.
 
 servers:
   - url: http://127.0.0.1:{port}/api/v1
@@ -329,7 +330,7 @@ paths:
         native config (the inverse of activate) and clears `is_active` on the
         wire's active connection, so the agent runs on its OWN built-in
         model/login. A Coffer LLM connection is an optional override, not a
-        prerequisite (ADR provider-switching amendment D1/D3).
+        prerequisite (spec provider-switching D1).
 
         Idempotent — a no-op when nothing is active for the wire. Emits a
         `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
@@ -352,7 +353,7 @@ paths:
         The single, global model Coffer's internal LLM engine (memory organizer,
         reorg, distill) runs on. The engine takes its endpoint +
         key from the `internal_default` connection but its MODEL from this
-        singleton (ADR provider-switching amendment E3). `model` is `null` until one is chosen.
+        singleton (spec provider-switching E3). `model` is `null` until one is chosen.
       responses:
         "200":
           description: OK
@@ -530,6 +531,8 @@ components:
             Opaque model id, passed verbatim to the vendor and never checked
             against a list of model names Coffer writes down.
         modality:
+          # Optional on the way IN (an omitted modality stores `text`); every
+          # response carries it, because what is stored is always concrete.
           $ref: "#/components/schemas/Modality"
 
     ProviderModelsOut:
@@ -613,6 +616,7 @@ components:
         - models
         - is_active
         - internal_default
+        - enabled
         - created_at
         - updated_at
       description: >-
@@ -640,12 +644,17 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AgentType" }
           description: >-
-            READ-ONLY. The EFFECTIVE agents this connection projects into,
-            derived from the resource's framework-level per-agent `scope`
+            READ-ONLY. The CONFIGURED agents this connection covers, derived
+            from the resource's framework-level per-agent `scope`
             (ADR per-agent-resource-scope) intersected with the agent types
-            Coffer knows; empty for a disabled or keyless (ollama) connection.
-            The projection writer is chosen by agent type, not protocol; the
-            Agent Overview picker filters on this. To CHANGE it, edit the scope
+            Coffer knows. Empty for a keyless (ollama) connection, which covers
+            no agent even in principle. It is deliberately NOT narrowed by
+            `enabled` — that rides the same payload, so a client wanting the
+            effective projection intersects the two itself, while a management
+            surface can still render the agent list of a connection the user
+            switched off. The projection writer is chosen by agent type, not
+            protocol; the Agent Overview picker filters on this AND on
+            `enabled`. To CHANGE it, edit the scope
             (`PUT /api/v1/resources/provider/{name}/scope`).
         models:
           type: array
@@ -670,6 +679,17 @@ components:
           description: >-
             Whether this connection is Coffer's internal-engine default. At
             most one connection globally has internal_default=true.
+        enabled:
+          type: boolean
+          description: >-
+            The user's switch on the resource itself. A disabled connection
+            projects into nothing and resolves no key, while still reporting
+            the reach it is configured for (see `compatible_agents`). Changed
+            through the shared resource enable/disable surface, not here.
+        description:
+          type: string
+          nullable: true
+          description: The connection's own description, as stored on the resource row.
         created_at:
           type: string
           format: date-time
@@ -719,18 +739,26 @@ components:
             preserving order, at most 200 of at most 200 characters); they are
             never checked against a list of model names Coffer writes down. An
             omitted `modality` stores `text`.
+        description:
+          type: string
+          nullable: true
+          description: Free text stored on the resource row.
 
     ProviderPatchRequest:
       type: object
       additionalProperties: false
       description: >-
-        All fields optional. `protocol` and `credential_ref` are immutable
-        and cannot be patched. Re-targeting which agents the connection projects
+        All fields optional. `credential_ref` is immutable — it is the vault
+        address the connection owns — but `protocol` is not: the probe that
+        guessed the wire can be wrong, and nothing keys off it for projection.
+        Re-targeting which agents the connection projects
         into is a SCOPE edit (`PUT /api/v1/resources/provider/{name}/scope`),
         not a patch field — re-target then re-activate to re-project. No CHOSEN
         model is on the connection (spec provider-switching E3); `models` only
         curates which of the endpoint's models it offers.
       properties:
+        protocol:
+          $ref: "#/components/schemas/Protocol"
         base_url:
           type: string
           nullable: true
@@ -750,6 +778,10 @@ components:
             restriction, so every model the endpoint serves is offered again.
             Each entry carries its own modality; an omitted `modality` stores
             `text`.
+        description:
+          type: string
+          nullable: true
+          description: Free text stored on the resource row.
 
     ProviderRenameRequest:
       type: object

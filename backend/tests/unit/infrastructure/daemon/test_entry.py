@@ -285,14 +285,3 @@ def test_main_raises_fd_soft_limit_before_serving(
 
     assert order and order[0] == "fd", "fd soft limit must be raised before serving"
     assert "serve" in order
-
-
-def test_entry_does_not_import_the_knowledge_engine() -> None:
-    """entry.py is the frozen daemon entrypoint; importing the knowledge engine
-    here would pull sqlite-vec into the daemon layer and break engine
-    confinement. vec availability is reported via /daemon/status instead."""
-    import pathlib
-
-    src = pathlib.Path(entry.__file__).read_text()
-    assert "vec_index" not in src
-    assert "--check-vec" not in src

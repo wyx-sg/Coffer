@@ -1,11 +1,10 @@
 # Quickstart — Knowledge Layer
 
-> 中文版: [quickstart.zh.md](./quickstart.zh.md)
-
 Knowledge is a directory of Markdown files under
 `~/.coffer/knowledge/<collection>/`. An agent finds what it needs by reading a
-generated catalogue and grepping, the way it navigates a codebase; you find it
-by opening a folder. There is no index, so what one of you writes the other
+generated catalogue and grepping, the way it navigates a codebase — or by
+searching a distinctive phrase and getting back the files that hold it; you find
+it by opening a folder. There is no index, so what one of you writes the other
 sees immediately. See [`spec.md`](./spec.md) and
 [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
 
@@ -42,8 +41,9 @@ coffer resource delete knowledge:shopee
 
 ## Through an MCP client (the primary surface)
 
-Five built-in tools. No scope argument, no mode, no `top_k`: a call spans every
-collection the agent is authorized for.
+Six built-in tools. No scope argument, no mode, no `top_k`: a call spans every
+collection the agent is authorized for. Upload is deliberately not one of them —
+a document enters through a human surface.
 
 - `coffer__list(path?)` — the catalogue, **one level at a time**. With no
   argument it names every collection you may read, each with its description
@@ -67,13 +67,17 @@ The motion is catalogue-then-grep — descend to choose *which file*, grep to fi
 *which line*:
 
 ```text
-coffer__list()                              # → shopee (48 files), coffer (4 files)
+coffer__list()                              # → every collection, with its
+                                            #   description and file count
 coffer__list(path="shopee")                 # → account/, gateway-routing.md, …
 coffer__list(path="shopee/account")         # → titles + descriptions
 coffer__read(path="shopee/account/session-ownership.md")
 
 coffer__grep(pattern="account.session")     # when you know the literal string
 coffer__grep(pattern="部署流程", collection="shopee")
+
+coffer__search(query="account.session")     # skip the descent: which FILES
+                                            #   contain it, with their titles
 
 coffer__write(title="Release process",
               description="How this repo cuts a release, and what not to do.",
@@ -87,7 +91,7 @@ written into an agent's own memory files.
 
 ## CLI
 
-Eight commands, all thin HTTP shells over the daemon. Paths are relative to the
+Ten commands, all thin HTTP shells over the daemon. Paths are relative to the
 knowledge root.
 
 ```bash
@@ -98,9 +102,12 @@ coffer knowledge ls shopee/account --json
 coffer knowledge read shopee/account/session-ownership.md
 
 # Search the files themselves. There is no index; this is the search.
+# `grep` reports a line at a time, `search` a file at a time.
 coffer knowledge grep "account.session"
 coffer knowledge grep "部署流程" --in shopee        # great for CJK — no tokenizer
 coffer knowledge grep "make release" --json
+coffer knowledge search "account.session"          # the files, with their
+                                                   #   title and description
 
 # Write. Exactly one of --in (create here) or --path (replace this).
 coffer knowledge write -t "Release process" \
@@ -111,13 +118,19 @@ coffer knowledge write -t "Release process" -d "…" -b "…" --path coffer/rele
 
 # Delete one file.
 coffer knowledge delete coffer/release-process.md
+
+# Upload a document; it lands as Markdown with its original kept aside.
+coffer knowledge upload ./q3-review.pdf --collection shopee
+
+# Tidy one collection (see below).
+coffer knowledge organize shopee
 ```
 
-`--json` works on `collections`, `ls`, `read` and `grep`.
+`--json` works on `collections`, `ls`, `read`, `grep` and `search`.
 
 ## Curate in your own tools
 
-The filesystem is the ingestion surface. Drop a Markdown file into a collection
+The filesystem is always an entrance. Drop a Markdown file into a collection
 from Finder, fix a wrong line in your editor, delete one that went stale —
 every change is live for the next call with no import, no reindex and nothing
 to reconcile, because the file **is** the knowledge.
@@ -137,8 +150,35 @@ updated_at: '2026-09-12T04:18:33Z'
 Login state is owned by `account.session`.
 ```
 
-There is no upload endpoint and no format conversion. A PDF is not knowledge
-until someone turns it into Markdown.
+## Get a document in from wherever you are
+
+The filesystem is only an entrance while you are sitting at the machine, so
+there is a second one for everything else. Upload a document and Coffer converts
+it to Markdown, names the file from its title, fills in a description, and keeps
+the bytes you sent under the collection's hidden `.raw/` in case the conversion
+needs redoing:
+
+```bash
+coffer knowledge upload ./q3-review.pdf --collection shopee
+coffer knowledge upload ./notes.docx --collection shopee --directory account
+```
+
+`POST /api/v1/knowledge/upload` is the same path (multipart: the file, plus
+`collection` and an optional `directory`), and so is the **Upload** button on a
+collection's page.
+
+From your phone: forward the document to your Coffer channel and say which
+collection it belongs in. The bot confirms the collection before it stores
+anything, and stores nothing from anyone but the paired owner.
+
+Supported inputs are whatever `markitdown` handles — PDF, .docx, .pptx, .xlsx,
+HTML, EPUB — plus plain text, Markdown and CSV. Legacy `.doc`/`.ppt`, `.rtf` and
+`.odt` are deliberately not among them: save as `.docx`/`.pptx` first. Anything
+else is refused with its type named, and nothing half-converted is left behind:
+one file per call, a size ceiling, and a refusal that says what the limit is.
+
+Afterwards it is an ordinary file in a collection, indistinguishable from one you
+wrote by hand.
 
 ## Tidy
 
@@ -153,9 +193,20 @@ coffer knowledge organize shopee
 
 The web-UI equivalent is the **Tidy** button. A background worker can also run
 the pass on an interval, but it is **off by default** and installation-wide —
-turn it on deliberately in Settings → Engine, because it rewrites files you and
+turn it on deliberately in Settings, because it rewrites files you and
 your agents manage together with no diff to approve. Each pass is recorded in
 Coffer's audit log.
+
+Once your vault converges with a sync remote, that switch also names a machine,
+and the timer runs on **that one only**. Two machines tidying one corpus is the
+failure this prevents: each merges the same pair of notes into a topic document,
+but into a *different* one, git merges both cleanly, and you end up holding the
+same knowledge twice with nothing reported as a conflict. With no owner chosen
+the switch means "here", which is the right answer for a single machine. Passes
+also stand aside for sync: one never overlaps a converge round, and never starts
+while a conflict or a pending confirmation is outstanding. Only one pass per
+collection runs at a time — click **Tidy** during one and it is refused rather
+than queued.
 
 ## Web UI
 
@@ -167,6 +218,13 @@ Coffer's audit log.
    which editor opens is the global preferred-editor preference, spec
    ui-shell). Your edit takes effect immediately — there is nothing to
    reconcile.
+3. **Upload** files a document into the collection in view, through the same
+   conversion path the CLI and the channel use.
+
+The page carries no search box of its own. The one input beside the tree narrows
+the names already on screen, client-side; reading the files themselves is what
+`search` and `grep` are for, and their callers are the agents' tools and the
+CLI.
 
 ## Where files live
 
@@ -179,14 +237,17 @@ Coffer's audit log.
     │   ├── account/
     │   │   └── session-ownership.md
     │   ├── gateway-routing.md
-    │   └── .history/               # revisions the tidy pass replaced (hidden)
+    │   ├── .history/               # revisions the tidy pass replaced (hidden)
+    │   └── .raw/                   # originals of uploaded documents (hidden)
     └── coffer/
         ├── README.md
         └── release-process.md
 ```
 
-`.history/` is dot-prefixed on purpose: ripgrep skips hidden entries, so an
-archived revision never comes back beside the live file.
+Both hidden directories are dot-prefixed on purpose: the catalogue, `grep` and
+`search` all skip hidden entries, so an archived revision never comes back
+beside the live file and a PDF never comes back beside the Markdown made from
+it.
 
 ## Limits
 
@@ -195,3 +256,5 @@ archived revision never comes back beside the live file.
   collision appends `-2`, `-3`, ….
 - Catalogue size: no hard limit, but the design assumes a catalogue that fits
   in an agent's context — comfortable into the hundreds of files.
+- Upload: one file per call, with a size ceiling; a refusal names the limit, and
+  a failed conversion leaves neither a Markdown file nor a `.raw/` original.

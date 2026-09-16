@@ -7,9 +7,7 @@ the layered-architecture contract holds (CODE-005).
 
 The infrastructure layer registers concrete tables at composition root by
 constructing :class:`PrunableTable` instances and calling
-:meth:`PrunableRegistry.register`. The infrastructure module
-``coffer.infrastructure.persistence.retention`` re-exports these names for
-backward compatibility with existing call sites.
+:meth:`PrunableRegistry.register`.
 """
 
 from __future__ import annotations

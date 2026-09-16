@@ -1,642 +1,293 @@
 # Feature Specification: Provider Switching
 
-> 中文版: [spec.zh.md](./spec.zh.md)
-
-**Feature Branch**: `feature/G9-provider-switching`
-**Created**: 2026-06-21
 **Status**: Draft
 
 ## One-line
 
-A unified **LLM connection** lets users configure a key once (name, wire format,
-base URL, encrypted credential, model) and use it BOTH ways: project it into the
-matching agent's native config file AND let Coffer's own internal LLM engine run
-on it. One connection retires the separate `ModelConfig`/`chat_models` registry,
-folding internal-engine model selection into the same record. Coffer's
-differentiator over `claude switch` or equivalent per-tool scripting: a unified
-registry with governance — Fernet-encrypted credentials, full audit trail, and
-an inspectable export/import bundle — not per-tool silos.
+An **LLM connection** is a credentialed endpoint — a name, a base URL, a
+detected protocol, an encrypted credential and a curated set of the models it
+offers. One connection is used both ways: projected into the native config file
+of each agent it reaches, and available as the endpoint Coffer's own internal
+engine runs on. Coffer's differentiator over per-tool switching scripts is
+governance: Fernet-encrypted credentials, a full audit trail, and one registry
+that converges across the user's machines.
 
 ## Why
 
-Claude Code and Codex each require their own native config files
-(`~/.claude/settings.json`, `~/.codex/config.toml`) with provider-specific keys
-and base URLs, and Coffer's internal engine used to keep a SECOND, parallel
-model registry (`chat_models`). Switching providers today means editing multiple
-files by hand, storing keys in plaintext, and losing the audit trail — and a key
-configured for an agent could not be reused by the internal engine. Coffer
-centralises connections: configure once, project it to the matching agent
-(switch), mark one as the internal engine's default, audit everything.
+Claude Code and Codex each read provider settings from their own native config
+file (`~/.claude/settings.json`, `~/.codex/config.toml`) with their own keys and
+base URLs. Switching providers by hand means editing several files, storing keys
+in plaintext, and losing any record of what changed — and a key configured for
+an agent could not be reused by Coffer's own engine. Coffer centralises the
+connection: configure once, route it at the agents you mean, mark one as the
+internal engine's default, audit everything.
 
-## Confirmed Decisions
+A connection is an **optional override** (D1). An agent with nothing projected
+runs on its own built-in login, and no surface may block on "no connection" —
+the chat surface offers the agent's own models and runs.
 
-Three decisions were locked before spec was written; do not relitigate them.
+## Decisions
 
-### Decision A — single-wire connection, per-agent activation, one internal default
+### The connection is a credentialed endpoint
 
-One connection holds `{name, wire_format, base_url, credential_ref, model,
-fast_model, wire_api, is_active, internal_default}`. A connection projects ONLY
-into agents whose native protocol matches its `wire_format`:
-
-- `anthropic` → Claude Code (`~/.claude/settings.json`)
-- `openai` → Codex (`~/.codex/config.toml`)
-- `ollama` → internal-only; never projected to any agent
-
-At most one active connection per wire format exists at any time (per-wire
-single-active invariant, analogous to the `ModelConfig.is_default` pattern in
-the retired chat-model registry). Claude Code and Codex "share" the registry — a
-credential ref may be reused across connections — but NOT via one record driving
-both agents.
-
-In addition to per-agent activation, a connection MAY carry a single GLOBAL
-`internal_default` flag (≤1 across all connections) marking the connection
-Coffer's own internal LLM engine uses (memory organizer, reorg, distill).
-The third wire `ollama` is internal-only: it never projects to
-any agent, and because it has no API key its `credential_ref` is absent — it
-needs only a `base_url`. `credential_ref` is therefore OPTIONAL: required for
-anthropic/openai, absent for ollama. One connection may be BOTH active (projected
-to its wire's agent) AND `internal_default` (used internally) — one key, two
-uses.
-
-### Decision B — credential isolation; key never plaintext in native config
-
-Consistent with the existing MCP `credential_refs` pattern and the project's
-"credential isolation" principle. The raw key stays in the Fernet vault and is
-materialised on demand:
-
-- **Claude Code**: `apiKeyHelper = "coffer provider key --wire anthropic"` in
-  `settings.json`. Claude invokes this command to fetch the key. Because Claude
-  Code re-invokes `apiKeyHelper` periodically, this design makes a future
-  hot-switch nearly free — forward-looking only.
-- **Codex**: `env_key = "COFFER_PROVIDER_KEY"` in the `[model_providers.coffer]`
-  TOML table. Codex reads the key from that env var at runtime. This PR does NOT
-  modify Codex spawning; the user must export the key manually (see Quickstart).
-  State plainly: **Codex standalone requires `COFFER_PROVIDER_KEY` to be set in
-  the shell; auto env-injection into Coffer-spawned Codex is deferred with
-  hot-switch.** This is the accepted cost of Decision B.
-
-The raw key is NEVER written to `settings.json`, `config.toml`, or any other
-native config file.
-
-### Decision C — phased; hot-switch is OUT OF SCOPE for this PR
-
-This PR ships: registry + projection + switch op + audit + export/import
-wiring.
-
-Hot-switch (mid-session reload of a running Claude Code or Codex process) is a
-**separate, later PR** and is explicitly **out of scope here**.
-
-## Amendment 2026-06-22 — Connections are optional overrides; multi-protocol; chat built-in fallback
-
-> Status: Draft. Supersedes the gating in Decision A and the two non-goals noted
-> below; recorded after reviewing the shipped UI (PR #187). Cross-ref
-> [Provider Switching](../../docs/decisions/provider-switching.md) Amendment.
-
-**Why.** Chat shells out to each agent's OWN runtime — Claude Code via the Claude
-Agent SDK, Codex via a `codex app-server` subprocess — and the backend never
-requires a Coffer connection (`turn_orchestrator` resolves no credential; the
-"no connection" block is a frontend-only guard in `DraftThread.tsx`). A
-connection is therefore an OPTIONAL OVERRIDE projected into the agent's native
-config, not a prerequisite. The shipped UI wrongly treated it as required
-(claude_code showed "还没有连接"; chat blocked with "尚未配置连接"), and codex
-chat broke because projection writes `wire_api = "chat"`, which `codex-cli`
-0.130 rejects (config fails to load → every turn errors).
-
-- **D1 — Connection is an optional override; built-in is the default.** With no
-  connection projected for an agent, it runs on its own built-in model/login.
-  The chat surface MUST NOT block on "no connection"; it runs on the built-in
-  model. (Removes the `DraftThread` hard guard.)
-- **D2 — A connection declares the protocols it supports (multi-select).**
-  Replaces single-`wire_format` gating: `protocols ⊆ {anthropic, openai}`. A
-  connection is offered to EVERY agent whose native protocol it declares
-  (anthropic → Claude Code, openai → Codex), so one key can serve both. `ollama`
-  / internal-only remains a separate concern for the internal engine. The
-  per-wire single-active invariant becomes **per-protocol single-active**: at
-  most one connection is the active override per protocol. Coffer still does NOT
-  translate protocols — a connection reaches an agent only if it declares that
-  agent's protocol (the endpoint must actually speak it).
-- **D3 — Per-agent override selection is the source of truth (Agent page).**
-  Each agent picks, on its detail page, which connection (among those declaring
-  its protocol) overrides it — or "built-in". This REPLACES the former non-goal
-  "no manual per-agent binding". Selecting projects it; "built-in" clears
-  Coffer's projection so the agent's own auth/model returns.
-- **D4 — Chat model selection is a FIXED choice, not free-form.** The chat
-  surface offers a fixed dropdown, never a free-text id. Its options are
-  state-dependent: when a connection overrides the agent, the connection's
-  introspected models (`POST /models/list-models`); otherwise the agent's
-  curated BUILT-IN list (Claude Code: opus / sonnet / haiku; Codex: gpt-5 /
-  o-series). The picker MUST NOT read the connection's stored `model` /
-  `fast_model` fields (they leave the connection in the E1 amendment); the
-  current per-conversation value is always shown so it stays selectable. No
-  free-form per-conversation model id (`Conversation.model_id` stays vestigial);
-  non-chat models (image / video) are never offered. Changing the
-  model/connection happens on the Agent page, not per conversation.
-- **D5 — Internal-engine selection is a separate control.** "Which connection
-  Coffer's internal engine uses" (`internal_default`) moves OUT of the
-  connection card into its own dropdown selector on the Model providers page.
-  Connection cards drop the internal-engine badge/star and gain an **edit**
-  action (add / edit / delete via one dialog).
-- **D6 — Connection dialog gains «测试连接» + «拉取模型».** The add/edit dialog
-  surfaces test-connection (`POST /models/test-connection`) and list-models
-  (`POST /models/list-models`), reusing the existing introspection service.
-  Both MUST accept an inline (not-yet-saved) secret so the user can test/fetch
-  before saving; fetched models populate a selectable dropdown.
-- **D7 — Codex `wire_api` is selectable; default `responses`.** The connection
-  exposes `wire_api ∈ {chat, responses}` in the dialog, defaulting to
-  `responses` (codex-cli 0.130 dropped `chat`). Fixes the broken-codex-chat bug.
-
-**Now in scope (were non-goals):** per-agent override selection (D3); chat
-built-in fallback (D1); one connection serving multiple agents via declared
-protocols (D2).
-
-**Still out of scope:** hot-switch; proxy / failover / format conversion;
-anthropic↔openai protocol translation.
-
-## Amendment 2026-06-22b — A connection is a credentialed endpoint; model & protocol leave the connection
-
-> Status: Draft. **Supersedes Decision A's "model on the connection" and the
-> earlier amendment's D2 (multi-protocol set).** Recorded after researching
-> cc-switch and a design pass with the user. Cross-ref
-> [Provider Switching](../../docs/decisions/provider-switching.md) amendment D8/D9.
-
-**Why.** A connection answers "which gateway account" — an endpoint + a key.
-*Which model* and *which protocol an agent speaks* are properties of the USE,
-not of the account: Claude Code always speaks the Anthropic Messages wire and
-Codex always speaks OpenAI, so the agent determines the protocol at projection
-time; and the model is picked per agent slot / internal-engine / chat turn.
-Carrying `model` and a manually-chosen `wire_format` on the connection forced the
-user to answer those questions too early and conflated the account with its uses.
-
-- **E1 — Connection entity slims to `{name, base_url, credential_ref,
-  protocol}`.** `model`, `fast_model`, and the manual `wire_format` selector are
-  REMOVED from the connection. `wire_api` (Codex chat/responses) likewise moves
-  to the Codex binding, not the connection.
-- **E2 — `protocol` is DETECTED, not user-entered.** On create/edit Coffer
-  probes the endpoint (reusing the introspection path) to classify it as
-  `anthropic`-wire, `openai`-wire, or `unknown`. The add dialog therefore shows
-  only **name + base_url + key + «测试连接»** — no type selector, no model field.
-- **E3 — Model is chosen at the point of use.** Per-agent binding (Agent page
-  dual slots → `ANTHROPIC_MODEL` + `ANTHROPIC_SMALL_FAST_MODEL`), the
-  internal-engine default selector, and the chat surface each pick a model from
-  the chosen connection's fetched models. No model lives on the connection. The
-  **internal-engine model** is its own global singleton (one row), read/written
-  via `GET`/`PUT /api/v1/internal-engine-config` and audited as
-  `internal_engine_model_set`. `resolve_internal_connection()` overlays that
-  model onto the resolved `internal_default` connection before the engine builds
-  its chat model; while the connection still carries a `model` (until E1 lands),
-  an empty internal-engine model falls back to the connection's model.
+- **E1 — The connection holds `{name, protocol, base_url, credential_ref,
+  models}`.** No model it runs, no `fast_model`, no manually-chosen wire format,
+  and no `wire_api`: the Codex chat/responses choice belongs to the Codex
+  binding. A connection answers "which gateway account", and which model an
+  agent runs is a property of the USE, not of the account.
+- **E2 — `protocol` says what the endpoint speaks, and nothing keys off it for
+  projection.** It drives model introspection and whether a key is required.
+  `anthropic`, `openai`, `ollama` and `unknown` are the values; `unknown` means
+  a probe was inconclusive. Coffer can detect it
+  (`POST /api/v1/models/detect-protocol`), but the create surface asks for it
+  instead: the web dialog offers a **provider preset** (OpenAI / Anthropic /
+  Google Gemini / DeepSeek / OpenRouter / Ollama) that fills in the endpoint and
+  the protocol, plus a **Custom** option that reveals a manual protocol
+  selector, and the CLI takes `--protocol`. The detect route stays for other
+  callers.
+- **E3 — The model is chosen at the point of use.** The per-agent binding
+  (`AgentConfig.model` / `fast_model`), the internal-engine selector and the
+  conversation each pick a model from what the chosen connection offers. The
+  **internal-engine model** is its own global singleton, read and written via
+  `GET` / `PUT /api/v1/internal-engine-config` and audited as
+  `internal_engine_model_set`; `resolve_internal_connection()` pairs it with the
+  resolved internal-default connection.
 - **E3a — The same singleton carries what Coffer does unattended.** Coffer runs
   three passes on its own behalf: aggregation reads the agents' own memory into
   the derived tree (spec [memory](../memory/spec.md) FR-007), organise lets the
   model rewrite that derived digest (FR-030), and tidy lets it rewrite the
   user's own knowledge files (spec [knowledge](../knowledge/spec.md) FR-051).
-  Each MUST carry a **switch and an interval** the operator can see and change,
-  read/written through `PUT /api/v1/internal-engine-config/upkeep` — one pass
-  per request, each half untouched when it is not sent, so a settings surface
+  Each carries a **switch and an interval** the operator can see and change,
+  written through `PUT /api/v1/internal-engine-config/upkeep` — one pass per
+  request, each other pass untouched when it is not sent, so a settings surface
   toggling one row cannot write back a stale copy of the other two. An interval
-  the operator has not chosen MUST be reported as unchosen ALONGSIDE the
-  default that then runs, so the default lives in one place — the worker that
-  owns the pass — and raising it later reaches every vault that never chose.
-  A worker MUST pick a change up without a restart; a pass MUST NOT be
-  schedulable below a floor that would busy-loop a model over the user's files.
-  The two passes that write only derived files ship ON; tidy, which rewrites
-  the only copy of the user's own writing, ships OFF. These settings travel
-  with the model choice (spec [vault-sync](../vault-sync/spec.md) slice 7):
-  switching a rewriter off is exactly the decision a second machine must not be
-  left out of.
-- **E4 — Projection input = connection (endpoint + key + protocol) + the
-  binding (model).** Activating/projecting a connection for an agent reads the
-  endpoint/key/protocol from the connection and the model(s) from that agent's
-  binding. A connection with no binding for an agent projects nothing.
-- **E5 — Compatibility filter, with an honest fallback.** The Agent page offers
-  only connections whose detected `protocol` matches the agent's wire. When a
-  connection's protocol is `unknown` (probe inconclusive), it is shown to ALL
-  agents and the user decides — Coffer does not silently hide a possibly-valid
-  connection.
-- **Migration (option A — discard):** existing connections drop `model` /
-  `fast_model`; their `wire_format` is re-derived as a detected `protocol` (or
-  `unknown` pending the next probe). Any model a user had configured is NOT
-  carried into a binding — after upgrade the user re-selects models on the Agent
-  page. This is the clean break the user chose over a best-effort carry-over.
+  the operator has not chosen is reported as unchosen ALONGSIDE the default that
+  then runs, so the default lives in one place — the worker that owns the pass —
+  and raising it later reaches every vault that never chose. A worker picks a
+  change up without a restart, and no pass may be scheduled below a floor that
+  would busy-loop a model over the user's files. The two passes that write only
+  derived files ship ON; tidy, which rewrites the only copy of the user's own
+  writing, ships OFF. These settings travel with the model choice (spec
+  [vault-sync](../vault-sync/spec.md)): switching a rewriter off is exactly the
+  decision a second machine must not be left out of.
+- **E4 — Projection input = the connection (endpoint + key + protocol) + the
+  agent's binding (model).** A connection with no binding on an agent projects
+  no model key at all, so that agent runs on its own default model.
 
-**Supersedes:** Decision A ("one connection holds … model, fast_model … " and
-"a connection projects ONLY into agents whose native protocol matches its
-`wire_format`" — now the agent's wire drives projection, and the connection's
-protocol is a detected compatibility hint); amendment D2 (multi-protocol set —
-already dropped, see [Provider Switching](../../docs/decisions/provider-switching.md)
-D8: one gateway for two agents = two connections).
+### Which agents a connection reaches
 
-**Still NOT in scope (unchanged):** proxy / hot-switch / protocol conversion.
-
-## Amendment 2026-06-23 — Per-connection compatible agents; per-connection key resolution; agent-keyed activation
-
-> Status: Draft. **Supersedes E5's protocol-based compatibility filter and the
-> per-protocol single-active invariant.** Recorded after a design pass with the
-> user. Cross-ref [Provider Switching](../../docs/decisions/provider-switching.md).
-
-**Why.** Tying projection to the connection's detected `protocol` cannot express
-"this openai-compatible gateway (e.g. agnes) should drive Claude Code." Worse, key
-resolution was keyed by `wire + is_active` (`apiKeyHelper = coffer provider key
---wire anthropic`, Codex injected `resolve_active_key(OPENAI)`), so routing such a
-connection to the "wrong" wire's agent would silently resolve a DIFFERENT
-connection's key — a credential mismatch. The fix decouples *which agents a
-connection projects into* from *the wire its endpoint speaks*, and resolves keys
-per CONNECTION.
-
-- **F1 — Which agents a connection projects into — revised 2026-09-13.** The
-  connection carries a "which agents" set: `⊆ {claude_code, codex}`, pre-filled
-  from the wire (both agents for every credentialed wire, `[]` for ollama, which
-  is internal-only) and narrowed by the user — that is how an openai gateway is
-  routed to Claude Code.
-
-  It was FIRST built as `compatible_agents`, a field inside the connection's own
-  config. It is now the **framework's per-agent `scope`** on the resource row
-  ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)):
-  the `provider` kind declares `supports_scope`, and `compatible_agents` is gone
-  from the config, from `ProviderCreate` and from `ProviderPatch`. Two kinds
-  answering one question two ways is what the framework field exists to end, and
-  `provider` was the last kind still answering it its own way.
-
-  The two axes disagree on what UNSET means, and that is the whole risk of the
-  move: `compatible_agents = null` meant *the wire's default* (nothing at all for
-  ollama), while framework `scope = null` means *every agent*. So:
-
-  - **Migration 0071 materialises every existing row** — it computes the
-    effective set the old field resolved to and writes it out concretely into
-    `scope`, then strips the dead key from the config. Reach is bit-for-bit
-    unchanged; the downgrade puts the value back.
-  - **A newly created connection is pre-filled from the wire**, through the
-    framework's `Kind.default_scope` hook, so it behaves exactly as it did
-    before rather than starting out reaching every agent.
-  - **`enabled` is honoured at the projection seam, and only there.** A
-    disabled connection projects into nothing and resolves no key. But the
-    *configured* reach — which agents the connection is set up to cover — is
-    reported without that narrowing, because the two answer different questions
-    and one field cannot carry both: folding `enabled` in made a disabled
-    connection's reported agent list empty, so switching a connection off looked
-    like it had erased the list and switching it back on looked like restoring
-    data that was never lost. `enabled` travels on the same payload, so a client
-    that wants the intersection takes it — and the two clients that offer a
-    connection to act on *now* (the agent's connection picker and the chat model
-    picker) MUST. `is_active` is NOT redundant with `enabled` and both are kept:
-    `enabled` is the user's switch on the resource, while
-    `is_active` records that this is the connection currently *written into* the
-    agents it reaches (at most one per agent type) — a claim about a file on
-    disk, which is why the boot self-check exists to catch it disagreeing.
-  - **`scope = []` is dormant**, the same meaning every other scoped kind gives
-    it: the connection reaches no agent, so no agent resolves its key.
-
-  Re-targeting is a scope edit (`PUT /api/v1/resources/provider/{name}/scope`,
+- **F1 — Reach is the resource's framework per-agent `scope`.** The `provider`
+  kind declares `supports_scope`
+  ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md));
+  there is no `compatible_agents` field in the config, in `ProviderCreate` or in
+  `ProviderPatch`. A new connection is pre-filled from its wire through the
+  kind's `default_scope` hook — both coding agents for a credentialed wire,
+  nothing for `ollama` — rather than starting out reaching every agent, which is
+  what the framework's unscoped default would have meant. Re-targeting is a
+  scope edit (`PUT /api/v1/resources/provider/{name}/scope`,
   `coffer scope set provider:<name> --agents …`), on the surface every scoped
-  kind shares, rather than a field only this kind had.
-- **F2 — Projection writer chosen by AGENT type, not protocol.** A connection
-  compatible with `claude_code` writes Claude's `settings.json` (anthropic shape);
-  with `codex`, Codex's `config.toml`. `protocol` now drives only model
-  introspection and whether a key is required.
-- **F3 — Per-connection key resolution.** Claude Code's projected `apiKeyHelper` is
-  `coffer provider key --connection <name>` → `GET /providers/{name}/key`, so the
-  agent always reads exactly the activated connection's key. Codex's
-  `COFFER_PROVIDER_KEY` is the key of the connection active for Codex
-  (`resolve_active_key_for_agent(codex)`). The legacy `--wire` helper /
-  `/active-key/{wire}` stay for back-compat, resolving by the wire's agent.
-- **F4 — Activation is per AGENT TYPE.** Invariant: at most one active connection
-  per agent type. Activating a connection projects it into all its compatible
-  agents and takes those agents over from any previously-active connection
-  (de-projecting it from agents the new one does not cover). `use-builtin/{wire}`
-  reverts the agent behind that wire; a connection compatible with multiple agents
-  is reverted as a unit (the single `is_active` flag is all-or-nothing).
-- **F5 — The connections page drops the per-row "switch."** Activation is
-  per-agent and lives on the Agent detail → Overview tab (which filters
-  connections by the agents they reach). The connections page is the library:
-  add / edit / delete + show each connection's reach.
+  kind shares. `scope = []` is dormant: the connection reaches no agent, so no
+  agent resolves its key.
+- **F1a — `enabled` narrows the projection and only the projection.** A disabled
+  connection projects into nothing and resolves no key. The CONFIGURED reach is
+  still reported without that narrowing, because the two answer different
+  questions and one field cannot carry both: folding `enabled` in made a
+  disabled connection's reported agent list empty, so switching a connection off
+  looked like it had erased the list and switching it back on looked like
+  restoring data that was never lost. `enabled` travels on the same payload, so
+  a client that wants the intersection takes it — and the two clients that offer
+  a connection to act on *now* (the agent's connection picker and the chat model
+  picker) MUST.
+- **F1b — `is_active` is not redundant with `enabled`.** `enabled` is the user's
+  switch on the resource; `is_active` records that this is the connection
+  currently *written into* the agents it reaches — a claim about a file on disk,
+  which is why the boot self-check (H6) exists to catch it disagreeing.
+- **F2 — The projection writer is chosen by AGENT type, not by protocol.** A
+  connection reaching `claude_code` writes Claude's `settings.json` (the
+  anthropic shape); one reaching `codex` writes Codex's `config.toml`. This is
+  how an OpenAI-compatible gateway is routed to Claude Code.
+- **E5 — An inconclusive probe hides nothing.** A connection whose protocol is
+  `unknown` starts reaching every agent and the user decides; Coffer does not
+  silently hide a possibly-valid connection. Coffer still translates nothing
+  between protocols — the endpoint must really speak what the agent sends.
+- **F5 — The connections page is the library.** It adds, deletes and shows each
+  connection's reach; it has no per-row switch, because activation is per agent
+  and lives on the Agent detail page's Overview tab.
 
-**Supersedes:** E5 (protocol-match compatibility filter — now the explicit
-explicit set, which since 2026-09-13 is the resource's framework scope);
-Decision A / FR-011's per-protocol single-active (now per-agent-type). **Still NOT in scope:** proxy / hot-switch / protocol conversion.
+### Switching an agent onto a connection
 
-## Amendment 2026-06-23c — Picking a connection is a draft; test then confirm to switch
+- **F4 — Activation is per AGENT TYPE.** At most one active connection per agent
+  type. Activating a connection projects it into every agent its scope reaches
+  and takes those agents over from any previously-active connection,
+  de-projecting that one from agents the new one does not cover.
+  `POST /api/v1/providers/use-builtin/{wire}` reverts the agent behind that
+  wire; a connection reaching several agents reverts as a unit, because the
+  single `is_active` flag is all-or-nothing.
+- **G1 — Picking a connection or a model on the Agent page is a DRAFT.** It
+  activates nothing and PATCHes nothing; it stages a choice. Picking a
+  non-built-in connection introspects its endpoint and stages a default model —
+  Claude Code's primary and fast slots and Codex's single slot all default to
+  the first model returned — so there is something to test. Without this, a
+  connection went live the instant it was picked, with no model bound: Claude
+  Code kept sending its own `claude-*` ids to an endpoint that does not serve
+  them and every model failed with "model may not exist or you may not have
+  access", with nothing saying the switch rather than the account was the
+  problem.
+- **G2 — Test, then confirm.** A custom connection must pass
+  `POST /api/v1/models/test-connection` with the staged model before it can be
+  confirmed; confirm stays disabled until the test for the CURRENT draft passes,
+  and changing the connection or the model resets the result. Confirming PATCHes
+  the per-agent binding and then activates the connection — the only step that
+  writes native config. Switching back to the built-in login needs no test.
+- **The activate operation.** `POST /api/v1/providers/{name}/activate` /
+  `coffer provider switch <name>`:
+  1. the connection must exist, else 404;
+  2. project into each agent its scope reaches, and de-project the agents the
+     previous connection held and this one does not;
+  3. clear `is_active` on the connections that held those agents, then set it on
+     the target (the single-process daemon serialises requests, so switches
+     never interleave);
+  4. emit `provider_switched` with `{from, to, protocol, agents}`;
+  5. return `{activated, protocol, projected, skipped}`. A connection that
+     reaches an agent type no registered agent has is recorded active and
+     projects nothing — reported as skipped, not an error.
 
-> Status: Draft. Recorded after the agnes connection was activated for Claude
-> Code with no model bound. Cross-ref
-> [Provider Switching](../../docs/decisions/provider-switching.md).
+  Projection runs BEFORE the activation flip, so a failed native-config write
+  aborts the switch with the registry unchanged.
+- **H6 — A connection is only active if the agent's config says so.**
+  `is_active` is a row in Coffer's database; what it MEANS is a few keys in a
+  file Coffer does not own, which the agent's own CLI, other tooling, the user
+  and a restore from backup all rewrite. At boot Coffer checks, for each agent
+  type with an active connection reaching it, whether that agent's native config
+  actually carries the projection; when it does not, the flag is CLEARED and
+  every surface then says the agent is on its built-in login. It heals in one
+  direction only: it never writes the projection back, because a flag left from
+  an earlier session is no warrant to re-route a user's agent through a gateway
+  they are not currently using. The reverse drift — Coffer's keys present while
+  the registry says inactive — is reported, not silently removed.
 
-**Why.** Under E3/E4 the model lives on the per-agent binding and activation only
-projects the endpoint + key. The Agent page activated a connection the instant it
-was picked, with no model bound — so a connection whose endpoint serves its own
-model ids (the agnes case: an openai gateway routed to Claude Code) left
-`ANTHROPIC_MODEL` unset, Claude Code kept sending its built-in `claude-*` ids to
-that endpoint, and every model — in both Coffer's slots and Claude Code's own
-`/model` picker — failed with "model may not exist or you may not have access."
-The user had no chance to choose a model the endpoint serves, and no signal that
-the switch (not their account) was the problem. Activating on a mere dropdown
-change also made an unverified endpoint the live config with one click.
+### Credential isolation
 
-- **G1 — Picking a connection / model on the Agent page is a DRAFT.** Selecting a
-  connection or a model no longer activates or PATCHes anything; it stages a
-  choice. Picking a non-built-in connection introspects its endpoint and stages a
-  default model — Claude Code's primary + fast and Codex's single slot all default
-  to the endpoint's FIRST returned model — so the user has something to test.
-- **G2 — «测试连接» before «确认切换».** A custom connection must pass a
-  test-connection probe (`POST /models/test-connection` with the staged model)
-  before it can be confirmed. Confirm is disabled until the test for the CURRENT
-  draft passes; changing the connection or model resets the test result. «确认切换»
-  PATCHes the per-agent binding (model + fast_model) then activates the connection
-  — the only step that writes native config. Switching to the built-in login needs
-  no test (no endpoint to reach) and confirms straight away.
+The raw key stays in the Fernet vault and is materialised on demand. It is NEVER
+written to `settings.json`, `config.toml`, or any other native config file.
 
-**Supersedes:** E4's implicit "picking activates immediately" — activation is now
-gated behind an explicit test + confirm, and the binding is never left empty.
-**Still NOT in scope:** proxy / hot-switch / protocol conversion.
+- **Claude Code**: `apiKeyHelper = "coffer provider key --connection <name>"`.
+  Claude Code invokes that command to fetch the key, and because it re-invokes
+  the helper periodically a future hot-switch is nearly free.
+- **Codex**: `env_key = "COFFER_PROVIDER_KEY"` in the `[model_providers.coffer]`
+  table. Codex reads the key from that variable, and Coffer materialises it into
+  the environment of any Codex process it spawns itself. A Codex the user starts
+  in their own shell needs the variable exported there — the accepted cost of
+  credential isolation, since Codex offers no helper-command seam.
+- **F3 — Keys resolve per CONNECTION.** `GET /api/v1/providers/{name}/key`
+  answers for exactly the connection the projected helper names, so routing a
+  connection to the "other" wire's agent can never resolve a different
+  connection's key. Codex's variable is filled from the connection active for
+  Codex. The legacy wire-keyed forms (`coffer provider key --wire <wire>`,
+  `GET /api/v1/providers/active-key/{wire}`) remain for `settings.json` files
+  written before, and resolve through the wire's agent.
 
-## Amendment 2026-09-09 — The agent's model catalogue comes from the backend
+### What a connection offers, and what a picker shows
 
-> Status: Draft. **Supersedes D4's "curated BUILT-IN list" and its either/or
-> option rule.** Recorded after a live session offered a Claude Code
-> conversation only `agnes-*` model ids. Cross-ref
-> [Provider Switching](../../docs/decisions/provider-switching.md).
+- **J1 — `models` is the OFFERED set, not a chosen model.** A gateway account
+  frequently serves dozens of models of which its owner uses two or three;
+  `models` records which. EMPTY means no restriction — the endpoint's whole
+  catalogue — and is the default.
+- **J2 — Curated on the connection, applied by every picker downstream.** The
+  user picks from live introspection (`POST /api/v1/models/list-models`) on the
+  connection's own detail page. A picker offering this connection's models then
+  offers exactly the curated set when it is non-empty, and everything the
+  endpoint serves when it is empty.
+- **J3 — Ids stay opaque.** The curated set is validated for SHAPE only
+  (non-blank ids, deduplicated preserving order, a sane cap) and passed verbatim
+  to the vendor. Coffer never checks an id against a list of its own, so an id
+  the endpoint stops serving is a stale menu entry, not a config error.
+- **L1 — A curated entry says WHICH KIND of model it is.** `models` is a list of
+  `{id, modality}`, where `Modality` is `text` (the default), `embedding`,
+  `image`, `video` or `audio`. One endpoint answers for more than chat, and
+  without the kind an embedding model could be picked as an agent's chat model.
+- **L2 — The STORED modality is the truth.** Coffer infers one in exactly two
+  places, both a convenience the user can correct from the connection editor: the
+  one-shot migration that converted stored plain-string entries, and endpoint
+  introspection, which returns an inferred modality beside each discovered id so
+  the editor pre-fills a sensible value. Reading a stored row never re-derives a
+  modality.
+- **L3 — One inference rule, used in both places.** Lowercase the id, then: an
+  id containing `embed` → `embedding`; containing `dall`, `image`, `imagen` or
+  `flux`, or carrying a token `sd` / `sd<digits>` → `image`; containing `video`
+  or `sora`, or a token `veo` / `veo<digits>` → `video`; containing `whisper` or
+  `audio`, or a token `tts` / `tts<digits>` → `audio`; everything else → `text`.
+  The long names match as substrings; the short ones match as whole tokens (the
+  id split on non-alphanumerics), so an unrelated id is not mis-tagged.
+- **L4 — Every CHAT picker narrows the curated set to `text`.** The ids feeding
+  `AgentModelCatalogueService.offered()` / `suggest()` — the web picker, the
+  channel `/model` card, the turn-time note — and the Codex model catalogue
+  Coffer projects, all take the `text` entries and nothing else. A connection
+  that curates SOMETHING but nothing `text` offers no chat model rather than
+  falling back to the endpoint's whole catalogue.
 
-**The defect.** D4's "curated BUILT-IN list" existed only as a hardcoded
-constant — `["opus", "sonnet", "haiku"]` — duplicated in
-`frontend/src/lib/api/providers.ts` and
-`backend/coffer/surfaces/http/channel_wiring.py`. Two copies, no owner, and
-stale: Claude Code's `--model` also accepts `fable`, `opusplan` and `default`,
-so `fable` was simply unreachable from Coffer — the picker is a fixed dropdown
-with no free-text (D4), so an id absent from the constant could not be typed
-in either. D4's options rule made it worse by being either/or: when a
-connection overrode the agent, the picker showed ONLY that connection's
-introspected models and HID the agent's own. Observed live: an `is_active`
-openai connection routed to `claude_code` while `~/.claude/settings.json`
-carried no Coffer projection at all — the agent was in fact running on its
-built-in login — yet the chat offered only `agnes-*` ids, none of which the
-agent could use.
+### The model catalogue
 
+- **D4 — A model is chosen from a fixed list, never typed.** Every Coffer
+  surface that offers a model offers a dropdown with no free-text entry, and the
+  current value is always among the options so it stays selectable. Non-chat
+  models are never offered. A model name is still raw passthrough everywhere the
+  CLI accepts one.
 - **H1 — The catalogue is a backend surface, per agent, and Coffer names no
-  model in it.**
-  `AgentModelCatalogueService` answers, per agent, which models that agent can
-  be put on, and `GET /api/v1/agent-providers/{agent_key}/models` is that answer
-  on the wire. The route SURVIVES the 2026-09-12 withdrawal below: what that
-  withdrawal takes away is the CURATING, never the catalogue itself — a surface
-  that has to offer a model still has to be told what there is to offer. It has
-  three readers. The web Chat page's model picker asks it per conversation, the
-  agent detail page asks it to say what that agent can be put on, and the
-  channel `/model` card reads the same service in-process. Every entry — id,
-  display name, description — is read back from the
-  installed agent, never written into Coffer, because a list written down here
-  goes stale on the next CLI release and cannot tell one release of a tier from
-  the next. Three sources answer, and their order is the order of the picker:
-  the Claude Code executable's embedded catalog of versioned models, which is
-  the only place the per-release display names exist; Codex's own `model/list`
-  app-server RPC; and each CLI's native config for the local choices only it
-  knows about (Claude Code publishes `additionalModelOptionsCache` in
-  `~/.claude.json`; Codex's `config.toml` names its configured models). The
-  catalogue lists **real models only**: the CLIs' tier **aliases** (`sonnet`,
-  `opus`, `haiku`, `fable`, `best`, `sonnet[1m]`, `opus[1m]`, `fable[1m]`,
-  `opusplan`) are not offered, because each resolves to a model the list already
-  carries — Claude Code itself strips a trailing `[1m]` before comparing two
-  model names — so listing both padded the picker with nine label-less
-  duplicates sitting beside the models they point at. Nothing becomes
-  unreachable: an alias is still accepted wherever a model name is typed
-  (`/model <name>`, the agent's own config) and the CLI validates it. Accepted
-  cost: `best` and `opusplan` are routing BEHAVIOURS rather than single models,
-  so they can only be set by typing the name, not by picking one from a list.
-  Each entry carries `id` (passed verbatim to the CLI), `label` and
-  `description`. Every source
-  degrades to nothing on its own — a missing CLI, a changed bundle layout, an
-  unauthenticated or wedged agent costs the models that source would have added
-  and nothing else. An unknown `agent_key` is a 404. Contract:
+  model in it.** `AgentModelCatalogueService` answers, per agent, which models
+  that agent can be put on;
+  `GET /api/v1/agent-providers/{agent_key}/models` is that answer on the wire.
+  Its readers are the web Chat page's picker, the agent detail page, and the
+  channel `/model` card, which reads the same service in-process. Every entry —
+  id, label, description — is read back from the installed agent, never written
+  into Coffer, because a list written down here goes stale on the next CLI
+  release. Three sources answer, and their order is the order of the picker:
+  Claude Code's embedded **alias table**, Codex's own `model/list` app-server
+  RPC, and each CLI's native config for the local choices only it knows (Claude
+  Code publishes `additionalModelOptionsCache` in `~/.claude.json`; Codex's
+  `config.toml` names its configured models). Every source degrades to nothing
+  on its own — a missing CLI, a changed bundle layout, an unauthenticated or
+  wedged agent costs the models that source would have added and nothing else.
+  An unknown `agent_key` is a 404. Contract:
   [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
   where the agent-provider routes live.
-- **H2 — Single source of truth.** The frontend constant is deleted; the
-  channel `/model` card reads the same catalogue. The list is owned in one
-  place — and owned by the agents themselves — so a newly released model reaches
-  every surface with no Coffer release at all.
-- **H3 — Options are a UNION, not an either/or.** The chat picker's options are
-  the agent's catalogue (H1) ∪ the active connection's introspected models
-  (`POST /models/list-models`) ∪ the conversation's current value. D4's ban on
-  free-text stands — the picker remains a fixed dropdown, and the current value
-  is always selectable. A connection therefore adds ids to the picker instead of
-  hiding the agent's own.
-- **H4 — The Agent page offers NO model control on the built-in login.**
-  Those slots bind a CONNECTION's model (E3/E4): `agent.model` is read only when
-  Coffer projects a connection. So on the built-in login the panel shows no
-  picker and no list — only a line saying where the model is chosen instead (per
-  conversation in the Chat page's model picker, or with `/model` in a channel),
-  so the absence is explained rather than looking broken. (Superseded twice:
-  2026-09-11b made the panel a curation control, and its 2026-09-12 withdrawal
-  removed the control altogether — curation moved to the channel and was then
-  removed from there too, so nothing curates an agent's models any more.)
-- **H5 — Coffer tells the agent which model it is on.** The system-prompt append
-  Coffer adds on every turn now states which model Coffer put the agent on — or
-  that Coffer set no override — and which ids are available. The motivating
-  incident: asked in a real channel session, the agent confidently named a model
-  it was not running on, because nothing in its context said otherwise. **Claude
-  Code only.** Codex's app-server takes no per-thread instructions — its
-  `ThreadSettings` carries approval/sandbox/model/effort and no prompt seam — so
-  there is nowhere to put the note without polluting the conversation's first
-  user message. Codex gets the accurate catalogue (H1) but not the note.
-
-- **H6 — A connection is only active if the agent's config says so.** `is_active`
-  is a row in Coffer's database; what it MEANS is a few keys in a file Coffer
-  does not own, which the agent's own CLI, other tooling, the user, and a
-  restore from backup all rewrite. Nothing put Coffer's keys back and nothing
-  noticed they had gone. At boot Coffer now checks, for each agent type with an
-  active compatible connection, whether that agent's native config actually
-  carries the projection; when it does not, the flag is CLEARED — the agent is
-  on its built-in login and every surface now says so. It heals in one direction
-  only: it never writes the projection back, because a flag left from an earlier
-  session is no warrant to re-route a user's agent through a gateway they are
-  not currently using (the sync post-import hook still projects, since an import
-  carries the user's explicit switch). The reverse drift — Coffer's keys present
-  while the registry says inactive — is reported, not silently removed.
-  Revision 0051 also strips the retired agent types (`cursor` / `opencode` /
-  `openclaw` / `hermes`) from connections' then-`compatible_agents` field
-  (materialised into the framework scope by 0071): revision 0048
-  deleted those agents' own rows but left their names inside connections, which
-  `ProviderConfig` rejects — so on a real install the first validation after the
-  upgrade raised and a working connection became unreadable.
-
-**Supersedes:** D4's curated built-in list (now the backend catalogue) and its
-either/or option rule (now the union in H3). D4's fixed-dropdown / no-free-text
-rule is unchanged. **Still NOT in scope:** proxy / hot-switch / protocol
-conversion.
-
-## Amendment 2026-09-11 — The connection curates WHICH models it offers
-
-> Status: Draft. **Nuances E1/E3's "no model on the connection" — it does not
-> reverse it.** **Refined 2026-09-12b:** each curated entry became a
-> `{id, modality}` object; every `list[str]` below reads as that list of objects.
-> Recorded after a design pass with the user. Cross-ref
-> [ADR provider-switching](../../docs/decisions/provider-switching.md).
-
-**Why.** E3 moved the model to the point of use, and the 2026-09-09 amendment
-made the picker's options a union of everything on offer. Both are right, and
-together they hand the user a menu they did not choose: a gateway account
-frequently serves dozens of models, of which its owner intends to use two or
-three. Nothing narrowed that list, because the only two states the design had
-were "one model, fixed on the connection" (too early a choice) and "every model
-the endpoint serves" (too many). The middle state — *which* of this endpoint's
-models do I actually use — belongs to the account, is stable, and is exactly
-what the connection is the right place to record.
-
-- **J1 — `models: list[str]` on the connection: the OFFERED set, not a chosen
-  model.** The connection still stores no model it *runs*: E1/E3 stand, and every
-  point of use (the per-agent binding, the internal-engine selector, the channel
-  `/model` card) still makes the choice. `models` only says which ids that choice
-  is offered. **EMPTY means no restriction** — the endpoint's whole catalogue —
-  which is the default, what every connection created before revision 0059
-  carries, and therefore an upgrade that changes nothing for anyone who does not
-  curate.
-- **J2 — Curated on the connection's detail page, applied by every picker
-  downstream.** The user picks from the live introspection
-  (`POST /api/v1/models/list-models`) on the connection itself. A picker
-  downstream that offers this connection's models then offers exactly the
-  curated set when it is non-empty, and everything the endpoint serves when it
-  is empty. This narrows the H3 union's *connection* term; the agent's own
-  catalogue term is untouched — a curated set never hides a model the agent can
-  reach on its own built-in login.
-- **J3 — Ids stay opaque; Coffer still writes down no model name.** The curated
-  set is validated for SHAPE only (non-blank ids, deduplicated preserving order,
-  a sane cap) and passed verbatim to the vendor. Coffer never checks an id
-  against a list of its own — the 2026-09-09 amendment's rule is unchanged, and
-  an id the endpoint stops serving is a stale menu entry, not a config error.
-- **Wire.** `ProviderOut.models: list[str]`; `ProviderCreate.models: list[str] |
-  None` (`null` ⇒ empty); `ProviderPatch.models: list[str] | None`, a
-  whole-value replace (`null` leaves it alone, `[]` clears the restriction). No new route — create and patch carry it.
-- **Audit.** No new event: the curated set is ordinary connection config, so a
-  change to it rides the `resource_updated` event `ResourceService.update_config`
-  already emits, whose `before`/`after` details carry the config verbatim (the
-  provider kind declares no redactor because its config holds no secret).
-- **Migration 0059** writes `models: []` into every existing `kind='provider'`
-  row, so each connection states its own answer — unrestricted — rather than
-  leaning on a reader's default. One-shot, per the house rule: no load-time shim.
-
-**Nuances:** E1/E3 (the model leaves the connection — still true of the CHOSEN
-model) and H3 (the picker's union — its connection term is now the curated set
-when one exists). **Still NOT in scope:** proxy / hot-switch / protocol
-conversion; and Coffer still validates no model id against a list of its own.
-
-## Amendment 2026-09-11b — The agent curates which of its own catalogue it offers
-
-> Status: **Partly withdrawn 2026-09-12.** K1 (the retirement filter) stands. The
-> PER-AGENT curated set K2–K4 introduced is **withdrawn**: it moved to the
-> CHANNEL, the surface that has an audience, and was then removed from there as
-> well — nothing in Coffer curates an agent's models any more. The bullets below
-> are rewritten to say what remains.
-> Cross-ref [ADR provider-switching](../../docs/decisions/provider-switching.md).
-
-**Why.** H1 made the catalogue the agent's own answer, which was right and
-remains right — but that answer is CUMULATIVE and ACCOUNT-BLIND. Claude Code's
-embedded catalog runs to nineteen models on a current install, of which this
-user's account can actually run nine. The other ten fail the moment they are
-picked, and the picker gives no hint which is which.
-
-Whether the ten can be excluded automatically was investigated and they cannot.
-Every field of all nineteen entries was compared against the known-good nine:
-`pricing` does not separate them (`claude-opus-4-5` and `claude-opus-4-6` are
-both `tier_5_25`, one dead and one alive), nor do `capabilities` (the working
-`claude-haiku-4-5` carries only `context_management` while the unavailable
-`claude-mythos-5-1` carries the full set), nor `knowledge_cutoff`, nor the
-context window, nor any version-number rule (opus keeps four versions, sonnet
-two). The CLI's own filter runs over `e.config.models` — a SERVER-provided
-account config, with `modelAccessCache` in `~/.claude.json` empty on this
-machine. **Which models an account may run is an account fact, not a local
-one.** A list hardcoded in Coffer would be wrong within a month, because Claude
-Code ships new models every few weeks and the user would have no way to tell why
-a new one never appeared. The answer drawn at the time was to show the catalogue
-and let the user tick it; the 2026-09-12 withdrawal below reverses that — Coffer
-shows the catalogue whole and ticks nothing, so a model the account cannot run
-is offered and fails when it is picked.
-
-- **K1 — Drop the models the binary itself says are dead.** The Claude Code
-  bundle carries a second table beside the catalog, pairing a model id with its
-  per-provider retirement dates and, for models the CLI silently reroutes, the
-  tier it is `remappedTo`. Coffer applies the CLI's own predicate over it: a
-  model is gone when it carries a `remappedTo` or when its **`firstParty`**
-  retirement date is past. Only `firstParty` — the other columns (bedrock,
-  vertex, foundry, …) describe deployments Coffer does not configure and carry
-  different dates. Read exactly like the catalog: located structurally, and if
-  the anchor ever stops matching the source returns the catalogue **unfiltered**
-  rather than a filter built from half a table. This shrinks the list the user
-  has to curate, costs nothing, and updates itself on every CLI upgrade.
-- **K2 — WITHDRAWN: `models: list[str]` on the agent.** The ticked set was
-  stored on `AgentConfig` and narrowed every picker that asked about that agent.
-  The premise was right — a cumulative, account-blind catalogue needs the user's
-  answer — but the PLACE was wrong: an agent has no audience, and curating it
-  narrowed a chat on a phone and a person opening the agent page at once. The
-  field, its shape validator and revision 0060's backfill are all gone, stripped
-  by **revision 0063** with no load-time shim (house rule). The answer then moved
-  to the CHANNEL and was withdrawn there too (revision 0068): no resource curates
-  models, and every surface offers the whole K1-filtered catalogue.
-- **K3 — One model question is left to ask an agent over HTTP, and the catalogue
-  route is it.** `GET|PUT …/models/selection` is **removed** along with
-  `AgentModelSelectionIn` / `AgentModelSelectionOut`: there is no second question
-  to ask of an agent any more. `GET /api/v1/agent-providers/{agent_key}/models`
-  STAYS, and still returns the full K1-filtered catalogue — keyed by agent TYPE,
-  answered from the first enabled agent resource of that type. It outlived the
-  channel dialogs that read it through the middle of 2026-09: the web Chat page's
-  model picker and the agent detail page are its readers now, and the channel
-  `/model` card reads the same catalogue in-process. What the route never answers
-  again is what a surface may OFFER — only what the agent can run.
-- **K4 — Narrowing an OFFER was the surface's job, and no surface narrows now.**
-  "What can this agent be put on" has one answer — `offered()` / `suggest()`
-  return the agent's catalogue (or an active connection's curated set, amendment
-  2026-09-11c) — and every surface offers that answer whole: the channel `/model`
-  card pages through it and refuses no id. A model name stays raw passthrough
-  everywhere — the CLI accepts names outside the catalogue entirely (tier
-  aliases, models newer than the installed binary), so a bad name surfaces as the
-  CLI's own error.
-- **Wire.** `AgentModelsOut` / `AgentModelOut` stay on
-  `GET /api/v1/agent-providers/{agent_key}/models`; only the selection pair left.
-  Under `/api/v1/agent-providers` there are two routes, then: the registry
-  listing and the per-agent catalogue. Contract:
-  [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
-  where the agent-provider routes live.
-- **Audit.** Nothing to record: there is no per-agent curated set to change.
-- **Migration 0060** wrote `models: []` into every `kind='agent'` row;
-  **migration 0063** takes the key back off every one of them, because
-  `AgentConfig` forbids extra keys and a row still carrying it would fail to
-  validate on load.
-
-**Nuances:** H1 (the catalogue is still the agent's own answer, now minus what
-the agent says is retired) and H4 (the Agent page's built-in login now offers no
-model control at all — not a picker, not a tick list — just a line saying where
-the model is chosen). **Still NOT in scope:**
-deriving account entitlement locally — it is not derivable — and Coffer still
-writes down no model name of its own.
-
-## Amendment 2026-09-11c — An active connection answers what a picker offers
-
-> Status: Draft. **Nuances 2026-09-11b**: that amendment made a picker show the
-> models the ACCOUNT can run; this one says whose account. Recorded after a live
-> session where the `/model` card offered `claude-opus-5` to an agent Coffer had
-> pointed at a gateway that does not serve it.
-
-**The defect.** `AgentModelCatalogueService` is the one catalogue behind every
-surface that offers a model choice, and it only ever asked the AGENT. It knew
-nothing about the connection Coffer had activated for that agent. So with an
-openai-compatible gateway routed to `claude_code`, the card offered Claude's own
-model names, none of which that endpoint serves; tapping one passed the id
-straight through to the SDK, which sent it to `ANTHROPIC_BASE_URL` and failed
-the turn. Both narrowing rules that existed — the retirement table and the
-per-agent curated set (since withdrawn, see 2026-09-11b) — describe the account
-the AGENT logs into itself, which is not where those turns were going.
-
+- **H2 — One source of truth.** No surface carries a model list of its own; the
+  catalogue is owned in one place, and owned by the agents themselves, so a
+  newly released model reaches every surface with no Coffer release at all.
+- **M1 — For Claude Code the catalogue IS the alias table.** The ids are the
+  aliases the CLI itself accepts (`opus`, `sonnet`, `haiku`, `fable` — whatever
+  the table holds), and each label is the display name of the model that alias
+  resolves to on a first-party account, so a release that moves an alias
+  relabels the picker on its own. Both halves come from one embedded blob,
+  located structurally; an anchor that stops matching costs this source
+  entirely rather than falling back to something else. The reason is
+  entitlement: the versioned catalog is cumulative and account-blind, nothing on
+  the machine says which of nineteen models a given account may run, and the
+  CLI's own picker offers four aliases and resolves each against the account at
+  turn time. Two attempts to have someone curate the remainder — first on the
+  agent, then on the channel — were both removed; nothing in Coffer curates an
+  agent's models. The accepted cost: a model that is not the current head of its
+  family cannot be PICKED from a Coffer surface. It stays typeable, and the
+  account's own extra options still reach the picker from `.claude.json`.
+- **M2 — Codex answers from its own `model/list`**, and both CLIs' native
+  configs still contribute their local choices.
 - **K1 — An active connection's curated set IS what a picker offers.** When a
-  connection is `is_active`, compatible with the agent type and carries a
-  curated model set, `offered()` / `suggest()` answer with those ids, in the
-  user's order, without consulting the agent's catalogue. `catalogue()` is
-  unchanged and still reports the agent's own models: it is the full truth the
-  detail page renders, and what a picker does with it is `offered()`'s
-  business.
+  connection is active, reaches the agent type and curates models, `offered()` /
+  `suggest()` answer with those ids, in the user's order, without consulting the
+  agent's catalogue: the catalogue describes the account the agent logs into
+  itself, and an active connection means the turns do not go there, so mixing
+  the two could only offer ids the endpoint rejects. `catalogue()` is unchanged
+  and still reports the agent's own models — the full truth the detail page
+  renders.
 - **K2 — An active connection that curates nothing changes nothing.** Coffer
   knows where the turns go, not what that endpoint serves, and deliberately does
   not ask: this read happens on every card render and every turn, so
   introspection would put a network round trip on the daemon's event loop
-  (CODE-034). The agent's own answer stands; curating the connection's set is
-  how the user makes it accurate.
-- **K3 — No active compatible connection means the agent's own login**, and the
-  catalogue (minus 2026-09-11b's K1 retirement filter) is the answer. A provider row Coffer cannot parse
-  degrades to this case rather than failing the read.
+  (CODE-034). The agent's own answer stands; curating the connection's set is how
+  the user makes it accurate.
+- **K3 — No active reaching connection means the agent's own login**, and the
+  catalogue is the answer. A provider row Coffer cannot parse degrades to this
+  case rather than failing the read.
 - **K4 — Codex additionally gets the list in ITS OWN picker.** Projecting a
   curated connection into Codex writes a Coffer-owned catalogue file next to its
   `config.toml` and points `model_catalog_json` at it. That key REPLACES Codex's
@@ -644,7 +295,7 @@ the AGENT logs into itself, which is not where those turns were going.
   catalogue, `model/list` returns exactly that model), which is what is wanted —
   the built-in names are not served by the endpoint the agent now calls.
   De-projection drops the pointer and retires the file, so Codex's own models
-  come back. The pointer is dropped iff it names the Coffer-owned file, the same
+  come back; the pointer is dropped iff it names the Coffer-owned file, the same
   ownership discipline `apiKeyHelper` already uses. An uncurated connection
   writes no catalogue, for K2's reason.
   - The file is a **wire contract with another program**: every field Codex's
@@ -652,671 +303,358 @@ the AGENT logs into itself, which is not where those turns were going.
     loudly — Codex warns and falls back to its built-in list, so the projection
     silently does not take effect.
   - Values Coffer cannot derive for a third-party endpoint each take the least
-    committal value, with the cost of being wrong recorded beside them. One has
-    a real consequence: `base_instructions` is where Codex keeps its ENTIRE
-    agent system prompt, and Coffer writes it empty — Codex then sends no
-    `instructions` field. It still sends its permissions, skills and environment
-    developer messages and the full tool set, so the agent works, but without
-    Codex's persona prompt. Copying that prompt into a Coffer-written file would
-    pin one Codex version's prompt and silently override every later one; Coffer
-    does not author another product's system prompt.
+    committal value. One has a real consequence: `base_instructions` is where
+    Codex keeps its ENTIRE agent system prompt, and Coffer writes it empty, so
+    Codex sends no `instructions` field. It still sends its permissions, skills
+    and environment developer messages and the full tool set, so the agent works,
+    but without Codex's persona prompt. Copying that prompt into a Coffer-written
+    file would pin one Codex version's prompt and silently override every later
+    one; Coffer does not author another product's system prompt.
   - Claude Code has no equivalent. The only thing shaped like one,
-    `additionalModelOptionsCache` in `~/.claude.json`, is Claude Code's own
-    CACHE of a field from its API response, refreshed and overwritten from
-    there; it is not a contract and anything written into it is clobbered. So
-    for `claude_code` the Coffer-side surfaces stay the only places the model is
-    chosen.
+    `additionalModelOptionsCache`, is Claude Code's own CACHE of a field from its
+    API response; anything written into it is clobbered. So for `claude_code` the
+    Coffer-side surfaces stay the only places the model is chosen.
+- **H4 — The Agent page offers no model control on the built-in login.** Those
+  slots bind a CONNECTION's model (E3/E4), so on the built-in login the panel
+  shows no picker and no list — only a line saying where the model is chosen
+  instead (per conversation in the Chat page's picker, or with `/model` in a
+  channel), so the absence is explained rather than looking broken.
+- **H5 — Coffer tells the agent which model it is on.** The system-prompt append
+  Coffer adds on every turn states which model Coffer put the agent on — or that
+  Coffer set no override — and which ids are available. Asked in a real channel
+  session, an agent confidently named a model it was not running on, because
+  nothing in its context said otherwise. **Claude Code only**: Codex's
+  app-server takes no per-thread instructions, so there is nowhere to put the
+  note without polluting the conversation's first user message. Codex gets the
+  accurate catalogue, not the note.
 
-**Nuances:** 2026-09-11b's K1 retirement filter (still applied whenever the
-agent is on its own login) and H1 (the catalogue is read, never authored — now
-read from the connection when one is active). **Still NOT in scope:**
-endpoint introspection on a picker read, and Coffer still validates no model id
-against a list of its own.
+### Reasoning effort
 
-## Amendment 2026-09-11d — `wire_api` has one legal value left
+- **N1 — The effort travels BESIDE the id, never inside it.** `AgentModel`
+  carries `efforts: tuple[str, ...]` — the levels the agent reported, in the
+  order it reported them, empty for an agent that takes no such setting — and
+  `default_effort`, the level it would use when none is chosen; the `…/models`
+  route exposes both. Beside, because that is what the protocols do: the effort
+  is its own field on a turn, so folding four levels into the name would
+  multiply one model into four entries under names Coffer invented, which J3
+  forbids. A reported default is kept only when it is one of the offered levels.
+  Nothing is invented for a model that reports none. The stakes are not
+  cosmetic: the same prompt on the same model reported 53 reasoning output
+  tokens at `low` and 2569 at `xhigh`.
+- **O1 — The levels come from the RUNTIME, not from the model.** For Codex they
+  are per model, because `model/list` reports `supportedReasoningEfforts` and a
+  `defaultReasoningEffort` per entry. For Claude Code they are the same for every
+  entry, read once from the installed Claude Agent SDK's own `EffortLevel` alias
+  — `ClaudeAgentOptions.effort` renders as the CLI's `--effort` flag — rather
+  than written down here. An SDK that declares none yields an empty tuple: the
+  controls hide themselves and turns are unchanged.
+- **O2 — No default is named for Claude Code.** `ClaudeAgentOptions.effort`
+  defaults to `None`, meaning "whatever the CLI decides", and the CLI does not
+  say what that is. Prose documentation naming one level is not a
+  machine-readable fact, and a picker naming the wrong default is worse than one
+  naming none.
+- **N2 — Stored per conversation, next to the model.** It goes in the same
+  provider-owned `AgentConfig` blob the model already lives in — `cwd`,
+  `session_id`, `model`, `effort` — because it is the same kind of fact: a choice
+  made for THIS conversation, owned by the provider, belonging neither to the
+  agent resource nor to the connection. `PATCH
+  /api/v1/chat/conversations/{id}/agent-config` takes `effort` alongside
+  `model`; a body that mentions one leaves the other alone, and an empty or null
+  value clears the field so the agent runs at its own default.
+- **N3 — Codex applies it on the TURN** — `turn/start {threadId, input,
+  effort}`, omitted when unset. The alternatives were rejected by experiment:
+  `thread/start` ignores an effort field entirely (the response keeps echoing the
+  config default, so a thread-level setting would be a control that changes
+  nothing while looking like it works), and `thread/settings/update` is refused
+  unless the client asks for the `experimentalApi` capability, a dependency
+  Coffer will not take on for a field it can set honestly elsewhere.
+- **N4 — Coffer validates no level.** Like a model name, the string is passed to
+  the CLI as given; the CLI owns that namespace, so a release that renames a
+  level or adds a fifth one works the day it ships, and a level an account cannot
+  run fails where every other unusable choice fails.
+- **O3 — An active connection does not erase the levels.** The ids a picker
+  offers are the connection's to answer (K1); the LEVELS are not, because the
+  turn still runs through the agent's own runtime whatever endpoint it points at.
+  So an id the agent also reports keeps its levels, and one the agent has never
+  heard of reports none. The label and description stay the connection's
+  business.
+- **O4 — Both agents, on every surface that offers a model.** The web Chat
+  page's draft bar carries the effort picker the open conversation has (spec
+  channels FR-078), and a channel has `/effort`, `/model`'s sibling in every
+  respect (spec channels FR-017).
 
-> Status: Draft. **Supersedes D7's "`wire_api ∈ {chat, responses}`, selectable".**
-> Recorded after checking the installed Codex while validating an unrelated
-> change.
+### Codex's `wire_api`
 
-**The defect.** `AgentConfig` accepted `wire_api = "chat"` and
-`ProviderProjector` wrote it into `[model_providers.coffer]`. Codex 0.139.0
-does not merely ignore that value — it **refuses to load `config.toml`**
-(`wire_api = "chat" is no longer supported`, naming `responses` as the fix), so
-the agent Coffer projected into has a CLI that will not start. Nothing in
-Coffer said so: the value was accepted at `PATCH /api/v1/agents/{name}`, stored,
-and projected into a file Coffer never reads back, where the failure surfaces as
-the agent being broken rather than as a setting being wrong. D7 already knew
-`chat` was dropped — it made `responses` the DEFAULT when codex-cli 0.130 went
-first — but left the other value selectable.
+`responses` is the only accepted value, enforced in `AgentConfig`, so anything
+else is a 422 the user sees at the moment they set it. Codex 0.139.0 does not
+merely ignore `wire_api = "chat"` — it **refuses to load `config.toml`**, so
+the agent Coffer projected into has a CLI that will not start. It is not fixed
+by mapping at projection time: rewriting the value on the way out would leave
+the stored value, and every `AgentOut` reporting it, saying something other than
+what Coffer projects, and a setting should not lie about itself. With one legal
+value the per-agent override can only hold its own default, which makes it
+vestigial; retiring the field is a separate change, since it is on the public
+API and the contract.
 
-- **L1 — `responses` is the only accepted value**, enforced in `AgentConfig`, so
-  `chat` is a 422 the user sees at the moment they set it. Verified against the
-  installed CLI: every other spelling is rejected by Codex's own parser
-  (`unknown variant, expected `responses``), and `chat` gets a message of its
-  own. This is the one boundary where the failure is still legible; past it,
-  Coffer is writing a file only Codex reads.
-- **L2 — Not fixed by mapping at projection time.** Rewriting `chat` to
-  `responses` on the way out would leave the stored value, and every `AgentOut`
-  reporting it, saying something that is not what Coffer projects. A setting
-  should not lie about itself.
-- **L3 — Migration 0061 flips the rows that already carry it.** One-shot, per
-  the house rule: no load-time shim. Revision 0037 did the same flip when
-  `wire_api` lived on the CONNECTION; 0040 then moved the field onto the agent,
-  and the agent PATCH path accepted `chat` right up to this change, so those
-  rows were never covered. Flipping rather than stripping keeps what the setting
-  MEANT to express — use Codex's Responses API — as the one thing it can now
-  say.
-
-**Note, not a decision:** with a single legal value the per-agent override can
-only ever hold its own default, which makes it vestigial. Retiring the field is
-a separate change — it is on the public API and the OpenAPI contract — and is
-deliberately NOT done here.
-
-## Amendment 2026-09-12 — A connection can be renamed; its models list themselves
-
-> Status: Draft. Adds a rename operation; **supersedes the "name is immutable"
-> assumption** the edit dialog encoded, and the Models tab's manual fetch.
+### Renaming a connection
 
 **A1 — The name is editable, and renaming is one operation.** A connection's
-name is the only handle the user has on it, and it was the one field the edit
-dialog refused to change. It is also its IDENTITY: the vault entry it owns is
-`provider/<name>/key`, its audit rows are filed under `provider:<name>`, and the
-name is written verbatim into the agent config Coffer projects (Claude Code's
-`apiKeyHelper` → `coffer provider key --connection <name>`, Codex's provider
-`display_name`). A rename therefore MUST move all four together, which is why it
-is `POST /api/v1/providers/{name}/rename` and not another `PATCH` field: a patch
-edits a connection's settings, and a name that another connection already holds
-must be a 409 rather than an edit that silently merges two connections.
+name is its IDENTITY: the vault entry it owns is `provider/<name>/key`, its
+audit rows are filed under `provider:<name>`, and the name is written verbatim
+into the agent config Coffer projects. A rename therefore moves all of it
+together, which is why it is `POST /api/v1/providers/{name}/rename` and not
+another `PATCH` field: a patch edits a connection's settings, and a name another
+connection already holds must be a 409 rather than an edit that silently merges
+two connections.
 
 - The owned vault entry moves with the name — written under the new ref before
   the row moves, the old one removed after, so no step can leave the connection
   pointing at a secret that is not there. A ref that ANOTHER resource also cites
-  stays where it is: renaming it would break that other citer.
-- The audit trail follows the resource. The log says what happened to a
-  connection, and after a rename that is still the same connection, so stranding
-  its history under a name that no longer resolves would lose it; the rename
-  itself is recorded as `resource_renamed` with the old and new names, so
-  nothing is erased.
-- An ACTIVE connection is re-projected under the new name, so an agent Coffer
-  put on it keeps resolving its key instead of calling the shim with a
-  connection that no longer exists.
+  stays where it is.
+- The audit trail follows the resource, and the rename itself is recorded as
+  `resource_renamed` with both names.
+- An ACTIVE connection is re-projected under the new name, so an agent Coffer put
+  on it keeps resolving its key.
 - Renaming to the current name is a no-op, not an error.
 
-**A2 — The Models tab introspects on open; there is no "Fetch models" button.**
-Which models an endpoint serves is a fact about the endpoint, exactly like the
-tool list of an MCP server — and Coffer lists those the moment you open the
-server. Making the user press a button first meant the common case (open the
-tab, see nothing, wonder whether the endpoint offers nothing or was never
-asked) was indistinguishable from an empty endpoint. So the tab probes as it
-opens, once per visit, with the table saying it is loading while it does.
+### Convergence
 
-- A failed probe MUST be visible and retryable: the table names the failure and
-  offers a retry. Silence is not an acceptable outcome of an automatic fetch.
-- A failed or empty probe still MUST leave the curated selection alone, and the
-  EMPTY-selection semantics are unchanged: empty means no restriction — every
-  model the endpoint serves.
+Modelling `provider` as a resource kind puts a connection into the sync tree
+automatically (spec [vault-sync](../vault-sync/spec.md)):
 
-**A3 — Two surface corrections that follow from what each page is for.**
+- The exporter writes each row to `resources/provider/<name>.yaml` via
+  `resource_to_doc` as step 1 of a converge round; git three-way-merges the tree
+  against the remote, and the **applier** puts the resulting difference back, one
+  document at a time.
+- What an incoming document carries is the connection — identity, description,
+  config — and NOT its reach: `enabled` and `scope` are one decision the user
+  makes per machine, on the machine. A row that already exists keeps the reach it
+  has; a row that has just arrived takes the kind's own default.
+- Credentials travel as Fernet ciphertext at `credentials/<ref>.enc`, and only
+  when the remote is configured to carry them. The master key never enters the
+  repository; it is bootstrapped out-of-band with
+  `coffer sync key export` / `import`.
+- **Projection is a machine-local side effect, so it is re-derived after every
+  round.** `is_active` rides the synced row, but writing the agent's native
+  config is something only `activate` / `deactivate` ever did — so a switch made
+  on one machine converged the other's registry while its agents kept running on
+  stale config. The provider kind's post-import hook re-derives the desired
+  projection from the converged rows and applies it idempotently: for each agent
+  type with a registered agent, the active connection whose scope reaches it is
+  projected, and a type with no active connection is de-projected.
+- On a vault holding more than one active connection for an agent type, or more
+  than one `internal_default`, the normalisation is deterministic: keep the
+  most-recently-updated and clear the rest.
 
-- The internal-engine badge is gone from the model-providers LIST row. That page
-  manages providers; which one Coffer's own engine happens to run on is a fact
-  about the engine, and it is stated where it is set (the internal-engine
-  settings panel) and on the connection's own detail header.
-- The detail header now carries the shared `ScopeControl` instead of a read-only
-  enabled/disabled badge: the list could disable a connection and its own page
-  could not. `provider` declares no per-agent scope, so the control's panel
-  renders its two-choice Disabled / Enabled fallback — and it is now the single
-  place that state is both shown and changed.
+### Audit
 
-## Amendment 2026-09-12b — A curated model says WHICH KIND of model it is
-
-> Status: Draft. **Refines J1's `models: list[str]`** into a list of objects; the
-> curated set's meaning (the OFFERED set, empty = no restriction) is unchanged.
-
-**Why.** A provider endpoint serves more than chat models. The same base URL and
-the same key answer for embedding, image, video and audio models, and the
-curated set said nothing about which was which — so every id the user curated
-was offered to every surface that asked, and an embedding model could be picked
-as an agent's chat model. A curated entry now says which KIND of model it is, so
-a picker asks for the kind it needs instead of offering every id to every
-surface.
-
-- **L1 — `models: list[CuratedModel]`, where `CuratedModel = {id, modality}`.**
-  `Modality` is a `StrEnum` with five values — `text` (the default),
-  `embedding`, `image`, `video`, `audio`. The id keeps every property J3 gave it:
-  opaque, verbatim to the vendor, validated for shape only. The modality is
-  Coffer's own note about the id, not something the vendor told it.
-- **L2 — The STORED modality is the truth; nothing infers one at read time.**
-  Coffer infers a modality in exactly two places, both a convenience the user can
-  correct from the connection editor: the one-shot Alembic migration that
-  converts stored plain-string entries, and endpoint introspection
-  (`POST /api/v1/models/list-models`), which returns an inferred modality
-  alongside each discovered id so the editor pre-fills a sensible value. There is
-  **no load-time shim** — reading a stored row never re-derives a modality, per
-  the house rule that a migration is one-shot.
-- **L3 — One inference rule, used in both places.** Lowercase the id, then: an id
-  containing `embed` → `embedding`; containing `dall`, `image`, `imagen` or
-  `flux`, or carrying a token `sd` / `sd<digits>` → `image`; containing `video`
-  or `sora`, or a token `veo` / `veo<digits>` → `video`; containing `whisper` or
-  `audio`, or a token `tts` / `tts<digits>` → `audio`; everything else → `text`.
-  The long names match as substrings; the short ones (`sd`, `veo`, `tts`) match
-  as whole tokens (the id split on non-alphanumerics), so an unrelated id is not
-  mis-tagged.
-- **L4 — Every CHAT model picker narrows the curated set to `text`.** The active
-  connection's curated ids feeding `AgentModelCatalogueService.offered()` /
-  `suggest()` — the web picker, the channel `/model` card, the turn-time note —
-  and the Codex model catalogue Coffer projects into the agent's native config,
-  all take the `text` entries and nothing else. An `embedding` / `image` /
-  `video` / `audio` entry can never surface as a chat model. A connection that
-  curates nothing still means no restriction, exactly as before.
-- **Wire.** `ProviderOut.models`, `ProviderCreateRequest.models`,
-  `ProviderPatchRequest.models` and `ProviderModelsOut.models` all become arrays
-  of `{id, modality}` objects (a new `ProviderModel` component schema; `modality`
-  is an enum defaulting to `text`). Empty still means unrestricted, and the patch
-  semantics are unchanged: `null` leaves the set alone, `[]` clears the
-  restriction.
-- **L5 — The surface: the Models tab grows a TYPE column.** Each row of the
-  connection detail page's Models table now reads model id · type · offered,
-  where the type is a five-value Select pre-filled from what introspection
-  guessed and corrected in place — the answer to "a provider should serve image,
-  video and embedding models too" is that one column, not a second table. A
-  correction on an already-offered row PATCHes the curated set immediately; one
-  made on a row that is not offered yet is held on the surface and travels into
-  the entry when its Switch is turned on. A Type filter sits beside the existing
-  Offered filter. Downstream, every chat picker that reads the set — the agent
-  Overview panel's model / fast-model dropdowns and the internal-engine card's
-  model dropdown — offers `text` entries only, and treats a connection that
-  curates SOMETHING but nothing `text` as offering no chat model rather than
-  falling back to the endpoint's whole catalogue (what the daemon does).
-
-**Refines:** J1/J2 (the curated set and the pickers that read it). **Unchanged:**
-J3 — Coffer still writes down no model NAME and validates no id against a list of
-its own; the modality is a kind, not a name.
-
-## Amendment 2026-09-13 — Claude Code offers its tier aliases, not its catalog
-
-> Status: Draft. **Supersedes H1's "real models only" rule for Claude Code**, and
-> **withdraws K1** (the retirement filter), whose only job was keeping dead names
-> out of a list that no longer exists.
-
-**Why.** H1 read the versioned catalog out of the Claude Code binary so a picker
-could tell Opus 5 from Opus 4.8. That catalog is cumulative and account-blind: it
-names every model the installed release has heard of, including internal families
-most accounts cannot run, and nothing on this machine says which of them a given
-account may use — D12 established exactly that, and accepted "a model this account
-cannot run fails when it is picked" as the cost. Two attempts to have someone
-curate the remainder (on the agent, then on the channel) were both removed. The
-bill came due as a plain bug report: a picker offering fourteen Claude models,
-most of them unusable. The CLI itself never asks for a versioned id — its own
-picker offers four tier aliases and resolves each against the account at turn
-time, which is precisely the knowledge Coffer does not have. Offering what it
-offers costs nothing Coffer could actually provide, and the version stays on
-screen because the alias's current target is read from the same table.
-
-- **M1 — Claude Code's catalogue IS its alias table.** The ids are the aliases the
-  CLI itself accepts (`opus`, `sonnet`, `haiku`, `fable` — whatever the table
-  holds), and each label is the display name of the model that alias resolves to
-  on a first-party account ("Opus 5"), so a release that moves an alias relabels
-  the picker on its own. Both halves come from one embedded blob: the `aliases`
-  object that follows the catalog, and the catalog entry it points at. Located
-  structurally, like everything else read out of that bundle; an anchor that stops
-  matching costs this source entirely rather than falling back to the catalog.
-- **M2 — The versioned catalog and the retirement table are no longer read.** K1
-  goes with them: an alias does not retire, and that per-provider table existed
-  only to prune the list M1 replaces. The `firstParty` date parsing and its
-  injected clock are deleted.
-- **M3 — Everything else is unchanged.** Codex still answers from its own
-  `model/list`; each CLI's native config still contributes the local choices only
-  it knows (Claude Code's `additionalModelOptionsCache` — the account's own extra
-  options, such as a 1M-context variant — and Codex's `config.toml`); an active
-  connection still answers outright (K3/H-order). A model NAME stays raw
-  passthrough everywhere: a conversation already pinned to `claude-opus-4-8` keeps
-  running on it, and any id can still be typed where a name is typed.
-- **Accepted cost.** A model that is not the current head of its family can no
-  longer be PICKED from the web picker or the channel `/model` card. It is not
-  unreachable — it stays typeable, and the account's own extra options still reach
-  the picker from `.claude.json`.
-
-**Supersedes:** H1's "the catalogue lists real models only … the CLIs' tier
-aliases are not offered", for Claude Code. **Withdraws:** K1.
-
-## Amendment 2026-09-13b — Codex's reasoning effort is a choice Coffer offers
-
-> Status: Draft. **Extends M1** — a catalogue is whatever the agent's own picker
-> offers — to the second field that picker carries for Codex. **Refines** the
-> per-conversation `AgentConfig` blob and the `…/models` payload.
-
-**Why.** M1 settled what the ID in a picker should be; it did not notice that for
-Codex the id is not the whole choice. `model/list` reports, per model, a
-`supportedReasoningEfforts` list — `low` / `medium` / `high` / `xhigh`, each with
-its own description — and a `defaultReasoningEffort`. Coffer read neither, so its
-picker offered a model and nothing else, while Codex's own picker offers the model
-AND the level, which is most of the choice a Codex user actually makes. On this
-machine `model/list` currently returns a SINGLE model, which makes the arithmetic
-plain: the effort was in practice the only choice left, and Coffer offered none of
-it. Nor is the difference cosmetic — the same prompt, same model, reported 53
-reasoning output tokens at `low` and 2569 at `xhigh` (~48x), from Codex's own
-token-usage notification.
-
-- **N1 — The effort travels BESIDE the id, never inside it.** `AgentModel` gains
-  `efforts: tuple[str, ...]` — the levels the agent reported, in the order it
-  reported them, empty for an agent that takes no such setting — and
-  `default_effort`, the level it would use when none is chosen; the `…/models`
-  route exposes both. Beside, because that is what Codex's protocol does: the
-  effort is its own field on a turn, so folding four levels into the name would
-  multiply one model into four entries that are the same model, under names
-  Coffer invented — exactly what J3 forbids. A reported default is kept only when
-  it is one of the offered levels; a default a picker cannot show is worse than
-  no default at all. Nothing is invented for a model that reports no efforts.
-- **N2 — Stored per conversation, next to the model.** It goes in the same
-  provider-owned `AgentConfig` blob the model already lives in — `cwd`,
-  `session_id`, `model`, now `effort` — because it is the same kind of fact: a
-  choice made for THIS conversation, owned by the provider, belonging neither to
-  the agent resource nor to the connection. `PATCH
-  /api/v1/chat/conversations/{id}/agent-config` takes `effort` alongside `model`;
-  a body that mentions one leaves the other alone, and an empty or null value
-  clears the field so the agent runs at its own default.
-- **N3 — It is applied on the TURN — `turn/start` `{threadId, input, effort}`,
-  omitted when unset.** The two other places it could go were rejected by
-  experiment, not by reading. `thread/start` ignores an effort field entirely:
-  the response keeps echoing the config default, so a thread-level setting would
-  have been a control that changes nothing while looking like it works.
-  `thread/settings/update` does exist, but is refused unless the client asks for
-  the `experimentalApi` capability in `initialize` — a dependency Coffer will not
-  take on for a field it can set honestly elsewhere. `turn/start` was verified by
-  measurement rather than by documentation (the 53-vs-2569 above), which is the
-  only evidence worth having for a field whose effect never appears in the
-  response that acknowledges it.
-- **N4 — Coffer validates no level.** Like a model name, the string is passed to
-  the CLI as given; Codex owns that namespace, so a release that renames a level
-  or adds a fifth one works the day it ships, and a level this account cannot run
-  fails where every other unusable choice fails — at the CLI. An agent that
-  reports no efforts (Claude Code) is unaffected end to end: no field is sent on
-  its turns, and the surface shows no control.
-
-**Extends:** M1 (a catalogue is what the agent's own picker offers).
-**Unchanged:** J3/M3 — Coffer writes down no model name, and now no level either;
-both stay raw passthrough.
-
-## Amendment 2026-09-14 — Claude Code reports its reasoning levels too
-
-> Status: Draft. **Amends N4** of the 2026-09-13b amendment, whose closing
-> sentence — "An agent that reports no efforts (Claude Code) is unaffected end to
-> end" — was a description of Coffer's own omission, read at the time as a
-> property of the agent. **Refines N1** (where a level comes from) and **extends**
-> the surfaces the choice is offered on.
-
-**Why.** N4 said Claude Code reports no efforts. It does not report them the way
-Codex does — there is no per-model `supportedReasoningEfforts` in its catalog —
-but the runtime Coffer drives it with takes one: the installed Claude Agent SDK
-declares `EffortLevel` and renders `ClaudeAgentOptions.effort` as the CLI's
-`--effort` flag. Coffer dropped it in three places at once (the discovery
-sources reported no levels, the provider did not persist one, the adapter never
-set it), so "Claude Code has no effort" was a statement about Coffer, not about
-Claude Code — and it was the kind of statement that is self-confirming, because
-with nothing reported no surface ever asked.
-
-- **O1 — The levels come from the RUNTIME, not from the model.** For Codex they
-  are per model because its protocol says so; for Claude Code they are the same
-  for every entry, read once from the SDK's own `EffortLevel` alias rather than
-  written down here. This keeps M1's discipline exactly: Coffer holds no list,
-  and an SDK release that adds a level reaches the pickers without an edit. An
-  SDK that declares none yields an empty tuple, which is the pre-amendment world
-  — the controls hide themselves and turns are unchanged.
-- **O2 — No default is named for it.** `ClaudeAgentOptions.effort` defaults to
-  `None`, meaning "whatever the CLI decides", and the CLI does not say what that
-  is. N1's rule ("a default a picker cannot show is worse than no default at
-  all") therefore lands on `default_effort: None` for every Claude Code entry.
-  Its prose documentation calls one level the default; prose is not a
-  machine-readable fact, and a picker naming the wrong default is worse than one
-  naming none.
-- **O3 — An active connection no longer erases the levels.** The 2026-09-11c
-  amendment made an active connection's curated ids the whole answer a picker
-  gets, and that answer was rebuilt as bare ids — which silently emptied every
-  effort control the moment a connection went active. Ids are the connection's
-  to answer; LEVELS are not, because the turn still runs through the agent's own
-  runtime whatever endpoint it points at. So an id the agent also reports keeps
-  its levels, and one the agent has never heard of reports none. The label and
-  description stay the connection's business (still empty), so 2026-09-11c is
-  narrowed rather than reversed.
-- **O4 — Two more surfaces offer the choice, for both agents.** The web Chat
-  page's DRAFT bar gets the effort picker the open conversation already had
-  (spec channels FR-078) — the first turn is the one most worth pitching, and by
-  the time the conversation exists it is already running — and a channel gets
-  `/effort`, `/model`'s sibling in every respect (spec channels FR-017). N4's
-  "Coffer validates no level" is unchanged on both: the level is passed through
-  verbatim, and `xhigh` on a model that cannot do it degrades inside Claude's
-  own runtime, which is exactly where that decision belongs.
-
-**Amends:** N4's last sentence. **Unchanged:** N2 (stored per conversation
-beside the model), N3 (Codex applies it on the turn), J3/M3 (raw passthrough,
-no name and no level written down).
+`ResourceService` already emits `resource_created` / `resource_updated` /
+`resource_deleted` / `resource_renamed` with kind-redacted config, and a change
+to the curated model set rides `resource_updated` — the provider kind declares
+no redactor, because its config holds no secret. This spec adds
+`provider_switched`, `provider_internal_default_set` and
+`provider_projection_refused`.
 
 ## Scope
 
 ### In scope
 
-- Backend `provider` resource Kind (CRUD via ResourceService → automatic audit
-  + automatic inclusion in export/import); credential handling (store secret to
-  Fernet vault, keep only ref); projection service (write native config for the
-  matching agent); switch / activate operation; `PROVIDER_SWITCHED` audit event;
-  export/import wiring (register the kind); key-resolution used by Claude's
-  `apiKeyHelper`.
-- Internal-engine connection selection: the global `internal_default` flag,
+- The `provider` resource kind (CRUD, audit and sync convergence through
+  `ResourceService`); credential handling (store the secret in the Fernet vault,
+  keep only the ref); the projection service that writes an agent's native
+  config; the switch / activate / use-builtin operations; per-connection key
+  resolution for Claude Code's `apiKeyHelper` and Codex's env var.
+- Internal-engine selection: the global `internal_default` flag,
   `set_internal_default(name)` + `resolve_internal_connection()`, the
-  `provider_internal_default_set` audit event, consumed by Coffer's internal
-  LLM engine (memory organizer / reorg / distill).
-- The connection's curated `models` set (the 2026-09-11 amendment): stored on
-  `ProviderConfig`, carried by create + patch, backfilled empty by revision 0059,
-  and applied by every model picker that offers that connection's models.
-- The retirement filter (the 2026-09-11b amendment): the agent's own catalogue
-  minus the models the installed binary's own retirement table calls dead. The
-  per-agent curated `models` set that amendment also introduced is WITHDRAWN —
-  curation moved to the channel and was then removed from there too, so nothing
-  curates an agent's models; the agent-side field is gone and revision 0063
-  strips it from stored rows.
-- Retire the standalone `ModelConfig` registry (model CRUD REST + `coffer model`
-  CLI), folding internal-engine model selection into the connection. The
-  provider introspection routes (`list-models`, `test-connection`) are KEPT.
-- CLI: `coffer provider list|add|show|edit|remove|switch|key|internal-default`
-- HTTP API: `/api/v1/providers` (list / create / get / patch / delete) plus
-  `/api/v1/providers/{name}/activate` and
-  `/api/v1/providers/{name}/internal-default`
-- Frontend: a minimal Providers resource page — `DataTable` (name, wire format,
-  base URL, model, active) with create / switch / delete actions,
-  mirroring the Skills and MCP resource-page pattern.
-- Tests across all tiers; acceptance markers tying to the scenarios below; zh
-  companion docs for every doc file in this spec bundle.
+  `provider_internal_default_set` event, and the separate internal-engine model
+  and upkeep singleton.
+- The connection's curated `models` set, each entry carrying a modality, applied
+  by every picker that offers that connection's models.
+- The per-agent model catalogue read back from the installed agents, with the
+  reasoning levels their runtimes report.
+- CLI: `coffer provider list|add|show|edit|rm|switch|key|internal-default`.
+- HTTP: the `/api/v1/providers` routes, `/api/v1/models/*` introspection, and
+  `/api/v1/internal-engine-config[/upkeep]`.
+- Frontend: the Model providers library page, a connection detail page with
+  Overview and Models tabs, and the per-agent switch on the Agent detail page.
+- Tests across all tiers, with acceptance markers tying to the scenarios below.
 
 ### Out of scope (explicit non-goals)
 
-- **Hot-switch / running-process reload** — deferred to a later PR.
-- **Explicit deactivate / native-config restore** — no "revert to default" op;
-  switching overwrites the relevant keys; restoration is a future concern.
-- **Provider drift-verify** — spec item 4.9; separate spec.
-- **Per-agent provider override beyond wire matching** — a profile whose
-  `wire_format` does not match an agent is simply not projected to it; no
-  manual per-agent binding.
-- **Proxy / failover / format conversion** — no proxying; no fallback chains;
-  no anthropic↔openai protocol translation. Wire format is fixed per profile.
-- **Auto env-injection of `COFFER_PROVIDER_KEY` into Coffer-spawned Codex** —
-  deferred with hot-switch.
+- **Hot-switch** — reloading a running Claude Code or Codex process mid-session.
+- **Provider drift-verify** — continuously reconciling the live native config
+  against the active connection. The boot self-check (H6) is the narrow version
+  that exists.
+- **Explicit native-config restore** beyond the `.bak` copies projection leaves.
+- **Proxy / failover / format conversion** — no proxying, no fallback chains, no
+  anthropic↔openai translation. A connection reaches an agent only because the
+  user routed it there, and the endpoint must really speak what that agent sends.
+- **Curating an agent's own models** — nothing in Coffer narrows what an agent
+  reports it can run.
+- **Deriving account entitlement locally** — which models an account may run is
+  an account fact, and no local source answers it.
 
-## Entity — ProviderProfile (Kind = `"provider"`)
+## Entity — connection (kind = `"provider"`)
 
-Resource `name` = the profile name (unique within kind; validated by
-`validate_name`).
+The resource `name` is the connection name, unique within the kind and validated
+by `validate_name`. Its config holds `{protocol, base_url, credential_ref,
+models, is_active, internal_default}` and never a secret or a chosen model; its
+reach is the resource row's `scope`, and its `enabled` switch is the framework's.
+The authoritative field list, with types and constraints, is
+[data-model.md](./data-model.md).
 
-### Config fields (exported `config` dict; deterministic, no machine-local ids)
+## Projection — writing native config
 
-| Field | Type | Notes |
-|---|---|---|
-| `wire_format` | `"anthropic" \| "openai" \| "ollama"` | Required. Gates which agent this connection projects to. `ollama` is internal-only — projected to NO agent (`target_for` returns None). |
-| `base_url` | `str` | Required (all wires). The upstream LLM endpoint. |
-| `credential_ref` | `str \| None` | Optional. Required for anthropic/openai (Fernet vault ref; pattern `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`; conventionally `provider/<name>/key`; multiple connections MAY share one ref). MUST be absent for ollama (no API key). |
-| `model` | `str` | Required. Primary model ID → `ANTHROPIC_MODEL` (Claude) / `model` (Codex); the model Coffer's internal engine runs when this is the internal default. |
-| `fast_model` | `str \| None` | Optional. `ANTHROPIC_SMALL_FAST_MODEL` (anthropic wire only); ignored for openai. |
-| `wire_api` | `"chat" \| "responses"` | Optional, default `"chat"`. openai/Codex only (`[model_providers.*].wire_api`). |
-| `is_active` | `bool` | At most one active per `wire_format`. ollama is never projected, so an ollama connection is always inactive. On import, if >1 active for a wire, normalise deterministically (keep most-recently-updated). |
-| `internal_default` | `bool` | At most one connection globally is the internal-engine default. On import, if >1, normalise (keep most-recently-updated). |
+Which file is written is decided by the AGENT (F2); the managed key set per
+agent, and the ownership markers that make de-projection safe, are in
+[data-model.md](./data-model.md). Two rules are normative here:
 
-> This table records the ORIGINAL shape. Amendment E1 removed `model` /
-> `fast_model` / `wire_api` and turned `wire_format` into a detected `protocol`;
-> the 2026-06-23 amendment added `compatible_agents`, which the 2026-09-13
-> amendment replaced with the resource's framework per-agent `scope` (migration
-> 0071); the 2026-09-11 amendment added the curated `models` set (empty =
-> unrestricted). The current field list
-> is [data-model.md](./data-model.md).
+- Coffer MERGES into the user's existing file and never replaces it. Everything
+  outside its managed keys is preserved, and the write is atomic (temp file +
+  rename) with a `.bak` copy rotated through three generations.
+- A write carries the fingerprint of the content it read and is REFUSED with 409
+  `CONFIG_FILE_STALE` — audited as `provider_projection_refused` — when the file
+  changed on disk in between, so a concurrent edit by the user or by the agent's
+  own CLI is never silently overwritten.
 
-- `audit_redactor`: config holds NO secret (only `credential_ref`); audit shows
-  config as-is. Double-check that no secret leaks via `config` or `details`.
+An `ollama` connection projects into no agent: it has no key to write, it is
+never `is_active`, and it is used solely by Coffer's internal engine.
 
-## Projection — Writing Native Config
+## Internal engine
 
-Analogous to `McpInjectionSpec` in `mcp_injection.py`; encode as a small
-explicit table.
+The global `internal_default` flag (at most one across all connections) selects
+the connection Coffer's own passes run on.
 
-### anthropic → Claude Code
-
-**File**: `~/.claude/settings.json` (JSON); resolved via
-`spec_for(AgentType.CLAUDE_CODE, "settings", cfg_dir)`.
-
-Coffer MANAGES exactly these keys by MERGING into the existing JSON (never full
-replace) and writing via `ConfigFileStore.write_text_atomic` (atomic + `.bak`):
-
-| Key path | Value |
-|---|---|
-| `apiKeyHelper` | `"coffer provider key --wire anthropic"` |
-| `env.ANTHROPIC_BASE_URL` | `profile.base_url` |
-| `env.ANTHROPIC_MODEL` | `profile.model` |
-| `env.ANTHROPIC_SMALL_FAST_MODEL` | `profile.fast_model` (omit / remove key when `None`) |
-
-`ANTHROPIC_API_KEY` MUST NOT be written (it would override the helper).
-Everything else in `settings.json` is preserved; serialised via
-`json.dumps(indent=2)` like the MCP JSON path in `mcp_entries.py`.
-
-### openai → Codex
-
-**File**: `~/.codex/config.toml` (TOML); resolved via
-`spec_for(AgentType.CODEX, "config", cfg_dir)`.
-
-Coffer MANAGES via `tomlkit` (comment/order-preserving, like the MCP TOML path):
-
-| Key path | Value |
-|---|---|
-| `model` | `profile.model` |
-| `model_provider` | `"coffer"` |
-| `[model_providers.coffer].name` | `"Coffer (<profile name>)"` |
-| `[model_providers.coffer].base_url` | `profile.base_url` |
-| `[model_providers.coffer].wire_api` | `profile.wire_api` (default `"chat"`) |
-| `[model_providers.coffer].env_key` | `"COFFER_PROVIDER_KEY"` |
-
-Everything else preserved.
-
-### ollama → (internal only)
-
-An ollama connection projects into NO agent config: `target_for(WireFormat.ollama)`
-returns `None`, so activation writes no native config and the connection is never
-`is_active`. It is used solely by Coffer's internal engine, reached via
-`resolve_internal_connection` when it is the `internal_default`.
-
-## Switch / Activate Operation
-
-`POST /api/v1/providers/{name}/activate` / `coffer provider switch <name>`:
-
-1. Profile must exist; return 404 otherwise.
-2. Clear `is_active` on all other profiles of the **same** `wire_format` via
-   `ResourceService.update_config`, then set the target's `is_active=true` via
-   a second call. The single-process daemon serialises requests so switches
-   never interleave.
-3. For each ENABLED registered agent whose `AgentType` native wire matches
-   `profile.wire_format`, project (write native config). If no matching agent is
-   registered, record active but project nothing — **not an error** (report as
-   skipped).
-4. Emit `provider_switched` audit event with details `{from: <prev_name|null>,
-   to: <name>, wire_format, agents: [...projected...]}`.
-5. Return `{activated: <name>, projected: [agent...], skipped: [agent...]}`.
-
-NOTE: projection (`_project`) runs BEFORE the activation flip; a native-config
-write failure aborts the switch with the registry unchanged.
-
-## Internal engine (Coffer's own LLM)
-
-Separate from per-agent activation, the global `internal_default` flag (≤1 across
-all connections) selects the connection Coffer's own internal LLM engine uses —
-the memory organizer, reorg, and distill.
-
-- `set_internal_default(name)`: clears `internal_default` on all other
-  connections, then sets it on the target (sequential clear-then-set, serialised
-  by the single-process daemon so the global single-internal-default invariant
-  holds), and emits a `provider_internal_default_set` audit event. When the
-  connection actually moves, it also clears the internal-engine model unless
-  the newly-chosen connection curates that id (FR-021).
-- `resolve_internal_connection() -> ProviderConfig | None`: returns the
-  `internal_default` connection's config, or `None` when no connection is marked.
-  When `None`, the internal engine (memory organizer / reorg / distill) is a
+- `set_internal_default(name)` clears the flag on every other connection, then
+  sets it on the target, and emits `provider_internal_default_set`.
+- `resolve_internal_connection()` pairs that connection with the global
+  internal-engine model, or returns `None` — with which the internal passes are a
   clean no-op rather than an error.
-- `build_chat_model(connection, ...)`: the internal engine builds its chat model
-  from the resolved connection, dispatched by `wire_format` (anthropic / openai /
-  ollama). This replaces the retired `ModelConfig` registry's model selection.
+- `build_chat_model(resolved, …)` builds the engine's chat model from the
+  resolved pair, dispatched by protocol.
 
-A connection may be BOTH `is_active` (projected to its wire's agent) AND
-`internal_default` (used internally) — one key, two uses.
-
-## Key Resolution (apiKeyHelper + Codex env)
-
-`coffer provider key --wire <wire_format>`:
-
-1. Find the active profile for the given wire format.
-2. Read `credential_ref` → decrypt via `EncryptedCredentialStore.get(ref)`.
-3. Print the raw key to **stdout ONLY**. Do NOT log the value.
-
-This is the command Claude Code's `apiKeyHelper` invokes (`--wire anthropic`).
-For Codex, the user exports: `export COFFER_PROVIDER_KEY="$(coffer provider key --wire openai)"`.
-
-## Export / import (reuse, ~zero engine change)
-
-Modeling `provider` as a ResourceService Kind puts it in the export bundle
-automatically ([Vault Export and Import](../../docs/decisions/vault-sync.md)):
-
-- `SyncExporter` lists all kinds → serialises each row to
-  `resources/provider/<name>.yaml` via `resource_to_doc`.
-- `SyncImporter` reconciles by `(kind, name)`.
-- Credentials already travel as Fernet ciphertext at `credentials/<ref>.enc`,
-  and only when the user exports with credentials.
-
-Touch points: define the Kind, add a `wire_provider_kind(...)` helper (mirror
-`wire_kb_kind` in `surfaces/http/wiring.py`), register into `app.state.kinds`
-in `surfaces/http/app.py`. No new migration, no manifest SCHEMA_VERSION bump.
-
-## Audit (reuse)
-
-`ResourceService` create / update already emit `RESOURCE_*` events with
-kind-redacted config. Add `PROVIDER_SWITCHED = "provider_switched"` to `AuditEventType`
-(`backend/coffer/domain/audit.py`) and emit it from the switch operation via
-`AuditService.record(AuditEventType.PROVIDER_SWITCHED.value, ref=ResourceRef(
-kind="provider", name=<name>), actor=..., details={...})`. Likewise add
-`PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"` and emit it
-from `set_internal_default`.
+A connection may be BOTH active (projected into the agents it reaches) AND the
+internal default — one key, two uses.
 
 ## HTTP API
 
-Hand-written OpenAPI; 005-style — not contract-test-gated; sync manually.
-Full spec in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
+Hand-written OpenAPI, not contract-test-gated; keep it in sync manually. Full
+document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
 
-- `GET  /api/v1/providers` → list profiles (`{ "providers": [ ProviderOut, ... ] }`)
-- `POST /api/v1/providers` → create (see credential-source rules below)
-- `GET  /api/v1/providers/{name}` → one profile
-- `PATCH /api/v1/providers/{name}` → update mutable fields (`base_url`,
-  `models`, `secret_value`); which agents the connection reaches is a scope edit
-  (`PUT /api/v1/resources/provider/{name}/scope`), not a patch field, and
-  `ProviderOut.compatible_agents` reports the CONFIGURED reach read-only (scope,
-  not narrowed by `enabled` — which rides the same payload);
-  `wire_format`/`protocol` and
-  `credential_ref` are immutable; `secret_value` rotates the stored secret;
-  `models` is a whole-value replace (`[]` clears the curated set)
-- `POST /api/v1/providers/{name}/rename` (`{new_name}`) → rename; moves the
-  owned vault entry, repoints the audit trail and re-projects an active
-  connection in one operation. 409 when another connection already holds the
-  name, 404 when this one is absent, no-op when the name is unchanged
-- `DELETE /api/v1/providers/{name}` → delete; guard via
-  `find_credential_citations` before removing an owned secret
+**Connections**
+
+- `GET /api/v1/providers` → `{providers: [ProviderOut, …]}`
+- `POST /api/v1/providers` → create (credential-source rule below)
+- `GET /api/v1/providers/{name}` → one connection
+- `PATCH /api/v1/providers/{name}` → update `base_url`, `protocol`, `models`,
+  `secret_value`, `description`. `credential_ref` is immutable; `secret_value`
+  rotates the stored secret; `models` is a whole-value replace (`null` leaves it
+  alone, `[]` clears the restriction). Reach is not a patch field — it is a scope
+  edit, and `ProviderOut.compatible_agents` reports the CONFIGURED reach
+  read-only, with `enabled` riding the same payload
+- `POST /api/v1/providers/{name}/rename` (`{new_name}`) → rename; 409 when
+  another connection holds the name, 404 when this one is absent, a no-op when
+  unchanged
+- `DELETE /api/v1/providers/{name}` → delete; `find_credential_citations` guards
+  the owned secret
 - `POST /api/v1/providers/{name}/activate` → switch; returns
-  `{activated, projected:[agent...], skipped:[agent...]}`
+  `{activated, protocol, projected, skipped}`
+- `POST /api/v1/providers/use-builtin/{wire}` → revert the agent behind that
+  wire to its built-in login; idempotent
 - `POST /api/v1/providers/{name}/internal-default` → set the internal-engine
   default; returns the updated `ProviderOut`
+- `GET /api/v1/providers/{name}/key` → the named connection's key (what the
+  projected `apiKeyHelper` calls)
+- `GET /api/v1/providers/active-key/{wire}` → the legacy wire-keyed form,
+  resolving through that wire's agent
 
-`wire_format` accepts `anthropic`, `openai`, or `ollama` on request and response.
+**Introspection** — `POST /api/v1/models/list-models`,
+`POST /api/v1/models/test-connection`, `POST /api/v1/models/detect-protocol`.
+All three accept an inline `secret_value` so a connection can be tested before
+it is saved.
 
-**Credential source rule**: For anthropic/openai, exactly one of `secret_value`
-(stored to vault under `provider/<name>/key`, kept as ref) or `credential_ref`
-(reuse existing) must be supplied on create; reject if both or neither are
-present. For `wire_format=ollama` the credential is OPTIONAL — supply NEITHER
-`secret_value` nor `credential_ref` (an ollama connection has no key).
+**Internal engine** — `GET` / `PUT /api/v1/internal-engine-config` and
+`PUT /api/v1/internal-engine-config/upkeep` (one pass per request).
 
-`ProviderOut` NEVER includes the secret; includes `credential_ref`, `is_active`,
-and `internal_default`.
+**Reach** is the framework's own surface:
+`GET` / `PUT /api/v1/resources/provider/{name}/scope`.
+
+**Credential source rule**: for `anthropic` / `openai` / `unknown`, exactly one
+of `secret_value` (stored under `provider/<name>/key`, kept as a ref) or
+`credential_ref` (reuse an existing entry) must be supplied on create; both or
+neither is rejected. An `ollama` connection must supply NEITHER.
+
+`ProviderOut` never includes the secret; it carries `credential_ref`,
+`compatible_agents`, `models`, `is_active`, `internal_default` and `enabled`.
 
 ## CLI
 
-`coffer provider list|add|show|edit|remove|switch|key|internal-default` with `--json`.
+`coffer provider list|add|show|edit|rm|switch|key|internal-default`, with
+`--json` on `list`.
 
-- `add` prompts for / accepts the secret (skipped for an ollama connection,
-  which has no key).
-- `key` prints the resolved secret (for `apiKeyHelper`); requires `--wire <wire_format>`;
-  resolves by the active profile for that wire.
-- `internal-default <name>` marks a connection as Coffer's internal-engine
-  default (clears any previous one).
+- `add <name> --protocol <p> --base-url <url> [--secret <value> |
+  --credential-ref <ref>]`. No model is supplied: it is chosen at the point of
+  use.
+- `edit <name> [--base-url <url>] [--secret <value>]` — the protocol and the
+  credential ref are not editable here.
+- `rm <name>` removes the connection, and its owned vault entry when nothing
+  else cites it.
+- `switch <name>` activates the connection for every agent its scope reaches.
+- `key --connection <name>` prints that connection's key — what Coffer projects.
+  `--wire <wire>` is the legacy form, resolving through the wire's agent. The raw
+  value goes to stdout only and is never logged.
+- `internal-default <name>` marks the connection Coffer's internal engine uses,
+  clearing any previous one.
 
-## Frontend (minimal)
+Re-targeting a connection is `coffer scope set provider:<name> --agents …`, and
+a rename is available over HTTP or from the connection's detail page.
 
-- `frontend/src/lib/api/providers.ts` — hand-written client + TS types (`types.ts`
-  codegen covers only the 001 gateway spec; do NOT expect generated types here).
-- A **Model providers** page (route `/model-providers`, in the sidebar's
-  RESOURCES group — `provider` is a resource kind with a list UI, so spec ui-shell's
-  IA rule puts it there) is the connection library: a `DataTable` (reuse the shared component; see
-  SkillsPage / MCP page) with columns name / wire_format / base_url / model /
-  active / internal, header action create, and row actions switch /
-  set-internal-default / delete, PLUS the Embedding card. The page shows ONLY
-  connection (provider + model) info — no agent names, no presets, no modality
-  split. Editing a connection is available via the CLI (`coffer provider edit`)
-  and the PATCH API, not the web page.
-- Per-agent connection + model selection lives on the **agent detail page
-  (Overview tab)**, filtered to that agent's wire, reusing the activate API. The
-  Model providers page does not bind agents.
+## Frontend
+
+- `frontend/src/lib/api/providers.ts` — the client and its types. The enums and
+  the activate/deactivate answers come from this spec's generated contract; the
+  connection shapes are hand-written.
+- **Model providers** (route `/model-providers`, in the sidebar's RESOURCES
+  group — spec ui-shell's IA rule puts a resource kind with a list UI there) is
+  the connection library: a `DataTable` of name / vendor / base URL / reach, an
+  Add action in the header, and Delete per row. There is no per-row switch (F5)
+  and no internal-engine badge: which connection Coffer's own engine runs on is a
+  fact about the engine, stated where it is set (the internal-engine settings
+  panel) and on the connection's own detail header. The **vendor** column and its
+  filter are DERIVED from `base_url` by matching it against the preset list
+  rather than stored, so an endpoint matching no preset reads as Custom; the
+  protocol stays on the detail page, where it answers a question rather than
+  sorting a list. The **name** column keeps the user's own name for the
+  connection: it is the id the routes and CLI address.
+- The connection **detail page** splits into **Overview** and **Models** tabs,
+  like agent and MCP-server detail. Its header carries the shared `ScopeControl`
+  — the single place the connection's reach and its enabled state are both shown
+  and changed. The edit dialog's Name field submits a rename ahead of the patch,
+  with the page following the new URL (the route IS the name).
+- The **Models** tab is a `DataTable`, one row per model id: id, type and
+  offered, with search, a Type filter and an Offered filter. The type is a
+  five-value Select pre-filled from what introspection guessed and correctable in
+  place; a correction on an already-offered row patches the curated set
+  immediately, while one made on a row not offered yet is held on the surface and
+  travels into the entry when its Switch is turned on. Empty selection still
+  means NO RESTRICTION.
+- **A2 — The Models tab introspects on open; there is no "Fetch models"
+  button.** Which models an endpoint serves is a fact about the endpoint, exactly
+  like an MCP server's tool list, and Coffer lists those the moment the server is
+  opened. Making the user press a button first made "the endpoint offers nothing"
+  and "nothing asked it" indistinguishable. So the tab probes as it opens, once
+  per visit, saying so while it does. A failed probe MUST be visible and
+  retryable — the table names the failure and offers a retry — and a failed or
+  empty probe leaves the curated selection alone.
+- Per-agent connection and model selection lives on the **agent detail page
+  (Overview tab)**, filtered to the connections that reach that agent and
+  narrowed by `enabled`, as the draft / test / confirm flow of G1–G2. On the
+  built-in login it shows no model control, only the line saying where the model
+  is chosen (H4).
+- The add-connection dialog offers the provider presets of E2 plus Custom, and
+  surfaces test-connection and list-models with an inline, not-yet-saved secret.
 - The old `/settings/models`, `/settings/providers` and
   `/settings/llm-connections` routes redirect to `/model-providers`.
-- Add `vi.mock` for any new hook in page + table tests.
-
-> **Amendment 2026-06-23 (provider presets).** The add-connection form no longer
-> auto-detects the `protocol` from base_url + key. Instead it offers a **provider
-> preset** picker (OpenAI / Anthropic / Google Gemini / DeepSeek / OpenRouter /
-> Ollama) that fills the endpoint + protocol, plus a **Custom**
-> option that reveals a manual protocol selector for any other OpenAI-/Anthropic-
-> compatible endpoint. The stored data model is unchanged (`protocol` is still a
-> `ProviderConfig` field); only how it is chosen at create time changed. The
-> `detect-protocol` probe endpoint stays for other callers but is no longer used
-> by the form.
-
-> **Amendment 2026-09-11 (the surface says what it manages).** The page stopped
-> calling these things "LLM connections" — in the UI they are **model providers**,
-> the name the sidebar and spec ui-shell already used. Four consequences for the
-> surface, none of them touching the stored model or the API:
->
-> - The list's second column and its filter are the **vendor** (OpenAI,
->   Anthropic, …), not the wire protocol. The vendor is DERIVED from `base_url`
->   by matching it against the preset list rather than stored — an endpoint that
->   matches no preset reads as Custom, which is also what happens if a user edits
->   a preset's base URL. The protocol stays visible on the detail page, where it
->   answers a question (how is this endpoint called) rather than sorting a list.
-> - The **name** column keeps showing the user's own name for the provider: it is
->   the unique id the routes and CLI address, and renaming it to the vendor would
->   collapse two keys on the same vendor into one row.
-> - The detail page splits its body into **Overview** and **Models** tabs, like
->   agent and MCP-server detail. The Models tab is a `DataTable` — one row per
->   model id with a per-row enable Switch, plus search and a status filter —
->   because a curated set of a real endpoint's models is a list, and every other
->   list in Coffer is that table. Empty selection still means NO RESTRICTION.
-> - The **Moonshot (Kimi)** preset is gone.
-
-> **Amendment 2026-09-11b (the surface, after the 2026-09-12 withdrawal).** The
-> Agent page's Overview tab has no model control on the built-in login: the
-> `AgentModelSelection` panel and the `GET|PUT …/models/selection` client that
-> fed it are gone, and the branch renders one muted line saying the model is
-> chosen per conversation — in the chat picker, or with `/model <id>` in a
-> channel. The non-built-in branch is untouched: a connection still binds its
-> model / fast-model dropdowns from its own models. The catalogue endpoint STAYS:
-> the Chat page's per-conversation picker reads it, the agent detail page reads it
-> to say what the agent can be put on, and the channel `/model` card reads the
-> same catalogue in-process.
-
-> **Amendment 2026-09-12 (the surface, after A1–A3).** The edit dialog's Name
-> field is editable and submits a rename ahead of the patch, with the detail
-> page following the new URL (the route IS the name). The Models tab has no
-> fetch button — it probes on open and offers a retry when that fails. The list
-> row carries no internal-engine badge, and the detail header's read-only
-> enabled/disabled badge is replaced by the shared `ScopeControl`.
 
 ## Acceptance Scenarios
 
@@ -1326,121 +664,125 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 
 ### Scenario: create an anthropic provider profile with an inline secret
 
-- **Given** no provider named `my-provider` exists,
-- **When** the user creates a profile with `wire_format="anthropic"`, a
-  `base_url`, `model`, and `secret_value` (the raw API key),
-- **Then** the profile is persisted with a `credential_ref` of
+- **Given** no connection named `my-provider` exists,
+- **When** the user creates one with `protocol="anthropic"`, a `base_url` and
+  `secret_value` (the raw API key),
+- **Then** it is persisted with a `credential_ref` of
   `provider/my-provider/key`, the raw key is stored in the Fernet vault under
   that ref, `ProviderOut` is returned with no secret field, and
-  `RESOURCE_CREATED` is audited.
+  `resource_created` is audited.
 
 ### Scenario: create a profile that reuses an existing credential ref
 
 - **Given** a credential already exists under ref `shared/key`,
-- **When** the user creates a profile supplying `credential_ref="shared/key"` (no `secret_value`),
-- **Then** the profile is persisted pointing to the existing ref, no new vault
-  entry is created, and `ProviderOut` reflects the supplied `credential_ref`.
+- **When** the user creates a connection supplying `credential_ref="shared/key"`
+  (no `secret_value`),
+- **Then** it is persisted pointing at the existing ref, no new vault entry is
+  created, and `ProviderOut` reflects the supplied `credential_ref`.
 
 ### Scenario: reject a profile with an unknown wire format
 
 - **Given** the daemon is running,
-- **When** the user attempts to create a profile with `wire_format="grpc"`,
-- **Then** the request is rejected with `422 Unprocessable Entity` and no
-  profile row is created.
+- **When** the user attempts to create a connection with `protocol="grpc"`,
+- **Then** the request is rejected with `422 Unprocessable Entity` and no row is
+  created.
 
 ### Scenario: reject a profile that supplies neither a secret nor a credential ref
 
 - **Given** the daemon is running,
 - **When** the user attempts to create an **anthropic** connection (the
-  neither-rule applies to anthropic/openai; ollama legitimately supplies neither)
-  without supplying either `secret_value` or `credential_ref`,
-- **Then** the request is rejected with `422 Unprocessable Entity` and no
-  profile row or vault entry is created.
+  neither-rule applies to anthropic / openai / unknown; ollama legitimately
+  supplies neither) without either `secret_value` or `credential_ref`,
+- **Then** the request is rejected with `422 Unprocessable Entity` and no row and
+  no vault entry are created.
 
 ### Scenario: update a provider profile
 
-- **Given** a provider profile exists,
-- **When** the user patches `base_url` and `model` (no `secret_value`),
-- **Then** only those fields are updated, `credential_ref` is unchanged, and
-  `RESOURCE_UPDATED` is audited.
+- **Given** a connection exists,
+- **When** the user patches `base_url` (no `secret_value`),
+- **Then** only that field is updated, `credential_ref` is unchanged, and
+  `resource_updated` is audited.
 
 ### Scenario: list provider profiles
 
-- **Given** two provider profiles exist (one anthropic, one openai),
-- **When** the user lists all providers,
+- **Given** two connections exist (one anthropic, one openai),
+- **When** the user lists all connections,
 - **Then** both appear in `ProviderOut[]`, none includes the raw secret, and
   each carries the correct `is_active` flag.
 
 ### Scenario: delete a provider profile cleans up its owned credential
 
-- **Given** a profile whose `credential_ref` is `provider/my-provider/key`
-  (owned; no other profile shares it),
-- **When** the user deletes the profile,
-- **Then** the vault entry at that ref is deleted and `RESOURCE_DELETED` is
+- **Given** a connection whose `credential_ref` is `provider/my-provider/key`
+  (owned; nothing else cites it),
+- **When** the user deletes it,
+- **Then** the vault entry at that ref is deleted and `resource_deleted` is
   audited.
 
 ### Scenario: activate an anthropic profile writes Claude Code settings
 
-- **Given** a Claude Code agent is registered and an anthropic profile exists,
-- **When** the user activates the profile,
-- **Then** `~/.claude/settings.json` contains `apiKeyHelper`,
-  `env.ANTHROPIC_BASE_URL`, and `env.ANTHROPIC_MODEL`; if `fast_model` is set,
-  `env.ANTHROPIC_SMALL_FAST_MODEL` is present; `ANTHROPIC_API_KEY` is absent;
-  and the profile's `is_active` becomes `true`.
+- **Given** a Claude Code agent is registered and a connection reaching it
+  exists,
+- **When** the user activates the connection,
+- **Then** `~/.claude/settings.json` contains `apiKeyHelper` naming that
+  connection, `env.ANTHROPIC_BASE_URL`, and — when the agent's binding names
+  them — `env.ANTHROPIC_MODEL` and `env.ANTHROPIC_SMALL_FAST_MODEL`;
+  `ANTHROPIC_API_KEY` is absent; and the connection's `is_active` becomes `true`.
 
 ### Scenario: an agent's model binding drives the projected model
 
 - **Given** a Claude Code agent is registered with a per-agent model binding
-  (`model` + `fast_model`) and an anthropic connection exists,
+  (`model` + `fast_model`) and a connection reaching it exists,
 - **When** the user activates the connection,
-- **Then** the projected `env.ANTHROPIC_MODEL` / `env.ANTHROPIC_SMALL_FAST_MODEL`
-  come from the AGENT's binding — the model lives at the point of use, not on the
-  connection (amendment 2026-06-22b E1/E3/E4). An unbound agent gets no model env
-  written, so it runs on its OWN default model.
+- **Then** the projected `env.ANTHROPIC_MODEL` /
+  `env.ANTHROPIC_SMALL_FAST_MODEL` come from the AGENT's binding — the model
+  lives at the point of use, not on the connection (E1/E3/E4). An unbound agent
+  gets no model env written, so it runs on its OWN default model.
 
 ### Scenario: activate an openai profile writes Codex config
 
-- **Given** a Codex agent is registered and an openai profile exists,
-- **When** the user activates the profile,
-- **Then** `~/.codex/config.toml` contains `model`, `model_provider = "coffer"`,
-  and a `[model_providers.coffer]` table with `base_url`, `wire_api`, and
-  `env_key = "COFFER_PROVIDER_KEY"`; the profile's `is_active` becomes `true`.
+- **Given** a Codex agent is registered and a connection reaching it exists,
+- **When** the user activates the connection,
+- **Then** `~/.codex/config.toml` contains `model` (from the agent's binding),
+  `model_provider = "coffer"`, and a `[model_providers.coffer]` table with
+  `base_url`, `wire_api = "responses"` and `env_key = "COFFER_PROVIDER_KEY"`;
+  and the connection's `is_active` becomes `true`.
 
 ### Scenario: activating a profile deactivates the previous active profile of the same wire format
 
-- **Given** anthropic profile A is active and anthropic profile B exists,
-- **When** the user activates profile B,
-- **Then** profile B becomes active and profile A becomes inactive (the
-  single-process daemon serialises the clear-then-set so switches never
-  interleave).
+- **Given** connection A is active for an agent type and connection B reaches
+  the same agent type,
+- **When** the user activates B,
+- **Then** B becomes active and A becomes inactive — at most one active
+  connection per AGENT TYPE (the single-process daemon serialises the
+  clear-then-set so switches never interleave).
 
 ### Scenario: switch a wire back to the agent built-in login
 
-- **Given** an anthropic connection is active and projected into Claude Code,
-- **When** the user switches that wire back to built-in (`POST
-  /providers/use-builtin/{wire}`),
-- **Then** Coffer's managed keys are removed from the agent's native config so
-  it falls back to its own login, and the connection is no longer active; the
-  operation is idempotent (a no-op when nothing is active). See
-  [Provider Switching](../../docs/decisions/provider-switching.md) amendment D1/D3
-  (connections are optional overrides).
+- **Given** a connection is active and projected into Claude Code,
+- **When** the user switches that wire back to built-in
+  (`POST /providers/use-builtin/{wire}`),
+- **Then** Coffer's managed keys are removed from the agent's native config so it
+  falls back to its own login, and the connection is no longer active; the
+  operation is idempotent (a no-op when nothing is active). A connection is an
+  optional override (D1).
 
 ### Scenario: activate a profile whose wire matches no registered agent records active but projects nothing
 
-- **Given** no Codex agent is registered and an openai profile exists,
-- **When** the user activates the openai profile,
-- **Then** the profile's `is_active` becomes `true`, no config file is written,
-  and the response carries `skipped: ["codex"]` (or empty `projected`).
+- **Given** no Codex agent is registered and a connection reaching only Codex
+  exists,
+- **When** the user activates it,
+- **Then** its `is_active` becomes `true`, no config file is written, and the
+  response carries `skipped: ["codex"]` (or empty `projected`).
 
 ### Scenario: switching preserves unrelated native-config keys and writes a .bak backup
 
-- **Given** `~/.claude/settings.json` contains keys that Coffer does not manage
+- **Given** `~/.claude/settings.json` contains keys Coffer does not manage
   (e.g. `theme`, `mcpServers`),
-- **When** the user activates an anthropic profile,
-- **Then** those keys are preserved byte-for-byte in the updated file, a
-  `.bak` file is written before the update (the previous `.bak` rotating to
-  `.bak.1`, then `.bak.2`; three generations are kept), and only the
-  Coffer-managed keys are changed.
+- **When** the user activates a connection reaching that agent,
+- **Then** those keys are preserved byte-for-byte in the updated file, a `.bak`
+  file is written before the update (the previous `.bak` rotating to `.bak.1`,
+  then `.bak.2`; three generations are kept), and only the Coffer-managed keys
+  are changed.
 
 ### Scenario: projection refuses to overwrite a concurrent edit
 
@@ -1454,25 +796,28 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 
 ### Scenario: a provider switch is recorded in the audit log
 
-- **Given** an anthropic profile is activated,
+- **Given** a connection is activated,
 - **When** the user queries the audit log,
-- **Then** a `provider_switched` entry appears with details `{from, to,
-  wire_format, agents}`, timestamp, and actor.
+- **Then** a `provider_switched` entry appears with details
+  `{from, to, protocol, agents}`, a timestamp, and an actor.
 
 ### Scenario: resolve the active provider key for the apiKeyHelper
 
-- **Given** an anthropic profile is active with a known secret stored in the
-  vault,
-- **When** `coffer provider key --wire anthropic` is executed,
+- **Given** a connection is active with a known secret stored in the vault,
+- **When** its key is resolved — `coffer provider key --connection <name>`, or
+  the legacy `--wire anthropic` form,
 - **Then** the raw key is printed to stdout and the vault key is NOT logged.
 
 ### Scenario: a provider profile round-trips through sync export and import
 
-- **Given** a provider profile with a credential ref exists,
-- **When** the exporter runs followed by the importer on a clean DB,
-- **Then** the profile row is restored with identical `config` fields, the
-  credential ciphertext is present at `credentials/<ref>.enc`, and no secret
-  is exposed in the bundle's plaintext.
+- **Given** a connection with a credential ref exists on one machine,
+- **When** a converge round runs — the exporter writes the connection into the
+  tree and the resource **applier** puts that document into the second machine's
+  vault,
+- **Then** the row lands there with identical `config` fields, the credential
+  ciphertext is present at `credentials/<ref>.enc`, and no secret appears
+  anywhere in the tree's plaintext. A later edit converges the same way, so the
+  second machine ends up with the edited config and description.
 
 ### Scenario: the command line covers create, list, and switch
 
@@ -1484,22 +829,23 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 
 ### Scenario: the connections page lists profiles and their compatible agents
 
-- **Given** the connections page is rendered with two mock connections (each with
-  a `compatible_agents` set),
+- **Given** the connections page is rendered with two mock connections whose
+  reach differs,
 - **When** the page renders,
-- **Then** it lists both connections with their compatible-agent chips and shows
-  NO per-row "Switch" action — activation is per-agent on the Agent Overview tab
-  (TypeScript acceptance test).
+- **Then** it lists both connections with their endpoints, marks the active one,
+  and shows each connection's reach in the Reach column's own control — not as a
+  second column repeating it in words — with NO per-row "Switch" action, because
+  activation is per-agent on the Agent Overview tab (TypeScript acceptance test).
 
 ### Scenario: route an openai-compatible connection to Claude Code with its scope
 
 - **Given** a Claude Code agent is registered and an `openai`-wire connection is
-  created (the agnes case) and then scoped to `["claude_code"]`,
+  created and then scoped to `["claude_code"]`,
 - **When** the user activates that connection,
-- **Then** it projects into Claude Code's `settings.json` (anthropic shape) with
-  `apiKeyHelper = "coffer provider key --connection <name>"`,
+- **Then** it projects into Claude Code's `settings.json` (the anthropic shape)
+  with `apiKeyHelper = "coffer provider key --connection <name>"`,
   `GET /providers/{name}/key` returns exactly that connection's key, and the
-  reported effective agent set follows the scope.
+  reported agent set follows the scope.
 
 ### Scenario: per-agent key routing follows the connection's scope
 
@@ -1511,40 +857,39 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 
 ### Scenario: list a provider's models
 
-- **Given** a connection being added or edited, with a provider entered (plus
-  base URL / credential ref where the provider needs them),
-- **When** the provider's models are fetched,
-- **Then** Coffer returns the model ids the provider exposes for selection, and
-  if none can be listed it returns an empty list with a message so the user can
-  still type a model id manually.
+- **Given** a connection being added or edited, with a protocol entered (plus
+  base URL and credential where the endpoint needs them),
+- **When** its models are fetched,
+- **Then** Coffer returns the model ids the endpoint exposes for selection, each
+  with an inferred modality, and if none can be listed it returns an empty list
+  with a message so the surface can say what happened.
 
 ### Scenario: test a model connection
 
-- **Given** a connection's provider, model id, and (where required) credential
-  ref,
+- **Given** a connection's protocol, a model id, and (where required) a
+  credential ref,
 - **When** the connection is tested,
-- **Then** Coffer makes a minimal request to the provider and reports success or
+- **Then** Coffer makes a minimal request to the endpoint and reports success or
   a humanized failure message, without persisting anything.
 
 ### Scenario: test or fetch models with an inline unsaved secret
 
-- **Given** the connection dialog is open and no connection (nor its credential
-  ref) has been saved yet,
-- **When** the user types a raw API key and triggers «测试连接» or «拉取模型»
-  (`POST /models/test-connection` / `POST /models/list-models` carrying
-  `secret_value` and no `credential_ref`),
+- **Given** the connection dialog is open and neither the connection nor its
+  credential ref has been saved yet,
+- **When** the user types a raw API key and triggers test-connection or
+  list-models (`POST /models/test-connection` / `POST /models/list-models`
+  carrying `secret_value` and no `credential_ref`),
 - **Then** the introspection service passes the inline key straight to the
-  provider without consulting the credential vault, the probe succeeds, and the
-  fetched models populate the selectable dropdown (per
-  [Provider Switching](../../docs/decisions/provider-switching.md) amendment D6).
+  endpoint without consulting the credential vault, the probe succeeds, and the
+  fetched models populate the selectable dropdown.
 
 ### Scenario: create an ollama connection without a credential
 
 - **Given** no connection named `local-llm` exists,
-- **When** the user creates a connection with `wire_format="ollama"`, a
-  `base_url`, `model`, and neither `secret_value` nor `credential_ref`,
-- **Then** the connection persists with `credential_ref` null, no vault entry is
-  created, and `ProviderOut` shows `internal_default=false`.
+- **When** the user creates one with `protocol="ollama"`, a `base_url`, and
+  neither `secret_value` nor `credential_ref`,
+- **Then** it persists with `credential_ref` null, no vault entry is created, it
+  reaches no agent, and `ProviderOut` shows `internal_default=false`.
 
 ### Scenario: set a connection as the internal engine default
 
@@ -1557,8 +902,9 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 
 - **Given** connection A is the internal default,
 - **When** the user sets connection B as the internal default,
-- **Then** B's `internal_default` becomes true and A's becomes false (global
-  single-internal-default invariant).
+- **Then** B's `internal_default` becomes true and A's becomes false (one
+  internal default globally, enforced by the database as well as by the
+  operation).
 
 ### Scenario: switching the internal engine's connection drops a model it does not serve
 
@@ -1590,24 +936,24 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   (`PUT /api/v1/internal-engine-config`),
 - **Then** `GET /api/v1/internal-engine-config` returns that model, an
   `internal_engine_model_set` audit entry is recorded, and
-  `resolve_internal_connection()` overlays the chosen model onto the resolved
-  internal-default connection (the model lives apart from the connection, per
-  the amendment below).
+  `resolve_internal_connection()` pairs the chosen model with the resolved
+  internal-default connection (the model lives apart from the connection, E3).
 
 ### Scenario: the agent's model picker offers a fixed list without free-form entry
 
-- **Given** an agent whose model binding is being edited,
+- **Given** an agent whose model is being chosen — on its detail page or in a
+  conversation,
 - **When** the model picker is opened,
-- **Then** it offers a fixed dropdown of the agent's model catalogue
-  (`GET /api/v1/agent-providers/{agent_key}/models`) with no free-text "Custom…"
-  entry; and when a connection overrides the agent the dropdown offers that
-  connection's introspected models IN ADDITION to the catalogue and the current
-  value, never reading the connection's stored `model` field (TypeScript
-  acceptance test; union per the 2026-09-09 amendment).
+- **Then** it offers a fixed dropdown with no free-text "Custom…" entry and no
+  text input: the agent's own catalogue
+  (`GET /api/v1/agent-providers/{agent_key}/models`) when it is on its built-in
+  login, and the active connection's introspected models when one overrides it —
+  never a model field stored on the connection, which carries none (TypeScript
+  acceptance test).
 
 ### Scenario: curate which of a connection's models are offered downstream
 
-- **Given** an LLM connection created with `models: ["opus", "sonnet", "opus"]`,
+- **Given** a connection created with `models: ["opus", "sonnet", "opus"]`,
 - **When** it is read back, then patched with `models: ["haiku"]`, then patched
   on an unrelated field,
 - **Then** the create response, `GET /api/v1/providers/{name}` and the list route
@@ -1619,11 +965,11 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 ### Scenario: a connection with no curated models offers every model the endpoint serves
 
 - **Given** a connection created without `models` (the default, and what every
-  connection made before revision 0059 carries),
+  connection made before the curated set existed carries),
 - **When** it is read back, then curated with `models: ["opus"]`, then patched
   with `models: []`,
-- **Then** it reports `[]` — no restriction, the endpoint's whole catalogue — both
-  at creation and after the `[]` patch, which clears the curated set.
+- **Then** it reports `[]` — no restriction, the endpoint's whole catalogue —
+  both at creation and after the `[]` patch, which clears the curated set.
 
 ### Scenario: rename a connection and keep its credential, audit trail and projection
 
@@ -1648,7 +994,7 @@ resolve under their original names with their credentials intact.
 **When** `acme` is renamed,
 **Then** `GET /api/v1/providers/<new name>/key` returns the same secret, the
 connection the projected config names is the new one, and the connection is
-still active and still compatible with that agent.
+still active and still reaches that agent.
 
 ### Scenario: the models table lists the endpoint's models when it opens
 
@@ -1695,165 +1041,182 @@ connection's existing curated selection is left exactly as it was.
 
 **Resource model**
 
-- **FR-001**: System MUST register each managed provider as a Resource of kind
+- **FR-001**: System MUST register each managed connection as a Resource of kind
   `provider`, identified by `provider:<name>`.
-- **FR-002**: System MUST validate provider config against a kind-specific schema
-  (fields: `wire_format`, `base_url`, `credential_ref`, `model`, `fast_model?`,
-  `wire_api?`, `is_active`).
-- **FR-003**: `ProviderOut` MUST NEVER include the raw secret. `credential_ref`
-  and `is_active` MUST be included.
+- **FR-002**: System MUST validate a connection's config against a kind-specific
+  schema over `{protocol, base_url, credential_ref, models, is_active,
+  internal_default}`, rejecting any other key. The config MUST NOT carry a model
+  the connection runs, nor the agents it reaches — reach is the resource row's
+  per-agent `scope`.
+- **FR-003**: `ProviderOut` MUST NEVER include the raw secret. `credential_ref`,
+  `compatible_agents` (the configured reach, read-only), `enabled`, `is_active`
+  and `internal_default` MUST be included.
 
 **Credential handling**
 
 - **FR-004**: On create with `secret_value`, System MUST store the raw key under
-  `provider/<name>/key` in the Fernet vault and persist only the ref. Exactly
-  one of `secret_value` or `credential_ref` must be supplied; both or neither
-  must be rejected `422`.
+  `provider/<name>/key` in the Fernet vault and persist only the ref. For
+  `anthropic` / `openai` / `unknown`, exactly one of `secret_value` or
+  `credential_ref` must be supplied; both or neither MUST be rejected `422`.
 - **FR-005**: On `PATCH` with `secret_value`, System MUST rotate the stored
   secret (overwrite the vault entry) without changing the ref.
-- **FR-006**: On delete, if the profile owns its credential ref (no other profile
-  cites it), System MUST delete the vault entry via `find_credential_citations`
-  guard.
+- **FR-006**: On delete, if the connection owns its credential ref (nothing else
+  cites it), System MUST delete the vault entry, guarded by
+  `find_credential_citations`.
 
 **Projection**
 
-- **FR-007**: System MUST project an activated anthropic profile into
-  `~/.claude/settings.json` via `ConfigFileStore.write_text_atomic` (atomic +
-  `.bak` rotated through three generations), merging only the specified keys,
-  preserving everything else. `ANTHROPIC_API_KEY` MUST NOT be written. Every
-  projection write (this one, FR-008's, and their de-projections) MUST carry
-  the fingerprint of the content it read and MUST be refused with 409
-  `CONFIG_FILE_STALE` — audited as `provider_projection_refused` — when the
-  file changed on disk in between, so a concurrent edit by the user is never
-  silently overwritten.
-- **FR-008**: System MUST project an activated openai profile into
-  `~/.codex/config.toml` via `tomlkit` (comment/order-preserving), merging
-  only the specified keys, preserving everything else.
-- **FR-009**: If `fast_model` is `None`, the key `env.ANTHROPIC_SMALL_FAST_MODEL`
-  MUST be omitted or removed from `settings.json`.
-- **FR-010**: Domain projection logic MUST be pure (no I/O). The pure functions
-  `apply_anthropic_settings(...)` and `apply_codex_provider(...)` in
-  `domain/provider/projection.py` return the new native-config TEXT directly;
-  `ProviderService._project(...)` calls them and performs the file write.
+- **FR-007**: System MUST project into `~/.claude/settings.json` via
+  `ConfigFileStore.write_text_atomic` (atomic, with `.bak` rotated through three
+  generations), merging only the managed keys and preserving everything else.
+  `ANTHROPIC_API_KEY` MUST NOT be written. Every projection write (this one,
+  FR-008's, and their de-projections) MUST carry the fingerprint of the content
+  it read and MUST be refused with 409 `CONFIG_FILE_STALE` — audited as
+  `provider_projection_refused` — when the file changed on disk in between, so a
+  concurrent edit is never silently overwritten.
+- **FR-008**: System MUST project into `~/.codex/config.toml` via `tomlkit`
+  (comment/order-preserving), merging only the managed keys and preserving
+  everything else. When the connection curates `text` models it MUST also write
+  the Coffer-owned model catalogue and point `model_catalog_json` at it, writing
+  the file before the pointer and dropping the pointer before the file; it MUST
+  drop that pointer only when it names the Coffer-owned filename.
+- **FR-009**: The model keys MUST come from the AGENT's binding. An unset
+  `model` or `fast_model` MUST leave the corresponding key out of — or removed
+  from — the native config, so the agent runs on its own default.
+- **FR-010**: Domain projection logic MUST be pure (no I/O): the `apply_*` /
+  `remove_*` functions in `domain/provider/projection.py` take the existing text
+  and return the new native-config TEXT; `ProviderProjector` performs the file
+  read and write.
 
 **Single-active invariant**
 
-- **FR-011**: At most one profile per `wire_format` may have `is_active=true`.
-  Activating a profile MUST clear `is_active` on all others of the same wire
-  via sequential `ResourceService.update_config` calls, then set the target's
-  `is_active=true`. The single-process daemon serialises requests so switches
-  never interleave. On import with >1 active for a wire, normalise: keep
-  most-recently-updated, set the rest to inactive.
+- **FR-011**: At most one connection per AGENT TYPE may have `is_active=true`.
+  Activating a connection MUST clear `is_active` on the connections holding the
+  agents it reaches, then set the target's, via sequential
+  `ResourceService.update_config` calls; the single-process daemon serialises
+  requests so switches never interleave. Converging a vault that holds more than
+  one active connection for an agent type MUST normalise deterministically: keep
+  the most-recently-updated, clear the rest.
 
 **Switch operation**
 
 - **FR-012**: `POST /api/v1/providers/{name}/activate` MUST apply FR-011, then
-  project to all ENABLED registered agents whose native wire matches
-  `wire_format`. If no matching agent is registered, record active and return a
+  project into every ENABLED registered agent the connection's scope reaches. If
+  no such agent is registered, it MUST record the connection active and return a
   non-empty `skipped` list — NOT an error.
-- **FR-013**: System MUST emit audit event with value `"provider_switched"` and
-  details `{from, to, wire_format, agents: [...projected...]}`.
+- **FR-013**: System MUST emit an audit event with value `"provider_switched"`
+  and details `{from, to, protocol, agents}`.
+- **FR-013a**: `POST /api/v1/providers/use-builtin/{wire}` MUST remove Coffer's
+  managed keys from the agent behind that wire and clear the active connection's
+  flag, idempotently, reverting a connection that reaches several agents as a
+  unit.
+- **FR-013b**: At boot, for each agent type with an active connection reaching
+  it, System MUST check that the agent's native config actually carries the
+  projection and MUST clear `is_active` when it does not. It MUST NOT write the
+  projection back; the opposite drift MUST be reported rather than removed.
 
 **Key resolution**
 
-- **FR-014**: `coffer provider key --wire <wire_format>` MUST find the active
-  profile for that wire, decrypt via `EncryptedCredentialStore.get(ref)`, and
-  print to stdout only. The raw key MUST NOT be logged. Resolution by profile
-  `<name>` is NOT supported on this subcommand; use `--wire` only.
+- **FR-014**: `coffer provider key --connection <name>` /
+  `GET /api/v1/providers/{name}/key` MUST resolve exactly that connection's
+  credential ref, decrypt via `EncryptedCredentialStore.get(ref)`, and print or
+  return it without logging the value. The wire-keyed form
+  (`--wire <wire>` / `GET /api/v1/providers/active-key/{wire}`) MUST remain for
+  back-compat, resolving through the connection active for that wire's agent.
 
-**Export / import**
+**Convergence**
 
-- **FR-015**: The `provider` kind MUST be registered into `app.state.kinds` so
-  `SyncExporter`/`SyncImporter` handle it automatically. No new migration or
-  SCHEMA_VERSION bump is needed.
+- **FR-015**: The `provider` kind MUST be registered into the composition root's
+  kind table so the sync exporter and the resource applier carry it
+  automatically. An incoming document MUST NOT change the local row's reach
+  (`enabled` / `scope`), and after a round the kind's post-import hook MUST
+  re-derive every agent's projection from the converged rows.
 
 **Audit**
 
-- **FR-016**: `PROVIDER_SWITCHED` (value `"provider_switched"`) MUST be added
-  to `AuditEventType` and emitted on every successful switch with `{from, to,
-  wire_format, agents}` in details. `RESOURCE_CREATED`, `RESOURCE_UPDATED`,
-  `RESOURCE_DELETED` are emitted automatically via `ResourceService`.
+- **FR-016**: `PROVIDER_SWITCHED` (`"provider_switched"`),
+  `PROVIDER_INTERNAL_DEFAULT_SET` (`"provider_internal_default_set"`) and
+  `PROVIDER_PROJECTION_REFUSED` (`"provider_projection_refused"`) MUST be in
+  `AuditEventType` and emitted from the switch, the internal-default operation
+  and a refused projection. `resource_created` / `resource_updated` /
+  `resource_deleted` / `resource_renamed` are emitted automatically by
+  `ResourceService`.
 
 **Surfaces**
 
-- **FR-017**: Create, switch, and delete operations MUST be available via (a) the
-  REST API, (b) `coffer provider ...` CLI with `--json`, and (c) the web
-  Providers page. Editing a profile (PATCH) is available via the REST API and
-  the CLI (`coffer provider edit`) only; the web page does NOT require an
-  inline edit affordance.
-- **FR-018**: The CLI `key` subcommand MUST support `--wire <wire_format>` to
-  resolve by the active profile for that wire. Resolution by positional `<name>`
-  is NOT supported; `--wire` is the only accepted form.
+- **FR-017**: Create, switch and delete MUST be available via (a) the REST API,
+  (b) `coffer provider …` with `--json` on `list`, and (c) the web surfaces — the
+  Model providers library for create and delete, the Agent detail page for the
+  switch. Editing a connection MUST be available over REST, over the CLI
+  (`coffer provider edit`) and from its detail page.
+- **FR-018**: The CLI `key` subcommand MUST accept `--connection <name>` as its
+  primary form and `--wire <wire>` as the back-compat form, and MUST refuse a
+  call naming neither.
 
 **Internal engine connection**
 
-- **FR-019**: The `ollama` wire is internal-only and projects to NO agent:
-  `target_for(WireFormat.ollama)` MUST return `None`, an ollama connection is
-  never `is_active`, and activating it writes no native config.
-- **FR-020**: `credential_ref` MUST be optional — required for anthropic/openai,
-  absent for ollama. On create, supplying neither `secret_value` nor
-  `credential_ref` is valid ONLY for `wire_format=ollama`; for anthropic/openai
-  the exactly-one rule of FR-004 stands.
+- **FR-019**: The `ollama` protocol is internal-only: `target_for(Protocol.OLLAMA)`
+  MUST return `None`, such a connection MUST reach no agent whatever its scope
+  says, MUST never be `is_active`, and activating it MUST write no native config.
+- **FR-020**: `credential_ref` MUST be optional — required for `anthropic` /
+  `openai` / `unknown`, absent for `ollama`. On create, supplying neither
+  `secret_value` nor `credential_ref` is valid ONLY for `ollama`; elsewhere
+  FR-004's exactly-one rule stands.
 - **FR-021**: At most one connection globally MUST have `internal_default=true`.
-  `set_internal_default` MUST clear `internal_default` on all others, then set
-  the target (sequential clear-then-set serialised by the single-process
-  daemon). On import with >1 internal default, normalise: keep
-  most-recently-updated, clear the rest.
+  `set_internal_default` MUST clear the flag on all others, then set the target
+  (sequential clear-then-set, serialised by the single-process daemon).
+  Converging more than one MUST normalise: keep the most-recently-updated.
 
   The invariant MUST be enforced by the **database**, not only by that method.
-  `internal_default` is an ordinary config field, so the generic resource-update
-  route, `coffer provider edit`, and an imported document all write it without
-  going through the clear-then-set — and a live vault was found holding two
-  flagged connections, which makes "which connection does the internal engine
-  use?" a question with no defined answer. A partial unique index over
-  `kind` restricted to flagged provider rows makes a second one
-  unrepresentable, whatever writes it.
+  `internal_default` is an ordinary config field, so the generic
+  resource-update route, `coffer provider edit`, and an incoming document all
+  write it without going through the clear-then-set — and a live vault was found
+  holding two flagged connections, which makes "which connection does the
+  internal engine use?" a question with no defined answer. A partial unique index
+  restricted to flagged provider rows makes a second one unrepresentable,
+  whatever writes it.
 
   A change of connection MUST also DROP the internal-engine model (E3). That
   model is a global singleton with no link to the connection, so carrying the
   previous connection's model across left Coffer's own passes aimed at a model
-  the new endpoint has never heard of — the user saw provider "Agnes" paired
-  with `deepseek-flash`. The one model kept is one the newly-chosen connection
-  CURATES: a curated `models` list is that connection's own catalogue, so an id
-  on it is still servable. Nothing is probed to decide — a settings write MUST
-  NOT depend on an endpoint being reachable. Cleared, the model falls to
-  `None`, `resolve_internal_connection()` returns `None` (FR-023's clean
-  no-op), and the model dropdown shows its placeholder over the new
-  connection's models. Setting the connection that is ALREADY the internal
-  default MUST change nothing. The rule lives in `set_internal_default`, so the
-  HTTP route and `coffer provider internal-default` both get it.
+  the new endpoint has never heard of. The one model kept is one the newly-chosen
+  connection CURATES: a curated `models` list is that connection's own catalogue,
+  so an id on it is still servable. Nothing is probed to decide — a settings
+  write MUST NOT depend on an endpoint being reachable. Cleared, the model falls
+  to `None`, `resolve_internal_connection()` returns `None` (FR-023's clean
+  no-op), and the model dropdown shows its placeholder over the new connection's
+  models. Setting the connection that is ALREADY the internal default MUST change
+  nothing. The rule lives in `set_internal_default`, so the HTTP route and
+  `coffer provider internal-default` both get it.
 - **FR-022**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
   connection as the internal-engine default (applying FR-021), emit a
   `provider_internal_default_set` audit event, and return the updated
   `ProviderOut`.
-- **FR-023**: `resolve_internal_connection()` MUST return the
-  `internal_default` connection's `ProviderConfig`, or `None` when no connection
-  is marked. When `None`, the internal engine (memory organizer / reorg /
-  distill) MUST be a clean no-op rather than an error.
-- **FR-024**: The standalone `ModelConfig` registry (model CRUD REST +
-  `coffer model` CLI) MUST be retired. The internal engine MUST build its chat
-  model from the internal-default connection via `build_chat_model(connection,
-  ...)` (dispatched by `wire_format`). The provider introspection routes
-  (`POST /api/v1/models/list-models`, `/api/v1/models/test-connection`) MUST be
-  retained.
+- **FR-023**: `resolve_internal_connection()` MUST return the internal-default
+  connection paired with the global internal-engine model, or `None` when no
+  connection is marked or no model is chosen. When `None`, Coffer's internal
+  passes MUST be a clean no-op rather than an error.
+- **FR-024**: Coffer MUST keep no second model registry: the internal engine
+  builds its chat model from the internal-default connection via
+  `build_chat_model(resolved, …)`, dispatched by protocol. The introspection
+  routes (`POST /api/v1/models/list-models`, `/test-connection`,
+  `/detect-protocol`) MUST be retained.
 
 **Curated model set**
 
-- **FR-025**: `ProviderConfig` MUST carry `models` — the set of model
-  ids the connection OFFERS downstream (a `list[str]` as first written; **refined
-  by FR-029** into a list of `{id, modality}` objects). An EMPTY list MUST mean no
-  restriction
-  (every model the endpoint serves), MUST be the default, and MUST be what every
-  connection created before revision 0059 holds. The field MUST NOT be read as a
+- **FR-025**: `ProviderConfig` MUST carry `models` — the set of model ids the
+  connection OFFERS downstream (**refined by FR-029** into a list of
+  `{id, modality}` objects). An EMPTY list MUST mean no restriction (every model
+  the endpoint serves) and MUST be the default. The field MUST NOT be read as a
   chosen model: the choice stays at the point of use (E1/E3). Ids MUST be
   validated for shape only — non-blank, deduplicated preserving order, at most
   200 ids of at most 200 characters — and MUST NEVER be checked against a list of
   model names Coffer writes down.
 - **FR-026**: `ProviderCreate.models` (`null` ⇒ empty) and `ProviderPatch.models`
   MUST carry the set; `ProviderOut.models` MUST return it. A `PATCH` MUST replace
-  the whole value — `null` leaves it unchanged, `[]` clears the restriction —
-  and MUST NOT require a route of its own. A change MUST
-  ride the `resource_updated` audit event provider updates already emit.
+  the whole value — `null` leaves it unchanged, `[]` clears the restriction — and
+  MUST NOT require a route of its own. A change MUST ride the `resource_updated`
+  audit event provider updates already emit.
 
 **Rename**
 
@@ -1863,10 +1226,10 @@ connection's existing curated selection is left exactly as it was.
   connection owns (`provider/<name>/key` — unless another resource also cites
   that ref, in which case it MUST be left alone), the `audit_log` rows filed
   under `provider:<old>`, and — when the connection is active — the projection
-  in every compatible agent's native config. It MUST record a `resource_renamed`
-  audit event naming both names. A name another connection already holds MUST be
-  refused with `RESOURCE_ALREADY_EXISTS` (409) BEFORE anything is written; an
-  absent connection MUST be a 404; renaming to the current name MUST be a no-op.
+  in every agent it reaches. It MUST record a `resource_renamed` audit event
+  naming both names. A name another connection already holds MUST be refused
+  with `RESOURCE_ALREADY_EXISTS` (409) BEFORE anything is written; an absent
+  connection MUST be a 404; renaming to the current name MUST be a no-op.
 
 **Model introspection on the connection detail page**
 
@@ -1911,66 +1274,83 @@ connection's existing curated selection is left exactly as it was.
   semantics are unchanged (`null` leaves the set alone, `[]` clears the
   restriction).
 
+**The model catalogue**
+
+- **FR-031**: `GET /api/v1/agent-providers/{agent_key}/models` MUST answer, per
+  agent type, which models that agent can be put on, read back from the
+  installed agent and never written down in Coffer. Each entry MUST carry `id`,
+  `label`, `description`, the reasoning `efforts` its runtime reports and the
+  `default_effort` it would use, keeping a reported default only when it is one
+  of the offered levels. Every source MUST degrade to nothing on its own; an
+  unknown `agent_key` MUST be a 404.
+- **FR-032**: What a picker is OFFERED MUST be: the active reaching connection's
+  curated `text` ids when it curates any, and otherwise the agent's own
+  catalogue. That read MUST NOT touch the network. Levels MUST survive it — an
+  id the agent also reports keeps the levels the agent reported.
+- **FR-033**: Every Coffer surface that chooses a model MUST offer a fixed list
+  with no free-text entry, always including the current value. A model name and
+  a reasoning level MUST both be passed to the agent verbatim, with no
+  validation against a list of Coffer's own.
+
 ### Key Entities
 
-- **ProviderProfile**: A Resource of kind `provider`, identified by
-  `provider:<name>`. Holds wire format, base URL, optional credential ref
-  (absent for ollama), the curated `models` set it offers downstream (empty =
-  unrestricted), per-wire `is_active` state, and the global `internal_default`
-  flag. Never holds the raw secret, and never a chosen model.
-- **`CuratedModel` / `Modality`**: One curated entry, `{id, modality}`, and the
+- **Connection** (`provider` resource): protocol, base URL, optional credential
+  ref (absent for ollama), the curated `models` set it offers downstream (empty =
+  unrestricted), `is_active` per agent type, and the global `internal_default`
+  flag. Never the raw secret, and never a chosen model. Its reach is the resource
+  row's per-agent `scope`.
+- **`CuratedModel` / `Modality`**: one curated entry, `{id, modality}`, and the
   `StrEnum` over `text` / `embedding` / `image` / `video` / `audio` it carries
   (FR-029). The modality is Coffer's own note about an opaque id — stored, never
   re-derived at read time — and it is what narrows a connection's curated set to
   the chat models a picker may offer.
-- **`apply_anthropic_settings` / `apply_codex_provider`**: Pure functions in
-  `domain/provider/projection.py` that return the new native-config TEXT directly.
-  Analogous to `domain/agent/mcp_install.py`'s `apply_install`. No `ProjectionPatch`
-  dataclass; no `build_patch()` function.
-- **`ProviderService._project`**: Private method in `application/provider/service.py`
-  that calls the pure projection functions and performs the file write.
-- **`ProjectionTarget` / `target_for(wire)`**: Helper in `domain/provider/projection.py`
-  mapping `wire_format` to the target config file descriptor; returns `None` for
-  `ollama` (internal-only, no projection).
-- **`ProviderService.resolve_active_key(wire)`**: Takes a `wire_format` string
-  only; no by-name resolution on this method.
-- **`ProviderService.set_internal_default(name)`**: Clears `internal_default` on
-  all other connections then sets the target; emits `provider_internal_default_set`.
-- **`ProviderService.resolve_internal_connection()`**: Returns the internal-default
-  connection's `ProviderConfig`, or `None` (→ the internal engine is a clean
-  no-op). `build_chat_model(connection, ...)` builds the internal engine's chat
-  model from it, dispatched by `wire_format`.
+- **`ResolvedConnection`**: a connection paired with the model to run on it,
+  since the model lives apart from the connection; what
+  `resolve_internal_connection()` returns and `build_chat_model` consumes.
+- **`apply_anthropic_settings` / `apply_codex_provider`** (and their `remove_*`
+  inverses): pure functions in `domain/provider/projection.py` that return the
+  new native-config TEXT, analogous to `domain/agent/mcp_install.py`'s
+  `apply_install`.
+- **`ProviderProjector`**: the application-layer collaborator that reads a
+  native config, calls a pure transform, writes it back atomically, refuses a
+  stale write, and owns the Codex catalogue file's lifecycle.
+- **`ProjectionTarget` / `target_for_agent(agent_type)`**: the agent-keyed map to
+  the config file Coffer writes; `target_for(protocol)` is the wire-keyed form,
+  returning `None` for `ollama`.
+- **`scoped_targets` / `projection_targets`**: the configured reach, and the
+  reach intersected with `enabled` — two questions kept apart on purpose.
+- **`AgentModelCatalogueService`**: `catalogue()` (what an agent can run),
+  `offered()` (what a picker shows), `efforts()`, `suggest()`.
+- **`ProviderService.set_internal_default(name)` /
+  `resolve_internal_connection()`**: the global internal-engine flag, the model
+  it drops, and the resolved pair the engine runs on.
 
 ## Success Criteria
 
-- **SC-001**: From a fresh install, a user can add an anthropic provider profile,
-  activate it, and have Claude Code pick up the new endpoint within one
-  `coffer provider switch` command.
+- **SC-001**: From a fresh install, a user can add a connection, bind a model,
+  switch an agent onto it, and have that agent pick up the new endpoint.
 - **SC-002**: No raw key ever appears in `settings.json`, `config.toml`, or the
-  export bundle (`resources/provider/*.yaml`) — verified by an automated scan
-  in integration tests.
-- **SC-003**: Every Acceptance Scenario is covered by at least one test marked
+  sync tree (`resources/provider/*.yaml`) — verified by an automated scan in
+  integration tests.
+- **SC-003**: Every acceptance scenario is covered by at least one test marked
   `acceptance(spec="provider-switching", scenario="…")`, and
   `make verify-acceptance` reports zero uncovered scenarios.
 - **SC-004**: `make verify` passes locally and in CI.
-- **SC-005**: Activating a profile writes the target native-config key set and
-  does NOT touch any key outside the defined managed set.
-- **SC-006**: With an `internal_default` connection configured, Coffer's internal
-  engine (memory organize / reorg / distill) runs on it; with no
-  connection marked `internal_default`, the internal engine is a clean no-op.
+- **SC-005**: Activating a connection writes the target native-config key set
+  and does NOT touch any key outside the managed set.
+- **SC-006**: With an `internal_default` connection and a model configured,
+  Coffer's own passes run on it; with neither, they are a clean no-op.
+- **SC-007**: A model newly released by an agent's own CLI reaches every Coffer
+  picker with no Coffer release.
 
 ## Assumptions
 
-- Spec agent-registry (PR #25) is merged; `AgentType`, `AgentConfig`, and
-  the agent CRUD + `on_delete` hook are available.
-- `EncryptedCredentialStore` (Fernet vault) and `ConfigFileStore.write_text_atomic`
-  are available (spec mcp-gateway).
-- `tomlkit` is already in the backend's Python dependencies (added by MCP TOML
-  path support).
+- Spec agent-registry is in place: `AgentType`, `AgentConfig`, and agent CRUD
+  with its `on_delete` hook are available.
+- `EncryptedCredentialStore` (the Fernet vault) and
+  `ConfigFileStore.write_text_atomic` are available (spec mcp-gateway).
+- `tomlkit` is already a backend dependency (added for the MCP TOML path).
 - Coffer runs as a single-user personal tool; no multi-user access control is
   needed beyond the existing `X-Coffer-Token` gate.
-- The user's `~/.claude/settings.json` and `~/.codex/config.toml` are writable
-  by Coffer. If the file does not exist, Coffer creates it with only the managed
-  keys.
-- Provider drift-verify (checking whether the live native config matches the
-  active profile) is deferred to spec 4.9.
+- The user's `~/.claude/settings.json` and `~/.codex/config.toml` are writable by
+  Coffer. If a file does not exist, Coffer creates it with only the managed keys.

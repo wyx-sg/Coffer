@@ -29,8 +29,11 @@ _AREA_PREFIXES = (
 )
 
 #: Areas a round never applies to the vault. ``machines/`` is the registry,
-#: read straight from the working tree; ``manifest.json`` carries the bundle's
-#: restamped creation time and says nothing about vault state.
+#: read straight from the working tree; ``manifest.json`` carries the layout's
+#: schema version and says nothing about vault state. The manifest is *read*
+#: before a round applies anything — a layout this build does not know is
+#: refused (``domain.sync.manifest.refuse_if_too_new``) — but it is never
+#: applied, because there is nothing in it to apply.
 NON_VAULT_AREAS = frozenset({"machines", "manifest"})
 
 DEFAULT_DELETION_SHARE = 0.2

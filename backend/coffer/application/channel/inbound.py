@@ -212,7 +212,6 @@ class InboundProcessor:
                     chat_id=msg.chat_id,
                     display_name=msg.sender_display,
                     paired_at=datetime.now(tz=UTC),
-                    active_conversation_id=None,
                     sender_id=owner,
                 )
                 await self._peers.upsert(peer)

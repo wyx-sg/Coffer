@@ -1,38 +1,18 @@
-"""Tests for the keyring adapter using keyring's in-memory test backend."""
+"""Tests for the keyring adapter against an in-memory keyring backend."""
 
 from __future__ import annotations
 
 import keyring
+import keyring.backend
 import keyring.core
+import pytest
 from keyring.backends.fail import Keyring as FailBackend
 
-
-class InMemoryKeyring(keyring.backend.KeyringBackend):
-    """Trivial in-memory backend for tests; mirrors keyring.testing.backend approach."""
-
-    priority = 1  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, str], str] = {}
-
-    def get_password(self, service: str, username: str) -> str | None:
-        return self._data.get((service, username))
-
-    def set_password(self, service: str, username: str, password: str) -> None:
-        self._data[(service, username)] = password
-
-    def delete_password(self, service: str, username: str) -> None:
-        self._data.pop((service, username), None)
-
-
-def _with_in_memory(monkeypatch):
-    backend = InMemoryKeyring()
-    monkeypatch.setattr(keyring.core, "_keyring_backend", backend)
-    return backend
+from tests.fixtures.keyring import install_in_memory_keyring
 
 
 def test_set_and_get_round_trip(monkeypatch):
-    _with_in_memory(monkeypatch)
+    install_in_memory_keyring(monkeypatch)
     from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
     adapter = KeyringAdapter()
@@ -41,7 +21,7 @@ def test_set_and_get_round_trip(monkeypatch):
 
 
 def test_get_missing_returns_none(monkeypatch):
-    _with_in_memory(monkeypatch)
+    install_in_memory_keyring(monkeypatch)
     from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
     adapter = KeyringAdapter()
@@ -49,7 +29,7 @@ def test_get_missing_returns_none(monkeypatch):
 
 
 def test_delete(monkeypatch):
-    _with_in_memory(monkeypatch)
+    install_in_memory_keyring(monkeypatch)
     from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
     adapter = KeyringAdapter()
@@ -65,36 +45,41 @@ def test_get_raises_keyring_locked(monkeypatch):
 
     monkeypatch.setattr(keyring.core, "_keyring_backend", FailBackend())
 
-    import pytest
-
     adapter = KeyringAdapter()
     with pytest.raises(CredentialLocked):
         adapter.get("anything")
 
 
+class _SetRaisesKeyringLocked(keyring.backend.KeyringBackend):
+    """A backend whose ``set_password`` always raises ``KeyringLocked``.
+
+    Deliberately NOT the shared ``InMemoryKeyring``: this fake exists to fail
+    on purpose, and it fails on the write path only (reads succeed, returning
+    nothing), which is the shape the macOS keychain presents when it is locked
+    for writes. ``keyring.backends.fail.Keyring`` cannot stand in — it raises a
+    different error type, on every operation.
+    """
+
+    priority = 1  # type: ignore[assignment]
+
+    def get_password(self, service: str, username: str) -> str | None:
+        return None
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        from keyring.errors import KeyringLocked
+
+        raise KeyringLocked("keyring is locked")
+
+    def delete_password(self, service: str, username: str) -> None:
+        pass
+
+
 def test_keyring_set_under_locked_raises_credential_locked(monkeypatch):
     """KeyringAdapter.set must raise CredentialLocked when the backend is locked."""
-    import pytest
-    from keyring.errors import KeyringLocked
-
     from coffer.domain.errors import CredentialLocked
     from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
-    class _LockedBackend(keyring.backend.KeyringBackend):
-        """A backend whose set_password always raises KeyringLocked."""
-
-        priority = 1  # type: ignore[assignment]
-
-        def get_password(self, service: str, username: str) -> str | None:
-            return None
-
-        def set_password(self, service: str, username: str, password: str) -> None:
-            raise KeyringLocked("keyring is locked")
-
-        def delete_password(self, service: str, username: str) -> None:
-            pass
-
-    monkeypatch.setattr(keyring.core, "_keyring_backend", _LockedBackend())
+    monkeypatch.setattr(keyring.core, "_keyring_backend", _SetRaisesKeyringLocked())
 
     adapter = KeyringAdapter()
     with pytest.raises(CredentialLocked):

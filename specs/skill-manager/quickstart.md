@@ -5,8 +5,8 @@ them to one or more registered AI agents (spec agent-registry).
 
 ## Prerequisites
 
-- Coffer's daemon is running (`coffer daemon`, or `coffer open` which starts it
-  and opens the web UI).
+- Coffer's daemon is running (`coffer daemon start`, or `coffer open`, which
+  starts one if none is running and opens the web UI).
 - At least one agent is registered (auto-detected or via `coffer agent add` —
   see spec agent-registry quickstart).
 ## Import an existing skill folder
@@ -62,9 +62,11 @@ two controls are the Skill list table's enable switch and the skill detail
 page's activation-scope control.
 
 If something else already exists at the target path (a regular file or a
-non-Coffer symlink), the operation refuses unless you pass `--force`. Forced
-operations back up the existing target to `<path>.coffer-backup-<timestamp>`
-before linking.
+non-Coffer symlink), delivery **reports and moves on**: that one skill comes
+back as a conflict, the existing target is left exactly as it was, and the rest
+of the delivery still happens. Delivery never overwrites and has no `--force`.
+The one place Coffer backs a target up before relinking is the opt-in drift
+repair below, and only for a link it put there itself.
 
 ## Adopt skills Coffer doesn't manage yet
 
@@ -106,16 +108,39 @@ folder, ask Coffer to report it:
 coffer skill verify
 ```
 
-The report categorizes drift and suggests a remedy per entry. Coffer does
-**not** automatically fix drift — you decide whether to re-enable or disable.
+The report categorizes drift and suggests a remedy per entry; asking for it
+never repairs anything.
 
-## Browse a skill's files (read-only)
+Repair is a separate, explicit operation — and it also runs **once at every
+daemon boot**, because boot is the moment nothing else reconciles an
+already-delivered link's health:
 
-The web UI shows a skill's master folder as a file tree and lets you read
-individual files in a read-only viewer. To change a file, open it (or its
-containing folder) in your own external editor or file manager via the viewer's
-open / reveal affordances. The same read data is available over the
-REST API, and each entry carries its absolute on-disk path.
+```bash
+coffer skill verify --fix        # or: POST /skills/repair
+```
+
+Repair re-delivers only the two drift kinds that are safe to fix without
+asking: a **missing link** is recreated, and a **tampered link** is renamed
+aside to `<path>.coffer-backup-<timestamp>` before being recreated — never
+deleted, never overwritten in place. The kinds that would clobber someone
+else's content or have nothing left to re-deliver from (replaced with a regular
+file, missing master, orphan master) are left exactly as they are and reported
+for a human. The boot pass is audited with an actor that says it was automatic,
+and a failure there never blocks startup.
+
+## Browse and edit a skill's files
+
+The web UI shows a skill's master folder as a file tree and opens an individual
+file in a viewer you can **edit in place**. A save is conditional: every read
+returns a content fingerprint, and a write that carries a stale one is rejected
+with `409` and the file left byte-identical, so an edit made in your own editor
+meanwhile is never silently lost (a write that omits the fingerprint stays
+unconditional, which is what a script that never read the file needs). The
+write overwrites an existing text file only — it will not create files, write
+outside the folder, or replace a binary. The viewer also offers open / reveal
+for the file and its containing folder, for anything bigger than a small edit.
+The same reads and the same write are available over the REST API, and each
+entry carries its absolute on-disk path.
 
 List the master folder as a recursive tree:
 
@@ -221,9 +246,10 @@ there is no copy drift.
 to import and ensure both `name` and `description` are non-empty in the
 top-of-file YAML.
 
-**"Refusing to overwrite existing target"** — there is a non-Coffer file or
-directory at the link path. Either remove it yourself or pass `--force` to
-have Coffer back it up and replace it.
+**A skill reported as a conflict instead of delivered** — there is a non-Coffer
+file or directory at the link path. Coffer will not overwrite it and offers no
+flag that would: move or remove it yourself, then let the next reconcile (or
+`coffer skill verify --fix`) deliver the link.
 
 **"Symlink creation failed; falling back to copy"** — your filesystem doesn't
 support directory junctions (Windows on FAT32 or some network shares). Coffer

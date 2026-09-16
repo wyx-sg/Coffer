@@ -30,7 +30,7 @@ that humans, CI, and agents all call.
 Coffer's ② (feedback) and ③ (knowledge) layers are already strong: a shared
 `make verify`, integration-heavy 4-tier tests with mechanically-enforced unit
 purity, pre-commit (ruff/prettier/commitlint), CI, and a best-in-class knowledge
-surface (AGENTS.md + `agents/*.md` + constitution/architecture/roadmap + bilingual
+surface (AGENTS.md + `agents/*.md` + constitution/architecture/roadmap + the
 ADRs). Against an industrial-grade bar, four gaps remain — and they cluster, not
 scatter:
 

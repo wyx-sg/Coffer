@@ -15,40 +15,29 @@
 // This surface never writes. Coffer does not own these bytes — the coding agent
 // rewrites them as it learns — so the way to change one is the editor the page
 // opens, not a field on the page.
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft } from "lucide-react";
 
 import { AgentMemoryStoreTree } from "@/components/agents/AgentMemoryStoreTree";
-import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 
 export function AgentMemoryStorePage() {
   const { t } = useTranslation();
   const { name = "" } = useParams<{ name: string }>();
-  const navigate = useNavigate();
   const params = useSearchParams()[0];
   const dir = params.get("dir") ?? "";
   const project = params.get("project");
 
-  const back = (
-    <div className="-ml-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => navigate(`/agents/${encodeURIComponent(name)}?tab=memory`)}
-        className="text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="mr-1.5 size-4" />
-        {t("common.backTo", { label: t("agents.workspace.memory") })}
-      </Button>
-    </div>
-  );
+  const back = {
+    to: `/agents/${encodeURIComponent(name)}?tab=memory`,
+    label: t("common.backTo", { label: t("agents.workspace.memory") }),
+  };
 
   if (!dir) {
     return (
       <div className="space-y-6">
-        {back}
+        <PageHeader back={back} title={name} />
         <Card className="border-destructive/40">
           <CardContent className="py-6">
             <p className="text-sm text-destructive" role="alert">
@@ -62,13 +51,16 @@ export function AgentMemoryStorePage() {
 
   return (
     <div className="space-y-6">
-      {back}
-
-      <header className="space-y-1">
-        <h1 className="font-serif text-2xl tracking-tight">{project || dir}</h1>
-        <p className="break-all font-mono text-xs text-muted-foreground">{dir}</p>
-        <p className="text-xs text-muted-foreground">{t("agents.memoryStore.readOnlyHint")}</p>
-      </header>
+      <PageHeader
+        back={back}
+        title={project || dir}
+        subtitle={
+          <>
+            <span className="block break-all font-mono text-xs">{dir}</span>
+            <span className="block">{t("agents.memoryStore.readOnlyHint")}</span>
+          </>
+        }
+      />
 
       <AgentMemoryStoreTree name={name} dir={dir} />
     </div>

@@ -8,7 +8,6 @@ import {
   type AgentConfigOut,
   type Conversation,
   type ConversationCreate,
-  type ConversationPatch,
 } from "@/lib/api/chat";
 import {
   agentConfigKey,
@@ -95,20 +94,6 @@ export function useRenameConversation() {
   });
 }
 
-export function useSetConversationModel() {
-  const qc = useQueryClient();
-  const onError = useConversationToastError();
-  return useMutation({
-    mutationFn: (vars: { id: string; model_id: string | null }) =>
-      chatApi.updateConversation(vars.id, { model_id: vars.model_id }),
-    onSuccess: (updated: Conversation) => {
-      qc.setQueryData(conversationKey(updated.id), updated);
-      qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
-    },
-    onError,
-  });
-}
-
 /** Set (or clear) a managed agent's own per-conversation model (agent_config.model). */
 export function useSetAgentModel() {
   const qc = useQueryClient();
@@ -132,20 +117,6 @@ export function useSetAgentEffort() {
       chatApi.setAgentEffort(vars.id, vars.effort),
     onSuccess: (updated: AgentConfigOut, vars) => {
       qc.setQueryData(agentConfigKey(vars.id), updated);
-    },
-    onError,
-  });
-}
-
-export function useUpdateConversation() {
-  const qc = useQueryClient();
-  const onError = useConversationToastError();
-  return useMutation({
-    mutationFn: (vars: { id: string; patch: ConversationPatch }) =>
-      chatApi.updateConversation(vars.id, vars.patch),
-    onSuccess: (updated: Conversation) => {
-      qc.setQueryData(conversationKey(updated.id), updated);
-      qc.invalidateQueries({ queryKey: CONVERSATIONS_KEY });
     },
     onError,
   });

@@ -34,11 +34,6 @@ function highlightCtor(): HighlightCtor | null {
   return ctor ?? null;
 }
 
-/** True when the running engine can paint highlights (real WebKit/Chromium). */
-export function highlightsSupported(): boolean {
-  return registry() !== null && highlightCtor() !== null;
-}
-
 /** All occurrences of `query` within the container's text nodes, in order. */
 export function findRanges(container: HTMLElement, query: string, caseSensitive: boolean): Range[] {
   const ranges: Range[] = [];

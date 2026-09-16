@@ -1,7 +1,5 @@
 # Harness — Agent Control Layer
 
-> 中文版: [harness.zh.md](./harness.zh.md)
-
 Coffer ships a checked-in control layer so the agent-facing harness is enforced, not just documented. See [Harness in Layers](../docs/decisions/industrial-grade-harness-in-layers.md) for the five-layer model.
 
 ## What is wired (`.claude/`)
@@ -16,7 +14,14 @@ Coffer ships a checked-in control layer so the agent-facing harness is enforced,
 
 ## Skills
 
-- `/coffer-spec` — scaffolds a new SDD spec (see `agents/sdd.md`).
+- `/coffer-spec` — the one checked-in skill (`.claude/skills/coffer-spec/SKILL.md`),
+  user-invoked only (`disable-model-invocation: true`), pinned by
+  `backend/tests/integration/harness/test_skills.py`. It scaffolds a new SDD spec
+  — read [`sdd.md`](./sdd.md) for the layout it should produce.
+- Whatever a scaffolder produces, the folder is **named, never numbered**:
+  `scripts/check_doc_numbering.py` (run by `make lint`) fails on a spec
+  directory starting with a digit and on any `spec <digits>` token, so a
+  numbered spec cannot be committed. `specs/<short-name>/spec.md`.
 
 ## How it is tested
 
@@ -38,4 +43,4 @@ Non-deterministic AI behaviour — retrieval quality and tool-routing — is mea
 ## Conventions
 
 - Hooks are Python (no `jq` dependency; the project guarantees Python 3.12). A hook must never break the agent — on any error it exits 0 with no decision.
-- `.claude/settings.json`, `.claude/hooks/`, `.claude/skills/` are committed. `.claude/settings.local.json` is for personal overrides (gitignored).
+- `.claude/settings.json`, the four `.claude/hooks/` scripts and `.claude/skills/coffer-spec/SKILL.md` are the tracked files under `.claude/` — that is the whole harness. `.claude/settings.local.json` is for personal overrides and stays untracked; the repo's `.gitignore` lists `.claude/commands/`, `.claude/worktrees/` and the loop/scheduler state files but **not** `settings.local.json`, so check your own global ignore covers it before committing.

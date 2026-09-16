@@ -14,7 +14,11 @@ coffer knowledge collections
 coffer resource delete knowledge:handbook     # collection lifecycle is a Resource concern
 ```
 
-Because a collection is a Resource, the framework's per-agent scope decides who may read it. An agent's calls span every collection activated for that agent — there is no scope argument on any knowledge tool, and no collection an agent is authorized for that it has to ask for by name. That authorization is a convention, not a security boundary: an agent holding shell tools can read the directory itself. It prevents mistaken retrieval, not deliberate access.
+Because a collection is a Resource, the framework's per-agent scope decides who may read it. An agent's calls span every collection activated for that agent by default, and there is no collection an agent is authorized for that it has to ask for by name.
+
+There is no **scope** argument on any knowledge tool — scope is Coffer's, decided per agent, and not something a caller can widen. `grep` and `search` do take an optional `collection` argument, but it only ever *narrows*: it restricts the pass to one collection the caller could already see. Omitting it searches every collection the caller may read.
+
+That authorization is a convention, not a security boundary: an agent holding shell tools can read the directory itself. It prevents mistaken retrieval, not deliberate access.
 
 ## What a collection holds
 
@@ -123,7 +127,7 @@ Deleting a whole collection goes through the kind-agnostic resource route, `DELE
 
 ## The MCP tools
 
-Every connected MCP client gets six built-in knowledge tools. None of them takes a scope: a call spans every collection the calling agent is authorized for, and the gateway supplies that identity at session handshake.
+Every connected MCP client gets six built-in knowledge tools. None of them takes a **scope**: a call spans every collection the calling agent is authorized for, and the gateway supplies that identity at session handshake. `coffer__grep` and `coffer__search` accept an optional `collection` to *narrow* a call to one of those collections when the agent already knows where to look — it can never reach one the agent was not authorized for.
 
 | Tool             | What it does                                                                    |
 | ---------------- | ------------------------------------------------------------------------------- |

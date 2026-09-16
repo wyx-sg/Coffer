@@ -131,17 +131,7 @@ def test_repr_hides_env_and_header_values() -> None:
     assert "tok123" not in repr(jira)
 
 
-# --- new shapes: container_key, command-array, environment, YAML ---
-
-
-def test_remove_entry_yaml_preserves_comments() -> None:
-    text = "# keep me\nmcp_servers:\n  drop:\n    command: x\n  keep:\n    command: y\n"
-    out = me.remove_entry(ConfigFileFormat.YAML, text, "drop")
-    assert "# keep me" in out
-    entries = me.parse_entries(ConfigFileFormat.YAML, out, source="config")
-    assert {e.name for e in entries} == {"keep"}
-    with pytest.raises(McpEntryNotFound):
-        me.remove_entry(ConfigFileFormat.YAML, out, "nope")
+# --- new shapes: container_key, command-array, environment ---
 
 
 def test_remove_entry_json_custom_container() -> None:

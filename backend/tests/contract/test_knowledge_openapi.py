@@ -59,7 +59,7 @@ def test_every_knowledge_route_is_declared(app_with_knowledge) -> None:  # type:
     assert _knowledge_routes(app_with_knowledge) == _EXPECTED_ROUTES
 
 
-def test_builtin_tool_set_is_the_five(builtin_registry) -> None:  # type: ignore[no-untyped-def]
+def test_builtin_tool_set_is_the_six(builtin_registry) -> None:  # type: ignore[no-untyped-def]
     assert {t.name for t in builtin_registry.list()} == _EXPECTED_BUILTIN_TOOLS
 
 

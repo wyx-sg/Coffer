@@ -342,7 +342,7 @@ def mcp_uninstall(
     typer.echo(f"removed Coffer MCP from agent:{name}")
 
 
-# --- workspace subcommands (mcp entries/plugins/dir configs/follow) -----------
+# --- workspace subcommands (mcp entries/plugins/dir configs) -----------------
 # Implemented in agent_workspace_cmd.py to keep this file under the size cap.
 
 _workspace.attach(app, config_app=config_app, mcp_app=mcp_app)

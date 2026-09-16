@@ -1,9 +1,10 @@
 """Chat wiring for the FastAPI composition root.
 
+Builds the conversation/message repos, the registry of agent providers the
+chat surface drives, the turn orchestrator, and the model-catalogue and
+introspection services that tell the surface which models each agent offers.
+
 Extracted from `app.py` so that file stays under the project's 400-LOC ceiling.
-The knowledge substrate this module used to build is gone with the index: the
-knowledge kind now needs nothing but a directory, so it wires itself
-(``knowledge_wiring.py``).
 """
 
 from __future__ import annotations

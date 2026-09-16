@@ -12,16 +12,11 @@ import { scopeApi, type ResourceScope, type Scope } from "@/lib/api/scope";
 import { useToast } from "@/components/ui/toast";
 
 /**
- * Active for every agent — what a fully-relaxed selection normalises back to
- * (`null` on the wire).
- *
- * The shape itself (`{agents}`, `null` = unrestricted, `[]` = matches nothing)
- * is declared once in `lib/api/scope.ts` against the generated `ScopeOut`, and
- * re-exported here so components keep importing their scope types from the
- * hook module.
+ * The scope shape itself (`{agents}`, `null` = unrestricted, `[]` = matches
+ * nothing) is declared once in `lib/api/scope.ts` against the generated
+ * `ScopeOut`, and re-exported here so components keep importing their scope
+ * types from the hook module.
  */
-export const UNRESTRICTED: Scope = { agents: null };
-
 export type { ResourceScope, Scope };
 
 /**

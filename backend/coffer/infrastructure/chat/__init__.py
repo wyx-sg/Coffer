@@ -1,6 +1,8 @@
 """Infrastructure adapters for the agent-chat surface.
 
-Concrete SQLAlchemy repos for conversations, messages, and model configs.
-LangGraph/LangChain adapters live in sibling modules and are the sole
-importers of those SDKs (enforced by importlinter Contract 9).
+Concrete SQLAlchemy repos for conversations and messages, and the adapters that
+drive Claude Code and Codex through their own SDKs. The LangGraph/LangChain
+adapters that once sat here moved to :mod:`coffer.infrastructure.llm`, now their
+only home — importlinter Contract 9a forbids this package importing those SDKs
+at all.
 """

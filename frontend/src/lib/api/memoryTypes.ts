@@ -59,51 +59,6 @@ export interface MemoryFileContentOut {
   size: number;
 }
 
-export interface OriginOut {
-  agent: string;
-  /** Absolute path of the agent's own native memory file. */
-  native_path: string;
-  /** The fact's anchor within that file (stable across recomputation). */
-  anchor: string;
-  /** When Coffer's own aggregation captured this fact. */
-  captured_at: string;
-  /** The source's own timestamp, when it has one; empty otherwise. */
-  source_written_at: string;
-}
-
-export type MemoryFactType = "user" | "feedback" | "project";
-export type MemoryFactStatus = "active" | "superseded";
-
-/** One fact without its body/origins — the shape `list_facts` returns. */
-export interface FactSummaryOut {
-  /** Stable identity across recomputation (FR-022). */
-  key: string;
-  /** Short, URL-safe identity within its partition — `GET .../facts/{slug}`. */
-  slug: string;
-  partition: string;
-  title: string;
-  description: string;
-  type: MemoryFactType;
-  status: MemoryFactStatus;
-  /** Non-empty names the fact key this one was superseded by. */
-  superseded_by: string;
-  /** Fact keys this one is flagged as disagreeing with. */
-  conflicts_with: string[];
-  /** A supersession or conflict here is always the model's finding (FR-033);
-   *  nothing settles one by hand any more. */
-  proposed: boolean;
-}
-
-export interface FactListOut {
-  facts: FactSummaryOut[];
-}
-
-/** One fact's full detail: its own words (never a paraphrase) plus origins. */
-export interface FactOut extends FactSummaryOut {
-  body: string;
-  origins: OriginOut[];
-}
-
 export interface AggregationResultOut {
   partitions: string[];
   facts_written: number;

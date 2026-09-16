@@ -45,7 +45,7 @@ export interface ResourceScope {
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
-export function scopePath(kind: string, name: string): string {
+function scopePath(kind: string, name: string): string {
   return `/resources/${enc(kind)}/${enc(name)}/scope`;
 }
 

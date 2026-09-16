@@ -7,10 +7,14 @@ Thanks for your interest in Coffer. This page is the **human contributor** entry
 ```bash
 git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
-make install    # venv + backend deps
+uv sync --frozen --extra dev --project backend   # the locked deps, as CI installs them
 make hooks      # wire pre-commit + commit-msg hooks
-make dev        # backend daemon (:8000)
+make dev        # backend daemon (:8000) + Vite (:5173)
 ```
+
+`make install` exists and uses `pip install -e ./backend[dev]`, which **re-resolves**
+dependencies — so it can give you versions CI has never seen. Prefer `uv sync --frozen`
+against `backend/uv.lock`, and rebuild that way first when a local result disagrees with CI.
 
 ## Project Anchors
 
@@ -34,7 +38,7 @@ PR titles and commit subjects must follow the [Conventional Commits](https://www
 
 ### Spec-driven development (SDD)
 
-All user-visible changes require a spec — a `specs/<NNN>-<short-name>/spec.md` — to be written or updated **before** implementation begins. The spec is the contract; the implementation must satisfy it. See [Spec-driven development](/reference/conventions/sdd) for the full SDD discipline.
+All user-visible changes require a spec — `specs/<name>/spec.md` — to be written or updated **before** implementation begins. Spec folders are named, never numbered; a CI gate rejects a numbered reference. The spec is the contract; the implementation must satisfy it. See [Spec-driven development](/reference/conventions/sdd) for the full SDD discipline.
 
 ## Testing
 
@@ -46,9 +50,16 @@ make verify-integration   # < 30s
 make verify-contract      # < 5s
 make verify-e2e           # MCP shim + daemon round-trip
 
-make verify               # unit + integration + contract (skip e2e)
-make verify-all           # everything
+make verify               # lint + unit + integration + contract + acceptance (skips e2e)
+make verify-all           # verify + e2e
 ```
+
+`make verify` includes `make lint`, which is more than ruff, mypy and the frontend's
+eslint/tsc — it also runs the repository's own gates: file-size limits
+(`check_file_sizes.py`), response-model coverage (`check_response_models.py`), named-not-
+numbered specs and ADRs (`check_doc_numbering.py`), the architecture-doc check
+(`check_architecture_doc.py`), the import-linter layering contracts, and the i18n key
+dump. Running the test tiers alone is **not** the same as running `make verify`.
 
 ## Security
 

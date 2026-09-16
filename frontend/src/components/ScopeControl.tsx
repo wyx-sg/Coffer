@@ -63,7 +63,8 @@
 // one resource.
 import { useTranslation } from "react-i18next";
 
-import { ReachControl, type ReachMode } from "@/components/reach/ReachControl";
+import { ReachControl } from "@/components/reach/ReachControl";
+import { reachModeOf, type ReachMode } from "@/components/reach/reachState";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { useDisableResource, useEnableResource } from "@/lib/hooks/useResourceMutations";
 import {
@@ -102,7 +103,7 @@ export function ScopeControl({ kind, name, enabled, scope: presetScope }: Props)
   const supportsScope = scopeData ? scopeData.supports_scope : true;
   const scope = scopeData?.scope ?? null;
 
-  const mode: ReachMode = !enabled ? "disabled" : scope === null ? "everywhere" : "restricted";
+  const mode: ReachMode = reachModeOf({ enabled, scope });
 
   const enableIfNeeded = () => {
     if (!enabled) enable.mutate({ kind, name });

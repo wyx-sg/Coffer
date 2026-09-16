@@ -1,7 +1,8 @@
 """YAML frontmatter parse/render for the on-disk markdown files.
 
-Both faces self-describe with a ``---``-fenced YAML block. This module is the
-only place that reads/writes that block (PyYAML lives here, in infrastructure).
+A knowledge file self-describes with a ``---``-fenced YAML block. This module
+is the only place that reads/writes a knowledge file's block (PyYAML lives here,
+in infrastructure).
 """
 
 from __future__ import annotations

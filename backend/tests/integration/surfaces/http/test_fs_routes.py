@@ -180,15 +180,76 @@ def test_fs_editors_empty_when_none_installed(tmp_path, monkeypatch):
         assert r.json()["editors"] == []
 
 
-def _stub_dialog(monkeypatch, *, returncode: int, stdout: str = "") -> None:
-    """Pin macOS and stub the native dialog spawn instead of opening a real one."""
+def _stub_dialog(monkeypatch, *, returncode: int, stdout: str = "") -> list[list[str]]:
+    """Pin macOS and stub the native dialog spawn instead of opening a real one.
+
+    Returns the list the stub appends each dialog argv to, so a test can assert
+    what the daemon would have spawned. A real dialog is modal and would hang
+    the suite forever waiting for a human.
+    """
+    calls: list[list[str]] = []
     monkeypatch.setattr("sys.platform", "darwin")
+
+    def _run(cmd, **_):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
+
     # Same reason as _capture_spawn: swap the module reference, never the real
     # subprocess module, which the daemon's startup also uses.
-    monkeypatch.setattr(
-        pick_service,
-        "subprocess",
-        SimpleNamespace(
-            run=lambda cmd, **_: SimpleNamespace(returncode=returncode, stdout=stdout, stderr="")
-        ),
-    )
+    monkeypatch.setattr(pick_service, "subprocess", SimpleNamespace(run=_run))
+    return calls
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="browse local folders to choose a config dir"
+)
+def test_fs_pick_folder_returns_the_chosen_directory(tmp_path, monkeypatch):
+    """POST /fs/pick-folder → available=True and the absolute path the user chose.
+
+    This is the one thing a browser cannot do for itself: it deliberately
+    withholds absolute paths, and registering an agent needs one. The daemon is
+    on the same machine, so it opens the host dialog and hands the path back.
+    """
+    chosen = tmp_path / "projects" / "work"
+    chosen.mkdir(parents=True)
+    calls = _stub_dialog(monkeypatch, returncode=0, stdout=f"{chosen}\n")
+    app = _app(tmp_path, monkeypatch, 59650)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/pick-folder", json={"start": str(tmp_path)})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"available": True, "path": str(chosen)}
+    # The dialog was invoked as an argument vector (never a shell string), and
+    # `start` reached it as the default location.
+    assert len(calls) == 1
+    assert calls[0][0] == "osascript"
+    assert str(tmp_path) in calls[0][-1]
+
+
+def test_fs_pick_folder_reports_a_cancelled_dialog_as_no_path(tmp_path, monkeypatch):
+    """A non-zero exit from a present dialog tool means the user cancelled.
+
+    available stays True — the host CAN pick — so the UI must not fall back to
+    its in-app browser, it must simply do nothing.
+    """
+    calls = _stub_dialog(monkeypatch, returncode=1)
+    app = _app(tmp_path, monkeypatch, 59651)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/pick-folder", json={})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"available": True, "path": None}
+    # No `start` → no default location spliced into the AppleScript.
+    assert len(calls) == 1
+    assert "default location" not in calls[0][-1]
+
+
+def test_fs_pick_folder_reports_unavailable_when_the_host_has_no_dialog(tmp_path, monkeypatch):
+    """No native dialog tool on this host → available=False, so the caller
+    knows to fall back to the in-app folder browser rather than assume the
+    user cancelled."""
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(pick_service.shutil, "which", lambda cmd: None)
+    app = _app(tmp_path, monkeypatch, 59652)
+    with _client(app) as c:
+        r = c.post("/api/v1/fs/pick-folder", json={})
+        assert r.status_code == 200, r.text
+        assert r.json() == {"available": False, "path": None}

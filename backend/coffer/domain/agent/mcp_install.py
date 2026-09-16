@@ -6,19 +6,16 @@ it back through the atomic store.
 
 The write is driven by two orthogonal axes (see :mod:`mcp_injection`):
 
-- **format** — ``json`` / ``toml`` / ``yaml`` selects the parser/serializer
-  (each preserving the user's other content: comments, ordering, unrelated
-  keys).
+- **format** — ``json`` / ``toml`` selects the parser/serializer (each
+  preserving the user's other content: comments, ordering, unrelated keys).
 - **shape** — ``container_key`` (the top-level table: ``mcpServers`` /
   ``mcp_servers``; a dotted JSON key like ``mcp.servers`` descends
   one object per dot) and ``entry_style`` (how a single stdio entry is
-  rendered: a ``{"command": shim}`` command-map, or the typed-command-array
-  shape ``{"type": "local", "command": [shim]}``).
+  rendered — today only the ``{"command": shim}`` command-map).
 
-Defaults reproduce the original behaviour — JSON ``mcpServers`` command-map
-(Claude Code), TOML ``mcp_servers`` command-map (Codex) — so existing callers
-and tests need no change; agents with non-default shapes pass ``container_key``
-/ ``entry_style``.
+Defaults match both shipped agents — JSON ``mcpServers`` command-map
+(Claude Code), TOML ``mcp_servers`` command-map (Codex); agents with
+non-default shapes pass ``container_key`` / ``entry_style``.
 
 Both wire Coffer via the stdio shim: ``command = <abs path to coffer-mcp-shim>``.
 """
@@ -34,11 +31,9 @@ import tomlkit
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_entries import (
     COFFER_SERVER_KEY,
-    _dump_yaml,
     _json_container,
     _parse_json,
     _parse_toml,
-    _parse_yaml,
 )
 from coffer.domain.agent.mcp_injection import McpEntryStyle, default_container_key
 
@@ -48,7 +43,7 @@ def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, A
     (``mcp.servers`` — an agent may nest its map one level down), creating each
     missing step. A hand-edit that left a non-object at any step is replaced
     (mirrors the flat branch's ``isinstance(dict)`` guard). JSON only — the
-    TOML/YAML container keys in use carry no dots."""
+    TOML container keys in use carry no dots."""
     node = data
     for part in dotted_key.split("."):
         child = node.get(part)
@@ -65,20 +60,12 @@ def _entry_fields(
     """The key/value pairs of a single stdio ``coffer`` entry for the style.
 
     ``agent_name``, when given, threads the installing agent's own name
-    through as ``--agent <name>`` (spec agent-registry FR-019, amended) so the shim can
-    self-report its identity at the MCP handshake. The command-map style
-    carries it as a separate ``args`` list (mirroring how Claude Code / Codex
-    already render stdio server args); the typed-array styles have no
-    ``args`` key in their shape, so the flag is appended directly onto the
-    ``command`` array instead. ``agent_name=None`` (the default) reproduces
-    the pre-Task-9 shape exactly, for any caller that doesn't know the name.
+    through as ``--agent <name>`` (spec agent-registry FR-019, amended) so the
+    shim can self-report its identity at the MCP handshake. The command-map
+    style carries it as a separate ``args`` list, mirroring how Claude Code /
+    Codex already render stdio server args. ``agent_name=None`` (the default)
+    omits the flag, for any caller that doesn't know the name.
     """
-    if entry_style is McpEntryStyle.TYPED_LOCAL_OBJECT:
-        command = [shim_path, "--agent", agent_name] if agent_name else [shim_path]
-        return {"type": "local", "command": command, "enabled": True}
-    if entry_style is McpEntryStyle.TYPED_COMMAND_ARRAY:
-        command = [shim_path, "--agent", agent_name] if agent_name else [shim_path]
-        return {"type": "local", "command": command}
     fields: dict[str, Any] = {"command": shim_path}
     if agent_name:
         fields["args"] = ["--agent", agent_name]
@@ -86,9 +73,10 @@ def _entry_fields(
 
 
 def _coffer_command(entry: Any) -> str | None:
-    """Extract the shim path from an installed entry, regardless of style.
+    """Extract the shim path from an installed entry.
 
-    Handles both ``command: "<shim>"`` and ``command: ["<shim>", ...]``; returns
+    Handles both ``command: "<shim>"`` (what Coffer writes) and
+    ``command: ["<shim>", ...]`` (as a hand-edited config may spell it); returns
     ``None`` when the entry is not a mapping or carries no command.
     """
     if not isinstance(entry, MutableMapping):
@@ -111,10 +99,9 @@ def apply_install(
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
     Idempotent: an existing ``coffer`` entry is replaced in place, never
-    duplicated — including entries written before ``agent_name`` support was
-    added (agents installed pre-Task-9 have no ``--agent`` flag at all;
-    re-installing rewrites them with it, in place — there is no separate
-    auto-migration path).
+    duplicated — including an entry written before ``agent_name`` support was
+    added, which carries no ``--agent`` flag at all; re-installing rewrites it
+    with the flag, in place, so there is no separate auto-migration path.
     """
     ck = container_key or default_container_key(fmt)
     fields = _entry_fields(shim_path, entry_style, agent_name)
@@ -127,15 +114,6 @@ def apply_install(
         # state (project paths, history) which may be non-ASCII; escaping it to
         # \uXXXX on every install needlessly rewrites unrelated content.
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-
-    if fmt is ConfigFileFormat.YAML:
-        ydata = _parse_yaml(text)
-        yservers = ydata.get(ck)
-        if not isinstance(yservers, MutableMapping):
-            yservers = {}
-            ydata[ck] = yservers
-        yservers[COFFER_SERVER_KEY] = dict(fields)
-        return _dump_yaml(ydata)
 
     if fmt is ConfigFileFormat.TOML:
         doc = _parse_toml(text)
@@ -164,13 +142,6 @@ def apply_uninstall(fmt: ConfigFileFormat, text: str, *, container_key: str | No
             servers.pop(COFFER_SERVER_KEY, None)
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
-    if fmt is ConfigFileFormat.YAML:
-        ydata = _parse_yaml(text)
-        servers = ydata.get(ck)
-        if isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers:
-            del servers[COFFER_SERVER_KEY]
-        return _dump_yaml(ydata)
-
     if fmt is ConfigFileFormat.TOML:
         doc = _parse_toml(text)
         servers = doc.get(ck)
@@ -192,9 +163,6 @@ def is_installed(fmt: ConfigFileFormat, text: str, *, container_key: str | None 
     if fmt is ConfigFileFormat.JSON:
         servers = _json_container(_parse_json(text), ck)
         return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
-    if fmt is ConfigFileFormat.YAML:
-        servers = _parse_yaml(text).get(ck)
-        return isinstance(servers, MutableMapping) and COFFER_SERVER_KEY in servers
     if fmt is ConfigFileFormat.TOML:
         servers = _parse_toml(text).get(ck)
         # isinstance guard so a scalar `mcp_servers` containing the substring
@@ -206,15 +174,10 @@ def is_installed(fmt: ConfigFileFormat, text: str, *, container_key: str | None 
 def installed_command(
     fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
 ) -> str | None:
-    """The shim path of the installed coffer entry, or ``None`` if absent.
-
-    Works for both the command-map and command-array entry styles.
-    """
+    """The shim path of the installed coffer entry, or ``None`` if absent."""
     ck = container_key or default_container_key(fmt)
     if not is_installed(fmt, text, container_key=ck):
         return None
     if fmt is ConfigFileFormat.JSON:
         return _coffer_command(_json_container(_parse_json(text), ck)[COFFER_SERVER_KEY])
-    if fmt is ConfigFileFormat.YAML:
-        return _coffer_command(_parse_yaml(text)[ck][COFFER_SERVER_KEY])
     return _coffer_command(_parse_toml(text)[ck][COFFER_SERVER_KEY])

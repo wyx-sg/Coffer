@@ -2,7 +2,7 @@
 
 Coffer is a local-first **AI agent vault** — one secure, shared interface for every AI agent on your machine.
 
-Coffer is a daemon + CLI + a web UI the daemon serves itself. It started as a unified **MCP gateway** — aggregating upstream MCP servers and re-exposing them to MCP clients (Claude Code, Codex) through one namespaced surface — and grew into a vault that also manages your **skills**, shared **knowledge**, and registered **agents**, reachable over **channels** and kept in step across your machines by **sync**. Configure once; every agent sees the same vault. All state lives on your machine — no cloud accounts, no vendor lock-in.
+Coffer is a daemon + CLI + a web UI, reachable in a browser the daemon serves itself or in a native **desktop app**. It started as a unified **MCP gateway** — aggregating upstream MCP servers and re-exposing them to MCP clients (Claude Code, Codex) through one namespaced surface — and grew into a vault that also manages your **skills**, shared **knowledge**, aggregated **memory**, model **providers**, and registered **agents**, reachable over **channels** and kept in step across your machines by **sync**. Configure once; every agent sees the same vault. All state lives on your machine — no cloud accounts, no vendor lock-in.
 
 ## Why Coffer?
 
@@ -12,19 +12,22 @@ Coffer is the single source of truth instead. Register a tool, deliver a skill, 
 
 ### What Coffer manages
 
+Seven resource kinds ship today:
+
 | Kind                                     | What it is                                                                                               |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | [MCP servers](/guide/register-server)    | Aggregate upstream MCP servers; re-expose their tools namespaced through one endpoint.                   |
 | [Agents](/guide/agents)                  | Detect and register Claude Code / Codex; edit their config, deliver skills, install Coffer's MCP server. |
 | [Skills](/guide/skills)                  | One master skill library, delivered into the agents you choose.                                          |
 | [Knowledge](/guide/knowledge)            | One store, shared by every agent: the entries they write and the documents you ingest, under one search. |
-| [Model providers](/guide/web-ui)         | The vendor endpoints Coffer holds keys for, and the connection its own engine runs on.                   |
+| [Memory](/guide/web-ui#memory)           | The facts Coffer aggregated out of your agents' own native memory, partitioned by project.               |
+| [Model providers](/guide/web-ui#model-providers) | The vendor endpoints Coffer holds keys for, and the connection its own engine runs on.            |
 | [Channels](/guide/channels)              | Reach your agents from Telegram or SeaTalk — the way you actually talk to them.                          |
 
 Plus two cross-cutting capabilities: an [encrypted credential store](/guide/credentials) and [vault sync](/guide/sync).
 
 ### Local-first by design
 
-All user state stays on your machine. Cloud services are LLM and tool providers only — they never become the system of record for any vault state. The HTTP API binds to `127.0.0.1`. Your configuration, credentials, and audit history are yours alone; secrets are encrypted at rest and travel only as ciphertext, only when you explicitly export them.
+All user state stays on your machine. Cloud services are LLM and tool providers only — they never become the system of record for any vault state. The HTTP API binds to `127.0.0.1`. Your configuration, credentials, and audit history are yours alone; secrets are encrypted at rest and travel only as ciphertext, only to a git remote you configured and own.
 
 [Get started →](/guide/getting-started)

@@ -29,13 +29,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
 from coffer.application.knowledge.service import KnowledgeService
-from coffer.domain.knowledge.converter import Conversion
+from coffer.domain.knowledge.converter import Conversion, EmptyConversion
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import UploadTooLarge
 from coffer.infrastructure.knowledge import fs, paths
@@ -129,7 +130,8 @@ class IngestService:
         """Convert ``data`` (named ``filename``) into a knowledge file.
 
         Raises ``UploadTooLarge`` over the size ceiling, ``UnsupportedDocument``
-        (``domain.knowledge.converter``) for a type no converter handles, and
+        (``domain.knowledge.converter``) for a type no converter handles,
+        ``EmptyConversion`` when a converter ran and produced no text, and
         whatever ``KnowledgeService.write`` raises for an unauthorized or
         otherwise invalid target — in every one of those cases nothing is
         written, converted or kept (FR-037).
@@ -144,6 +146,13 @@ class IngestService:
         await self._knowledge.require_visible(target_directory, agent)
 
         conversion = await self._registry.convert(data, filename)
+        # FR-037: a converter that succeeds but extracts nothing (an image-only
+        # PDF is the real case) must not be stored as a titled file with an
+        # empty body. Checked here rather than in each converter so every
+        # format is covered by one rule, and BEFORE the describe call so a
+        # refusal costs no model tokens either.
+        if not conversion.markdown.strip():
+            raise EmptyConversion(pathlib.Path(filename).suffix.lstrip(".").lower())
         description = await self._describe(conversion.markdown, title=conversion.title)
 
         written = await self._knowledge.write(

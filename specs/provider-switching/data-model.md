@@ -1,80 +1,50 @@
 # Data Model — Provider Switching
 
 Entities, fields, and reuse anchors for the provider registry.
-Depends on the agent kind from spec agent-registry and the kind-agnostic Resource
-framework from spec mcp-gateway.
+Depends on the agent kind from spec agent-registry and the kind-agnostic
+Resource framework from spec mcp-gateway.
 
 ## Domain entities (`backend/coffer/domain/provider/`)
 
 ### `ProviderConfig` (`domain/provider/config.py`)
 
-Pydantic v2 `BaseModel`. This is the synced `config` dict stored on the
-Resource row. It MUST NOT hold the raw secret.
-
-> **Amendment 2026-06-22b (E1–E2):** the connection is a credentialed endpoint.
-> `model`, `fast_model`, and `wire_api` are REMOVED; the manual `wire_format`
-> becomes a DETECTED `protocol`. The model lives at the point of use (Agent
-> binding / internal-default / chat), not on the connection.
-
-> **Amendment 2026-06-23 (F1, F4):** which agents the connection projects into
-> is decoupled from `protocol`, and `is_active` is scoped PER AGENT TYPE (≤1
-> active connection per agent), not per protocol. It was first carried as a
-> `compatible_agents: list[str] | None` field on this config (`AgentType`
-> values; `null` ⇒ the wire default).
-
-> **Amendment 2026-09-13 (F1 revised):** `compatible_agents` is REMOVED from the
-> config. The axis is the resource row's framework-level per-agent `scope`
-> ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
-> which every scoped kind shares. `null` there means EVERY agent, not the wire
-> default, so migration 0071 materialises each existing row's effective set into
-> `scope` and strips the key; a new connection is pre-filled from the wire by
-> the kind's `default_scope` hook. The agent names are still plain strings, so
-> this domain module stays free of the agent kind (the application layer
-> hydrates them into `AgentType` at the projection seam,
-> `application/provider/targets.py`, which also drops a disabled or keyless
-> connection to no agent at all).
-
-> **Amendment 2026-09-11 (J1–J3):** a `models` field records WHICH of
-> the endpoint's models the connection offers downstream. It stores no CHOSEN
-> model — E1/E3 stand — only the menu the point-of-use pickers may choose from.
-> EMPTY means no restriction, which is the default and what every connection
-> created before revision 0059 carries.
-
-> **Amendment 2026-09-12b (L1–L4):** each curated entry is an OBJECT,
-> `CuratedModel = {id: str, modality: Modality}`, where `Modality` is a `StrEnum`
-> over `text` (default), `embedding`, `image`, `video` and `audio` — a provider
-> endpoint serves more than chat models, and the entry now says which kind it is.
-> The **stored** modality is the truth: it is inferred only by the one-shot
-> migration that converts plain-string entries and by endpoint introspection
-> (both user-correctable), and **never** by a load-time shim. Every chat model
-> picker narrows the curated set to `text` (FR-029/FR-030).
+Pydantic v2 `BaseModel`, `extra="forbid"`. This is the synced `config` dict
+stored on the resource row. It MUST NOT hold the raw secret, and it holds no
+model the connection runs: a connection is a credentialed endpoint, and the
+model is chosen at the point of use.
 
 | Field | Type | Constraints / Notes |
 |---|---|---|
-| `protocol` | `Protocol` | DETECTED, not user-entered; `"anthropic"`, `"openai"`, `"ollama"`, or `"unknown"`. Probed from the endpoint on create/edit; a compatibility hint, not a projection gate. `ollama` is internal-only. `unknown` ⇒ offered to all agents (user decides). |
-| `base_url` | `str` | Required; upstream LLM endpoint URL. |
-| `credential_ref` | `str \| None` | Optional; required for anthropic/openai (Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`); absent for ollama (no API key). |
-| `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream (FR-025/FR-029). Each entry is `{id, modality}`. Default `[]` = no restriction (the endpoint's whole catalogue). Ids are opaque strings passed verbatim to the vendor — validated for shape only (non-blank, deduplicated by id preserving order, ≤200 ids of ≤200 chars), never against a list Coffer writes down. Not a chosen model: the choice still happens at the point of use. |
-| `models[].modality` | `Modality` | `"text"` (default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is (FR-029). STORED, never re-derived at read time: inferred only by the one-shot migration over plain-string entries and by endpoint introspection, both correctable from the connection editor. Chat model pickers offer only the `text` entries (FR-030). |
-| `is_active` | `bool` | At most one `True` per `protocol` at any time (FR-011); always `False` for ollama. |
-| `internal_default` | `bool` | At most one `True` globally (FR-021); the connection Coffer's internal engine uses (its MODEL is chosen by the internal-default selector, not stored here). On import, if >1, normalise (keep most-recently-updated). |
+| `protocol` | `Protocol` | Required. `"anthropic"`, `"openai"`, `"ollama"` or `"unknown"`. The wire the endpoint speaks: it drives model introspection and whether a key is required, and supplies the scope a new connection STARTS with. It is not a projection gate — that is the resource's scope. Mutable (the probe that guessed it can be wrong). |
+| `base_url` | `str` | Required, non-blank (trimmed); the upstream endpoint. |
+| `credential_ref` | `str \| None` | Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`, conventionally `provider/<name>/key`; several connections MAY share one. Required for `anthropic` / `openai` / `unknown`; MUST be absent for `ollama`, which has no key. Immutable once set. |
+| `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream. Default `[]` = no restriction (the endpoint's whole catalogue). Shape-validated only: non-blank ids, deduplicated by id preserving order, at most 200 ids of at most 200 characters. Ids are opaque and passed verbatim to the vendor — never checked against a list Coffer holds. Not a chosen model. |
+| `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
+| `is_active` | `bool` | At most one `True` per AGENT TYPE at any time, enforced by the switch op. It records that this connection is the one currently written INTO the agents it reaches — a claim about a file Coffer does not own, which is why the boot self-check exists. Always `False` for `ollama`, which projects into nothing. |
+| `internal_default` | `bool` | At most one `True` globally: the connection Coffer's own engine runs on. Its MODEL is a separate singleton, not stored here. Backed by a partial unique index, so a second flagged row is unrepresentable whatever writes it. |
 
-Model selection is NOT on the connection — `models` curates the menu, it does not
-make the choice. The model(s) projected for an agent come
-from that agent's binding (Agent page dual slots → `ANTHROPIC_MODEL` +
-`ANTHROPIC_SMALL_FAST_MODEL`); the Codex `wire_api` likewise moves to the Codex
-binding. **Migration (option A): existing connections drop `model`/`fast_model`/
-`wire_api`; `wire_format` is re-read as `protocol` (or `unknown` pending a probe);
-previously-configured models are NOT carried — users re-select on the Agent page.**
+Reach — which agents the connection projects into — is deliberately NOT a field
+here. It is the resource row's framework-level per-agent `scope`
+([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
+shared by every scoped kind. The agent names stay plain strings outside this
+module, so the provider domain never imports the agent kind; the application
+layer hydrates them at the projection seam
+(`application/provider/targets.py`).
 
-All fields are JSON-stable (no Python objects) so `model_dump(mode="json")`
-serialises cleanly for SQLite and sync export.
+`default_scope_for_protocol(protocol)` supplies the scope a new connection
+starts with: both coding agents for a credentialed wire, none for `ollama`,
+every agent for `unknown`. It exists because the framework's unscoped default
+means *every* agent, which would widen a fresh connection's reach rather than
+preserve it.
+
+`model_ids(modality=None)` is the narrowing seam: a chat picker asks for `TEXT`
+and can never be handed an embedding or image id, while an empty list keeps
+meaning "no restriction" for the caller to interpret.
+
+All fields are JSON-stable so `model_dump(mode="json")` serialises cleanly for
+SQLite and for sync.
 
 ### `Protocol` (`domain/provider/config.py`)
-
-A single `StrEnum` lives in `config.py` alongside `ProviderConfig`. There is no
-separate `wire.py` module. The old `WireApi` enum is gone — `wire_api` left the
-connection (it is a Codex-binding concern; projection defaults it to `responses`).
 
 ```python
 class Protocol(StrEnum):
@@ -84,85 +54,127 @@ class Protocol(StrEnum):
     UNKNOWN = "unknown"
 ```
 
+`unknown` means the probe was inconclusive: the connection starts open to every
+agent and the user decides. There is no `WireFormat` and no `WireApi` enum —
+the Codex `wire_api` choice lives on the agent's binding, where its only legal
+value is `responses`.
+
+### `CuratedModel` / `Modality` (`domain/provider/config.py`, `modality.py`)
+
+```python
+class CuratedModel(BaseModel):     # extra="forbid"
+    id: str
+    modality: Modality = Modality.TEXT
+```
+
+`Modality` is a `StrEnum` over `text`, `embedding`, `image`, `video`, `audio`.
+`infer_modality(model_id)` holds the single inference rule, used in exactly two
+places — the one-shot migration that converted stored plain-string entries, and
+endpoint introspection, which returns a suggestion the connection editor
+pre-fills. Nothing infers at load time: a stored entry is taken as written.
+
 ### `ResolvedConnection` (`domain/provider/config.py`)
 
-A frozen dataclass pairing a `ProviderConfig` with the `model` to run on it —
-since the model lives apart from the connection (E3), the two travel together
-when the internal engine builds a chat model. `resolve_internal_connection()`
-returns it (or `None`); `build_chat_model(resolved, resolver)` consumes it.
+A frozen dataclass pairing a `ProviderConfig` with the `model` to run on it.
+Since the model lives apart from the connection, the two travel together when
+the internal engine builds a chat model: `resolve_internal_connection()` returns
+one (or `None`), and `build_chat_model(resolved, resolver)` consumes it.
+
+### Errors (`domain/provider/errors.py`)
+
+`ProviderCredentialSourceInvalid` (both or neither credential source supplied)
+and `NoActiveProvider` (a key was asked for and nothing is active).
 
 ### Projection functions (`domain/provider/projection.py`)
 
-Pure (I/O-free) functions that return the new native-config TEXT directly,
-analogous to `domain/agent/mcp_install.py`'s `apply_install`. There is NO
-`ProjectionPatch` dataclass and NO `build_patch()` function.
+Pure (I/O-free) functions that take the file's existing text and return the new
+text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
 
-- `apply_anthropic_settings(config: ProviderConfig, existing_text: str) -> str`
-- `apply_codex_provider(config: ProviderConfig, profile_name: str, existing_text: str) -> str`
-- `ProjectionTarget` — descriptor for the target config file
-- `target_for(wire: Protocol) -> ProjectionTarget | None` — returns `None` for
-  `ollama` (internal-only; no agent projection)
-- Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `ANTHROPIC_API_KEY_HELPER`
+- `apply_anthropic_settings(text, *, base_url, model, fast_model, api_key_helper) -> str`
+  and its inverse `remove_anthropic_settings(text) -> str`
+- `apply_codex_provider(text, *, base_url, model, wire_api, display_name, provider_id, env_key, catalog_path) -> str`
+  and its inverse `remove_codex_provider(text, *, provider_id) -> str`
+- `codex_model_catalog_json(models) -> str | None` — the catalogue document, or
+  `None` when there is nothing honest to write; `codex_model_catalog_path(dir)`
+- `anthropic_api_key_helper(connection) -> str` — the only helper Coffer writes
+- `ProjectionTarget`, `target_for(protocol)`, `target_for_agent(agent_type)`,
+  `wire_for_agent(agent_type)`
+- Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `CODEX_MODEL_CATALOG_FILENAME`,
+  `CODEX_MODEL_CATALOG_KEY`, `CODEX_CATALOG_TRUNCATION_LIMIT`,
+  `MANAGED_API_KEY_HELPER_PREFIX`, `ANTHROPIC_API_KEY_HELPER`
 
-### Internal engine (`application/provider/service.py` + `infrastructure/chat/`)
+`CODEX_ENV_KEY` is re-exported from `domain/connection.py`, where it lives so
+the provider kind and the chat kind's Codex adapter can agree on the variable
+name without importing each other.
 
-The internal-engine connection is selected by the global `internal_default` flag:
+### Managed native-config keys, per agent type
 
-- `ProviderService.set_internal_default(name)` — clears `internal_default` on all
-  other connections, then sets the target (sequential clear-then-set, serialised
-  by the single-process daemon); emits `provider_internal_default_set`.
-- `ProviderService.resolve_internal_connection() -> ResolvedConnection | None` —
-  pairs the `internal_default` connection with the global internal-engine model
-  (below). `None` when no connection is marked OR no model is set (the model
-  lives apart from the connection — there is no fallback to a connection model).
-- `build_chat_model(resolved, ...)` consumes the `ResolvedConnection`, dispatched
-  by `protocol` (anthropic / openai / ollama), to build the internal engine's
-  chat model — replacing the retired `ModelConfig` registry's model selection.
+The writer is chosen by the AGENT the connection reaches, not by the
+connection's protocol, so an OpenAI-compatible gateway routed to Claude Code
+writes Claude's shape. Only these keys are Coffer's; everything else in the file
+is preserved, and the projection tests assert exactly this set.
+
+**Claude Code — `~/.claude/settings.json` (JSON):**
+
+| Managed key path | Source |
+|---|---|
+| `apiKeyHelper` | `"coffer provider key --connection <name>"` |
+| `env.ANTHROPIC_BASE_URL` | the connection's `base_url` |
+| `env.ANTHROPIC_MODEL` | the AGENT binding's `model` (key removed when unbound) |
+| `env.ANTHROPIC_SMALL_FAST_MODEL` | the agent binding's `fast_model` (key removed when unset) |
+
+`ANTHROPIC_API_KEY` is never written — it would override the helper.
+De-projection removes an `apiKeyHelper` only when it starts with
+`MANAGED_API_KEY_HELPER_PREFIX`, so a helper the user wrote is left alone.
+
+**Codex — `~/.codex/config.toml` (TOML, via tomlkit):**
+
+| Managed key path | Source |
+|---|---|
+| `model` | the agent binding's `model` (key removed when unbound) |
+| `model_provider` | `"coffer"` |
+| `model_catalog_json` | the absolute path of the Coffer-owned catalogue, written only while the connection curates `text` models; dropped otherwise |
+| `model_providers.coffer.name` | `f"Coffer ({name})"` |
+| `model_providers.coffer.base_url` | the connection's `base_url` |
+| `model_providers.coffer.wire_api` | the agent binding's `wire_api`, defaulting to `"responses"` |
+| `model_providers.coffer.env_key` | `"COFFER_PROVIDER_KEY"` |
+
+The catalogue file is written before `config.toml` points at it, and the
+pointer is dropped before the file is deleted, so Codex never reads a
+`model_catalog_json` path that is not there. The pointer is removed only when it
+names the Coffer-owned filename.
+
+### Internal engine (`application/provider/`, `infrastructure/chat/`)
+
+- `set_internal_default(name)` — clears the flag on every other connection then
+  sets it on the target (serialised by the single-process daemon); emits
+  `provider_internal_default_set`. When the connection actually moves it also
+  clears the internal-engine model unless the newly chosen connection curates
+  that id.
+- `resolve_internal_connection() -> ResolvedConnection | None` — pairs the
+  flagged connection with the global internal-engine model. `None` when no
+  connection is flagged OR no model is set; there is no fallback to a model on
+  the connection, because it carries none.
+- `build_chat_model(resolved, ...)` — dispatched by `protocol` (anthropic /
+  openai / ollama) to build the engine's chat model.
 
 #### `GlobalInternalEngineConfig` (`domain/internal_engine_config.py`)
 
-The internal-engine MODEL is a separate global singleton (one row, fixed
-`SINGLETON_ID = 1`), decoupled from the connection:
+The internal engine's model and its unattended passes are one global singleton
+(one row, fixed `SINGLETON_ID = 1`), decoupled from the connection.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `model` | `str \| None` | The model the internal engine runs on; `None` until chosen. |
+| `model` | `str \| None` | The model Coffer's own passes run on; `None` until chosen. |
+| pass switches / intervals | per pass | Aggregation, organise and tidy each carry a switch and an interval; an interval the operator has not chosen is reported as unchosen alongside the default that runs. |
 | `updated_at` | `datetime` | Last write. |
 
-- `InternalEngineConfigService.get()` returns the row or an unset default
-  (`model=None`); `.update(model=...)` trims/normalises empty → `None`, persists,
-  and emits an `internal_engine_model_set` audit event.
-- Stored via `SqlAlchemyInternalEngineConfigRepo` (table `internal_engine_config`,
-  alembic `0039`); exposed over `GET`/`PUT /api/v1/internal-engine-config`.
-
-### Managed native-config keys per `wire_format`
-
-The pure functions in `domain/provider/projection.py`
-(`apply_anthropic_settings` / `apply_codex_provider`) write exactly the keys
-below into the agent's native config; `ProjectionTarget` + `target_for(wire)`
-map each `wire_format` to its agent, allowlist key, and file format. The
-projection tests assert on these managed keys so the spec and implementation
-stay consistent.
-
-**anthropic keys managed:**
-
-| Managed key path | Source |
-|---|---|
-| `apiKeyHelper` | literal `"coffer provider key --wire anthropic"` |
-| `env.ANTHROPIC_BASE_URL` | `profile.base_url` |
-| `env.ANTHROPIC_MODEL` | `profile.model` |
-| `env.ANTHROPIC_SMALL_FAST_MODEL` | `profile.fast_model` (omit when `None`) |
-
-**openai keys managed:**
-
-| Managed key path | Source |
-|---|---|
-| `model` | `profile.model` |
-| `model_provider` | literal `"coffer"` |
-| `model_providers.coffer.name` | `f"Coffer ({profile_name})"` |
-| `model_providers.coffer.base_url` | `profile.base_url` |
-| `model_providers.coffer.wire_api` | `profile.wire_api` |
-| `model_providers.coffer.env_key` | literal `"COFFER_PROVIDER_KEY"` |
+`InternalEngineConfigService.get()` returns the row or an unset default;
+`.update(...)` normalises empty → `None`, persists, and emits
+`internal_engine_model_set`. Stored by
+`SqlAlchemyInternalEngineConfigRepo` (table `internal_engine_config`) and
+exposed over `GET` / `PUT /api/v1/internal-engine-config` and
+`PUT /api/v1/internal-engine-config/upkeep`.
 
 ## Reuse anchors
 
@@ -174,81 +186,92 @@ All implementation MUST reuse these existing components; do not re-implement.
 |---|---|---|
 | `EncryptedCredentialStore` | `backend/coffer/infrastructure/credentials/encrypted_store.py` | `get/set/exists/delete` — store and retrieve raw secrets |
 | credential resolver | `backend/coffer/application/credentials/resolver.py` | resolve a ref to plaintext (key resolution) |
-| HTTP adopt pattern | `backend/coffer/application/agent/mcp_entry_service.py:303` | model for "store secret, keep only ref" on create |
 | citation guard | `ResourceService.find_credential_citations` | guard before deleting an owned secret |
 
 ### Config-file store (native config write)
 
 | Component | Path | Used for |
 |---|---|---|
-| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write + `.bak` backup |
-| `spec_for` / `config_files_for` | `backend/coffer/domain/agent/config_files.py` | resolve the canonical path for a given `AgentType` + key |
+| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write + `.bak` (rotating `.bak.1` / `.bak.2`) |
+| `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection; retiring the Codex catalogue |
+| `spec_for` / `config_files_for` | `backend/coffer/domain/agent/config_files.py` | resolve the canonical path for an `AgentType` + key |
 | `AgentType` descriptors | `backend/coffer/domain/agent/descriptor.py` | `claude_code` `settings` → `~/.claude/settings.json`; `codex` `config` → `~/.codex/config.toml` |
 
 ### Projection template (MCP injection)
 
 | Component | Path | Used for |
 |---|---|---|
-| `apply_install` | `backend/coffer/domain/agent/mcp_install.py` | structural template for pure projection functions that return TEXT |
-| `mcp_entries.py` | `backend/coffer/domain/agent/mcp_entries.py` | JSON via `json.dumps`; TOML via `tomlkit` — reuse both |
-| MCP service | `backend/coffer/application/agent/mcp_service.py` | driver pattern to mirror |
+| `apply_install` | `backend/coffer/domain/agent/mcp_install.py` | structural template for pure transforms that return TEXT |
+| `mcp_entries.py` | `backend/coffer/domain/agent/mcp_entries.py` | JSON via `json.dumps`; TOML via `tomlkit` |
 
 ### Resource Kind pattern
 
 | Component | Path | Used for |
 |---|---|---|
-| `Kind` dataclass | `backend/coffer/domain/resource.py` | define the `provider` Kind |
-| kind factory | `backend/coffer/application/knowledge_base/kind.py` | model for `make_provider_kind(...)` |
-| `wire_kb_kind` | `backend/coffer/surfaces/http/wiring.py` | model for `wire_provider_kind(...)` |
-| composition root | `backend/coffer/surfaces/http/app.py` | where to register `app.state.kinds["provider"]` |
+| `Kind` dataclass | `backend/coffer/domain/resource.py` | define the `provider` kind |
+| `Scope` / `is_active` | `backend/coffer/domain/scope.py` | the per-agent reach axis |
+| kind factory | `backend/coffer/application/provider/kind.py` | `make_provider_kind()` — config schema, credential-ref extractor, `supports_scope`, `default_scope` |
+| composition root | `backend/coffer/surfaces/http/provider_wiring.py` | build the service, mount the routes, register the kind |
 
 ### Single-active invariant
 
-The activation flip uses sequential `ResourceService.update_config` calls
-(clear others, then set target); the single-process daemon serialises requests
-so switches never interleave. There is NO `ProviderRepo` / `activate_atomic`.
-
-| Component | Path | Used for |
-|---|---|---|
-| `ModelConfig` domain | `backend/coffer/domain/chat/model.py` | per-wire single-active pattern (mirror, do NOT couple) |
-| `ResourceService.update_config` | existing resource service | used directly by `ProviderService.activate()` |
+The activation flip uses sequential `ResourceService.update_config` calls (clear
+the others, then set the target); the single-process daemon serialises requests
+so switches never interleave. There is no `ProviderRepo` and no
+`activate_atomic`.
 
 ### Sync
 
 | Component | Path | Used for |
 |---|---|---|
 | `ResourceDoc` / `resource_to_doc` | `backend/coffer/domain/sync/serialization.py` | serialise provider rows |
-| `SyncExporter` | `backend/coffer/application/sync/exporter.py` | lists all kinds (automatic) |
-| `SyncImporter` | `backend/coffer/application/sync/importer.py` | reconciles by `(kind, name)` (automatic) |
+| `SyncExporter` | `backend/coffer/application/sync/exporter.py` | step 1 of a converge round: write every kind's rows into the tree |
+| `ResourceApplier` | `backend/coffer/application/sync/appliers.py` | apply an incoming document by `(kind, name)` — identity, description and config, never the reach |
+| `ProviderProjectionReconcile` | `backend/coffer/application/provider/sync_reconcile.py` | post-converge hook: re-derive the projection from the converged rows |
 
 ### Audit
 
 | Component | Path | Used for |
 |---|---|---|
-| `AuditEventType` | `backend/coffer/domain/audit.py` | add `PROVIDER_SWITCHED` |
-| `AuditEntry` | `backend/coffer/domain/audit.py` | event shape |
-| `AuditService.record` | `backend/coffer/application/audit_service.py` | emit `PROVIDER_SWITCHED` from switch op |
+| `AuditEventType` | `backend/coffer/domain/audit.py` | `PROVIDER_SWITCHED`, `PROVIDER_INTERNAL_DEFAULT_SET`, `PROVIDER_PROJECTION_REFUSED` |
+| `AuditService.record` | `backend/coffer/application/audit_service.py` | emit them from the switch / internal-default / projection paths |
 
-## SQLite schema changes
+## SQLite schema
 
 The `provider` kind reuses the shared `resources` table (rows with
-`kind='provider'`); the `ProviderConfig` dict is stored in the existing
-`resources.config` JSON column — **no new tables**. The slim-down is a DATA
-migration: **`0040`** rewrites each provider row's `config_json` (rename
-`wire_format`→`protocol`; strip `model`/`fast_model`/`wire_api`).
+`kind='provider'`); `ProviderConfig` is stored in the existing `resources.config`
+JSON column — **no new tables**. Every schema change this kind has needed has
+been a data migration over those rows, one-shot, with no load-time shim:
 
-## Audit events added
+| Revision | What it did |
+|---|---|
+| `0036` | moved the retired `chat_models` registry into provider resources |
+| `0037` | forced the then-connection-level `wire_api` to `responses` |
+| `0040` | slimmed the connection: `wire_format` → `protocol`, stripped `model` / `fast_model` / `wire_api` |
+| `0051` | stripped the retired agent types from connections' then-`compatible_agents` |
+| `0054` | added the partial unique index behind one global internal default |
+| `0059` | wrote `models: []` into every existing row |
+| `0064` | converted plain-string curated entries into `{id, modality}` objects |
+| `0065` | pointed the embedding configuration at a connection, before it was removed |
+| `0071` | materialised each row's effective reach into the framework `scope` and stripped `compatible_agents` |
 
-Add to `AuditEventType` in `backend/coffer/domain/audit.py`:
+Three more belong to the agent side of this feature: `0060` added a per-agent
+curated set, `0063` took it back off, and `0061` forced the agent binding's
+`wire_api` to `responses`.
+
+## Audit events
 
 | Value | When emitted |
 |---|---|
-| `provider_switched` | Successful `POST /providers/{name}/activate`; details: `{from, to, protocol, agents: [...projected...]}` |
-| `provider_internal_default_set` | Successful `POST /providers/{name}/internal-default`; details: `{from, to}` (previous internal-default name or null, and the new one) |
+| `provider_switched` | a successful `POST /providers/{name}/activate` or `POST /providers/use-builtin/{wire}`; details `{from, to, protocol, agents}` |
+| `provider_internal_default_set` | a successful `POST /providers/{name}/internal-default`; details `{from, to}` |
+| `provider_projection_refused` | a native-config write refused because the file changed under Coffer |
+| `internal_engine_model_set` | a write to the internal-engine singleton |
 
-`RESOURCE_CREATED`, `RESOURCE_UPDATED`, `RESOURCE_DELETED` are emitted
-automatically by `ResourceService` on CRUD operations (no new event types
-needed for those).
+`resource_created` / `resource_updated` / `resource_deleted` / `resource_renamed`
+come from `ResourceService`; a change to the curated model set rides
+`resource_updated`, whose before/after details carry the config verbatim (the
+kind declares no redactor because its config holds no secret).
 
 ## Application service contracts (`backend/coffer/application/provider/`)
 
@@ -256,63 +279,74 @@ needed for those).
 
 | Method | Purpose |
 |---|---|
-| `create(name, config, secret_value?, credential_ref?, actor) -> Resource` | Validate; store secret if `secret_value` supplied; register Resource. Reject if both/neither credential source given. |
-| `update(name, patch, secret_value?, actor) -> Resource` | Partial update; rotate vault entry if `secret_value` supplied. |
-| `delete(name, actor) -> None` | Guard owned credential via `find_credential_citations`; remove vault entry if owned; delete Resource. |
-| `activate(name, actor) -> ActivateResult` | Sequential clear-then-set for single-active invariant; project to matching registered agents; emit `PROVIDER_SWITCHED`. |
-| `resolve_active_key(wire: WireFormat) -> str` | Find active profile for the given wire format; decrypt and return key (stdout only; caller must not log). No by-name resolution. |
-| `set_internal_default(name, actor) -> Resource` | Clear `internal_default` on all other connections then set the target (global single-internal-default invariant, FR-021); emit `PROVIDER_INTERNAL_DEFAULT_SET`. |
-| `resolve_internal_connection() -> ProviderConfig \| None` | Return the `internal_default` connection's config, or `None` (→ the internal engine — memory organizer / reorg / distill — is a clean no-op). |
+| `create(...) -> Resource` | Validate the credential source (exactly one, or neither for ollama); store the secret; register the resource with the wire's default scope. |
+| `list()` / `get(name)` | The rows, as the surfaces read them. |
+| `update(name, patch, secret_value?)` | Partial update; rotates the vault entry when a secret is supplied. |
+| `delete(name)` | Guard the owned credential via `find_credential_citations`, remove it when unowned elsewhere, delete the resource. |
+| `rename(name, new_name)` | The row, the owned vault entry, the audit trail and any live projection, together. |
+| `activate(name) -> ActivateResult` | Clear-then-set for the per-agent-type invariant; project into every agent the scope reaches; de-project the agents the previous connection covered and this one does not; emit `provider_switched`. |
+| `deactivate(wire) -> DeactivateResult` | Revert the agent behind that wire to its built-in login; idempotent. |
+| `resolve_connection_key(name) -> str` | The named connection's key — what the projected `apiKeyHelper` calls. |
+| `resolve_active_key_for_agent(agent_type) -> str` | The key of the connection active for that agent (what Codex's env var is filled from). |
+| `resolve_active_key(wire) -> str` | The legacy wire-keyed form, resolving through the wire's agent. |
+| `set_internal_default(name) -> Resource` | The global flag, and the model it drops. |
+| `resolve_internal_connection() -> ResolvedConnection \| None` | The engine's endpoint + model, or `None` (→ the internal passes are a clean no-op). |
 
-### `ActivateResult` (`application/provider/service.py`)
+Decrypted values are returned to the caller and never logged.
+
+### Results (`application/provider/results.py`)
 
 ```python
 @dataclass
 class ActivateResult:
     activated: str
+    protocol: str
     projected: list[str]   # agent names written
-    skipped: list[str]     # agent names not matching or not registered
+    skipped: list[str]     # agents reached but not registered here
 ```
 
-### `ProviderService._project` (`application/provider/service.py`)
+`DeactivateResult` reports the connection that was reverted and the agents
+de-projected.
 
-Projection is an inlined private method on `ProviderService`; there is NO
-separate `application/provider/projector.py` / `ProviderProjector` class.
+### `ProviderProjector` (`application/provider/projector.py`)
 
-`_project(profile_name, config, agent_config_dir)` calls
-`apply_anthropic_settings(...)` or `apply_codex_provider(...)` (pure domain
-functions returning TEXT), then writes via `ConfigFileStore.write_text_atomic`.
+Projection is its own collaborator, not a private method on the service: it owns
+the read → pure transform → write sequence, the Codex catalogue file's
+lifecycle, and the refusal to write over content it did not read. It takes a
+`ProjectionConfigStore` port (`read_text` / `write_text_atomic` / `fingerprint` /
+`delete_with_backup`), so nothing below the application layer touches a path.
 
-There is NO `infrastructure/provider/persistence.py` and NO `ProviderRepo`.
-A provider profile is a plain resource row managed by the existing
-`ResourceService` (CRUD + audit + sync come for free).
+There is no `infrastructure/provider/persistence.py` and no `ProviderRepo`: a
+connection is a plain resource row, so CRUD, audit and sync come from the
+framework. `infrastructure/provider/introspector.py` is the kind's only
+infrastructure module — the single place that calls a third-party endpoint.
 
 ## On-disk / sync layout
 
-No new directories. Provider profiles land in the existing sync workspace:
+No new directories. Connections travel in the existing sync tree:
 
 ```
 ~/.coffer/sync/
   resources/
     provider/
-      <name>.yaml      # one deterministic YAML per profile (no secret)
+      <name>.yaml      # one deterministic YAML per connection (no secret)
   credentials/
     provider/
       <name>/
         key.enc        # Fernet ciphertext of the raw API key
 ```
 
-No new `~/.coffer/` subdirectory for providers (unlike skills which have a
-master content store). The only on-disk side-effects are the native config
-files written by projection (`~/.claude/settings.json`, `~/.codex/config.toml`)
-and their `.bak` backups.
+Ciphertext travels only when the remote is configured to carry it, and the
+reach a connection has on this machine does not travel at all. The only other
+on-disk side effects are the native config files projection writes, their `.bak`
+copies, and the Codex model catalogue.
 
 ## Constraints summary
 
 - `ProviderConfig` MUST NOT include the raw secret at any time.
-- Domain projection functions (`apply_anthropic_settings`, `apply_codex_provider`)
-  MUST be pure (no I/O); they return the new native-config TEXT.
+- The projection transforms MUST be pure; they return the new text.
 - Key resolution MUST NOT log the decrypted value.
-- The per-wire single-active invariant is enforced via sequential
-  `ResourceService.update_config` calls serialised by the single-process daemon.
+- The per-agent-type single-active invariant is enforced by sequential
+  `ResourceService.update_config` calls serialised by the single-process daemon;
+  the single global internal default is additionally enforced by the database.
 - All HTTP routes are loopback-only, gated by `X-Coffer-Token`.

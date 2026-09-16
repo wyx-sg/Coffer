@@ -16,7 +16,6 @@ daemon starts an adapter whether or not this vault converges with anything.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -51,6 +50,7 @@ from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
+from coffer.surfaces.http.sync_contributions import SyncContributions
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -85,6 +85,7 @@ def wire_channel_kind(
     credential_store: EncryptedCredentialStore,
     chat: ChatWiring,
     knowledge: KnowledgeWiring,
+    sync: SyncContributions,
 ) -> ChannelRuntime:
     # Derived from the host, cached in ``daemon-config.json``, and stable for
     # the life of the daemon — so it is resolved once here rather than on every
@@ -118,11 +119,9 @@ def wire_channel_kind(
         ingest=knowledge.ingest_service,
     )
 
-    resolver = CredentialResolver(credential_store)
-
-    async def materialize(refs: dict[str, str]) -> dict[str, str]:
-        # The store read is blocking (CODE-034) — never call it on the event loop.
-        return await asyncio.to_thread(resolver.materialize, refs)
+    # ``materialize_async`` is the resolver's own off-the-loop path (CODE-034);
+    # hand-rolling ``to_thread`` here is how the two drifted apart before.
+    materialize = CredentialResolver(credential_store).materialize_async
 
     async def adapter_factory(name: str, config: dict[str, object]) -> ChannelAdapter:
         parsed = parse_channel_config(dict(config))
@@ -190,6 +189,7 @@ def wire_channel_kind(
     service = ChannelService(
         resources=resource_svc,
         peers=peers,
+        threads=threads,
         pairing=pairing,
         runtime=runtime,
         audit=audit,
@@ -206,11 +206,11 @@ def wire_channel_kind(
     # happens, and pairings are what make a rebind cost nothing. They carry
     # platform identity only; the conversation pointer stays on this machine.
     #
-    # Registered on ``app.state`` the way every other area is, because sync is
-    # wired after every kind and reads what the kinds left there.
-    providers = getattr(app.state, "sync_state_providers", None)
-    if providers is None:
-        providers = []
-        app.state.sync_state_providers = providers
-    providers.append(ChannelPeerSyncState(resource_svc, peers))
+    # Appended to the ``SyncContributions`` collector every other area uses
+    # (``app_mcp_composition``, ``engine_config_composition``,
+    # ``agent_skill_wiring``); ``start_sync`` reads it once every kind is wired.
+    # It must go through that object and not onto ``app.state``: nothing reads
+    # ``app.state`` for state providers, so an area that registers there
+    # silently does not converge.
+    sync.state_providers.append(ChannelPeerSyncState(resource_svc, peers))
     return runtime

@@ -33,7 +33,12 @@ class _Resources:
 
 
 class _Peers:
-    async def get(self, resource_id: int) -> None:
+    async def owner_peer(self, resource_id: int) -> None:
+        return None
+
+
+class _Threads:
+    async def get(self, resource_id: int, chat_id: str, thread_id: str) -> None:
         return None
 
 
@@ -77,6 +82,7 @@ def _service(
     return ChannelService(
         resources=_Resources(config),  # type: ignore[arg-type]
         peers=_Peers(),  # type: ignore[arg-type]
+        threads=_Threads(),  # type: ignore[arg-type]
         pairing=PairingManager(),
         runtime=_Runtime(),  # type: ignore[arg-type]
         audit=None,  # type: ignore[arg-type]

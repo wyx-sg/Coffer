@@ -156,7 +156,7 @@ async def test_import_rejects_invalid_frontmatter(tmp_path):
     (src / "SKILL.md").write_text("no frontmatter")
     with pytest.raises(SkillValidationError):
         await skill_svc.import_local(path=str(src), actor="cli")
-    assert store.list_names() == []
+    assert not store.root.exists() or not any(store.root.iterdir())
     await engine.dispose()
 
 

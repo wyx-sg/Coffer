@@ -25,7 +25,10 @@ from coffer.application.channel.ports import ChannelPeer
 from coffer.application.channel.service import ChannelService
 from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.envelopes import SentMessage
-from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+from coffer.infrastructure.channel.persistence import (
+    ChannelPeerRepo,
+    ChannelThreadConversationRepo,
+)
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
@@ -80,6 +83,7 @@ class _Ctx:
     app: FastAPI
     runtime: _StubRuntime
     peers: ChannelPeerRepo
+    threads: ChannelThreadConversationRepo
     pairing: PairingManager
     resources: ResourceService
     tg_id: int = 0
@@ -98,10 +102,16 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
         kinds={"channel": make_channel_kind()}, repo=SqlAlchemyResourceRepo(sm), audit=audit
     )
     peers = ChannelPeerRepo(sm)
+    threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
     runtime = _StubRuntime()
     service = ChannelService(
-        resources=resources, peers=peers, pairing=pairing, runtime=runtime, audit=audit
+        resources=resources,
+        peers=peers,
+        threads=threads,
+        pairing=pairing,
+        runtime=runtime,
+        audit=audit,
     )
 
     tg = await resources.register(
@@ -131,6 +141,7 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
         app=app,
         runtime=runtime,
         peers=peers,
+        threads=threads,
         pairing=pairing,
         resources=resources,
         tg_id=tg.id,
@@ -153,9 +164,10 @@ async def _pair(ctx: _Ctx, resource_id: int, *, chat_id: str = "emp-1") -> None:
             chat_id=chat_id,
             display_name="Yu",
             paired_at=datetime.now(tz=UTC),
-            active_conversation_id="conv-9",
         )
     )
+    # The conversation pointer lives on the DM's thread row, not on the peer.
+    await ctx.threads.set_active_conversation(resource_id, chat_id, "", "conv-9")
 
 
 async def test_channel_routes_require_token(ctx: _Ctx) -> None:

@@ -15,10 +15,8 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "@/components/ui/toast";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import {
-  getFact,
   installDelivery,
   listDelivery,
-  listFacts,
   listPartitionFiles,
   listPartitions,
   organise,
@@ -29,8 +27,6 @@ import {
 import {
   memoryAgentDeliveryKey,
   memoryDeliveryKey,
-  memoryFactKey,
-  memoryFactsKey,
   memoryKey,
   memoryPartitionFileKey,
   memoryPartitionFilesKey,
@@ -49,24 +45,6 @@ export function useMemoryPartitions() {
   return useQuery({
     queryKey: memoryPartitionsKey,
     queryFn: async () => (await listPartitions()).partitions,
-  });
-}
-
-/** One partition's facts. */
-export function useMemoryFacts(partition: string, enabled = true) {
-  return useQuery({
-    queryKey: memoryFactsKey(partition),
-    queryFn: async () => (await listFacts(partition)).facts,
-    enabled: enabled && partition.length > 0,
-  });
-}
-
-/** One fact in full, with its own words and its origins. */
-export function useMemoryFact(partition: string, slug: string | null) {
-  return useQuery({
-    queryKey: memoryFactKey(partition, slug ?? ""),
-    queryFn: () => getFact(partition, slug as string),
-    enabled: Boolean(partition && slug),
   });
 }
 

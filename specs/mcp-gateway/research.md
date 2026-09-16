@@ -91,7 +91,7 @@ Set via SQLAlchemy `event.listens_for(engine.sync_engine, "connect")` so they ap
 {
   "version": 1,
   "pid": 12345,
-  "port": 8001,
+  "port": 8000,
   "token": "<32-char URL-safe random>",
   "started_at": "2026-05-20T12:34:56Z",
   "binary_path": "/Applications/Coffer.app/Contents/.../coffer-daemon"
@@ -113,7 +113,22 @@ Spawn flow uses `flock` on `~/.coffer/daemon.lock` to serialise concurrent detec
 
 ## Port allocation
 
-Range: `8000`–`8009`. Tried in order; first free wins. If all 10 are taken, daemon refuses to start with a clear error message and exits non-zero. Range chosen because it's small (operational hygiene), close to the conventional default (`8000`), and outside the well-known ports range (≥1024).
+The daemon binds **exactly one** port: `8000` by default, or whatever
+`~/.coffer/daemon-config.json` names (FR-028). It never scans for an
+alternative — a drifting origin breaks a bookmark and silently resets
+origin-keyed browser state, which is the whole reason the port is fixed. When
+that port cannot be bound the daemon refuses to start, naming the process that
+holds it and the commands that resolve it, and exits non-zero.
+
+The original design scanned `8000`–`8009`, first free wins. That scan survives
+in `infrastructure/daemon/port_alloc.py` as `bind_free_socket`, reachable ONLY
+through the `COFFER_PORT_RANGE_*` override — the hook the test suite uses to
+give each of its daemons a disjoint range, well away from the real 8000. A
+user's daemon never reaches it.
+
+The bind hands its already-bound socket's fd to uvicorn rather than closing and
+re-binding, so there is no gap in which another process could steal the port
+after `daemon.json` has published the live token against it.
 
 ## Test fixtures
 

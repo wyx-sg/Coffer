@@ -1,7 +1,5 @@
 # Competitive Research — Multi-Machine Config / State Sync
 
-> English: this file · 中文版: [multi-machine-sync.zh.md](./multi-machine-sync.zh.md)
->
 > Internal competitive-research report for Coffer's multi-machine sync (spec vault-sync,
 > [Vault Export and Import](../decisions/vault-sync.md)). **Date:** 2026-06-16. **Method:** deep-research harness. **Provenance
 > caveat:** this run hit an API session limit mid-verification — 1 claim

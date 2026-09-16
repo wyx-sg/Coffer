@@ -1,37 +1,54 @@
 # Feature Specification: [FEATURE NAME]
 
-**Feature Branch**: `[###-feature-name]`  
-**Created**: [DATE]  
-**Status**: Draft  
+**Spec**: `[short-name]` (the folder name under `specs/`, named for the feature — never numbered)
+**Status**: Draft
 **Input**: User description: "$ARGUMENTS"
 
-## User Scenarios & Testing *(mandatory)*
+<!--
+  A spec seeded from this template must keep three things intact or it will
+  fail `make verify`:
+
+  1. The top-level `## Acceptance Scenarios` section, with one
+     `### Scenario: <title>` per scenario. `scripts/audit_acceptance.py`
+     parses exactly that shape and FAILS a spec.md with zero scenarios.
+     Do NOT nest scenarios under a user story — the gate does not see them
+     there.
+  2. A named folder, not a numbered one. `scripts/check_doc_numbering.py`
+     rejects numbered spec directories and any `spec <NNN>` token in prose.
+  3. No date or time annotation in the header or body (see
+     `agents/sdd.md` "Markdown Style for spec.md"). Chronology lives in git
+     and in `.specify/memory/roadmap.md`, not in the spec.
+
+  A spec may nest: a parent spec owns the requirements its children share,
+  and a child spec lives in a subfolder of the parent's
+  (`specs/<parent>/<child>/spec.md`) and owns only what is specific to it.
+  A child's spec id is its path — `channels/telegram`, not `telegram`.
+-->
+
+## User Scenarios *(mandatory)*
 
 <!--
-  IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
-  Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
-  you should still have a viable MVP (Minimum Viable Product) that delivers value.
-  
-  Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
-  Think of each story as a standalone slice of functionality that can be:
-  - Developed independently
-  - Tested independently
-  - Deployed independently
-  - Demonstrated to users independently
+  User stories are PRIORITIZED user journeys, ordered by importance. Each one
+  must be INDEPENDENTLY TESTABLE: if you implement just ONE of them, the
+  result is still a viable slice that delivers value on its own — developable,
+  testable, deployable and demonstrable without the others.
+
+  Assign priorities (P1, P2, P3, …), P1 being the most critical.
+
+  Scenarios themselves do NOT go here. Each story names the outcomes it needs
+  and they are written up as `### Scenario:` entries in the
+  `## Acceptance Scenarios` section below, which is the section the gate reads.
 -->
 
 ### User Story 1 - [Brief Title] (Priority: P1)
 
 [Describe this user journey in plain language]
 
-**Why this priority**: [Explain the value and why it has this priority level]
+**Why this priority**: [The value it delivers and why it ranks here]
 
-**Independent Test**: [Describe how this can be tested independently - e.g., "Can be fully tested by [specific action] and delivers [specific value]"]
+**Independent Test**: [How this can be tested on its own — e.g. "fully tested by [action], delivering [value]"]
 
-**Acceptance Scenarios**:
-
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-2. **Given** [initial state], **When** [action], **Then** [expected outcome]
+**Covered by**: [the `### Scenario:` titles below that prove this story works]
 
 ---
 
@@ -39,27 +56,11 @@
 
 [Describe this user journey in plain language]
 
-**Why this priority**: [Explain the value and why it has this priority level]
+**Why this priority**: [The value it delivers and why it ranks here]
 
-**Independent Test**: [Describe how this can be tested independently]
+**Independent Test**: [How this can be tested on its own]
 
-**Acceptance Scenarios**:
-
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-
----
-
-### User Story 3 - [Brief Title] (Priority: P3)
-
-[Describe this user journey in plain language]
-
-**Why this priority**: [Explain the value and why it has this priority level]
-
-**Independent Test**: [Describe how this can be tested independently]
-
-**Acceptance Scenarios**:
-
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
+**Covered by**: [scenario titles from below]
 
 ---
 
@@ -67,62 +68,99 @@
 
 ### Edge Cases
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right edge cases.
--->
+<!-- ACTION REQUIRED: replace these placeholders with the real edge cases. -->
 
 - What happens when [boundary condition]?
-- How does system handle [error scenario]?
+- How does the system handle [error scenario]?
 
 ## Requirements *(mandatory)*
 
 <!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right functional requirements.
+  ACTION REQUIRED: replace these placeholders with the real functional
+  requirements.
+
+  FR ids are numbered **per spec, from FR-001**, and are never reused: a
+  requirement that is removed leaves its number retired rather than letting
+  the next one inherit it. A child spec numbers its own requirements from
+  FR-001 too — an id is only unique within the spec that carries it, so cite
+  one as `<spec-id> FR-00N` when referring to it from elsewhere.
+
+  Requirements shared by several sibling specs belong in the parent spec;
+  a child carries only what is specific to it.
 -->
 
 ### Functional Requirements
 
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-001**: System MUST [specific capability, e.g. "allow users to create accounts"]
+- **FR-002**: System MUST [specific capability, e.g. "validate email addresses"]
+- **FR-003**: Users MUST be able to [key interaction, e.g. "reset their password"]
+- **FR-004**: System MUST [data requirement, e.g. "persist user preferences"]
+- **FR-005**: System MUST [behavior, e.g. "log all security events"]
 
-*Example of marking unclear requirements:*
+*Example of marking an unclear requirement:*
 
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified — email/password, SSO, OAuth?]
 
-### Key Entities *(include if feature involves data)*
+### Key Entities *(include if the feature involves data)*
 
-- **[Entity 1]**: [What it represents, key attributes without implementation]
+- **[Entity 1]**: [What it represents, key attributes, no implementation detail]
 - **[Entity 2]**: [What it represents, relationships to other entities]
+
+## Acceptance Scenarios
+
+<!--
+  ACTION REQUIRED: replace these placeholders with the real scenarios.
+
+  This section is the contract the test suite is audited against. One
+  `### Scenario: <title>` per independently testable outcome. Each title must
+  be matched by at least one test carrying the acceptance marker:
+
+      @pytest.mark.acceptance(spec="<spec-id>", scenario="<title>")   # Python
+      acceptance("<spec-id>", "<title>", …)                            # TS
+
+  `scripts/audit_acceptance.py` (part of `make verify`) fails on a scenario
+  with no covering test, on a marker naming a scenario or spec that does not
+  exist, and on a marker whose test is unconditionally skipped. Titles are
+  matched verbatim, so edit a title and its marker in the same change.
+
+  Keep the Given/When/Then detail in the body under each heading — the
+  heading itself is the identifier, so keep it short and stable.
+-->
+
+### Scenario: [short, stable title of the outcome]
+
+**Given** [initial state], **When** [action], **Then** [expected outcome].
+
+### Scenario: [short, stable title of the outcome]
+
+**Given** [initial state], **When** [action], **Then** [expected outcome].
 
 ## Success Criteria *(mandatory)*
 
-<!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
--->
+<!-- ACTION REQUIRED: measurable and technology-agnostic. -->
 
 ### Measurable Outcomes
 
-- **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
-- **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
-- **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
-- **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- **SC-001**: [Measurable metric, e.g. "a user completes account creation in under 2 minutes"]
+- **SC-002**: [Measurable metric]
+- **SC-003**: [User-facing metric]
 
 ## Assumptions
 
 <!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right assumptions based on reasonable defaults
-  chosen when the feature description did not specify certain details.
+  ACTION REQUIRED: the reasonable defaults chosen where the feature
+  description left something unspecified.
 -->
 
-- [Assumption about target users, e.g., "Users have stable internet connectivity"]
-- [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
-- [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
-- [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+- [Assumption about the user, e.g. "the user is the single owner of this vault"]
+- [Assumption about scope boundaries, e.g. "X is out of scope for the first cut"]
+- [Assumption about data or environment]
+- [Dependency on an existing module or service]
+
+## Out of Scope
+
+<!--
+  What this spec deliberately does not do, so a reader does not infer it.
+-->
+
+- [Thing deliberately excluded, and why]

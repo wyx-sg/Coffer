@@ -1,7 +1,5 @@
 # Data Model: Channels
 
-> 中文版: [data-model.zh.md](./data-model.zh.md)
-
 ## Resource: `channel:<name>`
 
 Channels are rows in the existing `resources` table (kind = `channel`).
@@ -109,52 +107,104 @@ Validation rules:
 
 ## Table: `channel_peers`
 
-The paired owner and the conversation pointer. One row per channel today;
-keyed by chat id so future group support is a new row, not a migration.
+**The pairing row, and nothing else.** One row per `(channel, chat)`: the paired
+owner's DM, plus one row per group or thread the owner has addressed the bot in.
+It answers "may this sender drive turns here", and the `(resource_id, chat_id)`
+unique key is what let group support arrive as new rows rather than a migration.
 
 | column                   | type                                         | notes                                                                                                                                               |
 | ------------------------ | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                     | INTEGER PK                                   |                                                                                                                                                     |
 | `resource_id`            | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                                                                                                                                         |
-| `chat_id`                | TEXT                                         | Telegram chat id / SeaTalk employee_code                                                                                                            |
+| `chat_id`                | TEXT                                         | Telegram chat id / SeaTalk employee_code or group id                                                                                                |
 | `display_name`           | TEXT                                         | sender's name at pairing time, for UI/status                                                                                                        |
 | `paired_at`              | DATETIME (UTC)                               |                                                                                                                                                     |
-| `active_conversation_id` | TEXT NULL                                    | current conversation; cleared when the conversation disappears                                                                                      |
 | `sender_id`              | TEXT NULL                                    | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
-| `preferred_agent`        | TEXT NULL                                    | sticky agent choice (`/agent`); NULL → channel `default_agent`                                                                                      |
+| `active_conversation_id` | TEXT NULL                                    | **vestigial.** The live pointer moved to `channel_thread_conversations` with FR-032; no live path writes this column any more, so it reads NULL      |
+| `preferred_agent`        | TEXT NULL                                    | **vestigial** for the same reason — the sticky agent is per thread now. The synced pairing document still carries the field, so a value can arrive from another machine; nothing reads it back |
 
 Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 
-`active_conversation_id` is a soft reference into the chat platform's
-`conversations` table (no FK across the seam): if the conversation was
-deleted, the next inbound message detects the dangling id
-and creates a fresh conversation.
-
-`sender_id` / `preferred_agent` are nullable so a peer paired before this
-revision degrades gracefully: a null sender id means the chat-id-only gate,
-a null agent preference means the channel default.
+`sender_id` is nullable so a peer paired before the sender gate existed degrades
+gracefully: a null sender id means the chat-id-only gate.
 
 The table is **partly synced**, and the seam runs through the row rather than
-around it (spec vault-sync, `state/channel-peers/**`). `chat_id`, `sender_id`,
-`display_name` and `preferred_agent` are facts about the platform, so they
+around it (spec vault-sync, `state/channel-peers/**`). `chat_id`, `sender_id`
+and `display_name` are facts about the platform, so they
 travel with the channel — a channel that moved to another machine without them
-would make the owner re-pair from their phone every time. `active_conversation_id`
-is a soft reference into THIS machine's conversations, which do not sync, so it
-never leaves and an incoming pairing keeps whatever pointer is already here.
+would make the owner re-pair from their phone every time. The conversation
+pointer is a soft reference into THIS machine's conversations, which do not
+sync, so an incoming pairing keeps whatever pointer is already here.
 
 Migrations: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
-`20260614_0022_channel_peer_differentiation.py` adds the two nullable
-columns above. The model module is imported by `migrations/env.py` so Alembic
-sees the metadata.
+`20260614_0022_channel_peer_differentiation.py` adds `sender_id`,
+`preferred_agent` and a `preferred_workspace` that
+`20260620_0028_drop_channel_peer_preferred_workspace.py` takes back off when
+workspace switching is removed. The model module is imported by
+`migrations/env.py` so Alembic sees the metadata.
+
+## Table: `channel_thread_conversations`
+
+**Where a chat's live conversation actually is.** FR-032 moved conversation
+identity off the peer row and onto the `(channel, chat, thread)` triple, because
+a peer is one owner while a group is many threads: keyed by the peer alone,
+two threads of one group collided on one conversation and the second turn was
+refused with "a turn is already running".
+
+| column                   | type                                         | notes                                                                                                        |
+| ------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `id`                     | INTEGER PK                                   |                                                                                                              |
+| `resource_id`            | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                                                                                                  |
+| `chat_id`                | TEXT                                         | the DM, or the group                                                                                         |
+| `thread_id`              | TEXT                                         | `""` is the DM or a group's main chat; each group thread is its own row                                       |
+| `active_conversation_id` | TEXT NULL                                    | this thread's current conversation; cleared when the conversation disappears                                  |
+| `preferred_agent`        | TEXT NULL                                    | this thread's sticky `/agent` choice; NULL → the channel's `default_agent`                                    |
+| `updated_at`             | DATETIME (UTC)                               |                                                                                                              |
+
+Constraints: `UNIQUE (resource_id, chat_id, thread_id)`; index on `resource_id`.
+
+`active_conversation_id` is a soft reference into the chat platform's
+`conversations` table (no FK across the seam): if the conversation was deleted,
+the next inbound message detects the dangling id and opens a fresh one, built
+from this row's sticky agent plus the channel's defaults. The sticky agent is
+dropped in favour of the channel default once the channel's scope no longer
+admits it (FR-079), so narrowing a scope takes effect on the next conversation.
+This table is machine-local and does **not** sync — it names conversations, and
+conversations do not travel.
+
+Migration: `20260708_0041_channel_thread_conversations.py` creates it and
+backfills every existing peer's conversation and sticky agent as that peer's
+`thread_id=""` row, so no live DM conversation is lost. Idempotent on a database
+that already holds the table; reversible by dropping it.
+
+## Migrations that touch a channel's config
+
+| revision | what it does |
+| --- | --- |
+| `20260710_0047_channel_runs_on_to_scope.py` | backfills `scope_json` from the then-current `config_json.runs_on`, for the machine axis on reach that has since been withdrawn |
+| `20260912_0068_drop_channel_model_curation.py` | strips `default_model` and `models` off every stored channel config |
+| `20260914_0079_bind_channels_to_this_machine.py` | writes this machine's id into every channel that carries no `runs_on` |
+| `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given (FR-080) |
+| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names**, at the moment the comparison starts reading them that way (FR-079) |
+
+All five are one-direction and data-only, with no load-time shim (house rule).
 
 ## In-memory state (never persisted)
 
 | object              | scope            | content                                                                                      |
 | ------------------- | ---------------- | -------------------------------------------------------------------------------------------- |
 | `PairingCode`       | per channel      | code, expiry, remaining attempts; replaced on re-issue, dropped on success/expiry/exhaustion |
-| message queue       | per peer         | bounded FIFO (10) of inbound texts awaiting their turn                                       |
-| progress state      | per running turn | IM message id of the editable status message, last-edit timestamp                            |
+| live-surface state  | per running turn | the handle of the one surface the turn is growing, and the transport's own update buffer     |
 | seatalk token cache | per channel      | app access token + expiry                                                                    |
+| seen-event ids      | per channel      | for de-duplicating a redelivered platform event (FR-039)                                     |
+
+**The channel keeps no message queue of its own.** A message arriving mid-turn
+goes to the orchestrator's `enqueue_message` exactly as a web message does, so
+both surfaces drain one FIFO per conversation and a turn finishing on either
+advances it (FR-050). What the channel owns is a *refusal threshold*:
+`QUEUE_MAX = 10` is compared against that conversation's own pending queue, and
+past it the chat is told the bot is busy rather than the message being buffered
+here. The web composer is not bounded.
 
 Crash behavior: all of it evaporates with the daemon; turns are swept failed
 by the chat platform's startup sweep, codes are re-issued, queues are empty.
@@ -163,18 +213,33 @@ Nothing the user relies on lives only in memory.
 ## Normalized envelopes (domain value objects)
 
 ```
-InboundMessage:  channel name, chat_id, sender display name, sender_id, text,
-                 platform message id, timestamp
-InboundCallback: channel name, chat_id, sender_id, data (tapped ChoiceButton
-                 value), callback_id, platform message id (FR-018)
-OutboundText:    markdown text (rendered per adapter capability), optional
-                 ChoiceButtons (label + opaque value) → selection card
-ChannelCapabilities: supports_live_text, supports_edit, supports_buttons,
-                 supports_typing, max_message_chars
+InboundAttachment:  on-disk path, mime, filename — the bytes are already
+                    downloaded and never enter the chat DB (FR-020)
+InboundMessage:     channel name, chat_id, text, platform message id, timestamp;
+                    the sender as three values — sender_id (the owner gate),
+                    sender_mention_id and sender_mention_email (the @mention,
+                    FR-070) — plus sender_display; chat_kind, chat_title,
+                    thread_id, quoted_message_id; addressed and mentions_others
+                    (group gating, FR-024/FR-035); attachments; ephemeral_id
+InboundCallback:    a selection-card tap: the opaque `data` value, callback_id,
+                    platform message id, and the same chat/thread/sender
+                    identity a message carries (FR-018, FR-034)
+InboundLifecycle:   the bot's own standing in a chat changed — removed, or the
+                    group turned external (FR-058)
+InboundStop:        the platform's own stop control was pressed (FR-063)
+ChoiceButton:       label + opaque value; a list of them renders as a card
+EphemeralTarget:    who a privately-delivered reply is addressed to (FR-064)
+SentMessage:        what a send returned, so a later rewrite can address it
+ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
+                    supports_card_update, supports_buttons, supports_typing,
+                    supports_reactions, supports_media, supports_groups,
+                    supports_history_fetch, max_message_chars
 ```
 
 Adapters translate platform payloads to/from these; the application core
-never sees a Telegram update or SeaTalk event shape.
+never sees a Telegram update or SeaTalk event shape. `supports_live_text` and
+`supports_edit` are independent on purpose — SeaTalk answers yes to the first
+and no to the second (FR-037).
 
 ## Audit events (spec channels)
 

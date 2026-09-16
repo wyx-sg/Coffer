@@ -15,9 +15,11 @@ from typing import Protocol
 
 from coffer.domain.provider.modality import Modality
 
-#: Providers Coffer treats as machine-local; their base URL is loopback, so the
-#: SSRF guard (which blocks loopback) is intentionally skipped for them.
-LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio", "local"})
+#: WIRE PROTOCOLS Coffer treats as machine-local; their base URL is loopback, so
+#: the SSRF guard (which blocks loopback) is intentionally skipped for them. The
+#: members are ``domain.provider.config.Protocol`` values, because that is what
+#: the port's ``provider`` argument carries — a detected wire, not a vendor id.
+LOCAL_PROTOCOLS = frozenset({"ollama"})
 
 
 @dataclass(frozen=True)

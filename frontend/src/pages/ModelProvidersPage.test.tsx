@@ -47,15 +47,10 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
 }));
 
-// The dialog's introspection (detect / test / fetch) hits the network; stub the
-// hooks. `detect` synchronously resolves to a protocol so the create flow works.
-let detectResult = "openai";
+// The dialog's introspection (test / fetch models) hits the network; stub the
+// hooks. The wire protocol is picked by hand in the form — there is no
+// detection step any more.
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useDetectProtocol: () => ({
-    isPending: false,
-    mutate: (_p: unknown, o?: { onSuccess?: (r: { protocol: string }) => void }) =>
-      o?.onSuccess?.({ protocol: detectResult }),
-  }),
   useListProviderModels: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
   useTestConnection: () => ({ isPending: false, mutate: vi.fn(), data: undefined }),
 }));
@@ -108,7 +103,6 @@ function selectFilter(filterLabel: string, optionName: string) {
 describe("ModelProvidersPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    detectResult = "openai";
     resourceMock.enable.mockResolvedValue(undefined);
     resourceMock.disable.mockResolvedValue(undefined);
     scopeMock.put.mockResolvedValue(undefined);

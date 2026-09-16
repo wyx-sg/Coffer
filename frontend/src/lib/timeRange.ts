@@ -25,7 +25,7 @@ export function parseLocalDate(value: string): Date | undefined {
 }
 
 /** A typed "YYYY-MM-DD HH:mm:ss" (local) -> ISO string; empty/invalid -> undefined. */
-export function parseLocalDateTime(value: string): string | undefined {
+function parseLocalDateTime(value: string): string | undefined {
   return parseLocalDate(value)?.toISOString();
 }
 

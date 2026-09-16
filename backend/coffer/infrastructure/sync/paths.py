@@ -1,9 +1,9 @@
-"""Export/import path resolution (spec vault-sync).
+"""Where the file-backed trees a round mirrors actually live (spec vault-sync).
 
-An export mirrors the file-backed trees (knowledge, skills). Their
-roots are resolved here — not imported from the kind modules — so the sync
-slice stays decoupled from every kind (cross-kind import fence) while
-honouring the same ``$COFFER_*_ROOT`` overrides the kinds use.
+A round mirrors the knowledge and skill trees in both directions. Their roots
+are resolved here — not imported from the kind modules — so the sync slice
+stays decoupled from every kind (cross-kind import fence) while honouring the
+same ``$COFFER_*_ROOT`` overrides the kinds use.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def skills_root() -> pathlib.Path:
     return _rooted("COFFER_SKILLS_ROOT", "skills")
 
 
-#: The file-backed trees an export mirrors, as (bundle-subdir, live-root) pairs.
+#: The file-backed trees a round mirrors, as (tree-subdir, live-root) pairs.
 def mirrored_trees() -> list[tuple[str, pathlib.Path]]:
     return [
         ("knowledge", knowledge_root()),

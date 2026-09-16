@@ -21,7 +21,10 @@ servers:
     variables:
       port:
         default: "8000"
-        description: Port from `~/.coffer/daemon.json` (default 8000, 8001..8009 on fallback)
+        description: >-
+          Port from `~/.coffer/daemon.json`. The daemon binds exactly one port —
+          8000 unless `~/.coffer/daemon-config.json` names another — and
+          refuses to start rather than moving (FR-028).
 
 security:
   - cofferToken: []
@@ -176,6 +179,65 @@ paths:
               schema: { $ref: "#/components/schemas/ResourceOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/{kind}/{name}/scope:
+    parameters:
+      - in: path
+        name: kind
+        required: true
+        schema: { type: string }
+      - in: path
+        name: name
+        required: true
+        schema: { type: string }
+    get:
+      tags: [resources]
+      operationId: getResourceScope
+      summary: Read a resource's per-agent activation scope
+      description: |
+        The framework-level reach of one resource
+        ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
+        served for EVERY kind by the kind-agnostic route rather than per kind.
+        `supports_scope` says whether this kind takes a scope at all — false
+        makes any non-null write a 422 — so a client can render the two-choice
+        Disabled/Enabled panel instead of the agent list without knowing the
+        kinds itself.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceScopeOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [resources]
+      operationId: updateResourceScope
+      summary: Set a resource's per-agent activation scope
+      description: |
+        `scope: null` clears back to unscoped — active for every agent. A list
+        restricts to exactly those agents, and an empty list matches nothing,
+        so `{"agents": []}` is dormant. Deliberately NOT gated on the kind's
+        creation invariants: scope is orthogonal to them. A kind that declares
+        no scope rejects any non-null payload with 422, and so does an unknown
+        property — a client still sending the withdrawn `machines` axis would
+        otherwise have its restriction silently widened to "every agent".
+        Writing scope emits `resource_scope_updated` and fires the kind's
+        post-write reaction, so delivery and reclaim stay in step with the edit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceScopeUpdate" }
+      responses:
+        "200":
+          description: OK — the resource as it now stands, scope included
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /resources/mcp_server/{name}/capabilities:
     parameters:
@@ -795,6 +857,31 @@ components:
           example: [claude-code]
       nullable: true
 
+    ResourceScopeOut:
+      type: object
+      description: >-
+        GET .../scope — the resource's current scope plus whether its kind
+        supports one. Field names MUST match `ResourceScopeOut` in
+        `backend/coffer/surfaces/http/schemas.py`; the frontend's scope module
+        is hand-written, so nothing checks this at compile time.
+      properties:
+        scope:
+          $ref: "#/components/schemas/ScopeOut"
+        supports_scope:
+          type: boolean
+          description: >-
+            False means this kind has no scope at all and any non-null write is
+            a 422 (`agent` is the only such kind today).
+      required: [supports_scope]
+
+    ResourceScopeUpdate:
+      type: object
+      description: >-
+        PUT .../scope body. `scope: null` clears back to unscoped — every agent.
+      properties:
+        scope:
+          $ref: "#/components/schemas/ScopeOut"
+
     ResourceOut:
       type: object
       required: [ref, kind, name, config, enabled, created_at, updated_at]
@@ -808,10 +895,11 @@ components:
         config:
           type: object
           additionalProperties: true
-        # Framework-level activation scope: two independent allow-lists,
-        # AND-ed. null = unscoped (active everywhere); an axis given [] matches
-        # nothing. Carried on the list payload so a list view can render the
-        # reach control without one GET per row.
+        # Framework-level activation scope: ONE allow-list of agents. null =
+        # unscoped (active for every agent); [] matches nothing, i.e. dormant.
+        # The machine axis was withdrawn — reach does not travel. Carried on
+        # the list payload so a list view can render the reach control without
+        # one GET per row.
         scope:
           $ref: "#/components/schemas/ScopeOut"
         enabled: { type: boolean }
@@ -906,8 +994,6 @@ components:
           { type: integer, default: 30, minimum: 5, maximum: 120 }
         request_timeout_seconds:
           { type: integer, default: 120, minimum: 5, maximum: 1800 }
-        idle_timeout_seconds:
-          { type: integer, default: 600, minimum: 60, maximum: 86400 }
 
     MCPToolView:
       type: object
@@ -1177,12 +1263,6 @@ components:
             enabled: { type: integer }
             healthy: { type: integer }
             unhealthy: { type: integer }
-        vec_available:
-          type: boolean
-          description: >-
-            Whether sqlite-vec's vec0 extension loaded in this daemon process.
-            False in a frozen build that lost the native lib (vector retrieval
-            degrades to keyword-only); asserted by the bundle smoke test.
 
     TokenRotationOut:
       type: object

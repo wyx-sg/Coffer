@@ -6,10 +6,13 @@
 
 ## Source of truth
 
-`frontend/tailwind.config.js` is the single source of truth for spacing,
-colour, radius, typography, and container width tokens. Do not introduce
-parallel CSS variables or ad-hoc inline style values; extend the Tailwind
-config and reuse the tokens.
+`frontend/tailwind.config.js` is the single source of truth for the tokens it
+actually defines — `colors`, `borderRadius`, `fontFamily`, `maxWidth`, and the
+`container` — and this file is the source of truth for the vocabulary built on
+them. It extends **no** `spacing` and **no** `fontSize` key: spacing and the type
+scale are Tailwind's own defaults, used as-is (§Spacing, §Typography). Do not
+introduce parallel CSS variables or ad-hoc inline style values; extend the
+Tailwind config and reuse the tokens.
 
 ## Colour palette
 

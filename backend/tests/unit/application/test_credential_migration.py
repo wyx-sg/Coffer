@@ -9,6 +9,14 @@ from coffer.domain.errors import CredentialLocked
 
 
 class _FakeStore:
+    """Stands in for both ends of the migration, so it carries both shapes.
+
+    The legacy keychain is addressed synchronously (through
+    ``asyncio.to_thread``); the destination store is addressed through its async
+    facade, which is what ``EncryptedCredentialStore`` mandates for anything
+    running on the event loop.
+    """
+
     def __init__(self) -> None:
         self.store: dict[str, str] = {}
 
@@ -20,6 +28,12 @@ class _FakeStore:
 
     def delete(self, ref: str) -> None:
         self.store.pop(ref, None)
+
+    async def aget(self, ref: str) -> str | None:
+        return self.get(ref)
+
+    async def aset(self, ref: str, value: str) -> None:
+        self.set(ref, value)
 
 
 class _LockedKeyring(_FakeStore):

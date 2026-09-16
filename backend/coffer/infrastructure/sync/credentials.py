@@ -1,7 +1,7 @@
-"""Ciphertext-only credential IO for export/import (spec vault-sync).
+"""Ciphertext-only credential IO for convergence (spec vault-sync).
 
 Reads/writes the ``credentials`` table as raw Fernet ciphertext — no master
-key needed, so exporting/importing never touches plaintext. Locked-ref
+key needed, so neither direction of a round touches plaintext. Locked-ref
 detection *does* use the key: a ref is locked when no key is present on this
 machine, or when the stored ciphertext cannot be decrypted with it (it was
 encrypted under a different key whose owner hasn't bootstrapped here yet).

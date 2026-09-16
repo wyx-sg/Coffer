@@ -9,13 +9,14 @@ FRONTEND := frontend
 	coverage lock \
 	eval eval-routing eval-curate \
 	bundle-binaries \
-	desktop desktop-test \
+	desktop desktop-stage-binaries desktop-lint desktop-test \
 	frontend-codegen \
 	lint format dev clean
 
 help:
 	@echo "Coffer Makefile targets:"
 	@echo "  make install               create venv + install backend + frontend deps"
+	@echo "  make install-e2e-browsers  download the Playwright chromium build (heavy)"
 	@echo "  make hooks                 install pre-commit + commit-msg git hooks"
 	@echo ""
 	@echo "  Verification (4 test tiers + lint, see agents/testing.md):"
@@ -24,7 +25,7 @@ help:
 	@echo "  make verify-unit           unit tier only (includes purity guardrail)"
 	@echo "  make verify-integration    integration tier only"
 	@echo "  make verify-contract       contract tier only"
-	@echo "  make verify-e2e            e2e tier only (currently: Playwright web only)"
+	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
 	@echo "  make verify-acceptance     audit spec.md scenarios vs test markers"
 	@echo "  make verify-benchmark      SC-003 gateway-overhead benchmark (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make lint                  ruff + mypy + eslint + tsc + import-linter + file/response_model checks"
@@ -37,10 +38,14 @@ help:
 	@echo ""
 	@echo "  Desktop shell (optional; needs a Rust toolchain — not in 'make verify'):"
 	@echo "  make desktop               build the Coffer.app + .dmg (SLOW: runs PyInstaller, ~50 min)"
+	@echo "  make desktop-lint          cargo check + cargo clippy for the desktop crate"
 	@echo "  make desktop-test          cargo test for the desktop crate"
+	@echo "  make desktop-stage-binaries  stage externalBin placeholders so cargo can compile"
 	@echo ""
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
+	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the daemon"
+	@echo "  make bundle-binaries       freeze the four CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
 # Use `./.venv/bin/python3` directly in the install recipe instead of $(PY).
@@ -95,6 +100,11 @@ lint:
 	$(PY) scripts/check_response_models.py
 	$(PY) scripts/check_doc_numbering.py
 	$(PY) scripts/check_architecture_doc.py
+# Both trees are checked under the project's rules. `backend/**` gets them
+# from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults
+# (line-length 88, the starter rule set) because nothing above it carried a
+# config — the root ruff.toml now inherits the real one. See the comment in
+# that file for why it is a file and not a `--config` flag here.
 	$(PY) -m ruff check $(BACKEND) evals
 	$(PY) -m ruff format --check $(BACKEND) evals
 	$(PY) -m mypy --config-file $(BACKEND)/pyproject.toml $(BACKEND)/coffer
@@ -112,6 +122,23 @@ lint:
 	else \
 		echo "lint: $(FRONTEND)/node_modules missing — skipping frontend"; \
 	fi
+# TODO(coordinator): add `npm run knip` to the frontend leg above.
+#
+# The frontend has no dead-export gate — eslint.config.js carries only the
+# react-hooks rules and one no-restricted-syntax — which is why dead modules,
+# dead hooks and dead query keys accumulated unnoticed. `npm run knip` (config
+# in frontend/package.json's "knip" key) is the gate for it, and it works: run
+# it today and it reports 1 unlisted dependency, 34 unused exports and 42
+# unused exported types.
+#
+# It is NOT wired in yet for exactly that reason — wiring it now turns
+# `make lint` and every CI job that calls it red. The frontend dead-code
+# cleanup is in flight; once it lands, re-run `npm run knip`, clear whatever
+# remains (or park it in the "ignore" list with a reason), and append
+# `&& npm run knip` to the `cd $(FRONTEND) &&` chain above. Nothing else needs
+# to change: the script is `npx --yes knip@<pinned>`, the same on-demand
+# pattern `make desktop` uses for the Tauri CLI, so there is no dependency or
+# lockfile change waiting on it.
 
 verify-unit:
 	$(PY) scripts/check_unit_purity.py
@@ -126,33 +153,38 @@ verify-unit:
 		echo "verify-unit: $(FRONTEND)/node_modules missing — skipping frontend"; \
 	fi
 
+# Backend-only, as agents/testing.md documents. The frontend has no
+# tier-by-directory layout: its tests are co-located `*.test.tsx` beside the
+# module they cover and all of them run in `verify-unit`'s `vitest run src`.
+# A `frontend/tests/integration` leg used to sit here; that directory was the
+# first scaffold's shape, deleted when the real web shell landed, and the guard
+# it left behind could only ever print its own skip message.
 verify-integration:
 	@if [ -d $(BACKEND)/tests/integration ]; then \
 		$(PY) -m pytest $(BACKEND)/tests/integration; \
 	else \
 		echo "verify-integration: $(BACKEND)/tests/integration/ does not exist yet — skipping backend"; \
 	fi
-	@if [ -d $(FRONTEND)/tests/integration ] && [ -d $(FRONTEND)/node_modules ]; then \
-		cd $(FRONTEND) && npx vitest run tests/integration; \
-	else \
-		echo "verify-integration: no $(FRONTEND)/tests/integration/ — skipping frontend"; \
-	fi
 
 verify-benchmark:
 	COFFER_RUN_BENCHMARKS=1 $(PY) -m pytest $(BACKEND)/tests -m benchmark
 
+# Backend-only, as agents/testing.md documents. The one frontend contract test
+# (`frontend/src/bootstrap.contract.test.ts`) is co-located and runs in
+# `verify-unit`; `frontend/tests/contract/` has never existed, so the leg that
+# used to guard on it only ever printed a skip.
 verify-contract:
 	@if [ -d $(BACKEND)/tests/contract ]; then \
 		$(PY) -m pytest $(BACKEND)/tests/contract; \
 	else \
 		echo "verify-contract: $(BACKEND)/tests/contract/ does not exist yet — skipping backend"; \
 	fi
-	@if [ -d $(FRONTEND)/tests/contract ] && [ -d $(FRONTEND)/node_modules ]; then \
-		cd $(FRONTEND) && npx vitest run tests/contract; \
-	else \
-		echo "verify-contract: no $(FRONTEND)/tests/contract/ — skipping frontend"; \
-	fi
 
+# `npx playwright test` runs BOTH projects in e2e/playwright.config.ts: `web`
+# (browser specs under e2e/web/specs/) and `mcp` (cross-process shim+daemon
+# specs under e2e/mcp/specs/, no browser). A pytest leg used to follow, guarded
+# on `e2e/*.py`; no such file has ever existed in this repo — the MCP shim
+# tests it claimed to skip are the Playwright `mcp` project above.
 verify-e2e:
 	@if [ ! -f e2e/playwright.config.ts ]; then \
 		echo "verify-e2e: no e2e/playwright.config.ts — skipping"; \
@@ -160,11 +192,6 @@ verify-e2e:
 		echo "verify-e2e: e2e/node_modules missing — run 'make install' first"; exit 1; \
 	else \
 		cd e2e && npx playwright test; \
-	fi
-	@if [ -d e2e ] && ls e2e/*.py >/dev/null 2>&1; then \
-		$(PY) -m pytest e2e; \
-	else \
-		echo "verify-e2e: no e2e/*.py — skipping MCP shim tests"; \
 	fi
 
 format:
@@ -260,7 +287,6 @@ frontend-codegen:
 		cd $(FRONTEND) && npm run codegen; \
 	fi
 
-.PHONY: bundle-binaries
 bundle-binaries:
 	bash ./scripts/build_binaries.sh
 
@@ -318,12 +344,21 @@ desktop:
 	@echo ""
 	@echo "desktop: built (unsigned) — see desktop/target/release/bundle/"
 
-# `cargo test` needs the externalBin entries to resolve at build time, so a
-# checkout with no frozen binaries staged cannot compile the crate. Stand in
-# a placeholder for any that is missing: it is gitignored like the real ones,
-# and it announces itself loudly if it ever escapes into a bundle. A real
-# `make desktop` overwrites all four.
-desktop-test:
+# ANY cargo command on the crate (check, clippy, test, build) needs the
+# externalBin entries to resolve at build time, so a checkout with no frozen
+# binaries staged cannot compile it. Stand in a placeholder for any that is
+# missing: it is gitignored like the real ones, and it announces itself loudly
+# if it ever escapes into a bundle. A real `make desktop` overwrites all four.
+# Split out of `desktop-test` so the CI desktop job (.github/workflows/
+# desktop.yml) stages the same placeholders before `cargo check`/`clippy`
+# instead of keeping a second copy of this loop.
+desktop-stage-binaries:
+# The staging loop asks rustc for the host triple, so the no-toolchain case has
+# to be caught here rather than in each caller — otherwise `make desktop-lint`
+# on a machine without Rust dies on a bare "rustc: command not found".
+	@command -v rustc >/dev/null 2>&1 || { \
+		echo "desktop: no Rust toolchain — install one from https://rustup.rs"; exit 1; \
+	}
 	@set -e; \
 	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
 	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
@@ -331,10 +366,26 @@ desktop-test:
 	for b in coffer coffer-daemon coffer-mcp-shim coffer-callback; do \
 		f="desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 		if [ ! -e "$$f" ]; then \
-			printf '#!/bin/sh\necho "%s: placeholder staged by make desktop-test; run make desktop to build the real binary" >&2\nexit 1\n' "$$b" > "$$f"; \
+			printf '#!/bin/sh\necho "%s: placeholder staged by make desktop-stage-binaries; run make desktop to build the real binary" >&2\nexit 1\n' "$$b" > "$$f"; \
 			chmod +x "$$f"; \
 		fi; \
 	done
+
+# Compile + lint the crate without bundling anything. This is what CI runs
+# (.github/workflows/desktop.yml): `make desktop` is PyInstaller + Tauri and
+# takes about fifty minutes, so it is not a gate anywhere; these two are.
+# `-D warnings` makes clippy's findings failures, matching how ruff/eslint
+# behave for the other two languages in the tree.
+desktop-lint: desktop-stage-binaries
+	cd desktop && cargo check --all-targets
+	@cd desktop && if cargo clippy --version >/dev/null 2>&1; then \
+		cargo clippy --all-targets -- -D warnings; \
+	else \
+		echo "desktop-lint: clippy component missing — run 'rustup component add clippy'"; \
+		exit 1; \
+	fi
+
+desktop-test: desktop-stage-binaries
 	cd desktop && cargo test
 
 clean:

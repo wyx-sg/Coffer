@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import pathlib
 import shutil
 import subprocess
@@ -57,6 +58,7 @@ from coffer.domain.scope import Scope
 from coffer.domain.sync.backup import BackupRemote
 from coffer.domain.sync.convergence import ConvergeRun, PendingConfirmation
 from coffer.domain.sync.diff import DeletionGuard
+from coffer.domain.sync.manifest import MANIFEST_PATH
 from coffer.domain.sync.models import ExportSummary
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
@@ -237,8 +239,8 @@ class StubStateProvider:
     def __init__(self) -> None:
         self.docs: dict[str, dict[str, object]] = {}
 
-    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
-        return sorted(self.docs.items()), [""]
+    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
+        return sorted(self.docs.items())
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
         for rel, payload in docs:
@@ -334,6 +336,37 @@ def bare_remote(path: pathlib.Path) -> str:
             ["git", "-C", str(path), "config", key, value], check=True, capture_output=True
         )
     return str(path)
+
+
+def another_coffer_pushes(remote_url: str, *, layout: int, adding: str) -> None:
+    """A machine running a *different Coffer build* converges with this remote.
+
+    It writes ``manifest.json`` with the layout version given and adds one
+    document, then pushes. Driven through plain git rather than through a
+    :class:`VaultMachine`, deliberately: what is under test is what this build
+    does with a tree written by a build whose layout it may not know, and a
+    harness machine can only ever write this build's layout.
+    """
+    clone = pathlib.Path(remote_url).parent / f"other-coffer-{layout}"
+    subprocess.run(
+        ["git", "clone", "-b", BRANCH, remote_url, str(clone)], check=True, capture_output=True
+    )
+    for key, value in (("user.email", "other@localhost"), ("user.name", "Other Coffer")):
+        subprocess.run(
+            ["git", "-C", str(clone), "config", key, value], check=True, capture_output=True
+        )
+    (clone / MANIFEST_PATH).write_text(
+        json.dumps({"schema_version": layout}, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+    )
+    doc = clone / adding
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text("written by another Coffer\n", encoding="utf-8")
+    for args in (
+        ["add", "-A"],
+        ["commit", "-m", f"coffer: layout {layout}"],
+        ["push", "origin", BRANCH],
+    ):
+        subprocess.run(["git", "-C", str(clone), *args], check=True, capture_output=True)
 
 
 class VaultMachine:

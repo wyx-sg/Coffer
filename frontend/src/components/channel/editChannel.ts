@@ -41,7 +41,7 @@ export async function applyChannelEdit(plan: ChannelPlan): Promise<string> {
 }
 
 /** Mutable edit-form inputs by channel type (secrets blank = "leave as-is"). */
-export interface ChannelEditValues {
+interface ChannelEditValues {
   /** The agent every new conversation on this channel binds to. */
   default_agent: string;
   /** New Telegram bot token; blank leaves the stored credential untouched. */

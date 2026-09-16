@@ -2,11 +2,14 @@
 // surfaces (MCP entries, plugins, unmanaged skills). Split out of agents.ts for
 // the file-size budget; re-exported there so existing import paths keep working.
 //
-// MCP entries and plugins are the agent-registry contract's generated schemas
-// under the names the hooks already import. Unmanaged skills stay hand-written:
-// they belong to the skill-manager contract, which does not generate (it
-// `$ref`s a schema it never defines — see `scripts/codegen.mjs`).
+// Every shape here is an alias of a generated schema under the name the hooks
+// already import: MCP entries and plugins come from the agent-registry
+// contract, the unmanaged-skill entry from the skill-manager one (which the
+// agent's Skills tab reads even though the skill routes themselves live
+// elsewhere). The list envelope around it is declared inline in that contract,
+// with no schema of its own to alias, so it stays written out below.
 import type { components } from "@/lib/api/generated/agent-registry";
+import type { components as SkillManager } from "@/lib/api/generated/skill-manager";
 
 type Schemas = components["schemas"];
 
@@ -20,21 +23,15 @@ export type AdoptMcpEntryBody = Schemas["McpEntryAdopt"];
  * install dir (Claude only today; null / empty otherwise). */
 export type PluginOut = Schemas["Plugin"];
 
-export type MarketplaceOut = Schemas["Marketplace"];
-
 /** `can_uninstall`: whether in-app uninstall is available for this agent now
  * (capability +, for CLI-strategy agents like Claude, the agent's CLI being on
  * PATH). */
 export type PluginsResponse = Schemas["PluginsOut"];
 
-export interface UnmanagedSkillOut {
-  name: string;
-  path: string;
-  location: string;
-  valid: boolean;
-  reason: string | null;
-  foreign_link: boolean;
-}
+/** `location` is the scan location the entry was found in — `skills` is
+ * `<config_dir>/skills`, `agents_dir` the agent product's secondary standard
+ * location. Taken from the contract, so it is the two names and not `string`. */
+export type UnmanagedSkillOut = SkillManager["schemas"]["UnmanagedSkillOut"];
 
 export interface UnmanagedSkillsResponse {
   items: UnmanagedSkillOut[];

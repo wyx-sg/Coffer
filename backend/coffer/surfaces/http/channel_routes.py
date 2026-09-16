@@ -104,6 +104,10 @@ class ChannelStatusOut(BaseModel):
 
 class NotifyIn(BaseModel):
     text: str = Field(min_length=1, max_length=4096)
+    #: Which paired chat to push to. Omitted, the channel's owner chat (its
+    #: earliest pairing — the owner's DM). A chat this channel is not paired to
+    #: is refused, so a caller cannot address an arbitrary group.
+    chat_id: str | None = None
 
 
 class NotifyOut(BaseModel):
@@ -128,7 +132,7 @@ async def channel_status(name: str) -> ChannelStatusOut:
             chat_id=status.peer.chat_id,
             display_name=status.peer.display_name,
             paired_at=status.peer.paired_at,
-            active_conversation_id=status.peer.active_conversation_id,
+            active_conversation_id=status.peer_conversation_id,
         )
         if status.peer is not None
         else None
@@ -167,7 +171,7 @@ async def channel_status(name: str) -> ChannelStatusOut:
 
 @router.post("/{name}/notify", response_model=NotifyOut)
 async def notify_channel(name: str, body: NotifyIn, actor: str = Depends(get_actor)) -> NotifyOut:
-    await get_channel_service().notify(name, body.text, actor=actor)
+    await get_channel_service().notify(name, body.text, actor=actor, chat_id=body.chat_id)
     return NotifyOut(sent=True)
 
 

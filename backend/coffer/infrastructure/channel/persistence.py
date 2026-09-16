@@ -18,7 +18,6 @@ from sqlalchemy import (
     UniqueConstraint,
     delete,
     select,
-    update,
 )
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
@@ -39,9 +38,7 @@ class ChannelPeerModel(Base):
     chat_id: Mapped[str] = mapped_column(String, nullable=False)
     display_name: Mapped[str] = mapped_column(String, nullable=False, default="")
     paired_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    active_conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     sender_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    preferred_agent: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("resource_id", "chat_id", name="uq_channel_peers_resource_chat"),
@@ -87,9 +84,7 @@ def _to_domain(row: ChannelPeerModel) -> ChannelPeer:
         chat_id=row.chat_id,
         display_name=row.display_name,
         paired_at=_tz(row.paired_at),
-        active_conversation_id=row.active_conversation_id,
         sender_id=row.sender_id,
-        preferred_agent=row.preferred_agent,
     )
 
 
@@ -99,20 +94,28 @@ class ChannelPeerRepo:
     A channel may have several peer rows — one per DM/group/thread it has
     been paired to (``UniqueConstraint("resource_id", "chat_id")``).
     ``upsert`` re-pairs a single ``(resource_id, chat_id)`` row without
-    disturbing any other chat paired to the same channel; ``get`` remains the
-    legacy single-peer accessor for callers that only ever address a
-    channel's DM peer.
+    disturbing any other chat paired to the same channel. Every read either
+    names its chat (``get_by_chat``) or says which of several it wants
+    (``owner_peer``, ``list_by_resource``): a read that names neither is how a
+    private notification ended up in a group chat.
     """
 
     def __init__(self, session_maker: async_sessionmaker) -> None:  # type: ignore[type-arg]
         self._sm = session_maker
 
-    async def get(self, resource_id: int) -> ChannelPeer | None:
+    async def owner_peer(self, resource_id: int) -> ChannelPeer | None:
+        """The earliest-paired chat — see ``ChannelPeerRepoPort.owner_peer``.
+
+        ``chat_id`` breaks a ``paired_at`` tie so the answer is the same on
+        every call and on every machine that converged the same pairings.
+        """
         async with self._sm() as session:
             row = (
                 (
                     await session.execute(
-                        select(ChannelPeerModel).where(ChannelPeerModel.resource_id == resource_id)
+                        select(ChannelPeerModel)
+                        .where(ChannelPeerModel.resource_id == resource_id)
+                        .order_by(ChannelPeerModel.paired_at, ChannelPeerModel.chat_id)
                     )
                 )
                 .scalars()
@@ -177,9 +180,7 @@ class ChannelPeerRepo:
                     chat_id=peer.chat_id,
                     display_name=peer.display_name,
                     paired_at=peer.paired_at,
-                    active_conversation_id=peer.active_conversation_id,
                     sender_id=peer.sender_id,
-                    preferred_agent=peer.preferred_agent,
                 )
             )
             await session.commit()
@@ -192,36 +193,6 @@ class ChannelPeerRepo:
                 delete(ChannelPeerModel).where(
                     ChannelPeerModel.resource_id == resource_id,
                     ChannelPeerModel.chat_id == chat_id,
-                )
-            )
-            await session.commit()
-
-    async def set_active_conversation(
-        self, resource_id: int, chat_id: str, conversation_id: str | None
-    ) -> None:
-        async with self._sm() as session:
-            await session.execute(
-                update(ChannelPeerModel)
-                .where(
-                    ChannelPeerModel.resource_id == resource_id,
-                    ChannelPeerModel.chat_id == chat_id,
-                )
-                .values(active_conversation_id=conversation_id)
-            )
-            await session.commit()
-
-    async def set_preferences(
-        self,
-        resource_id: int,
-        *,
-        preferred_agent: str | None,
-    ) -> None:
-        async with self._sm() as session:
-            await session.execute(
-                update(ChannelPeerModel)
-                .where(ChannelPeerModel.resource_id == resource_id)
-                .values(
-                    preferred_agent=preferred_agent,
                 )
             )
             await session.commit()

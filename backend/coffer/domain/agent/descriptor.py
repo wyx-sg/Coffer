@@ -10,9 +10,9 @@ low-level primitives (the ``AgentType`` enum, the ``ConfigFileSpec`` dataclass)
 and read this table back via a *lazy* import inside their functions — this module
 imports them at top level, they import this module only on demand.
 
-Facet fields beyond config-files + MCP (plugins, skills, memory, transcripts)
-are added to :class:`AgentDescriptor` by later batches; Batch 1 populates
-identity, the config-file allowlist, and MCP injection.
+:class:`AgentDescriptor` carries every per-type answer Coffer needs: identity,
+the config-file allowlist, MCP injection, the skill directory, and the plugin
+capability.
 """
 
 from __future__ import annotations
@@ -55,11 +55,6 @@ class AgentDescriptor:
     skill_subpath: str = "skills"
     #: How Coffer manages this agent's plugins (``None`` = no plugin concept).
     plugins: PluginCapability | None = None
-    #: Whether this agent is surfaced in discovery — the only UI entry point that
-    #: enumerates agents. Every manifest type is exposed. The flag gates
-    #: discovery/visibility only, never registration — the backend accepts a
-    #: direct registration of any manifest type regardless of this flag.
-    enabled: bool = True
 
     def default_config_dir(self) -> pathlib.Path:
         return _home() / self.config_subpath
@@ -132,12 +127,10 @@ def descriptor_for(agent_type: AgentType) -> AgentDescriptor:
         raise AssertionError(f"no descriptor for AgentType {agent_type!r}") from None
 
 
-def is_agent_enabled(agent_type: AgentType) -> bool:
-    """Whether this agent is surfaced in discovery/UI. Gates visibility only,
-    not registration (see the ``AgentDescriptor.enabled`` field)."""
-    return descriptor_for(agent_type).enabled
-
-
-def visible_agent_types() -> tuple[AgentType, ...]:
-    """Agent types currently exposed to users (``enabled=True`` in the manifest)."""
-    return tuple(t for t in AgentType if descriptor_for(t).enabled)
+# An ``enabled`` flag used to sit on the descriptor, gating whether a type was
+# offered by auto-detect. It was True for every record it ever held, and it
+# gated discovery only while registration accepted any manifest type anyway —
+# so its only reachable effect would have been hiding an agent from the one
+# screen that helps a user add it. Withdrawing an agent means removing it from
+# ``AgentType`` and this manifest, which stops registration too; 0031 and 0048
+# are how that was actually done.

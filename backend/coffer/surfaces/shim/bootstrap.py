@@ -56,12 +56,6 @@ def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
         meta[_AGENT_META_KEY] = agent
 
 
-def _inject_cwd(envelope: dict[str, Any]) -> None:
-    """Back-compat alias for :func:`_inject_meta` — stamps only the launch
-    cwd. Kept for any call site that only cares about cwd propagation."""
-    _inject_meta(envelope)
-
-
 def _setup_shim_log() -> None:
     """Send our diagnostic log to a file (NOT stdout — that's the MCP wire).
 

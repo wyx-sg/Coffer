@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Server } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,7 +19,6 @@ import type { components } from "@/lib/api/types";
 import { type HealthState } from "@/components/mcp/HealthBadge";
 import { McpServerDetailHeader } from "@/components/mcp/McpServerDetailHeader";
 import { McpServerDetailTabs } from "@/components/mcp/McpServerDetailTabs";
-import { McpServerDeleteDialog } from "@/components/mcp/McpServerDeleteDialog";
 
 type TestResult = components["schemas"]["McpTestResultOut"];
 
@@ -131,15 +131,17 @@ export function McpServerDetailPage() {
         }}
       />
 
-      <McpServerDeleteDialog
-        name={name}
+      <ConfirmDialog
         open={deleteOpen}
-        isPending={del.isPending}
-        error={del.error}
         onOpenChange={(o) => {
           setDeleteOpen(o);
           if (!o) del.reset();
         }}
+        title={t("mcp.server.deleteConfirmTitle", { name })}
+        description={t("mcp.server.deleteConfirmBody")}
+        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
+        pending={del.isPending}
+        error={del.error}
         onConfirm={handleDelete}
       />
     </div>

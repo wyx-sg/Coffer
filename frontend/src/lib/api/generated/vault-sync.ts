@@ -4,31 +4,6 @@
  */
 
 export interface paths {
-    "/api/v1/sync/remote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The one sync remote this vault converges with */
-        get: operations["getSyncRemote"];
-        /**
-         * Configure the sync remote
-         * @description Every field but the URL has the spec's default, so a bare URL is a complete configuration. The push credential is named by **reference**; the secret itself never reaches this payload, the repository's git config, or a git argument vector.
-         */
-        put: operations["setSyncRemote"];
-        post?: never;
-        /**
-         * Clear the sync remote
-         * @description Idempotent. The working tree and its history are left on disk — they are the vault's local backup, and the remote is a rendezvous rather than a system of record.
-         */
-        delete: operations["clearSyncRemote"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sync/run": {
         parameters: {
             query?: never;
@@ -38,10 +13,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Run one converge round now
-         * @description Serialize, merge, diff, guard, apply, publish. Returns the same `RoundOut` for every terminal state; read `status` to tell them apart. A round that starts without a pointer also reports `join`.
-         */
+        /** Run one converge round now. */
         post: operations["runSyncRound"];
         delete?: never;
         options?: never;
@@ -59,47 +31,13 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Join a remote — configure it and run the first round
-         * @description Configures the remote as `PUT /sync/remote` does, then runs a round with no pointer. The join detection it triggers is a property of the converge service, not of this route: **any** pointer-less round performs it, so a machine that merely forgot its pointer cannot skip it by configuring the remote the other way.
+         * Join the configured remote.
+         * @description The same round as any other. `choice` is only for a returning machine
+         *     whose recorded base is gone from the remote's history: `keep-local`
+         *     joins as new and publishes this vault's documents as additions. Absent,
+         *     that case is refused rather than guessed.
          */
         post: operations["adoptSyncRemote"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Where this machine stands */
-        get: operations["getSyncStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Restore the vault from the remote's history
-         * @description Moves the working tree to a revision and applies the difference from the current pointer, so a document deleted last week returns without discarding anything the vault has gained since. Always explicit — a round never reaches back into history on its own.
-         */
-        post: operations["restoreVault"];
         delete?: never;
         options?: never;
         head?: never;
@@ -115,11 +53,45 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Apply a round the deletion guard held. */
+        post: operations["confirmHeldSyncRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard a held round, leaving both sides as they are. */
+        post: operations["rejectHeldSyncRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         /**
-         * Decide a round the circuit breaker held
-         * @description A round whose diff would delete more than the configured share of documents does not proceed; it is recorded as awaiting confirmation in one of two directions. `apply` performs it, `reject` leaves the vault and the remote untouched, and `rebuild` — valid only for a **publish**-side hold — takes the remote's state instead, discarding this machine's local-only documents rather than publishing their absence as a deletion.
+         * Rebuild this machine from the remote, discarding local-only documents.
+         * @description Destructive on purpose — the answer for a machine whose vault is gone.
          */
-        post: operations["confirmSyncRound"];
+        post: operations["rebuildVaultFromRemote"];
         delete?: never;
         options?: never;
         head?: never;
@@ -135,11 +107,88 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Undo the last round. */
+        post: operations["rollbackLastSyncRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring the vault back to an earlier point in the remote's history. */
+        post: operations["restoreVaultAtPoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/remote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The configured remote, or nothing. */
+        get: operations["getSyncRemote"];
         /**
-         * Undo the last round's apply
-         * @description Every round tags the vault's state immediately before it applied. Rollback is the same applier run backwards over that snapshot, and the pointer returns with it. The ten most recent snapshots are kept.
+         * Configure the remote.
+         * @description Every field but the URL carries a default, so a `PUT` with a bare URL is
+         *     a complete configuration rather than a half-set one.
          */
-        post: operations["rollbackSyncRound"];
+        put: operations["setSyncRemote"];
+        post?: never;
+        /** Forget the remote. Idempotent. */
+        delete: operations["clearSyncRemote"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The remote, the last round, and this machine's own identity. */
+        get: operations["getSyncStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every round this vault has run, newest first.
+         * @description Read-only and unfiltered. The surface searches, filters and pages in the
+         *     browser over the window it is handed, the same way the Activity page
+         *     does, so this route stays one query with one knob. Rounds that changed
+         *     nothing are included — they are what makes a gap in the record visible.
+         */
+        get: operations["listSyncRuns"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -153,10 +202,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * The machine registry
-         * @description A derived view, not a synced table: it is whatever `machines/*.yaml` in the working tree currently holds. Each machine writes only its own descriptor, so the documents occupy disjoint paths and cannot conflict.
-         */
+        /** Every machine in the registry, with this one marked. */
         get: operations["listSyncMachines"];
         put?: never;
         post?: never;
@@ -180,8 +226,9 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename this machine
-         * @description The name is a label and nothing keys on it — every reference to a machine uses the derived id — so renaming costs nothing. A machine may rename only itself; it writes no other machine's descriptor.
+         * Rename this machine.
+         * @description Free — `scope` references the derived id, never the label, so nothing
+         *     else has to change.
          */
         patch: operations["renameSelfMachine"];
         trace?: never;
@@ -196,11 +243,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Remove a retired machine from the registry
-         * @description Deletes that machine's descriptor from the working tree. For a machine that is gone for good, or one whose fallback id did not survive deleting `~/.coffer` and has reappeared under a new one. Nothing else in the vault references the id, so removing it rewrites no resource.
-         */
-        delete: operations["removeSyncMachine"];
+        /** Retire a machine from the registry. */
+        delete: operations["retireSyncMachine"];
         options?: never;
         head?: never;
         patch?: never;
@@ -213,8 +257,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Short SHA-256 fingerprint of the master key (never the key itself) */
-        get: operations["getKeyFingerprint"];
+        /** This machine's master-key fingerprint. */
+        get: operations["getMasterKeyFingerprint"];
         put?: never;
         post?: never;
         delete?: never;
@@ -232,7 +276,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Return this machine's master key material (out-of-band transfer) */
+        /**
+         * Hand back the master key's material.
+         * @description Moves key **material** only, never documents. The caller decides where
+         *     it lands; the daemon never writes to a path a caller named.
+         */
         post: operations["exportMasterKey"];
         delete?: never;
         options?: never;
@@ -249,48 +297,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Install master key material brought from another machine */
+        /** Adopt a master key exported from another machine. */
         post: operations["importMasterKey"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Discard a round held at the deletion guard
-         * @description The vault was never touched — the guard runs before the apply — so rejecting only returns the working tree to the pointer.
-         */
-        post: operations["rejectHeldRound"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/rebuild": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rebuild this machine from the remote
-         * @description Replaces this vault with the remote's, discarding documents only this machine holds. The answer for a machine whose vault is gone: confirming a held round would publish the loss to every other machine, and rejecting would refuse the same round forever. Destructive on purpose; nothing is pushed.
-         */
-        post: operations["rebuildFromRemote"];
         delete?: never;
         options?: never;
         head?: never;
@@ -301,27 +309,155 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ErrorEnvelope: {
+            error: {
+                code: string;
+                message: string;
+            };
+        };
+        /** @description One document's fate in one round — what moved, and which way. */
+        DocChangeOut: {
+            path: string;
+            /** @enum {string} */
+            status: "added" | "modified" | "deleted";
+        };
+        /**
+         * @description What a round moved, as a tally **and** as the list behind it. The tally
+         *     is what a row shows; the list is what the reader opens the row to find.
+         */
+        DiffCountsOut: {
+            /** @default 0 */
+            added: number;
+            /** @default 0 */
+            modified: number;
+            /** @default 0 */
+            deleted: number;
+            /**
+             * @description Every path this side of the round touched, sorted, with its status.
+             * @default []
+             */
+            changes: components["schemas"]["DocChangeOut"][];
+        };
+        FailureOut: {
+            path: string;
+            reason: string;
+        };
+        /** @description One area the deletion guard tripped on, and by how much. */
+        BreachOut: {
+            area: string;
+            deleted: number;
+            total: number;
+        };
+        /** @description A round the deletion guard held. */
+        PendingConfirmationOut: {
+            /**
+             * @description `apply` means the remote would delete too much of this vault;
+             *     `publish` means this vault would delete too much of the remote — the
+             *     case where this machine is the damaged one.
+             * @enum {string}
+             */
+            direction: "apply" | "publish";
+            breaches: components["schemas"]["BreachOut"][];
+            paths: string[];
+            /** Format: date-time */
+            raised_at: string;
+        };
+        /** @description One converge round's outcome. */
+        RoundOut: {
+            /**
+             * @description The whole of `ConvergeStatus`, and `status` is what discriminates this
+             *     one shape across every round-shaped operation. `no_change` and
+             *     `disabled` are successes rather than skips: an unchanged vault makes
+             *     no commit by design, and an unconfigured or switched-off remote is
+             *     the ordinary state of a fresh install. `conflict` left the vault
+             *     untouched and the pointer unmoved; `awaiting_confirmation` is held at
+             *     the deletion guard and `pending` says which way; `push_failed`
+             *     applied everything locally and kept the commit for the next round.
+             * @enum {string}
+             */
+            status: "ok" | "no_change" | "conflict" | "awaiting_confirmation" | "push_failed" | "failed" | "disabled";
+            /**
+             * @description `new` or `returning` when this round joined a remote; null otherwise.
+             * @default null
+             */
+            join: string | null;
+            applied: components["schemas"]["DiffCountsOut"];
+            published: components["schemas"]["DiffCountsOut"];
+            /** @default null */
+            commit: string | null;
+            /** @default [] */
+            conflicts: string[];
+            /**
+             * @description Paths an agent merged. Always reported, successful or not: a silent
+             *     machine merge of the user's own notes is what they would most want
+             *     told.
+             * @default []
+             */
+            agent_resolved: string[];
+            /** @default [] */
+            failures: components["schemas"]["FailureOut"][];
+            /**
+             * @description Credential refs whose ciphertext this machine cannot decrypt.
+             * @default []
+             */
+            locked_refs: string[];
+            /** @default null */
+            pending: components["schemas"]["PendingConfirmationOut"] | null;
+            /** @default null */
+            error: string | null;
+        };
+        RunRecordOut: components["schemas"]["RoundOut"] & {
+            /**
+             * @description A row key for a surface, never shown — two rounds that changed
+             *     nothing are otherwise indistinguishable values.
+             */
+            id: number;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string;
+        };
+        SyncRunListOut: {
+            runs: components["schemas"]["RunRecordOut"][];
+        };
+        AdoptIn: {
+            /**
+             * @description `keep-local` only, and only for a returning machine whose recorded
+             *     base is gone from the remote's history.
+             * @default null
+             */
+            choice: string | null;
+        };
         SyncRemoteIn: {
-            /** @description A git repository the user owns. Must not begin with `-` — git would read it as an option. */
+            /** @description Becomes an argument to `git`, so it may not begin with `-`. */
             url: string;
             /**
-             * @description Held to `git check-ref-format --branch`; in particular it must not begin with `-`.
+             * @description Held to `git check-ref-format --branch`.
              * @default main
              */
             branch: string;
-            /** @description A name in the credential store — never the secret. The daemon resolves it at push time and nowhere else. */
-            credential_ref?: string | null;
             /**
-             * @description Carry Fernet ciphertext under credentials/. Off by default; the master key is never written regardless.
+             * @description A name in the credential store — **never** the secret. The daemon
+             *     resolves it at push time and nowhere else.
+             * @default null
+             */
+            credential_ref: string | null;
+            /**
+             * @description Whether encrypted credentials travel with the documents.
              * @default false
              */
             include_credentials: boolean;
-            /** @default 3600 */
+            /**
+             * @description Seconds between automatic rounds. The worker converges on this
+             *     interval as soon as a remote is configured and `enabled`.
+             * @default 3600
+             */
             interval_seconds: number;
             /** @default true */
             enabled: boolean;
             /**
-             * @description Refused when it would overlap the vault's own directories (knowledge, skills, memory) or Coffer's own `~/.coffer` outside the default location.
+             * @description The separate working tree the round commits from — never the live
+             *     vault directory.
              * @default ~/.coffer/sync
              */
             worktree_path: string;
@@ -336,181 +472,44 @@ export interface components {
             worktree_path: string;
         };
         SyncRemoteStateOut: {
-            /** @description False on a fresh vault — being unconfigured is not an error */
+            /** @description `false` on a fresh vault. */
             configured: boolean;
             remote: components["schemas"]["SyncRemoteOut"] | null;
         };
         SyncRemoteClearedOut: {
-            /** @description False when there was nothing to clear — delete is idempotent */
+            /** @description `false` when there was nothing to clear — delete is idempotent. */
             cleared: boolean;
-        };
-        /** @description The same fields as SyncRemoteIn — adopting configures a remote and joins it. */
-        AdoptIn: {
-            url: string;
-            /** @default main */
-            branch: string;
-            credential_ref?: string | null;
-            /** @default false */
-            include_credentials: boolean;
-            /** @default 3600 */
-            interval_seconds: number;
-            /** @default ~/.coffer/sync */
-            worktree_path: string;
-        };
-        AreaCountOut: {
-            /** @description knowledge, skills, resources, state/<area>, credentials, machines */
-            area: string;
-            count: number;
-        };
-        AppliedPathOut: {
-            /** @description Path in the working tree */
-            path: string;
-            /** @enum {string} */
-            change: "added" | "modified" | "deleted";
-        };
-        PathFailureOut: {
-            path: string;
-            reason: string;
-        };
-        ConflictOut: {
-            path: string;
-            /**
-             * @description How the path was settled. `credential_freshness` is the fresher Fernet encryption winning, which applies to credentials/*.enc and nothing else. `agent` is the bounded pass, which ran in the working tree only and passed the validation gate; it is always reported, because a silent machine merge of the user's own notes is precisely what they would want to know about. `unresolved` aborted the round.
-             * @enum {string}
-             */
-            resolution: "credential_freshness" | "agent" | "unresolved";
-        };
-        PendingConfirmationOut: {
-            /**
-             * @description Which side the circuit breaker held. `apply` protects this vault from a remote that went wrong; `publish` protects the other machines from this one — a vault emptied by a reinstall, a failed restore or a stray `rm -rf` would otherwise publish the loss as an ordinary deletion.
-             * @enum {string}
-             */
-            direction: "apply" | "publish";
-            /** @description The paths the round would remove */
-            documents: string[];
-            /** @description How many of each area's documents that is */
-            area_counts: components["schemas"]["AreaCountOut"][];
-        };
-        /** @description Present on exactly the rounds that started without a pointer. Joining is an explicit, reported act: the surfaces state what was found before anything is applied. */
-        JoinOut: {
-            /**
-             * @description `new` — this machine's id is absent from the remote's registry, so the pointer is git's empty tree, the union is taken, and deletion is structurally impossible. `returning` — the id is present, so the base is recovered from this machine's own descriptor and the round is an ordinary stale-machine round. Treating a returning machine as new would republish everything the others deleted while it was away.
-             * @enum {string}
-             */
-            kind: "new" | "returning";
-            /**
-             * Format: date
-             * @description From this machine's descriptor; null for a new machine
-             */
-            last_converged_at: string | null;
-            /** @description The recovered base; null for a new machine */
-            last_converged_commit: string | null;
-            /** @description Documents the remote has changed since that commit */
-            remote_changed: number;
-            /** @description Documents this vault has changed since that commit */
-            local_changed: number;
-        };
-        /** @description One shape for every terminal state; `status` discriminates. The list fields are always present, populated or not, so a surface renders one component for a run, an adopt, a restore, a confirm and a rollback. */
-        RoundOut: {
-            /** @enum {string} */
-            status: "ok" | "no_change" | "joined" | "conflict" | "awaiting_confirmation" | "push_failed" | "error";
-            /**
-             * @description Set when this round joined a remote; null otherwise
-             * @enum {string|null}
-             */
-            join: "new" | "returning" | null;
-            /** @description What the round wrote into this vault */
-            applied: components["schemas"]["DiffCountsOut"];
-            /** @description What the round wrote into the remote */
-            published: components["schemas"]["DiffCountsOut"];
-            /** @description The pointer after the round; unchanged when the round did not absorb */
-            commit: string | null;
-            /** @description Paths git could not merge. A non-empty list aborts the round untouched */
-            conflicts: string[];
-            /** @description Paths an agent merged — reported whether or not the round succeeded */
-            agent_resolved: string[];
-            /** @description Per-path failures. They are reported and never abort the round */
-            failures: components["schemas"]["PathFailureOut"][];
-            /** @description Credential refs whose ciphertext this machine holds without the key */
-            locked_refs: string[];
-            /** @description Set when the deletion guard held the round for confirmation */
-            pending: components["schemas"]["PendingConfirmationOut"];
-            error: string | null;
-        };
-        /** @description What one side of a round moved — the tally a history row shows, and the paths behind it that opening the row is for. */
-        DiffCountsOut: {
-            added: number;
-            modified: number;
-            deleted: number;
-            /** @description Every path this side touched, sorted by path */
-            changes: components["schemas"]["DocChangeOut"][];
-        };
-        /** @description One document's fate in one round. */
-        DocChangeOut: {
-            path: string;
-            /** @enum {string} */
-            status: "added" | "modified" | "deleted";
-        };
-        RestoreIn: {
-            /** @description A sha, a ref, or a YYYY-MM-DD date resolving to the last commit at or before it — the tip cannot return something deleted last week. */
-            at?: string | null;
-        };
-        ConfirmIn: {
-            /**
-             * @description `rebuild` is valid only for a publish-side hold: take the remote's state and discard this machine's local-only documents, rather than publishing their absence.
-             * @default apply
-             * @enum {string}
-             */
-            decision: "apply" | "reject" | "rebuild";
         };
         SyncStatusOut: {
             configured: boolean;
             remote: components["schemas"]["SyncRemoteOut"] | null;
+            last_run: components["schemas"]["RoundOut"] | null;
+            /** @description This machine's own id, so a surface can mark its row in the registry. */
             machine_id: string;
-            machine_name: string;
-            key_fingerprint?: string | null;
-            /** @description Null means this machine is joining; the next round detects which kind */
-            pointer: string | null;
-            last_round?: components["schemas"]["RoundOut"] | null;
-            /** Format: date-time */
-            next_round_at?: string | null;
-            pending: string[];
-            not_applicable: components["schemas"]["PathFailureOut"][];
-            conflicts: components["schemas"]["ConflictOut"][];
-            /** @description A pending confirmation in either direction, with the documents it would remove. Present here as well as on the round, because a hold outlives the request that produced it. */
-            confirmation?: components["schemas"]["PendingConfirmationOut"] | null;
-            /** @description The most recent join, kept visible after the fact */
-            join?: components["schemas"]["JoinOut"] | null;
-            worktree_path?: string;
-            /** @description The ten most recent pre-apply snapshots, newest first */
-            snapshots?: components["schemas"]["SnapshotOut"][];
-        };
-        SnapshotOut: {
-            tag: string;
-            commit: string;
-            /** Format: date-time */
-            created_at: string;
+            /**
+             * @description `false` when the id came from the host rather than the local fallback
+             *     file. `true` means it does not survive deleting `~/.coffer`.
+             */
+            machine_id_is_derived: boolean;
         };
         MachineOut: {
-            /** @description sha256("coffer-machine:" + the host identifier) truncated to 16 hex characters. The raw host identifier is never published. */
             machine_id: string;
-            /** @description The user's label; mutable at no cost */
             name: string;
             os: string;
             hostname: string;
             coffer_version: string;
             /**
-             * Format: date
-             * @description A date, restamped at most once per calendar day, so an idle machine commits no heartbeat. It means "last converged day".
+             * @description The **day** this machine last converged — a day rather than an
+             *     instant, because an idle machine must not commit a heartbeat every
+             *     round.
              */
-            last_converged_at?: string | null;
-            /** @description That machine's published pointer — what a returning machine recovers */
-            last_converged_commit?: string | null;
-            key_fingerprint?: string | null;
-            /** @description Whether that machine's key fingerprint equals this one's. False means its credentials cannot be decrypted here. */
-            key_matches?: boolean;
-            /** @description The agents registered on that machine */
-            agents?: string[];
+            last_converged_on: string | null;
+            /**
+             * @description Null when either side has published no fingerprint yet. `false`
+             *     means that machine's credentials cannot be decrypted here.
+             */
+            key_matches: boolean | null;
+            agents: string[];
             is_self: boolean;
         };
         MachineListOut: {
@@ -519,65 +518,53 @@ export interface components {
         MachineRenameIn: {
             name: string;
         };
+        /**
+         * @description Retiring a machine removes its descriptor and nothing else — nothing in
+         *     the vault references a machine id, which is why this answer has no
+         *     second half.
+         */
         MachineRemovedOut: {
-            machine_id: string;
             removed: boolean;
         };
-        KeyFingerprintOut: {
-            present: boolean;
-            /** @description First 12 hex chars of SHA-256(master key); null when absent */
-            fingerprint: string | null;
+        RestoreIn: {
+            /**
+             * @description A sha, a ref, or a `YYYY-MM-DD` date resolving to the last commit at
+             *     or before it — the tip cannot return something deleted last week.
+             * @default null
+             */
+            at: string | null;
         };
-        /** @description No fields — key export takes no arguments. */
-        EmptyIn: Record<string, never>;
         KeyMaterialIn: {
-            /** @description The Fernet key text to install here */
             material: string;
         };
         KeyMaterialOut: {
-            /** @description The Fernet key text. Crosses the token-guarded loopback API only; it is never written into the sync repository under any setting. */
             material: string;
         };
         KeyImportOut: {
-            /** @description Credential refs whose ciphertext still cannot be decrypted here. Affected resources refuse to spawn rather than failing decryption silently. */
+            /** @description Refs whose ciphertext is still undecryptable after the import. */
             locked_refs: string[];
         };
-        Error: {
-            error?: {
-                code?: string;
-                message?: string;
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
+        KeyFingerprintOut: {
+            fingerprint: string | null;
         };
     };
     responses: {
-        /** @description Invalid request body */
-        ValidationError: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description Conflicting state */
-        Conflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description No such resource */
+        /** @description No such machine. */
         NotFound: {
             headers: {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["Error"];
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /** @description The URL or branch was refused at the wire. */
+        Unprocessable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
     };
@@ -588,6 +575,154 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    runSyncRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The round's outcome. A held round reports `pending`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+        };
+    };
+    adoptSyncRemote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AdoptIn"];
+            };
+        };
+        responses: {
+            /** @description The joining round's outcome. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+        };
+    };
+    confirmHeldSyncRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The now-applied round's outcome. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+        };
+    };
+    rejectHeldSyncRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRemoteClearedOut"];
+                };
+            };
+        };
+    };
+    rebuildVaultFromRemote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rebuilding round's outcome. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+        };
+    };
+    rollbackLastSyncRound: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rollback round's outcome. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+        };
+    };
+    restoreVaultAtPoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RestoreIn"];
+            };
+        };
+        responses: {
+            /** @description The restoring round's outcome. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+        };
+    };
     getSyncRemote: {
         parameters: {
             query?: never;
@@ -597,7 +732,10 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Sync being unconfigured is the ordinary state of a fresh vault, not an error: it is a 200 with `remote: null`. */
+            /**
+             * @description `configured: false` with `remote: null` on a fresh vault — sync
+             *     being off is the ordinary state, not an error.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -621,7 +759,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Remote stored; the converge worker picks it up */
+            /** @description The stored remote, without its credential. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -630,8 +768,7 @@ export interface operations {
                     "application/json": components["schemas"]["SyncRemoteOut"];
                 };
             };
-            /** @description Invalid url/branch/interval (`SYNC_REMOTE_INVALID`), or the remote could not be reached with the credential given (`SYNC_REMOTE_UNREACHABLE`, whose `details.hint` says whether it looked like auth, not-found or network). */
-            422: components["responses"]["ValidationError"];
+            422: components["responses"]["Unprocessable"];
         };
     };
     clearSyncRemote: {
@@ -643,7 +780,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cleared, or nothing was configured */
+            /** @description `cleared: false` when there was nothing to clear. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -652,54 +789,6 @@ export interface operations {
                     "application/json": components["schemas"]["SyncRemoteClearedOut"];
                 };
             };
-        };
-    };
-    runSyncRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The round ran to a terminal state. `ok`, `no_change` and `joined` advanced the pointer; `conflict`, `awaiting_confirmation`, `push_failed` and `error` did not, and left the vault untouched except where `applied` says otherwise. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description No remote configured (`SYNC_NOT_CONFIGURED`), or the working tree declares a schema version this build does not know (`SYNC_TREE_TOO_NEW`); nothing was applied. */
-            409: components["responses"]["Conflict"];
-        };
-    };
-    adoptSyncRemote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AdoptIn"];
-            };
-        };
-        responses: {
-            /** @description The join was attempted and `join` says which kind it was — `new` (id absent from the registry: pointer is git's empty tree, the union is taken, deletion is structurally impossible) or `returning` (id present: the base is recovered from this machine's own descriptor and the round proceeds as an ordinary stale-machine round). */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description Invalid remote (`SYNC_REMOTE_INVALID`, `SYNC_REMOTE_UNREACHABLE`) */
-            422: components["responses"]["ValidationError"];
         };
     };
     getSyncStatus: {
@@ -711,7 +800,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The remote, this machine, the pointer, the last round and the next one, plus anything outstanding: pending paths, paths not applicable here, unresolved conflicts, and a pending confirmation in **either** direction. */
+            /** @description The status a surface opens on. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -722,80 +811,26 @@ export interface operations {
             };
         };
     };
-    restoreVault: {
+    listSyncRuns: {
         parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RestoreIn"];
+            query?: {
+                limit?: number;
             };
-        };
-        responses: {
-            /** @description The difference was applied; reported as an ordinary round */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description No remote configured (`SYNC_NOT_CONFIGURED`) */
-            409: components["responses"]["Conflict"];
-            /** @description The revision or date does not resolve (`SYNC_REMOTE_INVALID`) */
-            422: components["responses"]["ValidationError"];
-        };
-    };
-    confirmSyncRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ConfirmIn"];
-            };
-        };
-        responses: {
-            /** @description The held round was decided */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description Nothing is awaiting confirmation (`SYNC_NOTHING_TO_CONFIRM`), or `rebuild` was asked of an apply-side hold (`SYNC_AWAITING_CONFIRMATION`). */
-            409: components["responses"]["Conflict"];
-        };
-    };
-    rollbackSyncRound: {
-        parameters: {
-            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The vault is back on the pre-apply snapshot */
+            /** @description The run history. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RoundOut"];
+                    "application/json": components["schemas"]["SyncRunListOut"];
                 };
             };
-            /** @description No snapshot to roll back to (`SYNC_NO_SNAPSHOT`) */
-            409: components["responses"]["Conflict"];
         };
     };
     listSyncMachines: {
@@ -807,7 +842,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Every machine that has converged, with the local one marked */
+            /** @description The registry. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -831,7 +866,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Renamed; the new name is published on the next round */
+            /** @description This machine's descriptor, renamed. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -840,23 +875,20 @@ export interface operations {
                     "application/json": components["schemas"]["MachineOut"];
                 };
             };
-            /** @description Empty or unusable name (`SYNC_REMOTE_INVALID`) */
-            422: components["responses"]["ValidationError"];
         };
     };
-    removeSyncMachine: {
+    retireSyncMachine: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description The 16-hex-character machine id, as the registry reports it */
                 machine_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The descriptor was removed */
+            /** @description Removed. Nothing else in the vault referenced it. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -865,13 +897,10 @@ export interface operations {
                     "application/json": components["schemas"]["MachineRemovedOut"];
                 };
             };
-            /** @description No such machine in the registry (`SYNC_MACHINE_UNKNOWN`) */
             404: components["responses"]["NotFound"];
-            /** @description That is this machine (`SYNC_MACHINE_IS_SELF`) — removing your own descriptor would republish it on the next round. */
-            409: components["responses"]["Conflict"];
         };
     };
-    getKeyFingerprint: {
+    getMasterKeyFingerprint: {
         parameters: {
             query?: never;
             header?: never;
@@ -880,7 +909,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Whether a key exists here and its fingerprint. It is the same value each machine publishes in its descriptor, so the machines table can state that another machine's credentials cannot be decrypted here. */
+            /** @description The fingerprint, or null when none has been published. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -898,14 +927,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        /** @description Empty object — the caller decides where the material lands. */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EmptyIn"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description The Fernet key text. The caller writes it wherever it belongs — the CLI to the file path its argument names, the web UI to a browser download. The daemon writes nothing. */
+            /** @description The key material. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -914,8 +938,6 @@ export interface operations {
                     "application/json": components["schemas"]["KeyMaterialOut"];
                 };
             };
-            /** @description No master key on this machine (`MASTER_KEY_FILE_INVALID`) */
-            422: components["responses"]["ValidationError"];
         };
     };
     importMasterKey: {
@@ -925,63 +947,22 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        /** @description The key material itself. The CLI reads it from the file its argument names; the web UI reads it from an `<input type="file">`. An existing different key is backed up to a timestamped sibling before it is replaced, never truncated in place. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["KeyMaterialIn"];
             };
         };
         responses: {
-            /** @description Key installed; credential refs that remain locked here */
+            /**
+             * @description The credential refs still locked after the import — ciphertext this
+             *     machine holds but cannot decrypt.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["KeyImportOut"];
-                };
-            };
-            /** @description Not a valid Fernet key (`MASTER_KEY_FILE_INVALID`) */
-            422: components["responses"]["ValidationError"];
-        };
-    };
-    rejectHeldRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Discarded */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncRemoteClearedOut"];
-                };
-            };
-            409: components["responses"]["Conflict"];
-        };
-    };
-    rebuildFromRemote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Rebuilt */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
                 };
             };
         };

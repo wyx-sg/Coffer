@@ -14,10 +14,8 @@ import type {
   AggregationResultOut,
   DeliveryStatusListOut,
   DeliveryStatusOut,
-  FactListOut,
   MemoryFileContentOut,
   MemoryFileTreeOut,
-  FactOut,
   OrganiseResultOut,
   PartitionListOut,
 } from "./memoryTypes";
@@ -27,18 +25,10 @@ export * from "./memoryTypes";
 /** `/api/v1/memory` — the root every memory route hangs off. */
 const ROOT = "/memory";
 
-// --- partitions + facts -----------------------------------------------------
+// --- partitions -------------------------------------------------------------
 
 export function listPartitions(): Promise<PartitionListOut> {
   return call<PartitionListOut>(`${ROOT}/partitions`);
-}
-
-export function listFacts(partition: string): Promise<FactListOut> {
-  return call<FactListOut>(`${ROOT}/partitions/${enc(partition)}/facts`);
-}
-
-export function getFact(partition: string, slug: string): Promise<FactOut> {
-  return call<FactOut>(`${ROOT}/partitions/${enc(partition)}/facts/${enc(slug)}`);
 }
 
 // --- aggregation + organise --------------------------------------------------

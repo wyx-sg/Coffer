@@ -3,6 +3,10 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
+from coffer.application.retention_registry import (
+    PrunableRegistry,
+    PrunableTable,
+)
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.mcp import (
     persistence as _mcp_persistence,  # noqa: F401 — registers the mcp_invocations model
@@ -16,10 +20,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyRetentionRepo,
 )
-from coffer.infrastructure.persistence.retention import (
-    PrunableRegistry,
-    PrunableTable,
-)
+from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_retention_service
@@ -44,7 +45,7 @@ async def _client(tmp_path, *extra_tables: PrunableTable):
     )
     for extra in extra_tables:
         registry.register(extra)
-    repo = SqlAlchemyRetentionRepo(sm)
+    repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     svc = RetentionService(registry=registry, repo=repo, audit=audit)
     await svc.initialize_defaults()

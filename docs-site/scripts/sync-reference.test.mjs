@@ -9,34 +9,24 @@ import {
   GH_BLOB,
 } from "./sync-reference.mjs";
 
-test("specFileLabel: spec sub-files get uniform type labels, no spec number", () => {
-  assert.equal(specFileLabel("spec", "en"), "Spec");
-  assert.equal(specFileLabel("data-model", "en"), "Data model");
-  assert.equal(specFileLabel("quickstart", "en"), "Quickstart");
-  assert.equal(specFileLabel("spec", "zh"), "功能规格");
-  assert.equal(specFileLabel("data-model", "zh"), "数据模型");
+test("specFileLabel: spec sub-files get uniform type labels", () => {
+  assert.equal(specFileLabel("spec"), "Spec");
+  assert.equal(specFileLabel("data-model"), "Data model");
+  assert.equal(specFileLabel("quickstart"), "Quickstart");
 });
 
-test("specFileLabel: unknown base falls back to titleized name (no number)", () => {
-  assert.equal(specFileLabel("design-notes", "en"), "Design Notes");
+test("specFileLabel: unknown base falls back to titleized name", () => {
+  assert.equal(specFileLabel("design-notes"), "Design Notes");
 });
 
-test("classifyFile: English .md goes to the EN reference tree", () => {
+test("classifyFile: a spec .md goes to the reference tree", () => {
   const r = classifyFile("specs/mcp-gateway/spec.md");
-  assert.deepEqual(r, {
-    locale: "en",
-    dest: "reference/specs/mcp-gateway/spec.md",
-  });
+  assert.deepEqual(r, { dest: "reference/specs/mcp-gateway/spec.md" });
 });
 
-test("classifyFile: .zh.md goes to the zh tree with .zh stripped", () => {
-  const r = classifyFile(
-    "docs/decisions/code-layout-layer-first.zh.md",
-  );
-  assert.deepEqual(r, {
-    locale: "zh",
-    dest: "zh/reference/adr/code-layout-layer-first.md",
-  });
+test("classifyFile: an ADR goes to the adr area", () => {
+  const r = classifyFile("docs/decisions/code-layout-layer-first.md");
+  assert.deepEqual(r, { dest: "reference/adr/code-layout-layer-first.md" });
 });
 
 test("classifyFile: tasks.md is excluded", () => {
@@ -50,12 +40,7 @@ test("classifyFile: files outside the synced areas are excluded", () => {
 
 test("classifyFile: a directory README.md becomes index.md", () => {
   assert.deepEqual(classifyFile("docs/decisions/README.md"), {
-    locale: "en",
     dest: "reference/adr/index.md",
-  });
-  assert.deepEqual(classifyFile("docs/decisions/README.zh.md"), {
-    locale: "zh",
-    dest: "zh/reference/adr/index.md",
   });
 });
 

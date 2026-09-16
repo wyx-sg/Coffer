@@ -41,7 +41,6 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     _ACTIVE_SESSIONS,
     _JSON_RPC_INTERNAL_ERROR,
     _JSON_RPC_INVALID_REQUEST,
-    _JSON_RPC_METHOD_NOT_FOUND,
     _LAST_ACTIVITY,
     _NOTIFICATION_QUEUES,
     _QUEUE_MAXSIZE,
@@ -213,7 +212,11 @@ async def test_post_unknown_method_returns_json_rpc_error(
     assert r.status_code == 200
     body = r.json()
     assert "error" in body
-    assert body["error"]["code"] in (_JSON_RPC_METHOD_NOT_FOUND, _JSON_RPC_INTERNAL_ERROR)
+    # The gateway raises ``UpstreamUnavailable`` (a ``CofferError`` whose code is
+    # not ``TOOL_DISABLED``) for a method it does not dispatch, so the route's
+    # ``CofferError`` branch can only ever emit -32603. Asserting the exact code
+    # keeps the test from passing on a value the route cannot produce.
+    assert body["error"]["code"] == _JSON_RPC_INTERNAL_ERROR
 
 
 @pytest.mark.asyncio

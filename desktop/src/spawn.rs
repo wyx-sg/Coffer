@@ -3,40 +3,13 @@
 //! Split out of `daemon.rs` to keep every file under the project's 400-line
 //! cap (see `agents/stack.md`).
 
-use std::env;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tauri::AppHandle;
 
 use crate::env_path::daemon_spawn_path;
+use crate::logging::open_daemon_log;
 use crate::resolve::{daemon_source, DaemonSource};
-
-/// Path the daemon's stdout/stderr is appended to, given the user's home dir.
-/// Pure so it's unit-testable. Mirrors the CLI spawn (backend `_client.py`),
-/// which logs to this same file.
-fn daemon_log_path(home: &str) -> PathBuf {
-    PathBuf::from(home)
-        .join(".coffer")
-        .join("logs")
-        .join("daemon.log")
-}
-
-/// Open `~/.coffer/logs/daemon.log` for appending, creating the logs directory
-/// if needed. Returns `None` on any failure (no home, mkdir/open error) so the
-/// caller falls back to `/dev/null` rather than failing the spawn.
-fn open_daemon_log() -> Option<fs::File> {
-    let home = env::var("HOME")
-        .ok()
-        .or_else(|| env::var("USERPROFILE").ok())?;
-    let path = daemon_log_path(&home);
-    fs::create_dir_all(path.parent()?).ok()?;
-    fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .ok()
-}
 
 /// Resolve a daemon (the five-step chain in `resolve.rs`) and spawn it
 /// detached, returning its PID.
@@ -129,17 +102,6 @@ fn spawn_daemon_detached(binary: &Path) -> Result<u32, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn daemon_log_path_is_under_coffer_logs() {
-        // The daemon's stdout/stderr append here instead of /dev/null so a
-        // GUI-spawned daemon's crash is recoverable. Mirrors the CLI spawn
-        // (backend _client.py), which logs to the same file.
-        assert_eq!(
-            daemon_log_path("/Users/u"),
-            PathBuf::from("/Users/u/.coffer/logs/daemon.log")
-        );
-    }
 
     #[test]
     fn spawning_a_missing_binary_names_the_path_it_tried() {

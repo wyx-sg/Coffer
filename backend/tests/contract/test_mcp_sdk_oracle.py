@@ -14,6 +14,7 @@ the test fails — so the SDK's own validation is the oracle.
 
 from __future__ import annotations
 
+import re
 import socket
 import sys
 import threading
@@ -33,6 +34,55 @@ _FAKE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
 
 _TOKEN = "test-oracle-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
+
+#: FR-040: the gateway exposes EXACTLY six built-in knowledge tools. Upload is
+#: not among them — a document enters through a human surface, not an agent's
+#: tool call.
+_KNOWLEDGE_TOOLS = frozenset(
+    {
+        "coffer__list",
+        "coffer__grep",
+        "coffer__read",
+        "coffer__search",
+        "coffer__write",
+        "coffer__delete",
+    }
+)
+
+#: The rest of the built-in roster, which this test asserts nothing about
+#: beyond "it is not knowledge's". Named so the wire assertion below can be an
+#: exact one without swallowing a seventh knowledge tool into a vague
+#: superset. `scripts/check_architecture_doc.py` is the gate that owns the full
+#: roster and reds when a slice registers a tool the architecture doc never
+#: names; here the split is what scopes the claim to one kind.
+_NON_KNOWLEDGE_BUILTIN_TOOLS = frozenset(
+    {
+        "coffer__list_skills",
+        "coffer__load_skill",
+        "coffer__recall",
+        "coffer__diagnose",
+        "coffer__search_tools",
+    }
+)
+
+_APPLICATION_ROOT = Path(__file__).resolve().parents[2] / "coffer" / "application"
+#: The same declaration shape `scripts/check_architecture_doc.py` scrapes.
+_TOOL_DECL = re.compile(r'BuiltinTool\(\s*name="([a-z_]+)"')
+
+
+def _tools_declared_under(package: Path) -> set[str]:
+    """The `coffer__` tool names declared by the sources under `package`.
+
+    Read off disk rather than trusted from the wire, so "exactly six" is
+    pinned at the source too: a seventh knowledge tool added in
+    `application/knowledge/` reds this even before anyone checks whether the
+    gateway advertises it.
+    """
+    return {
+        f"coffer__{name}"
+        for path in package.rglob("*.py")
+        for name in _TOOL_DECL.findall(path.read_text(encoding="utf-8"))
+    }
 
 
 @pytest.fixture
@@ -189,26 +239,30 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the knowledge tools specifically must be there. One kind, six
-        # tools — the reading half.
-        expected_knowledge_tools = {
-            "coffer__grep",
-            "coffer__read",
-            "coffer__list",
-            "coffer__search",
-        }
-        assert expected_knowledge_tools.issubset(tool_names), (
-            f"knowledge built-in tools missing from tools/list; "
-            f"missing={expected_knowledge_tools - tool_names}; got={sorted(tool_names)}"
+        # And the knowledge tools specifically. FR-040 says EXACTLY six, so
+        # this is an equality and not the `issubset` it used to be: a subset
+        # check let a seventh knowledge tool — an agent-callable `upload`, say,
+        # which FR-040 rules out by name — ship without anything going red.
+        #
+        # The knowledge-owned half of the roster is isolated by subtracting the
+        # five built-ins other slices own, so this asserts about one kind
+        # rather than about every built-in Coffer happens to have.
+        coffer_tools = {n for n in tool_names if n.startswith("coffer__")}
+        knowledge_on_the_wire = coffer_tools - _NON_KNOWLEDGE_BUILTIN_TOOLS
+        assert knowledge_on_the_wire == set(_KNOWLEDGE_TOOLS), (
+            f"the knowledge tools in tools/list are not exactly the six FR-040 "
+            f"names; unexpected={sorted(knowledge_on_the_wire - _KNOWLEDGE_TOOLS)}; "
+            f"missing={sorted(_KNOWLEDGE_TOOLS - knowledge_on_the_wire)}"
         )
-        # …and the write half.
-        expected_write_tools = {
-            "coffer__write",
-            "coffer__delete",
-        }
-        assert expected_write_tools.issubset(tool_names), (
-            f"knowledge write tools missing from tools/list; "
-            f"missing={expected_write_tools - tool_names}; got={sorted(tool_names)}"
+        # Pinned at the source as well as on the wire: a seventh tool declared
+        # in the knowledge slice but not yet registered with the gateway is
+        # still a seventh tool, and a reviewer should see it here.
+        declared = _tools_declared_under(_APPLICATION_ROOT / "knowledge")
+        assert declared == set(_KNOWLEDGE_TOOLS), (
+            f"backend/coffer/application/knowledge declares "
+            f"{len(declared)} built-in tool(s), not the six FR-040 allows; "
+            f"unexpected={sorted(declared - _KNOWLEDGE_TOOLS)}; "
+            f"missing={sorted(_KNOWLEDGE_TOOLS - declared)}"
         )
 
         # 3. tools/call — SDK validates CallToolResult

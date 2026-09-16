@@ -23,7 +23,7 @@ interface ServerPlan {
  * in `headers` for http (HttpTransport has no `env` field), mirroring how
  * the secret path already routes to each transport's credential_refs.
  */
-export function planServer(srv: ParsedServer): ServerPlan {
+function planServer(srv: ParsedServer): ServerPlan {
   const credentialRefs: Record<string, string> = {};
   const plain: Record<string, string> = {};
   const secrets: { ref: string; value: string }[] = [];

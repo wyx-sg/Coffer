@@ -59,7 +59,7 @@ export const ECHO_MATCH_WINDOW_MS = 60_000;
  * How far BEFORE `sentAt` a row's `created_at` may land and still match. The
  * daemon is local, so server/client drift is small; this only absorbs it.
  */
-export const ECHO_CLOCK_SKEW_MS = 5_000;
+const ECHO_CLOCK_SKEW_MS = 5_000;
 
 let echoSerial = 0;
 

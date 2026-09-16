@@ -4,6 +4,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select
 
+from coffer.application.retention_registry import (
+    PrunableRegistry,
+    PrunableTable,
+    UnknownPrunableTable,
+)
 from coffer.infrastructure.chat import (
     persistence as _chat_persistence,  # noqa: F401 (registers chat tables on Base.metadata)
 )
@@ -13,9 +18,37 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.models import AuditLogModel
-from coffer.infrastructure.persistence.repos import (
-    SqlAlchemyRetentionRepo,
-    UnknownPrunableTable,
+from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
+from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
+
+#: What this module's repo is allowed to sweep, registered the way the
+#: composition root registers the real thing: audit_log by its timestamp, and
+#: the conversations archive/delete pair over updated_at and archived_at.
+_TABLES = (
+    PrunableTable(
+        name="audit_log",
+        timestamp_column="timestamp",
+        default_retention_days=365,
+        display_name="Audit Log",
+        description="Resource lifecycle events.",
+    ),
+    PrunableTable(
+        name="conversations_archive",
+        timestamp_column="updated_at",
+        default_retention_days=7,
+        display_name="Idle threads",
+        description="Idle chat threads get archived.",
+        action="archive",
+        target_table="conversations",
+        archive_set_column="archived_at",
+    ),
+    PrunableTable(
+        name="conversations",
+        timestamp_column="updated_at",
+        default_retention_days=30,
+        display_name="Conversations",
+        description="Archived chat threads and their messages.",
+    ),
 )
 
 
@@ -23,7 +56,13 @@ async def _repo(tmp_path):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    return SqlAlchemyRetentionRepo(session_maker(engine)), engine
+    registry = PrunableRegistry()
+    for table in _TABLES:
+        registry.register(table)
+    repo = SqlAlchemyRetentionRepo(
+        session_maker(engine), allowlist=allowlist_from_registry(registry.all())
+    )
+    return repo, engine
 
 
 @pytest.mark.asyncio
@@ -143,8 +182,8 @@ async def test_delete_older_than_conversations_cascades_to_messages(tmp_path):
         # One stale thread (2 messages) and one recent thread (1 message).
         conv_sql = (
             "INSERT INTO conversations "
-            "(id, agent_key, title, model_id, created_at, updated_at) "
-            "VALUES (:id, 'builtin', 't', NULL, :ts, :ts)"
+            "(id, agent_key, title, created_at, updated_at) "
+            "VALUES (:id, 'builtin', 't', :ts, :ts)"
         )
         msg_sql = (
             "INSERT INTO chat_messages "
@@ -186,8 +225,8 @@ async def test_archive_older_than_stamps_idle_threads_only(tmp_path):
 
     conv_sql = (
         "INSERT INTO conversations "
-        "(id, agent_key, title, model_id, created_at, updated_at, archived_at) "
-        "VALUES (:id, 'builtin', 't', NULL, :ts, :ts, :arch)"
+        "(id, agent_key, title, created_at, updated_at, archived_at) "
+        "VALUES (:id, 'builtin', 't', :ts, :ts, :arch)"
     )
     async with sm() as s:
         await s.execute(text(conv_sql), {"id": "idle", "ts": idle, "arch": None})

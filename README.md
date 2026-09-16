@@ -1,10 +1,6 @@
 # Coffer
 
 <p align="center">
-  <b>English</b> · <a href="./README.zh.md">简体中文</a>
-</p>
-
-<p align="center">
   <a href="https://wyx-sg.github.io/Coffer/"><img alt="Docs" src="https://img.shields.io/badge/docs-coffer-C96442"></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
   <img alt="Python ≥3.12" src="https://img.shields.io/badge/python-%E2%89%A53.12-3776AB?logo=python&logoColor=white">
@@ -18,11 +14,13 @@ Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one 
 
 - **MCP servers** — aggregate upstream MCP servers and re-expose them to MCP clients (Claude Code, Codex) through a unified, namespaced surface. Configure once; every client sees the same tools.
 - **Agents** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them.
+- **Providers** — one shared registry of model-provider profiles (base URL plus credential), projected atomically into each agent's own native config, so you switch provider once instead of once per agent. Credentials stay Fernet ciphertext and are isolated per agent.
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
 - **Knowledge** — a directory of markdown files, not an index. You create a **collection**, nest folders in it however you like, and drop files in from your own editor or file manager; agents read and write the same bytes over MCP and find things by walking a generated catalogue and grepping, with nothing chunked, embedded or reconciled in between. Each collection is a resource, so you decide which agents may see it. A tidy pass merges duplicates into coherent documents on request, archiving every revision it replaces.
+- **Memory** — Coffer aggregates each registered agent's own native memory read-only, normalises it into derived facts partitioned by project plus a `global` partition, and delivers a budgeted digest back at session start; `coffer__recall` fetches whatever the digest left out. Coffer never writes an agent's memory files, and everything under `~/.coffer/memory/` is derived and rebuildable.
 - **Channels** — chat with your registered coding agents (Claude Code, Codex) from Telegram or SeaTalk, and receive notifications from your phone.
 
-Run Coffer on more than one machine? **Vault export & import** writes the whole vault to a directory you pick and reads one back on the other machine — knowledge, resources, and ciphertext-only credentials travel; the encryption key never leaves your machines.
+Run Coffer on more than one machine? The vault **converges bidirectionally** with one git remote you own. A background worker applies a diff against the last state the vault provably held, and git's three-way merge is the arbiter when both ends moved — so nothing is overwritten wholesale. A new machine bootstraps with `coffer sync adopt`. Secrets travel as ciphertext only; the master key never leaves a machine except through an explicit out-of-band transfer you perform yourself. One thing deliberately stays behind: a resource's **reach** — whether it is enabled, and which agents it is scoped to — is machine-local, so each machine answers that question for itself.
 
 One **UI** ties them together — register and configure your agents, browse and curate every kind, and manage the vault's settings from one place. It reaches you two ways from a single build: served by the daemon at its own loopback origin for a browser, and hosted in a **macOS desktop app** with a Dock icon and a menu-bar tray that starts the daemon for you.
 
@@ -82,10 +80,10 @@ A binary installed this way is not quarantined, so there is no Gatekeeper step o
 Each `v*` tag publishes two tiers from
 [Releases](https://github.com/wyx-sg/Coffer/releases/latest):
 
-| Platform            | File                          | What it is                        |
-| ------------------- | ----------------------------- | --------------------------------- |
+| Platform            | File                           | What it is                        |
+| ------------------- | ------------------------------ | --------------------------------- |
 | macOS Apple silicon | `Coffer-unsigned-<triple>.dmg` | The desktop app, self-contained   |
-| macOS Apple silicon | `coffer-cli-<triple>.tar.gz`  | The command line and its binaries |
+| macOS Apple silicon | `coffer-cli-<triple>.tar.gz`   | The command line and its binaries |
 
 Coffer currently ships macOS (Apple Silicon) only. The archive contains `coffer`,
 `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries. Verify either download
@@ -198,11 +196,21 @@ backend/              Python daemon + CLI + shim
     domain/           pure types + business rules (no I/O)
     application/      services + orchestration
     infrastructure/   DB, MCP transports, encrypted credential store, daemon discovery
-    surfaces/         HTTP (FastAPI) + CLI (Typer) + stdio shim
+    surfaces/         HTTP (FastAPI), CLI (Typer), stdio shim, SeaTalk callback listener
+frontend/             React + TypeScript + Vite web UI, served by the daemon
+desktop/              Tauri (Rust) macOS shell — Dock icon, menu-bar tray, bundled binaries
+e2e/                  Playwright suites — the web UI and the MCP gateway
+evals/                AI eval harness — tool-search and tool-routing suites
+scripts/              repo gates (file sizes, doc naming, acceptance audit) and maintenance
+docs-site/            VitePress source for the published documentation site
 specs/                Speckit specs (one per feature)
 docs/decisions/       Architectural Decision Records (ADRs)
-agents/               Workflow, SDD, stack, and testing guides
+agents/               Guides: workflow, SDD, stack, frontend, visual language, testing, harness
 ```
+
+The `surfaces/callback/` process is the `coffer-callback` binary above: a standalone
+listener a tunnel points at, which verifies a SeaTalk signature and forwards the event
+to the daemon over loopback.
 
 Architecture deep-dive: [.specify/memory/architecture.md](.specify/memory/architecture.md).
 ADRs: [docs/decisions/](docs/decisions/).
@@ -211,18 +219,25 @@ ADRs: [docs/decisions/](docs/decisions/).
 
 ## Developer commands
 
-| Command        | What it does                                                          |
-| -------------- | --------------------------------------------------------------------- |
-| `make verify`  | Full check: lint, type, unit, integration, contract, acceptance audit |
-| `make install` | Install backend deps into the project venv                            |
+| Command           | What it does                                                            |
+| ----------------- | ----------------------------------------------------------------------- |
+| `make install`    | Create the venv and install backend + frontend deps                     |
+| `make hooks`      | Wire the pre-commit and commit-msg git hooks                            |
+| `make dev`        | Run the backend (`:8000`) and the frontend (`:5173`) together           |
+| `make verify`     | `lint verify-unit verify-integration verify-contract verify-acceptance` |
+| `make verify-all` | `make verify` plus the end-to-end tier                                  |
+| `make desktop`    | Build `Coffer.app` and the `.dmg` (needs Rust; roughly 50 minutes)      |
+| `make lock`       | Refresh `backend/uv.lock` from `backend/pyproject.toml`                 |
+
+`make help` lists the rest, including each test tier on its own.
 
 ---
 
 ## Contributing
 
 - **Conventional Commits** required — see [agents/workflow.md](agents/workflow.md)
-- **Spec-driven development** — every feature starts with a spec under `specs/<id>/` — see [agents/sdd.md](agents/sdd.md)
-- **Architecture contracts** — 6 importlinter contracts must stay green (defined in [backend/pyproject.toml](backend/pyproject.toml))
+- **Spec-driven development** — every feature starts with a spec under `specs/<short-name>/` — see [agents/sdd.md](agents/sdd.md)
+- **Architecture contracts** — 20 importlinter contracts must stay green (defined in [backend/pyproject.toml](backend/pyproject.toml))
 - **Credentials** — secrets are stored only as Fernet ciphertext in the `credentials` table via `coffer.infrastructure.credentials`; plaintext never reaches the DB, logs, or audit
 
 ---

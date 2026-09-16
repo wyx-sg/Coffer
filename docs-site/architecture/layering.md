@@ -22,7 +22,7 @@ Arrows show the allowed import direction. `surfaces` may import `application`; `
 
 ### domain/
 
-The domain layer contains the kind-agnostic entities and protocols that define what Coffer manages at the conceptual level. This includes `resource.py` (the Resource entity, `ResourceRef`, and the frozen `Kind` record every kind's factory returns), `audit.py` (the `AuditEvent` value object), `errors.py` (the canonical error hierarchy), and one subdirectory per kind for that kind's value objects — `mcp/` (tool schemas, capability descriptors, session state models), `agent/`, `skill/`, `channel/`, `knowledge/`, `chat/`, and `sync/`.
+The domain layer contains the kind-agnostic entities and protocols that define what Coffer manages at the conceptual level. This includes `resource.py` (the Resource entity, `ResourceRef`, and the frozen `Kind` record every kind's factory returns), `audit.py` (the `AuditEventType` enum and the `AuditEntry` record), `errors.py` (the canonical error hierarchy), and one subdirectory per kind for that kind's value objects — `mcp/` (tool schemas, capability descriptors, session state models), `agent/`, `skill/`, `knowledge/`, `memory/`, `provider/`, `channel/` — plus the cross-cutting `chat/` and `sync/`.
 
 ::: warning Absolute invariant
 `domain/` may NOT import from `infrastructure/`, `surfaces/`, or any external SDK. No SQLAlchemy, no FastAPI, no `keyring`, no `httpx` — none of these appear anywhere in the domain layer. If a domain entity needs to validate a URL, it uses Python's standard library. If it needs to represent a credential, it holds a string reference, not a keychain handle.
@@ -32,7 +32,7 @@ This restriction is not just architectural taste — it is what makes the domain
 
 ### application/
 
-The application layer orchestrates domain entities with infrastructure and surfaces. It defines the services that implement Coffer's use cases: `resource_service.py` for kind-agnostic CRUD (create/read/update/enable/disable/delete for resources of any kind), `audit_service.py` for recording lifecycle events, `retention_service.py` for the background log-pruning worker, and one subdirectory per kind — `application/mcp/` (session management, capability curation, invocation recording), `application/agent/`, `application/skill/`, `application/channel/`, and `application/knowledge/`. Alongside the kinds sit cross-cutting service slices that are **not** kinds: `application/chat/` (the turn platform the channels run agents on — the `TurnOrchestrator` and its turn state), `application/sync/` (convergence of the vault with a user-owned git remote), `application/credentials/` (the shared `CredentialResolver`), and `application/fs/` (filesystem-browse).
+The application layer orchestrates domain entities with infrastructure and surfaces. It defines the services that implement Coffer's use cases: `resource_service.py` for kind-agnostic CRUD (create/read/update/enable/disable/delete for resources of any kind), `audit_service.py` for recording lifecycle events, `retention_service.py` for the background log-pruning worker, and one subdirectory per kind — `application/mcp/` (session management, capability curation, invocation recording), `application/agent/`, `application/skill/`, `application/knowledge/`, `application/memory/`, `application/provider/`, and `application/channel/`. Alongside the kinds sit cross-cutting service slices that are **not** kinds: `application/chat/` (the turn platform the channels run agents on — the `TurnOrchestrator` and its turn state), `application/sync/` (convergence of the vault with a user-owned git remote), `application/credentials/` (the shared `CredentialResolver`), and `application/fs/` (filesystem-browse).
 
 Application services receive their infrastructure dependencies as constructor arguments (repositories, keychain adapters, upstream clients) — they do not instantiate them. This is the dependency-inversion pattern: the application layer defines what it needs (via interfaces or protocol classes in `domain/`), and the composition root provides the concrete implementation.
 
@@ -42,7 +42,9 @@ Application services receive their infrastructure dependencies as constructor ar
 
 ### infrastructure/
 
-The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery utilities (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, source fetcher, sync engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (the on-disk path layout, frontmatter parsing, file I/O, the document converters, and the `ripgrep` wrapper), and `infrastructure/chat/` (the Claude Code and Codex agent drivers, the gateway tool provider, and turn persistence). The cross-cutting `infrastructure/sync/` slice (the git mirror the vault converges through) is not a kind. Two kind-agnostic packages sit beside the kinds: `infrastructure/net/` (the SSRF guard every outbound URL passes through) and `infrastructure/agent_files/` (readers of an agent's own on-disk transcripts, shared by the agent and memory kinds).
+The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery and the pre-database config file (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, drift engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (the on-disk path layout, frontmatter parsing, file I/O, the document converters, and the `ripgrep` wrapper), `infrastructure/memory/` (the partition path layout and the per-agent native-memory readers), `infrastructure/provider/` (the connection introspector), and `infrastructure/chat/` (the Claude Code and Codex agent drivers, the gateway tool provider, and turn persistence). Two cross-cutting slices are not kinds: `infrastructure/sync/` (the git mirror the vault converges through, and this machine's identity) and `infrastructure/llm/` (the internal engine's model clients, remote transcription, and the agentic reorganise loop the tidy and organise passes run on).
+
+Two kind-agnostic packages sit beside the kinds. `infrastructure/agent_files/` holds readers of an agent's own on-disk transcripts, shared by the agent and memory kinds. `infrastructure/net/` holds the SSRF guard — and it is worth being exact about its reach, because the honest statement is narrower than the module's name suggests: `check_url` has exactly **one** caller, `infrastructure/provider/introspector.py`. It is not a chokepoint every outbound URL passes through, and nothing enforces that it becomes one. See [Outbound HTTP](/architecture/security#outbound-http-one-guarded-path-and-the-rest) for what is and is not covered.
 
 Infrastructure is wired into the system at the composition root, not imported by domain or application code. Application services receive infrastructure objects as injected dependencies. This means you can swap the real SQLAlchemy repository for a test double (an in-memory dictionary or a SQLite `:memory:` database) without changing a line of application or domain code.
 
@@ -97,6 +99,8 @@ backend/coffer/
 │   ├── skill/                    # skill value objects
 │   ├── channel/                  # channel config, envelopes, signing
 │   ├── knowledge/                # collection config + entry/document value objects
+│   ├── memory/                   # partition + fact value objects
+│   ├── provider/                 # connection protocol + projection value objects
 │   ├── chat/                     # chat turn / message value objects
 │   └── sync/                     # sync value objects
 ├── application/
@@ -107,7 +111,8 @@ backend/coffer/
 │   ├── agent/                    # agent services + make_agent_kind
 │   ├── skill/                    # skill services + make_skill_kind
 │   ├── channel/                  # adapter protocol, pairing, inbound runtime
-│   ├── knowledge/                # collection, entry, ingest + search services
+│   ├── knowledge/                # collection, file, ingest + search services
+│   ├── memory/                   # aggregation, organise, recall, context + make_memory_kind
 │   ├── chat/                     # TurnOrchestrator, turn state
 │   ├── provider/                 # provider ports, introspection + make_provider_kind
 │   ├── sync/                     # cross-cutting — vault convergence with a git remote (not a kind)
@@ -115,36 +120,46 @@ backend/coffer/
 │   └── fs/                       # cross-cutting — filesystem-browse service
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
-│   ├── daemon/                   # pid_lock, port allocation
+│   ├── daemon/                   # pid_lock, port binding, daemon-config.json
 │   ├── mcp/                      # subprocess transport, HTTP upstream client
 │   ├── agent/                    # agent config-file store
-│   ├── skill/                    # master store, source fetcher, sync engine
+│   ├── skill/                    # master store, drift engine
 │   ├── channel/                  # telegram/seatalk transports, peer repo, render
 │   ├── knowledge/                # path layout, frontmatter, file store, converters, ripgrep
-│   ├── chat/                     # LangGraph agent, gateway tool provider, CLI agents
-│   ├── provider/                 # provider introspector
-│   ├── net/                      # kind-agnostic — SSRF guard for outbound URLs
+│   ├── memory/                   # partition path layout + per-agent native-memory readers
+│   ├── chat/                     # the Claude Code and Codex drivers, gateway tool provider
+│   ├── provider/                 # provider introspector (the one `check_url` caller)
+│   ├── net/                      # kind-agnostic — the SSRF guard (one call site; see Security)
 │   ├── agent_files/              # kind-agnostic — readers of an agent's own transcripts (agent + memory)
+│   ├── logging/                  # kind-agnostic — structlog setup, eval capture
+│   ├── llm/                      # cross-cutting — internal-engine models, transcription, reorganise loop
 │   ├── sync/                     # cross-cutting — git mirror the vault converges through (not a kind)
 │   └── credentials/              # cross-cutting — encrypted credential store + master key — only place importing `keyring`
 └── surfaces/
     ├── http/
     │   ├── app.py                # composition root — wires every kind's factory and wiring module
+    │   ├── routing.py            # the one place every sub-router is imported and mounted
     │   ├── kind_wiring.py        # + per-kind *_wiring.py — each returns a typed dataclass app.py passes on
     │   ├── dependencies.py       # kind-agnostic getters; per-kind *_dependencies.py sit beside the routes
     │   ├── resource_routes.py
-    │   └── mcp/                  # MCP HTTP/SSE routes and session handling
+    │   ├── mcp/                  # MCP HTTP/SSE routes and session handling
+    │   ├── knowledge/            # collections, tree, file, grep, search, upload, tidy
+    │   ├── memory/               # partitions, facts, files, sync, organise, context, delivery
+    │   └── chat/                 # conversations, turns, agent providers
     ├── cli/
     │   ├── main.py               # composition root — Typer wiring
     │   ├── resource_cmd.py
+    │   ├── daemon_cmd.py         # + daemon_port_cmd.py — the one group that needs no daemon
     │   └── mcp.py
     ├── callback/                 # coffer-callback channel listener (separate process)
     └── shim/                     # coffer-mcp-shim stdio entry point
 ```
 
-Within each layer, the root files are kind-agnostic. Kind-specific code lives under named subdirectories — `mcp/`, `agent/`, `skill/`, `channel/`, `knowledge/`, `chat/` — one per kind, mirrored across `domain/`, `application/`, `infrastructure/`, and (where the kind has a surface) `surfaces/`. When a new kind arrives, its directories appear at each layer without altering the kind-agnostic root files.
+The `desktop/` crate sits outside `backend/coffer/` entirely — it is Rust, it imports nothing from any of these layers, and it reaches the daemon over the same loopback HTTP every other surface uses. See [Surfaces](/architecture/surfaces#desktop-shell-cofferapp).
 
-A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `infrastructure/sync/` (bidirectional convergence of the vault with a user-owned git remote), `application/credentials/` + `infrastructure/credentials/` (credential resolution and the encrypted store), and `application/fs/` (filesystem-browse). These follow the same layering rules as kinds but have no `Kind` factory and no entry in `app.state.kinds` — they are shared services used across kinds.
+Within each layer, the root files are kind-agnostic. Kind-specific code lives under named subdirectories — `mcp/`, `agent/`, `skill/`, `knowledge/`, `memory/`, `provider/`, `channel/` — one per kind, mirrored across `domain/`, `application/`, `infrastructure/`, and (where the kind has its own route package) `surfaces/http/`. When a new kind arrives, its directories appear at each layer without altering the kind-agnostic root files.
+
+A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `infrastructure/sync/` (bidirectional convergence of the vault with a user-owned git remote), `application/credentials/` + `infrastructure/credentials/` (credential resolution and the encrypted store), `application/chat/` + `infrastructure/chat/` (the turn platform that drives the user's own coding agents), `infrastructure/llm/` (the internal engine's model clients and the loop the unattended passes run on), and `application/fs/` (filesystem-browse). These follow the same layering rules as kinds but have no `Kind` factory and no entry in `app.state.kinds` — they are shared services used across kinds.
 
 ### Why layer-first, not feature-first (vertical slices)?
 

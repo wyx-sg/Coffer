@@ -44,7 +44,7 @@ export function statusLabel(t: TFunction, status: string): string {
 }
 
 /** `+2 ~1 −0`, in the same order the counts are reported everywhere else. */
-export function countsLabel(t: TFunction, counts: DiffCounts): string {
+function countsLabel(t: TFunction, counts: DiffCounts): string {
   return t("sync.history.countsShort", { ...counts });
 }
 

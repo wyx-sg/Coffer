@@ -435,6 +435,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{name}/native-memory/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * One native-memory store's directory, as a read-only tree
+         * @description The tree of one store the listing handed out (FR-049). `dir` MUST be a
+         *     `memory_dir` that listing returned — any other path under the agent's
+         *     config dir (its transcripts, its settings, a sibling project) is 404,
+         *     the same answer as a store that is gone, so the difference cannot be
+         *     used to probe the filesystem. The walk is depth-bounded and says so on
+         *     the node it clipped rather than silently truncating. Read-only: Coffer
+         *     never writes an agent's own memory, so there is no fingerprint here and
+         *     no write to pair it with.
+         */
+        get: operations["listAgentNativeMemoryFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{name}/native-memory/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one file inside a native-memory store
+         * @description One file's text, for the read-only preview (FR-049). `dir` is bounded
+         *     exactly as the tree read bounds it, and `path` must resolve inside that
+         *     store — a store that is not this agent's, a path escaping the store and
+         *     a file that does not exist are one answer, 404. Reads are size-capped
+         *     and a binary file comes back flagged with empty content rather than as
+         *     bytes. The absolute path travels alongside so the viewer can offer
+         *     open / reveal (FR-038).
+         */
+        get: operations["readAgentNativeMemoryFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{name}/transcripts/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read one of the agent's conversations
+         * @description The ONE place a transcript body crosses the wire (FR-048), so every
+         *     guard is concentrated here. `path` is an absolute `source_path` the
+         *     listing gave out and must resolve inside this agent's own transcript
+         *     directory; anything else is 404 rather than a file read — the same
+         *     answer as a transcript since deleted. Bounded twice over, because one
+         *     transcript can be tens of megabytes: at most `limit` turns come back,
+         *     and each turn's text is cut at the per-turn cap with `truncated` set.
+         *     Every turn is secret-scrubbed before it leaves the parser. The whole
+         *     file's turn count comes back as `message_count` alongside the window,
+         *     so a reader is never shown 200 turns and left to assume that is all of
+         *     them. Read-only: nothing is written, nothing is retained, no audit
+         *     event. An agent type with no known transcript layout is 400
+         *     (`BAD_REQUEST`).
+         */
+        get: operations["readAgentTranscriptSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fs/browse": {
         parameters: {
             query?: never;
@@ -517,7 +608,7 @@ export interface paths {
         /**
          * List GUI editors installed on this machine
          * @description Enumerate common GUI code editors detected as installed, for the
-         *     preferred-editor picker in Settings (spec ui-shell-ui-shell). Detection is
+         *     preferred-editor picker in Settings (spec ui-shell). Detection is
          *     per-OS: macOS returns app-bundle names (for `open -a`), Linux/Windows
          *     return commands found on PATH. The returned `value` is exactly what
          *     `/fs/open`'s `with` field accepts. The chosen preference itself stays
@@ -805,6 +896,65 @@ export interface components {
             sessions: components["schemas"]["TranscriptSession"][];
             /** @description Sessions matching the search/filter, so the UI can page and show "N of total". */
             total: number;
+            limit: number;
+            offset: number;
+        };
+        /** @description One entry in a native-memory store's tree. `path` is relative to the store directory. */
+        MemoryFileNode: {
+            name: string;
+            /** @description Path relative to the store directory. */
+            path: string;
+            /** @enum {string} */
+            type: "file" | "dir";
+            /** @description Bytes, for a file. */
+            size?: number | null;
+            /**
+             * @description A directory whose descendants were clipped at the walk-depth bound.
+             * @default false
+             */
+            truncated: boolean;
+            /** @description Directories before files, each group sorted by name. */
+            children?: components["schemas"]["MemoryFileNode"][];
+        };
+        MemoryFileTreeOut: {
+            root: components["schemas"]["MemoryFileNode"];
+        };
+        /** @description One file's contents. No fingerprint — this surface has no write. */
+        MemoryFileContentOut: {
+            /** @description Path relative to the store directory. */
+            path: string;
+            /** @description Absolute path on disk, so the viewer can offer open / reveal. */
+            abs_path: string;
+            /** @description Empty when `binary`. */
+            content: string;
+            /** @description True when the read hit the size cap. */
+            truncated: boolean;
+            binary: boolean;
+            size: number;
+        };
+        /** @description One conversational turn, as the session page renders it. */
+        TranscriptMessage: {
+            role: string;
+            /** @description Secret-scrubbed, and cut to the per-turn cap when `truncated` is true. */
+            text: string;
+            /** Format: date-time */
+            timestamp?: string | null;
+            /** @default false */
+            truncated: boolean;
+        };
+        /** @description One session's summary fields (the listing's, so a deep link shows the same title and project the row did) plus a window of its turns. */
+        TranscriptSessionDetailOut: {
+            session_id: string;
+            title?: string | null;
+            project_path?: string | null;
+            /** @description The WHOLE file's turn count, while `messages` is the `limit` turns from `offset`. */
+            message_count: number;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** Format: date-time */
+            last_activity_at?: string | null;
+            source_path: string;
+            messages: components["schemas"]["TranscriptMessage"][];
             limit: number;
             offset: number;
         };
@@ -1539,6 +1689,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TranscriptSessionListOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAgentNativeMemoryFiles: {
+        parameters: {
+            query: {
+                /** @description A `memory_dir` from the native-memory listing. */
+                dir: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileTreeOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    readAgentNativeMemoryFile: {
+        parameters: {
+            query: {
+                /** @description A `memory_dir` from the native-memory listing. */
+                dir: string;
+                /** @description File path relative to the store directory. */
+                path: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFileContentOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    readAgentTranscriptSession: {
+        parameters: {
+            query: {
+                /** @description Absolute `source_path` of a session, as the listing gave it. */
+                path: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscriptSessionDetailOut"];
                 };
             };
             400: components["responses"]["BadRequest"];

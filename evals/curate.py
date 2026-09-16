@@ -151,18 +151,12 @@ def _resolve_sink(arg: str | None) -> Path:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Curate captured traces into eval cases."
-    )
+    parser = argparse.ArgumentParser(description="Curate captured traces into eval cases.")
     parser.add_argument(
         "--input", help="capture JSONL sink (default: COFFER_EVAL_CAPTURE / ~/.coffer)"
     )
-    parser.add_argument(
-        "--dataset", default="tool_search.jsonl", help="dataset file to grow"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="show cases without writing"
-    )
+    parser.add_argument("--dataset", default="tool_search.jsonl", help="dataset file to grow")
+    parser.add_argument("--dry-run", action="store_true", help="show cases without writing")
     args = parser.parse_args(argv)
 
     sink = _resolve_sink(args.input)
@@ -178,9 +172,7 @@ def main(argv: list[str] | None = None) -> int:
         print("\nno new cases.")
         return 0
     if args.dry_run:
-        print(
-            f"\n[dry-run] would append {len(cases)} case(s) to datasets/{args.dataset}:"
-        )
+        print(f"\n[dry-run] would append {len(cases)} case(s) to datasets/{args.dataset}:")
         for c in cases:
             print(f"  {json.dumps(c)}")
         return 0

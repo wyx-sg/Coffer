@@ -3,9 +3,8 @@
 // Memory / MCP / Skill agent-detail tabs read with one visual language: a muted
 // section heading + hint on the left, an outline link button on the right.
 //
-// Memory and MCP render <ManagedLinkCard> (the row in its own Card); the Skill
-// tab embeds <ManagedLinkRow> inside its follow-toggle card so the toggle and
-// the pointer share a single white box.
+// The Skill tab embeds <ManagedLinkRow> inside its follow-toggle card so the
+// toggle and the pointer share a single white box.
 //
 // <CofferGatewayCard> wraps that pointer for surfaces an agent reaches THROUGH
 // the Coffer MCP gateway (its Coffer memory, its gateway MCP servers): when
@@ -41,14 +40,6 @@ export function ManagedLinkRow({ title, hint, buttonLabel, onOpen }: ManagedLink
         <ArrowRight className="ml-1.5 size-3.5" />
       </Button>
     </div>
-  );
-}
-
-export function ManagedLinkCard(props: ManagedLinkProps) {
-  return (
-    <Card className="p-4">
-      <ManagedLinkRow {...props} />
-    </Card>
   );
 }
 

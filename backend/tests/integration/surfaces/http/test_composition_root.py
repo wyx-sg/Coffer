@@ -71,3 +71,32 @@ def test_app_runs_alembic_migrations_on_startup(tmp_path, monkeypatch):
     conn.close()
     table_names = {r[0] for r in rows}
     assert {"resources", "audit_log", "retention_policies"}.issubset(table_names)
+
+
+def test_every_synced_state_area_registers_its_provider(tmp_path, monkeypatch):
+    """A kind that forgets to register its ``SyncedStatePort`` does not fail —
+    it silently stops converging.
+
+    That is not hypothetical: ``wire_channel_kind`` appended its provider to
+    ``app.state.sync_state_providers``, a name nothing ever read, so channel
+    pairings did not reach the vault at all while every test and every page
+    went on passing. This test is the only place that notices.
+
+    Adding a synced area means adding it here. That is the point: the list is
+    the claim, and the claim is checked.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", "59400")
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", "59409")
+
+    app = create_app()
+    with TestClient(app):
+        areas = {p.area for p in app.state.sync_contributions.state_providers}
+
+    assert areas == {
+        "settings",  # application/engine_settings_sync
+        "mcp-preferences",  # application/mcp/sync_state
+        "agent-plugins",  # application/agent/plugin_sync_state
+        "channel-peers",  # application/channel/sync_state
+    }

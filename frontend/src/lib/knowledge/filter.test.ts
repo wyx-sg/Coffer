@@ -1,6 +1,6 @@
 // frontend/src/lib/knowledge/filter.test.ts
 //
-// The lanes' filter is name-only and client-side: it matches a file's title or
+// The knowledge filter is name-only and client-side: it matches a file's title or
 // its on-disk basename, case-insensitively, and an empty box matches
 // everything. It never looks at a document's body — that is retrieval, and
 // retrieval belongs to the agents' `coffer__search`, not this page.

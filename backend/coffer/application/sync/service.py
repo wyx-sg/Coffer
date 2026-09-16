@@ -23,6 +23,7 @@ from pathlib import Path
 from coffer.application.audit_service import AuditService
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.sync.convergence import ConvergeRound
+from coffer.application.sync.convergence_ops import refuse_newer_layout
 from coffer.application.sync.ports import (
     BundlePort,
     ConvergenceStatePort,
@@ -236,6 +237,9 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
             await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
             await mirror.fetch(token=await self._token(remote))
             target = await mirror.resolve_revision(at or f"origin/{remote.branch}")
+            # A restore reads its documents out of ``target``, so ``target`` is
+            # the tree whose layout must be legible here.
+            await refuse_newer_layout(mirror, target)
             round_ = self._round_factory(mirror, remote.branch)
             run = await round_.reverse_to(pointer, target, delete=False)
         return run
@@ -257,6 +261,12 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
             await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
             await mirror.fetch(token=await self._token(remote))
             tip = await mirror.resolve_revision(f"origin/{remote.branch}")
+            # The most destructive read of the remote there is — this vault
+            # becomes that tree — so it is the last place to skip the layout
+            # check. Unlike a round, this raises out to the surface: a rebuild
+            # is a user asking for something now, and the answer is 409 and
+            # "upgrade this machine first", not a silent partial vault.
+            await refuse_newer_layout(mirror, tip)
             run = await self._round_factory(mirror, remote.branch).rebuild_to(tip)
             await self._state.set_pointer(tip)
             await self._state.set_pending(None)

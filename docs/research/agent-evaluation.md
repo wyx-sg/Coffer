@@ -1,7 +1,5 @@
 # Competitive Research — AI Agent Evaluation & the Eval Flywheel
 
-> English: this file · 中文版: [agent-evaluation.zh.md](./agent-evaluation.zh.md)
->
 > Internal competitive-research report for Coffer's eval direction (the
 > [Eval Flywheel](../decisions/close-the-eval-flywheel.md) ADR, and the AI-eval
 > layer of [Harness in Layers](../decisions/industrial-grade-harness-in-layers.md)).

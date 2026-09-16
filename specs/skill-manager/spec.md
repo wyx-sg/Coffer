@@ -1,9 +1,7 @@
 # Feature Specification: Skill Manager
 
-**Feature Branch**: `feature/skill-manager`
-**Created**: 2026-05-22
 **Status**: Accepted
-**Input**: User description: "Coffer manages portable AI skills using the open AgentSkills standard (agentskills.io). One canonical store lives at `~/.coffer/skills/`; per-agent visibility is a directory symlink/junction into the `skills/` subfolder of each agent's config directory. Users can import skills from local paths; each skill's own `enabled` flag and `scope` decide which registered agents it is delivered to. v1 supports Claude Code and Codex CLI as sync targets (each registered as a Resource of kind `agent` per spec agent-registry-agent-registry)."
+**Input**: User description: "Coffer manages portable AI skills using the open AgentSkills standard (agentskills.io). One canonical store lives at `~/.coffer/skills/`; per-agent visibility is a directory symlink/junction into the `skills/` subfolder of each agent's config directory. Users can import skills from local paths; each skill's own `enabled` flag and `scope` decide which registered agents it is delivered to. v1 supports Claude Code and Codex CLI as sync targets (each registered as a Resource of kind `agent` per spec agent-registry)."
 
 ## User Scenarios & Testing
 
@@ -161,9 +159,9 @@ The user should not have to configure delivery twice. A skill's own two fields s
 - **Skill name collision on import**: Rejected by default; the user either renames via SKILL.md frontmatter and retries, or re-imports with `overwrite` (`--force`) to replace the existing skill in place — its per-agent bindings and delivered symlinks are preserved.
 - **Master folder size exceeds limit (default 50 MB)**: Import rejected with the configured cap and a hint to adjust settings.
 - **Symlink/junction creation fails on Windows (FAT32 or network share)**: Falls back to copy mode for that target with an audit flag `degraded=true`; UI shows a warning chip.
-- **User edits `SKILL.md` in an external editor from inside an agent's `config_dir/skills` folder**: Coffer's UI never edits file content; the user makes the change in their own editor (reached via Coffer's "open in external editor" / "reveal in file manager" affordances or directly). Because the agent's path is a symlink to master, the external edit lands in master and is visible to all other agents on next read; no drift is detected.
+- **User edits `SKILL.md` in an external editor from inside an agent's `config_dir/skills` folder**: Because the agent's path is a symlink to master, the external edit lands in master and is visible to every other agent on next read; no drift is detected. The in-app editor (FR-028) writes the same master file, and its conditional save is what keeps the two from losing each other's work: a Coffer save carrying a fingerprint the external edit has already invalidated is refused with 409 rather than applied.
 - **User deletes a Coffer-managed file from inside an agent's `config_dir/skills` folder**: Master is affected (same reason); next `verify` flags any other agents whose links no longer resolve consistently.
-- **Removing an agent (per spec agent-registry) while it has skill bindings**: Spec agent-registry defines the agent kind's `on_delete` seam; the 005-skill-manager spec supplies the `cleanup_bindings_for_agent` callback at the composition root, so removing an agent first cleans up that agent's bindings and any associated symlinks before the agent row is deleted.
+- **Removing an agent (per spec agent-registry) while it has skill bindings**: Spec agent-registry defines the agent kind's `on_delete` seam; this spec supplies the `cleanup_bindings_for_agent` callback at the composition root, so removing an agent first cleans up that agent's bindings and any associated symlinks before the agent row is deleted.
 - **Agent's `config_dir` is moved or removed externally**: The next sync operation surfaces the failure; `verify` reports the affected bindings; user remediates by updating the agent's `config_dir` or removing the agent.
 - **`~/.agents/skills` is shared with other tools**: The scan lists what it finds and classifies only Coffer's own links as managed; everything else is unmanaged. Deletion is always an explicit user action — Coffer never garbage-collects another tool's skills.
 - **Unmanaged entry is a symlink pointing outside the master store**: Listed as unmanaged-but-not-adoptable (adopting would move someone else's source of truth); the user can follow the link's target manually or delete the link.
@@ -481,7 +479,7 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 **Delivery reconciliation (workspace amendment)**
 
 - **FR-025**: The system MUST reconcile deliveries per agent from the FR-012a predicate alone. A reconcile computes the agent's wanted set as `{s.name for s in skills if s.enabled and is_active(s.scope, agent_name)}` — a free function over the agent alone, with no evaluator object to build and no machine to bind into one. The same skill row can still be wanted here and unwanted on another machine, for a better reason than a machine axis was: the `enabled` flag and the scope this predicate reads are this machine's own, and the round that brought the skill here brought neither. It delivers every wanted skill the agent does not hold, and reclaims every held copy that is no longer wanted. It MUST run on: a skill being enabled or disabled, a skill's scope being edited, a skill being imported, a skill being removed, an agent being registered, an agent being enabled or disabled, an agent's `config_dir` changing, and the post-import hook after a sync import. A disabled agent's wanted set is empty, so the same reconcile reclaims its copies and restores them when it is enabled again. Conflicts at target paths follow FR-011 (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
-- **FR-026**: Unmanaged-skill operations MUST be available through the REST API, the `coffer agent skill …` / `coffer skill …` CLI (with `--json` on reads), and the agent's Skills tab in the web UI. Delivery itself is not an operation on this surface: it is controlled by the skill resource's `enabled` flag and `scope` through the generic resource enable/disable and scope surfaces.
+- **FR-026**: Unmanaged-skill operations MUST be available through the REST API, the `coffer skill unmanaged|adopt|rm-unmanaged` CLI (with `--json` on reads), and the agent's Skills tab in the web UI. They live under `coffer skill` and not under `coffer agent`: the agent is an argument to them, not their subject, and `coffer agent` carries only the groups whose subject IS the agent (`config`, `mcp`, `plugin`). Delivery itself is not an operation on this surface: it is controlled by the skill resource's `enabled` flag and `scope` through the generic resource enable/disable and scope surfaces.
 
 **Lifecycle**
 
@@ -524,9 +522,9 @@ Per `agents/sdd.md`, every scenario in this section is referenced by at least on
 
 ## Assumptions
 
-- Spec agent-registry-agent-registry has shipped (PR #25); the agent kind, its CRUD, audit, and `on_delete` hook are available.
-- The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec mcp-gateway-mcp-gateway are in place.
-- The application shell from spec ui-shell-ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot 002-ui-shell reserved as a placeholder.
+- Spec agent-registry has shipped; the agent kind, its CRUD, audit, and `on_delete` hook are available.
+- The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec mcp-gateway are in place.
+- The application shell from spec ui-shell — sidebar IA, layout, routing skeleton, and design system — is in place; the Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot.
 - Skills follow the open AgentSkills standard (`SKILL.md` with `name`/`description` frontmatter at minimum) as published at agentskills.io, validated against the standard's exact constraints (`name` ≤64 chars, `description` ≤1024 chars) with the optional `license` and experimental `allowed-tools` fields recognized; non-conforming folders are out of scope.
 - Local-imported skills are point-in-time copies; the source path is recorded for traceability, not for sync.
 - Windows users have directory-junction support on their filesystem; FAT32 and network shares fall back to copy mode.

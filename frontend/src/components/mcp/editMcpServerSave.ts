@@ -29,7 +29,7 @@ export function credentialRefsOf(config: unknown): Record<string, string> {
 }
 
 /** The config JSON minus the fields with their own controls — credentials and
- * the three timeouts. Both are merged back in on save, so the textarea never
+ * the two timeouts. Both are merged back in on save, so the textarea never
  * competes with a structured field over the same key. */
 export function configWithoutOwnControls(config: unknown): string {
   const clone = JSON.parse(JSON.stringify(config ?? {})) as Record<string, unknown>;
@@ -37,7 +37,6 @@ export function configWithoutOwnControls(config: unknown): string {
   if (transport) delete transport.credential_refs;
   delete clone.spawn_timeout_seconds;
   delete clone.request_timeout_seconds;
-  delete clone.idle_timeout_seconds;
   return JSON.stringify(clone, null, 2);
 }
 

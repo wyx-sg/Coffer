@@ -1,8 +1,6 @@
 # Aggregate the agents' memory; never write it
 
-> 中文版: [aggregate-agent-memory-never-write-it.zh.md](aggregate-agent-memory-never-write-it.zh.md)
-
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
 **Rewrites**: *Memory via MCP, not native projection* (2026-06-18) — this ADR replaces it, keeping its prohibition and replacing its answer. See [Revision history](#revision-history).

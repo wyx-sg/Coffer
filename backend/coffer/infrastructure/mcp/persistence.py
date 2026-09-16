@@ -189,25 +189,6 @@ class MCPCapabilityPreferenceRepo:
             await session.refresh(row)
             return _pref_to_domain(row)
 
-    async def touch_last_seen(
-        self,
-        resource_id: int,
-        capability_type: CapabilityType,
-        capability_key: str,
-        when: datetime,
-    ) -> None:
-        async with self._sm() as session:
-            stmt = select(MCPCapabilityPreferenceModel).where(
-                MCPCapabilityPreferenceModel.resource_id == resource_id,
-                MCPCapabilityPreferenceModel.capability_type == capability_type,
-                MCPCapabilityPreferenceModel.capability_key == capability_key,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                return
-            row.last_seen_at = when
-            await session.commit()
-
     async def reconcile(
         self,
         resource_id: int,

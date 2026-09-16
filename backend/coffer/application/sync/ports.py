@@ -41,11 +41,11 @@ class ImportGate(Protocol):
 
 
 class PostImportHook(Protocol):
-    """Per-kind side-effect reconciliation run AFTER an import (spec vault-sync
-    import reconciliation). Re-applies machine-local side-effects (native
-    config projections, on-disk transforms, deliveries) idempotently from the
-    imported rows — current state, not deltas — and returns error strings,
-    which are reported in the import summary."""
+    """Per-kind side-effect reconciliation run AFTER a round applies (spec
+    vault-sync ``## Applying a diff``). Re-applies machine-local side-effects
+    (native config projections, on-disk transforms, deliveries) idempotently
+    from current state — not from the diff — and returns error strings, which
+    the round reports among its failures."""
 
     kind: str
 
@@ -56,27 +56,28 @@ class SyncedStatePort(Protocol):
     """A module-owned shared-state area carried under ``state/<area>/``.
 
     Modules (channel pairing, memory store labels, ...) implement this and the
-    composition root registers the providers — sync never imports kind modules
-    (cross-kind fence). Docs are deterministic payloads: export writes the
-    area, import upserts into local state."""
+    composition root registers the providers through ``SyncContributions`` —
+    sync never imports kind modules (cross-kind fence). Docs are deterministic
+    payloads, and the area travels in both directions: serializing writes what
+    this machine decided, applying upserts what another machine decided, and a
+    document's disappearance is a decision too (``delete_docs``)."""
 
     @property
     def area(self) -> str:
         """Directory name under ``state/`` (kebab-case)."""
         ...
 
-    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
+    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
         """Local state as (relative doc path without extension, payload) pairs.
 
-        The second element is the path prefixes this machine owns. It is
-        retained for provider compatibility and ignored by the exporter: a
-        bundle is a snapshot of THIS machine, so every doc it returns is
-        written and nothing else is preserved."""
+        Everything this machine publishes for the area, and nothing else: a
+        document the list does not name is one this machine no longer holds,
+        which the serializer converges as the deletion it is."""
         ...
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
-        """Apply the bundle's docs to local state; returns (doc path, error)
-        pairs, which are reported as per-doc import failures."""
+        """Apply the working tree's docs to local state; returns (doc path,
+        error) pairs, which the round reports as per-path failures and holds."""
         ...
 
     async def delete_docs(self, rels: list[str]) -> None:
@@ -115,7 +116,8 @@ class MasterKeyPort(Protocol):
 
 
 class BundlePort(Protocol):
-    """Filesystem IO over one export bundle directory (spec vault-sync layout).
+    """Filesystem IO over the working tree the vault converges through, in the
+    layout spec vault-sync lays out.
 
     Every method is synchronous blocking IO; the application layer runs them
     off the event loop.
@@ -133,7 +135,7 @@ class BundlePort(Protocol):
     No write may delete one."""
 
     def open_for_write(self) -> None:
-        """Prepare the bundle directory for an export.
+        """Prepare the working tree for this machine's serialization.
 
         It creates the directory and validates it. It MUST NOT clear anything:
         each area converges against local state in its own write method, which

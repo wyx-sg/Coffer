@@ -89,12 +89,6 @@ def knowledge_cli_daemon(tmp_path, monkeypatch):
     fake_client.__exit__(None, None, None)
 
 
-def _ls(path: str) -> dict:
-    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "ls", path, "--json"])
-    assert result.exit_code == 0, result.output
-    return json.loads(_extract_json(result.output))
-
-
 def _make_collection(name: str, description: str = "test collection") -> None:
     created = _runner.invoke(
         cli_app, [KIND_KNOWLEDGE, "create", name, "--description", description]

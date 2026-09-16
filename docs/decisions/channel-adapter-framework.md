@@ -1,8 +1,8 @@
 # Channel Adapter Framework
 
-> 中文版: [channel-adapter-framework.zh.md](./channel-adapter-framework.zh.md)
-
 **Status**: Accepted
+**Date**: 2026-06-12
+**Deciders**: Yuxing Wu
 **Spec**: [channels](../../specs/channels/spec.md)
 
 ## Context

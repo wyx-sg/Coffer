@@ -1,0 +1,85 @@
+name: desktop
+
+# `desktop/` is a real Rust crate and, until this workflow existed, NOTHING in
+# CI compiled it: `grep cargo .github/workflows/` matched only cache paths.
+# `make verify` deliberately excludes it (agents/stack.md "Desktop Shell"), so
+# the crate's only gate was whoever remembered to run `make desktop-test` by
+# hand — which is how references to deleted modules and retired spec ids
+# survived in it for months.
+#
+# This job is the cheap half of the story. It runs `cargo check`, `cargo
+# clippy` and `cargo test`; it does NOT run `make desktop`, which bundles the
+# app via PyInstaller + Tauri and takes about fifty minutes.
+#
+# It needs neither Node nor a built frontend. `tauri::generate_context!`
+# consults `frontendDist` only when the `custom-protocol` feature is on, which
+# is the Tauri CLI's release path; a plain cargo invocation is a dev build, so
+# the macro takes the `devUrl` branch and embeds no assets. What it DOES need
+# is the four `externalBin` sidecars to resolve, which `make
+# desktop-stage-binaries` fakes.
+
+on:
+  push:
+    branches: [main]
+    paths: &desktop_paths
+      - "desktop/**"
+      - "Makefile"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    branches: [main]
+    paths: *desktop_paths
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: desktop (check + clippy + test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      # Tauri v2's Linux prerequisites. Without them `cargo check` fails in
+      # pkg-config before it reaches any of this crate's own code. libxdo is
+      # pulled in by the `tray-icon` feature in desktop/Cargo.toml.
+      - name: install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            file
+
+      # Same action and SHA release.yml already pins for the desktop tier, so
+      # there is one Rust toolchain across the repo. `components: clippy` is
+      # the only addition: release.yml builds, this job lints.
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+        with:
+          components: clippy
+
+      # Cache keyed like release.yml's, but on its own prefix: a `cargo check`
+      # /`clippy` target dir holds .rmeta, not the linked artifacts a release
+      # build leaves, and sharing one key would have each job evict the other.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/target
+          key: ${{ runner.os }}-cargo-lint-${{ hashFiles('desktop/Cargo.toml', 'desktop/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-lint-
+
+      - name: make desktop-lint
+        run: make desktop-lint
+
+      - name: make desktop-test
+        run: make desktop-test

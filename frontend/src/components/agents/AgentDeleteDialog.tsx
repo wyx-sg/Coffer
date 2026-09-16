@@ -1,18 +1,16 @@
 // frontend/src/components/agents/AgentDeleteDialog.tsx — spec agent-registry.
-// Delete-confirmation dialog for AgentDetailPage. Extracted to keep that
-// page under the file-size limit; owns the useRemoveAgent mutation itself so
-// the page only wires the open state and the post-delete navigation.
+// Delete-confirmation for AgentDetailPage: the shared ConfirmDialog plus the
+// `useRemoveAgent` mutation it drives, so the page wires only the open state
+// and where to go afterwards. A component rather than a block on the page
+// because AgentDetailPage is at its file-size limit.
+//
+// It was a hand-rolled six-element Dialog — a copy of ConfirmDialog with
+// nothing added — which meant it silently opted out of the convention that a
+// confirmation closes only on success. Going through the primitive, it gets
+// both the closing rule and the inline error.
 import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
 
 export function AgentDeleteDialog({
@@ -30,32 +28,27 @@ export function AgentDeleteDialog({
   const remove = useRemoveAgent();
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("agents.removeConfirm", { name })}</DialogTitle>
-          <DialogDescription>{t("agents.removeConfirmBody")}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={remove.isPending}
-            onClick={() =>
-              remove.mutate(name, {
-                onSuccess: () => {
-                  onOpenChange(false);
-                  onDeleted();
-                },
-              })
-            }
-          >
-            {remove.isPending ? t("common.deleting") : t("common.delete")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) remove.reset();
+      }}
+      title={t("agents.removeConfirm", { name })}
+      description={t("agents.removeConfirmBody")}
+      confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
+      pending={remove.isPending}
+      error={remove.error}
+      onConfirm={() =>
+        // Closes only on success, so a failure leaves the dialog up with the
+        // reason on it.
+        remove.mutate(name, {
+          onSuccess: () => {
+            onOpenChange(false);
+            onDeleted();
+          },
+        })
+      }
+    />
   );
 }

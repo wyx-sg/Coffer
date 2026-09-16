@@ -1,5 +1,6 @@
-# --- mkdocs build output ---
-docs/_site/
+# The docs site is VitePress under docs-site/, and it carries its own
+# .gitignore for .vitepress/dist, .vitepress/cache and the generated
+# reference/ layer. There is no mkdocs in this repo and no docs/_site.
 
 # --- Python ---
 __pycache__/
@@ -77,11 +78,6 @@ out/
 .svelte-kit/
 .tsbuildinfo
 *.tsbuildinfo
-
-# --- Electron ---
-release/
-release-builds/
-app-builds/
 
 # --- Rust / Tauri desktop shell ---
 desktop/target/
@@ -170,6 +166,13 @@ backend/tests/perf/results/*
 .cache/
 tmp/
 temp/
+
+# --- Per-developer Claude Code state (local-only; not shared across clones) ---
+# settings.local.json is where the CLI writes one machine's permission grants.
+# A user's global ignore may already cover it, but a global ignore is not the
+# repo's contract: without this line, the first contributor whose global ignore
+# differs commits their own allowlist.
+.claude/settings.local.json
 
 # --- /next-task autonomous loop (local-only; not shared across clones) ---
 .claude/commands/

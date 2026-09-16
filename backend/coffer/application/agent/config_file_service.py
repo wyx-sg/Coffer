@@ -66,8 +66,17 @@ class ConfigFileStorePort(Protocol):
     def write_text_atomic(self, path: pathlib.Path, text: str) -> None:
         """Atomically write ``text`` to ``path`` (temp file + rename).
 
-        Backs up any existing file to ``<path>.bak`` first and creates parent
-        directories as needed.
+        Creates parent directories as needed, and keeps THREE generations of
+        what was there — ``<path>.bak``, ``.bak.1``, ``.bak.2``, rotated on
+        every write (``ConfigFileStore.BACKUP_COPIES``). These are the user's
+        own config files, so a RUN of bad edits has to be recoverable, not just
+        the last one.
+
+        The adapter also accepts an ``expected_fingerprint`` keyword for an
+        optimistic staleness check; it is absent from this port because the
+        callers that want it (``ConfigFileService.write``,
+        ``application.provider.projector``) declare their own narrower port
+        that includes it.
         """
         ...
 
@@ -80,7 +89,8 @@ class ConfigFileStorePort(Protocol):
         ...
 
     def delete_with_backup(self, path: pathlib.Path) -> bool:
-        """Copy content to ``<path>.bak``, then remove the file.
+        """Copy content to ``<path>.bak``, rotating older generations as a
+        write does, then remove the file.
 
         Returns ``False`` when the file is already absent.
         """

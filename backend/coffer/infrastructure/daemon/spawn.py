@@ -24,11 +24,12 @@ from pathlib import Path
 
 from coffer.infrastructure.logging.files import log_dir
 
-#: Where the retired macOS desktop bundle staged its `coffer-daemon`. Coffer
-#: no longer ships that bundle, but a machine that installed one still has it
-#: at this stable path, so the probe is kept as an upgrade courtesy: it costs
-#: one `exists()` and saves a user with an old /Applications/Coffer.app from a
-#: shim that cannot find a daemon. Module-level so tests can monkeypatch it.
+#: Where the macOS desktop bundle stages its `coffer-daemon`: the .dmg ships
+#: `coffer-daemon` as a Tauri sidecar (`externalBin` in
+#: `desktop/tauri.conf.json`), which lands in `Contents/MacOS/`. So on a machine
+#: whose Coffer came from the .app rather than the CLI tarball, this is where the
+#: daemon actually is, and the probe is a live resolution step — not a
+#: compatibility shim. Module-level so tests can monkeypatch it.
 _MACOS_APP_BUNDLE_DAEMON = Path("/Applications/Coffer.app/Contents/MacOS/coffer-daemon")
 
 
@@ -46,11 +47,10 @@ def daemon_spawn_command() -> list[str]:
            co-locates all three binaries in ``~/.coffer/bin``;
         2. ``coffer-daemon`` on ``PATH`` (``shutil.which``) — covers separate
            installs and any layout where the bin dir is exported;
-        3. macOS only: the daemon staged inside a previously-installed
-           desktop bundle
-           (``/Applications/Coffer.app/Contents/MacOS/coffer-daemon``) — a
-           leftover from the retired desktop app, kept so a machine that
-           still has one is not stranded.
+        3. macOS only: the daemon staged inside the installed desktop
+           bundle (``/Applications/Coffer.app/Contents/MacOS/coffer-daemon``)
+           — where the .dmg puts it, so a machine that installed Coffer as an
+           app rather than a CLI tarball resolves here.
 
       The first candidate that exists wins. If none exists, the sibling
       path is returned as a best effort so the caller surfaces a single,

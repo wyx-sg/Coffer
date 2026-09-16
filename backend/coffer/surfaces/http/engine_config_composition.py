@@ -1,10 +1,8 @@
 """The internal-engine config singleton, built for the app lifespan.
 
-What used to stand here built two singletons — an embedding configuration and
-the internal-engine model choice. The embedding one configured nothing once the
-vector index was removed (ADR knowledge-is-plain-files), so only the engine's
-own settings survive: which model Coffer runs on its own behalf, and whether it
-may tidy unattended.
+The engine's own settings: which model Coffer runs on its own behalf, and
+whether it may tidy unattended. Building the service also registers its synced
+state area, so the settings travel with the vault.
 
 Split out of :mod:`coffer.surfaces.http.app` for the file-size budget.
 """

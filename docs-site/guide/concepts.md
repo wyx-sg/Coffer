@@ -6,19 +6,23 @@ Four core concepts underpin how Coffer works. Understanding them helps you reaso
 
 Every user-managed entity in Coffer is a **Resource** identified by `<kind>:<name>`. The resource framework unifies identity, lifecycle (register / update / enable / disable / delete), audit, and schema validation across all kinds.
 
-Five kinds ship today:
+Seven kinds ship today:
 
 - `mcp_server` — a registered upstream MCP server that carries its transport configuration, credential references, and per-server policies.
 - `agent` — a registered local AI coding agent (`claude_code` or `codex`) whose curated config files Coffer can view and edit, and into which Coffer can install its own MCP server.
 - `skill` — an AgentSkills folder Coffer manages from a single master copy and can deliver to an agent's config directory. Per-agent enable/disable bindings are managed from the agent's detail page.
 - `knowledge` — a collection of what your agents know: the files they write and the documents you ingest, as Markdown on disk under `~/.coffer/knowledge/<collection>/`. The files are the only copy — there is no index over them, and search is a literal pass across the files themselves.
+- `memory` — one partition of the facts Coffer aggregated out of your agents' *own* native memory, as files under `~/.coffer/memory/`. Derived, never written back into the agent.
+- `provider` — a vendor endpoint Coffer holds a key for: `{protocol, base_url, credential_ref}`. One may be marked Coffer's internal default, which is the connection its own unattended passes run on.
 - `channel` — a Telegram or SeaTalk binding that lets you reach your agents from a messaging app.
 
 The framework is kind-agnostic: adding a new kind in the future requires no changes to the core resource machinery.
 
 ## Gateway (daemon)
 
-The **gateway** is the long-lived FastAPI daemon that runs on `127.0.0.1:<auto-port>`. It owns all state (stored in SQLite at `~/.coffer/coffer.db`), aggregates upstream MCP servers, and re-exposes their tools through a unified `/mcp` HTTP/SSE endpoint.
+The **gateway** is the long-lived FastAPI daemon that runs on `127.0.0.1:8000`. It owns all control-plane state (stored in SQLite at `~/.coffer/coffer.db`), aggregates upstream MCP servers, and re-exposes their tools through a unified `/mcp` HTTP/SSE endpoint.
+
+The port is **fixed**, not scanned: with nothing configured the daemon binds exactly 8000 and refuses to start if it cannot, telling you which process holds the port. That is what makes a bookmark to the web UI keep working — and it is why your UI preferences, which the browser keys by origin, do not silently reset. Pin a different port with `coffer daemon port set <n>`; it is stored in `~/.coffer/daemon-config.json`, the one setting that has to live in a file rather than the database, because the port is chosen before the database is even opened.
 
 Because the daemon is the single writer, all registered clients see a consistent, up-to-date view of your servers. The daemon is started with `coffer daemon start` and discovered by other processes through `~/.coffer/daemon.json` (PID + port + token, mode `0600`).
 

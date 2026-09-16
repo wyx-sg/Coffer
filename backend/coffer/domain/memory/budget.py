@@ -14,8 +14,10 @@ essentially every tokenizer this content will ever pass through. English-like
 ASCII prose runs at roughly four characters per token; a CJK ideograph,
 kana or hangul syllable is usually close to its own token. Pricing both at
 one flat ratio would either wildly overcount a mostly-English digest or
-wildly undercount a mostly-Chinese one — and this codebase's own commit
-history is bilingual, so both cases are real, not hypothetical.
+wildly undercount a mostly-Chinese one. Both cases are real, not hypothetical:
+what this measures is the user's own writing — their notes, their memory facts,
+their agents' transcripts — and a vault whose owner works in Chinese produces
+digests that are mostly CJK.
 
 Being approximate is fine. Being silently unbounded — treating a
 2,000-character Chinese digest as 500 tokens when it is closer to 2,000 — is

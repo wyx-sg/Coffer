@@ -18,19 +18,19 @@ import { ApiError } from "../api/errors";
 // Event types
 // ---------------------------------------------------------------------------
 
-export interface TurnStartEvent {
+interface TurnStartEvent {
   event: "turn_start";
   // Backend TurnStarted dataclass has only `type`; no extra fields on the wire.
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   data: {};
 }
 
-export interface TextDeltaEvent {
+interface TextDeltaEvent {
   event: "text_delta";
   data: { text: string };
 }
 
-export interface ToolCallEvent {
+interface ToolCallEvent {
   event: "tool_call";
   data: {
     tool_use_id: string;
@@ -39,7 +39,7 @@ export interface ToolCallEvent {
   };
 }
 
-export interface ToolResultEvent {
+interface ToolResultEvent {
   event: "tool_result";
   data: {
     tool_use_id: string;
@@ -49,7 +49,7 @@ export interface ToolResultEvent {
   };
 }
 
-export interface TurnDoneEvent {
+interface TurnDoneEvent {
   event: "turn_done";
   // Backend TurnDone: prompt_tokens, completion_tokens, stop_reason, type.
   data: {
@@ -59,12 +59,12 @@ export interface TurnDoneEvent {
   };
 }
 
-export interface TurnErrorEvent {
+interface TurnErrorEvent {
   event: "turn_error";
   data: { code: string; message: string };
 }
 
-export interface QueueChangedEvent {
+interface QueueChangedEvent {
   event: "queue_changed";
   data: { pending: string[] };
 }

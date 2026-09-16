@@ -20,19 +20,32 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CredentialLocked
 
 
-class _CredentialStorePort(Protocol):
-    """Local structural port (kind-agnostic — mirrors resource_service's)."""
+class _LegacyStorePort(Protocol):
+    """The OS keychain this migration drains. Sync, and slow: a read can block
+    on a user prompt, so every call goes through ``asyncio.to_thread``."""
 
     def get(self, ref: str) -> str | None: ...
-    def set(self, ref: str, value: str) -> None: ...
     def delete(self, ref: str) -> None: ...
+
+
+class _StorePort(Protocol):
+    """The destination store, addressed through its async facade.
+
+    ``EncryptedCredentialStore`` mandates it: a sync read or write on the event
+    loop stalls — or deadlocks against — the aiosqlite coroutine holding the
+    write lock. This module used to hand-roll ``asyncio.to_thread`` around the
+    sync methods for its writes while calling ``get`` straight on the loop,
+    which is the drift the mandate exists to prevent."""
+
+    async def aget(self, ref: str) -> str | None: ...
+    async def aset(self, ref: str, value: str) -> None: ...
 
 
 async def migrate_legacy_keychain(
     kinds: dict[str, Any],
     repo: Any,
-    legacy: _CredentialStorePort,
-    store: _CredentialStorePort,
+    legacy: _LegacyStorePort,
+    store: _StorePort,
     audit: Any,
     *,
     extra_refs: Iterable[str] = (),
@@ -54,7 +67,7 @@ async def migrate_legacy_keychain(
         if not ref or ref in seen:
             return
         seen.add(ref)
-        if store.get(ref) is not None:
+        if await store.aget(ref) is not None:
             return
         try:
             # to_thread: keychain reads can block on user prompts.
@@ -63,10 +76,7 @@ async def migrate_legacy_keychain(
             return
         if value is None:
             return
-        # to_thread: the store write blocks on SQLite's busy_timeout; on the
-        # event loop it would freeze the coroutine holding the write lock,
-        # turning a wait into a guaranteed deadlock.
-        await asyncio.to_thread(store.set, ref, value)
+        await store.aset(ref, value)
         # The value is now safely in the store; a CredentialLocked here just
         # leaves a harmless keychain copy behind — suppress and continue
         # (it never needs retrying, the store already holds the ref).

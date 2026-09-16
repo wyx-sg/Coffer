@@ -28,9 +28,25 @@ coffer channel status mybot                                  # adapter state + p
 
 ```bash
 coffer channel notify mybot "deploy finished"        # push a message to your paired account
+coffer channel bind mybot                            # this machine runs the adapter
 ```
 
-In a paired chat, the in-chat commands `/new`, `/stop`, `/status`, and `/help` control the conversation. Channel conversations also appear on the app's **Chat** page.
+A channel is **bound to one machine**, because two daemons long-polling the same bot would each answer half your messages. `bind` sets which one, and it takes effect without a restart: the binding is config, both daemons reconcile config on their own loop, and the machine losing the channel stops its adapter within a tick of seeing the change. Run `bind` from the machine that currently holds the channel and the handover has no overlap at all.
+
+In a paired chat, these in-chat commands control the conversation:
+
+| Command   | What it does                                                        |
+| --------- | ------------------------------------------------------------------- |
+| `/help`, `/start` | What this bot understands.                                  |
+| `/new`    | Start a fresh conversation.                                         |
+| `/agent`  | Switch which agent answers in this chat.                            |
+| `/model`  | Switch the model that agent runs on.                                |
+| `/effort` | Switch the thinking effort.                                         |
+| `/stop`   | Interrupt the turn in flight.                                       |
+| `/save`   | Save what the agent produced as a document.                         |
+| `/status` | Which conversation this chat is bound to, and whether a turn is running. |
+
+Channel conversations also appear on the app's **Chat** page.
 
 The **Channels** page in the app does the same without the terminal: add a channel (store its secret and register in one step), pair, toggle it on or off, and send a test message from the channel detail page.
 

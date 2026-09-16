@@ -17,8 +17,15 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=500"]
 
+  # Keep this rev equal to the ruff version backend/uv.lock pins, which is the
+  # one `make lint` / `make format` / CI run. Two ruff versions on the same
+  # code is how the hook and `make format` end up undoing each other, and a
+  # rev below the `ruff>=0.16.0` floor in backend/pyproject.toml is that by
+  # construction. (The previous pin, v0.15.14, was not even a real tag — that
+  # series ends at v0.15.9 — so `pre-commit` could not install this repo at
+  # all.)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.14
+    rev: v0.16.6
     hooks:
       - id: ruff
         args: [--fix]
@@ -34,8 +41,7 @@ repos:
         exclude: |
           (?x)^(
             frontend/package-lock\.json|
-            e2e/package-lock\.json|
-            .*\.test/openapi\.json
+            e2e/package-lock\.json
           )$
 
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook

@@ -34,7 +34,7 @@ class AuditEventType(StrEnum):
     AGENT_CONFIG_FILE_WRITTEN = "agent_config_file_written"
     AGENT_MCP_INSTALLED = "agent_mcp_installed"
     AGENT_MCP_UNINSTALLED = "agent_mcp_uninstalled"
-    # agent workspace (specs agent-registry/005 amendment)
+    # agent workspace (spec agent-registry, amended)
     AGENT_CONFIG_FILE_DELETED = "agent_config_file_deleted"
     AGENT_MCP_ENTRY_REMOVED = "agent_mcp_entry_removed"
     AGENT_MCP_ENTRY_ADOPTED = "agent_mcp_entry_adopted"
@@ -70,8 +70,6 @@ class AuditEventType(StrEnum):
     SYNC_REJECTED = "sync_rejected"
     SYNC_ROLLED_BACK = "sync_rolled_back"
     SYNC_MACHINE_REMOVED = "sync_machine_removed"
-    # spec mcp-gateway FR-028
-    DAEMON_PORT_SET = "daemon_port_set"
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"

@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { mcpStatusKey } from "@/lib/api/queryKeys";
 
-export type McpServerStatus = "healthy" | "failing";
+type McpServerStatus = "healthy" | "failing";
 
 interface ServerStatusRead {
   /** `null` = nothing known yet, so the card shows no badge. */

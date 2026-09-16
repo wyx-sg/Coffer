@@ -11,24 +11,20 @@
 //
 // The catalogue, file and tidy shapes are the knowledge contract's generated
 // schemas (`specs/knowledge/contracts/api.openapi.yaml` → `generated/knowledge.ts`)
-// under the names the hooks and pages already import. Search and upload stay
-// hand-written: the contract exposes `/knowledge/grep` (a flat match list)
-// where the daemon serves `/knowledge/search` (hits grouped per file), and has
-// no `/knowledge/upload` route at all.
+// under the names the hooks and pages already import. Upload's shapes are the
+// exception and stay hand-written here.
+//
+// There is no search type in this file because there is no search in the UI:
+// the filter box over a collection is client-side and name-only
+// (`lib/knowledge/filter.ts`), and retrieval over file BODIES is the agents'
+// surface (`coffer__search`) and the CLI's. `/knowledge/search` being in the
+// contract is therefore not a shape this frontend is missing.
 import type { components } from "@/lib/api/generated/knowledge";
 
 type Schemas = components["schemas"];
 
 /** One file's frontmatter + body, plus the absolute paths for file actions. */
 export type FileOut = Schemas["FileOut"];
-
-/**
- * Who wrote a file, from its frontmatter. Mirrors the backend
- * `coffer.domain.knowledge.Actor`. This is the authorship vocabulary —
- * distinct from the broader audit-log actor vocabulary (request origins
- * `ui`/`cli`/`api` plus the domain actors) rendered via `audit.actor.*`.
- */
-export type KnowledgeActor = FileOut["actor"];
 
 /**
  * One collection: a top-level folder, described by its own `README.md`.
@@ -49,10 +45,8 @@ export interface CollectionListOut {
 }
 
 /** An immediate subdirectory of the listed level. */
-export type TreeDirectoryOut = Schemas["DirectoryOut"];
 
 /** A Markdown file at the listed level, with its frontmatter metadata. */
-export type TreeFileOut = Schemas["FileSummaryOut"];
 
 /** One level of the catalogue — the tree descends a level per request (FR-021). */
 export type TreeOut = Schemas["TreeOut"];

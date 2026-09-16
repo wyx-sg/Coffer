@@ -25,9 +25,5 @@ class Attachment:
     def is_image(self) -> bool:
         return self.mime.startswith("image/")
 
-    @property
-    def is_pdf(self) -> bool:
-        return self.mime == "application/pdf"
-
 
 __all__ = ["Attachment"]

@@ -727,6 +727,7 @@ class ChannelEnv:
         return ChannelService(
             resources=self.resources,
             peers=self.peers,
+            threads=self.threads,
             pairing=self.pairing,
             runtime=runtime,
             audit=self.audit,
@@ -769,7 +770,6 @@ class ChannelEnv:
             chat_id=chat_id,
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
-            active_conversation_id=None,
             sender_id=sender_id,
         )
         await self.peers.upsert(peer)
@@ -913,7 +913,12 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
     kinds["agent"] = Kind(name="agent", display_name="Agent", config_schema=AgentConfig)
 
     service = ChannelService(
-        resources=resources, peers=peers, pairing=pairing, runtime=runtime, audit=audit
+        resources=resources,
+        peers=peers,
+        threads=threads,
+        pairing=pairing,
+        runtime=runtime,
+        audit=audit,
     )
     return ChannelEnv(
         adapter_factory=adapter_factory,

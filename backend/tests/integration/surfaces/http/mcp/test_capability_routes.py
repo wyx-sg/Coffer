@@ -417,7 +417,8 @@ async def test_list_capabilities_falls_back_to_cached_prefs_when_upstream_unavai
             assert r.json()["from_cache"] is False
             # ...disable one tool so we can prove the flag survives the fallback.
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/disable"
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                json={"capability_key": "write_file"},
             )
             assert r.status_code == 204, r.text
 
@@ -534,7 +535,8 @@ async def test_enable_disable_capability_flips_preference(
 
             # Disable write_file
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/disable"
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                json={"capability_key": "write_file"},
             )
             assert r.status_code == 204, r.text
 
@@ -550,7 +552,8 @@ async def test_enable_disable_capability_flips_preference(
 
             # Re-enable write_file
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/enable"
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/enable",
+                json={"capability_key": "write_file"},
             )
             assert r.status_code == 204, r.text
 
@@ -580,7 +583,8 @@ async def test_enable_unknown_capability_returns_404(
         ) as client:
             # Enable before discovery has ever run → preference row doesn't exist
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/nonexistent_tool/enable"
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/enable",
+                json={"capability_key": "nonexistent_tool"},
             )
             assert r.status_code == 404
     finally:
@@ -603,7 +607,8 @@ async def test_disable_unknown_capability_returns_404(
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/ghost_tool/disable"
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                json={"capability_key": "ghost_tool"},
             )
             assert r.status_code == 404
     finally:
@@ -637,7 +642,8 @@ async def test_refresh_invalidates_cache_and_returns_fresh_list(
 
             # Disable one tool
             await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/disable"
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                json={"capability_key": "write_file"},
             )
 
             # Refresh: invalidates cache, re-queries, re-applies preferences.
@@ -837,14 +843,18 @@ async def test_enable_capability_creates_audit_event(
 
             # Disable → audit event
             await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/disable"
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                json={"capability_key": "write_file"},
             )
             events = await audit.query(event_type="capability_disabled")
             assert len(events) == 1
             assert events[0].details["capability_key"] == "write_file"
 
             # Enable → audit event
-            await client.post("/api/v1/resources/mcp_server/fs/capabilities/tool/write_file/enable")
+            await client.post(
+                "/api/v1/resources/mcp_server/fs/capabilities/tool/enable",
+                json={"capability_key": "write_file"},
+            )
             events = await audit.query(event_type="capability_enabled")
             assert len(events) == 1
             assert events[0].details["capability_key"] == "write_file"

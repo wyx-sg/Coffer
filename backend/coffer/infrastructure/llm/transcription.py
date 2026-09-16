@@ -1,8 +1,7 @@
 """Remote speech-to-text over an OpenAI-compatible ``/audio/transcriptions``.
 
-Coffer used to transcribe voice locally, bundling a ``whisper.cpp`` sidecar
-built from source in CI (a decision since retired). That was the heaviest build
-dependency in the project by a wide margin, for a feature a remote endpoint
+Transcription is remote because a local engine would be this project's
+heaviest build dependency by a wide margin, for a feature a remote endpoint
 does at least as well.
 
 **This is the one place user content may leave the machine, and it is off by

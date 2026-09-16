@@ -13,13 +13,13 @@
 // so there is nothing to browse — the only structure worth showing is the
 // dialogue itself.
 import { useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft } from "lucide-react";
 
 import { AgentTranscriptOutline } from "@/components/agents/AgentTranscriptOutline";
 import { AgentTranscriptView } from "@/components/agents/AgentTranscriptView";
 import { FileActions } from "@/components/FileActions";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
@@ -28,31 +28,19 @@ import { TRANSCRIPT_TURNS_PAGE_SIZE, useTranscriptSession } from "@/lib/hooks/us
 export function AgentConversationPage() {
   const { t } = useTranslation();
   const { name = "" } = useParams<{ name: string }>();
-  const navigate = useNavigate();
   const sourcePath = useSearchParams()[0].get("path") ?? "";
   const [offset, setOffset] = useState(0);
   const { data, isPending, error } = useTranscriptSession(name, sourcePath, offset);
 
-  const backToTab = () => navigate(`/agents/${encodeURIComponent(name)}?tab=conversations`);
-
-  const back = (
-    <div className="-ml-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={backToTab}
-        className="text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="mr-1.5 size-4" />
-        {t("common.backTo", { label: t("agents.workspace.conversations") })}
-      </Button>
-    </div>
-  );
+  const back = {
+    to: `/agents/${encodeURIComponent(name)}?tab=conversations`,
+    label: t("common.backTo", { label: t("agents.workspace.conversations") }),
+  };
 
   if (isPending) {
     return (
       <div className="space-y-6">
-        {back}
+        <PageHeader back={back} title={name} />
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             {t("common.loading")}
@@ -64,7 +52,7 @@ export function AgentConversationPage() {
   if (error || !data) {
     return (
       <div className="space-y-6">
-        {back}
+        <PageHeader back={back} title={name} />
         <Card className="border-destructive/40">
           <CardContent className="space-y-3 py-6">
             <p className="text-sm text-destructive" role="alert">
@@ -81,25 +69,30 @@ export function AgentConversationPage() {
 
   return (
     <div className="space-y-6">
-      {back}
-
-      <header className="space-y-2">
-        <h1 className="font-serif text-2xl tracking-tight">{data.title ?? data.session_id}</h1>
-        {data.project_path ? (
-          <p className="font-mono text-xs text-muted-foreground">{data.project_path}</p>
-        ) : null}
-        <p className="text-xs text-muted-foreground">
-          {/* The window and the whole are separate numbers on purpose: a reader
-              looking at the first 200 turns of 812 should be told so. */}
-          {t("agents.conversationDetail.turnRange", {
-            from: data.offset + 1,
-            to: data.offset + shown,
-            total: data.message_count,
-          })}
-          {data.last_activity_at ? ` · ${new Date(data.last_activity_at).toLocaleString()}` : ""}
-        </p>
-        <FileActions filePath={data.source_path} />
-      </header>
+      <PageHeader
+        back={back}
+        title={data.title ?? data.session_id}
+        subtitle={
+          <>
+            {data.project_path ? (
+              <span className="block break-all font-mono text-xs">{data.project_path}</span>
+            ) : null}
+            <span className="block text-xs">
+              {/* The window and the whole are separate numbers on purpose: a
+                  reader looking at the first 200 turns of 812 should be told so. */}
+              {t("agents.conversationDetail.turnRange", {
+                from: data.offset + 1,
+                to: data.offset + shown,
+                total: data.message_count,
+              })}
+              {data.last_activity_at
+                ? ` · ${new Date(data.last_activity_at).toLocaleString()}`
+                : ""}
+            </span>
+          </>
+        }
+        actions={<FileActions filePath={data.source_path} />}
+      />
 
       {/* Contents on the left, the conversation in its own frame on the right
           — the same two-pane shape every other detail surface here uses. The

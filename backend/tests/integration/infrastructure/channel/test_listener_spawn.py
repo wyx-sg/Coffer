@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import socket
 import sys
 from pathlib import Path
 
@@ -22,12 +21,7 @@ from coffer.infrastructure.channel.listener_spawn import (
     CallbackListenerController,
     _listener_command,
 )
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
+from tests.fixtures.net import free_port
 
 
 def _pidfiles(home: Path) -> list[Path]:
@@ -83,7 +77,7 @@ def test_listener_command_resolves_module_entrypoint_for_source_installs() -> No
     spec="channels", scenario="the callback listener answers the verification handshake"
 )
 async def test_spawned_listener_answers_verification_handshake(home: Path) -> None:
-    port = _free_port()
+    port = free_port()
     controller = _controller(port)
     try:
         await controller.ensure_running({"ch": "s3cret"})
@@ -127,7 +121,7 @@ async def test_spawned_listener_answers_verification_handshake(home: Path) -> No
 
 
 async def test_ensure_running_is_idempotent_and_restarts_on_secret_change(home: Path) -> None:
-    port = _free_port()
+    port = free_port()
     controller = _controller(port)
     try:
         await controller.ensure_running({"ch": "one"})

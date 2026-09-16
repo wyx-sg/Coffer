@@ -2,7 +2,7 @@
 
 Layout::
 
-    manifest.json                  # bundle schema version + creation time
+    manifest.json                  # layout schema version; read before an apply
     knowledge/ skills/             # mirrors of the live file-backed trees
     resources/<kind>/<name>.yaml   # one deterministic file per synced resource
     state/<area>/...yaml           # module-owned shared state
@@ -33,14 +33,13 @@ from typing import Any
 import yaml
 
 from coffer.domain.sync.errors import SyncBundleInvalid, SyncSerializationError
-from coffer.domain.sync.manifest import Manifest
+from coffer.domain.sync.manifest import MANIFEST_PATH, Manifest
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
 from coffer.infrastructure.sync.tree_mirror import _converge_files, _mirror_tree
 
 _logger = logging.getLogger(__name__)
 
-_MANIFEST = "manifest.json"
 _RESOURCES = "resources"
 _CREDENTIALS = "credentials"
 _STATE = "state"
@@ -170,7 +169,10 @@ class Bundle:
 
     def write_manifest(self, manifest: Manifest) -> None:
         self._root.mkdir(parents=True, exist_ok=True)
-        (self._root / _MANIFEST).write_text(
+        # ``MANIFEST_PATH`` rather than a literal: the version gate reads this
+        # same path out of the remote, and a writer and a reader that disagree
+        # about the name make the gate guard nothing.
+        (self._root / MANIFEST_PATH).write_text(
             json.dumps(manifest.to_dict(), sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
         )

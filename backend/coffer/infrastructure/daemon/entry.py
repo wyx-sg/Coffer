@@ -167,10 +167,6 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
 
 
 def main() -> None:
-    # sqlite-vec availability is reported by the daemon's /daemon/status endpoint
-    # (vec_available) and asserted by the bundle smoke test against the running
-    # frozen binary — not via an argv probe here, so this module never imports
-    # the knowledge engine (engine-confinement contract).
     _raise_fd_soft_limit()
     _install_signal_handlers()
     # Detect-or-spawn: probe + bind happen under one flock (acquire_or_existing). If a

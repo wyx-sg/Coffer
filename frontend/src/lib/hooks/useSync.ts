@@ -4,12 +4,13 @@
 // half (spec vault-sync). The machine registry lives in `useMachines.ts`,
 // because it is the other tab and has its own invalidation story.
 //
-// Two queries on purpose: `GET /sync/remote` is the configuration the form
-// edits, and `GET /sync/status` carries the last round plus this machine's id,
-// which the form never writes. Anything that can change the round — running
-// one, confirming or rejecting a held one, rolling one back — invalidates the
-// status, the registry (a round republishes descriptors), and the resource
-// caches a round can have rewritten underneath the page.
+// One query for the whole card: `GET /sync/status` carries the remote, the
+// last round and this machine's id together, so the form reads the remote out
+// of the status it already has rather than fetching the same record twice.
+// Anything that can change the round — running one, confirming or rejecting a
+// held one — invalidates the status, the registry (a round republishes
+// descriptors), and the resource caches a round can have rewritten underneath
+// the page.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -23,14 +24,9 @@ import {
   skillsKey,
   syncKey,
   syncKeyFingerprintKey,
-  syncRemoteKey,
   syncRunsKey,
   syncStatusKey,
 } from "@/lib/api/queryKeys";
-
-export function useSyncRemote() {
-  return useQuery({ queryKey: syncRemoteKey, queryFn: () => syncApi.getRemote() });
-}
 
 export function useSyncStatus() {
   return useQuery({ queryKey: syncStatusKey, queryFn: () => syncApi.status() });

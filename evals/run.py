@@ -79,12 +79,8 @@ def _evaluate(report: dict, *, update: bool) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run Coffer eval suites.")
-    parser.add_argument(
-        "--routing", action="store_true", help="also run the tool-routing suite"
-    )
-    parser.add_argument(
-        "--update-baseline", action="store_true", help="record current as baseline"
-    )
+    parser.add_argument("--routing", action="store_true", help="also run the tool-routing suite")
+    parser.add_argument("--update-baseline", action="store_true", help="record current as baseline")
     parser.add_argument("--top-k", type=int, default=3)
     args = parser.parse_args(argv)
 
@@ -93,9 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.routing:
         routing = run_routing_eval()
         if routing is None:
-            print(
-                "\n[routing] skipped — no local LLM reachable (set OLLAMA_URL/OLLAMA_MODEL)."
-            )
+            print("\n[routing] skipped — no local LLM reachable (set OLLAMA_URL/OLLAMA_MODEL).")
         else:
             reports.append(routing)
 

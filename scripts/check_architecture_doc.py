@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Keep `.specify/memory/architecture.md` (+ `.zh.md`) level with the tree.
+"""Keep `.specify/memory/architecture.md` level with the tree.
 
 Two things drift silently in that document, and both have: the code-layout
 tree (packages get added, moved or deleted without the tree following) and
 the builtin-tool roster (a slice registers a tool the document never names).
 This gate fails `make lint` on either.
 
-Checks, for each of the two documents:
+Checks:
 
   1. Every package directory one level under `backend/coffer/{domain,
      application,infrastructure,surfaces}` is named, under its own layer, in
@@ -29,10 +29,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_ROOT = REPO_ROOT / "backend" / "coffer"
 LAYERS = ("domain", "application", "infrastructure", "surfaces")
-DOCS = (
-    REPO_ROOT / ".specify" / "memory" / "architecture.md",
-    REPO_ROOT / ".specify" / "memory" / "architecture.zh.md",
-)
+DOCS = (REPO_ROOT / ".specify" / "memory" / "architecture.md",)
 TOOL_PREFIX = "coffer__"
 _SKIP_DIRS = {"__pycache__"}
 _TOOL_DECL = re.compile(r"BuiltinTool\(\s*name=\"([a-z_]+)\"")
@@ -154,7 +151,7 @@ def main() -> int:
         return 1
     n_pkgs = sum(len(v) for v in on_disk.values())
     print(
-        f"check_architecture_doc: OK — {n_pkgs} packages and {len(tools)} builtin tools named in both docs"
+        f"check_architecture_doc: OK — {n_pkgs} packages and {len(tools)} builtin tools named in the document"
     )
     return 0
 

@@ -11,7 +11,7 @@ The hub (``dependencies``) is kind-agnostic; every kind publishes its own
 pairs from its own module. All of them are enumerated here, and a guard test
 fails the moment a module grows a ``set_*`` this table does not list.
 
-get_actor() validation lives in test_pr14_fixes.py and is not duplicated here.
+get_actor() validation lives in test_actor_header.py and is not duplicated here.
 """
 
 from __future__ import annotations
@@ -59,7 +59,6 @@ _PROVIDERS: list[_Provider] = [
         mcp_deps,
         "_mcp_session_factory",
         "_capability_discovery",
-        "_supervisor",
         "_preferences_repo",
         "_invocation_repo",
         "_health_repo",

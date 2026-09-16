@@ -46,5 +46,13 @@
 [GOVERNANCE_RULES]
 <!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: [CONSTITUTION_VERSION]
+<!--
+  Example: **Version**: 0.6.2
+
+  One field, not three. The live constitution carries the version and nothing
+  else: ratification and amendment dates would be a second chronology beside
+  the amendment notes that follow the field, each of which already states what
+  changed and why. Every amendment appends such a note and bumps this version
+  (see the Governance section of `.specify/memory/constitution.md`).
+-->

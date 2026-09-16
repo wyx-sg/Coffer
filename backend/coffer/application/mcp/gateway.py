@@ -16,7 +16,7 @@ enabled-server list lives in `gateway_scope`.
 
 For the spec's "upstream tool list changes mid-session" scenario, the
 session subscribes to each upstream's notification stream (via
-`UpstreamConnection.on_notification`) and forwards the relevant
+`UpstreamConnectionPort.on_notification`) and forwards the relevant
 list-changed messages downstream while invalidating the discovery
 cache.
 """

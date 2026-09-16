@@ -29,7 +29,10 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.envelopes import SentMessage
 from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import Scope
-from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+from coffer.infrastructure.channel.persistence import (
+    ChannelPeerRepo,
+    ChannelThreadConversationRepo,
+)
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas, session_maker
@@ -81,6 +84,16 @@ class _StubRuntime:
         self.adapters: dict[str, _StubAdapter] = {}
         self.listener_port = 8787
         self.listener_running = True
+        #: name -> (state, last error), as ``ChannelRuntime.websocket_state``
+        #: answers for a websocket-delivery SeaTalk channel.
+        self.websocket_states: dict[str, str] = {}
+        self.websocket_errors: dict[str, str] = {}
+
+    def websocket_state(self, name: str) -> tuple[str, str | None] | None:
+        state = self.websocket_states.get(name)
+        if state is None:
+            return None
+        return state, self.websocket_errors.get(name)
 
     def is_running(self, name: str) -> bool:
         return name in self.adapters
@@ -114,7 +127,6 @@ class _Daemon:
                     chat_id=chat_id,
                     display_name="Yu",
                     paired_at=dt.now(tz=UTC),
-                    active_conversation_id=None,
                 )
             )
         )
@@ -140,10 +152,16 @@ def channel_daemon(tmp_path, monkeypatch):
         credentials=keyring,
     )
     peers = ChannelPeerRepo(sm)
+    threads = ChannelThreadConversationRepo(sm)
     pairing = PairingManager()
     runtime = _StubRuntime()
     service = ChannelService(
-        resources=resources, peers=peers, pairing=pairing, runtime=runtime, audit=audit
+        resources=resources,
+        peers=peers,
+        threads=threads,
+        pairing=pairing,
+        runtime=runtime,
+        audit=audit,
     )
 
     fapp = FastAPI()
@@ -193,23 +211,25 @@ def _register_tg(name: str = "tg") -> Any:
     )
 
 
-def _register_st(name: str = "st") -> Any:
-    return runner.invoke(
-        app,
-        [
-            "channel",
-            "register",
-            name,
-            "--type",
-            "seatalk",
-            "--app-id",
-            "app-1",
-            "--app-secret-ref",
-            _ST_SECRET_REF,
-            "--signing-secret-ref",
-            _ST_SIGNING_REF,
-        ],
-    )
+def _register_st(name: str = "st", *, delivery: str = "webhook") -> Any:
+    argv = [
+        "channel",
+        "register",
+        name,
+        "--type",
+        "seatalk",
+        "--app-id",
+        "app-1",
+        "--app-secret-ref",
+        _ST_SECRET_REF,
+        "--delivery",
+        delivery,
+    ]
+    if delivery == "webhook":
+        # Only webhook delivery has anything signed to verify (FR-071); the CLI
+        # refuses the flag on websocket delivery.
+        argv += ["--signing-secret-ref", _ST_SIGNING_REF]
+    return runner.invoke(app, argv)
 
 
 def _listed_names(daemon: _Daemon) -> list[str]:
@@ -380,7 +400,10 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
     assert "running: True" in r.output
     assert "no pending code" in r.output
     assert "peer:     Yu (chat emp-1)" in r.output
-    assert "callback: 127.0.0.1:8787/seatalk/st (listener up)" in r.output
+    assert "inbound:  webhook 127.0.0.1:8787/seatalk/st (listener up)" in r.output
+    # FR-071: not managed is said, not left blank — the owner may front the
+    # callback themselves and needs to know Coffer is not doing it.
+    assert "tunnel:   not managed by Coffer" in r.output
 
     as_json = runner.invoke(app, ["channel", "status", "st", "--json"])
     assert as_json.exit_code == 0, as_json.output
@@ -397,6 +420,48 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
         "websocket_state": None,
         "websocket_error": None,
     }
+
+
+@pytest.mark.acceptance(
+    spec="channels",
+    scenario="status reports webhook-only facts as absent rather than as defaults",
+)
+def test_status_of_a_websocket_channel_reports_no_webhook_facts(
+    channel_daemon: _Daemon,
+) -> None:
+    """FR-071. The service reports ``port=0`` / ``listener_running=False`` /
+    ``path=""`` for a websocket channel deliberately — there is no listener to
+    have. The CLI used to render those as ``callback: 127.0.0.1:0 (listener
+    down)``, i.e. a healthy channel described as broken ingress at a port
+    nothing is on.
+    """
+    assert _register_st(delivery="websocket").exit_code == 0
+    channel_daemon.runtime.adapters["st"] = _StubAdapter()
+    channel_daemon.runtime.websocket_states["st"] = "connected"
+
+    r = runner.invoke(app, ["channel", "status", "st"])
+    assert r.exit_code == 0, r.output
+    assert "inbound:  websocket (connected)" in r.output
+    assert "127.0.0.1:0" not in r.output
+    assert "listener" not in r.output
+    assert "tunnel:" not in r.output
+
+
+def test_status_of_a_websocket_channel_prints_its_error_verbatim(
+    channel_daemon: _Daemon,
+) -> None:
+    """The two websocket failures that matter — no SDK installed, another
+    process already holding the connection — are only actionable if the owner
+    can read them."""
+    assert _register_st(delivery="websocket").exit_code == 0
+    channel_daemon.runtime.adapters["st"] = _StubAdapter()
+    channel_daemon.runtime.websocket_states["st"] = "kicked"
+    channel_daemon.runtime.websocket_errors["st"] = "another connection took over"
+
+    r = runner.invoke(app, ["channel", "status", "st"])
+    assert r.exit_code == 0, r.output
+    assert "inbound:  websocket (kicked)" in r.output
+    assert "ws error: another connection took over" in r.output
 
 
 def test_status_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:

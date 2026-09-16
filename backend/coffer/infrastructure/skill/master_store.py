@@ -25,11 +25,10 @@ from datetime import UTC, datetime
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_.\-]+$")
 _NAME_MAX_LEN = 64
 
-# Never copy a `.git` directory into the canonical store. A git-sourced skill
-# fetched with an empty subpath is the whole repository, so an unfiltered
-# copytree would drag the entire `.git` history into ``~/.coffer/skills/<name>/``.
-# Applying the ignore unconditionally is also correct for local imports, where
-# a stray `.git` is likewise unwanted in the managed copy.
+# Never copy a `.git` directory into the canonical store: a skill imported from
+# a path inside a checkout would otherwise drag that repository's whole history
+# into ``~/.coffer/skills/<name>/``, and the managed copy is a snapshot, not a
+# working tree.
 _IGNORE_VCS = shutil.ignore_patterns(".git")
 
 
@@ -86,11 +85,6 @@ class MasterStore:
 
     def exists(self, name: str) -> bool:
         return self.paths_for(name).folder.is_dir()
-
-    def list_names(self) -> list[str]:
-        if not self._root.is_dir():
-            return []
-        return sorted(p.name for p in self._root.iterdir() if p.is_dir())
 
     def copy_in(
         self,

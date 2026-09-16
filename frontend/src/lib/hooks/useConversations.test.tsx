@@ -10,7 +10,6 @@ import {
   useCreateConversation,
   useRenameConversation,
   useDeleteConversation,
-  useSetConversationModel,
 } from "./useConversations";
 import type { Conversation } from "@/lib/api/chat";
 
@@ -47,7 +46,6 @@ function makeConversation(overrides?: Partial<Conversation>): Conversation {
     id: "conv-1",
     agent_key: "claude_code",
     title: "Test Conversation",
-    model_id: null,
     created_at: "2026-05-22T00:00:00Z",
     updated_at: "2026-05-22T00:00:00Z",
     ...overrides,
@@ -204,31 +202,6 @@ describe("useRenameConversation", () => {
     });
 
     expect(chatApiMock.updateConversation).toHaveBeenCalledWith("conv-1", { title: "New Name" });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-  });
-});
-
-describe("useSetConversationModel", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  test("calls updateConversation with model_id", async () => {
-    const updated = makeConversation({ model_id: "model-x" });
-    chatApiMock.updateConversation.mockResolvedValue(updated);
-    chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
-
-    const { result } = renderHook(() => useSetConversationModel(), {
-      wrapper: makeWrapper(),
-    });
-
-    await act(async () => {
-      await result.current.mutateAsync({ id: "conv-1", model_id: "model-x" });
-    });
-
-    expect(chatApiMock.updateConversation).toHaveBeenCalledWith("conv-1", {
-      model_id: "model-x",
-    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
   });
 });

@@ -140,8 +140,17 @@ def _strip_span(text: str, offset: int, length: int) -> str:
 
 def _forward_sender_name(message: dict[str, Any]) -> str:
     """Best-effort display name for a forwarded message's original sender,
-    across both the modern ``forward_origin`` shape and the legacy
-    ``forward_from`` / ``forward_sender_name`` fields it replaced."""
+    across both the modern ``forward_origin`` shape and the pre-Bot-API-7
+    ``forward_from`` / ``forward_sender_name`` fields it replaced.
+
+    The old fields are KEPT deliberately, as of 2026-09. Telegram's own cloud
+    stopped sending them at Bot API 7.0, but a channel may point at a
+    self-hosted Bot API server of any vintage — which is the same reason
+    ``telegram.py`` treats its 10.x capabilities as per-adapter and
+    ``telegram_draft.py`` latches a feature off when a server has never heard
+    of it. Two fields of tolerance against a forwarded message rendered with
+    no sender name. Drop them when the adapter stops supporting self-hosted
+    servers, not before."""
     origin = message.get("forward_origin")
     if isinstance(origin, dict):
         otype = origin.get("type")

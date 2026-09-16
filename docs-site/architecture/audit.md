@@ -57,7 +57,7 @@ Every change to any resource or capability is written to the `audit_log` table b
 
 The actor field deserves particular attention. Every surface sets it explicitly: the Typer CLI passes `X-Coffer-Actor: cli` in its HTTP calls to the daemon; REST API clients can set `X-Coffer-Actor: api` or `X-Coffer-Actor: ui`; if the header is absent, the daemon defaults to `"api"`. The daemon itself emits `system` events for automated operations like retention cleanup. This means the audit log provides an accurate picture of whether a change was initiated interactively, programmatically, or automatically.
 
-The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`), grouped by domain. There are 39, and the list is deliberately short — see [What is worth auditing](#what-is-worth-auditing) below.
+The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`), grouped by domain. There are **53** at the time of writing, and the list is deliberately short — see [What is worth auditing](#what-is-worth-auditing) below. The enum is the authority; when this page and it disagree, it is this page that is wrong.
 
 **Resource & capability:**
 
@@ -67,6 +67,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `resource_updated`                           | After config or description change                                 |
 | `resource_enabled` / `resource_disabled`     | After `set_enabled` when state actually flipped                    |
 | `resource_deleted`                           | After `delete`; includes a pre-delete config snapshot in `details` |
+| `resource_renamed`                           | When a resource moves to a new name — its identity, not its config, changed |
 | `resource_scope_updated`                     | When a resource's per-agent activation scope changes               |
 | `capability_enabled` / `capability_disabled` | When a user toggles a capability                                   |
 
@@ -76,8 +77,9 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | ----------------------------- | --------------------------------------------- |
 | `token_rotated`               | After `POST /api/v1/daemon/rotate-token`      |
 | `retention_updated`           | When a retention policy is changed            |
-| `embedding_config_updated`    | When the embedding provider/model is changed  |
 | `internal_engine_model_set`   | When the internal engine's model is chosen    |
+
+The daemon's **port** is a deliberate non-entry here. It is process configuration read before the database opens, and `coffer daemon port` must work with no daemon running — so the audit table is unreachable on exactly the path that matters most. Recording a change only when a daemon happened to be up would be less honest than recording none, so a `daemon_port_set` event existed briefly and was removed with its rows (revision `0069`).
 
 **Credentials & master key:**
 
@@ -87,7 +89,6 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `credential_migrated`                                       | Per ref, when a legacy keychain secret is migrated into the store |
 | `master_key_relocated`                                      | After the master key moves between file and keychain storage      |
 | `master_key_exported` / `master_key_imported`               | Out-of-band master-key transfer to / from another machine         |
-| `vault_backed_up`                                           | After each backup run, with its status and commit — never the push credential and never git's raw error text |
 
 **Agent workspace** — every one of these writes a file Coffer does not own:
 
@@ -97,6 +98,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | `agent_mcp_installed` / `agent_mcp_uninstalled`            | When Coffer's MCP entry is installed into / removed from an agent       |
 | `agent_mcp_entry_removed`                                  | When an MCP entry is deleted from an agent's own config file             |
 | `agent_mcp_entry_adopted`                                  | When an MCP entry found in an agent's own config is adopted into Coffer  |
+| `agent_plugin_toggled` / `agent_plugin_uninstalled`        | When one of the agent's own plugins is enabled/disabled, or removed      |
 
 **Skill:**
 
@@ -112,14 +114,24 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 
 | Event                 | Trigger                                             |
 | --------------------- | --------------------------------------------------- |
-| `kb_document_deleted` | When an ingested document is deleted                 |
-| `memory_deleted`      | When a note is deleted                               |
-| `memory_cleared`      | When a knowledge scope's notes are cleared           |
-| `knowledge_tidied`    | When a tidy pass rewrote or archived at least one note |
+| `knowledge_written`   | When a file is created or replaced in a collection   |
+| `knowledge_deleted`   | When a knowledge file is deleted                     |
+| `knowledge_tidied`    | When a tidy pass rewrote or archived at least one file |
 
-The `kb_*` and `memory_*` prefixes are historical: they were the wire values before the two kinds merged into `knowledge`, and they are kept verbatim so existing audit rows and queries stay valid.
+The `kb_*` prefix that once appeared here is gone entirely, not merely deprecated: those values were the wire form before the `knowledge_base` and `memory` kinds merged into `knowledge`, and revisions `0055` and `0077` purged the rows along with the enum members. An event type nothing can label costs more in `coffer__diagnose` than the record is worth.
 
 `knowledge_tidied` is the exception to the rule that recomputation is not audited (below). The tidy pass runs unattended, on a timer, and an LLM rewrites text the user and their agents wrote — that is a change to content, not a recomputation of a derived index, and the prior revision it archived into `.history/` is the only way back. Its `details` carry the note counts before and after, how many notes were written and archived, and the model that did it. A pass that wrote and archived nothing records nothing, so the interval sweep does not bury the passes that mattered.
+
+**Memory** — the derived tree, and the hook Coffer installs in someone else's settings file:
+
+| Event                                                     | Trigger                                                                |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `memory_aggregated`                                       | When an aggregation pass re-derived the tree from the agents' own memory |
+| `memory_organised`                                        | When an organise pass rewrote a partition                               |
+| `memory_delivery_installed` / `memory_delivery_removed`   | When Coffer's session-start hook is written into / removed from an agent's settings |
+| `memory_delivery_fired`                                   | When that hook actually ran — which is the only thing that distinguishes an installed hook from no feature at all |
+
+The `memory_*` prefix here belongs to today's `memory` kind. It is **not** the retired `memory_added` / `memory_deleted` / `memory_cleared` family, which described knowledge notes and was purged with the merge. `memory_override_set` and `memory_override_cleared` went the same way in revision `0078`, with the per-fact decisions they recorded.
 
 **Channel:**
 
@@ -133,8 +145,18 @@ The `kb_*` and `memory_*` prefixes are historical: they were the wire values bef
 | ------------------------------- | ----------------------------------------------------------- |
 | `provider_switched`             | When a connection is projected into an agent's native config |
 | `provider_internal_default_set` | When a connection becomes Coffer's internal engine           |
+| `provider_projection_refused`   | When a projection write refused because the agent's native config file changed on disk between Coffer's read and its write (optimistic concurrency) |
 
-**Export / import:** the resource writes an import performs are recorded as ordinary resource lifecycle events, so an imported change is as traceable as one made by hand. There are no configuration or conflict events, because there is no sync configuration and no conflict state ([Vault Export and Import](/reference/adr/vault-sync)).
+**Sync** ([Vault Sync](/reference/adr/vault-sync)) — the vault converges bidirectionally with a git remote the user owns, so both the rounds and the decisions about them are recorded:
+
+| Event                  | Trigger                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `sync_run`             | After a converge round, with its outcome                                       |
+| `sync_confirmed` / `sync_rejected` | When the user accepts or declines a round that stopped to ask — an oversized deletion, say |
+| `sync_rolled_back`     | When a round is undone                                                         |
+| `sync_machine_removed` | When a machine is dropped from the set converging on this remote               |
+
+The resource writes a converge round performs are *also* recorded as ordinary resource lifecycle events, so a change that arrived from another machine is as traceable as one made by hand.
 
 ## What is worth auditing
 
@@ -212,6 +234,7 @@ One row per registered prunable policy. Default values seeded at first daemon st
 | ----------------------- | ------------------------------------------ | -------- |
 | `audit_log`             | Delete rows older than the window          | 365 days |
 | `mcp_invocations`       | Delete rows older than the window          | 30 days  |
+| `sync_runs`             | Delete converge-round history older than the window | 90 days |
 | `conversations_archive` | Auto-archive chats idle for this many days | 7 days   |
 | `conversations`         | Delete archived chats this many days after archival | 30 days |
 

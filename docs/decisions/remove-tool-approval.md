@@ -1,12 +1,10 @@
 # Remove the Tool-Approval System; Owner-Pairing Is the Gate
 
-> 中文版: [remove-tool-approval.zh.md](./remove-tool-approval.zh.md)
-
-- **Status:** Accepted
-- **Date:** 2026-06-18
-- **Deciders:** Yuxing Wu
-- **Spec:** [channels](../../specs/channels/spec.md) (removal — no new spec; the `spec.md` is updated alongside this ADR)
-- **Supersedes:** the **"approval seat"** job of the since-removed ADR that repositioned Agent Chat as the Vault Console; removes the per-tool approval relay introduced by the retired Agent Chat spec and bridged to IM by the Channels spec ([Channel Adapter Framework](./channel-adapter-framework.md), [Channel Entrypoint Differentiation](./channel-entrypoint-differentiation.md))
+**Status**: Accepted
+**Date**: 2026-06-18
+**Deciders**: Yuxing Wu
+**Spec**: [channels](../../specs/channels/spec.md) (removal — no new spec; the `spec.md` is updated alongside this ADR)
+**Supersedes**: the **"approval seat"** job of the since-removed ADR that repositioned Agent Chat as the Vault Console; removes the per-tool approval relay introduced by the retired Agent Chat spec and bridged to IM by the Channels spec ([Channel Adapter Framework](./channel-adapter-framework.md), [Channel Entrypoint Differentiation](./channel-entrypoint-differentiation.md))
 
 ## Context
 

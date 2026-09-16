@@ -1,7 +1,10 @@
 """Shared in-memory keyring backend for tests.
 
-Many test modules used to duplicate this same class — TEST-003 in the
-PR #14 test review folded them into one shared helper. Use via:
+One dict-backed ``KeyringBackend``, installed over the process-wide active
+backend, for every test that needs the keyring to simply work. There are no
+local copies of this class; a test that hand-rolls its own backend is doing so
+because it needs one that FAILS in a particular way, and says so in its own
+docstring. Use via:
 
     from tests.fixtures.keyring import InMemoryKeyring, install_in_memory_keyring
 

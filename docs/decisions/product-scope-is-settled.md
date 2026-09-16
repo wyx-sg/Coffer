@@ -1,7 +1,5 @@
 # Product Scope Is Settled
 
-> 中文版: [product-scope-is-settled.zh.md](./product-scope-is-settled.zh.md)
-
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu (project owner)
@@ -99,7 +97,7 @@ carries a half-removed capability that the next reader has to reconstruct.
   fallback that answers while the index is missing, exactly as the 2026-09-12
   restoration had it.
 - A removal PR without a stated reversal cost is incomplete and is sent back,
-  the same way a PR without its `.zh.md` companion is.
+  the same way a PR that leaves its spec claiming the removed behaviour is.
 
 ## Alternatives Considered
 

@@ -23,8 +23,11 @@ class Conversion:
     #: The document's own title (its first Markdown H1) when it has one, else
     #: the uploaded file's own name (FR-034).
     title: str
-    #: Which converter produced this — carried so a failure message downstream
-    #: can say what ran, without re-deriving it from the file extension.
+    #: Which converter produced this. Reported on the successful upload
+    #: response (``IngestedDocumentOut.converter``) so the caller knows which
+    #: converter's output it is looking at — a conversion that FAILED raises
+    #: instead, and the engine-level failure names its own engine
+    #: (``EngineUnavailable``).
     converter: str
 
 
@@ -34,6 +37,27 @@ class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type,
     def __init__(self, doc_type: str) -> None:
         self.doc_type = doc_type
         super().__init__(f"unsupported document type: {doc_type!r}")
+
+
+class EmptyConversion(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"
+    """A converter ran and produced nothing; nothing was written (FR-037).
+
+    The case that matters is an image-only PDF: MarkItDown extracts no text
+    from it, returns ``""``, and reports no error — it did its job, the
+    document simply has no text layer. Stored, that is a knowledge file with a
+    title and an empty body, which FR-037's "never half-converted" forbids and
+    which is worse than a refusal: search will never find it and nothing says
+    why.
+
+    A sibling of :class:`UnsupportedDocument` and, like it, deliberately NOT a
+    ``CofferError``: both are refusals of one upload that the route turns into
+    the family's single ``INGEST_REJECTED`` code, distinguished by
+    ``details.reason``.
+    """
+
+    def __init__(self, doc_type: str) -> None:
+        self.doc_type = doc_type
+        super().__init__(f"converter produced no text for a {doc_type!r} document")
 
 
 @runtime_checkable

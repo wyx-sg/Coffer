@@ -1,4 +1,4 @@
-// frontend/src/components/mcp/ServerTimeoutFields.tsx — the three per-server timeouts.
+// frontend/src/components/mcp/ServerTimeoutFields.tsx — the two per-server timeouts.
 //
 // These have been configurable on the backend since spec mcp-gateway and had no UI at
 // all, so every registered server ran on the defaults. That is a poor fit for
@@ -30,12 +30,11 @@ export function ServerTimeoutFields({ value, onChange, idPrefix }: Props) {
       labelKey: "mcp.timeouts.request",
       hintKey: "mcp.timeouts.requestHint",
     },
-    { key: "idle" as const, labelKey: "mcp.timeouts.idle", hintKey: "mcp.timeouts.idleHint" },
   ];
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium">{t("mcp.timeouts.legend")}</legend>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {fields.map((f) => (
           <div key={f.key} className="space-y-1.5">
             <Label htmlFor={`${idPrefix}-${f.key}`} className="text-xs">

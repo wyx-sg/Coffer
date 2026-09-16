@@ -23,9 +23,7 @@ def test_mixed_reliability() -> None:
 
 
 def test_none_correct() -> None:
-    assert aggregate_routing(
-        [{"correct_count": 0}, {"correct_count": 0}], samples=3
-    ) == {
+    assert aggregate_routing([{"correct_count": 0}, {"correct_count": 0}], samples=3) == {
         "accuracy": 0.0,
         "pass^k": 0.0,
         "pass@k": 0.0,

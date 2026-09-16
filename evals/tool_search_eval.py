@@ -4,14 +4,13 @@ Scores the pure keyword ranker (``coffer.domain.mcp.tool_search.rank_tools``)
 over a labelled set of intent → expected-tool cases against an upstream-shaped
 catalogue (``<server>__<tool>`` names with near-duplicates across servers) — the
 same kind of aggregated catalogue the live tool ranks. Fully local,
-deterministic, free — no LLM, so it runs in the default ``make eval`` path
-alongside the retrieval suite.
+deterministic, free — no LLM, so it is the one suite the default ``make eval``
+path runs; the tool-routing suite needs a model and is opt-in (``--routing``).
 """
 
 from __future__ import annotations
 
 from coffer.domain.mcp.tool_search import rank_tools
-
 from evals._io import load_jsonl
 from evals.metrics import mrr, recall_at_k
 

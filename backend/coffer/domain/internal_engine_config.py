@@ -3,11 +3,10 @@ does unattended (spec provider-switching amendment 2026-06-22b).
 
 Coffer's own internal LLM engine — the notes tidy pass, and whatever else
 Coffer runs on its own behalf — uses the connection flagged ``internal_default``
-for its
-endpoint + key + wire, but the MODEL it uses is chosen separately here — the
-connection no longer carries a model. ``model`` is ``None`` until the operator
-picks one, in which case the engine falls back to the connection's model during
-rollout (removed once the connection's model field is dropped)."""
+for its endpoint + key + wire, but the MODEL it uses is chosen separately here;
+the connection carries no model of its own to fall back to. ``model`` is
+``None`` until the operator picks one, and while it is ``None`` the engine has
+nothing to run on and every pass it drives is a no-op."""
 
 from __future__ import annotations
 

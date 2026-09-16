@@ -29,6 +29,7 @@ from coffer.domain.sync.backup import (
     DEFAULT_INTERVAL_SECONDS,
     DEFAULT_WORKTREE,
 )
+from coffer.domain.sync.manifest import SCHEMA_VERSION
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.sync_routes import (
@@ -38,7 +39,13 @@ from coffer.surfaces.http.sync_routes import (
     set_machine_registry,
     set_sync_service,
 )
-from tests.integration.sync.harness import MACHINE_A, MACHINE_B, VaultMachine, two_machines
+from tests.integration.sync.harness import (
+    MACHINE_A,
+    MACHINE_B,
+    VaultMachine,
+    another_coffer_pushes,
+    two_machines,
+)
 
 pytestmark = pytest.mark.timeout(180)
 
@@ -440,6 +447,52 @@ async def test_restore_without_a_remote_is_409(client) -> None:
 
     assert r.status_code == 409
     assert _code(r) == "SYNC_NOTHING_TO_ROLL_BACK"
+
+
+# --- a remote this build cannot read ----------------------------------------
+
+
+async def test_a_run_against_a_newer_layout_fails_and_says_why(client, fleet) -> None:
+    """A round reports, it does not raise: the worker drives the same call on a
+    timer, so the refusal arrives as a recorded failed round carrying the
+    sentence that tells the user what to do about it."""
+    a, _b = fleet
+    a.write_knowledge("notes", "mine", "my body\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+
+    another_coffer_pushes(
+        a.remote_url, layout=SCHEMA_VERSION + 1, adding="knowledge/notes/newer.md"
+    )
+
+    r = await client.post("/api/v1/sync/run", json={})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "failed", body
+    assert str(SCHEMA_VERSION + 1) in body["error"] and "upgrade" in body["error"]
+    assert a.read_knowledge("notes", "newer") is None
+    assert a.read_knowledge("notes", "mine") == "my body\n"
+
+
+async def test_rebuilding_from_a_newer_layout_is_409(client, fleet) -> None:
+    """A rebuild is a user asking for something now, so the refusal keeps its
+    code and reaches them as one: this vault would *become* that tree, which
+    makes it the last place to guess at a layout."""
+    a, _b = fleet
+    a.write_knowledge("notes", "mine", "my body\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+
+    another_coffer_pushes(
+        a.remote_url, layout=SCHEMA_VERSION + 1, adding="knowledge/notes/newer.md"
+    )
+
+    r = await client.post("/api/v1/sync/rebuild", json={})
+
+    assert r.status_code == 409
+    assert _code(r) == "SYNC_BUNDLE_TOO_NEW"
+    assert a.read_knowledge("notes", "mine") == "my body\n", "the vault must be untouched"
 
 
 # --- status -----------------------------------------------------------------

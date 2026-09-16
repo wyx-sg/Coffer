@@ -1,7 +1,5 @@
 # Machine × Agent Resource Scope — Design
 
-> 中文版: [machine-agent-scope.zh.md](./machine-agent-scope.zh.md)
-
 > **Historical record.** This note designed a machine × agent scope **matrix**
 > on top of continuous multi-machine sync. Multi-machine sync is back — as a
 > converge round against a git rendezvous the user owns

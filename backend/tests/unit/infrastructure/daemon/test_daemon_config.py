@@ -49,7 +49,7 @@ def test_write_then_read_round_trips() -> None:
     assert daemon_config.read_fixed_port() == 9123
     assert daemon_config.effective_port() == 9123
     payload = json.loads(daemon_config.config_path().read_text())
-    assert payload == {"version": 1, "port": 9123}
+    assert payload == {"port": 9123}
 
 
 def test_written_config_is_user_only() -> None:
@@ -101,3 +101,32 @@ def test_out_of_range_port_in_the_file_is_ignored() -> None:
     path.write_text(json.dumps({"version": 1, "port": 80}))
     assert daemon_config.read_fixed_port() is None
     assert daemon_config.effective_port() == daemon_config.DEFAULT_PORT
+
+
+def test_a_file_from_an_older_build_keeps_its_keys_and_still_reads() -> None:
+    """Every vault written before this build has a ``version`` key no reader
+    ever consulted, plus whatever a newer build might add.
+
+    Forward compatibility here is key-preservation, not a version gate: the
+    file loads unchanged, and a write of one setting leaves the other keys —
+    known, retired and unknown alike — exactly where they were.
+    """
+    path = daemon_config.config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({"version": 1, "port": 9123, "machine_id": "mid", "from_the_future": 7})
+    )
+
+    assert daemon_config.read_fixed_port() == 9123
+    assert daemon_config.read_cached_machine_id() == "mid"
+    assert daemon_config.config_is_readable()
+
+    daemon_config.write_machine_name("laptop")
+    assert json.loads(path.read_text()) == {
+        "version": 1,
+        "port": 9123,
+        "machine_id": "mid",
+        "from_the_future": 7,
+        "machine_name": "laptop",
+    }
+    assert daemon_config.read_machine_name() == "laptop"

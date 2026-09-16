@@ -5,11 +5,13 @@ and injects its live API token into the ``index.html`` it serves (FR-025), so a
 browser that lands on that origin is authenticated by the act of loading the
 page. There is nothing for this command to hand over.
 
-What is left is the part a human cannot do reliably: the port. The daemon binds
-the first free port in its range and records it in ``~/.coffer/daemon.json``, so
-the origin moves between restarts. This command reads the real one — and
-detect-or-spawn starts a daemon if none is running — which is why it still
-earns its place.
+What is left is starting the thing. The port no longer moves — FR-028 pinned it
+to 8000, and a daemon that cannot have it refuses to start rather than drifting
+to another one (the 8000-8009 scan survives only behind the
+``COFFER_PORT_RANGE_*`` test override). So this command reads the live port out
+of ``~/.coffer/daemon.json`` for correctness rather than for discovery, and what
+it actually saves the user is detect-or-spawn: it starts a daemon when none is
+running, then opens the page that daemon is serving.
 """
 
 from __future__ import annotations

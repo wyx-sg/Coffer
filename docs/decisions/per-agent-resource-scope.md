@@ -1,19 +1,10 @@
 # Per-Agent Resource Scope
 
-> 中文版: [per-agent-resource-scope.zh.md](./per-agent-resource-scope.zh.md)
-
-- **Status:** Accepted
-- **Spec:** [vault-sync](../../specs/vault-sync/spec.md) (also amends
-  [mcp-gateway](../../specs/mcp-gateway/spec.md) and
-  [skill-manager](../../specs/skill-manager/spec.md))
-- **Amends:** [Everything Is a Resource Kind](./everything-is-a-resource-kind.md) (resources
-  now carry a scope), [Tool Retrieval](./tool-retrieval-for-overload.md) /
-  [Built-in Agent Is Internal](./builtin-agent-is-internal-capability.md)
-  (`coffer__search_tools` ranking is scope-aware), and — since the 2026-09-13
-  revision — [Provider Switching](./provider-switching.md) (a connection's
-  `compatible_agents` field is replaced by this scope) and spec
-  [channels](../../specs/channels/spec.md) (a channel's scope names the agents it
-  may drive). See [Revision history](#revision-history).
+**Status**: Accepted
+**Date**: 2026-09-09
+**Deciders**: Yuxing Wu
+**Spec**: [vault-sync](../../specs/vault-sync/spec.md) (also amends [mcp-gateway](../../specs/mcp-gateway/spec.md) and [skill-manager](../../specs/skill-manager/spec.md))
+**Amends**: [Everything Is a Resource Kind](./everything-is-a-resource-kind.md) (resources now carry a scope), [Tool Retrieval](./tool-retrieval-for-overload.md) / [Built-in Agent Is Internal](./builtin-agent-is-internal-capability.md) (`coffer__search_tools` ranking is scope-aware), and — since the 2026-09-13 revision — [Provider Switching](./provider-switching.md) (a connection's `compatible_agents` field is replaced by this scope) and spec [channels](../../specs/channels/spec.md) (a channel's scope names the agents it may drive). See [Revision history](#revision-history).
 
 ## Context
 

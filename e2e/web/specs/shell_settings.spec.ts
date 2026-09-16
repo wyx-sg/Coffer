@@ -1,8 +1,9 @@
 // e2e/web/specs/shell_settings.spec.ts
 //
-// UI Shell §User Story 5 — the redesigned Settings: tabs grouped by what
-// the user manages (Data / About), the daemon never surfaced as a concept,
-// the sidebar language switcher, and the removal of the confusing controls.
+// UI Shell §User Story 5 — the redesigned Settings: tabs grouped by what the
+// user manages (General, Coffer's model, Data, Security, About), the daemon
+// never surfaced as a concept, the sidebar language switcher, and the removal
+// of the confusing controls.
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";
@@ -18,10 +19,20 @@ acceptance(
     // /settings index redirects to the first tab — General.
     await expect(page).toHaveURL(/\/settings\/general/);
 
-    // Settings shows General, Data, and About. The daemon is never a tab.
-    await expect(page.getByRole("link", { name: /^General$/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^Data$/ })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^About$/ })).toBeVisible();
+    // Settings shows five tabs, in the order the layout declares them:
+    // General, Coffer's model, Data, Security, About (frontend/src/router.tsx
+    // + SettingsLayout.tsx). The daemon is never one of them.
+    for (const name of [
+      /^General$/,
+      /^Coffer's model$/,
+      /^Data$/,
+      /^Security$/,
+      /^About$/,
+    ]) {
+      await expect(page.getByRole("link", { name })).toBeVisible();
+    }
+    // The daemon is never surfaced — no Daemon tab, no status panel. Asserted
+    // here only: this is the test that enumerates the tab set.
     await expect(page.getByRole("link", { name: /^Daemon$/ })).toHaveCount(0);
 
     // Click About — content swaps without leaving /settings/*
@@ -42,9 +53,20 @@ acceptance(
   "settings drops the confusing controls",
   async ({ page }) => {
     // No Settings tab exposes a daemon-shutdown or token-rotation control
-    // — both are rare/dangerous actions that belong on the CLI.
-    for (const tab of ["data", "about"]) {
+    // — both are rare/dangerous actions that belong on the CLI. Every tab is
+    // visited, and each is first pinned to a card heading it renders itself,
+    // so a pane that failed to mount can't satisfy the absence checks
+    // vacuously.
+    const panes: [string, RegExp][] = [
+      ["general", /^Preferences$/], // GeneralSettings
+      ["engine", /^Automatic upkeep$/], // EngineSettings -> UpkeepSettings
+      ["data", /^Data retention$/], // DataSettings
+      ["security", /^Credential encryption$/], // SecuritySettings
+      ["about", /^About Coffer$/], // AboutPage
+    ];
+    for (const [tab, heading] of panes) {
       await page.goto(`/settings/${tab}`);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
       await expect(
         page.getByRole("button", { name: /shut\s*down/i }),
       ).toHaveCount(0);
@@ -52,9 +74,6 @@ acceptance(
         page.getByRole("button", { name: /rotate token/i }),
       ).toHaveCount(0);
     }
-
-    // The daemon is never surfaced — no Daemon tab, no status panel.
-    await expect(page.getByRole("link", { name: /^Daemon$/ })).toHaveCount(0);
 
     // The About tab carries no language selector (the sidebar switcher is
     // the single source) and no developer-only resource-kind list.

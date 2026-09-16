@@ -45,7 +45,6 @@ async def test_create_conversation_returns_placeholder_title() -> None:
     conv = await svc.create_conversation(agent_key="builtin")
     assert conv.title == "New conversation"
     assert conv.agent_key == "builtin"
-    assert conv.model_id is None
 
 
 @pytest.mark.asyncio
@@ -121,16 +120,6 @@ async def test_rename_conversation_not_found() -> None:
     svc, _, _, _ = make_service()
     with pytest.raises(ConversationNotFound):
         await svc.rename_conversation("bad-id", new_title="Title")
-
-
-@pytest.mark.asyncio
-async def test_set_conversation_model_then_clear() -> None:
-    svc, _, _, _ = make_service()
-    conv = await svc.create_conversation(agent_key="builtin")
-    updated = await svc.set_conversation_model(conv.id, model_id="m-001")
-    assert updated.model_id == "m-001"
-    cleared = await svc.set_conversation_model(conv.id, model_id=None)
-    assert cleared.model_id is None
 
 
 # ---------------------------------------------------------------------------

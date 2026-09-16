@@ -55,6 +55,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/channels/{name}/callback-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe a SeaTalk channel's public callback path end to end
+         * @description Sends the platform's own verification handshake at the channel's configured public URL and reports whether the echo came back — so the whole webhook chain (public URL → tunnel → loopback listener → signature → handshake) is confirmed from one button instead of by watching for a real event. It does NOT confirm the stored signing secret matches SeaTalk's, since both sides of the probe sign with the same stored secret; only a real event shows that.
+         *
+         *     A failure is reported as `ok: false` with a `detail` the owner can act on, never as an HTTP error: the probe ran, and what it found is the answer. A Telegram channel, and a SeaTalk channel on **websocket** delivery, are refused the same way — a websocket channel has no public URL to probe at all, and its `websocket_state` is the health answer there (FR-071).
+         */
+        post: operations["testChannelCallback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/channels/{name}/events": {
         parameters: {
             query?: never;
@@ -174,7 +196,7 @@ export interface paths {
         head?: never;
         /**
          * Set a conversation's agent model (managed agents)
-         * @description Sets `agent_config.model` — the managed agent's own model, passed through to its CLI (Claude Code `--model`, Codex `model`) — preserving `cwd` and `session_id`. An empty or null `model` clears the override so the conversation inherits the active provider profile's projected default. Mirrors the channel `/model` command. The `model_id` of PATCH /conversations/{id} is unrelated and is not read by the turn path.
+         * @description Sets `agent_config.model` — the managed agent's own model, passed through to its CLI (Claude Code `--model`, Codex `model`) — preserving `cwd` and `session_id`. An empty or null `model` clears the override so the conversation inherits the active provider profile's projected default. Mirrors the channel `/model` command. It is unrelated to the `model_id` recorded on each message, which reports the model a turn actually ran on and is never read back as configuration.
          */
         patch: operations["setAgentConfig"];
         trace?: never;
@@ -404,9 +426,19 @@ export interface components {
         };
         NotifyIn: {
             text: string;
+            /**
+             * @description Which paired chat to push to. Omitted, the channel's owner chat — its earliest pairing, the owner's DM. A chat this channel is not paired to is refused, so a caller cannot address an arbitrary group.
+             * @default null
+             */
+            chat_id: string | null;
         };
         NotifyOut: {
             sent: boolean;
+        };
+        CallbackTestOut: {
+            ok: boolean;
+            /** @description What the probe found, in words the owner can act on — empty on a clean pass. */
+            detail: string;
         };
         SeaTalkEventIn: {
             event_id?: string;
@@ -430,13 +462,11 @@ export interface components {
         };
         ConversationPatch: {
             title?: string | null;
-            model_id?: string | null;
         };
         ConversationOut: {
             id: string;
             agent_key: string;
             title: string;
-            model_id: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -644,6 +674,30 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
+        };
+    };
+    testChannelCallback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Channel resource name (the `<name>` of `channel:<name>`) */
+                name: components["parameters"]["ChannelName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The probe ran; `ok` says what it found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CallbackTestOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     ingestChannelEvent: {

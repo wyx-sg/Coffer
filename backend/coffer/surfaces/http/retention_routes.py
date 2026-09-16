@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends
 
+from coffer.application.retention_registry import UnknownPrunableTable
 from coffer.application.retention_service import RetentionService
-from coffer.infrastructure.persistence.retention import UnknownPrunableTable
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_retention_service
 from coffer.surfaces.http.schemas import (

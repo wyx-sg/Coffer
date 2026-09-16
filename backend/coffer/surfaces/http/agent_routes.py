@@ -63,8 +63,10 @@ class AgentOut(BaseModel):
     config_dir: str
     description: str | None
     # Slice 6: whether the agent's native write-side memory is disabled.
-    # spec provider-switching amendment 2026-06-22b (E3): per-agent model binding (None = unbound,
-    # falls back to the active connection's model during rollout).
+    # spec provider-switching amendment 2026-06-22b (E3): per-agent model
+    # binding. ``None`` = unbound, and unbound means unbound — the connection
+    # carries no singular model to fall back to, so projection writes no model
+    # for this agent at all.
     model: str | None
     fast_model: str | None
     wire_api: str | None

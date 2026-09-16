@@ -39,7 +39,7 @@ export interface TableSelection<T> {
   }) => ReactNode;
 }
 
-/** Loading-state contract shared by DataTable and DataCardGrid. */
+/** Loading-state contract for DataTable. */
 export interface ListLoading {
   /** While true, `pageSize`-capped skeleton rows/cards stand in for the data
    *  (never an empty surface). Omit to keep the plain "render what you have"
@@ -49,7 +49,7 @@ export interface ListLoading {
 
 /** Skeleton placeholders never exceed this many, whatever the page size: a
  *  pulsing wall of 100 rows reads as a fault, not as loading. */
-export const MAX_SKELETON_ROWS = 5;
+const MAX_SKELETON_ROWS = 5;
 
 export function skeletonCount(pageSize: number): number {
   return Math.max(1, Math.min(MAX_SKELETON_ROWS, pageSize));

@@ -15,7 +15,7 @@ not a limitation: point it at a stronger model whenever you need to.
 
 ```
 evals/
-├── metrics.py         # pure ranking metrics: recall@k, precision@k, MRR
+├── metrics.py         # pure ranking metrics: recall@k, MRR
 ├── tool_search_eval.py # ranks the tool catalogue with the coffer__search_tools ranker -> recall@k/MRR
 ├── routing_eval.py    # samples a pluggable model k× to pick a tool; accuracy + pass^k
 ├── run.py             # runner: scorecard + regression gate vs baselines
@@ -62,8 +62,8 @@ ranker the gateway uses and scores **recall@k** and **MRR** over an
 upstream-shaped catalogue (`datasets/tool_search_catalog.jsonl` — `<server>__<tool>`
 names with near-duplicates across servers, the kind of aggregated catalogue the
 live tool actually ranks) — does the right upstream tool land in the top-k? The
-ranker is pure, deterministic, and local (no model), so this suite runs in the
-default `python -m evals.run` alongside retrieval.
+ranker is pure, deterministic, and local (no model), so it is the whole of the
+default `python -m evals.run` — the only suite in the gate.
 
 **Tool routing** (`routing_eval.py`) — gives the model the tool catalogue
 (`datasets/tool_catalog.jsonl`) plus a user request and asks for the single best

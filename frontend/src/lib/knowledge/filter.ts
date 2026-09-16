@@ -1,6 +1,6 @@
 // frontend/src/lib/knowledge/filter.ts
 //
-// The one matcher behind both lanes' filter box. Filtering is CLIENT-SIDE and
+// The one matcher behind every knowledge filter box. Filtering is CLIENT-SIDE and
 // name-only: it narrows the list already on screen as the user types — no
 // request, no debounce, no ranking. Meaning-based retrieval over a scope's
 // bodies is the agents' surface (`coffer__search`) and the CLI's.

@@ -1,7 +1,27 @@
 # Competitive Research — Unified Multi-Agent Config & Rules Management
 
-> English: this file · 中文版: [agent-config-management.zh.md](./agent-config-management.zh.md)
->
+> **Historical record.** This report was written 2026-06-16 and last verified
+> **2026-06-19**; the body below is preserved as that dated record and its
+> findings are left as they were written. Two of its load-bearing facts about
+> Coffer have since changed. **The agent set narrowed from six types to two.**
+> `AgentType` is now exactly `claude_code` and `codex`, and the manifest
+> defines exactly two `AgentDescriptor` records — so §4 takeaway #4's "the 4
+> wired-but-hidden agents (Cursor/OpenCode/OpenClaw/Hermes)" and the
+> verification update's "**6 wired total, 2 enabled, 4 hidden**" no longer
+> describe the code: those four agents were **removed**, not hidden, and there
+> is nothing left to "light up". The breadth comparison against rivals'
+> 12–31 agents therefore reads against a deliberately narrower product.
+> **And the instruction-distribution layer the verification update credits is
+> gone**: the three modules it cites —
+> `backend/coffer/domain/agent/instructions.py`,
+> `backend/coffer/domain/agent/managed_block.py` and
+> `backend/coffer/surfaces/http/agent_instructions_routes.py` — do not exist on
+> disk, so the "headline finding is flipped" claim about a hub-delivered master
+> instruction should not be relied on without re-checking `main`. Read
+> `.specify/memory/architecture.md` and `specs/agent-registry/spec.md` for the
+> live design; read what follows as the state of the field, and of Coffer, in
+> mid-2026.
+
 > Internal competitive-research report for Coffer's agent registry + config-file
 > management (spec agent-registry). **Date:** 2026-06-16. **Method:** deep-research harness.
 > **Provenance caveat:** 1 claim (Ruler's MCP propagation) survived full 3-vote

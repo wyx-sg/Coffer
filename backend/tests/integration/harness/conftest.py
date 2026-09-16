@@ -1,4 +1,4 @@
-"""Fixtures for testing the .claude/hooks/* scripts via subprocess."""
+"""Helpers for testing the .claude/hooks/* scripts via subprocess."""
 
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-
-import pytest
 
 # backend/tests/integration/harness/conftest.py -> repo root is parents[4]
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -33,13 +31,3 @@ def hook_json(proc: subprocess.CompletedProcess[str]) -> dict:
     """Parse a hook's stdout JSON; return {} when stdout is empty."""
     out = proc.stdout.strip()
     return json.loads(out) if out else {}
-
-
-@pytest.fixture
-def run_hook_fn():
-    return run_hook
-
-
-@pytest.fixture
-def hook_json_fn():
-    return hook_json

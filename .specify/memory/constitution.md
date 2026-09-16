@@ -6,8 +6,8 @@
 >
 > This constitution holds **scaffolding-level** invariants only: tech stack,
 > workflow, licensing posture, and architectural style. Product behavior —
-> the resource model, safety/approval rules, the surface roster, what gets
-> persisted where — is defined per feature in `specs/`.
+> the resource model, the gate on who may drive an agent, the surface roster,
+> what gets persisted where — is defined per feature in `specs/`.
 
 ## Core Principles
 
@@ -67,8 +67,9 @@ plan.
   extracted only after the second feature needs them. (Exception: the
   Resource framework — see [Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md).)
 - **Persistence.** SQLite is the system of record for control-plane state.
-  Bulk user content (when introduced per spec) is stored as files on the
-  local file system; indexed on demand.
+  Bulk user content — knowledge collections, memory partitions — is stored as
+  files on the local file system, and those files are the only copy: nothing
+  indexes, chunks or embeds them.
 - **Credentials.** Secrets live **only** as Fernet ciphertext in the
   `credentials` table; plaintext exists in memory solely between decrypt and
   the spawn/header-injection that consumes it. The Fernet master key is
@@ -78,11 +79,15 @@ plan.
   credential refs. No secret plaintext reaches the database, logs, audit, or
   any structured event. Credential material leaves the machine only as Fernet
   ciphertext and only when the user asks for it explicitly; the master key is
-  never written into an export and is bootstrapped onto another machine
-  out-of-band.
-- **Network defaults.** Loopback-only. Outbound HTTP, when introduced, goes
-  through a SSRF-guarded client. Public-reachable surfaces, when introduced,
-  run as a separate process limited to signed callback paths.
+  never written into anything the vault publishes, and reaches another machine
+  only through the explicit out-of-band transfer (`/sync/key/export` and
+  `/sync/key/import`, which move key material and nothing else).
+- **Network defaults.** Loopback-only. Outbound HTTP goes through a
+  SSRF-guarded client (`coffer.infrastructure.net.ssrf_guard`, which rejects
+  loopback, private and link-local destinations). The one public-reachable
+  surface runs as a separate process limited to signed callback paths
+  (`coffer.surfaces.callback`, which verifies the platform signature and can
+  reach nothing but the daemon over loopback).
 
 ## Quality Gates
 
@@ -112,7 +117,30 @@ Architectural Constraints, or to a Quality Gate requires:
 constitutional principles or constraints it affects, and explain why the
 change respects (or formally amends) them.
 
-**Version**: 0.6.1
+**Version**: 0.6.2
+
+> **0.6.2 amendment (editorial).** Brought four sentences level with the code
+> they describe; no rule changes. Motivation: each of them described something
+> as unbuilt or hedged that has since shipped, or described a mechanism that has
+> since been removed, so a reader learned the wrong thing about a constraint
+> that was itself still correct. (1) The preamble listed "safety/approval rules"
+> among per-feature product behaviour, which reads as a per-tool approval
+> system; that system was removed and owner-pairing is the only gate
+> ([Remove the Tool-Approval System](../../docs/decisions/remove-tool-approval.md)),
+> so the phrase is now "the gate on who may drive an agent". (2) The Persistence
+> constraint said bulk user content is stored as files "(when introduced per
+> spec)" and "indexed on demand"; it is introduced, and the index is gone — the
+> files are the only copy and nothing indexes, chunks or embeds them
+> ([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)).
+> (3) The Credentials constraint said the master key "is never written into an
+> export"; export and import were deleted, and key material now moves only
+> through `/sync/key/export` and `/sync/key/import`, which carry the key and
+> nothing else. (4) The Network defaults constraint hedged outbound HTTP and
+> public-reachable surfaces as "when introduced"; both exist —
+> `infrastructure/net/ssrf_guard.py` and the `surfaces/callback` listener — so
+> the hedges are removed and each rule names what implements it. Downstream
+> impact: none — every constraint binds exactly what it bound before. Decision
+> recorded by the project owner.
 
 > **0.6.1 amendment (editorial).** Reworded the layering line of the
 > Architecture constraint. Motivation: it wrote the layers as

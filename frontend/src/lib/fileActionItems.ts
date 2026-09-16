@@ -1,8 +1,9 @@
 // frontend/src/lib/fileActionItems.ts
-// The open-in-editor / reveal actions as descriptors, shared by the inline
-// `FileActions` bar (components/FileActions.tsx) and the RowActions "⋯" overflow
-// menu (components/RowActions.tsx). Lives apart from the FileActions component so
-// that file stays component-only (React fast refresh).
+// The open-in-editor / reveal actions as descriptors, rendered by the inline
+// `FileActions` bar (components/FileActions.tsx). Lives apart from that
+// component so it stays component-only (React fast refresh), and so a surface
+// that wants these actions in some other shape can render the descriptors
+// itself.
 //
 // The actual open/reveal goes through useFsActions, which calls the loopback
 // daemon (spec agent-registry FR-039, ADR daemon-proxies-os-file-actions). Coffer's viewers are read-only — editing happens in the user's own

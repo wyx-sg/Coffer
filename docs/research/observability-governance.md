@@ -1,7 +1,5 @@
 # Competitive Research — Observability, Audit & Governance + MCP Security
 
-> English: this file · 中文版: [observability-governance.zh.md](./observability-governance.zh.md)
->
 > Internal competitive-research report for Coffer's audit/retention/invocation
 > log + local security primitives. **Date:** 2026-06-16. **Method:** deep-research
 > harness (key findings 3-0 confirmed).

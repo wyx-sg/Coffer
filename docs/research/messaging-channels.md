@@ -1,7 +1,5 @@
 # Competitive Research — Messaging-Channel Connectivity & Routing for Agents
 
-> English: this file · 中文版: [messaging-channels.zh.md](./messaging-channels.zh.md)
->
 > Internal competitive-research report for Coffer's channels feature (spec channels,
 > [Channel Adapter Framework](../decisions/channel-adapter-framework.md)).
 > **Date:** 2026-06-16. **Method:** deep-research harness. Angles A/B/C

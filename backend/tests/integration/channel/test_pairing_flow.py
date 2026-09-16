@@ -19,11 +19,10 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
 
     await env.processor.on_message(inbound("tg", "chat-1", code, sender_display="Alice"))
 
-    peer = await env.peers.get(resource.id)
+    peer = await env.peers.owner_peer(resource.id)
     assert peer is not None
     assert peer.chat_id == "chat-1"
     assert peer.display_name == "Alice"
-    assert peer.active_conversation_id is None
 
     assert len(adapter.sent) == 1
     chat_id, text = adapter.sent[0]
@@ -37,7 +36,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
 
     # The code was consumed: the same code from another chat does not re-pair.
     await env.processor.on_message(inbound("tg", "chat-2", code))
-    peer = await env.peers.get(resource.id)
+    peer = await env.peers.owner_peer(resource.id)
     assert peer is not None
     assert peer.chat_id == "chat-1"
     assert len(adapter.sent) == 1  # no confirmation for the second chat
@@ -52,7 +51,7 @@ async def test_message_from_a_different_chat_is_silently_ignored(env: ChannelEnv
 
     assert adapter.sent == []
     assert await env.chat.list_conversations() == []
-    peer = await env.peers.get(resource.id)
+    peer = await env.peers.owner_peer(resource.id)
     assert peer is not None
     assert peer.chat_id == "owner"
 
@@ -67,10 +66,10 @@ async def test_wrong_guesses_get_no_reply_and_exhaust_the_code(env: ChannelEnv) 
     for _ in range(10):
         await env.processor.on_message(inbound("tg", "chat-1", "WRONGGUESS"))
     assert adapter.sent == []
-    assert await env.peers.get(resource.id) is None
+    assert await env.peers.owner_peer(resource.id) is None
 
     # Attempt exhaustion invalidated the code — even the right one fails now.
     await env.processor.on_message(inbound("tg", "chat-1", code))
-    assert await env.peers.get(resource.id) is None
+    assert await env.peers.owner_peer(resource.id) is None
     assert adapter.sent == []
     assert env.pairing.pending("tg") is False

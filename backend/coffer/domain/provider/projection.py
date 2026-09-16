@@ -72,13 +72,12 @@ CODEX_CATALOG_TRUNCATION_LIMIT = 10_000
 
 #: Prefix of every Coffer-managed ``apiKeyHelper`` — both the per-connection form
 #: (``coffer provider key --connection <name>``) and the legacy wire form
-#: (``--wire anthropic``). De-projection removes a helper iff it starts with this,
-#: so it never clobbers a user-owned helper but always reverts ours.
+#: (``--wire anthropic``) still found in older ``settings.json`` files.
+#: De-projection removes a helper iff it starts with this, so it never clobbers a
+#: user-owned helper but always reverts ours. Coffer WRITES only the
+#: per-connection form (:func:`anthropic_api_key_helper`); the legacy form is
+#: recognised for removal, never emitted.
 MANAGED_API_KEY_HELPER_PREFIX = "coffer provider key"
-
-#: Legacy wire-keyed helper kept for back-compat (older ``settings.json`` files);
-#: resolution falls back to the connection active for the wire's agent.
-ANTHROPIC_API_KEY_HELPER = f"{MANAGED_API_KEY_HELPER_PREFIX} --wire anthropic"
 
 
 def anthropic_api_key_helper(connection: str) -> str:
@@ -115,12 +114,6 @@ _AGENT_TARGETS: dict[AgentType, ProjectionTarget] = {
 }
 
 
-def target_for(wire: Protocol) -> ProjectionTarget | None:
-    """The projection target for ``wire`` (which agent + native config file), or
-    ``None`` for internal-only wires (``ollama``) that project into no agent."""
-    return _TARGETS.get(wire)
-
-
 def wire_for_agent(agent_type: AgentType) -> Protocol | None:
     """The wire whose ``deactivate`` covers ``agent_type`` — the inverse of the
     wire→agent correspondence ``_TARGETS`` encodes. ``None`` for a type no wire
@@ -146,7 +139,7 @@ def apply_anthropic_settings(
     base_url: str,
     model: str | None,
     fast_model: str | None,
-    api_key_helper: str = ANTHROPIC_API_KEY_HELPER,
+    api_key_helper: str,
 ) -> str:
     """Return new ``settings.json`` text with Coffer's anthropic provider keys.
 
@@ -155,6 +148,11 @@ def apply_anthropic_settings(
     ``ANTHROPIC_API_KEY`` (it would override the helper). When ``model`` is
     ``None`` (an unbound agent) the ``ANTHROPIC_MODEL`` var is omitted so the
     agent runs on its OWN default model.
+
+    ``api_key_helper`` is REQUIRED and has no default: the only helper Coffer
+    may write is the per-connection one (:func:`anthropic_api_key_helper`), so a
+    caller must name the connection rather than fall back to a wire-keyed form
+    that cannot say which connection's key to fetch.
     """
     data = json.loads(text) if text.strip() else {}
     if not isinstance(data, dict):  # a hand-edit left a non-object root

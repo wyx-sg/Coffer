@@ -15,7 +15,7 @@ const SECRET_NAME_RE = /token|secret|pass|pwd|key|cred|auth/i;
  */
 const SECRET_VALUE_RE = /^(?:Bearer\s+|ghp_|gho_|github_pat_|sk-|xox[abp]-|eyJ[A-Za-z0-9_-]{20,})/;
 
-export interface ParsedEnvVar {
+interface ParsedEnvVar {
   key: string;
   value: string;
   /** Heuristic default — the user confirms/flips this in the review step. */

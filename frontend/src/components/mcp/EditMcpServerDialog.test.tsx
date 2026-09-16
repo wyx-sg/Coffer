@@ -96,7 +96,9 @@ describe("EditMcpServerDialog", () => {
     const request = screen.getByLabelText(/^request$/i) as HTMLInputElement;
     expect(request.value).toBe("120");
     expect((screen.getByLabelText(/^spawn$/i) as HTMLInputElement).value).toBe("30");
-    expect((screen.getByLabelText(/^idle$/i) as HTMLInputElement).value).toBe("600");
+    // Two fields, not three: the idle timeout is gone with the backend field,
+    // which nothing ever enforced.
+    expect(screen.queryByLabelText(/^idle$/i)).toBeNull();
 
     // The JSON textarea must not ALSO carry them — two controls over one key
     // would fight on save.
@@ -110,7 +112,6 @@ describe("EditMcpServerDialog", () => {
     const body = patch.mock.calls[0][1].body as { config: Record<string, unknown> };
     expect(body.config.request_timeout_seconds).toBe(45);
     expect(body.config.spawn_timeout_seconds).toBe(30);
-    expect(body.config.idle_timeout_seconds).toBe(600);
   });
 
   test("pre-populates existing credential rows with keep-existing placeholder", () => {

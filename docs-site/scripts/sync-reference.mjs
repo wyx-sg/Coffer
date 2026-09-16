@@ -1,10 +1,9 @@
 import { fileURLToPath } from "node:url";
-import { dirname, resolve, join, posix, basename } from "node:path";
+import { dirname, resolve, join, posix } from "node:path";
 import {
   readdirSync,
   statSync,
   mkdirSync,
-  copyFileSync,
   readFileSync,
   writeFileSync,
   rmSync,
@@ -33,7 +32,7 @@ const AREAS = [
   { src: ".specify/memory", area: "project" },
   { src: "agents", area: "conventions" },
 ];
-const EXCLUDED = new Set(["tasks.md", "tasks.zh.md"]);
+const EXCLUDED = new Set(["tasks.md"]);
 
 // Normalise a repo path to posix separators for matching/output.
 const toPosix = (p) => p.split("\\").join("/");
@@ -56,12 +55,8 @@ export function classifyFile(repoPath) {
   if (EXCLUDED.has(base)) return null;
   const a = areaOf(p);
   if (!a) return null;
-  const isZh = p.endsWith(".zh.md");
-  let restNoZh = isZh ? a.rest.replace(/\.zh\.md$/, ".md") : a.rest;
-  restNoZh = restNoZh.replace(/(^|\/)README\.md$/, "$1index.md"); // dir index → index.md
-  return isZh
-    ? { locale: "zh", dest: posix.join("zh/reference", a.area, restNoZh) }
-    : { locale: "en", dest: posix.join("reference", a.area, restNoZh) };
+  const rest = a.rest.replace(/(^|\/)README\.md$/, "$1index.md"); // dir index → index.md
+  return { dest: posix.join("reference", a.area, rest) };
 }
 
 // Map a repo-relative .md target to its on-site route (extensionless), or null.
@@ -158,13 +153,11 @@ const ACRONYMS = {
 };
 
 /**
- * Turn a spec folder name into a nav label.
- * 'mcp-gateway' → '001 · MCP Gateway'
- * If the first segment is not numeric, title-case all words joined by space.
+ * Turn a spec folder name into a nav label: 'mcp-gateway' → 'MCP Gateway'.
+ * Spec directories are named, not numbered, so the folder name is the whole
+ * label: title-case each hyphen-separated word, honouring known acronyms.
  */
 export function specFolderLabel(folder) {
-  // Spec directories are named, not numbered, so the folder name is the whole
-  // label: title-case each hyphen-separated word, honouring known acronyms.
   return folder
     .split("-")
     .map((w) => {
@@ -174,20 +167,12 @@ export function specFolderLabel(folder) {
     .join(" ");
 }
 
-// Category labels per locale
+// Category labels
 const CAT_LABELS = {
-  en: {
-    specs: "Specs",
-    adr: "ADRs",
-    project: "Project memory",
-    conventions: "Engineering conventions",
-  },
-  zh: {
-    specs: "规格",
-    adr: "ADRs",
-    project: "项目纲领",
-    conventions: "工程规范",
-  },
+  specs: "Specs",
+  adr: "ADRs",
+  project: "Project memory",
+  conventions: "Engineering conventions",
 };
 
 // File priority order within a spec folder
@@ -199,35 +184,23 @@ const SPEC_FILE_PRIORITY = [
   "quickstart",
 ];
 
-// Uniform labels for spec sub-files, by base name, per locale. The spec NUMBER
-// lives only on the parent group label (e.g. "001 · MCP Gateway"); the
-// sub-files are labelled by document type so they read consistently regardless
-// of how each source file's H1 happens to be worded.
+// Uniform labels for spec sub-files, by base name. Sub-files are labelled by
+// document type so they read consistently regardless of how each source file's
+// H1 happens to be worded.
 const SPEC_FILE_LABELS = {
-  en: {
-    spec: "Spec",
-    plan: "Plan",
-    "data-model": "Data model",
-    research: "Research",
-    quickstart: "Quickstart",
-    index: "Overview",
-  },
-  zh: {
-    spec: "功能规格",
-    plan: "实施计划",
-    "data-model": "数据模型",
-    research: "研究",
-    quickstart: "快速上手",
-    index: "概览",
-  },
+  spec: "Spec",
+  plan: "Plan",
+  "data-model": "Data model",
+  research: "Research",
+  quickstart: "Quickstart",
+  index: "Overview",
 };
 
 /**
- * Label for a spec sub-file (by base name + locale). Falls back to a titleized
- * base name (never the spec number, which belongs on the group label).
+ * Label for a spec sub-file, by base name. Falls back to a titleized base name.
  */
-export function specFileLabel(base, locale) {
-  const known = SPEC_FILE_LABELS[locale]?.[base];
+export function specFileLabel(base) {
+  const known = SPEC_FILE_LABELS[base];
   if (known) return known;
   return base
     .split(/[-_]/)
@@ -239,12 +212,10 @@ export function specFileLabel(base, locale) {
 }
 
 /**
- * Build the reference sidebar array for a given locale from an array of
- * file descriptors: { locale, area, route, base, specFolder? }
+ * Build the reference sidebar array from an array of file descriptors:
+ * { area, route, base, specFolder? }
  */
-function buildReferenceSidebar(descriptors, locale) {
-  const labels = CAT_LABELS[locale];
-  const prefix = locale === "zh" ? "/zh" : "";
+function buildReferenceSidebar(descriptors) {
   const byArea = { specs: [], adr: [], project: [], conventions: [] };
   for (const d of descriptors) {
     if (byArea[d.area]) byArea[d.area].push(d);
@@ -272,7 +243,7 @@ function buildReferenceSidebar(descriptors, locale) {
       text: specFolderLabel(folder),
       collapsed: true,
       items: files.map((f) => ({
-        text: specFileLabel(f.base, locale),
+        text: specFileLabel(f.base),
         link: f.route,
       })),
     };
@@ -308,10 +279,10 @@ function buildReferenceSidebar(descriptors, locale) {
   const convItems = convFiles.map((f) => ({ text: f.title, link: f.route }));
 
   return [
-    { text: labels.specs, items: specsItems },
-    { text: labels.adr, collapsed: true, items: adrItems },
-    { text: labels.project, items: projectItems },
-    { text: labels.conventions, items: convItems },
+    { text: CAT_LABELS.specs, items: specsItems },
+    { text: CAT_LABELS.adr, collapsed: true, items: adrItems },
+    { text: CAT_LABELS.project, items: projectItems },
+    { text: CAT_LABELS.conventions, items: convItems },
   ];
 }
 
@@ -327,11 +298,10 @@ function walk(absDir, repoDir, out = []) {
 }
 
 function run() {
-  for (const dir of ["reference", "zh/reference"]) {
-    rmSync(resolve(__dirname, "..", dir), { recursive: true, force: true });
-  }
-  const seenEn = new Set();
-  const seenZh = new Set();
+  rmSync(resolve(__dirname, "..", "reference"), {
+    recursive: true,
+    force: true,
+  });
   // descriptors collected for sidebar generation
   const descriptors = [];
 
@@ -350,13 +320,12 @@ function run() {
       const destAbs = resolve(__dirname, "..", c.dest);
       mkdirSync(dirname(destAbs), { recursive: true });
       writeFileSync(destAbs, content);
-      (c.locale === "zh" ? seenZh : seenEn).add(c.dest.replace(/^zh\//, ""));
 
       // Build descriptor for sidebar
       const routeRaw =
         "/" + c.dest.replace(/\.md$/, "").replace(/\/index$/, "/");
       const baseNoExt = posix.basename(c.dest, ".md");
-      // specFolder: for specs area, the path segment immediately after reference/specs/ or zh/reference/specs/
+      // specFolder: for specs area, the segment right after reference/specs/
       let specFolder;
       if (area === "specs") {
         const m = c.dest.match(/reference\/specs\/([^/]+)\//);
@@ -371,7 +340,6 @@ function run() {
         .join(" ");
       const title = extractTitle(rawContent) ?? titleizedBase;
       descriptors.push({
-        locale: c.locale,
         area,
         route: routeRaw,
         base: baseNoExt,
@@ -381,39 +349,8 @@ function run() {
     }
   }
 
-  // Fallback: EN doc with no ZH sibling → copy EN into the zh tree, warn.
-  // Also add a zh descriptor mirroring the en one.
-  for (const enDest of seenEn) {
-    if (!seenZh.has(enDest)) {
-      const from = resolve(__dirname, "..", enDest);
-      const to = resolve(__dirname, "..", "zh", enDest);
-      mkdirSync(dirname(to), { recursive: true });
-      copyFileSync(from, to);
-      console.warn(`[sync] no zh translation, using EN fallback: ${enDest}`);
-      // Add zh descriptor mirroring en
-      const enDesc = descriptors.find(
-        (d) =>
-          d.locale === "en" &&
-          "/" + enDest.replace(/\.md$/, "").replace(/\/index$/, "/") ===
-            d.route,
-      );
-      if (enDesc) {
-        descriptors.push({
-          ...enDesc,
-          locale: "zh",
-          route: "/zh" + enDesc.route,
-        });
-      }
-    }
-  }
-
   // Build and write sidebar JSON
-  const enDescs = descriptors.filter((d) => d.locale === "en");
-  const zhDescs = descriptors.filter((d) => d.locale === "zh");
-  const sidebarJson = {
-    en: buildReferenceSidebar(enDescs, "en"),
-    zh: buildReferenceSidebar(zhDescs, "zh"),
-  };
+  const sidebarJson = buildReferenceSidebar(descriptors);
   const sidebarPath = resolve(
     __dirname,
     "..",

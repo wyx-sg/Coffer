@@ -273,7 +273,7 @@ async def test_adopt_invalid_folder_raises_and_registers_nothing(tmp_path):
         )
     assert exc.value.reason == "skill_md_missing"
     assert await skill_svc.list_skills() == []
-    assert store.list_names() == []
+    assert not store.root.exists() or not any(store.root.iterdir())
     assert (original / "notes.txt").is_file()  # untouched
     await engine.dispose()
 

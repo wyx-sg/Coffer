@@ -42,17 +42,16 @@ dependencies = [
     "psutil>=5.9",
     "tomlkit>=0.13",
     "pyyaml>=6.0",
-    # spec agent-registry (agent registry): round-trip YAML editing for agents whose config
-    # is YAML (e.g. Hermes ~/.hermes/config.yaml) — preserves the user's
-    # comments/order on MCP install, the YAML analogue of tomlkit. pyyaml alone
-    # would clobber comments.
-    "ruamel.yaml>=0.18",
-    # Inbound channel attachments → text (spec channels FR-030). MarkItDown is
-    # here for that alone: the knowledge layer converts nothing any more (ADR
-    # knowledge-is-plain-files), so this is no longer a "knowledge substrate"
-    # dependency. The extras pull in its format backends — without them every
-    # rich format it advertises (pdf/docx/pptx/xlsx/xls) raises
-    # MissingDependencyException at extraction time. html is built-in.
+    # Document → text, for exactly two callers, which is what Contract 7
+    # ("engine confinement") fences it to: inbound channel attachments
+    # (spec channels FR-030, ``infrastructure/chat``) and knowledge ingest
+    # (``infrastructure/knowledge/converters``, which turns an uploaded file
+    # into a markdown knowledge file). What the knowledge layer no longer has
+    # is an INDEX — nothing here embeds or retrieves (ADR
+    # knowledge-is-plain-files); conversion at ingest is untouched by that.
+    # The extras pull in its format backends — without them every rich format
+    # it advertises (pdf/docx/pptx/xlsx/xls) raises MissingDependencyException
+    # at extraction time. html is built-in.
     # Removed with the index: sqlite-vec (the vector index), llama-index-*,
     # sentence-transformers, chromadb, mem0ai, pypdf. Coffer embeds nothing at
     # all now — knowledge search and memory recall are literal.
@@ -128,7 +127,6 @@ pretty = true
 [[tool.mypy.overrides]]
 module = [
     "markitdown.*",
-    "ruamel.*",
 ]
 ignore_missing_imports = true
 

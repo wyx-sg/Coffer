@@ -1,68 +1,91 @@
 # Implementation Plan: Vault Sync
 
-> 中文版: [plan.zh.md](./plan.zh.md)
-
 Sync is a **cross-cutting service**, not a resource kind (see
 [Vault Sync](../../docs/decisions/vault-sync.md)). It follows the
 retention/credentials pattern across the four layers, and the only user-entered
 row it owns is the single `sync_remotes` config row; the convergence pointer is
 machine-local state and the machine registry is the working tree itself.
 
-The spec fixes the algorithm; this plan fixes the names, the boundaries and the
-order.
-
-**Nothing is renamed.** `bundle.py` stays `bundle.py`, `git_mirror.py` stays
-`git_mirror.py`, `backup.py` stays `backup.py`. Every one of them changes
-behaviour substantially, and none of that is helped by churning the docstring
-reference in every file that imports them.
+The spec fixes the algorithm; this plan fixes the names and the boundaries.
 
 ## Layering
 
 ```
 domain/sync/          pure value objects + contracts
+  backup.py           BackupRemote (the remote's configuration), its URL and
+                      branch validators, worktree_conflict, redact
   convergence.py      JoinKind, ConvergeStatus, GuardDirection,
-                      PendingConfirmation, ConvergeRun                    (new)
+                      PendingConfirmation, ConvergeRun, RunRecord
   diff.py             ChangeStatus, DocChange, DeletionGuard, DiffSummary,
-                      area_of, NON_VAULT_AREAS                            (new)
-  machine.py          derive_machine_id, MachineDescriptor                (new)
-  fernet_time.py      encrypted_at, is_fresher                        (restored)
-  errors.py           the SyncError family, + SyncJoinAmbiguous
-  backup.py           BackupRemote (the remote's configuration)
-  models.py           AreaCount, ExportSummary
-  serialization.py    deterministic Resource <-> doc projection (pure)
-  portability.py      ${HOME} normalization / expansion (pure)
+                      area_of, NON_VAULT_AREAS, the two guard thresholds
+  errors.py           the SyncError family: SyncBundleTooNew,
+                      SyncBundleInvalid, SyncSerializationError,
+                      MasterKeyFileInvalid, BackupRemoteInvalid,
+                      SyncJoinAmbiguous
+  fernet_time.py      encrypted_at, is_fresher — ordering two ciphertexts
+                      without the key
+  machine.py          derive_machine_id, MachineDescriptor
   manifest.py         Manifest, SCHEMA_VERSION
+  models.py           AreaCount, ExportSummary
+  portability.py      ${HOME} normalization / expansion (pure)
+  serialization.py    deterministic Resource <-> doc projection (pure)
 
 application/sync/
-  convergence.py      ConvergeRound — the seven steps, plus reverse_to    (new)
-  service.py          ConvergeService — remote, lock, audit, key bootstrap (new)
+  convergence.py      ConvergeRound — the seven steps
+  convergence_backwards.py  BackwardsMixin — reverse_to, and the rollback and
+                      rebuild that run a round's applier backwards over it
+  convergence_ops.py  the round's helpers that need nothing from the round:
+                      is_inapplicable, commit_message, held_run, failed_run,
+                      applier_for
+  service.py          ConvergeService — the lock, the audit trail, the
+                      master-key bootstrap, confirm / reject / rollback
+  service_remote.py   RemoteMixin — the remote's configuration half
+  service_machines.py MachinesMixin — the registry half
+  service_history.py  HistoryMixin — the run-history half
   appliers.py         TreeApplier, ResourceApplier, StateApplier,
-                      CredentialApplier                                   (new)
-  conflicts.py        ConflictArbiter                                     (new)
-  joining.py          JoinResolver, Join                                  (new)
-  machines.py         MachineRegistry, MachineView                        (new)
+                      CredentialApplier
+  conflicts.py        ConflictArbiter
+  joining.py          JoinResolver, Join
+  machines.py         MachineRegistry, MachineView
+  exporter.py         SyncExporter — the serializer step 1 calls
   worker.py           ConvergeWorker — the timer, shaped like RetentionWorker
-  exporter.py         SyncExporter — the serializer a round calls at step 1
-  ports.py            + ConvergenceStatePort, ConflictResolverPort,
+  ports.py            ImportGate, PostImportHook, SyncedStatePort,
+                      CredentialSyncPort, MasterKeyPort, BundlePort,
+                      ConvergenceStatePort, ConflictResolverPort,
                       VaultApplyPort, SyncRemoteRepoPort
+  git_port.py         GitMirrorPort — half of ports.py on its own, so it lives
+                      on its own
 
 infrastructure/sync/
   git_mirror.py       GitMirror — the one place that runs git
   bundle.py           Bundle — the tree's layout and its document IO
   tree_mirror.py      _mirror_tree / _converge_files — differential, `protected`
-  machine_id.py       resolve, MachineIdentity                            (new)
-  credentials.py      ciphertext dump/load
+  machine_id.py       resolve, MachineIdentity — the host's stable identifier
+  identity.py         resolve_identity, machine_name — the id and the label,
+                      resolved once and cached in daemon-config.json
+  conflict_resolver.py AgenticConflictResolver — the bounded model pass
+  credentials.py      CredentialSyncAdapter — ciphertext dump/load
   paths.py            the mirrored trees
 
 infrastructure/persistence/
-  sync_remote_repo.py the single sync_remotes row
-  (+ the ConvergenceStatePort adapter — machine-local, see below)
+  sync_remote_repo.py    the single sync_remotes row, and the sync_runs history
+  convergence_state_repo.py  the pointer, the held round and the held paths
+                             — machine-local, see below
 
 surfaces/
-  http/sync_routes.py + sync_wiring.py    /api/v1/sync/*
-  cli/sync_cmd.py                         `coffer sync` group
-  frontend/src/pages/sync/                the top-level Sync page
+  http/sync_routes.py       /api/v1/sync/*
+  http/sync_schemas.py      the wire shapes those routes declare
+  http/sync_wiring.py       the composition root for one round's object graph
+  http/sync_contributions.py  what each kind contributes, collected explicitly
+  cli/sync_cmd.py           `coffer sync` group
+  cli/sync_machine_cmd.py   `coffer sync machine` and `coffer sync key`
+  frontend/src/pages/sync/  the top-level Sync page
 ```
+
+Both splits above are the file-size tier rather than new seams: `ConvergeRound`
+is one unit across `convergence.py`, `convergence_backwards.py` and
+`convergence_ops.py`, and `ConvergeService` is one unit across `service.py` and
+its three mixins.
 
 Six units carry the weight, and each is named for exactly what it does:
 
@@ -93,33 +116,10 @@ Six units carry the weight, and each is named for exactly what it does:
   mirror, and returns `(resolved_by_agent, unresolved)`. It never sees the
   vault, which is what makes the spec's rule structural rather than remembered.
 
-## Rewritten, deleted, kept
-
-| Existing unit | Fate |
-| --- | --- |
-| `domain/sync/backup.py` | **kept** — `BackupRemote` is the remote's configuration and its fields are unchanged. `record_run` now takes a `ConvergeRun` |
-| `domain/sync/models.py` | **trimmed** — `ImportSummary` goes with the importer; `AreaCount` and `ExportSummary` stay, because the exporter still produces them |
-| `domain/sync/errors.py` | **extended** — gains `SyncJoinAmbiguous`; the bundle and master-key errors stay, because the bundle layout is still what the working tree holds |
-| `domain/sync/serialization.py` | **kept** — the resource document is identity, description and config; `enabled` and `scope` are read and discarded, because reach is machine-local |
-| `domain/sync/portability.py`, `manifest.py` | **kept** unchanged |
-| `application/sync/exporter.py` | **kept** — `SyncExporter` is the serializer step 1 calls. What changed is underneath it: `Bundle` now converges differentially instead of clearing |
-| `application/sync/importer.py` | **deleted** — a bundle-wins whole-tree import is precisely the operation this spec removes; `appliers.py` replaces it |
-| `application/sync/backup_service.py` | **deleted** — `ConvergeService` + `ConvergeRound` replace it |
-| `application/sync/backup_worker.py` | **deleted** — `worker.py`'s `ConvergeWorker` replaces it, same shape |
-| `application/sync/ports.py` | **extended** — four new ports (below), twelve additions to `GitMirrorPort`, and the `machines/` methods on `BundlePort`. `SyncedStatePort` gains `delete_docs`; `CredentialSyncPort`, `MasterKeyPort`, `ImportGate`, `PostImportHook` unchanged |
-| `infrastructure/sync/bundle.py` | **rewritten in place** — `open_for_write` clears nothing; every area converges differentially; a `held_paths` callback names what the export must preserve; `write_machine_descriptor` / `read_machine_descriptors` / `delete_machine_descriptor` arrive |
-| `infrastructure/sync/git_mirror.py` | **extended in place** — the askpass/token handling is untouched; `merge`, `commit_merge`, `abort_merge`, `take_side`, `diff_paths`, `file_count`, `reset_hard`, `tag`, `tags`, `delete_tag`, `read_file`, `read_worktree` are added, plus the `EMPTY_TREE` constant |
-| `infrastructure/sync/tree_mirror.py` | **extended** — `_mirror_tree` and `_converge_files` take `protected`, the destination-relative paths that survive a convergence because this vault has not absorbed them |
-| `infrastructure/sync/credentials.py`, `paths.py` | **kept** |
-| `infrastructure/persistence/sync_remote_repo.py` | **kept** — same single row, new `last_status` vocabulary |
-| `frontend/.../settings/SyncBundleCard.tsx` | **deleted** with export/import |
-| `frontend/.../settings/SyncBackupCard.tsx` | **rewritten** into the Sync page's Status tab |
-| `frontend/.../settings/SyncMasterKeyCard.tsx` | **kept**, moved onto the Status tab |
-
 Nothing from the 0.3.0 convergence attempt is resurrected: no tombstone table,
 no TTL, no timestamp arbitration, no quarantine table. The diff is the ledger.
 
-### The four new ports
+### Four of the ports
 
 - **`ConvergenceStatePort`** — the pointer, the retry set and the
   not-applicable set (`pointer` / `set_pointer` / `held_paths` / `hold` /
@@ -172,182 +172,91 @@ tidy worker**. Both rewrite vault content, and an export taken half-way through
 a rewrite is a torn snapshot that git reads as a deliberate change. That is why
 the lock is injectable rather than private.
 
-## Build order (TDD, each a committable chunk)
-
-1. **Scope stays one axis, and reach stays home** — `domain/scope.py` keeps the
-   single-axis `Scope` (agents only). A resource's reach — its `enabled` flag and
-   its `scope` together — is machine-local and is not serialized into the bundle
-   at all, so each machine answers "what does this reach here?" for itself. The
-   machine axis this spec once introduced was withdrawn with the same decision;
-   its strip migration inlines the shape rather than importing the domain, so the
-   revision means the same thing forever, and no load-time shim reads the old
-   shape afterwards.
-2. **Machine identity** — `derive_machine_id` (pure), `machine_id.resolve` (the
-   three sources and their order), `MachineIdentity` carrying `derived`. Unit
-   tests: the raw host identifier never appears in the output; the same raw id
-   hashes stably; the fallback file is written `0600` and never rewritten,
-   because regenerating it would split this machine's identity in two.
-3. **domain/sync value objects** — `convergence.py`, `diff.py`, `machine.py`,
-   `fernet_time.py`. Unit tests: `area_of` maps every row of the spec's apply
-   table and `NON_VAULT_AREAS` excludes `machines` and `manifest`;
-   `DeletionGuard.breached_areas` fires above the share **or** the floor, treats
-   an area absent from `totals` as wholly at risk, and returns nothing for a
-   diff with no deletions; `MachineDescriptor.from_doc` tolerates fields a newer
-   build wrote; `is_fresher` orders two tokens without a key and answers False
-   on a tie or an unparseable header.
-4. **The convergence-state adapter** — the SQLite table behind
-   `ConvergenceStatePort`. Integration tests: the pointer, the two held sets and
-   a `PendingConfirmation` round-trip; `hold`/`release` move a path between the
-   sets; `set_pending(None)` clears.
-5. **`Bundle` differential writes** — `open_for_write` clears nothing,
-   `_converge_files` and `_mirror_tree` honour `protected`, and the machine
-   descriptor methods land. Integration tests: an unchanged vault produces an
-   unchanged tree; a deleted document is removed; a **held** path is never
-   removed; an unchanged descriptor is not rewritten, which is what stops an
-   idle machine committing a heartbeat.
-6. **`GitMirror`'s new commands** — merge with conflict list, `commit_merge`,
-   `abort_merge`, `take_side`, `diff_paths`, `file_count`, tags, `read_file`,
-   `read_worktree`, `reset_hard`, `EMPTY_TREE`. Integration tests run against a
-   real local bare repository, so no network is involved. Three pin the security
-   rules the backup remote already had: the token never reaches `.git/config`,
-   never appears in an argument vector, and a failed push's message carries no
-   secret. One pins `core.quotepath=false`, because a conflicted file with a
-   non-ASCII name came back C-quoted once already and crashed the resolver into
-   a retry loop.
-7. **The appliers** — every row of the apply table against a real
-   `ResourceService`, the real credential store and tmp vault dirs. Integration
-   tests: an addition registers and runs the kind's import gate; a deletion
-   removes the resource and releases the credentials nothing else cites; a
-   deletion of something already gone here is agreement, not a failure;
-   `TreeApplier` leaves no empty collection directory behind;
-   `CredentialApplier` refuses a blob older than the one it holds even outside a
-   merge conflict.
-8. **`ConflictArbiter`** — the credential rule first, then the bounded agent
-   pass. Unit tests with a fake resolver: a surviving conflict marker is
-   rejected, an unparseable resource or state document is rejected, a
-   credential conflict where neither header orders the two sides is left
-   unsettled rather than guessed, and a deletion-versus-edit on a credential
-   falls through to the next layer. With no model configured, nothing is
-   resolved and everything is reported.
-9. **`JoinResolver` + `MachineRegistry`** — the join decision and the registry.
-   Integration tests: an absent descriptor joins as `NEW` from `EMPTY_TREE`; a
-   present one with a reachable commit joins as `RETURNING` from that commit; a
-   present one whose commit is gone from the history raises
-   `SyncJoinAmbiguous` rather than guessing, and `join_choice="keep-local"` is
-   the explicit answer; a descriptor this build cannot parse still proves the
-   machine has been here. Registry tests: two machines' descriptors merge with
-   no conflict; `publish_self` restamps `last_converged_on` at most once per
-   calendar day; `retire` removes the descriptor and refuses to retire self.
-10. **`ConvergeRound`** — the seven steps. Unit tests with fakes cover step
-    order and each `ConvergeStatus`; integration tests use two tmp vaults and
-    one bare repository as machines A and B and replay the spec's scenarios:
-    union on a new join, recovered base on a returning join, a stale machine not
-    resurrecting a deletion, a clean hunk merge, an unresolved conflict leaving
-    the vault untouched and the pointer unmoved, the apply-side guard holding a
-    deletion, the **publish-side** guard holding a wiped vault's deletions, a
-    waiver honoured for the recorded tip and refused after the remote moves,
-    `reverse_to` landing on the pre-apply snapshot, and a drifted HEAD being
-    reset to the pointer before step 1. One more pins the rule that makes
-    "an unchanged vault makes no commit" true: a staged diff confined to
-    `manifest.json` is a **restamp, not a change** — `staged_paths` and
-    `discard_staged` exist for exactly that, and `_serialize_and_commit` must
-    consult them before it commits.
-11. **`ConvergeService` + `ConvergeWorker`** — policy and the timer.
-    `run_once` never raises for anything the user can be told about, so the
-    loop has no judgement to make; an exception inside a round never ends it.
-    Tests: a disabled remote returns `DISABLED` without touching git; a held
-    round returns immediately on the next tick; `confirm` re-derives with the
-    recorded tip; `reject` resets the tree and leaves the vault alone;
-    `rollback` diffs from the pointer to the newest snapshot and applies that,
-    and pushes nothing. The tidy setting gains its owner machine in
-    `state/settings/internal-engine.yaml` here, and a pass is a no-op off-owner
-    and skipped while a conflict or a hold is outstanding.
-12. **HTTP + wiring** — the operations below, each with an explicit response
-    model; `ConvergeWorker` started and stopped in `_lifespan`. Contract test
-    against `contracts/api.openapi.yaml`. A test asserts the remote's payload
-    carries only the credential *reference*.
-13. **CLI** — `coffer sync remote set|show|clear`, `adopt`, `now`, `status`,
-    `restore`, `confirm`, `reject`, `rollback`, `machines`,
-    `machine rename|remove`, `key export|import`, over the loopback client.
-    `adopt` takes the same remote flags as `remote set`, since it configures
-    one, and prints what it found — which kind of join, when this machine last
-    converged — before it proceeds.
-14. **Frontend** — a top-level **Sync** page with a **Status** tab (remote form,
-    last and next round, what recent rounds changed, a run button, the
-    master-key card) and a **Machines** tab (the registry table, with the local
-    machine marked, a fingerprint mismatch stated in words, and a warning where
-    the id came from the fallback file rather than the host). Conflicts and
-    holds render as a banner on Status. The reach editor states, where reach is
-    set, that it applies to this machine only and is not synced, and says when a
-    resource is dormant here.
-15. **Docs** — architecture.md cross-cutting row, roadmap status, docs-site
-    guide and architecture pages, bilingual companions; acceptance markers tie
-    each `spec.md` scenario to a test.
-
 ## API shapes
 
 Under `/api/v1/sync`, all loopback-token guarded. Schema names are the FastAPI
-response-model names, because `make verify-contract` checks the two against
-each other. The routes are a thin projection of two objects: `ConvergeService`
-(`run_once`, `confirm`, `reject`, `rollback`, `key_fingerprint`, `export_key`,
-`import_key`) and `MachineRegistry` (`list`, `describe_self`, `retire`).
+response-model names, and `contracts/api.openapi.yaml` declares the same ones.
+The routes are a thin projection of two objects: `ConvergeService` (`run_once`,
+`confirm`, `reject`, `rebuild`, `rollback`, `restore`, `runs`,
+`key_fingerprint`, `export_key`, `import_key`) and `MachineRegistry` (`list`,
+`describe_self`, `retire`).
 
 | Operation | Request | Response | Behind it |
 | --- | --- | --- | --- |
 | `GET /sync/remote` | — | `SyncRemoteStateOut` | `SyncRemoteRepoPort.get` |
 | `PUT /sync/remote` | `SyncRemoteIn` | `SyncRemoteOut` | `SyncRemoteRepoPort.set` |
 | `DELETE /sync/remote` | — | `SyncRemoteClearedOut` | `SyncRemoteRepoPort.clear` |
-| `POST /sync/run` | `RunIn` | `ConvergeRunOut` | `run_once(join_choice=…)` |
-| `POST /sync/adopt` | `AdoptIn` | `ConvergeRunOut` | `set` then `run_once` |
+| `POST /sync/run` | — | `RoundOut` | `run_once()` |
+| `POST /sync/adopt` | `AdoptIn` (optional) | `RoundOut` | `run_once(join_choice=…)` — there is no separate adopt method, because joining is detected by the absent pointer |
 | `GET /sync/status` | — | `SyncStatusOut` | `last_run` + state + registry |
-| `GET /sync/runs` | `limit` | `SyncRunListOut` | `list_runs` — every round, newest first |
-| `POST /sync/restore` | `RestoreIn` | `ConvergeRunOut` | an earlier revision through the same appliers |
-| `POST /sync/confirm` | — | `ConvergeRunOut` | `confirm()` |
-| `POST /sync/reject` | — | `SyncRejectedOut` | `reject()` |
-| `POST /sync/rollback` | — | `ConvergeRunOut` | `rollback()` |
+| `GET /sync/runs` | `limit` query | `SyncRunListOut` | `runs(limit)` — every round, newest first |
+| `POST /sync/restore` | `RestoreIn` (optional) | `RoundOut` | an earlier revision through the same appliers |
+| `POST /sync/confirm` | — | `RoundOut` | `confirm()` |
+| `POST /sync/reject` | — | `SyncRemoteClearedOut` | `reject()` |
+| `POST /sync/rebuild` | — | `RoundOut` | `rebuild()` |
+| `POST /sync/rollback` | — | `RoundOut` | `rollback()` |
 | `GET /sync/machines` | — | `MachineListOut` | `MachineRegistry.list` |
 | `PATCH /sync/machines/self` | `MachineRenameIn` | `MachineOut` | `describe_self` + rename |
-| `DELETE /sync/machines/{id}` | — | `MachineRetiredOut` | `MachineRegistry.retire` |
+| `DELETE /sync/machines/{machine_id}` | — | `MachineRemovedOut` | `MachineRegistry.retire` |
 | `GET /sync/key/fingerprint` | — | `KeyFingerprintOut` | `key_fingerprint()` |
-| `POST /sync/key/export` | `EmptyIn` | `KeyMaterialOut` | `export_key()` |
+| `POST /sync/key/export` | — | `KeyMaterialOut` | `export_key()` |
 | `POST /sync/key/import` | `KeyMaterialIn` | `KeyImportOut` | `import_key()` |
 
-`confirm` and `reject` get separate paths because they are separate methods
-with genuinely different shapes: confirming re-runs a round and returns one,
-while rejecting only resets the tree and returns nothing but the fact that it
-did. Folding them into one body field would have hidden that.
+`confirm`, `reject` and `rebuild` get three separate paths rather than one body
+field, because they are three separate methods with genuinely different shapes:
+confirming re-derives a round and returns one, rebuilding runs a different
+round, and rejecting only resets the tree and returns nothing but the fact that
+it did. Folding them into one `decision` field would have hidden that.
 
-Three shapes carry the design, and they are worth stating here rather than only
+Four shapes carry the design, and they are worth stating here rather than only
 in the yaml:
 
-- **`ConvergeRunOut` is `ConvergeRun`, field for field.** `status`
+- **`RoundOut` is `ConvergeRun` projected field for field.** `status`
   discriminates (`ok`, `no_change`, `conflict`, `awaiting_confirmation`,
   `push_failed`, `failed`, `disabled`) and `join` is `new` / `returning` /
-  absent. `applied` and `published` are both reported, because "what this round
+  null. `applied` and `published` are both reported, because "what this round
   took" and "what this round gave" are different questions and the publish-side
-  guard makes the second one load-bearing.
-- **`PendingConfirmationOut` names its direction and its tip.** `direction` is
-  `apply` or `publish`; `breaches` is `(area, deleted, total)` per breached
-  area; `remote_tip` is what the waiver is scoped to. `GET /sync/status`
-  reports a hold in either direction, because a hold outlives the request that
-  raised it.
+  guard makes the second one load-bearing. Every round-shaped operation — run,
+  adopt, restore, confirm, rebuild, rollback — answers with this one shape, so
+  a surface renders one component for all six.
+- **`RunRecordOut` widens `RoundOut` rather than standing beside it** — the
+  same report plus `id`, `started_at` and `finished_at`. A subtype rather than
+  a shape of its own, so the status page and the history table cannot drift
+  into describing one round two ways. `SyncRunListOut` is a list of them.
+- **`DiffCountsOut` carries the paths, not only the tally.** `added` /
+  `modified` / `deleted` is what a history row shows; `changes` is every path
+  that side touched with its status, which is what opening the row is for. A
+  round reporting `+1 ~1` and nothing further would be refusing the only
+  question the row raises.
 - **`MachineOut` is `MachineView` flattened** — the descriptor's fields plus
   `is_self` and a nullable `key_matches`, which is `null` when either side has
   published no fingerprint rather than a misleading `false`. Note the field is
   `last_converged_on`, a **date**: it is restamped at most once per calendar
   day, so it means "the last day this machine converged".
 
+`PendingConfirmationOut` deliberately stops short of the domain object it comes
+from. `PendingConfirmation` carries `remote_tip` because the waiver is scoped
+to it; the wire shape carries `direction`, `breaches`, `paths` and `raised_at`
+and **not** the tip, because a caller has no use for a revision it cannot act
+on — confirming is "yes, that one", and which tip that was is the service's
+business. `GET /sync/status` reports a hold in either direction, because a hold
+outlives the request that raised it.
+
 Error codes and their HTTP mappings: `BACKUP_REMOTE_INVALID` (422),
-`SYNC_JOIN_AMBIGUOUS` (409), `SYNC_NOTHING_PENDING` (409),
-`SYNC_NOTHING_TO_ROLL_BACK` (409), `SYNC_CANNOT_RETIRE_SELF` (422),
-`SYNC_BUNDLE_TOO_NEW` (409), `SYNC_BUNDLE_INVALID` (422),
-`SYNC_SERIALIZATION_INVALID` (422), `SYNC_APPLIER_MISSING` (422),
+`GIT_MIRROR_FAILED` (502), `SYNC_JOIN_AMBIGUOUS` (409),
+`SYNC_NOTHING_PENDING` (409), `SYNC_NOTHING_TO_ROLL_BACK` (409),
+`SYNC_CANNOT_RETIRE_SELF` (422), `SYNC_BUNDLE_TOO_NEW` (409),
+`SYNC_BUNDLE_INVALID` (422), `SYNC_SERIALIZATION_INVALID` (422),
 `MASTER_KEY_FILE_INVALID` (422).
 
 ## Key constraints honored
 
-- Every file ≤ 400 lines; `application/sync/convergence.py` is the one to watch,
-  and `joining.py` and `conflicts.py` are already split out of it.
+- Every backend file ≤ 400 lines. `ConvergeRound` and `ConvergeService` are the
+  two to watch, and both are already split for it — the round across
+  `convergence.py`, `convergence_backwards.py` and `convergence_ops.py` with
+  `joining.py` and `conflicts.py` beside it, the service across `service.py`
+  and three mixins. Each split follows a seam that was already there, so the
+  cap never bought an arbitrary boundary.
 - `application/` must not import `infrastructure/`: git, the bundle, the
   convergence state, the remote's row and the host id are all injected as ports.
 - `domain/sync` stays pure (no sqlalchemy, no fs, no subprocess) — including

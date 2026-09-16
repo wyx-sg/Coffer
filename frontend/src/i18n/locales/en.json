@@ -20,12 +20,12 @@
   "common": {
     "close": "Close",
     "save": "Save",
+    "create": "Create",
     "cancel": "Cancel",
     "delete": "Delete",
     "dismiss": "Dismiss",
     "edit": "Edit",
     "loading": "Loading…",
-    "loadMore": "Load more (showing {{loaded}} of {{total}})",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "saving": "Saving…",
@@ -35,7 +35,6 @@
     "rawLog": "Raw log",
     "done": "Done",
     "saved": "Saved",
-    "moreActions": "More actions",
     "showPassword": "Show",
     "hidePassword": "Hide",
     "dateTimeFormatHint": "YYYY-MM-DD HH:mm:ss",
@@ -55,7 +54,6 @@
       "enable": "Enable",
       "disable": "Disable",
       "delete": "Delete",
-      "install": "Install",
       "summary": {
         "allOk": "{{count}} succeeded",
         "partial": "{{ok}} succeeded, {{failed}} failed",
@@ -70,7 +68,6 @@
   "files": {
     "conflict": "This file changed on disk since you opened it, so the save was refused. Your edits are still here — copy them somewhere safe, then reload to take the version on disk.",
     "discardAndReload": "Discard my edits and reload",
-    "readOnlyBinary": "Binary file — read-only",
     "readOnlyTruncated": "Too large to load in full — read-only, so a save cannot truncate it",
     "readOnlyMissing": "Not created yet — read-only"
   },
@@ -103,7 +100,6 @@
     "title": "MCP servers",
     "subtitle": "Upstream MCP servers Coffer aggregates and re-exposes through a single shim.",
     "addServer": "Add MCP server",
-    "all": "All",
     "loadFailed": "Failed to load resources",
     "welcome": {
       "title": "A local-first vault for the AI assets your editors share",
@@ -138,8 +134,6 @@
     "missingRunner": "{{runner}} is not installed on this machine",
     "missingRunnerHint": "Install {{runner}}, then refresh",
     "table": {
-      "transport": "Transport",
-      "health": "Health",
       "search": "Search servers…",
       "deleteAria": "Delete {{name}}"
     },
@@ -226,8 +220,6 @@
       "back": "Back",
       "import": "Import {{count}}",
       "review": "Review what will be imported",
-      "transport": "Transport",
-      "env": "Environment variables",
       "noEnv": "No environment variables",
       "secret": "Secret",
       "secretHint": "Values marked Secret are encrypted into Coffer's local database; the rest stay in the config.",
@@ -257,9 +249,7 @@
       "spawn": "Spawn",
       "spawnHint": "Starting the server process. 5–120, default 30.",
       "request": "Request",
-      "requestHint": "One call to this server. 5–1800, default 120.",
-      "idle": "Idle",
-      "idleHint": "Before an unused connection closes. 60–86400, default 600."
+      "requestHint": "One call to this server. 5–1800, default 120."
     }
   },
   "timeRange": {
@@ -307,7 +297,6 @@
       "credential_migrated": "Credential migrated from OS keychain",
       "credential_read": "Read a credential",
       "credential_set": "Stored a credential",
-      "daemon_port_set": "Set the daemon's port",
       "internal_engine_model_set": "Set the internal engine's model",
       "knowledge_deleted": "Deleted a note from {{resource}}",
       "knowledge_tidied": "Tidied the {{resource}} collection",
@@ -490,7 +479,6 @@
       "addTitle": "Add model provider",
       "editTitle": "Edit model provider",
       "empty": "No model providers yet.",
-      "switch": "Switch",
       "active": "Active",
       "activeHint": "This provider powers Coffer's own model (Settings → Coffer's model).",
       "reachHint": "Which agents this provider reaches is set with the reach control — on the provider's row in the list, or on its own page.",
@@ -528,12 +516,7 @@
       "renameHint": "Renaming moves the stored key, the history and any agent this provider drives with it.",
       "customProvider": "Custom",
       "wireFormat": "Protocol",
-      "detectType": "Detect type",
-      "detected": "Detected: {{wire}}",
-      "detectFailed": "Could not detect — pick one",
       "baseUrl": "Base URL",
-      "model": "Model",
-      "fastModel": "Fast model (optional)",
       "secret": "API key",
       "searchPlaceholder": "Search model providers…",
       "allVendors": "All vendors",
@@ -555,7 +538,6 @@
         "noModelsYet": "This endpoint listed no models. Leave the selection empty and every model it offers stays available.",
         "modelId": "Model",
         "modelSearchPlaceholder": "Search models…",
-        "modelOffered": "Offered",
         "noModelsMatch": "No models match your search.",
         "modality": "Type",
         "allModalities": "All types",
@@ -641,7 +623,6 @@
     "CREDENTIAL_UNREADABLE": "Stored credential could not be decrypted with the current master key",
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
-    "DOCUMENT_NOT_FOUND": "Document not found",
     "ENGINE_UNAVAILABLE": "The retrieval engine is unavailable",
     "FORBIDDEN": "This action is not permitted.",
     "FS_PATH_NOT_BROWSABLE": "That path can't be browsed",
@@ -655,7 +636,6 @@
     "INGEST_REJECTED_unsupported_type": "This file type isn't supported. Convert it to PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), HTML, EPUB, CSV, or a text/Markdown file and re-upload. Legacy .doc/.ppt: save as .docx/.pptx first.",
     "INTERNAL_ERROR": "An unexpected error occurred",
     "INVALID_PREFIX": "Invalid prefix",
-    "KB_NOT_FOUND": "Knowledge base not found",
     "KNOWLEDGE_COLLECTION_EXISTS": "A knowledge collection with that name already exists",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "Knowledge collection not found",
     "KNOWLEDGE_ERROR": "The knowledge layer rejected that operation",
@@ -672,10 +652,6 @@
     "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
     "MEMORY_FACT_NOT_FOUND": "That memory fact wasn't found",
     "MEMORY_FILE_NOT_FOUND": "That file isn't in this partition",
-    "MEMORY_NOT_FOUND": "Memory not found",
-    "MEMORY_REJECTED": "The memory was rejected (empty or too long)",
-    "MEMORY_STORE_MERGE_INVALID": "Those knowledge scopes cannot be merged",
-    "MEMORY_STORE_NOT_FOUND": "Memory store not found",
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
     "NOT_FOUND": "Not found.",
@@ -686,19 +662,16 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "Supply exactly one of a saved credential or an inline key",
-    "RECONVERSION_BLOCKED": "Reindexing is already in progress",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "RESOURCE_NOT_FOUND": "Resource not found",
     "SCOPE_INVALID": "That reach isn't valid for this resource kind",
-    "SCOPE_UNRESOLVED": "The memory scope couldn't be resolved",
     "SHIM_NOT_FOUND": "Couldn't find the coffer-mcp-shim binary. Install Coffer so the shim is on PATH, or set COFFER_MCP_SHIM_PATH.",
     "SKILL_DIR_NOT_WRITABLE": "The skills directory isn't writable — check its permissions",
     "SKILL_FILE_STALE": "The skill file changed on disk since you loaded it. Reload and retry.",
     "SKILL_INVALID": "The skill is invalid",
     "SKILL_OUT_OF_SCOPE": "This skill's reach doesn't include this agent on this machine",
-    "SYNC_APPLIER_MISSING": "Nothing in this vault knows how to apply that path",
-    "SYNC_BUNDLE_INVALID": "That folder is not a Coffer export bundle",
-    "SYNC_BUNDLE_TOO_NEW": "That bundle was written by a newer Coffer; upgrade before importing",
+    "SYNC_BUNDLE_INVALID": "That folder cannot be used as the sync working tree",
+    "SYNC_BUNDLE_TOO_NEW": "The sync remote was written by a newer Coffer; upgrade this machine before it can converge",
     "SYNC_CANNOT_RETIRE_SELF": "A machine cannot retire itself",
     "SYNC_JOIN_AMBIGUOUS": "This machine has converged with this remote before, but the commit it reached is gone from the remote's history — re-run the join and choose whether to keep this vault's own documents or rebuild this machine from the remote",
     "SYNC_NOTHING_PENDING": "No converge round is waiting for confirmation",
@@ -722,10 +695,6 @@
     "perPage": "Per page",
     "prev": "Previous",
     "next": "Next"
-  },
-  "resourceDetail": {
-    "unknownKind": "Unknown kind",
-    "unknownKindBody": "No frontend module registered for kind: {{kind}}"
   },
   "agents": {
     "title": "Agents",
@@ -961,7 +930,6 @@
     "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy to at least one agent. Those agents won't see edits to the master skill until it is delivered again.",
     "title": "Skills",
     "subtitle": "AgentSkills-standard folders Coffer manages and delivers to your registered agents.",
-    "empty": "No skills yet. Import a local folder to get started.",
     "loadFailed": "Failed to load skills",
     "add": "Add skill",
     "addSubtitle": "Import a local AgentSkills-standard folder from disk.",
@@ -978,12 +946,8 @@
     "removeConfirmBody": "This deletes the master folder and all per-agent links.",
     "importConflictTitle": "A skill named “{{name}}” already exists. Replace it?",
     "importReplace": "Replace",
-    "card": {
-      "noBindings": "No agents bound"
-    },
     "detail": {
       "back": "Back to skills",
-      "enabled": "Enabled",
       "versionHash": "Version hash",
       "masterPath": "Master path",
       "lastSynced": "Last synced",
@@ -991,20 +955,7 @@
       "updated": "Updated",
       "tabs": {
         "overview": "Overview",
-        "bindings": "Bindings",
         "files": "Files"
-      }
-    },
-    "bindings": {
-      "noAgents": "No agents registered yet. Add an agent first to bind this skill.",
-      "toggleAria": "Toggle {{agent}}",
-      "searchPlaceholder": "Search agents…",
-      "noMatches": "No agents match your filters.",
-      "allStatuses": "All statuses",
-      "cols": {
-        "agent": "Agent",
-        "link": "Link",
-        "status": "Status"
       }
     },
     "files": {
@@ -1012,7 +963,6 @@
       "selectFile": "Select a file to view.",
       "binary": "Binary file ({{size}} bytes)",
       "truncated": "Content truncated — showing the start of the file.",
-      "saved": "Saved.",
       "truncatedReadonly": "This file is too large to edit here.",
       "editorLabel": "Contents of {{path}}"
     },
@@ -1037,7 +987,6 @@
     "title": "Knowledge",
     "subtitle": "Markdown files you and your agents both edit — one folder per collection. Agents read them through Coffer's tools; only the agents you allow can see a collection.",
     "add": "New collection",
-    "empty": "No collections yet. Make one, then drop a markdown file into its folder — or let an agent write the first one.",
     "loadFailed": "Failed to load collections",
     "searchPlaceholder": "Search collections…",
     "noMatches": "No collections match your search.",
@@ -1052,7 +1001,6 @@
       "tidy": "Tidy",
       "tidyHint": "Rebuilds each collection's index file from the Markdown on disk.",
       "tidyDone": "Tidy pass finished.",
-      "searchTitle": "Search contents",
       "emptyFolder": "Nothing here yet",
       "selectAFile": "Select a file to read it",
       "treeLabel": "Files in this collection"
@@ -1109,7 +1057,6 @@
     "delivery": {
       "title": "Delivery",
       "subtitle": "Coffer's session-start hook in this agent's own settings.",
-      "loadFailed": "Failed to load delivery status",
       "installed": "Installed",
       "notInstalled": "Not installed",
       "installedHint": "Coffer's {{event}} hook is written into this agent's settings. Every time it fires is recorded on the Activity page.",
@@ -1343,8 +1290,6 @@
       "self": "{{name}} · this machine",
       "unbound": "Not bound",
       "unknown": "Unknown machine ({{id}})",
-      "runsHere": "This machine runs this channel's adapter.",
-      "runsElsewhere": "{{machine}} runs this channel's adapter — this machine does not.",
       "unboundBody": "This channel is bound to no machine, so no daemon starts it and the bot never answers. Pick the machine that should answer it.",
       "unknownBody": "This channel is bound to {{id}}, which no machine in the registry claims — it runs nowhere until it is bound to one that does.",
       "handover": "Rebinding needs no restart. The machine losing the channel stops within a couple of seconds; the machine gaining it starts after the next sync round brings the change over. Rebinding away from the machine you are on hands over cleanly — binding a channel to this machine while another still holds it can leave both answering until that machine's next round.",
@@ -1480,7 +1425,6 @@
       }
     },
     "history": {
-      "title": "History",
       "description": "Every converge round this machine has run, newest first. The rounds that changed nothing are listed too — they are what shows the vault was still converging.",
       "searchPlaceholder": "Search rounds…",
       "empty": "No round has run yet. Save a remote, then Converge now to start one.",
@@ -1568,7 +1512,6 @@
       "retire": "Retire",
       "retireTitle": "Retire {{name}}?",
       "retireBody": "Its descriptor is removed from the registry and nothing else is rewritten. Reach is set on each machine and names none, so it is untouched; a channel BOUND to this machine keeps naming it, and runs nowhere until you bind it to another.",
-      "retired": "{{name}} retired.",
       "derivedNote": "This machine's id is stored in a local file rather than derived from the host, so deleting ~/.coffer makes it come back as a new machine and this row has to be retired by hand."
     }
   }

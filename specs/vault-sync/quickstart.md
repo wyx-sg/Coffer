@@ -1,7 +1,5 @@
 # Quickstart — Vault Sync
 
-> 中文版: [quickstart.zh.md](./quickstart.zh.md)
-
 Keep one vault across your machines. You point each of them at a git repository
 you own; a background worker converges them. The master key never enters the
 repository — you bring it over once, out-of-band.
@@ -13,12 +11,18 @@ repo on a NAS). Put the push token in the credential store first, so the remote
 can name it by reference and never by value:
 
 ```bash
-coffer credentials set sync/github-token ghp_...
+printf '%s' ghp_xxxxxxxx | coffer credentials set sync/github-token
 coffer sync remote set https://github.com/you/coffer-vault.git \
   --credential-ref sync/github-token \
-  --interval 1h \
+  --interval 3600 \
   --with-credentials
 ```
+
+`credentials set` takes the reference as its only argument and reads the secret
+from stdin, so the token never lands in shell history. (`--value <secret>`
+exists for scripts and says in its own help that it is the unsafe way.)
+
+`--interval` is **seconds** between automatic rounds — `3600` is the default.
 
 `--with-credentials` is what makes Fernet **ciphertext** ride along. Leave it
 off and no credential material ever reaches the repository; the master key is
@@ -49,9 +53,18 @@ git -C ~/.coffer/sync log --stat -1
 Install Coffer on the other machine, then:
 
 ```bash
-coffer sync adopt https://github.com/you/coffer-vault.git \
+coffer sync remote set https://github.com/you/coffer-vault.git \
   --credential-ref sync/github-token
+coffer sync adopt
 ```
+
+`adopt` takes an optional URL and nothing else — it configures the remote with
+its defaults when one is not set yet. A remote that needs a push credential or
+a non-default branch or interval is configured with `remote set` first, as
+above, and then adopted with no argument at all. Its one flag, `--keep-local`,
+answers the single case a join cannot default: a returning machine whose
+recorded base is no longer in the remote's history, which publishes this
+vault's documents as additions instead of refusing.
 
 Adopting tells you **what kind of join this is** before it applies anything:
 
@@ -102,7 +115,8 @@ coffer sync key import ~/coffer-master.key
 > Skip this and convergence still works, but the credentials that arrived stay
 > **locked**: they are reported as `credentials_locked`, and resources that need
 > them won't spawn. The Machines tab says so directly, by comparing key
-> fingerprints for you.
+> fingerprints for you; `coffer sync key fingerprint` prints this machine's
+> side of that comparison.
 
 ## 4. Watch them converge
 
@@ -114,12 +128,22 @@ coffer sync status
 ```
 
 ```
-remote   https://github.com/you/coffer-vault.git (main), every 1h
-machine  Laptop — a3f21c9e4b7d2610 (this machine)
-pointer  c04b8e1
-last     ok, 2026-09-13 14:02 — 3 applied, 0 failed
-next     15:02
-pending  none
+remote: https://github.com/you/coffer-vault.git  branch main
+  every 3600s · credentials included · enabled
+  push credential: sync/github-token
+  working tree: ~/.coffer/sync
+this machine: a3f21c9e4b7d2610
+ok
+  applied here: added 3
+  published: nothing
+  commit: c04b8e1a2f7d
+```
+
+`status` answers "what is happening now". For "what has been happening", every
+round this machine has run is one line each, newest first:
+
+```bash
+coffer sync history --limit 20
 ```
 
 Write a knowledge note on one machine, wait a round, and read it on the other.
@@ -161,16 +185,20 @@ coffer scope set mcp_server:work-jira --agents claude-code
 List your machines whenever you want to see who is in the vault:
 
 ```bash
-coffer sync machines
+coffer sync machine list
 ```
 
 ```
-ID                NAME      OS      LAST CONVERGED  KEY
-a3f21c9e4b7d2610  Laptop    darwin  2026-09-13      4f2a91c0b8de  (this machine)
-b7c40d29e1f58a33  Desktop   darwin  2026-09-13      4f2a91c0b8de
+Name                    Id        System  Last converged  Key  Agents
+Laptop  (this machine)  a3f21c9e  darwin  2026-09-13      ✓    claude-code, codex
+Desktop                 b7c40d29  darwin  2026-09-13      ✓    claude-code
 ```
 
-Rename one whenever you like — nothing keys on the label:
+The `Key` column is the comparison already made for you: `✓` means that
+machine's credentials decrypt here, `✗ different` means they do not, and `—`
+means one of the two machines has published no fingerprint yet.
+
+Rename this machine whenever you like — nothing keys on the label:
 
 ```bash
 coffer sync machine rename "Work desktop"
@@ -221,15 +249,18 @@ remote that went wrong; the **publish** side protects the other machines from
 *this* one — a reinstall, a failed restore or a stray `rm -rf` would otherwise
 publish the loss and take the fleet down with it.
 
+Three separate commands answer it, because they are three different acts:
+
 ```bash
-coffer sync confirm            # yes, apply it
-coffer sync confirm --reject   # no, leave everything as it is
-coffer sync confirm --rebuild  # rebuild this machine from the remote instead
+coffer sync confirm   # yes, apply it
+coffer sync reject    # no, leave everything as it is
+coffer sync rebuild   # rebuild this machine from the remote instead
 ```
 
-`--rebuild` is the answer when this machine is the damaged one: take the
-remote's state and discard what is local-only, rather than publishing an
-accidental deletion.
+`rebuild` is the answer when this machine is the damaged one: take the remote's
+state and discard what is local-only, rather than publishing an accidental
+deletion. It is destructive on purpose, so it asks before it runs — pass
+`--yes` to skip the prompt in a script.
 
 If a round did apply something you did not want, it is reversible — every round
 tags the state of the vault immediately before it applied:

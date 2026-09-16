@@ -41,11 +41,16 @@ def test_load_captures_keeps_only_valid_tool_search(tmp_path: Path) -> None:
                 "query": "make a ticket",
                 "results": ["jira__create"],
             },
+            # Valid in every other respect — non-empty query, non-empty
+            # results — so the kind is the only reason it can be dropped.
+            # ``tool_routing`` is the kind a routing capture would plausibly
+            # carry; this curator grows the tool-search dataset and must label
+            # tool_search records only.
             {
-                "kind": "retrieval",
-                "query": "kafka offsets",
-                "results": ["kafka"],
-            },  # other kind
+                "kind": "tool_routing",
+                "query": "file a ticket for the outage",
+                "results": ["jira__create"],
+            },
             {"kind": "tool_search", "query": "", "results": ["x__y"]},  # empty query
             {
                 "kind": "tool_search",
@@ -148,9 +153,7 @@ def test_curate_dedups_against_dataset_and_within_batch(tmp_path: Path) -> None:
     # "make a ticket" is in the dataset -> never presented; the in-batch dupe is
     # also collapsed. Only "open a PR" reaches the labeler.
     assert asked == ["open a PR"]
-    assert cases == [
-        {"query": "open a PR", "expected": ["gh__pr"], "source": "captured"}
-    ]
+    assert cases == [{"query": "open a PR", "expected": ["gh__pr"], "source": "captured"}]
 
 
 def test_curate_skips_when_labeler_returns_none() -> None:
@@ -159,9 +162,7 @@ def test_curate_skips_when_labeler_returns_none() -> None:
 
 
 def test_curate_skips_empty_label() -> None:
-    captures = [
-        {"kind": "tool_search", "query": "nothing relevant", "results": ["a__b"]}
-    ]
+    captures = [{"kind": "tool_search", "query": "nothing relevant", "results": ["a__b"]}]
     assert curate(captures, set(), lambda _r: []) == []
 
 
@@ -173,22 +174,16 @@ def test_append_jsonl_round_trips_and_keeps_newline_boundary(
 ) -> None:
     monkeypatch.setattr(_io, "DATASETS", tmp_path)
     # Seed a file WITHOUT a trailing newline to prove append inserts one.
-    (tmp_path / "ds.jsonl").write_text(
-        '{"query": "seed", "expected": ["s__t"]}', encoding="utf-8"
-    )
+    (tmp_path / "ds.jsonl").write_text('{"query": "seed", "expected": ["s__t"]}', encoding="utf-8")
 
-    append_jsonl(
-        "ds.jsonl", [{"query": "new", "expected": ["n__w"], "source": "captured"}]
-    )
+    append_jsonl("ds.jsonl", [{"query": "new", "expected": ["n__w"], "source": "captured"}])
 
     rows = load_jsonl("ds.jsonl")
     assert [r["query"] for r in rows] == ["seed", "new"]
     assert rows[1]["source"] == "captured"
 
 
-def test_curate_then_append_grows_dataset(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_curate_then_append_grows_dataset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_io, "DATASETS", tmp_path)
     (tmp_path / "tool_search.jsonl").write_text(
         '{"query": "make a ticket", "expected": ["jira__create"]}\n', encoding="utf-8"

@@ -71,25 +71,6 @@ def _basic_stdio_config(*tools: str) -> dict:
     }
 
 
-def _slow_stdio_config(delay_ms: int) -> dict:
-    return {
-        "transport": {
-            "type": "stdio",
-            "command": sys.executable,
-            "args": [
-                str(_FAKE),
-                "--scenario",
-                "slow",
-                "--init-delay-ms",
-                str(delay_ms),
-                "--tools",
-                "x",
-            ],
-        },
-        "spawn_timeout_seconds": 5,  # explicit lower bound for the test
-    }
-
-
 @pytest.mark.asyncio
 async def test_lazy_spawn_returns_initialized_connection(tmp_path, monkeypatch):
     _with_in_memory(monkeypatch)

@@ -1,7 +1,5 @@
 # Frontend — React / TypeScript / Vite
 
-> 中文版: [frontend.zh.md](./frontend.zh.md)
-
 Coffer's frontend is the daemon-served web UI (`frontend/`): built to static
 assets that the daemon serves at its own loopback origin in production, and
 run from the Vite dev server (`make dev`) in development with `COFFER_DEV_CORS`
@@ -42,6 +40,11 @@ src/lib/x/                       — pure helpers a feature owns (parsers, filte
 src/i18n/locales/{en,zh}.json    — under the top-level "x" key
 ```
 
+- **One documented naming exception**: the MCP-server list page is
+  `pages/ResourcesPage.tsx` (with `ResourceDetailPage.tsx`), routed at
+  `mcp-servers` in `router.tsx` — there is no `McpServersPage.tsx`. It kept the
+  generic name from when the page was the resource index; a new feature follows
+  the scheme above.
 - **Data fetching lives in a hook file, never inline in a component.** A page or
   component calls `useX()`; it does not call `useQuery`/`useMutation` directly.
   (`lib/hooks/useKnowledge.ts` is the shape to copy: every query and mutation
@@ -126,8 +129,9 @@ the chat SSE stream (below).
 - **Generated types for every contract.** `npm run codegen`
   (`frontend/scripts/codegen.mjs`) runs openapi-typescript over each
   `specs/*/contracts/api.openapi.yaml` into `src/lib/api/generated/<spec>.ts`
-  — six of the seven today; `skill-manager` joins the list once its contract
-  defines the `ErrorOut` schema it references (§9.1); `src/lib/api/types.ts` re-exports the
+  — **all seven** contracts that have one (`mcp-gateway`, `agent-registry`,
+  `channels`, `knowledge`, `provider-switching`, `skill-manager`, `vault-sync`,
+  the `CONTRACTS` array in `codegen.mjs`); `src/lib/api/types.ts` re-exports the
   mcp-gateway one so `components["schemas"][…]` keeps working. `npm run lint`
   runs `codegen:check` first, so a contract edit without a regenerate fails CI;
   never hand-edit `generated/` (it is prettier-ignored, 4-space indented).
@@ -247,13 +251,13 @@ return useMutation({
 
 When you work near these, migrate toward the target; don't extend the debt:
 
-1. **`specs/skill-manager/contracts/api.openapi.yaml` defines no `ErrorOut`**,
-   so it is skipped by codegen and `src/lib/api/skills.ts` keeps hand-written
-   types. Add the schema to the contract, add the spec to
-   `frontend/scripts/codegen.mjs`, then alias the types. Likewise the other
-   hand-written wire types the contract does not match (listed in the header
-   comment of each `src/lib/api/x.ts` that keeps one): fix the contract when
-   the backend is right, then replace the type with the generated alias.
-2. **`statusColors.ts` / `ToolCallCard`** still use raw palette classes (§6).
-3. **The `codemirror` vendor chunk (~590 kB)** is one file; split the language
+1. **`generated/skill-manager.ts` exists but nothing imports it.** The contract
+   does define `ErrorOut` and codegen does emit the module — what is left is
+   adoption: `src/lib/api/skills.ts` still hand-writes its wire types, and the
+   unmanaged-skill types in `src/lib/api/agents-workspace.ts` say they cannot be
+   generated. Alias them onto the generated schemas instead of re-deriving them.
+   Same for the other hand-written wire types a contract does not match (each is
+   listed in the header comment of the `src/lib/api/x.ts` that keeps one): fix
+   the contract when the backend is right, then replace the type with the alias.
+2. **The `codemirror` vendor chunk (~590 kB)** is one file; split the language
    modes out of it if a page that needs only one mode becomes a landing page.

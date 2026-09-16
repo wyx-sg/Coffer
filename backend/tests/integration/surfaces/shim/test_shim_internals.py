@@ -26,46 +26,15 @@ import httpx
 import pytest
 
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.surfaces.shim.bootstrap import _inject_cwd, _inject_meta
+from coffer.surfaces.shim.bootstrap import _inject_meta
 from coffer.surfaces.shim.main import _Bridge, _parse_args
 
 
-def test_inject_cwd_stamps_launch_cwd_into_initialize_meta(monkeypatch):
-    """FR-004: the shim reports its launch cwd at the initialize handshake so
-    the daemon can resolve the per-project memory store."""
-    monkeypatch.setattr("os.getcwd", lambda: "/work/my-repo")
-    envelope: dict[str, Any] = {"method": "initialize", "params": {"protocolVersion": "x"}}
-    _inject_cwd(envelope)
-    assert envelope["params"]["_meta"]["coffer/cwd"] == "/work/my-repo"
-
-
-def test_inject_cwd_creates_params_and_meta_when_absent(monkeypatch):
-    monkeypatch.setattr("os.getcwd", lambda: "/p")
-    envelope: dict[str, Any] = {"method": "initialize"}
-    _inject_cwd(envelope)
-    assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
-
-
-def test_inject_cwd_preserves_existing_meta(monkeypatch):
-    monkeypatch.setattr("os.getcwd", lambda: "/p")
-    envelope: dict[str, Any] = {"params": {"_meta": {"other": "keep"}}}
-    _inject_cwd(envelope)
-    assert envelope["params"]["_meta"]["other"] == "keep"
-    assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
-
-
-def test_inject_cwd_alias_does_not_stamp_agent(monkeypatch):
-    """`_inject_cwd` is a thin backward-compat alias — it must never stamp the
-    agent identity key even when one happens to already be present."""
-    monkeypatch.setattr("os.getcwd", lambda: "/p")
-    envelope: dict[str, Any] = {"method": "initialize"}
-    _inject_cwd(envelope)
-    assert "coffer/agent" not in envelope["params"]["_meta"]
-
-
 def test_inject_meta_stamps_cwd_and_agent(monkeypatch):
-    """MCP Gateway FR-021 (amended): when a ``--agent`` name is known, it rides
-    the same ``_meta`` bag as the launch cwd under ``coffer/agent``."""
+    """FR-004: the shim reports its launch cwd at the initialize handshake so
+    the daemon can resolve the per-project memory store. MCP Gateway FR-021
+    (amended): when a ``--agent`` name is known, it rides the same ``_meta``
+    bag under ``coffer/agent``."""
     monkeypatch.setattr("os.getcwd", lambda: "/work/my-repo")
     envelope: dict[str, Any] = {"method": "initialize", "params": {"protocolVersion": "x"}}
     _inject_meta(envelope, "claude_code")
@@ -74,6 +43,7 @@ def test_inject_meta_stamps_cwd_and_agent(monkeypatch):
 
 
 def test_inject_meta_without_agent_omits_agent_key(monkeypatch):
+    """Also the params/_meta-absent path: both bags are created on the way in."""
     monkeypatch.setattr("os.getcwd", lambda: "/p")
     envelope: dict[str, Any] = {"method": "initialize"}
     _inject_meta(envelope, None)
@@ -94,6 +64,7 @@ def test_inject_meta_preserves_existing_meta_keys(monkeypatch):
     envelope: dict[str, Any] = {"params": {"_meta": {"other": "keep"}}}
     _inject_meta(envelope, "codex")
     assert envelope["params"]["_meta"]["other"] == "keep"
+    assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
     assert envelope["params"]["_meta"]["coffer/agent"] == "codex"
 
 

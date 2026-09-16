@@ -1,6 +1,6 @@
 """One-shot LLM completion adapter (LlmCompletionPort).
 
-Keeps langchain confined to infrastructure.chat (Contract 9).
+Keeps langchain confined to ``infrastructure.llm`` (Contract 9a).
 """
 
 from __future__ import annotations

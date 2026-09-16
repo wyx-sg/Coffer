@@ -5,10 +5,20 @@ description: "Task list template for feature implementation"
 
 # Tasks: [FEATURE NAME]
 
-**Input**: Design documents from `/specs/[###-feature-name]/`
-**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
+**Input**: Design documents from `specs/[short-name]/` (named for the feature — never numbered)
+**Prerequisites**: spec.md (required — the acceptance scenarios are what this breakdown has to cover), plan.md (required), research.md, data-model.md, contracts/
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Tests**: NOT optional. Every `### Scenario:` in `spec.md` needs at least one
+test carrying the acceptance marker for it, and `scripts/audit_acceptance.py`
+fails `make verify` on a scenario with no covering test, on a marker naming a
+scenario that does not exist, and on a marker whose test is unconditionally
+skipped. A spec is "shipped" only when the end-to-end deliverable works AND
+every scenario is covered (see [`agents/sdd.md`](../../agents/sdd.md)).
+
+**This file is transient.** It is a checkbox list to tick through while
+building, and it is deleted once the work ships — it describes work to be
+done, so it has no reason to outlive the work. The published documentation
+site excludes files named exactly `tasks.md`, so keep that name.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -20,10 +30,18 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions
 
-- **Single project**: `src/`, `tests/` at repository root
-- **Web app**: `backend/src/`, `frontend/src/`
-- **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+Coffer's layout is fixed. Use these real paths, not a generic `src/`:
+
+- **Backend**: `backend/coffer/{domain,application,infrastructure,surfaces}/<slice>/`
+- **Backend tests**: `backend/tests/{unit,integration,contract}/`
+- **Frontend**: `frontend/src/{pages,components,lib}/`
+- **Frontend tests**: `frontend/src/**/*.test.ts(x)`, `frontend/tests/{integration,contract}/`
+- **End-to-end**: `e2e/web/specs/` (Playwright) and the MCP shim round-trip
+
+The import direction is enforced by the import-linter contracts in
+`backend/pyproject.toml`: `domain/` imports nothing, `application/` does not
+import `infrastructure/` or `surfaces/`, and `infrastructure/` adapts to ports
+defined in `application/`.
 
 <!-- 
   ============================================================================
@@ -79,19 +97,20 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 1 (write these first, and make them fail)
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+> Write these FIRST and confirm they fail before implementing. Each one
+> carries the acceptance marker for the `spec.md` scenario it proves.
 
-- [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T010 [P] [US1] Contract test for [endpoint] in backend/tests/contract/test_[name].py
+- [ ] T011 [P] [US1] Integration test for [user journey] in backend/tests/integration/test_[name].py
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Create [Entity1] model in src/models/[entity1].py
-- [ ] T013 [P] [US1] Create [Entity2] model in src/models/[entity2].py
-- [ ] T014 [US1] Implement [Service] in src/services/[service].py (depends on T012, T013)
-- [ ] T015 [US1] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T012 [P] [US1] Create [Entity1] types in backend/coffer/domain/[slice]/[entity1].py
+- [ ] T013 [P] [US1] Create [Entity2] types in backend/coffer/domain/[slice]/[entity2].py
+- [ ] T014 [US1] Implement [Service] in backend/coffer/application/[slice]/service.py (depends on T012, T013)
+- [ ] T015 [US1] Implement [endpoint] in backend/coffer/surfaces/http/[slice]_routes.py
 - [ ] T016 [US1] Add validation and error handling
 - [ ] T017 [US1] Add logging for user story 1 operations
 
@@ -105,16 +124,16 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 2 (write these first, and make them fail)
 
-- [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T018 [P] [US2] Contract test for [endpoint] in backend/tests/contract/test_[name].py
+- [ ] T019 [P] [US2] Integration test for [user journey] in backend/tests/integration/test_[name].py
 
 ### Implementation for User Story 2
 
-- [ ] T020 [P] [US2] Create [Entity] model in src/models/[entity].py
-- [ ] T021 [US2] Implement [Service] in src/services/[service].py
-- [ ] T022 [US2] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T020 [P] [US2] Create [Entity] types in backend/coffer/domain/[slice]/[entity].py
+- [ ] T021 [US2] Implement [Service] in backend/coffer/application/[slice]/service.py
+- [ ] T022 [US2] Implement [endpoint] in backend/coffer/surfaces/http/[slice]_routes.py
 - [ ] T023 [US2] Integrate with User Story 1 components (if needed)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
@@ -127,16 +146,16 @@ Examples of foundational tasks (adjust based on your project):
 
 **Independent Test**: [How to verify this story works on its own]
 
-### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
+### Tests for User Story 3 (write these first, and make them fail)
 
-- [ ] T024 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T025 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T024 [P] [US3] Contract test for [endpoint] in backend/tests/contract/test_[name].py
+- [ ] T025 [P] [US3] Integration test for [user journey] in backend/tests/integration/test_[name].py
 
 ### Implementation for User Story 3
 
-- [ ] T026 [P] [US3] Create [Entity] model in src/models/[entity].py
-- [ ] T027 [US3] Implement [Service] in src/services/[service].py
-- [ ] T028 [US3] Implement [endpoint/feature] in src/[location]/[file].py
+- [ ] T026 [P] [US3] Create [Entity] types in backend/coffer/domain/[slice]/[entity].py
+- [ ] T027 [US3] Implement [Service] in backend/coffer/application/[slice]/service.py
+- [ ] T028 [US3] Implement [endpoint] in backend/coffer/surfaces/http/[slice]_routes.py
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -150,10 +169,10 @@ Examples of foundational tasks (adjust based on your project):
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] TXXX [P] Documentation updates in docs/
+- [ ] TXXX [P] Update spec.md, the ADR if the design changed, and .specify/memory/architecture.md
 - [ ] TXXX Code cleanup and refactoring
 - [ ] TXXX Performance optimization across all stories
-- [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
+- [ ] TXXX [P] Additional unit tests in backend/tests/unit/ and frontend/src/
 - [ ] TXXX Security hardening
 - [ ] TXXX Run quickstart.md validation
 
@@ -178,7 +197,7 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Within Each User Story
 
-- Tests (if included) MUST be written and FAIL before implementation
+- Tests MUST be written and FAIL before implementation
 - Models before services
 - Services before endpoints
 - Core implementation before integration
@@ -199,12 +218,12 @@ Examples of foundational tasks (adjust based on your project):
 
 ```bash
 # Launch all tests for User Story 1 together (if tests requested):
-Task: "Contract test for [endpoint] in tests/contract/test_[name].py"
-Task: "Integration test for [user journey] in tests/integration/test_[name].py"
+Task: "Contract test for [endpoint] in backend/tests/contract/test_[name].py"
+Task: "Integration test for [user journey] in backend/tests/integration/test_[name].py"
 
 # Launch all models for User Story 1 together:
-Task: "Create [Entity1] model in src/models/[entity1].py"
-Task: "Create [Entity2] model in src/models/[entity2].py"
+Task: "Create [Entity1] types in backend/coffer/domain/[slice]/[entity1].py"
+Task: "Create [Entity2] types in backend/coffer/domain/[slice]/[entity2].py"
 ```
 
 ---

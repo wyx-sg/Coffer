@@ -27,8 +27,6 @@ from coffer.infrastructure.daemon.atomic_write import write_json_0600
 
 _logger = logging.getLogger(__name__)
 
-_CONFIG_VERSION = 1
-
 #: The port the daemon binds when the user has configured nothing — and the
 #: single place that number is written down, so bootstrap, the CLI and every
 #: message quoting it cannot drift apart.
@@ -139,11 +137,13 @@ def _merge(**fields: Any) -> None:
 
     Merging rather than replacing is what lets several settings share one file.
     Keys this build does not know are preserved for the same reason: a config
-    written by a newer Coffer must survive being touched by an older one.
+    written by a newer Coffer must survive being touched by an older one. That
+    preservation is the whole forward-compatibility story — earlier builds also
+    stamped a ``version``, which nothing ever read or branched on; files that
+    carry it keep it, as an unknown key like any other.
     """
     payload = dict(_read_raw() or {})
     payload.update(fields)
-    payload["version"] = _CONFIG_VERSION
     write_json_0600(config_path(), payload)
 
 
