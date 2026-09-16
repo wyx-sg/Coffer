@@ -61,14 +61,30 @@ coffer agent mcp uninstall claude-code   # remove it
 
 Install is idempotent: running it again updates the existing entry in place rather than duplicating it. Once installed, the agent reaches every server you have registered with Coffer through the shim — see [Connect a client](/guide/connect-client).
 
+## The agent's own plugins
+
+Claude Code can install plugins of its own. Coffer does not manage them, but it can see and toggle them, because a plugin is a thing running inside an agent Coffer is responsible for:
+
+```bash
+coffer agent plugin list claude-code
+coffer agent plugin enable claude-code <plugin>
+coffer agent plugin disable claude-code <plugin>
+coffer agent plugin uninstall claude-code <plugin>
+```
+
+Each of these writes a file Coffer does not own, so each is audited (`agent_plugin_toggled`, `agent_plugin_uninstalled`).
+
 ## Web UI walkthrough
 
 The **Agents** page in the [Web UI](/guide/web-ui) covers the same flow without the terminal:
 
 1. Open **Agents** and click **Detect** to scan for installed agents. The detect dialog lists what was found; confirm an agent to register it.
-2. The agent detail page has four tabs — **Overview**, **Skills**, **MCP servers**, and **Config files**.
+2. The agent detail page has seven tabs — **Overview**, **Skills**, **MCP servers**, **Plugins**, **Memory**, **Conversations**, and **Config files**.
 3. On the **Config files** tab, open any curated config file and edit it in place. Saving validates the file's format first — malformed JSON or TOML is rejected and the file on disk is left untouched — then writes atomically, keeping the previous contents next to the file as `.bak`. If the file changed on disk while you were editing, the save is refused rather than applied over the top, and you are offered a reload.
 4. Use the **Install Coffer MCP** toggle in the header to add or remove the `coffer` entry, with a live status indicator.
 5. On the **Skills** tab, toggle each skill on or off for this agent, or use **Install skills** to bind more. The **MCP servers** tab shows the gateway install status alongside the agent's own direct MCP entries; those are read-only apart from **Adopt**, which brings an entry into Coffer as a managed resource — Coffer does not remove or disable entries in another tool's config.
+6. **Plugins** lists the agent's own plugins with an enable/disable switch and an uninstall. **Memory** shows what this agent reaches through Coffer, its session-start **Delivery** state, and a read-only view of the agent's *own* native memory stores. **Conversations** reads the agent's own transcripts.
+
+See the [Web UI guide](/guide/web-ui#agents) for what each tab holds in detail.
 
 [Connect a client →](/guide/connect-client)

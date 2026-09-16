@@ -10,9 +10,7 @@ import pytest
 
 from coffer.domain.agent.types import AgentType
 from coffer.domain.connection import CODEX_ENV_KEY
-from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.projection import (
-    ANTHROPIC_API_KEY_HELPER,
     CODEX_PROVIDER_ID,
     anthropic_api_key_helper,
     apply_anthropic_settings,
@@ -21,9 +19,13 @@ from coffer.domain.provider.projection import (
     codex_model_catalog_path,
     remove_anthropic_settings,
     remove_codex_provider,
-    target_for,
     target_for_agent,
 )
+
+#: ``apply_anthropic_settings`` takes no default helper any more (only the
+#: per-connection form may be written), so tests that do not care WHICH
+#: connection it names pass this one.
+_HELPER = "coffer provider key --connection test-conn"
 
 
 def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
@@ -32,9 +34,10 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
         base_url="https://gw/anthropic",
         model="claude-opus-4-8",
         fast_model="claude-haiku-4-5",
+        api_key_helper=anthropic_api_key_helper("agnes"),
     )
     d = json.loads(out)
-    assert d["apiKeyHelper"] == ANTHROPIC_API_KEY_HELPER
+    assert d["apiKeyHelper"] == anthropic_api_key_helper("agnes")
     assert d["theme"] == "dark"  # unrelated key preserved
     assert d["env"]["FOO"] == "1"  # unrelated env preserved
     assert d["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
@@ -49,14 +52,19 @@ def test_anthropic_omits_fast_model_when_none() -> None:
         base_url="u",
         model="m",
         fast_model=None,
+        api_key_helper=_HELPER,
     )
     assert "ANTHROPIC_SMALL_FAST_MODEL" not in json.loads(out)["env"]
 
 
 def test_anthropic_handles_empty_and_is_idempotent() -> None:
-    first = apply_anthropic_settings("", base_url="u", model="m", fast_model="f")
+    first = apply_anthropic_settings(
+        "", base_url="u", model="m", fast_model="f", api_key_helper=_HELPER
+    )
     assert json.loads(first)["env"]["ANTHROPIC_BASE_URL"] == "u"
-    second = apply_anthropic_settings(first, base_url="u", model="m", fast_model="f")
+    second = apply_anthropic_settings(
+        first, base_url="u", model="m", fast_model="f", api_key_helper=_HELPER
+    )
     assert json.loads(first) == json.loads(second)
 
 
@@ -98,6 +106,7 @@ def test_remove_anthropic_clears_managed_keys_preserves_others() -> None:
         base_url="u",
         model="m",
         fast_model="f",
+        api_key_helper=_HELPER,
     )
     d = json.loads(remove_anthropic_settings(text))
     assert "apiKeyHelper" not in d  # Coffer's managed helper removed
@@ -120,7 +129,9 @@ def test_remove_anthropic_keeps_a_user_owned_apikeyhelper() -> None:
 def test_remove_anthropic_empty_and_idempotent() -> None:
     assert json.loads(remove_anthropic_settings("")) == {}
     once = remove_anthropic_settings(
-        apply_anthropic_settings("", base_url="u", model="m", fast_model=None)
+        apply_anthropic_settings(
+            "", base_url="u", model="m", fast_model=None, api_key_helper=_HELPER
+        )
     )
     twice = remove_anthropic_settings(once)
     assert json.loads(once) == json.loads(twice)
@@ -160,13 +171,6 @@ def test_remove_codex_empty_and_idempotent() -> None:
     )
     twice = remove_codex_provider(once)
     assert tomllib.loads(once) == tomllib.loads(twice)
-
-
-def test_targets_map_wire_to_agent() -> None:
-    assert target_for(Protocol.ANTHROPIC).agent_type is AgentType.CLAUDE_CODE
-    assert target_for(Protocol.ANTHROPIC).config_key == "settings"
-    assert target_for(Protocol.OPENAI).agent_type is AgentType.CODEX
-    assert target_for(Protocol.OPENAI).config_key == "config"
 
 
 def test_target_for_agent_maps_agent_to_config() -> None:

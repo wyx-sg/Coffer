@@ -21,6 +21,7 @@ from coffer.application.channel.pairing import PairingManager, start_link
 from coffer.application.channel.ports import (
     ChannelPeer,
     ChannelPeerRepoPort,
+    ChannelThreadConversationRepoPort,
     EventIngestAdapter,
 )
 from coffer.domain.audit import AuditEventType
@@ -87,6 +88,12 @@ class ChannelStatus:
     running: bool
     pending_pairing: bool
     peer: ChannelPeer | None
+    # The conversation the owner's DM is currently driving, read from the
+    # thread-conversation table (``thread_id=""`` is the DM). It is reported
+    # beside ``peer`` rather than on it because a pairing and a conversation
+    # pointer are different lifetimes: the pairing converges between machines,
+    # the pointer names a row in THIS machine's conversation store.
+    peer_conversation_id: str | None
     callback: CallbackInfo | None
     # FR-041/FR-060: contradictions between the configuration and what the
     # platform actually permits. Empty is the healthy case.
@@ -108,6 +115,7 @@ class ChannelService:
         *,
         resources: ResourceService,
         peers: ChannelPeerRepoPort,
+        threads: ChannelThreadConversationRepoPort,
         pairing: PairingManager,
         runtime: ChannelRuntime,
         audit: AuditService,
@@ -116,6 +124,7 @@ class ChannelService:
     ) -> None:
         self._resources = resources
         self._peers = peers
+        self._threads = threads
         self._pairing = pairing
         self._runtime = runtime
         self._audit = audit
@@ -218,7 +227,12 @@ class ChannelService:
 
     async def status(self, name: str) -> ChannelStatus:
         resource = await self._channel(name)
-        peer = await self._peers.get(resource.id)
+        peer = await self._peers.owner_peer(resource.id)
+        # The DM's own thread row (``thread_id=""``) is where the conversation
+        # pointer actually lives. ``channel_peers`` carried a column of the
+        # same name that nothing ever wrote, so this line used to report None
+        # for every channel that had been talking for weeks.
+        dm = await self._threads.get(resource.id, peer.chat_id, "") if peer else None
         channel_type = str(resource.config.get("channel_type", ""))
         callback: CallbackInfo | None = None
         if channel_type == "seatalk":
@@ -238,6 +252,7 @@ class ChannelService:
             running=self._runtime.is_running(name),
             pending_pairing=self._pairing.pending(name),
             peer=peer,
+            peer_conversation_id=dm.active_conversation_id if dm else None,
             callback=callback,
             runs_on=runs_on,
             # A runtime with no machine of its own is not bound anywhere else
@@ -342,10 +357,22 @@ class ChannelService:
         if not task.cancelled() and task.exception() is not None:
             _logger.error("channel.ingest.failed", exc_info=task.exception())
 
-    async def notify(self, name: str, text: str, *, actor: str) -> None:
-        """Push text to the channel's paired peer, outside any conversation."""
+    async def notify(self, name: str, text: str, *, actor: str, chat_id: str | None = None) -> None:
+        """Push text to one of the channel's paired chats, outside any conversation.
+
+        ``chat_id`` names the chat. Omitted, it is the channel's owner chat —
+        its earliest pairing, which is the owner's DM (see
+        ``ChannelPeerRepoPort.owner_peer``). That default is load-bearing, not a
+        convenience: the caller is "notify this channel", the text is whatever
+        the user or a job wrote, and picking an arbitrary paired chat put
+        private notifications into group chats. A chat that is not paired to
+        this channel is refused rather than messaged.
+        """
         resource = await self._channel(name)
-        peer = await self._peers.get(resource.id)
+        if chat_id is None:
+            peer = await self._peers.owner_peer(resource.id)
+        else:
+            peer = await self._peers.get_by_chat(resource.id, chat_id)
         if peer is None:
             raise ChannelNotPaired(name)
         adapter = self._runtime.adapter(name)

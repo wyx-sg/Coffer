@@ -1,9 +1,9 @@
 # The knowledge layer is a directory of files, not an index
 
-**Status**: Accepted — twice revised (see Revision history). The 2026-09-12 revision reinstated document upload, conversion to Markdown with the original under `.raw/`, and ranked semantic retrieval with a sixth tool `coffer__search`. The 2026-09-14 revision removes the ranking again — `coffer__search` stays, as a literal search. Everything else below stands.
+**Status**: Accepted
 **Date**: 2026-09-12 (revised 2026-09-12 and 2026-09-14; see Revision history)
 **Deciders**: Yuxing Wu
-**Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md), [Retrieval mode is an internal engine detail](retrieval-mode-is-internal.md)
+**Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md), and the retired decision that a retrieval *mode* was an internal engine detail an external surface must never expose — with no ranked index there are no modes left to keep internal, so that ADR is deleted rather than kept as a marker
 **Related**: spec [knowledge](../../specs/knowledge/spec.md); [Everything Is a Resource Kind](everything-is-a-resource-kind.md) and [Per-Agent Resource Scope](per-agent-resource-scope.md), both of which survive; [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md)
 
 ## Context

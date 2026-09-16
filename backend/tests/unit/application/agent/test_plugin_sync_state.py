@@ -86,9 +86,8 @@ async def test_export_writes_one_doc_per_agent_with_plugins() -> None:
             )
         }
     )
-    docs, owned = await state.export_docs()
+    docs = await state.export_docs()
 
-    assert owned == ["codex"]
     [(path, doc)] = docs
     assert path == "codex"
     assert doc["agent"] == "codex"
@@ -103,11 +102,10 @@ async def test_export_writes_one_doc_per_agent_with_plugins() -> None:
 
 @pytest.mark.asyncio
 async def test_an_agent_with_no_plugins_writes_no_doc() -> None:
+    # An agent with nothing to carry writes nothing, rather than an empty
+    # document the other machine would have to read as "no plugins here".
     state = _state({"claude_code": _Listing(items=[], marketplaces=[])})
-    docs, owned = await state.export_docs()
-    assert docs == []
-    # Still owned — the agent exists, it just has nothing to carry.
-    assert owned == ["claude_code"]
+    assert await state.export_docs() == []
 
 
 @pytest.mark.asyncio
@@ -119,9 +117,8 @@ async def test_one_unreadable_agent_does_not_lose_the_others() -> None:
             "codex": _Listing(items=[_Plugin("a@m", "a", "m", True)], marketplaces=[]),
         }
     )
-    docs, owned = await state.export_docs()
+    docs = await state.export_docs()
     assert [p for p, _ in docs] == ["codex"]
-    assert owned == ["broken", "codex"]
 
 
 @pytest.mark.asyncio
@@ -149,7 +146,7 @@ async def test_deleting_an_agents_doc_touches_no_agent_and_republishes_what_is_h
     await state.delete_docs(["codex"])
     assert plugins.calls == []
 
-    docs, _owned = await state.export_docs()
+    docs = await state.export_docs()
     assert [p for p, _ in docs] == ["codex"]
 
 

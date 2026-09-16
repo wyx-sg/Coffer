@@ -24,9 +24,10 @@ In order:
    - [`agents/workflow.md`](./agents/workflow.md) — branches, Conventional Commits, AI signatures, PR flow, merge policy.
    - [`agents/stack.md`](./agents/stack.md) — backend (Python / FastAPI / SQLite). Includes file-size limits, layered-architecture import rules, wire-contract rule.
    - [`agents/frontend.md`](./agents/frontend.md) — frontend (React / TypeScript / Vite). State management, API layer, query keys, hooks, design-system and i18n conventions.
+   - [`agents/visual-language.md`](./agents/visual-language.md) — the UI's visual language: the Tailwind-config tokens for spacing, colour, radius, typography and container width, and the conventions for reusing them instead of ad-hoc values.
    - [`agents/testing.md`](./agents/testing.md) — 4 test tiers (unit / integration / contract / e2e), acceptance markers, mocking philosophy.
    - [`agents/harness.md`](./agents/harness.md) — agent control layer: `.claude/` hooks, permissions, and repo skills.
-4. The relevant **`specs/<NNN>-<short-name>/spec.md`** — for any spec-touching work.
+4. The relevant **`specs/<short-name>/spec.md`** — for any spec-touching work.
 
 If sources disagree: **constitution wins.** Flag inconsistency to the user.
 
@@ -65,9 +66,9 @@ The user has delegated architectural authority. **Default to deciding and explai
 
 ```bash
 make install                # one-time: venv + backend deps
-make verify                 # fast path (lint + unit + integration + contract)
+make verify                 # fast path (lint + unit + integration + contract + acceptance)
 make verify-all             # adds e2e
-make dev                    # backend daemon (:8000)
+make dev                    # backend (:8000) + frontend (:5173)
 
 git checkout -b feature/<short-name>
 git add <files> && git commit -m "feat(<scope>): <subject>"

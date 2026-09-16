@@ -30,19 +30,25 @@ def _provider(env: ChannelEnv) -> ChannelPeerSyncState:
 async def test_the_exported_document_carries_platform_identity_only(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     peer = await env.pair(resource, chat_id="chat-42", sender_id="sender-7")
-    await env.peers.set_active_conversation(resource.id, peer.chat_id, "conv-local-only")
+    # Everything local this chat is in the middle of: the conversation it is
+    # driving and the agent it has stuck to both live on the thread row.
+    await env.threads.set_active_conversation(resource.id, peer.chat_id, "", "conv-local-only")
+    await env.threads.set_preferred_agent(resource.id, peer.chat_id, "", "codex")
 
-    docs, _owned = await _provider(env).export_docs()
+    docs = await _provider(env).export_docs()
 
     assert [path for path, _ in docs] == [doc_path("tg", "chat-42")]
     payload = docs[0][1]
     assert payload["channel"] == "tg"
     assert payload["chat_id"] == "chat-42"
     assert payload["sender_id"] == "sender-7"
-    # The pointer is not in the document, and not merely absent as a key: it
-    # must not be reconstructible from anything the document does carry.
+    # Neither the pointer nor the sticky agent is in the document, and not
+    # merely absent as a key: neither must be reconstructible from anything the
+    # document does carry.
     assert "active_conversation_id" not in payload
+    assert "preferred_agent" not in payload
     assert "conv-local-only" not in str(payload)
+    assert "codex" not in str(payload)
     assert AREA == "channel-peers"
 
 
@@ -54,8 +60,12 @@ async def test_an_arriving_pairing_lands_without_disturbing_the_local_conversati
 
     The other machine publishes the pairing it holds; this machine may already
     have a conversation open in that same chat. The pairing must land — that is
-    the point — and the conversation pointer must be the one this machine set,
-    because the arriving document has nothing true to say about it.
+    the point — and the conversation pointer must be untouched, because it
+    belongs to a table the arriving document does not address.
+
+    The document is written the way an OLDER machine would still write it, with
+    a ``preferred_agent`` key: that key names an agent installed on the sending
+    machine, so it is ignored here rather than applied.
     """
     resource = await env.register_channel("tg")
     provider = _provider(env)
@@ -81,15 +91,14 @@ async def test_an_arriving_pairing_lands_without_disturbing_the_local_conversati
     landed = await env.peers.get_by_chat(resource.id, "chat-42")
     assert landed is not None
     assert landed.sender_id == "sender-7"
-    assert landed.preferred_agent == "claude_code"
-    assert landed.active_conversation_id is None
+    assert await env.threads.get(resource.id, "chat-42", "") is None
 
     # Now this machine opens a conversation in that chat, and the other machine
     # publishes the same pairing again on its next round.
-    await env.peers.set_active_conversation(resource.id, "chat-42", "conv-mine")
+    await env.threads.set_active_conversation(resource.id, "chat-42", "", "conv-mine")
     assert await provider.import_docs(arriving) == []
 
-    kept = await env.peers.get_by_chat(resource.id, "chat-42")
+    kept = await env.threads.get(resource.id, "chat-42", "")
     assert kept is not None
     assert kept.active_conversation_id == "conv-mine"
 

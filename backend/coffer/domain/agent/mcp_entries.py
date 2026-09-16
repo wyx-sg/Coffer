@@ -12,7 +12,6 @@ helpers from here.
 
 from __future__ import annotations
 
-import io
 import json
 import re
 from collections.abc import MutableMapping
@@ -20,7 +19,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import tomlkit
-from ruamel.yaml import YAML
 
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.mcp_injection import default_container_key
@@ -54,39 +52,6 @@ def _parse_toml(text: str) -> tomlkit.TOMLDocument:
         raise ConfigFileFormatInvalid("toml", str(e)) from e
 
 
-def _yaml() -> YAML:
-    """Round-trip YAML handler (preserves comments/order/quoting), like tomlkit."""
-    y = YAML()
-    y.preserve_quotes = True
-    y.indent(mapping=2, sequence=4, offset=2)
-    return y
-
-
-def _parse_yaml(text: str) -> MutableMapping[str, Any]:
-    """Parse YAML to a round-trip mapping. Empty/comment-only text → empty map.
-
-    Raises ``ConfigFileFormatInvalid`` for malformed YAML or a non-mapping top
-    level (mirrors the JSON ``top-level value must be an object`` rule).
-    """
-    if not text.strip():
-        return {}
-    try:
-        data = _yaml().load(text)
-    except Exception as e:  # ruamel raises various YAMLError subclasses
-        raise ConfigFileFormatInvalid("yaml", str(e)) from e
-    if data is None:
-        return {}
-    if not isinstance(data, MutableMapping):
-        raise ConfigFileFormatInvalid("yaml", "top-level value must be a mapping")
-    return data
-
-
-def _dump_yaml(data: MutableMapping[str, Any]) -> str:
-    buf = io.StringIO()
-    _yaml().dump(data, buf)
-    return buf.getvalue()
-
-
 @dataclass(frozen=True)
 class McpEntry:
     """One MCP server entry as configured in an agent's own file (derived, never stored)."""
@@ -110,8 +75,8 @@ def _json_container(data: MutableMapping[str, Any], dotted_key: str) -> Any:
     """Resolve a JSON container key that may be a dotted PATH (``mcp.servers``
     — an agent may nest its servers map one level down). Each dot descends one
     object; a missing/non-mapping step resolves to ``None``. Single-segment
-    keys behave exactly like a plain ``get``. JSON only — the TOML/YAML
-    container keys in use carry no dots."""
+    keys behave exactly like a plain ``get``. JSON only — the TOML container
+    keys in use carry no dots."""
     node: Any = data
     for part in dotted_key.split("."):
         if not isinstance(node, MutableMapping):
@@ -127,8 +92,6 @@ def _servers_map(
     try:
         if fmt is ConfigFileFormat.JSON:
             servers = _json_container(_parse_json(text), ck)
-        elif fmt is ConfigFileFormat.YAML:
-            servers = _parse_yaml(text).get(ck)
         else:  # TOML
             servers = _parse_toml(text).get(ck)
     except ConfigFileFormatInvalid as e:
@@ -138,8 +101,8 @@ def _servers_map(
 
 def _split_command(raw: MutableMapping[str, Any]) -> tuple[str | None, tuple[str, ...]]:
     """Resolve (command, args) from either a string command + args list, or a
-    single ``command`` array whose first element is the executable (the
-    ``TYPED_COMMAND_ARRAY`` shape: ``command: [<shim>, ...]``)."""
+    single ``command`` array whose first element is the executable
+    (``command: [<shim>, ...]``, as a hand-edited config may spell it)."""
     cmd = raw.get("command")
     extra = raw.get("args")
     extra_args = tuple(str(a) for a in extra) if isinstance(extra, (list, tuple)) else ()
@@ -159,7 +122,7 @@ def parse_entries(
     """Parse all MCP server entries from ``text`` in the given format.
 
     ``container_key`` selects the top-level table (default: the format's
-    conventional key — ``mcpServers`` for JSON, ``mcp_servers`` for TOML/YAML;
+    conventional key — ``mcpServers`` for JSON, ``mcp_servers`` for TOML;
     agents with a non-default container pass it explicitly, and a dotted JSON
     key like ``mcp.servers`` descends one object per dot). Handles both the
     command-map and command-array entry shapes and both ``env``/``environment``
@@ -225,17 +188,6 @@ def remove_entry(
             raise McpEntryNotFound(name)
         del servers[name]
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
-
-    if fmt is ConfigFileFormat.YAML:
-        try:
-            ydata = _parse_yaml(text)
-        except ConfigFileFormatInvalid as e:
-            raise AgentConfigParseError("<config>", str(e)) from e
-        servers = ydata.get(ck)
-        if not isinstance(servers, MutableMapping) or name not in servers:
-            raise McpEntryNotFound(name)
-        del servers[name]
-        return _dump_yaml(ydata)
 
     if fmt is ConfigFileFormat.TOML:
         try:

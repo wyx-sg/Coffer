@@ -55,12 +55,11 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        # Heavy ML stack no coffer binary ships. Transcription is remote, so
-        # nothing here should ever pull torch/mlx; the exclude documents the
-        # invariant and guards against a future transitive pull.
+        # Heavy ML stack no coffer binary ships. No coffer source imports any
+        # of it — nothing local decodes audio or runs a model; the exclude
+        # documents the invariant and guards against a future transitive pull.
         "torch",
         "mlx",
-        "mlx_whisper",
         "numba",
         "llvmlite",
         "scipy",

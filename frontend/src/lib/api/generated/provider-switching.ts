@@ -247,7 +247,7 @@ export interface paths {
          *     native config (the inverse of activate) and clears `is_active` on the
          *     wire's active connection, so the agent runs on its OWN built-in
          *     model/login. A Coffer LLM connection is an optional override, not a
-         *     prerequisite (ADR provider-switching amendment D1/D3).
+         *     prerequisite (spec provider-switching D1).
          *
          *     Idempotent — a no-op when nothing is active for the wire. Emits a
          *     `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
@@ -272,7 +272,7 @@ export interface paths {
          * @description The single, global model Coffer's internal LLM engine (memory organizer,
          *     reorg, distill) runs on. The engine takes its endpoint +
          *     key from the `internal_default` connection but its MODEL from this
-         *     singleton (ADR provider-switching amendment E3). `model` is `null` until one is chosen.
+         *     singleton (spec provider-switching E3). `model` is `null` until one is chosen.
          */
         get: operations["getInternalEngineConfig"];
         /**
@@ -456,7 +456,7 @@ export interface components {
             base_url: string;
             /** @description Fernet vault reference for the API key. Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`. Typically `provider/<name>/key` for an owned secret. Null for an ollama connection (no API key). */
             credential_ref: string | null;
-            /** @description READ-ONLY. The EFFECTIVE agents this connection projects into, derived from the resource's framework-level per-agent `scope` (ADR per-agent-resource-scope) intersected with the agent types Coffer knows; empty for a disabled or keyless (ollama) connection. The projection writer is chosen by agent type, not protocol; the Agent Overview picker filters on this. To CHANGE it, edit the scope (`PUT /api/v1/resources/provider/{name}/scope`). */
+            /** @description READ-ONLY. The CONFIGURED agents this connection covers, derived from the resource's framework-level per-agent `scope` (ADR per-agent-resource-scope) intersected with the agent types Coffer knows. Empty for a keyless (ollama) connection, which covers no agent even in principle. It is deliberately NOT narrowed by `enabled` — that rides the same payload, so a client wanting the effective projection intersects the two itself, while a management surface can still render the agent list of a connection the user switched off. The projection writer is chosen by agent type, not protocol; the Agent Overview picker filters on this AND on `enabled`. To CHANGE it, edit the scope (`PUT /api/v1/resources/provider/{name}/scope`). */
             compatible_agents: components["schemas"]["AgentType"][];
             /** @description The curated set of models this connection OFFERS downstream — which of the endpoint's models the user intends to use, each with the modality saying WHICH KIND of model it is. EMPTY means no restriction (every model the endpoint serves), which is the default. Not a chosen model: the choice still happens at the point of use (spec provider-switching E3). Ids are opaque and passed verbatim to the vendor. The modality returned here is the STORED one — nothing re-derives it on read. */
             models: components["schemas"]["ProviderModel"][];
@@ -464,6 +464,10 @@ export interface components {
             is_active: boolean;
             /** @description Whether this connection is Coffer's internal-engine default. At most one connection globally has internal_default=true. */
             internal_default: boolean;
+            /** @description The user's switch on the resource itself. A disabled connection projects into nothing and resolves no key, while still reporting the reach it is configured for (see `compatible_agents`). Changed through the shared resource enable/disable surface, not here. */
+            enabled: boolean;
+            /** @description The connection's own description, as stored on the resource row. */
+            description?: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -481,14 +485,19 @@ export interface components {
             secret_value?: string | null;
             /** @description Curate which of the endpoint's models this connection offers downstream, each entry naming its modality. Null ⇒ empty ⇒ no restriction. Ids are opaque strings (non-blank, deduplicated preserving order, at most 200 of at most 200 characters); they are never checked against a list of model names Coffer writes down. An omitted `modality` stores `text`. */
             models?: components["schemas"]["ProviderModel"][] | null;
+            /** @description Free text stored on the resource row. */
+            description?: string | null;
         };
-        /** @description All fields optional. `protocol` and `credential_ref` are immutable and cannot be patched. Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/provider/{name}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching E3); `models` only curates which of the endpoint's models it offers. */
+        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong, and nothing keys off it for projection. Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/provider/{name}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching E3); `models` only curates which of the endpoint's models it offers. */
         ProviderPatchRequest: {
+            protocol?: components["schemas"]["Protocol"];
             base_url?: string | null;
             /** @description Rotate the stored secret. Overwrites the vault entry at the current `credential_ref`. Never echoed in any response. */
             secret_value?: string | null;
             /** @description Replace the curated offered set as a whole (no merging). Null ⇒ leave unchanged; `[]` clears the restriction, so every model the endpoint serves is offered again. Each entry carries its own modality; an omitted `modality` stores `text`. */
             models?: components["schemas"]["ProviderModel"][] | null;
+            /** @description Free text stored on the resource row. */
+            description?: string | null;
         };
         /** @description The connection's new name. Sent to a dedicated route rather than as a `ProviderPatch` field because the name is the connection's identity, not part of its config. */
         ProviderRenameRequest: {

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from evals.metrics import mrr, precision_at_k, recall_at_k
+from evals.metrics import mrr, recall_at_k
 
 
 def test_recall_at_k_full_hit() -> None:
@@ -24,13 +24,6 @@ def test_recall_at_k_partial() -> None:
 def test_recall_at_k_no_relevant_defined_is_one() -> None:
     # nothing to retrieve -> vacuously perfect (avoid div-by-zero)
     assert recall_at_k(["a"], set(), k=3) == 1.0
-
-
-def test_precision_at_k() -> None:
-    ranked = ["d1", "x", "d2", "y"]
-    relevant = {"d1", "d2"}
-    # 1 of the top-2 is relevant -> 0.5
-    assert precision_at_k(ranked, relevant, k=2) == 0.5
 
 
 def test_mrr_first_relevant_rank() -> None:

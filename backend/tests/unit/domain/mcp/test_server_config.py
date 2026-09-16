@@ -64,7 +64,20 @@ def test_mcp_server_config_defaults():
     cfg = MCPServerConfig.model_validate({"transport": {"type": "stdio", "command": "x"}})
     assert cfg.spawn_timeout_seconds == 30
     assert cfg.request_timeout_seconds == 120
-    assert cfg.idle_timeout_seconds == 600
+
+
+def test_mcp_server_config_ignores_retired_idle_timeout_key():
+    """A vault written while ``idle_timeout_seconds`` still existed may carry
+    the key in its stored ``Resource.config`` JSON. No idle GC was ever
+    implemented, so the field is gone; loading such a config must ignore the
+    stale key rather than reject the server. The key then disappears on the
+    resource's next write, because ``_validate_config`` persists
+    ``model_dump()`` of the validated model.
+    """
+    cfg = MCPServerConfig.model_validate(
+        {"transport": {"type": "stdio", "command": "x"}, "idle_timeout_seconds": 600}
+    )
+    assert not hasattr(cfg, "idle_timeout_seconds")
 
 
 def test_mcp_server_config_validates_timeout_ranges():

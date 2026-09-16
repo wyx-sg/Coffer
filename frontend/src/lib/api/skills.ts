@@ -7,21 +7,19 @@
 import { call, enc } from "@/lib/api/call";
 import type { Scope } from "@/lib/hooks/useScope";
 
-export type SkillSourceType = "local_import";
-
-export interface LocalImportSource {
+interface LocalImportSource {
   type: "local_import";
   original_path: string;
 }
 
-export type SkillSource = LocalImportSource;
+type SkillSource = LocalImportSource;
 
-export type LinkMode = "symlink" | "junction" | "copy_fallback";
+type LinkMode = "symlink" | "junction" | "copy_fallback";
 
 /** One agent currently holding a delivered copy of this skill. Delivery
  *  bookkeeping surfaced read-only: a row here simply means "delivered". Who
  *  gets a row is decided by `SkillOut.enabled` + `SkillOut.scope`. */
-export interface SkillBindingOut {
+interface SkillBindingOut {
   agent_name: string;
   last_linked_at: string | null;
   last_link_path: string | null;

@@ -24,6 +24,7 @@ from coffer.application.sync.ports import (
 from coffer.domain.error_base import CofferError
 from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus, PendingConfirmation
 from coffer.domain.sync.diff import ChangeStatus, DeletionGuard, DiffSummary, DocChange
+from coffer.domain.sync.manifest import MANIFEST_PATH, refuse_if_too_new
 from coffer.domain.sync.models import ExportSummary
 
 _logger = logging.getLogger(__name__)
@@ -194,3 +195,29 @@ def applier_for(appliers: Mapping[str, VaultApplyPort], path: str) -> VaultApply
         if path.startswith(prefix):
             return applier
     return None
+
+
+async def refuse_newer_layout(mirror: GitMirrorPort, revision: str) -> None:
+    """Step 0b. Stop before reading a tree written in a layout this build does
+    not know (spec vault-sync; ``SYNC_BUNDLE_TOO_NEW``).
+
+    ``revision`` is the commit whose documents are about to be read — the
+    remote's tip for a round, the tip for a rebuild, the named point for a
+    restore — because that is the tree whose layout has to be legible, not
+    whatever the working tree happens to hold.
+
+    It runs before the round serializes, merges, applies or pushes anything, so
+    a refusal leaves both sides exactly as they were. Both sides is the point:
+    the older build would not only apply a tree it half-understands, it would
+    *publish* into it — every area the exporter converges is written from what
+    this build knows, so a newer build's documents in a directory this one
+    writes would leave as deletions nobody made, and the other machines would
+    honour them.
+
+    It **raises** rather than returning a status, unlike the rest of a round's
+    outcomes and for the same reason ``SyncJoinAmbiguous`` does: the surfaces
+    answer this with a code (409) and an instruction to upgrade, not with a
+    diff. ``ConvergeService.run_once`` turns it into a recorded ``FAILED`` run,
+    so the worker's loop still has no judgement to make.
+    """
+    refuse_if_too_new(await mirror.read_file(revision, MANIFEST_PATH))

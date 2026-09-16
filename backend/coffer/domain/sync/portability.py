@@ -1,12 +1,12 @@
-"""Path portability for exported config (spec vault-sync, ADR: vault-sync).
+"""Path portability for synced config (spec vault-sync, ADR: vault-sync).
 
 The user's machines have different usernames/home layouts, so absolute paths
 inside resource configs (``config_dir``, command paths) break when carried
-verbatim. Export rewrites string values whose prefix is the exporting
-machine's home directory to ``${HOME}/...``; import expands the token against
-the importing machine's home. Paths outside ``$HOME`` are carried verbatim and
-may simply not resolve on the other machine — which surfaces as a reported
-import failure for that resource, not a silent mismatch.
+verbatim. Serializing rewrites string values whose prefix is this machine's
+home directory to ``${HOME}/...``; applying expands the token against the
+receiving machine's home. Paths outside ``$HOME`` are carried verbatim and may
+simply not resolve on the other machine — which surfaces as a reported
+per-path failure for that resource, not a silent mismatch.
 
 Everything here is pure: homes are passed in, IO lives in infrastructure.
 """

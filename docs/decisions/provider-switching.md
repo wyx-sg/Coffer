@@ -1,8 +1,18 @@
-# ADR provider-switching: Provider Switching
+# Provider Switching
 
-**Status**: Proposed
+**Status**: Accepted
 **Date**: 2026-06-21
+**Deciders**: Yuxing Wu
 **Spec**: [specs/provider-switching/spec.md](../../specs/provider-switching/spec.md)
+
+The live decision is the one below **as corrected by the amendments** at the end
+of this file (D6 onwards). Three clauses of `## Decision` were reversed there and
+not rewritten in place: a connection is a credentialed endpoint with `protocol`
+*detected*, not a `wire_format` the user picks (D9); model and effort are fields
+on the **agent**, not on the connection (D9, D10, D16); and what a connection
+projects to is its **per-agent scope**, so one record may legitimately reach both
+agents and "at most one active per wire format" is really at most one per agent
+type. Read the amendments before relying on a sentence in `## Decision`.
 
 ## Context
 

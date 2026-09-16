@@ -11,13 +11,17 @@ MCP client on your machine can connect through the shim without any additional c
 ```bash
 git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ./backend[dev]
+uv sync --frozen --extra dev --project backend   # UV_PROJECT_ENVIRONMENT=$PWD/.venv
 make verify          # sanity-check the install
 ```
 
-`pip install` puts both the CLI (`coffer`) and the stdio shim (`coffer-mcp-shim`) on your `PATH`
+This puts both the CLI (`coffer`) and the stdio shim (`coffer-mcp-shim`) on your `PATH`
 as console-script entry points — no separate deploy step.
+
+`--frozen` is what makes this reproducible: it installs exactly `backend/uv.lock`, which is
+the dependency set CI gates against. `make install` uses `pip install -e ./backend[dev]`
+instead, which re-resolves and can therefore give you versions CI has never seen. See
+[Download & install](/guide/install#from-source-developers).
 
 - **`coffer`** — the management CLI for registering and inspecting MCP servers.
 - **`coffer-mcp-shim`** — the stdio bridge that MCP clients use to talk to the daemon.

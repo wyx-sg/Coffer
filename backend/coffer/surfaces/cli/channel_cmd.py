@@ -202,16 +202,46 @@ def status(
         typer.echo("peer:     not paired")
     callback = body.get("callback")
     if callback:
-        typer.echo(
-            f"callback: 127.0.0.1:{callback['port']}{callback['path']} "
-            f"(listener {'up' if callback['listener_running'] else 'down'})"
-        )
-        if callback.get("public_callback_url"):
-            typer.echo(f"register: {callback['public_callback_url']}")
+        _echo_inbound(callback)
     for diagnostic in body.get("diagnostics") or []:
         # FR-060: a setting that reads correctly here and does nothing in the
         # chat is worth interrupting for.
         typer.echo(f"warning:  {diagnostic['message']}")
+
+
+def _echo_inbound(callback: dict[str, object]) -> None:
+    """The inbound-transport lines of ``coffer channel status`` (FR-071).
+
+    A SeaTalk channel receives events one of two ways, and each way's facts are
+    the OTHER way's absent values. FR-071 requires the absent ones to read as
+    absent — this used to print ``callback: 127.0.0.1:0 (listener down)`` for a
+    perfectly healthy websocket channel, because ``port=0`` /
+    ``listener_running=False`` are what the service deliberately reports when
+    there is no listener to have. A zero rendered as an address is worse than
+    saying nothing: it sends the owner looking for ingress that is not part of
+    the design.
+    """
+    if callback.get("delivery") == "websocket":
+        state = callback.get("websocket_state") or "not running"
+        typer.echo(f"inbound:  websocket ({state})")
+        error = callback.get("websocket_error")
+        if error:
+            # Verbatim: the two failures that matter (no SDK installed, another
+            # process holding the connection) are only actionable if read.
+            typer.echo(f"ws error: {error}")
+        return
+
+    typer.echo(
+        f"inbound:  webhook 127.0.0.1:{callback['port']}{callback['path']} "
+        f"(listener {'up' if callback['listener_running'] else 'down'})"
+    )
+    if callback.get("tunnel_managed"):
+        typer.echo(f"tunnel:   managed ({'up' if callback.get('tunnel_running') else 'down'})")
+    else:
+        # Not a fault: the owner may front the callback themselves.
+        typer.echo("tunnel:   not managed by Coffer")
+    if callback.get("public_callback_url"):
+        typer.echo(f"register: {callback['public_callback_url']}")
 
 
 @app.command("bind")
@@ -248,11 +278,22 @@ def notify(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Channel name"),
     text: str = typer.Argument(..., help="Message text"),
+    chat: str | None = typer.Option(
+        None, "--chat", help="Paired chat id to push to (default: the owner's DM)"
+    ),
 ) -> None:
-    """Push a message to the channel's paired owner."""
+    """Push a message to one of the channel's paired chats.
+
+    Without ``--chat`` it goes to the owner chat — the channel's earliest
+    pairing, which is the owner's DM. Naming a chat the channel is not paired
+    to is refused rather than delivered somewhere else.
+    """
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
+    body: dict[str, str] = {"text": text}
+    if chat:
+        body["chat_id"] = chat
     with c:
-        r = c.post(f"/channels/{name}/notify", json={"text": text})
+        r = c.post(f"/channels/{name}/notify", json=body)
         _cli_client.check(r, verbose=verbose)
     typer.echo("sent")

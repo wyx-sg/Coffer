@@ -9,7 +9,7 @@ Coffer uses four test tiers running in parallel CI jobs. Acceptance scenarios fr
 | **Unit**        | Pure functions, single class, domain logic, value objects. No I/O. Fake ports / no real infrastructure. Enforced by `scripts/check_unit_purity.py`. | < 100 ms                | `pytest`                                                                                                                                                                                                 | yes                             |
 | **Integration** | Multiple modules + real local infrastructure: real SQLite, real subprocess, real filesystem, `keyring` test backend. No network.                    | < 2 s                   | `pytest` + `httpx.AsyncClient` / `fastapi.TestClient`                                                                                                                                                    | yes                             |
 | **Contract**    | Wire-format conformance: hand-written `*.openapi.yaml` ↔ Pydantic models. Blocks PR on drift.                                                       | < 1 s                   | Currently: `pytest` + `TestClient` manual assertions on `/openapi.json`. **Future** (add when contract surface grows): `schemathesis` for backend fuzzing.                                                | yes                             |
-| **E2E**         | Full stack via real surfaces: a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite.                  | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x. Specs spawn the real shim + daemon as OS subprocesses and drive JSON-RPC across them end-to-end.                                                       | NO (separate `make verify-e2e`) |
+| **E2E**         | Full stack via real surfaces, in **two legs**: a browser (Chromium) against the UI the daemon serves, and a real MCP client → `coffer-mcp-shim` (stdio) → daemon (`/mcp` HTTP) → upstream MCP servers → SQLite. | < 30 s                  | `Playwright` (`@playwright/test`) + TypeScript 5.x. The `web` project drives pages against a Vite server pointed at an isolated daemon; the `mcp` project spawns the real shim + daemon as OS subprocesses and drives JSON-RPC across them. | NO (separate `make verify-e2e`) |
 
 **Suite shape**: integration ≫ unit > contract > e2e (in counts of tests). This is deliberately NOT the classic unit-heavy pyramid: the integration tier runs against real SQLite files and real subprocesses but stays fast (the full backend suite is ~100 s), so most behavior is pinned where the real wiring lives. The unit tier is reserved for pure logic (mechanically enforced by `scripts/check_unit_purity.py`).
 
@@ -48,22 +48,34 @@ backend/tests/
     └── test_*.py
 ```
 
-**E2E** — top-level, crosses the daemon ↔ shim ↔ MCP-client boundary:
+**E2E** — top-level, two Playwright projects: a browser suite over the served UI
+and a cross-process suite over the daemon ↔ shim ↔ MCP-client boundary:
 
 ```
 e2e/
-├── playwright.config.ts       # Playwright runner config (mcp project)
+├── playwright.config.ts       # runner config: `web` + `mcp` projects, and the
+│                              # two webServers (isolated daemon on :18000,
+│                              # Vite on :5173 pointed at it)
 ├── package.json               # @playwright/test + TypeScript
+├── scripts/start_daemon.sh    # the isolated-HOME daemon both projects share
+├── web/
+│   └── specs/                 # browser against the daemon-served UI
+│       ├── *.spec.ts          # agent_workspace, shell_activity, shell_agents,
+│       │                      # shell_cold_start, shell_knowledge,
+│       │                      # shell_mcp_flows, shell_settings, shell_skills
+│       └── _acceptance.ts, _helpers.ts   # support modules, not specs
 └── mcp/
     └── specs/                 # real MCP client → shim → daemon
-        └── *.spec.ts
+        ├── *.spec.ts
+        └── _acceptance.ts, _helpers.ts
 ```
 
-Run with `cd e2e && npm test` (`playwright test`).
+Run both with `cd e2e && npm test` (`playwright test`), or one leg with
+`npx playwright test --project=web` / `--project=mcp`.
 
 ## Layout Rationale
 
-- **Why `e2e/` is top-level (not under `backend/`)**: e2e is the seam exercised through real surfaces — an MCP client talks to `coffer-mcp-shim` over stdio, which talks to the daemon over `/mcp`, which fans out to upstream MCP servers and SQLite. Putting it under `backend/` would misrepresent ownership; it drives the assembled product, not one package's internals.
+- **Why `e2e/` is top-level (not under `backend/`)**: e2e is the seam exercised through real surfaces — a browser clicks through the UI the daemon serves, and an MCP client talks to `coffer-mcp-shim` over stdio, which talks to the daemon over `/mcp`, which fans out to upstream MCP servers and SQLite. Neither leg belongs to one package: putting them under `backend/` (or `frontend/`) would misrepresent ownership; they drive the assembled product.
 - **When to split inside a directory**: when a tier accumulates two clearly-different test families, split into subdirs and split the corresponding CI job. Don't pre-split for tests that don't exist yet.
 
 ## Naming
@@ -89,14 +101,14 @@ Every `spec.md` scenario in `## Acceptance Scenarios` must be covered by at leas
 ...
 ```
 
-The spec ID is the spec folder name (e.g. `specs/foo/spec.md` → `foo`).
+The spec ID is the spec's path under `specs/` (`specs/foo/spec.md` → `foo`; a child spec at `specs/foo/bar/spec.md` → `foo/bar`).
 
 **Python (pytest):**
 
 ```python
 import pytest
 
-@pytest.mark.acceptance(spec="001-foo", scenario="register and list")
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="register and list")
 def test_register_then_appears_in_list(...):
     ...
 ```
@@ -108,7 +120,7 @@ Marker is registered in `backend/pyproject.toml` under `[tool.pytest.ini_options
 - scenarios listed in spec.md without a covering marker (missing coverage)
 - markers referring to a scenario / spec ID that doesn't exist (orphan marker — usually means a spec was renamed)
 
-Stdlib-only, runs in milliseconds. With zero specs it's a no-op pass — the rail is in place before the first spec lands.
+Stdlib-only, runs in milliseconds — it covers all nine specs under `specs/`.
 
 ## Unit-Tier Purity Guardrail
 
@@ -140,37 +152,60 @@ make verify-all          # verify + e2e (full suite)
 make verify-unit         # unit-purity guardrail + unit tier
 make verify-integration  # integration tier only
 make verify-contract     # contract tier only
-make verify-e2e          # e2e tier only (Playwright MCP e2e: shim + daemon)
+make verify-benchmark    # the benchmark-marked tests (excluded from verify)
+make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
 make verify-acceptance   # audit spec.md scenarios vs test markers
 
-make lint                # ruff + mypy
+make lint                # every static gate (see below) — NOT just ruff + mypy
 make format              # ruff format
 ```
+
+**`make lint` is the whole static gate, not a formatter pass.** In order
+(`Makefile`): `scripts/check_file_sizes.py`, `scripts/check_response_models.py`,
+`scripts/check_doc_numbering.py`, `scripts/check_architecture_doc.py`, `ruff
+check`, `ruff format --check`, `mypy --strict`, `lint-imports` (the layering +
+cross-kind fence), and — when `frontend/node_modules` is present —
+`scripts/dump_i18n_backend_keys.py --check` plus `npm run lint` and `npm run
+typecheck` in `frontend/`.
+
+Two consequences worth internalising:
+
+- **A docs-only edit can fail `make lint`.** `check_doc_numbering.py` rejects a
+  numbered ADR/spec token and a dead link under `docs/decisions/`;
+  `check_architecture_doc.py` holds `.specify/memory/architecture.md` to the
+  code. Run `make lint` after touching markdown, not just after touching code.
+- **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is
+  load-bearing in a worktree** — a bare invocation resolves `coffer` through
+  the editable install (which points at the main checkout) and reports contract
+  violations for modules this tree does not have.
 
 ### Verification targets — what each one runs
 
 | Target                    | What it runs                                                                                                                                                                                | When to use                                                                 |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`. The "pre-PR" gate.                                                                                 | Before every push and PR. CI runs the same tiers in parallel.               |
-| `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (HTTP, CLI, shim).           |
-| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports) then `pytest backend/tests/unit`.                                                                                       | Tight TDD loop on pure domain code.                                         |
-| `make verify-integration` | `pytest backend/tests/integration`.                                                                                                                                                          | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
-| `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                             | After editing `specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
-| `make verify-e2e`         | `cd e2e && playwright test` — the Playwright/TypeScript MCP e2e suite (`e2e/mcp/specs/*.spec.ts`) drives a real MCP client through the shim to the daemon and upstream servers.               | After touching the daemon ↔ shim ↔ MCP-client boundary.                   |
+| `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (web UI, HTTP, CLI, shim).   |
+| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest backend/tests/unit`, then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
+| `make verify-integration` | `pytest backend/tests/integration` (+ `vitest run tests/integration` if `frontend/tests/integration/` exists).                                                                               | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
+| `make verify-contract`    | `pytest backend/tests/contract` (+ the frontend contract vitest dir if it exists).                                                                                                            | After editing `specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
+| `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — the perf-budget tests, which `make verify` deliberately excludes.                                                               | After touching the gateway hot path or any code a perf budget covers.       |
+| `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). Then `pytest e2e` if any `e2e/*.py` exist. | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
 | `make verify-acceptance`  | `scripts/audit_acceptance.py`: parses every `specs/*/spec.md` `## Acceptance Scenarios` block and every `@acceptance(spec=…, scenario=…)` marker; fails on uncovered or orphan scenarios.   | Every spec.md edit. Cheap; runs without dependencies.                       |
 
 ## CI Jobs
 
-`.github/workflows/verify.yml` runs these jobs in parallel; all must pass to merge:
+`.github/workflows/verify.yml` runs **eight** jobs in parallel; all must pass to merge:
 
-| Job           | What                                                      |
-| ------------- | --------------------------------------------------------- |
-| `lint`        | ruff + mypy                                               |
-| `unit`        | `make verify-unit` (purity check + backend)               |
-| `integration` | `make verify-integration`                                 |
-| `contract`    | `make verify-contract`                                    |
-| `acceptance`  | `python3 scripts/audit_acceptance.py` (no install needed) |
-| `e2e`         | `make verify-e2e` (Playwright MCP e2e: shim + daemon)     |
+| Job           | What                                                                                                                       |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `lint`        | `make lint` — every static gate above, frontend included (it installs Node + `npm ci`)                                     |
+| `unit`        | `make verify-unit` (purity check + backend pytest + frontend vitest)                                                       |
+| `integration` | `make verify-integration` (installs `ripgrep`, which knowledge search shells out to)                                       |
+| `benchmark`   | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
+| `acceptance`  | `python3 scripts/audit_acceptance.py` (stdlib only, no install needed)                                                      |
+| `secrets`     | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean       |
+| `contract`    | `make verify-contract`                                                                                                     |
+| `e2e`         | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                    |
 
 ## When a Tier is Empty
 

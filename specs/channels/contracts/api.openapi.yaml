@@ -5,7 +5,8 @@ info:
   description: >
     REST surface for messaging channels (spec channels). Channel CRUD rides the
     generic /resources endpoints (spec mcp-gateway); this contract adds the
-    channel-specific operations: pairing, status, notify, and the SeaTalk
+    channel-specific operations: pairing, status, notify, the webhook
+    callback probe, and the SeaTalk
     event ingest the callback listener forwards to. The callback listener's
     own public path (POST /seatalk/{channel}) is served by a separate process
     and is not part of the daemon's API surface.
@@ -86,6 +87,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+
+  /api/v1/channels/{name}/callback-test:
+    post:
+      summary: Probe a SeaTalk channel's public callback path end to end
+      description: >
+        Sends the platform's own verification handshake at the channel's
+        configured public URL and reports whether the echo came back — so the
+        whole webhook chain (public URL → tunnel → loopback listener →
+        signature → handshake) is confirmed from one button instead of by
+        watching for a real event. It does NOT confirm the stored signing
+        secret matches SeaTalk's, since both sides of the probe sign with the
+        same stored secret; only a real event shows that.
+
+
+        A failure is reported as `ok: false` with a `detail` the owner can act
+        on, never as an HTTP error: the probe ran, and what it found is the
+        answer. A Telegram channel, and a SeaTalk channel on **websocket**
+        delivery, are refused the same way — a websocket channel has no public
+        URL to probe at all, and its `websocket_state` is the health answer
+        there (FR-071).
+      operationId: testChannelCallback
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelName'
+      responses:
+        '200':
+          description: The probe ran; `ok` says what it found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallbackTestOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/v1/channels/{name}/events:
     post:
@@ -279,8 +313,9 @@ paths:
         through to its CLI (Claude Code `--model`, Codex `model`) — preserving
         `cwd` and `session_id`. An empty or null `model` clears the override so
         the conversation inherits the active provider profile's projected
-        default. Mirrors the channel `/model` command. The `model_id` of PATCH
-        /conversations/{id} is unrelated and is not read by the turn path.
+        default. Mirrors the channel `/model` command. It is unrelated to the
+        `model_id` recorded on each message, which reports the model a turn
+        actually ran on and is never read back as configuration.
       operationId: setAgentConfig
       tags: [chat]
       requestBody:
@@ -673,12 +708,31 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
+        chat_id:
+          type: [string, "null"]
+          default: null
+          description: >-
+            Which paired chat to push to. Omitted, the channel's owner chat —
+            its earliest pairing, the owner's DM. A chat this channel is not
+            paired to is refused, so a caller cannot address an arbitrary
+            group.
 
     NotifyOut:
       type: object
       required: [sent]
       properties:
         sent: { type: boolean }
+
+    CallbackTestOut:
+      type: object
+      required: [ok, detail]
+      properties:
+        ok: { type: boolean }
+        detail:
+          type: string
+          description: >
+            What the probe found, in words the owner can act on — empty on a
+            clean pass.
 
     SeaTalkEventIn:
       type: object
@@ -719,16 +773,14 @@ components:
       type: object
       properties:
         title: { type: string, nullable: true }
-        model_id: { type: string, nullable: true }
 
     ConversationOut:
       type: object
-      required: [id, agent_key, title, model_id, created_at, updated_at]
+      required: [id, agent_key, title, created_at, updated_at]
       properties:
         id: { type: string }
         agent_key: { type: string }
         title: { type: string }
-        model_id: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         archived_at:

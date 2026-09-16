@@ -7,6 +7,10 @@
 // (agents/frontend.md §3). Never inline a string-array `queryKey` at a call
 // site — an ESLint rule (eslint.config.js) rejects it outside this file.
 //
+// A bare root (`["mcp"]`) is declared only where something actually invalidates
+// through it. Every child spells its own segments out, so a feature whose
+// writes are all narrow needs no root and does not get one for symmetry.
+//
 // Two keys keep a flat shape on purpose, documented where they are declared:
 // `messagesKey` (a sibling of the conversation, not a child) and
 // `endpointModelsKey` (deliberately NOT under `providersKey`).
@@ -75,7 +79,6 @@ export const skillFileKey = (name: string, path: string) => ["skills", name, "fi
 // mcp — per-server discovery, health and invocation log
 // ---------------------------------------------------------------------------
 
-export const mcpKey = ["mcp"] as const;
 export const mcpCapabilitiesKey = (serverName: string) =>
   ["mcp", "capabilities", serverName] as const;
 export const mcpStatusKey = (serverName: string) => ["mcp", "status", serverName] as const;
@@ -103,14 +106,12 @@ export const endpointModelsKey = (name: string) => ["endpointModels", name] as c
 // channels — channel resources ride `resourcesKey`; only live status is here
 // ---------------------------------------------------------------------------
 
-export const channelsKey = ["channels"] as const;
 export const channelStatusKey = (name: string) => ["channels", name, "status"] as const;
 
 // ---------------------------------------------------------------------------
 // daemon
 // ---------------------------------------------------------------------------
 
-export const daemonKey = ["daemon"] as const;
 export const daemonStatusKey = ["daemon", "status"] as const;
 export const daemonLogsKey = (filters: Record<string, unknown>) =>
   ["daemon", "logs", filters] as const;
@@ -121,7 +122,6 @@ export const daemonVersionSkewKey = (version: string | undefined) =>
 // fs — the loopback daemon's view of the local filesystem
 // ---------------------------------------------------------------------------
 
-export const fsKey = ["fs"] as const;
 export const fsBrowseKey = (path: string) => ["fs", "browse", path] as const;
 export const fsEditorsKey = ["fs", "editors"] as const;
 
@@ -129,18 +129,16 @@ export const fsEditorsKey = ["fs", "editors"] as const;
 // audit / retention
 // ---------------------------------------------------------------------------
 
-export const auditKey = ["audit"] as const;
 export const auditListKey = (filters: Record<string, unknown>) => ["audit", filters] as const;
 
 export const retentionKey = ["retention"] as const;
 export const retentionPoliciesKey = ["retention", "policies"] as const;
 
 // ---------------------------------------------------------------------------
-// sync — remote, rounds, machine registry, master key
+// sync — rounds, machine registry, master key
 // ---------------------------------------------------------------------------
 
 export const syncKey = ["sync"] as const;
-export const syncRemoteKey = ["sync", "remote"] as const;
 export const syncStatusKey = ["sync", "status"] as const;
 export const syncMachinesKey = ["sync", "machines"] as const;
 export const syncRunsKey = ["sync", "runs"] as const;
@@ -164,14 +162,11 @@ export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
 
 // ---------------------------------------------------------------------------
-// memory — partitions, facts, files, delivery
+// memory — partitions, files, delivery
 // ---------------------------------------------------------------------------
 
 export const memoryKey = ["memory"] as const;
 export const memoryPartitionsKey = ["memory", "partitions"] as const;
-export const memoryFactsKey = (partition: string) => ["memory", "facts", partition] as const;
-export const memoryFactKey = (partition: string, slug: string) =>
-  ["memory", "facts", partition, slug] as const;
 /** A partition's own directory, and one file in it — the tree the detail page
  *  browses (spec memory FR-062). */
 export const memoryPartitionFilesKey = (partition: string) =>
@@ -188,7 +183,6 @@ export const memoryAgentDeliveryKey = (agent: string) => ["memory", "delivery", 
 /** Deliberately NOT under `memoryKey` or `knowledgeKey`: one read answers for
  *  every kind, and a pass ending must not drag either kind's whole subtree
  *  into the same invalidation. */
-export const upkeepKey = ["upkeep"] as const;
 export const upkeepRunsKey = ["upkeep", "runs"] as const;
 
 // ---------------------------------------------------------------------------
@@ -212,7 +206,6 @@ export const messagesKey = (conversationId: string) => ["messages", conversation
 // settings — daemon-side settings the Settings pages edit
 // ---------------------------------------------------------------------------
 
-export const settingsKey = ["settings"] as const;
 export const credentialSettingsKey = ["settings", "credentials"] as const;
 export const internalEngineKey = ["settings", "internalEngine"] as const;
 

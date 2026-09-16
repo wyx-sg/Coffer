@@ -95,11 +95,6 @@
     @apply rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(31,27,23,0.04),0_0_0_0.5px_rgba(31,27,23,0.02)];
   }
 
-  /* Inline code in body copy and connect-a-client snippets */
-  .code-chip {
-    @apply rounded-sm bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground/80;
-  }
-
   /* Chat markdown code blocks: the wrapping <pre> owns the padding + warm
      background (MarkdownContent); the highlight.js github theme only colors the
      text, so neutralise its white background + inner padding here. */

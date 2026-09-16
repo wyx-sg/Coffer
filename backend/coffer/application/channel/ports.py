@@ -234,20 +234,31 @@ class ChannelPeer:
     chat_id: str
     display_name: str
     paired_at: datetime
-    active_conversation_id: str | None
     # The paired sender's stable identity (Telegram from.id, SeaTalk
     # employee_code); the owner gate checks it when present. ``None`` on rows
     # paired before the gate gained sender awareness → chat-id-only fallback.
     sender_id: str | None = None
-    # Sticky structural choice: which agent new conversations use.
-    # ``None`` means fall back to the channel default.
-    preferred_agent: str | None = None
 
 
 class ChannelPeerRepoPort(Protocol):
     """Persistence for peer bindings."""
 
-    async def get(self, resource_id: int) -> ChannelPeer | None: ...
+    async def owner_peer(self, resource_id: int) -> ChannelPeer | None:
+        """The channel's OWNER chat — the one a notification addressed to the
+        channel rather than to a conversation belongs in.
+
+        A channel may hold several peer rows: its DM plus every group it has
+        been paired to (``UniqueConstraint("resource_id", "chat_id")``). This
+        returns the earliest-paired one, which under the single-owner premise is
+        the owner's DM: pairing the DM is how a channel starts working at all,
+        and a group can only be added to a channel that already does.
+
+        The order matters, not just the determinism. The predecessor of this
+        method selected on ``resource_id`` with no ``ORDER BY``, so ``notify``
+        could put a private message into a group chat depending on what SQLite
+        happened to return first.
+        """
+        ...
 
     async def get_by_chat(self, resource_id: int, chat_id: str) -> ChannelPeer | None: ...
 
@@ -270,17 +281,6 @@ class ChannelPeerRepoPort(Protocol):
         deletion of one document."""
         ...
 
-    async def set_active_conversation(
-        self, resource_id: int, chat_id: str, conversation_id: str | None
-    ) -> None: ...
-
-    async def set_preferences(
-        self,
-        resource_id: int,
-        *,
-        preferred_agent: str | None,
-    ) -> None: ...
-
 
 @dataclass(frozen=True)
 class ChannelThreadConversation:
@@ -290,8 +290,10 @@ class ChannelThreadConversation:
 
     ``thread_id=""`` is the DM (or a group's main chat); each thread in a group
     is an independent row with its own active conversation and its own sticky
-    agent. Pairing/owner identity stays on ``ChannelPeer`` — this binding only
-    owns the conversation a turn drives and the agent it opens with."""
+    agent. Pairing/owner identity stays on ``ChannelPeer`` — this binding is the
+    ONLY place the conversation a turn drives and the agent it opens with are
+    recorded (``channel_peers`` carried a second, never-written copy of both
+    until 0084 dropped them)."""
 
     resource_id: int
     chat_id: str

@@ -1,0 +1,693 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Memory API
+  version: 0.4.0
+  description: |
+    REST surface for the one `memory` resource kind (spec memory, FR-061).
+    Eleven routes, and that is the whole management plane.
+
+    ## Everything here is derived
+
+    The memory layer aggregates each **registered and enabled** agent's own
+    native memory, read-only, and never writes it
+    ([Aggregate Agent Memory, Never Write It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md)).
+    Everything under `~/.coffer/memory/` is derived from those sources: delete
+    it, `POST /sync`, and the same facts come back (FR-023). There is **no
+    memory table** — facts, digests and partition metadata are Markdown files
+    and the one Resource row a partition already has (FR-070).
+
+    ## A partition is the only boundary
+
+    A **partition** is a top-level directory under the memory root and one
+    `memory` Resource: exactly one per project plus one named `global`, and no
+    other partitioning axis exists (FR-010). Partitions are created by
+    aggregation, never by a client and never by an agent's working directory —
+    so there is no `POST /partitions` on this surface (FR-013).
+
+    A project partition is named by a readable slug from its project root,
+    never an opaque id, and the absolute root travels on `PartitionOut`
+    (FR-011).
+
+    ## These routes are the owner's view, and are unscoped
+
+    Like knowledge's REST surface, `list_partitions` / `list_facts` /
+    `get_fact` / the file family are the *person's* own view of their own
+    vault and are therefore not filtered by a Resource's per-agent scope.
+
+    Scope **is** enforced on the one route a real agent's session reaches —
+    `POST /context`, which composes over the partitions that agent is
+    authorized for — and on `coffer__recall`, which this surface does not
+    expose at all: L2 is MCP-only (FR-060).
+
+    ## The file family is read-only, and that is the design
+
+    `GET /partitions/{name}/files` and `.../files/content` walk one
+    partition's own directory and read a file out of it (FR-062). There is
+    deliberately **no write**: the tree is derived, so an edit would survive
+    exactly until the next aggregation pass, and offering one would be
+    offering a lie. `FileContentOut` therefore carries no fingerprint, unlike
+    the skill kind's equivalent — a fingerprint exists to make a later write
+    conditional, and this family has no write.
+
+    Both shapes carry `abs_path` and `folder_abs_path` on every node and every
+    read, because a browser cannot resolve a path on the user's own disk but
+    the loopback daemon can — that is what the open-in-editor and
+    reveal-in-file-manager actions hand back.
+
+    ## Why deleting a partition is not here
+
+    There is deliberately **no** `DELETE /api/v1/memory/partitions/{name}`. A
+    partition's lifecycle is a Resource's lifecycle, so deletion goes through
+    the kind-agnostic resource route, `DELETE /api/v1/resources/memory/{name}`,
+    which runs the same audit and cascade as every other kind and cleans the
+    directory up through the Kind's `on_delete`.
+
+    ## Why per-agent delivery status has no last-fired field
+
+    `DeliveryStatusOut` answers exactly one question: installed or not
+    (FR-055, FR-064). A fire is an **event**, not a property of an agent — every
+    fire writes one `memory_delivery_fired` audit row, and "has it ever run"
+    is read on the vault-wide audit surface. A hook installed a minute ago has
+    legitimately never fired, so a status field flagging that would be crying
+    wolf on its own normal state. This layer carries no audit surface of its
+    own either (FR-065).
+
+    ## Errors
+
+    Every failure is the app-wide envelope,
+    `{"error": {"code": "...", "message": "..."}}`, raised from a `CofferError`
+    and mapped centrally — no route here builds an `HTTPException` of its own.
+    The codes this family raises: `RESOURCE_NOT_FOUND` (404, no `memory`
+    Resource by that name), `MEMORY_FACT_NOT_FOUND` (404),
+    `MEMORY_FILE_NOT_FOUND` (404), `MEMORY_UNSAFE_PATH` (400, a path escaping
+    the partition — FR-072), `MEMORY_DELIVERY_UNSUPPORTED` (the agent type has
+    no hook adapter), `MEMORY_DELIVERY_CONFIG_INVALID` (its settings file is
+    not a JSON object Coffer can edit) and `UPKEEP_ALREADY_RUNNING` (409, a
+    second organise over a partition already being organised — FR-066).
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: The local daemon, loopback only.
+
+security:
+  - CofferToken: []
+
+tags:
+  - name: memory
+    description: Partitions, facts, the session context, and per-agent delivery.
+
+paths:
+  /api/v1/memory/partitions:
+    get:
+      tags: [memory]
+      operationId: listMemoryPartitions
+      summary: Every partition, with its project root and fact count.
+      responses:
+        "200":
+          description: The partition list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartitionListOut"
+
+  /api/v1/memory/partitions/{name}/facts:
+    get:
+      tags: [memory]
+      operationId: listMemoryFacts
+      summary: Every fact in one partition, as summaries.
+      parameters:
+        - $ref: "#/components/parameters/PartitionName"
+      responses:
+        "200":
+          description: The partition's facts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/partitions/{name}/facts/{slug}:
+    get:
+      tags: [memory]
+      operationId: getMemoryFact
+      summary: One fact, whole — its body, its origins and its conflicts.
+      parameters:
+        - $ref: "#/components/parameters/PartitionName"
+        - name: slug
+          in: path
+          required: true
+          description: The fact's slug, which is also its file name.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The fact.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FactOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/partitions/{name}/files:
+    get:
+      tags: [memory]
+      operationId: listMemoryPartitionFiles
+      summary: The partition's own directory, as a read-only tree.
+      parameters:
+        - $ref: "#/components/parameters/PartitionName"
+      responses:
+        "200":
+          description: The tree, rooted at the partition directory.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileTreeOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/partitions/{name}/files/content:
+    get:
+      tags: [memory]
+      operationId: readMemoryPartitionFile
+      summary: One file out of the partition's directory.
+      description: |
+        Read-only. There is no `PUT` counterpart: the tree is derived, so an
+        edit would be overwritten by the next aggregation pass.
+      parameters:
+        - $ref: "#/components/parameters/PartitionName"
+        - name: path
+          in: query
+          required: true
+          description: |
+            POSIX path relative to the partition directory, e.g.
+            `facts/python-lockfile.md`. A path escaping the partition is
+            refused with `MEMORY_UNSAFE_PATH`.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The file's content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/sync:
+    post:
+      tags: [memory]
+      operationId: syncMemory
+      summary: Run aggregation over every registered, enabled agent's native memory.
+      description: |
+        Read-only with respect to the agents (FR-002). Skips any source whose
+        content hash is unchanged (FR-006) and isolates one whose format it
+        cannot parse, reporting its path while the rest of the pass completes
+        (FR-005). Records a `memory_aggregated` audit event whose actor
+        distinguishes this requested pass from the worker's scheduled one.
+      responses:
+        "200":
+          description: What the pass did.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AggregationResultOut"
+
+  /api/v1/memory/partitions/{name}/organise:
+    post:
+      tags: [memory]
+      operationId: organiseMemoryPartition
+      summary: Run the organise pass over one partition.
+      description: |
+        Merges duplicates across agents, marks a fact superseded when a later
+        one contradicts it, flags a pair it cannot settle, and rewrites the
+        partition's digest (FR-030). With no internal connection configured it
+        still writes a usable digest mechanically and proposes nothing
+        (FR-032). Only one pass per partition runs at a time; a second request
+        while one is in flight is refused rather than queued (FR-066), and the
+        in-flight pass is readable on the shared upkeep-runs surface.
+      parameters:
+        - $ref: "#/components/parameters/PartitionName"
+      responses:
+        "200":
+          description: What the pass found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganiseResultOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A pass over this partition is already running (`UPKEEP_ALREADY_RUNNING`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/memory/context:
+    post:
+      tags: [memory]
+      operationId: composeMemoryContext
+      summary: Compose the session-start context — L0 always, L1 when it fits.
+      description: |
+        A `POST` despite being a read, because the query is structured rather
+        than a couple of scalar filters (knowledge's `search` is a `POST` for
+        the same reason). Nothing here changes the memory tree.
+
+        This is the one route a real agent's own session reaches, and it is
+        therefore the one that enforces the calling agent's per-agent scope
+        (FR-014). `record_fired` is what the installed hook sets; a management
+        surface previewing the payload leaves it false so it never records a
+        fire that did not happen (FR-055).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContextQuery"
+      responses:
+        "200":
+          description: The composed payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposedContextOut"
+
+  /api/v1/memory/delivery:
+    get:
+      tags: [memory]
+      operationId: listMemoryDelivery
+      summary: Per-agent delivery installation state.
+      parameters:
+        - name: agent
+          in: query
+          required: false
+          description: Restrict to one agent. Omitted, every registered agent is reported.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One entry per agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryStatusListOut"
+
+  /api/v1/memory/delivery/{agent}/install:
+    post:
+      tags: [memory]
+      operationId: installMemoryDelivery
+      summary: Install Coffer's session-start hook into one agent's own settings.
+      description: |
+        An **explicit** act, never a side effect of registering an agent or
+        aggregating memory (FR-054). Idempotent, marker-scoped, and it leaves
+        every hook Coffer did not write exactly as it was. Writes the agent's
+        *settings* file — never any file that is an agent's memory. Records a
+        `memory_delivery_installed` audit event with the actor.
+      parameters:
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: The resulting state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryStatusOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/delivery/{agent}:
+    delete:
+      tags: [memory]
+      operationId: removeMemoryDelivery
+      summary: Remove Coffer's hook from one agent's settings.
+      description: |
+        Takes out only the marked entry, dropping the event array and the
+        top-level hooks key once they are empty. With nothing installed it is a
+        clean no-op that writes no file and records no audit event.
+      parameters:
+        - $ref: "#/components/parameters/AgentName"
+      responses:
+        "200":
+          description: The resulting state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryStatusOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    CofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  parameters:
+    PartitionName:
+      name: name
+      in: path
+      required: true
+      description: The partition — `global` or a project slug.
+      schema:
+        type: string
+    AgentName:
+      name: agent
+      in: path
+      required: true
+      description: The registered agent's resource name, e.g. `claude-code`.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: The request was refused (e.g. `MEMORY_UNSAFE_PATH`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: No such partition, fact, file or agent.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    PartitionOut:
+      type: object
+      required: [name, project_root, fact_count]
+      properties:
+        name:
+          type: string
+          description: The directory name, and the `memory` Resource's name.
+        project_root:
+          type: string
+          description: |
+            The absolute project root this partition was minted for. Empty for
+            `global` (FR-011).
+        fact_count:
+          type: integer
+          description: Counted from the partition's `facts/` directory at call time.
+
+    PartitionListOut:
+      type: object
+      required: [partitions]
+      properties:
+        partitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartitionOut"
+
+    OriginOut:
+      type: object
+      required: [agent, native_path, anchor, captured_at, source_written_at]
+      properties:
+        agent:
+          type: string
+          description: The registered agent this fact was read out of.
+        native_path:
+          type: string
+          description: Absolute path of the agent's own file it came from.
+        anchor:
+          type: string
+          description: |
+            Where inside that file — a heading or a bullet — or empty when the
+            whole file is the fact. Part of the fact's identity (FR-022).
+        captured_at:
+          type: string
+          description: When Coffer read it.
+        source_written_at:
+          type: string
+          description: When the source itself says it was written, when it says at all.
+
+    FactSummaryOut:
+      type: object
+      required:
+        [key, slug, partition, title, description, type, status, superseded_by, conflicts_with]
+      properties:
+        key:
+          type: string
+          description: |
+            How one fact names another across a recomputation — the smallest of
+            the fact's origin keys, so gaining a second origin never moves its
+            identity (FR-022).
+        slug:
+          type: string
+          description: Readable slug; also the file name inside the partition.
+        partition:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum: [user, feedback, project]
+          description: |
+            `user` and `feedback` are about the person and file into `global`
+            whichever project they came from (FR-012).
+        status:
+          type: string
+          enum: [active, superseded]
+        superseded_by:
+          type: string
+          description: The key of the fact that replaced this one, or empty.
+        conflicts_with:
+          type: array
+          items:
+            type: string
+          description: |
+            Keys of facts organise flagged this one as disagreeing with. The
+            model's finding, and only ever that — nothing settles a conflict by
+            hand (FR-033).
+
+    FactOut:
+      allOf:
+        - $ref: "#/components/schemas/FactSummaryOut"
+        - type: object
+          required: [body, origins]
+          properties:
+            body:
+              type: string
+              description: |
+                The source's own words, never a paraphrase — a fact stays
+                quotable back to its origin (FR-021).
+            origins:
+              type: array
+              items:
+                $ref: "#/components/schemas/OriginOut"
+
+    FactListOut:
+      type: object
+      required: [facts]
+      properties:
+        facts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FactSummaryOut"
+
+    AggregationResultOut:
+      type: object
+      required: [partitions, facts_written, sources_read, sources_skipped, failures]
+      properties:
+        partitions:
+          type: array
+          items:
+            type: string
+          description: The partitions this pass touched.
+        facts_written:
+          type: integer
+          description: Zero on a pass where nothing changed.
+        sources_read:
+          type: integer
+        sources_skipped:
+          type: integer
+          description: Sources whose content hash was unchanged (FR-006).
+        failures:
+          type: array
+          items:
+            type: string
+          description: |
+            Paths of native sources that would not parse. Left standing rather
+            than deleted, so a later sync keeps retrying them (FR-005).
+
+    OrganiseResultOut:
+      type: object
+      required: [partition, merged, superseded, conflicts, model_used]
+      properties:
+        partition:
+          type: string
+        merged:
+          type: integer
+        superseded:
+          type: integer
+        conflicts:
+          type: integer
+        model_used:
+          type: boolean
+          description: |
+            False when no internal connection is configured — the digest is
+            still written, mechanically (FR-032).
+
+    ContextQuery:
+      type: object
+      properties:
+        cwd:
+          type: string
+          default: ""
+          description: The session's working directory, which selects the project partition.
+        agent:
+          type: [string, "null"]
+          default: null
+          description: |
+            The calling agent's registered name. It is what the per-agent scope
+            is evaluated against (FR-014).
+        budget_tokens:
+          type: [integer, "null"]
+          default: null
+          description: Omitted or null uses the server's default.
+        record_fired:
+          type: boolean
+          default: false
+          description: |
+            Whether serving this payload counts as a real delivery (FR-055).
+            The installed hook always sets it; a preview must not.
+
+    ComposedContextOut:
+      type: object
+      required: [text, partition, facts_included, facts_omitted, layers]
+      properties:
+        text:
+          type: string
+          description: |
+            The payload, bounded by the token budget. When facts were left out it
+            says how many and names `coffer__recall` as the way to reach them
+            (FR-051).
+        partition:
+          type: string
+          description: The project partition the cwd resolved to.
+        facts_included:
+          type: integer
+        facts_omitted:
+          type: integer
+        layers:
+          type: array
+          items:
+            type: string
+            enum: [L0, L1]
+          description: |
+            Which layers the budget admitted. A tiny budget can ship L0 alone;
+            it can never ship half of L0 (FR-050).
+
+    FileNodeOut:
+      type: object
+      required: [name, path, abs_path, folder_abs_path, type]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+          description: POSIX, relative to the partition directory; `""` for the root.
+        abs_path:
+          type: string
+          description: |
+            The entry's absolute path on the user's own disk — what
+            open-in-editor and reveal-in-file-manager hand back to the daemon.
+        folder_abs_path:
+          type: string
+          description: The absolute path of the folder holding it.
+        type:
+          type: string
+          enum: [file, dir]
+        size:
+          type: [integer, "null"]
+          default: null
+        truncated:
+          type: boolean
+          default: false
+          description: True on a directory whose descendants were clipped at the walk bound.
+        children:
+          type: array
+          default: []
+          items:
+            $ref: "#/components/schemas/FileNodeOut"
+
+    FileTreeOut:
+      type: object
+      required: [root]
+      properties:
+        root:
+          $ref: "#/components/schemas/FileNodeOut"
+
+    FileContentOut:
+      type: object
+      required: [path, abs_path, folder_abs_path, content, truncated, binary, size]
+      properties:
+        path:
+          type: string
+        abs_path:
+          type: string
+        folder_abs_path:
+          type: string
+        content:
+          type: string
+          description: Empty when `binary` is true.
+        truncated:
+          type: boolean
+        binary:
+          type: boolean
+        size:
+          type: integer
+
+    DeliveryStatusOut:
+      type: object
+      required: [agent, installed, command, event]
+      description: |
+        Installed or not, and nothing else. There is deliberately no
+        last-fired field — see the `info.description` above (FR-055, FR-064).
+      properties:
+        agent:
+          type: string
+        installed:
+          type: boolean
+        command:
+          type: string
+          description: |
+            The command the hook entry runs, carrying Coffer's marker so
+            detection never depends on `argv[0]`.
+        event:
+          type: string
+          description: |
+            The agent's own lifecycle event the entry is attached to —
+            `SessionStart` for Claude Code, `UserPromptSubmit` with a
+            once-per-session guard for Codex, which publishes no session-start
+            event (FR-054).
+
+    DeliveryStatusListOut:
+      type: object
+      required: [delivery]
+      properties:
+        delivery:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveryStatusOut"

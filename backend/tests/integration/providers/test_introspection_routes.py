@@ -28,9 +28,6 @@ class _FakePort:
         if api_key == "bad":
             raise RuntimeError("401 unauthorized")
 
-    async def test_embedding(self, *, provider, model, base_url, api_key):  # type: ignore[no-untyped-def]
-        return 1536
-
     async def detect_protocol(self, *, base_url, api_key):  # type: ignore[no-untyped-def]
         if api_key == "bad":
             raise RuntimeError("auth failed")

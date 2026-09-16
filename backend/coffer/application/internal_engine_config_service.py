@@ -25,7 +25,6 @@ class InternalEngineConfigRepo(Protocol):
         self,
         *,
         model: str | None,
-        auto_tidy_enabled: bool | None = None,
         tidy_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig: ...
@@ -55,8 +54,9 @@ class InternalEngineConfigService:
         operator may also be changing on another machine (they converge through
         vault sync).
 
-        ``auto_tidy_enabled`` is one of these passes, so writing it here rather
-        than through the separate argument keeps one path to it.
+        Tidy is one of these passes: its switch is the ``auto_tidy_enabled``
+        column, which the repo writes from this map like any other pass's, so
+        there is one path to it.
         """
         current = await self.get()
         return await self.update(
@@ -70,7 +70,6 @@ class InternalEngineConfigService:
         self,
         *,
         model: str | None,
-        auto_tidy_enabled: bool | None = None,
         tidy_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
         actor: str = "api",
@@ -78,7 +77,6 @@ class InternalEngineConfigService:
         cleaned = model.strip() if model and model.strip() else None
         saved = await self._repo.set(
             model=cleaned,
-            auto_tidy_enabled=auto_tidy_enabled,
             tidy_owner_machine_id=tidy_owner_machine_id,
             upkeep=upkeep,
         )

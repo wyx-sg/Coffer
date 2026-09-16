@@ -18,6 +18,8 @@ import pytest
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.search import SearchService
+from coffer.domain.knowledge.converter import Conversion
+from coffer.infrastructure.knowledge.converters.registry import ConverterRegistry
 from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
 
 from .conftest import _create_collection, _write_file
@@ -145,28 +147,75 @@ def test_upload_lands_as_markdown_with_frontmatter(client) -> None:
     spec="knowledge", scenario="an uploaded original is kept under .raw/ and stays out of retrieval"
 )
 def test_upload_keeps_the_original_under_raw_and_out_of_retrieval(client, tmp_path) -> None:
+    """FR-035: the original is kept, and retrieval never reaches it.
+
+    The arrangement is what makes this provable, and it is the reason the
+    fixture is HTML rather than the `.txt` this test used to send. Passthrough
+    copies a `.txt` verbatim, so every marker in the original is also in the
+    converted Markdown and `.raw/` exclusion cannot be distinguished from
+    conversion: the old `all(".raw" not in m["path"] ...)` shape passed on a
+    single match that came from the Markdown, and would have passed just as
+    happily on zero matches if grep had broken outright.
+
+    An HTML comment is dropped by the converter, so `banana-marker` lives in
+    `.raw/runbook.html` and nowhere else, while `session cache` is in BOTH the
+    original and the conversion. That gives two assertions with teeth:
+
+    * the raw-only marker must return **exactly nothing** — one hit means grep
+      descended into `.raw/`;
+    * the shared phrase must return hits, and every hit's path must be the
+      converted file — which is the positive control that proves the empty
+      result above is exclusion rather than a grep that stopped working.
+    """
     _create_collection(client, "shopee")
 
     resp = client.post(
         "/api/v1/knowledge/upload",
         data={"collection": "shopee"},
-        files={"file": ("Runbook.txt", b"Runbook\n\nOnly the original says banana-marker.\n")},
+        files={
+            "file": (
+                "Runbook.html",
+                b"<html><head><title>Runbook</title></head><body>"
+                b"<!-- banana-marker -->"
+                b"<p>Account gateway owns the session cache.</p>"
+                b"</body></html>",
+            )
+        },
     )
     assert resp.status_code == 201, resp.text
     doc = resp.json()
 
-    raw_path = tmp_path / "knowledge" / "shopee" / ".raw" / "runbook.txt"
+    raw_path = tmp_path / "knowledge" / "shopee" / ".raw" / "runbook.html"
     assert raw_path.is_file()
     assert doc["raw_path"] == str(raw_path)
     assert b"banana-marker" in raw_path.read_bytes()
+    # The premise the two grep assertions rest on: the marker survived into the
+    # original and did NOT survive into the conversion.
+    converted = client.get("/api/v1/knowledge/file", params={"path": doc["path"]})
+    assert converted.status_code == 200, converted.text
+    assert "banana-marker" not in converted.json()["body"]
 
     tree = client.get("/api/v1/knowledge/tree", params={"path": "shopee"})
     assert tree.status_code == 200
-    assert all(".raw" not in f["path"] for f in tree.json()["files"])
+    # Exact, not "nothing under .raw/": the converted file is the only thing
+    # the tree may carry, and `.raw` is not a directory it may offer either.
+    assert [f["path"] for f in tree.json()["files"]] == [doc["path"]]
+    assert tree.json()["directories"] == []
 
     grep = client.get("/api/v1/knowledge/grep", params={"pattern": "banana-marker"})
     assert grep.status_code == 200
-    assert all(".raw" not in m["path"] for m in grep.json()["matches"])
+    assert grep.json()["matches"] == [], (
+        f"a marker that exists only under .raw/ must match nothing at all: {grep.json()['matches']}"
+    )
+
+    shared = client.get("/api/v1/knowledge/grep", params={"pattern": "session cache"})
+    assert shared.status_code == 200
+    hits = shared.json()["matches"]
+    assert hits, "grep found nothing for a phrase the converted file contains"
+    assert {m["path"] for m in hits} == {doc["path"]}, (
+        "a phrase present in both the original and the conversion must be "
+        f"reported only from the conversion: {sorted({m['path'] for m in hits})}"
+    )
 
 
 @pytest.mark.acceptance(
@@ -185,6 +234,39 @@ def test_upload_of_unsupported_type_is_refused_with_its_reason(client) -> None:
     assert body["error"]["code"] == "INGEST_REJECTED"
     assert body["error"]["details"]["reason"] == "unsupported_type"
     assert body["error"]["details"]["doc_type"] == "exe"
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="a document is never stored half-converted")
+def test_upload_of_a_pdf_with_no_text_layer_is_refused_as_scanned(client, monkeypatch) -> None:
+    """FR-037, end to end, including the reason the UI keys its message off.
+
+    A real image-only PDF is not worth carrying as a fixture: the rule is that
+    ANY conversion producing no text is refused, so the converter is made to
+    return ``""`` — which is exactly what MarkItDown does for a scanned PDF,
+    without raising.
+    """
+    _create_collection(client, "shopee")
+
+    async def _empty(self, data, filename):  # type: ignore[no-untyped-def]
+        return Conversion(markdown="", title="Scan", converter="markitdown")
+
+    monkeypatch.setattr(ConverterRegistry, "convert", _empty)
+
+    resp = client.post(
+        "/api/v1/knowledge/upload",
+        data={"collection": "shopee"},
+        files={"file": ("scan.pdf", b"%PDF-1.7 image only")},
+    )
+    assert resp.status_code == 400, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "INGEST_REJECTED"
+    # The key `frontend/src/i18n/locales/{en,zh}.json` already define as
+    # `INGEST_REJECTED_scanned_pdf` — it was a message with no producer.
+    assert body["error"]["details"]["reason"] == "scanned_pdf"
+    assert body["error"]["details"]["doc_type"] == "pdf"
+
+    tree = client.get("/api/v1/knowledge/tree", params={"path": "shopee"})
+    assert tree.json()["files"] == []
 
 
 def test_upload_into_an_unknown_collection_is_not_found(client) -> None:

@@ -61,7 +61,6 @@ def _conv_out(conv: Conversation) -> ConversationOut:
         id=conv.id,
         agent_key=conv.agent_key,
         title=conv.title,
-        model_id=conv.model_id,
         created_at=conv.created_at,
         updated_at=conv.updated_at,
         archived_at=conv.archived_at,
@@ -160,22 +159,17 @@ async def update_conversation(
     body: ConversationPatch,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
 ) -> ConversationOut:
-    """Rename a conversation and/or change its model override.
+    """Rename a conversation.
 
-    ``model_id`` is a vestigial per-conversation override column (the managed
-    agent's own model lives in its agent_config, ADR provider-switching); it is persisted as
-    given without registry validation.
+    A body that names no ``title`` changes nothing and returns the conversation
+    as it stands. The agent's own model is not set here — it lives in the
+    conversation's agent_config (PATCH ``/conversations/{id}/agent-config``,
+    ADR provider-switching).
     """
-    set_model = "model_id" in body.model_fields_set
-
     if body.title is not None:
         conv = await svc.rename_conversation(id, new_title=body.title)
     else:
         conv = await svc.get_conversation(id)
-
-    if set_model:
-        conv = await svc.set_conversation_model(id, model_id=body.model_id)
-
     return _conv_out(conv)
 
 
@@ -206,9 +200,7 @@ async def set_agent_config(
     leaves the other where it was. An empty/whitespace ``model`` clears the
     override (the conversation then inherits the active provider profile's
     projected default); an empty/whitespace ``effort`` clears it (the agent then
-    runs at whatever its own config says). The registry ``model_id`` (PATCH
-    /conversations/{id}) is unrelated and is not read by the managed-agent turn
-    path.
+    runs at whatever its own config says).
     """
     cfg = await svc.get_agent_config(id)  # raises ConversationNotFound -> 404
     fields: dict[str, str | None] = {}

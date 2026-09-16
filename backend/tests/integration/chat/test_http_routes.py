@@ -96,7 +96,6 @@ def test_conversation_crud_roundtrip() -> None:
         conv_id = data["id"]
         assert data["agent_key"] == "builtin"
         assert data["title"] == "New conversation"
-        assert data["model_id"] is None
 
         # Get
         resp = client.get(f"/api/v1/chat/conversations/{conv_id}")

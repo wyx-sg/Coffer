@@ -11,7 +11,6 @@ from collections.abc import Callable
 
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
-from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -51,22 +50,6 @@ def get_capability_discovery() -> CapabilityDiscovery:
     if _capability_discovery is None:
         raise RuntimeError("capability discovery not initialised")
     return _capability_discovery
-
-
-_supervisor: SubprocessSupervisor | None = None
-
-
-def set_supervisor(supervisor: SubprocessSupervisor) -> None:
-    """Called by the composition root once on startup."""
-    global _supervisor
-    _supervisor = supervisor
-
-
-def get_supervisor() -> SubprocessSupervisor:
-    """FastAPI Depends() target."""
-    if _supervisor is None:
-        raise RuntimeError("supervisor not initialised")
-    return _supervisor
 
 
 _preferences_repo: MCPCapabilityPreferenceRepo | None = None

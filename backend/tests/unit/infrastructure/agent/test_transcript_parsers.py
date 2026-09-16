@@ -81,24 +81,38 @@ def test_parse_codex_defensive() -> None:
 
 
 def test_parse_codex_list_of_blocks_content() -> None:
-    """parse_codex handles content as a list of typed blocks (real rollout format)."""
+    """parse_codex handles content as a list of typed blocks.
+
+    In the shape a REAL rollout uses: a ``response_item`` record whose
+    ``payload`` holds the message. This fixture used to emit the flat
+    ``{"type": "message"}`` shape while its own docstring called itself the
+    real rollout format — and no real rollout uses that shape at all (see
+    ``transcript_records.codex_inner``), so the one test claiming to cover
+    production covered the tolerance branch instead.
+    """
     lines = [
         '{"type":"session_meta","cwd":"/repo","id":"c2"}',
         json.dumps(
             {
-                "type": "message",
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": "What is the deploy process?"},
-                    {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}},
-                ],
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "What is the deploy process?"},
+                        {"type": "tool_use", "name": "Bash", "input": {"command": "ls"}},
+                    ],
+                },
             }
         ),
         json.dumps(
             {
-                "type": "message",
-                "role": "assistant",
-                "content": [{"type": "output_text", "text": "Run make release to deploy."}],
+                "type": "response_item",
+                "payload": {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Run make release to deploy."}],
+                },
             }
         ),
     ]

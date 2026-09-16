@@ -1,13 +1,13 @@
-"""Deterministic, kind-agnostic projection of a resource to/from a bundle doc.
+"""Deterministic, kind-agnostic projection of a resource to/from a synced doc.
 
 A *resource document* is the plain-dict form written to
-``resources/<kind>/<name>.yaml`` in an export bundle, and it is identity plus
-description plus config — nothing else. Determinism is load-bearing (spec
-vault-sync "Determinism"): machine-local, churn-prone fields (``id``,
-``created_at``, ``updated_at``) are excluded and the encoder (infrastructure)
-dumps with sorted keys — so two exports of an unchanged vault produce
-byte-identical files, and the user can diff a bundle to see exactly what they
-are carrying.
+``resources/<kind>/<name>.yaml`` in the tree the vault converges through, and
+it is identity plus description plus config — nothing else. Determinism is
+load-bearing (spec vault-sync "Determinism"): machine-local, churn-prone
+fields (``id``, ``created_at``, ``updated_at``) are excluded and the encoder
+(infrastructure) dumps with sorted keys — so an unchanged vault serializes to
+byte-identical files on every machine and on every round, and the user can
+read the remote's history with their own git tools.
 
 **A resource's reach is not part of the document.** ``enabled`` and ``scope``
 read like two fields but they are one thing: the resource's *reach*, set by one

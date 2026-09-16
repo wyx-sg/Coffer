@@ -13,31 +13,9 @@ from datetime import UTC, datetime
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from coffer.application.retention_registry import PrunableTable, UnknownPrunableTable
 from coffer.domain.retention import RetentionPolicy
 from coffer.infrastructure.persistence.models import RetentionPolicyModel
-from coffer.infrastructure.persistence.retention import PrunableTable, UnknownPrunableTable
-
-# Allowlists for delete_older_than / archive_older_than. The keys are tables that
-# may be swept; the values are the only column names allowed for that table.
-#
-# This static copy is the repo's default so a repo built bare (tests) still
-# refuses anything unregistered. The daemon does NOT rely on it staying in step
-# with the registry by hand: composition root derives the live allowlist from
-# the very ``PrunableTable`` entries it registers (:func:`allowlist_from_registry`),
-# so a table added to one place without the other cannot be swept — the SQL
-# identifiers below are only ever drawn from code-level registrations, never
-# from a request.
-_PRUNABLE_TABLE_ALLOWLIST: dict[str, set[str]] = {
-    "audit_log": {"timestamp"},
-    "mcp_invocations": {"timestamp"},
-    # A converge round runs on a timer, so its history grows whether or not
-    # anything happened; swept by when the round finished.
-    "sync_runs": {"finished_at"},
-    # Conversations have a two-stage lifecycle: archive_older_than stamps
-    # archived_at on idle threads (matched by updated_at), then delete_older_than
-    # removes them by archived_at — taking their messages along (cascade below).
-    "conversations": {"updated_at", "archived_at"},
-}
 
 
 def allowlist_from_registry(tables: Iterable[PrunableTable]) -> dict[str, set[str]]:
@@ -74,22 +52,22 @@ class SqlAlchemyRetentionRepo:
     """Concrete RetentionRepo against the `retention_policies` table.
 
     `delete_older_than` / `archive_older_than` validate table+column against
-    the allowlist before constructing any SQL. Never accepts user-supplied
-    table names — only values registered at composition root: pass the
-    registry-derived allowlist (:func:`allowlist_from_registry`) there; the
-    static default exists for a repo built without one.
+    ``allowlist`` before constructing any SQL, and never accept a user-supplied
+    table name. The allowlist is required and has no default, so the identifiers
+    that can reach the SQL below are always the ones some caller registered:
+    derive it from the registry those same registrations built
+    (:func:`allowlist_from_registry`) and there is one source of truth for
+    what is sweepable.
     """
 
     def __init__(
         self,
         sm: async_sessionmaker,  # type: ignore[type-arg]
         *,
-        allowlist: Mapping[str, set[str]] | None = None,
+        allowlist: Mapping[str, set[str]],
     ) -> None:
         self._sm = sm
-        self._allowlist: Mapping[str, set[str]] = (
-            _PRUNABLE_TABLE_ALLOWLIST if allowlist is None else allowlist
-        )
+        self._allowlist: Mapping[str, set[str]] = allowlist
 
     async def get(self, table_name: str) -> RetentionPolicy:
         async with self._sm() as session:

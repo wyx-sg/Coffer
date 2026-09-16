@@ -1,11 +1,10 @@
 """Serve the built web UI from the daemon itself (spec mcp-gateway FR-024).
 
-Coffer used to ship the UI inside a Tauri desktop shell. The shell is gone: the
-daemon now serves ``frontend/dist`` at its own loopback origin, so the UI and
-the management API share a scheme, host and port. That makes the browser treat
-API calls as same-origin, and it removes the shell's standing operating cost —
-there is no bundle to rebuild and reinstall, and no built artifact that can
-drift away from the source it was built from.
+The same built ``frontend/dist`` has two hosts: the Tauri desktop shell bundles
+it into the app, and the daemon serves it here at its own loopback origin for
+anyone reaching Coffer through a browser. This is the browser half. Serving the
+UI from the daemon puts it on the management API's own scheme, host and port,
+so the browser treats API calls as same-origin.
 
 Two layouts have to resolve:
 

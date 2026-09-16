@@ -91,13 +91,13 @@ section that future readers most often want — don't skip it.>
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session | Accepted |
 | [`daemon-detect-or-spawn`](daemon-detect-or-spawn.md) | Daemon Detect-or-Spawn Pattern | Accepted |
 | [`daemon-serves-the-token-in-the-page`](daemon-serves-the-token-in-the-page.md) | The Daemon Serves Its Token in the Page, Guarded by the Host Header | Accepted |
-| [`desktop-shell-over-a-shared-frontend`](desktop-shell-over-a-shared-frontend.md) | The Desktop Shell Returns, Owning Only What a Browser Cannot Do | Proposed — amends [The Daemon Serves Its Token in the Page](daemon-serves-the-token-in-the-page.md), which gains a third credential supplier |
-| [`everything-is-a-resource-kind`](everything-is-a-resource-kind.md) | Information Architecture — Everything Is a Resource Kind | Amended (2026-05-30, 2026-06-11) |
+| [`desktop-shell-over-a-shared-frontend`](desktop-shell-over-a-shared-frontend.md) | The Desktop Shell Returns, Owning Only What a Browser Cannot Do | Accepted — amends [The Daemon Serves Its Token in the Page](daemon-serves-the-token-in-the-page.md), which gains a third credential supplier |
+| [`everything-is-a-resource-kind`](everything-is-a-resource-kind.md) | Information Architecture — Everything Is a Resource Kind | Accepted |
 | [`distribution-pyinstaller`](distribution-pyinstaller.md) | Distribution — PyInstaller-Bundled Daemon, Shim, and CLI | Accepted |
 | [`cross-platform-skill-delivery`](cross-platform-skill-delivery.md) | Cross-Platform Skill Delivery — Symlink / Junction / Copy-Fallback | Accepted |
-| [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.md) | Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec, Configurable Embeddings | Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) |
+| [`files-as-truth-sqlite-retrieval`](files-as-truth-sqlite-retrieval.md) | Retrieval Stack — Markdown Files as Truth, Not a Vendored Engine | Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) |
 | [`knowledge-is-plain-files`](knowledge-is-plain-files.md) | The knowledge layer is a directory of files, not an index | Accepted |
-| [`agent-native-shared-memory`](agent-native-shared-memory.md) | One Shared Knowledge Store Across Agents | Accepted — projection half superseded by [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) |
+| [`agent-native-shared-memory`](agent-native-shared-memory.md) | One Shared Knowledge Store Across Agents | Accepted |
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channel Adapter Framework | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store | Accepted |
 | [`vault-sync`](vault-sync.md) | Vault Sync | Accepted |
@@ -107,13 +107,10 @@ section that future readers most often want — don't skip it.>
 | [`channel-entrypoint-differentiation`](channel-entrypoint-differentiation.md) | Channel Entrypoint Differentiation Layer | Accepted |
 | [`builtin-agent-is-internal-capability`](builtin-agent-is-internal-capability.md) | The Built-in Agent Is an Internal Capability, Not a Chat Persona | Accepted |
 | [`remove-tool-approval`](remove-tool-approval.md) | Remove the Tool-Approval System; Owner-Pairing Is the Gate | Accepted |
-| [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the agents' memory; never write it | Proposed — rewrites *Memory via MCP, not native projection* (2026-06-18) |
-| [`skill-content-trust-layer`](skill-content-trust-layer.md) | Skill Content Trust Layer (Heuristic Scan, Warn-Don't-Block) | Reverted (2026-06-20) |
-| [`consume-official-mcp-registry`](consume-official-mcp-registry.md) | Consume the official MCP Registry for server discovery | Reverted (2026-06-20) |
+| [`aggregate-agent-memory-never-write-it`](aggregate-agent-memory-never-write-it.md) | Aggregate the agents' memory; never write it | Accepted |
 | [`chat-single-owner-live-mirror`](chat-single-owner-live-mirror.md) | Chat Is a Single-Owner Live Mirror | Accepted |
-| [`provider-switching`](provider-switching.md) | Provider Switching | Proposed |
+| [`provider-switching`](provider-switching.md) | Provider Switching | Accepted |
 | [`daemon-proxies-os-file-actions`](daemon-proxies-os-file-actions.md) | Local Daemon Proxies OS File Actions | Accepted |
-| [`retrieval-mode-is-internal`](retrieval-mode-is-internal.md) | Retrieval mode is an internal engine detail; external surfaces expose query→answer | Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) |
 | [`channel-media`](channel-media.md) | Channel media — reference in the DB, materialise per agent at send | Accepted — the v1 "defer a persisted attachment block" decision is superseded by [Persisted Attachment Reference](persisted-attachment-reference.md) |
 | [`persisted-attachment-reference`](persisted-attachment-reference.md) | Persist channel attachments as a reference block, re-materialise from history | Accepted |
 | [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope | Accepted |

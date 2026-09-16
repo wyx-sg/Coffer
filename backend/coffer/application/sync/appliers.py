@@ -2,9 +2,14 @@
 
 One applier per bundle area, each owning a path prefix, each with exactly two
 operations. Two rather than one "sync this path", because **removal is the
-operation that had to be authorised** — import used to be forbidden from
-deleting anything — and it should be visible at the seam rather than hidden
-inside a branch.
+operation that had to be authorised** — the one-way import this replaced was
+forbidden from deleting anything — and it should be visible at the seam rather
+than hidden inside a branch.
+
+A path no applier owns is not a failure and needs no error of its own:
+``machines/`` and ``manifest.json`` are in every diff and belong to nobody,
+which is why ``convergence_ops.applier_for`` answers with ``None`` and the
+round skips the path.
 
 Every applier raises ``CofferError`` to report a per-path failure. The round
 catches it, holds the path so the next export cannot publish it as a deletion,
@@ -22,7 +27,6 @@ import yaml
 
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.ports import CredentialSyncPort, ImportGate, SyncedStatePort
-from coffer.domain.error_base import CofferError
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource, ResourceRef
 from coffer.domain.sync.errors import SyncSerializationError
@@ -88,8 +92,8 @@ class ResourceApplier:
     What an incoming document may change is narrower than what it used to be.
     It carries the resource — identity, description, config — and it does not
     carry the resource's **reach**: ``enabled`` and ``scope`` are one decision
-    the user makes per machine, on the machine, and an import never touches
-    them here. A row that already exists keeps the reach it was given; a row
+    the user makes per machine, on the machine, and an arriving document never
+    touches them here. A row that already exists keeps the reach it was given; a row
     that has just arrived takes the framework's own default, because a resource
     nobody on this machine has looked at yet has not been given a reach here
     either.
@@ -273,9 +277,3 @@ def _ref_from(doc: Mapping[str, object], path: str) -> tuple[str, str]:
     if len(parts) != 3:
         raise SyncSerializationError(f"{path} is not resources/<kind>/<name>.yaml")
     return parts[1], parts[2].removesuffix(".yaml")
-
-
-class ApplierError(CofferError):
-    """Raised when no applier owns a path that the round expected one for."""
-
-    code = "SYNC_APPLIER_MISSING"

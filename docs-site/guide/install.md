@@ -6,12 +6,16 @@ release notes link to. Choose the path that fits your use case:
 | Path                                             | Best for                                                        |
 | ------------------------------------------------ | --------------------------------------------------------------- |
 | [One-line CLI install](#one-line-cli-install)    | The fastest setup on a workstation, a server or a headless box  |
+| [Desktop app](#desktop-app)                      | A Dock icon and a tray item instead of a terminal command       |
 | [Manual archive download](#manual-archive-download) | Air-gapped machines, pinned versions, or checking signatures yourself |
 | [From source](#from-source-developers)           | Contributors and developers working on Coffer itself            |
 
-::: tip There is one download, and it includes the UI
-Coffer ships a **single release artifact**: `coffer-cli-<triple>.tar.gz`. There is no separate
-desktop application — the daemon serves the web UI itself, and you open it with `coffer open`.
+::: tip Two artifacts, one Coffer
+A release publishes the CLI archive `coffer-cli-<triple>.tar.gz` and the desktop app
+`Coffer-unsigned-<triple>.dmg`. They carry the **same four binaries** and drive the same
+daemon and the same web UI, so the choice is only how you reach it: `coffer open` in a
+browser, or a Dock icon. Installing the app installs the CLI too — on first launch it
+deploys those binaries into `~/.coffer/bin/`.
 :::
 
 ::: tip Daemon auto-starts — you never run it manually
@@ -103,19 +107,51 @@ single-use, short-lived code. See the [Web UI guide](/guide/web-ui).
 
 ---
 
+## Desktop app
+
+`Coffer-unsigned-<triple>.dmg` on the
+[GitHub Releases page](https://github.com/wyx-sg/Coffer/releases/latest) is the same web UI
+in a native window: a Dock icon, an entry in Cmd-Tab, and a resident tray item with **Open
+Coffer**, **Restart daemon** and **Quit**. Closing the window leaves the app in the tray
+rather than quitting it.
+
+Drag `Coffer.app` into `/Applications` and open it. You do not start a daemon first — the
+app resolves one for itself, in a fixed order: an already-running daemon named by
+`~/.coffer/daemon.json` is taken over rather than duplicated; otherwise it spawns the
+`coffer-daemon` it carries inside its own bundle, or the one in `~/.coffer/bin/`, or one on
+your `PATH`.
+
+The `.dmg` is **self-contained**: it embeds `coffer`, `coffer-daemon`, `coffer-mcp-shim` and
+`coffer-callback`, and deploys them into `~/.coffer/bin/` on first launch. Installing the
+app therefore installs the CLI as well — add `~/.coffer/bin` to your `PATH` and
+`coffer …` and `coffer-mcp-shim` are available in a terminal too.
+
+The app is unsigned and un-notarised, so macOS quarantines it after the drag:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+See [Distribution](/architecture/distribution) for what the shell owns and what it
+deliberately leaves to the daemon.
+
+---
+
 ## Manual archive download
 
 Go to the [GitHub Releases page](https://github.com/wyx-sg/Coffer/releases/latest) and pick
-the archive for your platform:
+the artifact for your platform:
 
-| Platform                       | File                                |
-| ------------------------------ | ----------------------------------- |
-| macOS Apple silicon (M-series) | `coffer-cli-<triple>.tar.gz`        |
+| Platform                       | File                            | What it is                                  |
+| ------------------------------ | ------------------------------- | ------------------------------------------- |
+| macOS Apple silicon (M-series) | `coffer-cli-<triple>.tar.gz`    | The four binaries, for the terminal         |
+| macOS Apple silicon (M-series) | `Coffer-unsigned-<triple>.dmg`  | The [desktop app](#desktop-app), carrying the same four |
 
 Coffer ships macOS (Apple Silicon) builds only. On Linux or Intel macOS, use the
 [from-source install](#from-source-developers).
 
-Verify the download against the release's aggregated `SHA256SUMS`, then extract it:
+Verify the download against the release's aggregated `SHA256SUMS` — it covers every artifact
+in the release, the `.dmg` included — then extract it:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
@@ -128,11 +164,21 @@ Add `~/.coffer/bin` to your `PATH` so MCP clients can find `coffer-mcp-shim`.
 
 The binaries are unsigned, so macOS quarantines them on first run. Code signing and
 notarisation need a paid Apple Developer ID, which has not been provisioned yet. Clear the
-quarantine attribute on the extracted binaries:
+quarantine attribute on everything you extracted — recursively, so the helper binaries are
+covered too:
 
 ```sh
-xattr -d com.apple.quarantine ~/.coffer/bin/coffer ~/.coffer/bin/coffer-daemon ~/.coffer/bin/coffer-mcp-shim
+xattr -dr com.apple.quarantine ~/.coffer/bin
 ```
+
+For the desktop app it is the bundle you dragged across:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Coffer.app
+```
+
+A binary installed by the [one-line installer](#one-line-cli-install) is never quarantined,
+so that path skips this step entirely.
 
 ### After install
 
@@ -155,20 +201,33 @@ as Python console-script entry points (no PyInstaller, no binary download).
 ```bash
 git clone https://github.com/wyx-sg/Coffer.git
 cd Coffer
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ./backend[dev]
+uv sync --frozen --extra dev --project backend   # UV_PROJECT_ENVIRONMENT=$PWD/.venv
 make verify          # lint + types + unit + integration + contract + acceptance
 ```
 
+::: warning Use the lockfile, not a fresh resolve
+`make install` still runs `pip install -e ./backend[dev]`, which works — but it
+**re-resolves** every dependency to whatever is newest and satisfies the range, so the
+versions you get are not the versions CI gates against. CI runs
+`uv sync --frozen --extra dev --project backend` against the committed `backend/uv.lock`.
+If a test passes locally and fails in CI (or the reverse) for no reason visible in the
+diff, rebuild the environment with `uv sync --frozen` before looking any further — an
+unlocked environment is the usual cause.
+:::
+
 ::: tip Auto-spawn applies here too
-`pip install` puts `coffer`, `coffer-daemon`, and `coffer-mcp-shim` on your `PATH`. The
-daemon auto-starts the first time you run a management command or an MCP client connects —
-`coffer daemon start` exists for explicit control but is **not** a required setup step.
+Either install puts `coffer`, `coffer-daemon`, and `coffer-mcp-shim` on your `PATH` as
+console scripts. The daemon auto-starts the first time you run a management command or an
+MCP client connects — `coffer daemon start` exists for explicit control but is **not** a
+required setup step. A source install skips binary deployment entirely: it is not a frozen
+build, and the console scripts are already there.
 :::
 
 ### Prerequisites
 
 - **Python ≥ 3.12** for the from-source install (the release binaries bundle their own).
+- **[uv](https://docs.astral.sh/uv/)** — how CI builds the environment, and the only way to
+  get exactly the locked dependency set.
 - **[ripgrep](https://github.com/BurntSushi/ripgrep)** (`rg`) — recommended, on every install
   path. Coffer's knowledge search (`coffer__grep`, `coffer__search`) runs `rg` when it is on
   your `PATH`; without it Coffer falls back to a slower built-in search that returns the same

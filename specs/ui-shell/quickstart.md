@@ -27,8 +27,9 @@ make dev
 
 `make dev` boots two processes:
 
-- The daemon (`coffer daemon start`) on a free port in 8000–8009, writing
-  `~/.coffer/daemon.json`.
+- The daemon (`coffer daemon start`) on port 8000 — fixed, not scanned; it
+  refuses to start rather than moving if something else holds it (FR-028) —
+  writing `~/.coffer/daemon.json`.
 - The Vite dev server on `http://localhost:5173/`. Vite's dev-only
   token-injection plugin (`frontend/vite.config.ts`) reads
   `~/.coffer/daemon.json` and injects the daemon token into the page so
@@ -40,21 +41,23 @@ Open `http://localhost:5173/` in any modern browser.
 
 The first time you visit, the index (`/`) redirects to `/agents` and you see:
 
-- The redesigned sidebar — role-based groups: **Agents** (`/agents` — the
-  agents you use), **Resources** (**MCP servers**, at `/mcp-servers`), and
-  **System** (**Audit log** at `/audit`, **Settings**). The active route is
-  highlighted. Click the collapse handle to switch between full and
-  icon-only modes; your choice persists across reloads. (`/resources` still
-  works — it's a legacy redirect to `/mcp-servers`.)
+- The redesigned sidebar — role-based groups: **Agents** (**Agents** at
+  `/agents`, **Chat** at `/chat`), **Resources** (**MCP servers**, **Skills**,
+  **Knowledge**, **Memory**, **Model providers**, **Channels**), and **System**
+  (**Activity** at `/activity`, **Sync**, **Settings**). The active route is
+  highlighted. Click the collapse handle to switch between full and icon-only
+  modes; your choice persists across reloads. (`/resources` still works — it's
+  a legacy redirect to `/mcp-servers`.)
 - The Agents welcome card explaining what Coffer is, with one primary action:
   **Add agent**. The matching **Add MCP server** welcome lives one click away
   on **MCP servers** (`/mcp-servers`).
 
-If the daemon is not running (you skipped `make dev` or it crashed), you
-see a "Daemon not running" view instead, with a Reload recovery control.
-Once the daemon is reachable again the
-view recovers on the very next render — no manual reload needed (see the
-`daemon-offline banner` acceptance scenario).
+If the daemon is not running (you skipped `make dev` or it crashed), you see a
+"Daemon not running" view instead. In a browser it shows the command to run —
+`coffer daemon start` — and no button: the page cannot start a daemon, and the
+status query polls every 30s, so the banner clears itself once the daemon is
+back (see the `daemon-offline banner` acceptance scenario). The desktop shell is
+the exception: it can spawn one, so there the banner carries a Restart control.
 
 Switch the language between English and 中文 from the language switcher at
 the bottom of the sidebar. The change takes effect on the next render and
@@ -90,9 +93,10 @@ walks you through one screen per server so you can:
   the spec scenario).
 
 Click **Add** to finish. On success the dialog closes and (for a single
-server) the app navigates to `/mcp-servers/mcp_server/<name>` showing the
-Overview tab. The new server appears in the resources list with health
-"unknown", flipping to "healthy" within ~10 seconds.
+server) the app navigates to `/mcp-servers/<name>` showing the Overview tab
+(`/mcp-servers/mcp_server/<name>` is a legacy redirect to it). The new server
+appears in the resources list with health "unknown", flipping to "healthy"
+within ~10 seconds.
 
 If your JSON is malformed (parse error or wrong shape), the dialog stays
 open and renders a readable error explaining what's wrong; nothing is sent
@@ -119,26 +123,31 @@ To watch an invocation land, point an MCP client at Coffer per
 ("Wire Coffer into your MCP client"), trigger a tool call (e.g. ask Claude
 Code to read a file), then refresh the **Invocations** tab.
 
-## 5. Audit log and settings
+## 5. Activity and settings
 
-- `/audit` — the audit-log view (under the **System** group).
-  Filter by time range and actor; click any row to expand its raw log —
-  the entry's full underlying JSON record, pretty-printed in a monospace,
-  scrollable block. The legacy `/observability` URL still resolves and
-  redirects here. (Observability — system health / metrics — is a distinct
-  surface reserved for the future, not this audit log.)
-- `/settings` — tabs sidebar opening on **General** (default rows-per-page
-  preference), plus **Data** (retention policy, manual prune) and
-  **About** (version / license / source).
+- `/activity` — one page, one tab per record Coffer keeps: **Changes** (the
+  audit log), **MCP calls** (every call the gateway proxied, across servers) and
+  **Daemon** (what Coffer itself did, including what broke). Each tab filters by
+  free text and time range plus the one filter its record affords; click any row
+  to expand its raw underlying record, pretty-printed in a monospace, scrollable
+  block. Both legacy URLs — `/audit` and `/observability` — resolve and redirect
+  here. (Observability — system health / metrics — is a distinct surface
+  reserved for the future, not this.)
+- `/settings` — tabs sidebar opening on **General** (default rows-per-page, the
+  preferred external editor), plus **Coffer's model** (at `/settings/engine` — its own
+  LLM connection, and the switch and interval of each pass it runs unasked), **Data** (retention
+  policy, manual prune), **Security** (where the master key lives) and **About**
+  (version / license / source).
 
-You will notice three deliberately absent surfaces compared to the v0
-shell:
+Some controls the v0 shell had are deliberately gone, and none of them came
+back:
 
 - There is no "Daemon" tab and no daemon-status panel. The daemon is an
-  implementation detail; if it goes down, the daemon-offline banner is
-  the one signal you see.
-- There is no "Shutdown daemon" button — it would kill the very page
-  you're on; use `coffer daemon stop` from the CLI.
+  implementation detail; if it goes down, the daemon-offline banner is the one
+  signal you see. (**Coffer's model** is not that panel — it configures the
+  model Coffer itself runs on and its unattended passes, not the process.)
+- There is no "Shutdown daemon" button — it would kill the very page you're on;
+  use `coffer daemon stop` from the CLI.
 - There is no "Rotate token" button — use `coffer daemon rotate-token`.
 
 ## Where things live

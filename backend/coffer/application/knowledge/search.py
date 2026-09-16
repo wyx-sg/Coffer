@@ -1,20 +1,12 @@
 """``coffer__search`` — literal search over the knowledge files.
 
-This module used to be half of a two-tier retrieval loop: embed the query
-against a disposable sidecar of section vectors, rank by cosine, and degrade
-to a literal search when no embedder was available. The embedding half is
-**gone** — deliberately removed, not tidied away as something unused. What is
-left is the tier that was previously the fallback, promoted to being the whole
-answer: ripgrep over exactly the collections the caller may see, reported as
-file-level hits with the lines that matched.
+Ripgrep over exactly the collections the caller may see, reported as file-level
+hits with the lines that matched. Two properties follow from having no index at
+all, and they are why there is nothing here to keep level with the disk:
 
-Two properties survive the removal intact, and they are why there is nothing
-left to maintain here:
-
-* **Freshness is decided from the file, never from a record of an edit.**
-  There is no index to keep level with the disk, so a file the human changed in
-  their editor, an agent wrote, or `git` pulled is searchable the instant it
-  lands (FR-028).
+* **Freshness is decided from the file, never from a record of an edit.** A
+  file the human changed in their editor, an agent wrote, or `git` pulled is
+  searchable the instant it lands (FR-028).
 * **Nothing derived is authoritative.** Titles, descriptions and content always
   come off disk, because there is nowhere else they could come from.
 

@@ -35,6 +35,13 @@ JSON for scripts:
 coffer agent list --json
 ```
 
+One agent's registered name, type and config dir:
+
+```bash
+coffer agent show claude-code
+coffer agent show claude-code --json
+```
+
 ## Manually add an agent (custom path)
 
 If your agent is installed somewhere non-standard, add it with an explicit
@@ -128,11 +135,13 @@ On save, Coffer validates the content against the file's format (malformed
 atomically, and keeps a `.bak` of the prior version so a bad edit is
 recoverable. If the file changed on disk since you read it, the save is
 rejected and the editor offers a reload instead of silently overwriting. The
-Config-files tab shows each file **read-only** and offers
-open-in-external-editor / reveal-in-file-manager for the file and
-its containing folder, so you edit in your own editor (Coffer uses your
-"preferred external editor" preference from Settings); the `coffer agent config
-edit` CLI above is the programmatic edit route.
+Config-files tab offers the same save from the web UI: a file opens in a viewer
+that becomes **editable behind an explicit Edit**, and an unsaved draft is
+guarded three ways — picking another file, leaving the tab, and leaving the page
+each ask first. Beside the content it also offers open-in-external-editor /
+reveal-in-file-manager for the file and its containing folder, for the edits you
+would rather make in your own editor (Coffer uses your "preferred external
+editor" preference from Settings).
 
 ## Edit directory config entries
 
@@ -167,9 +176,17 @@ the format has one (Codex), and whether an equivalent `mcp_server` resource is
 already registered in Coffer. Env/header values never leave the daemon — only
 key names are listed.
 
-The listing is read-only. To remove an entry or flip a Codex `enabled` flag,
-use the agent's own UI — Coffer does not edit these entries in place. The one
-write it offers here is adoption, below.
+Coffer offers two writes here: **remove** and **adopt**. Flipping a Codex
+`enabled` flag is not one of them — that switch belongs to the agent's own UI.
+
+```bash
+coffer agent mcp remove-entry claude-code my-server
+coffer agent mcp remove-entry claude-code my-server --source settings  # when both files carry the name
+```
+
+Removal edits only that entry's source file, keeps a `.bak`, and refuses to
+touch Coffer's own `coffer` entry (that one is `coffer agent mcp
+install|uninstall`).
 
 **Adopt** a direct entry into Coffer to serve it to all agents through the
 gateway instead. Secret-looking env/header keys must be mapped to credential
@@ -186,10 +203,10 @@ then removes the entry from the agent's file; any failure rolls back so you
 never lose a working entry. On a name conflict the error suggests an
 alternative — retry with `--name <suggested>`.
 
-## List an agent's plugins
+## Manage an agent's plugins
 
-The CLI lists the agent's installed plugins, grouped by marketplace. This is a
-**read-only** view with no web UI — there is no Plugins tab:
+The agent's **Plugins** tab — and the CLI — lists every installed plugin in one
+table, with the marketplace it came from as a column:
 
 ```bash
 coffer agent plugin list codex
@@ -197,9 +214,55 @@ coffer agent plugin list codex --json
 ```
 
 Each plugin shows its `<name>@<marketplace>` id, enabled state, and whether its
-on-disk cache is present. Coffer parses these files and writes none of them:
-enabling, disabling, uninstalling and installing all stay with the agent's own
-tooling (`claude plugin …`, Codex's `config.toml`).
+on-disk cache is present. Two writes are offered:
+
+```bash
+coffer agent plugin enable codex fmt@acme
+coffer agent plugin disable codex fmt@acme
+coffer agent plugin uninstall codex fmt@acme        # asks first; --force skips
+```
+
+Both touch only the documented surface — Codex's `config.toml` entry, Claude
+Code's `enabledPlugins` map in `settings.json`. An uninstall for Codex also
+deletes the plugin's cache directory; for Claude Code it shells out to `claude
+plugin uninstall`, so Coffer never hand-writes that agent's internal inventory —
+and when the `claude` CLI is not on `PATH` the listing reports
+`can_uninstall=false` and the affordance is hidden. Installing plugins and
+managing marketplaces stay with the agent's own tooling.
+
+## Read the agent's own memory
+
+The agent's **Memory** tab shows three things: a pointer to Coffer's own Memory
+page, the per-agent memory **delivery** switch (owned by spec memory), and the
+coding agent's OWN native memory stores, read-only. The stores are also on the
+CLI:
+
+```bash
+coffer agent native-memory claude-code                 # one row per store
+coffer agent native-memory-files claude-code --dir <memory_dir>
+coffer agent native-memory-files claude-code --dir <memory_dir> --path MEMORY.md
+```
+
+`--dir` takes a `memory_dir` the scan handed out and nothing else: any other
+path under the agent's config dir is a 404. Coffer never writes an agent's own
+memory — the surface previews a file and offers open / reveal instead of an
+editor.
+
+## Browse the agent's own conversations
+
+The **Conversations** tab lists the agent's local session transcripts, searchable
+and sortable, and opens one as a readable conversation beside a contents list of
+the person's own prompts. On the CLI:
+
+```bash
+coffer agent transcripts claude-code --query refactor --sort last_activity_at --order desc
+coffer agent transcript claude-code --path <source_path> --limit 200
+```
+
+The listing carries no message text; a body travels only through the
+single-session read, secret-scrubbed, capped per turn and paged. Nothing is
+written and nothing is retained — a cold parse may just be slower than a warm
+one.
 
 ## Install Coffer's MCP into an agent
 

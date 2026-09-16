@@ -18,19 +18,13 @@ import type { components } from "@/lib/api/generated/vault-sync";
 
 type Schemas = components["schemas"];
 
+/** One document's fate in one round. */
+interface DocChange {
+  path: string;
+  status: "added" | "modified" | "deleted";
+}
+
 /** Per-round change counts for one direction of the diff. */
-/** One document's fate in one round. */
-export interface DocChange {
-  path: string;
-  status: "added" | "modified" | "deleted";
-}
-
-/** One document's fate in one round. */
-export interface DocChange {
-  path: string;
-  status: "added" | "modified" | "deleted";
-}
-
 export interface DiffCounts {
   added: number;
   modified: number;
@@ -41,10 +35,10 @@ export interface DiffCounts {
 }
 
 /** One path the round could not apply here, with the reason why. */
-export type RoundFailure = Schemas["PathFailureOut"];
+type RoundFailure = Schemas["FailureOut"];
 
 /** One area whose deletion share tripped the circuit breaker. */
-export interface GuardBreach {
+interface GuardBreach {
   area: string;
   deleted: number;
   total: number;
@@ -100,9 +94,6 @@ export interface SyncRunList {
 /** The one remote this vault converges with. `credential_ref` is a NAME. */
 export type SyncRemote = Schemas["SyncRemoteOut"];
 
-/** `GET /sync/remote`. `configured: false` (remote null) is the fresh vault. */
-export type SyncRemoteState = Schemas["SyncRemoteStateOut"];
-
 /** `GET /sync/status` — the remote, its last round, and this machine's id. */
 export interface SyncStatus {
   configured: boolean;
@@ -143,10 +134,8 @@ export interface MachineRemoved {
 export type SyncRemoteInput = Omit<SyncRemote, "worktree_path"> & { worktree_path?: string };
 
 export const syncApi = {
-  getRemote: () => call<SyncRemoteState>("/sync/remote"),
   putRemote: (remote: SyncRemoteInput) =>
     call<SyncRemote>("/sync/remote", { method: "PUT", body: remote }),
-  clearRemote: () => call<{ cleared: boolean }>("/sync/remote", { method: "DELETE" }),
   status: () => call<SyncStatus>("/sync/status"),
 
   /** Every round this vault has run, newest first. Unfiltered on purpose:
@@ -161,7 +150,6 @@ export const syncApi = {
    *  The third answer for a machine whose files are gone: confirming a held
    *  round would publish the loss, rejecting would refuse it forever. */
   rebuild: () => call<ConvergeRound>("/sync/rebuild", { method: "POST" }),
-  rollback: () => call<ConvergeRound>("/sync/rollback", { method: "POST" }),
 
   machines: () => call<MachineList>("/sync/machines"),
   renameSelf: (name: string) =>

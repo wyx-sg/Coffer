@@ -1,11 +1,11 @@
 """Outbound provider introspection adapter (specs channels and knowledge).
 
 Implements ``application.provider.ports.ProviderIntrospectionPort``. One
-OpenAI-compatible ``AsyncOpenAI`` client (base_url swapped per provider) powers
-list-models + the chat/embedding test calls; Anthropic uses its own REST shape.
-Every non-local outbound URL passes the SSRF guard first; the machine-local
-providers (ollama/lmstudio/local) are exempt because their base URL is loopback,
-which the guard otherwise blocks.
+OpenAI-compatible ``AsyncOpenAI`` client (base_url swapped per protocol) powers
+list-models + the chat test call; Anthropic uses its own REST shape. Every
+non-local outbound URL passes the SSRF guard first; the machine-local ``ollama``
+protocol is exempt because its base URL is loopback, which the guard otherwise
+blocks.
 """
 
 from __future__ import annotations
@@ -15,27 +15,25 @@ from urllib.parse import urlparse
 
 import httpx
 
-from coffer.application.provider.ports import LOCAL_PROVIDERS
+from coffer.application.provider.ports import LOCAL_PROTOCOLS
 from coffer.infrastructure.net.ssrf_guard import check_url
 
-#: Default base URL per provider (None = the SDK's own default, i.e. OpenAI).
-PROVIDER_BASE_URLS: dict[str, str | None] = {
+#: Default base URL per WIRE PROTOCOL (None = the SDK's own default, i.e.
+#: OpenAI). The key is a ``domain.provider.config.Protocol`` value — a wire
+#: Coffer DETECTED, never a vendor id: every caller of this adapter reaches it
+#: through ``POST /api/v1/models/*``, whose ``provider`` field the connection
+#: editors fill from the connection's ``protocol``. ``unknown`` is absent on
+#: purpose: an unclassified endpoint has no default, so its base URL must be the
+#: one the user typed.
+PROTOCOL_BASE_URLS: dict[str, str | None] = {
     "openai": None,
     "anthropic": "https://api.anthropic.com",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "voyage": "https://api.voyageai.com/v1",
-    "jina": "https://api.jina.ai/v1",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
-    "azure": None,
-    "dashscope": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "ollama": "http://localhost:11434/v1",
-    "lmstudio": "http://localhost:1234/v1",
-    "local": None,
 }
 
 _ANTHROPIC_VERSION = "2023-06-01"
 _TIMEOUT = 15.0
-#: Loopback hostnames → an internal-only (ollama/lmstudio) connection.
+#: Loopback hostnames → an internal-only (ollama-style) connection.
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"})
 
 
@@ -43,11 +41,12 @@ class ProviderIntrospector:
     """Implements ``ProviderIntrospectionPort`` over OpenAI-compatible HTTP."""
 
     def _base_url(self, provider: str, base_url: str | None) -> str | None:
-        return base_url or PROVIDER_BASE_URLS.get(provider)
+        # ``provider`` is the connection's detected wire protocol, not a vendor.
+        return base_url or PROTOCOL_BASE_URLS.get(provider)
 
     async def _guard(self, provider: str, url: str | None) -> None:
-        # Local providers point at loopback (which the guard blocks); exempt them.
-        if provider in LOCAL_PROVIDERS or not url:
+        # Local protocols point at loopback (which the guard blocks); exempt them.
+        if provider in LOCAL_PROTOCOLS or not url:
             return
         await asyncio.to_thread(check_url, url)
 
@@ -108,7 +107,7 @@ class ProviderIntrospector:
         url = (base_url or "").strip()
         if not url:
             return "unknown"
-        # Loopback endpoints are ollama/lmstudio-style (internal-only) — classify
+        # Loopback endpoints are ollama-style (internal-only) — classify
         # without an outbound probe (the SSRF guard would block them anyway).
         # Parse the host precisely: substring matching would mis-tag a remote
         # host like "my-localhost-proxy.example.com" as a keyless local provider.

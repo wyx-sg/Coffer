@@ -177,13 +177,17 @@ describe("AgentConversationPage", () => {
     stub(null, { error: new Error("request failed: 404") });
     renderAt();
     expect(screen.getByRole("alert")).toHaveTextContent(/request failed/i);
-    expect(screen.getByRole("button", { name: /back to/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /back to/i })).toBeInTheDocument();
   });
 
+  // The back affordance is the shared PageHeader's, so it is a real link with
+  // an href — middle-clickable, copyable — not a button that calls navigate().
   test("back returns to the tab the row was on, not to the agent's overview", () => {
     stub();
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /back to/i }));
+    const back = screen.getByRole("link", { name: /back to/i });
+    expect(back).toHaveAttribute("href", "/agents/codex?tab=conversations");
+    fireEvent.click(back);
     expect(screen.getByText("agent detail")).toBeInTheDocument();
   });
 });

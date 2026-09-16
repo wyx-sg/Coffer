@@ -33,6 +33,10 @@ from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.sync_state import McpPreferenceSyncState
 from coffer.application.resource_service import ResourceService
+from coffer.application.retention_registry import (
+    PrunableRegistry,
+    PrunableTable,
+)
 from coffer.application.retention_service import RetentionService
 from coffer.infrastructure.channel.media_retention import default_media_sweep
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
@@ -42,10 +46,6 @@ from coffer.infrastructure.mcp.persistence import (
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
-from coffer.infrastructure.persistence.retention import (
-    PrunableRegistry,
-    PrunableTable,
-)
 from coffer.surfaces.http.mcp.dependencies import (
     McpSessionFactory,
     set_capability_discovery,
@@ -53,7 +53,6 @@ from coffer.surfaces.http.mcp.dependencies import (
     set_invocation_repo,
     set_mcp_session_factory,
     set_preferences_repo,
-    set_supervisor,
 )
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
@@ -146,7 +145,6 @@ def wire_mcp_kind(
         )
 
     # 6. Set ALL the MCP dependency providers
-    set_supervisor(process_supervisor)
     set_capability_discovery(process_discovery)
     set_preferences_repo(prefs_repo)
     set_invocation_repo(inv_repo)

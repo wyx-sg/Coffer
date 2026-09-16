@@ -4,17 +4,16 @@ A **skill** is an [AgentSkills](https://agentskills.io)-standard bundle — a fo
 
 ## Import a skill
 
-Add a skill to your master library from a local folder or a public Git URL:
+Add a skill to your master library from a folder on disk:
 
 ```bash
-coffer skill import ./my-skill                                      # copy a local folder in
-coffer skill fetch https://github.com/acme/skills --ref main --subpath foo
-coffer skill list                                                  # → my-skill | local_import
-coffer skill show my-skill                                          # metadata + files
+coffer skill import ./my-skill      # copy a local folder in
+coffer skill list                   # → my-skill | local_import
+coffer skill show my-skill          # metadata + files
 ```
 
-- `import` takes a point-in-time copy; `fetch` records the Git source so you can refresh it later with `coffer skill update <name>`.
-- The master copy lives at `~/.coffer/skills/<name>/`.
+- `import` takes a copy. `local_import` is the **only** source a skill can have: there is no Git fetcher and no `update` command. If a skill originally came from a repository, the way to refresh it is to pull that repository yourself and `import` again.
+- The master copy lives at `~/.coffer/skills/<name>/`, and it is the source of truth — edit it there (or on the skill's page) and every agent it reaches sees the change without re-delivery.
 
 ## Decide which agents get a skill
 
@@ -30,11 +29,12 @@ coffer skill verify                                    # report drift; non-zero 
 Both of those settings — the enable flag and the scope — are **this machine's**. They are never synced, so a skill that converges to your laptop and your desktop can be delivered to different agents on each, and you set that on each. See [Sync](/guide/sync).
 
 - Delivery is a symlink from the agent's `skills/` directory to the master copy, created and reclaimed for you whenever either input changes.
-- Coffer never auto-remediates drift. `verify` reports missing, tampered, or orphaned links; you fix them explicitly (`coffer skill update`, or re-apply the scope).
+- `coffer skill verify` reports missing, tampered, or orphaned links; `coffer skill repair` (also the **Repair** action in the app) is the explicit fix.
 - `coffer skill rm <name>` removes a skill and tears down all of its links.
+- `coffer skill unmanaged` lists skills sitting in an agent's directory that Coffer did not put there; `adopt` pulls one into the master library, and `rm-unmanaged` deletes it.
 
 ## In the app
 
-The **Skills** page lists your master library; import via a file picker or a Git URL, and open a skill to see its metadata and browse its master folder, editing any text file in place. Delivery is set on the skill itself — the list table's enable switch, and the activation-scope control on the skill's page. Each agent's **Skills** tab shows what it currently receives, read-only. See [Agents](/guide/agents).
+The **Skills** page lists your master library; import via a folder picker — a path, not a URL — and open a skill to see its metadata and browse its master folder, editing any text file in place. Delivery is set on the skill itself — the list table's enable switch, and the activation-scope control on the skill's page. Each agent's **Skills** tab shows what it currently receives, read-only. See [Agents](/guide/agents).
 
 [Knowledge →](/guide/knowledge)

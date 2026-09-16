@@ -1,20 +1,19 @@
 # Feature Specification: UI Shell & Visual Language
 
-**Feature Branch**: `feature/002-mcp-gateway-web` (PR #23 on top of `feature/mcp-gateway`)
 **Status**: Accepted
 **Input**: The mcp-gateway UI shipped as a functional skeleton: bare tailwind defaults, ad-hoc spacing, no first-run onboarding. This spec turns the skeleton into a real product shell — a coherent visual language, an information architecture built on a single unifying concept (every managed entity is a _resource kind_), and the end-to-end flows that make the gateway usable for a first-time visitor (not just for Playwright fixtures that bypass auth).
 
-**Scope note**: Coffer's specs are split along the backend/frontend line. `mcp-gateway` owns the daemon, MCP gateway, REST API, and CLI. **This spec owns the web UI** — the visual language, the information architecture, and internationalisation. This is a **pure UI redesign on top of 001**: it adds no new backend, so the data model lives in `specs/mcp-gateway/data-model.md` and no separate `tasks.md` tracker is kept here. See [`plan.md`](./plan.md) and [`quickstart.md`](./quickstart.md) for the companion docs.
+**Scope note**: Coffer's specs are split along the backend/frontend line. `mcp-gateway` owns the daemon, MCP gateway, REST API, and CLI. **This spec owns the web UI** — the visual language, the information architecture, and internationalisation. It adds no backend of its own, so entities live in the owning kind's spec and no separate `tasks.md` tracker is kept here. See [`plan.md`](./plan.md) and [`quickstart.md`](./quickstart.md) for the companion docs.
 
 ## Information Architecture
 
 The sidebar is grouped **by role**, not on a single axis. Two concepts sit
-side by side: **agents** are the _consumers_ (the agents you use), and
-**resources** are the _assets_ those agents draw on — named, configured,
-lifecycle-managed entities behind a kind-agnostic framework. `mcp_server` is
-the resource kind that ships today, surfaced through a per-kind registry so the
-navigation and the resources page carry no kind-specific branches. Agents are
-NOT a resource kind, so they live in their own group, not under Resources.
+side by side: **agents** are the _consumers_ (the agents you use, and the chat
+you hold with one), and **resources** are the _assets_ those agents draw on —
+named, configured, lifecycle-managed entities behind a kind-agnostic framework.
+Each scoped kind gets its own list surface, so the navigation and each list page
+carry no kind-specific branches. Agents are NOT a resource kind, so they live in
+their own group, not under Resources.
 
 **The sidebar shows only what Coffer can do today.** It does not list dead "not yet implemented" placeholders: a sidebar full of "soon" entries reads as an unfinished scaffold, not a product.
 
@@ -23,20 +22,25 @@ Today the sidebar's shipped surfaces are:
 ```
  AGENTS
   Agents           /agents            — the consumers (Bot icon)
+  Chat             /chat              — a conversation with one of them
  RESOURCES
   MCP servers      /mcp-servers       — the aggregated upstream servers
   Skills           /skills            — what Coffer delivers to agents
-  Knowledge        /knowledge         — one page per knowledge scope
+  Knowledge        /knowledge         — the collections under ~/.coffer/knowledge/
+  Memory           /memory            — the partitions aggregated from the agents' own stores
   Model providers  /model-providers   — credentialed vendor endpoints
   Channels         /channels          — the IM transports agents answer on
  SYSTEM
   Activity         /activity          — what changed, what was called, what broke
+  Sync             /sync              — converging this vault with a git remote
   Settings         /settings
 ```
 
+That listing is exhaustive: eleven entries in three groups, and no twelfth.
+
 **RESOURCES holds one entry per resource kind that has a list UI, and that
-correspondence is the rule** — five kinds (`mcp_server`, `skill`, `knowledge`,
-`provider`, `channel`), five entries. Two had drifted out of it and were
+correspondence is the rule** — six kinds (`mcp_server`, `skill`, `knowledge`,
+`memory`, `provider`, `channel`), six entries. Two had drifted out of it and were
 returned in 2026-09: **Model providers** was the only kind filed under Settings
 (as "LLM connections"), and its old name described a page rather than the thing
 it manages — a `provider` is `{protocol, base_url, credential_ref}`, a vendor
@@ -48,18 +52,20 @@ named **「消息渠道 / Channels」** and nothing else — sidebar, page heade
 welcome panel and dialogs all say the same words, because a surface the user
 reaches two ways must not have two names.
 
-That leaves AGENTS holding a single entry. The asymmetry is deliberate: agents
-are the one thing in the product that *uses* the vault rather than living in
-it, and collapsing the group would lose that distinction to save one line.
+AGENTS holds two entries, and Agents comes first: the agents are the subject,
+and a chat is one thing you do with one of them. The group stays its own even
+though it is the smallest — agents are the one thing in the product that *uses*
+the vault rather than living in it, and collapsing the group would lose that
+distinction to save two lines.
 
 The app's index (`/`) redirects to `/agents`, so a first-time visitor lands on
-the Agents surface. It is grouped into **Agents** (the consumers), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Activity and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` is kept as a legacy redirect to `/mcp-servers` for old bookmarks.) The agent detail page is a simple **Overview + Config files** detail page: an Overview tab summarising the agent's registered config and a Config files tab that surfaces its known config files read-only, with no create / edit / delete / enable.
+the Agents surface. It is grouped into **Agents** (the consumers and the chat with one), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Activity, Sync and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` and `/mcp-servers/mcp_server/:name` are kept as legacy redirects for old bookmarks.) The agent detail page's own tabs belong to spec agent-registry (FR-009), which owns what they show; this spec owns only that they are tabs on a detail page laid out like every other.
 
-All list surfaces (agents, MCP servers, skills, knowledge, model providers, channels, each Activity tab) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are an icon plus its label — never a bare icon, which reads as a different affordance from the labelled action beside it. Cards are reserved for welcome / empty states only.
+All list surfaces (agents, MCP servers, skills, knowledge, memory, model providers, channels, each Activity tab, each Sync tab) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are an icon plus its label — never a bare icon, which reads as a different affordance from the labelled action beside it. Cards are reserved for welcome / empty states only.
 
 Every list surface carries a **reach** column — named for what it holds, not for the on/off flag it replaced: one button, labelled with the answer it already holds — "Every agent", "2 agents", "Disabled", or "No agent selected" for a scope narrowed to nobody — which opens a panel where "who does this reach?" is a single choice between Disabled, Every agent and Only selected agents, the last over the scope's list of agents. Every detail page carries the same button in its header. The button states the reach so the reader learns it by reading, rather than by comparing which of three side-by-side segments looks pressed; a kind that declares no scope gets the same button over a two-choice Disabled / Enabled panel. The panel stages its agent list and writes exactly once, when it closes — the two whole-value choices close it themselves — so a panel that is opened and dismissed writes nothing, and no write can refetch the list and move the row the panel is anchored to. It is written once and mounted in three places (the row, the detail header, the selection bar), so the three can never drift into three different answers to one question. A multi-select applies that same choice to the whole selection: a bulk write is a new intent, so its button reads "Set reach…" and its panel opens with nothing chosen rather than on any one row's value, and a row that fails is reported in the batch's one summary rather than silently skipped. Delete stays its own button beside it.
 
-**Observability** (system health / metrics) is planned but not shown today; it appears in the sidebar only once it ships. Activity is not it: a record of what happened is not a measurement of how the system is doing. The reverse rule holds too — an entry is removed when its feature is, which is how Machines left.
+**Observability** (system health / metrics) is planned but not shown today; it appears in the sidebar only once it ships. Activity is not it: a record of what happened is not a measurement of how the system is doing. The reverse rule holds too — an entry is removed when its feature is, and returns with it: **Machines** left the sidebar as a top-level fleet view and came back as a tab under Sync, where a machine is one participant in convergence rather than a surface of its own.
 
 The sidebar collapses to an icon-only rail and back; the choice persists across sessions (localStorage).
 
@@ -146,11 +152,17 @@ inside its own tab: one failing lane must not take the other two down with
 it. There is no manual refresh control — switching tab or changing a filter
 changes the query and refetches.
 
-`GET /api/v1/audit` and `coffer audit` are unchanged. The page adds two
-read-only routes for the other two lanes: `GET /api/v1/mcp/invocations`
-(cross-server, each row naming its server) and `GET /api/v1/daemon/logs`. The
-daemon-log route carries its token dependency on the route itself — the daemon
-router leaves `/status` open, and log contents are not status.
+The page is a consumer of three routes it does not own: `GET /api/v1/audit`,
+`GET /api/v1/mcp/invocations` (cross-server, each row naming its server) and
+`GET /api/v1/daemon/logs`. All three are spec mcp-gateway's, whose contract
+carries them — every REST route in the product is that spec's, and this one adds
+none. What this spec requires of them is only what the page needs: that the
+second and third exist as read-only, cross-cutting lanes, and that the daemon-log
+route is authenticated (the daemon router leaves `/status` open, and log
+contents are not status).
+
+`coffer audit` and `coffer mcp invocations` stay as they are — a script that
+read the log before this page existed still does.
 
 **The daemon log is not one format, and the Daemon tab's columns depend on
 reading all of them.** `daemon.log` collects Coffer's own structlog JSON, the
@@ -192,7 +204,9 @@ work; the legacy `/audit` URL redirects here.
 
 ### User Story 4 — Settings is organised around the user, not the daemon (Priority: P2)
 
-A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (display preferences — the default rows-per-page for list tables, and the preferred external editor for opening managed files), **Data** (retention policy and manual prune), and **About** (version, license, source). Settings opens on the General tab. The daemon is an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel. A user never needs to know Coffer runs a background daemon.
+A developer opens Settings and finds tabs grouped by what they manage, not by how Coffer is built: **General** (display preferences — the default rows-per-page for list tables, and the preferred external editor for opening managed files), **Coffer's model** (at `/settings/engine` — Coffer's own machinery: the internal LLM connection and model its own passes run on, and the switch and interval of each of those passes), **Data** (retention policy and manual prune), **Security** (where the master encryption key lives — beside the database, or in the OS keychain), and **About** (version, license, source). Settings opens on the General tab.
+
+Coffer's model and Security are here because both configure Coffer ITSELF rather than anything served to an agent, and because both do something on a timer or at every start that the user should be able to see and change: a pass that rewrites their own files, and a key whose location decides what the OS asks for on every daemon launch. Neither is a daemon-status readout. The daemon remains an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel, and a user never needs to know Coffer runs a background daemon.
 
 The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`. It MUST also expose a **preferred external editor** preference — the application Coffer uses when the user opens a managed file (or its containing folder) from a read-only file viewer. The default is the operating system's default application; the user MAY override it by **picking an editor the daemon detected as installed** (enumerated via `GET /api/v1/fs/editors`, spec agent-registry FR-039 — a browser can't list installed apps) or by entering a custom application / launch command. Like the other display preferences the chosen value is persisted in `localStorage` and never sent to the daemon (except transiently as the target when opening a file).
 
@@ -207,13 +221,13 @@ Removed — none of these is something a user needs to operate or see:
 
 Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clearing expired data).
 
-**Independent Test**: open `/settings` — it lands on General. The tab list reads General / Data / About. There is no "Daemon" tab and no daemon-status panel; no tab exposes a "Shutdown" or "Rotate token" control.
+**Independent Test**: open `/settings` — it lands on General. The tab list reads General / Coffer's model / Data / Security / About. There is no "Daemon" tab and no daemon-status panel; no tab exposes a "Shutdown" or "Rotate token" control.
 
 **Representative scenarios** (full list under `## Acceptance Scenarios`):
 
 - settings layout uses the redesigned tabbed sidebar
 - settings drops the confusing controls
-- the General tab persists a preferred-editor choice
+- general tab persists the preferred editor
 
 ---
 
@@ -269,13 +283,13 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **When** they navigate to `http://localhost:5173/` in a real browser
 - **Then** the index redirects to `/agents` and the page renders the sidebar + main content area within 2 seconds
 - **And** the main content shows the Agents welcome view (no generic error card)
-- **And** the sidebar lists Coffer's operational surfaces — Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Activity, Settings — grouped under "Agents", "Resources", and "System" headings
+- **And** the sidebar lists exactly Coffer's operational surfaces — Agents, Chat; MCP servers, Skills, Knowledge, Memory, Model providers, Channels; Activity, Sync, Settings — grouped under "Agents", "Resources", and "System" headings, with no other entry
 
 ### Scenario: token-missing renders an actionable empty state
 
 - **Given** `~/.coffer/daemon.json` does not exist (daemon is not running)
 - **When** the user navigates to `http://localhost:5173/`
-- **Then** the page shows a "Daemon not running" view with one obvious recovery affordance (a Reload control)
+- **Then** the page shows a "Daemon not running" view naming the one recovery a browser can offer — the `coffer daemon start` command to run (the Restart control belongs to the desktop shell, which can actually spawn a daemon)
 - **And** the sidebar is still visible so the user can orient themselves
 - **And** no view shows the literal text "unexpected error" or `INTERNAL_ERROR`
 
@@ -291,7 +305,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Given** the user opens the "Add MCP server" dialog from the resources list
 - **When** they paste the standard `mcpServers` JSON and confirm the review step
 - **Then** the app posts each server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
-- **And** on success the dialog closes and (for a single server) the app navigates to `/mcp-servers/mcp_server/<name>` showing the Overview tab
+- **And** on success the dialog closes and (for a single server) the app navigates to `/mcp-servers/<name>` showing the Overview tab (the old kind-segment path `/mcp-servers/mcp_server/<name>` survives only as a redirect to it)
 - **And** the new server appears on the resources list with health "unknown" then "healthy" within 10 seconds
 
 ### Scenario: add-server form navigates to detail then back to list shows card
@@ -331,7 +345,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - **Given** the user navigates to `/settings`
 - **When** the page resolves
 - **Then** it lands on the General tab
-- **And** the settings sidebar shows General, Data, and About, with the current route highlighted
+- **And** the settings sidebar shows General, Coffer's model, Data, Security, and About — exactly those five, in that order — with the current route highlighted
 - **And** clicking a tab swaps the right pane content without a full page reload
 
 ### Scenario: settings drops the confusing controls
@@ -366,7 +380,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 - **Given** the daemon is not running (no reachable `127.0.0.1:<port>` from `~/.coffer/daemon.json`, or the file is absent)
 - **When** the user has the app open and any authenticated request to the daemon fails to connect
-- **Then** a daemon-offline banner renders at the top of the workspace with a clear recovery affordance — a Reload control
+- **Then** a daemon-offline banner renders at the top of the workspace naming the recovery the host can actually offer — in a browser, the `coffer daemon start` command to run, because the page cannot start a daemon; in the desktop shell, a Restart control, because it can
 - **And** the banner disappears automatically once the daemon becomes reachable again, without a manual page reload
 
 ### Scenario: JSON import shows readable error for malformed JSON
@@ -381,9 +395,9 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 ## Success Criteria
 
-- Every scenario above has at least one covering test (unit, integration, or e2e) and the `audit_acceptance` script passes 002 alongside 001.
+- Every scenario above has at least one covering test (unit, integration, or e2e) and `scripts/audit_acceptance.py` passes for this spec alongside the others.
 - A first-time user can register an MCP server and reach a working gateway in-app; pointing an MCP client at the shim is documented in the project README.
-- The sidebar shows only operational surfaces (Agents, MCP servers, Skills, Knowledge, Model providers, Channels, Activity, Settings), grouped by role; no feature appears as a dead "soon" entry.
+- The sidebar shows only operational surfaces — Agents and Chat; MCP servers, Skills, Knowledge, Memory, Model providers and Channels; Activity, Sync and Settings — grouped by role, with nothing else in it and no feature appearing as a dead "soon" entry.
 - The three records Coffer keeps — the audit log, the MCP invocation log and the daemon log — reach a person through one page at `/activity`, a tab and a table each, and an agent through one call to `coffer__diagnose`, which returns them joined; `/audit` and the legacy `/observability` URL redirect there rather than 404ing. Scripts keep `GET /api/v1/audit` / `coffer audit` and `coffer mcp invocations`. Observability (system health / metrics) is a reserved future surface, and is not this.
 - Settings groups data controls (retention and prune) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.

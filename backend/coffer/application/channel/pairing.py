@@ -145,7 +145,6 @@ async def claim_pairing(
         chat_id=chat_id,
         display_name=sender_display,
         paired_at=datetime.now(tz=UTC),
-        active_conversation_id=None,
         sender_id=sender_id or None,
     )
     await peers.upsert(peer)

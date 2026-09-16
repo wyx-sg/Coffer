@@ -42,7 +42,6 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
             id="c-channel",
             agent_key="claude_code",
             title="standup thread",
-            model_id=None,
             created_at=now,
             updated_at=now,
             channel_name="team-standup",
@@ -55,7 +54,6 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
             id="c-web",
             agent_key="claude_code",
             title="draft",
-            model_id=None,
             created_at=now,
             updated_at=now,
         )

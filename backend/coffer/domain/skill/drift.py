@@ -53,10 +53,6 @@ class DriftReport:
 
     entries: list[DriftEntry] = field(default_factory=list)
 
-    @property
-    def has_drift(self) -> bool:
-        return bool(self.entries)
-
 
 @dataclass(frozen=True)
 class RepairResult:

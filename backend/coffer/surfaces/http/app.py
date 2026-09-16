@@ -41,7 +41,6 @@ from coffer.application.diagnostics import register_diagnostics_builtin_tools
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
-from coffer.infrastructure.daemon.pid_lock import read as read_daemon_json
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
@@ -52,8 +51,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
-from coffer.infrastructure.sync.identity import coffer_dir
-from coffer.surfaces.http import cors, daemon_routes, host_guard, webui
+from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_skill_wiring import run_skill_drift_boot_heal
 from coffer.surfaces.http.app_mcp_composition import (
@@ -69,6 +67,7 @@ from coffer.surfaces.http.credential_composition import (
     make_credential_resolver,
     run_legacy_keychain_migration,
 )
+from coffer.surfaces.http.daemon_identity import publish_daemon_identity
 from coffer.surfaces.http.dependencies import (
     set_audit_service,
     set_internal_engine_config_service,
@@ -99,10 +98,6 @@ def _db_url() -> str:
     )
 
 
-def _daemon_json_path() -> pathlib.Path:
-    return coffer_dir() / "daemon.json"
-
-
 _logger = logging.getLogger(__name__)
 
 
@@ -119,30 +114,6 @@ async def _best_effort(step: str, awaitable: Awaitable[object]) -> None:
         _logger.debug("shutdown.%s.cancelled", step)
     except Exception:
         _logger.warning("shutdown.%s.failed", step, exc_info=True)
-
-
-def _publish_daemon_identity() -> None:
-    """Read token + port + started_at if daemon.json exists (set by entry.py
-    BEFORE uvicorn starts). Absent is fine — an in-process app (tests,
-    `uvicorn coffer.main:app`) has no discovery file. Present-but-unreadable
-    is a real fault and MUST fail startup: swallowing it left the token unset,
-    so every authenticated route answered 503 while /daemon/status said
-    "ready"."""
-    json_path = _daemon_json_path()
-    if not json_path.exists():
-        return
-    try:
-        info = read_daemon_json(json_path)
-    except (ValueError, KeyError, OSError) as exc:
-        _logger.error(
-            "daemon.json at %s is unreadable (%r); refusing to start without a token",
-            json_path,
-            exc,
-        )
-        raise RuntimeError(f"daemon.json at {json_path} is unreadable: {exc}") from exc
-    set_active_token(info.token)
-    daemon_routes.set_port(info.port)
-    daemon_routes.set_started_at(info.started_at)
 
 
 @asynccontextmanager
@@ -257,7 +228,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # drives turns through the chat platform's handles, and `/save` through the
     # knowledge kind's.
     channel_runtime = wire_channel_kind(
-        app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge
+        app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
     )
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
@@ -273,7 +244,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # worker. The repo's start() is a no-op if already started.
     await kinds.mcp.invocation_repo.start()
 
-    _publish_daemon_identity()
+    publish_daemon_identity()
 
     # Frozen builds only; no-op from source (FR-026, see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
@@ -300,6 +271,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # the lifespan actually started a worker needs a seam to reach it through,
     # and the alternative is asserting the wiring by reading the wiring.
     app.state.background_workers = workers
+    # Same seam, for the same reason. An area that forgets to register its
+    # state provider does not fail — it just silently stops converging, which
+    # is how channel pairings went a whole release without syncing. A test that
+    # can read the collected set is what makes that visible.
+    app.state.sync_contributions = sync_contributions
 
     # Channel adapter reconciler (spec channels). Started after the daemon token is
     # published so the callback listener can be spawned with valid loopback
@@ -385,11 +361,9 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # Same eager registration for the channel kind (the lifespan's
     # wire_channel_kind overwrites it with the runtime-evicting on_delete).
     app.state.kinds.setdefault("channel", make_channel_kind())
-    cors.install(app)
-    # AFTER cors so it wraps it: Starlette runs the last-added middleware
-    # outermost, and a request for an authority this daemon does not answer for
-    # should be refused before anything else looks at it.
-    host_guard.install(app)
+    # CORS, then the loopback host guard, then the trace id — the ordering and
+    # why each position is load-bearing live in ``middleware``.
+    middleware.install(app)
     err_handlers.register(app)
     include_all_routers(app)
     # LAST: the SPA mount claims "/", so every API route must already be

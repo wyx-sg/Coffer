@@ -4,8 +4,10 @@
 Convention (see agents/testing.md "Acceptance Scenarios — Cross-Tier Markers"):
   * Spec scenarios live in `specs/<id>/spec.md` under '## Acceptance Scenarios'
     as `### <title>` (or `### Scenario: <title>`) headings.
-  * Spec ID is the spec's directory name (e.g. specs/001-mcp-servers/spec.md
-    → '001-mcp-servers').
+  * Spec ID is the spec directory's path relative to `specs/`, so it is the
+    folder name for a top-level spec (`specs/mcp-gateway/spec.md` →
+    'mcp-gateway') and a slash-joined path for a nested child
+    (`specs/channels/telegram/spec.md` → 'channels/telegram').
   * Python tests carry `@pytest.mark.acceptance(spec="...", scenario="...")`.
   * TS tests use `test.acceptance("spec", "scenario", ...)`.
 
@@ -28,9 +30,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SPECS_DIR = REPO_ROOT / "specs"
 BACKEND_TESTS = REPO_ROOT / "backend" / "tests"
+# The frontend has no tier-by-directory layout: its tests are co-located
+# `*.test.tsx` under src/. `frontend/tests/` was the first scaffold's shape and
+# has been gone since the real web shell landed, so it is not listed here.
 FRONTEND_TS_ROOTS = [
     REPO_ROOT / "frontend" / "src",
-    REPO_ROOT / "frontend" / "tests",
     REPO_ROOT / "e2e",
 ]
 TS_SKIP_DIRS = {"node_modules", "dist", "build", ".next", "test-results"}
@@ -90,11 +94,22 @@ def parse_spec_scenarios(spec_md: Path) -> list[str]:
 
 
 def collect_specs() -> dict[str, set[str]]:
+    """`{spec_id: {scenario, ...}}` for every spec.md at any depth under specs/.
+
+    The spec id is the spec directory's path RELATIVE TO `specs/`, so a nested
+    child spec is `channels/telegram` while a top-level one stays `channels`.
+    The recursive glob and the relative id are what let a parent spec keep its
+    own scenarios while its children carry theirs: a `*/spec.md` glob would see
+    only the parent, and `spec_md.parent.name` would collapse
+    `specs/channels/telegram` and `specs/agent-registry/telegram` onto the same
+    id. On today's flat tree both spellings produce exactly the same ids.
+    """
     out: dict[str, set[str]] = {}
     if not SPECS_DIR.exists():
         return out
-    for spec_md in sorted(SPECS_DIR.glob("*/spec.md")):
-        out[spec_md.parent.name] = set(parse_spec_scenarios(spec_md))
+    for spec_md in sorted(SPECS_DIR.rglob("spec.md")):
+        spec_id = spec_md.parent.relative_to(SPECS_DIR).as_posix()
+        out[spec_id] = set(parse_spec_scenarios(spec_md))
     return out
 
 

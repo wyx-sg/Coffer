@@ -40,7 +40,6 @@ vi.mock("@/lib/hooks/useAgentProviders", () => ({
 // scope, so the hooks behind it are stubbed rather than served by a real client.
 // `channel` declares scope, so the control's panel offers all three states.
 vi.mock("@/lib/hooks/useScope", () => ({
-  UNRESTRICTED: { agents: null },
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));

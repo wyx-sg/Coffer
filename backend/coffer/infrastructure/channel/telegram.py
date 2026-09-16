@@ -60,7 +60,6 @@ from coffer.infrastructure.channel.telegram_updates import (
 _logger = logging.getLogger(__name__)
 
 _POLL_TIMEOUT_SECONDS = 50
-_BACKOFF_LADDER = (1.0, 5.0, 30.0)
 _CHUNK_LIMIT = 4000
 # FR-038: how long to wait for more album items sharing a media_group_id before
 # flushing them as one turn. Small — the items arrive back-to-back.

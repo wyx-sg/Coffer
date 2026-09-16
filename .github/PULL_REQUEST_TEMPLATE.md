@@ -1,7 +1,9 @@
 <!--
 PR title must follow Conventional Commits (same shape as commit subject):
-  <type>(<scope>): <subject>     ≤ 72 chars, lowercase, no trailing period.
-See agents/workflow.md "Commits" for the full rule set.
+  <type>(<scope>): <subject>
+Limits come from .commitlintrc.yaml, which the pr-title workflow and the local
+commit-msg hook both read: subject ≤ 120 chars, whole header ≤ 150. Case is not
+enforced. See agents/workflow.md "Commits" for the full rule set.
 -->
 
 ## What
@@ -16,13 +18,14 @@ See agents/workflow.md "Commits" for the full rule set.
 
 <!--
 - If the change has spec acceptance scenarios, list which scenarios are now
-  covered (e.g., "001-mcp-servers acceptance scenario `register and list`").
+  covered (e.g., "mcp-gateway acceptance scenario `register and list`").
 - Otherwise describe how a reviewer can manually exercise the change.
 -->
 
 ## Spec references
 
-<!-- Spec IDs (e.g., 001-mcp-servers) or N/A for pre-spec scaffolding. -->
+<!-- Spec ids — the folder path under specs/, named and never numbered
+     (e.g. `mcp-gateway`, or `channels/telegram` for a child spec) — or N/A. -->
 
 ## Screenshots
 
@@ -35,6 +38,6 @@ See agents/workflow.md "Commits" for the full rule set.
 ---
 
 - [ ] `make verify-all` is green locally
-- [ ] PR title matches the squashed commit subject (≤ 72 chars, Conventional Commits)
+- [ ] PR title matches the squashed commit subject (Conventional Commits, within .commitlintrc.yaml's caps)
 - [ ] AI-authored commits carry `Co-authored-by: <Agent> <noreply@...>`
 - [ ] Constitution / agents/ docs updated if conventions changed

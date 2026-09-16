@@ -28,7 +28,7 @@ from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.search import SearchService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS
-from coffer.domain.knowledge.converter import UnsupportedDocument
+from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
 from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.surfaces.http.auth import require_token
@@ -64,11 +64,12 @@ router = APIRouter(
     dependencies=[Depends(require_token)],
 )
 
-#: ``UnsupportedDocument`` is not a ``CofferError`` (it never was one), so it
-#: has no code of its own in ``surfaces/http/errors.py``'s table. Reusing the
-#: still-mapped ``INGEST_REJECTED`` (400) rather than inventing a new one —
-#: the family already has exactly one code for "this upload is refused", and
-#: ``details.doc_type`` says which type.
+#: Neither ``UnsupportedDocument`` nor ``EmptyConversion`` is a
+#: ``CofferError`` (the first never was one), so neither has a code of its own
+#: in ``surfaces/http/errors.py``'s table. Both reuse the still-mapped
+#: ``INGEST_REJECTED`` (400) rather than inventing new ones — the family has
+#: exactly one code for "this upload is refused", ``details.reason`` says which
+#: refusal, and ``details.doc_type`` says which type.
 _INGEST_REJECTED = "INGEST_REJECTED"
 
 
@@ -243,5 +244,15 @@ async def upload(
             _INGEST_REJECTED,
             f"unsupported document type: {exc.doc_type!r}",
             {"reason": "unsupported_type", "doc_type": exc.doc_type},
+        )
+    except EmptyConversion as exc:
+        # A PDF gets its own reason because the cause is knowable and the fix
+        # is actionable ("run OCR"); any other format that converts to nothing
+        # falls back to the family's generic message.
+        reason = "scanned_pdf" if exc.doc_type == "pdf" else "empty_conversion"
+        return error_response(
+            _INGEST_REJECTED,
+            f"no text could be extracted from this {exc.doc_type!r} document",
+            {"reason": reason, "doc_type": exc.doc_type},
         )
     return IngestedDocumentOut.model_validate(doc, from_attributes=True)

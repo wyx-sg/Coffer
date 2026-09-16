@@ -1,7 +1,5 @@
 # Feature Specification: Channels
 
-**Feature Branch**: `feature/channels`
-**Created**: 2026-06-12
 **Status**: Accepted
 **Input**: User description: "Coffer needs messaging channels — Telegram and
 SeaTalk first — so the owner can talk to any agent on the chat platform from
@@ -174,7 +172,7 @@ the app's own credentials, and everything after that arrives on a socket only
 this machine opened. For a local-first vault that is the better transport — it
 deletes the entire ingress apparatus instead of managing it — and its price is
 paid elsewhere: the platform's own client library, which the operator supplies
-(FR-072), and one connection per SeaTalk app, so a second machine registering
+(FR-081), and one connection per SeaTalk app, so a second machine registering
 the same app takes the events away from the first.
 
 Both land on the same seam. An event is the same envelope whichever way it
@@ -227,15 +225,16 @@ disable that actually stops traffic) is what makes the feature operable.
 
 ---
 
-### User Story 9 — Switch agent and model from chat (Priority: P2)
+### User Story 9 — Switch agent, model and effort from chat (Priority: P2)
 
 The owner steers the entrypoint without leaving the IM app. `/agent codex`
-switches the conversation to Codex; `/model opus` changes the model. Switching
+switches the conversation to Codex; `/model opus` changes the model; `/effort
+high` changes how hard that model thinks. Switching
 the agent starts a fresh conversation pinned to the new choice (the agent is
 fixed for a conversation's life) and the choice sticks for later messages and
-`/new`; switching the model takes effect on the next turn in the same
-conversation. Each command with no argument reports the current value and the
-available choices.
+`/new`; switching the model or the effort takes effect on the next turn in the
+same conversation. Each command with no argument reports the current value and
+the available choices, as a selection card where the transport has buttons.
 
 **Why this priority**: A channel is an entrypoint _manager_, not a single fixed
 wire. Routing to a chosen agent with a chosen model is what makes one paired
@@ -253,23 +252,25 @@ message answered by it; send `/model <name>` and observe the next turn use it.
 
 ---
 
-### User Story 10 — Know who drove what, and when a turn is done (Priority: P2)
+### User Story 10 — Know who may drive, and when a turn is done (Priority: P2)
 
-Because the entrypoint is remote-reachable, every turn a channel message drives
-is recorded in the audit log
-with the channel, peer, and agent — answering "who drove which agent through
-which channel". And when a turn ends abnormally, one compact summary is pushed
+Because the entrypoint is remote-reachable, the act that grants a stranger the
+right to drive turns at all is recorded in the audit log: a pairing code issued,
+and a sender claiming it. A turn itself is not — the conversation and its
+messages are already the durable record of what was asked and what answered, and
+they are readable from the Chat page and the REST API. And when a turn ends
+abnormally, one compact summary is pushed
 to the chat: the failure, the stop, or the tool-iteration limit, with tool
 count, duration, and tokens. A clean success sends no summary on any channel —
 the reply itself is the signal, so the fact line would just be noise.
 
 **Why this priority**: An entrypoint manager's two unclaimed differentiators are
-first-class auth/audit and a reliable completion signal; both must be true on
-every channel, including the silent ones.
+a fail-closed authorization boundary that leaves a record, and a reliable
+completion signal; both must be true on every channel, including the silent ones.
 
-**Independent Test**: Drive a turn from a paired channel and observe a
-turn-started audit record with the channel, peer, and agent; observe that a
-clean success sends no completion summary while a failed turn does.
+**Independent Test**: Issue a pairing code and claim it, and observe both events
+in the audit log with the channel and the sender; then observe that a clean
+success sends no completion summary while a failed turn does.
 
 **Covering scenarios**:
 
@@ -278,6 +279,47 @@ clean success sends no completion summary while a failed turn does.
 - a group member who is not the paired sender is ignored
 
 ---
+
+### User Story 11 — Watch and steer the same conversation from the browser (Priority: P2)
+
+The owner is driving a conversation from their phone and sits down at a desk.
+The web Chat page lists every conversation in the vault, whatever opened it,
+badges the ones a channel is also reachable on, and renders the turn already in
+flight from its beginning. From there the owner reads the tool calls as cards,
+types the next message into the same pending queue the phone feeds, interrupts
+the running turn, renames or archives the conversation, and changes which agent
+it runs on, which model, and how hard that model thinks. Nothing about the turn
+tells the agent which window it arrived through.
+
+**Why this priority**: This is the one thing no channel can do — a desktop-sized
+view onto a conversation the owner started on a phone, and a draft surface wide
+enough to pitch the next turn properly. Section G carries the requirements.
+
+**Independent Test**: Start a turn from a paired channel, open the page
+mid-turn, and observe the in-flight turn replayed from its start and then
+followed live; send a second message from the page and observe it queued behind
+the running turn on both surfaces; interrupt from the page and observe the
+partial reply kept.
+
+**Covering scenarios**:
+
+- list available agents
+- choose an agent when starting a conversation
+- send a message and receive a streamed reply
+- observe a turn started from another surface
+- second message queues during a streaming turn
+- editing a queued message re-queues it at the tail
+- manage conversations
+- archive and restore a conversation
+
+---
+
+> **There is no User Story 5.** It was the tool-approval story, and
+> [Remove Tool Approval](../../docs/decisions/remove-tool-approval.md) removed it
+> together with its requirements, success criteria and scenarios — owner pairing
+> is the gate instead. The gap stands rather than being closed by renumbering:
+> that ADR names the removed story by its number, so compacting the list would
+> re-point its reference at whichever story inherited the five.
 
 ### Edge Cases
 
@@ -297,9 +339,11 @@ clean success sends no completion summary while a failed turn does.
   reconnect (update offset is committed only after dispatch).
 - SeaTalk sender rate limits (HTTP 429) → outbound sends back off and retry.
 - Inbound photos and files → downloaded and handed to the agent for the turn
-  (images inlined for a vision agent; any agent gets the file's path). An empty
-  message with nothing downloadable (a sticker, a location) → the channel replies
-  that it needs text, a photo, or a file.
+  (images inlined for a vision agent; any agent gets the file's path). A sticker
+  is a picture the user chose deliberately, so it is downloaded like any other
+  attachment (FR-067). Only a message with no text and nothing downloadable at
+  all — a location, a contact card — gets the reply that the channel needs text,
+  a photo, or a file.
 
 ## Requirements
 
@@ -365,8 +409,13 @@ clean success sends no completion summary while a failed turn does.
   paired peer, callback endpoint), issues pairing codes, and toggles
   enable/disable, and binds each channel to the machine that runs it (FR-080).
   CLI parity: `coffer channel list / register / bind / pair / status / notify`.
-- **FR-012**: Channel events are audited: pairing issued, paired,
-  notification sent — alongside the automatic resource-lifecycle audit.
+- **FR-012**: Channel events are audited where an event grants or moves the
+  right to drive turns: a pairing code issued, and a sender claiming it. Those
+  two are the whole channel-specific audit surface, alongside the automatic
+  resource-lifecycle audit the framework records. Traffic is deliberately not
+  audited — a notification sent and a turn run are neither irreversible nor
+  invisible afterwards, and the conversation and its messages are already their
+  record.
 - **FR-013**: The owner switches the conversation's agent from chat. `/agent`
   with no argument reports the current agent and the registry's available agent
   keys; `/agent <key>` validates the key against the agent registry and, on
@@ -391,9 +440,7 @@ clean success sends no completion summary while a failed turn does.
   `employee_code`); pairing records it on the peer, and an inbound message is
   accepted only when its `chat_id` matches and — when the peer has a stored
   `sender_id` — its sender matches. A peer paired before this requirement (no
-  stored `sender_id`) degrades to the chat-id-only gate. One channel-driven
-  event is audited beyond FR-012: a turn started by an inbound message
-  (channel, peer, agent, conversation).
+  stored `sender_id`) degrades to the chat-id-only gate.
 - **FR-015**: After a turn that did not end normally the channel sends one compact
   completion summary as a fresh message: a failure reports the error, an interrupt
   reports the stop, and the tool-iteration limit reports the limit, each with tool
@@ -401,21 +448,24 @@ clean success sends no completion summary while a failed turn does.
   channel — the reply itself is the completion signal, so the fact line would only
   be noise (this holds regardless of whether the transport can edit messages).
 - **FR-017**: The owner switches the model from chat. `/model` with no argument
-  reports the current model; `/model <name>` for the builtin agent resolves the
-  name against the model registry and sets the conversation's model override,
-  and for a bridged agent stores the raw upstream model string passed through to
-  the CLI. A model switch takes effect on the next turn in the same conversation
-  (the model is re-read each turn, unlike the agent and working directory). An
-  invalid builtin model is rejected against the registry; a bad bridged model
-  string surfaces as the CLI's own error relayed to the chat. On a transport
+  reports the current model; `/model <name>` stores the raw upstream model
+  string, passed through to the bound agent's CLI verbatim. A channel curates no
+  models, so nothing is validated here: the model namespace belongs to the CLI,
+  not to Coffer (the built-in model-registry agent that once owned one is
+  retired), and a name that agent cannot run surfaces as the CLI's own error
+  relayed to the chat on the next turn. A model switch takes effect on the next
+  turn in the same conversation
+  (the model is re-read each turn, unlike the agent and working directory).
+  On a transport
   that `supports_buttons` (FR-018), `/model` with no argument renders the choices
   as a selection card. They come from the agent's model catalogue — read back
   from the installed CLI, the one list Coffer has of what that agent can run, and
   the same list the web Chat page's picker offers — in **full**, because nothing
   curates it: neither the agent nor the channel narrows what the card may offer.
   It is shown one **page** at a time
-  (FR-018): that catalogue runs to 29 models for `claude_code`, and a card
-  that long is unreadable on a phone and refused outright by SeaTalk, so the card
+  (FR-018): a current CLI's catalogue runs to dozens of ids — far past what a
+  card may carry — and a card that long is unreadable on a phone and refused
+  outright by SeaTalk, so the card
   is a window onto the list rather than the list. It opens on the page holding the
   model currently in effect, so a freshly rendered card always has its tick in
   view. Free-text `/model <name>` still reaches a model the user can already
@@ -655,8 +705,8 @@ clean success sends no completion summary while a failed turn does.
   ruled it out are gone. The platform has published the capability, so the
   behaviour above is a documented contract rather than something reverse-engineered
   from a binary; and the client library it needs is no longer a licensing problem
-  for this repository, because Coffer does not ship it (FR-072).
-- **FR-072**: The WebSocket client library is an **operator-supplied optional
+  for this repository, because Coffer does not ship it (FR-081).
+- **FR-081**: The WebSocket client library is an **operator-supplied optional
   dependency**, never a vendored one. The only client for SeaTalk's websocket
   delivery is the platform's own SDK, distributed from an internal corporate
   portal, absent from public PyPI, and published under no public licence — so
@@ -721,8 +771,8 @@ clean success sends no completion summary while a failed turn does.
   test; `make verify` passes.
 - **SC-006**: From one paired chat the owner reaches every registered agent
   with a chosen model (demonstrated by driving two scripted providers in tests).
-- **SC-007**: Every channel-driven turn
-  is queryable in the audit log by channel, peer, and agent; a clean success
+- **SC-007**: Every pairing — the code issued and the sender who claimed it — is
+  queryable in the audit log by channel; and a clean success
   sends no completion summary on any channel, while a turn that ends abnormally
   (failed, interrupted, tool-limit) sends one reporting the outcome.
 
@@ -936,7 +986,7 @@ have.
 
 - **Given** a paired channel
 - **When** notify is called via REST and via CLI
-- **Then** the text arrives in the IM chat both times and is audited
+- **Then** the text arrives in the IM chat both times
 
 ### Scenario: notify on an unpaired channel fails cleanly
 
@@ -1048,6 +1098,15 @@ have.
 - **Then** adapter run state, paired peer, and (for seatalk) the callback
   port and path are reported accurately
 
+### Scenario: status reports webhook-only facts as absent rather than as defaults
+
+- **Given** a channel delivering over a websocket, which has no callback
+  listener and no tunnel to have
+- **When** the user queries status on every surface
+- **Then** the websocket state is named and the listener port, path and tunnel
+  are omitted rather than rendered from their absent values, so a healthy
+  channel is never described as broken ingress
+
 ### Scenario: /agent switches the agent and sticks
 
 - **Given** a paired channel with a second scripted agent registered
@@ -1155,7 +1214,7 @@ have.
 
 - **Given** a paired channel on an adapter that can edit messages
 - **When** a text-only turn (no tool calls) keeps producing reply text past the
-  throttle interval
+  transport's update interval
 - **Then** a status message is opened with the streaming reply text and edited in
   place as the answer grows, then deleted on finish while the final reply is sent
   once
@@ -1163,7 +1222,7 @@ have.
 ### Scenario: a fast text-only reply opens no status message
 
 - **Given** a paired channel on an adapter that can edit messages
-- **When** a text-only turn completes within the throttle interval
+- **When** a text-only turn completes within the transport's update interval
 - **Then** no status message is opened (no create → delete → resend flicker) — only
   the single final reply is sent
 
@@ -1177,8 +1236,8 @@ have.
 
 ### Scenario: a transport with no live-text surface posts no interim status message
 
-- **Given** a paired channel on an adapter that can neither edit nor stream, in
-  a group/thread (where the DM-only typing signal does not apply either)
+- **Given** a paired channel on an adapter that can neither edit nor stream and
+  declares no typing signal either, in a group/thread
 - **When** a turn runs
 - **Then** no interim signal is posted at all — only the final chunked reply
   lands in the originating group/thread
@@ -1908,7 +1967,7 @@ Two kinds of channel live under this plane:
   another. This is Coffer's moat: agents with no channel of their own (Claude
   Code, Codex) reach IM *only* this way; and **SeaTalk is
   Coffer-hosted for every agent, because no external gateway speaks SeaTalk.**
-  All of spec channels — including the enhancements below (FR-028…FR-042) — describes
+  Every requirement in this spec describes
   this path. The one seam that keeps it agent-agnostic: every inbound message
   becomes text plus on-disk `Attachment(path, mime, filename)`, and each agent
   adapter materializes attachments its own way (Claude inlines images/PDFs;
@@ -1932,10 +1991,10 @@ Because official Telegram/Slack integrations either don't exist for most agents
 (Codex/Gemini/OpenCode have no official Telegram; SeaTalk has no official
 anything) or are single-agent and often cloud-only, the Coffer-hosted channel
 is not redundant with them — it is the only path to unified, local, multi-agent
-control, and the enhancements below are exactly the group/thread/voice/media
-capabilities the official personal bridges lack.
+control, and the group, thread, voice and media behaviour the sections below
+specify is exactly what the official personal bridges lack.
 
-### E. Unified channel management and one-bot-all-agents
+### One bot, all agents, one management surface
 
 - **FR-040**: One bot controls all agents. A single paired Coffer-hosted bot
   drives any managed agent, switchable via `/agent` and selection cards; agent
@@ -2150,15 +2209,15 @@ capabilities the official personal bridges lack.
   unless it is named in the subscribed update types) rather than as a dedicated
   event; it normalises to the same lifecycle envelope, so the rule is one rule
   and not one per platform. Being *added* is deliberately not an event: anyone
-  can add a bot to a group, and pairing (FR-005) is the gate.
+  can add a bot to a group, and pairing (FR-003) is the gate.
 
 ### E. The turn platform
 
-Folded in from the retired Agent Chat spec. These requirements describe the machinery
+These requirements describe the machinery
 *underneath* every channel turn — the registry, the adapters, the conversation
-store, and the turn lifecycle. They lived in their own spec while a web Chat
-page was their other client. That page is a live surface again (section G
-below), but the description stays here: one platform, one document, so the
+store, and the turn lifecycle. They live here rather than in a spec of their own
+even though the web Chat page (section G below) is their second client: one
+platform, one document, so the
 whole path — IM message → turn → reply, and that same turn watched from the
 browser — reads in one place instead of two.
 
@@ -2195,7 +2254,7 @@ browser — reads in one place instead of two.
   platform's turn events, and persist the upstream session id so the next turn
   continues the same session. Claude Code is driven through the Claude Agent SDK
   and Codex through `codex app-server` (JSON-RPC 2.0 over stdio, NDJSON-framed);
-  both run with full permissions — owner pairing (FR-005) is the security gate.
+  both run with full permissions — owner pairing (FR-003) is the security gate.
   Both MUST emit the reply as text increments *as it is written*, not as one
   block at the end of the turn — otherwise the live surface of FR-037 has
   nothing to grow and a channel reply lands all at once after a long silence.
@@ -2245,7 +2304,7 @@ browser — reads in one place instead of two.
 - **FR-051**: Interrupting a turn MUST also **pause** the pending queue: the
   current turn stops with its partial output kept, and queued messages are held
   rather than auto-run until the owner resumes them. This is what `/stop`
-  (FR-011) reaches, from the chat exactly as `POST .../interrupt` does from the
+  (FR-006) reaches, from the chat exactly as `POST .../interrupt` does from the
   web; the next message from either surface resumes the held queue.
 - **FR-052**: System MUST express a turn as a sequence of typed events covering,
   at minimum, turn start, text deltas, tool calls, tool results, turn
@@ -2269,23 +2328,30 @@ browser — reads in one place instead of two.
   agent process stopped through the adapter's own cancellation path. In both
   cases whatever text streamed before the failure is kept on the assistant
   message (marked failed) and delivered to the chat ahead of the notice.
-- **FR-055**: Every completed turn MUST be recorded in the audit log with the
-  actor, the agent, the conversation, and the turn's token usage, so "which
-  agent did what, driven by whom" is answerable after the fact (see FR-030 for
-  the channel-specific fields).
+- **FR-055**: A turn's own record is the conversation it ran in. The user
+  message, the assistant message, its tool-call and tool-result blocks, its
+  model and its token usage are all persisted (FR-048) and readable from the
+  REST API and the Chat page, so "which agent did what" is answerable after the
+  fact from the timeline rather than from a second ledger. Turn activity MUST
+  therefore NOT be written to the audit log: a turn is neither irreversible nor
+  security-sensitive nor invisible afterwards, and an audit row per turn would
+  duplicate the timeline while diluting a log whose value is that everything in
+  it changed who may do what. What the audit log carries for a channel is the
+  pairing (FR-012) — the act that grants a sender the right to drive turns at
+  all — and the resource lifecycle around the channel itself.
 
 
 ### F. Telegram platform parity (Bot API 10.x)
 
-Telegram's Bot API 10.1–10.3 (June–August 2026) added a family of surfaces
-built for exactly this shape of bot: a message that streams while an agent
-generates it, a stop control the platform draws itself, structured rich text,
-and a group reply only one member can see. Coffer had hand-built approximations
-of the first three — an edited message standing in for a stream, a typed
-`/stop`, a five-tag HTML subset standing in for markdown — and had no answer at
-all for the fourth. These requirements move each one onto the platform's own
-mechanism while keeping the hand-built path as the fallback, because the Bot
-API server a user reaches is not guaranteed to be new enough.
+Telegram's Bot API carries a family of surfaces built for exactly this shape of
+bot: a message that streams while an agent generates it, a stop control the
+platform draws itself, structured rich text, and a group reply only one member
+can see. Coffer uses each one where the Bot API server it reaches offers it, and
+keeps its own hand-built equivalent — an edited message standing in for a
+stream, a typed `/stop`, an HTML subset standing in for markdown — as the
+fallback beneath it, because the Bot API server a user reaches is not guaranteed
+to be new enough. Every requirement here is therefore two mechanisms and a
+probe, not one mechanism.
 
 - **FR-059**: Platform capability is probed, never assumed. On start the
   transport reads what the platform says about itself (`getMe`) and keeps the
@@ -2336,12 +2402,17 @@ API server a user reaches is not guaranteed to be new enough.
   FR-024: that requirement stops the bot from *acting* on everything, this one
   stops it from *saying* everything out loud. Every command declares which side
   of that line it falls on, on the same roster FR-065 registers the menu from:
-  `/new` and `/stop` change state the whole room shares and stay visible, while
-  the ones that answer the asker — `/agent`, `/model`, `/effort`, `/status`,
-  `/help` — are delivered privately where the transport can. A command added
-  without that declaration defaults to private, which is the safe way round but
-  still a decision the roster states rather than one a new command inherits by
-  accident.
+  `/new` and `/stop` change state the whole room shares and stay visible, and so
+  does `/save`, whose outcome is a file the room's other members can be expected
+  to want to know about; the ones that answer only the asker — `/agent`,
+  `/model`, `/effort`, `/status`,
+  `/help` — are delivered privately where the transport can. A roster entry that
+  declares nothing is **visible**, so privacy is something a command opts into
+  rather than something it acquires by omission; a command that is not on the
+  roster at all is answered privately, because an "unknown command" scolding is
+  the least useful thing to broadcast. The two defaults differ because they
+  answer different questions — what a command Coffer ships decided, versus what
+  to do with a string nobody declared.
   **Selection cards are deliberately excluded.** A card is the one surface that
   must be *rewritten* after it is used (FR-018), and a privately-delivered
   message is rewritten through a different address space — Telegram edits an
@@ -2363,7 +2434,7 @@ API server a user reaches is not guaranteed to be new enough.
   recent) is one entry plus its handler, with no second list to forget. Copy the owner already wrote, and the
   bot's name, are their branding decision and MUST NOT be overwritten.
 - **FR-066**: Pairing is one tap. Where the platform supports a parameterised
-  start link, the pairing code (FR-005) is issued as a link that carries it, so
+  start link, the pairing code (FR-003) is issued as a link that carries it, so
   the owner pairs by opening the link instead of transcribing eight characters
   on a phone. The typed code keeps working — the link is an additional way in,
   and the same single-use, TTL-bounded, attempt-bounded gate applies to both.
@@ -2420,9 +2491,8 @@ API server a user reaches is not guaranteed to be new enough.
 ### G. The web Chat page
 
 The turn platform has a second surface: a **Chat page** in the web UI, onto
-exactly the conversations the channels drive. It shipped with the Agent Chat
-spec, was removed on 2026-09-10 as unused, and is restored on 2026-09-12,
-because the thing it does that no channel can is let the owner watch, steer and
+exactly the conversations the channels drive. It earns its place by doing the
+one thing no channel can — letting the owner watch, steer and
 continue from a desktop a conversation they are driving from their phone. The
 decision it rests on is recorded in
 [Chat Is a Single-Owner Live Mirror](../../docs/decisions/chat-single-owner-live-mirror.md).
@@ -2656,7 +2726,7 @@ G restores the live mirror and only the live mirror.
   `cloudflared` child for it. On **websocket** delivery none of that exists: the
   daemon dials out, so there is no listener, no tunnel, and no public URL
   (FR-071). What the owner supplies there instead is the platform's own client
-  library (FR-072).
+  library (FR-081).
 - Channels carry text plus inbound photos and files (FR-020): media is
   downloaded and handed to the agent, while an empty message with nothing
   downloadable gets a polite "send text, a photo, or a file" reply. Outbound is

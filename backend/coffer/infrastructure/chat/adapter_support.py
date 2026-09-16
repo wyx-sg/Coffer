@@ -11,9 +11,12 @@ app-server-backed (:mod:`codex_agent`) adapters both need:
   can ``--resume`` it.
 - :func:`last_user_text` — the prompt for a turn: the text of the most recent
   user message in the history.
-
-These were extracted from the now-deleted ``cli_agent`` module when the legacy
-The pre-SDK CLI adapters were retired; the live adapters are the only callers.
+- :func:`channel_system_context` — the append telling a channel-driven agent it
+  is on a phone chat rather than at a terminal.
+- :func:`model_system_context` — the append naming the model Coffer put the
+  session on, and what else it could be switched to.
+- :func:`compose_system_context` — the three appends a provider owes its agent
+  (channel, model, memory digest), joined into the one string it passes on.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-//! The four IPC commands the webview calls, and the detect-or-spawn policy
+//! The three IPC commands the webview calls, and the detect-or-spawn policy
 //! behind them.
 //!
 //! Where a daemon comes from lives in `resolve.rs` (the five-step chain);
@@ -128,13 +128,6 @@ pub fn version_is_compatible(expected: &str, daemon: &str) -> bool {
     !daemon.is_empty() && expected == daemon
 }
 
-/// Expose this app build's expected daemon version to the web UI (shown in the
-/// version-skew banner copy so the user sees what the app expected).
-#[tauri::command]
-pub fn get_app_version() -> String {
-    APP_VERSION.to_string()
-}
-
 /// Whether the running daemon's reported version matches what this app build
 /// expects. The web UI passes the `version` from `/api/v1/daemon/status`; on
 /// `false` it surfaces a "daemon out of date — restart it" banner (reusing the
@@ -260,10 +253,12 @@ mod tests {
     }
 
     #[test]
-    fn get_app_version_returns_the_crate_version() {
-        // Sourced from CARGO_PKG_VERSION, not a hardcoded literal.
-        assert_eq!(get_app_version(), env!("CARGO_PKG_VERSION"));
-        assert!(!get_app_version().is_empty());
+    fn app_version_comes_from_the_crate_version() {
+        // Sourced from CARGO_PKG_VERSION, not a hardcoded literal — a
+        // freshly-installed app and an old detached daemon it reuses cannot
+        // silently agree.
+        assert_eq!(APP_VERSION, env!("CARGO_PKG_VERSION"));
+        assert!(!APP_VERSION.is_empty());
     }
 
     #[test]

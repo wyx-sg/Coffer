@@ -7,10 +7,11 @@ adapter factory produces the recording FakeChannelAdapter.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from coffer.application.channel.ports import ChannelPeer
 from coffer.domain.channel.errors import ChannelNotPaired
 from coffer.domain.errors import CredentialMissing, ResourceNotFound
 
@@ -91,6 +92,75 @@ async def test_notify_sends_via_running_adapter(env: ChannelEnv) -> None:
     await env.service.notify("tg", "backup finished", actor="cli")
 
     assert adapter.sent == [("owner", "backup finished")]
+
+
+async def test_notify_goes_to_the_owner_dm_not_to_a_group(env: ChannelEnv) -> None:
+    """The bug: ``notify`` read "the channel's peer" through a query with no
+    ``ORDER BY``, so whether a private notification reached the owner or a
+    group chat depended on what SQLite happened to return first.
+
+    A channel holds one peer row per chat it is paired to. The owner chat is
+    the earliest pairing — a group can only be added to a channel whose DM
+    already works.
+    """
+    resource = await env.register_channel("tg")
+    await env.runtime.reconcile_once()
+    adapter = env.created_adapters[0]
+
+    # Paired group-first, so insertion order disagrees with pairing order.
+    await env.peers.upsert(
+        ChannelPeer(
+            resource_id=resource.id,
+            chat_id="team-group",
+            display_name="Team",
+            paired_at=datetime.now(tz=UTC),
+        )
+    )
+    await env.peers.upsert(
+        ChannelPeer(
+            resource_id=resource.id,
+            chat_id="owner-dm",
+            display_name="Owner",
+            paired_at=datetime.now(tz=UTC) - timedelta(days=2),
+        )
+    )
+
+    await env.service.notify("tg", "your backup failed", actor="cli")
+
+    assert adapter.sent == [("owner-dm", "your backup failed")]
+
+
+async def test_notify_can_name_a_paired_chat_explicitly(env: ChannelEnv) -> None:
+    resource = await env.register_channel("tg")
+    await env.runtime.reconcile_once()
+    adapter = env.created_adapters[0]
+    await env.pair(resource, chat_id="owner-dm")
+    await env.peers.upsert(
+        ChannelPeer(
+            resource_id=resource.id,
+            chat_id="team-group",
+            display_name="Team",
+            paired_at=datetime.now(tz=UTC),
+        )
+    )
+
+    await env.service.notify("tg", "deploy done", actor="cli", chat_id="team-group")
+
+    assert adapter.sent == [("team-group", "deploy done")]
+
+
+async def test_notify_refuses_a_chat_this_channel_is_not_paired_to(env: ChannelEnv) -> None:
+    """Otherwise ``chat_id`` would be a way to message an arbitrary chat id
+    through a channel that has no relationship with it."""
+    resource = await env.register_channel("tg")
+    await env.runtime.reconcile_once()
+    adapter = env.created_adapters[0]
+    await env.pair(resource, chat_id="owner-dm")
+
+    with pytest.raises(ChannelNotPaired):
+        await env.service.notify("tg", "psst", actor="cli", chat_id="someone-else")
+
+    assert adapter.sent == []
 
 
 @pytest.mark.acceptance(spec="channels", scenario="notify on an unpaired channel fails cleanly")

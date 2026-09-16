@@ -117,7 +117,7 @@ def test_every_yaml_path_is_implemented(
 @pytest.mark.parametrize(
     "schema_name,required_fields",
     [
-        ("ConversationOut", {"id", "agent_key", "title", "model_id", "created_at", "updated_at"}),
+        ("ConversationOut", {"id", "agent_key", "title", "created_at", "updated_at"}),
         ("ConversationCreate", set()),
         ("ConversationPatch", set()),
         ("AgentConfigOut", {"cwd", "model"}),

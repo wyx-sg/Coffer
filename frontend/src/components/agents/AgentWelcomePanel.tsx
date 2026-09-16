@@ -13,7 +13,7 @@ export function AgentWelcomePanel({ onAddAgent }: { onAddAgent: () => void }) {
     <Card className="paper-card border-primary/20 bg-gradient-to-br from-card to-accent/40">
       <CardContent className="space-y-6 py-10">
         <div className="space-y-2">
-          <h2 className="font-serif text-2xl tracking-tight">{t("agents.welcome.title")}</h2>
+          <h2 className="text-2xl">{t("agents.welcome.title")}</h2>
           <p className="max-w-prose text-sm leading-relaxed text-foreground/80">
             {t("agents.welcome.body")}
           </p>

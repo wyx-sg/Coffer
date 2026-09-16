@@ -32,24 +32,29 @@ anything.
   once per round. In the other direction, a symlink the working tree holds is
   refused rather than read into the vault.
 - **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`, `memory`,
-  `provider` definitions (system of record is SQLite; serialized to text). A
-  resource document is identity, description and config — what the resource
-  *is*. What it reaches is not in it; see below.
+  `provider`, `channel` definitions (system of record is SQLite; serialized to
+  text). A resource document is identity, description and config — what the
+  resource *is*. What it reaches is not in it; see below.
+
+  Every kind travels, `channel` included. A channel is an inbound surface —
+  a port, a tunnel, a webhook URL a platform has been told to call — so two
+  machines answering one conversation is a real danger, and the document names
+  the one machine that may: a channel carries `runs_on`, the `machine_id` of
+  the single machine whose daemon starts its adapter (spec channels FR-080).
+  The document travels; the adapter does not. The second machine therefore
+  holds the channel's configuration, its credential references and its
+  pairings, so taking over a bot is a rebind rather than a re-registration and
+  a machine that died is not a machine that took a bot with it.
 - **Shared state** — module-owned areas that belong to the vault rather than to
   one machine: MCP capability preferences, internal engine settings, the agent
   plugin inventory, and channel peer pairings.
 
-  Channel peer pairings are here again. They were removed on the reasoning that
-  pairings are platform-level, so rebinding a channel to another machine would
-  need no re-pairing — and a channel did not reach another machine any more, so
-  there was no rebinding left for them to save. A channel travels again and
-  names the machine that runs it (`## What does not sync`), so the premise is
-  gone and so is the removal: a channel that moved without its pairings would
-  make the owner re-pair from their phone every time, which is the exact cost
-  the area existed to avoid. What travels is platform identity — chat id,
-  sender id, display name, the chat's sticky agent. The **active conversation
-  pointer does not**: conversations are machine-local, and a published pointer
-  would name a conversation the other machine does not have.
+  Channel peer pairings travel because a channel does: a channel that moved to
+  another machine without its pairings would make the owner re-pair from their
+  phone on every rebind. What travels is platform identity — chat id, sender
+  id, display name, the chat's sticky agent. The **active conversation pointer
+  does not**: conversations are machine-local, and a published pointer would
+  name a conversation the other machine does not have.
 
   The plugin inventory is an **inventory, not a replicator**: it records which
   plugins each agent has on each machine and writes nothing into any agent's
@@ -74,48 +79,6 @@ machine *does* with the vault belongs to that machine.
   laptop that deliberately left a server dark would find it live again after the
   desktop's next round, with nothing in the history that reads like a decision
   anyone made.
-
-> **Amendment 2026-09-14 (channels travel, and each names the machine that runs
-> it).** Withdraws the `channel` entry from this list and the rule that a round
-> ignores `resources/channel/**` in both directions.
->
-> **Why the reversal.** The entry said a channel is an inbound surface bound to
-> one machine — its port, its tunnel, the webhook URL a platform has been told
-> to call — so a channel arriving on a second machine is "at best inert and at
-> worst a second machine answering the same conversation". The danger was real
-> and is unchanged. What the entry lacked was a way to say **which** machine the
-> one live consumer is; having no such field, it could only keep the document
-> from moving. A channel now carries `runs_on`, the `machine_id` of the single
-> machine whose daemon starts its adapter (spec channels FR-080), and only that
-> machine starts one. The objection is answered rather than avoided: the
-> document travels, the adapter does not.
->
-> **What that buys.** The second machine holds the channel's configuration, its
-> credential references and its pairings, so taking over a bot is a rebind
-> rather than a re-registration — and a machine that has died is no longer a
-> machine that took a bot with it. A channel bound to a dead machine is one
-> click from running on a live one.
->
-> **What it costs.** Two things, both stated rather than hidden. First, an extra
-> field that MUST be right: a binding naming a machine nobody claims leaves the
-> channel running nowhere, so it is reported as a fault rather than treated as
-> permission for any machine to start (FR-080). Second, a **one-way upgrade
-> ordering**: a machine still running the withholding build keeps deleting
-> channel documents out of the shared tree, and a machine running this one
-> honours those deletions like any other. Both machines must be upgraded before
-> a channel is expected to travel; until then the publish-side deletion guard is
-> what stands between a stale exporter and somebody's channels.
->
-> **Alternatives considered.** *Keeping channels machine-local and adding a
-> "claim" protocol* — rejected: it needs the same field plus a negotiation, and
-> a negotiation between machines that may not both be running has no answer.
-> *Expressing the binding as a machine axis on `scope`* — rejected, and for the
-> reason the machine axis was removed in the first place: reach is machine-local
-> and the binding is one answer the machines share, so putting them in one field
-> gives "where does this apply" two meanings and two ways to disagree.
->
-> The pairings paragraph in `## What syncs` is restored by the same amendment,
-> and for the same reason: its removal was justified by this entry.
 
 Conversations and the audit log are deliberately excluded: they are records of
 what happened *on a machine*, and a merged history of two machines' activity
@@ -386,6 +349,11 @@ checks are relaxed for exactly that case (spec channels FR-080) — a channel
 bound elsewhere is not judged here against agents this machine happens to have,
 because it is not this machine that will drive them.
 
+`runs_on` is a field that MUST be right, so a binding naming a machine nobody
+claims is **reported as a fault** rather than read as permission for any
+machine to start the adapter (spec channels FR-080): a channel running nowhere
+is a visible problem, and a channel running twice is not.
+
 A state document reaches the tree only while there is a decision to carry, so
 its deletion is that decision being taken back, and each area honours it in its
 own terms:
@@ -396,7 +364,8 @@ own terms:
   seen-timestamps are this machine's own. A server not registered here is
   ignored.
 - **`state/settings/internal-engine`** — the singleton is reset to its defaults
-  (no model, tidy off, no tidy owner). The defaults publish **no** document —
+  (no model, no tidy owner, aggregate and organise on, tidy off, and every
+  pass back on its own default interval). The defaults publish **no** document —
   neither a machine that never chose nor one whose choice was taken back writes
   one — which is what stops a fresh machine, which never persists a default it
   already has, from deleting the document again every round.
@@ -530,9 +499,10 @@ never reaches back into history on its own.
 
 | Surface | Operation |
 | --- | --- |
-| CLI | `coffer sync rebuild` · `coffer sync remote set <url> [--branch] [--interval] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` · `coffer sync adopt <url>` · `coffer sync now` · `coffer sync status` · `coffer sync restore [--at <rev\|date>]` · `coffer sync confirm` · `coffer sync reject` · `coffer sync rollback` |
-| CLI (machines) | `coffer sync machines` · `coffer sync machine rename <name>` · `coffer sync machine remove <id>` |
-| CLI (key) | `coffer sync key export <file>` · `coffer sync key import <file>` |
+| CLI | `coffer sync now` · `coffer sync adopt [<url>] [--keep-local]` · `coffer sync status` · `coffer sync history [--limit]` · `coffer sync restore [--at <rev\|date>]` · `coffer sync confirm` · `coffer sync reject` · `coffer sync rebuild [--yes]` · `coffer sync rollback` |
+| CLI (remote) | `coffer sync remote set <url> [--branch] [--interval <seconds>] [--with-credentials] [--credential-ref]` · `coffer sync remote show` · `coffer sync remote clear` |
+| CLI (machines) | `coffer sync machine list` · `coffer sync machine rename <name>` · `coffer sync machine remove <id>` |
+| CLI (key) | `coffer sync key export <file>` · `coffer sync key import <file>` · `coffer sync key fingerprint` |
 | HTTP | `GET\|PUT\|DELETE /api/v1/sync/remote` · `POST /api/v1/sync/run` · `POST /api/v1/sync/adopt` · `GET /api/v1/sync/status` · `GET /api/v1/sync/runs` · `POST /api/v1/sync/restore` · `POST /api/v1/sync/confirm` · `POST /api/v1/sync/reject` · `POST /api/v1/sync/rebuild` · `POST /api/v1/sync/rollback` |
 | HTTP (machines) | `GET /api/v1/sync/machines` · `PATCH /api/v1/sync/machines/self` · `DELETE /api/v1/sync/machines/{id}` |
 | HTTP (key) | `GET /api/v1/sync/key/fingerprint` · `POST /api/v1/sync/key/export` · `POST /api/v1/sync/key/import` |
@@ -798,5 +768,8 @@ never reaches back into history on its own.
   describe what happened on a machine; merging them is a different feature.
 - **Merging two unrelated vaults into one.** First contact takes the union of
   documents; it does not reconcile two histories that never shared a base.
-- **A machine × agent pair matrix.** Scope's two lists are `AND`-ed; expressing
-  a different agent per machine on one resource is not supported.
+- **A machine × agent pair matrix.** `scope` has one list, `agents`, and no
+  machine axis to pair it with. Expressing "these agents on the desktop, those
+  on the laptop" inside one travelling field is not supported and is not
+  wanted: reach is machine-local, so each machine already answers that question
+  for itself by holding its own scope (`## What does not sync`).

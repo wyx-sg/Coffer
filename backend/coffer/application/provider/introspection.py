@@ -89,8 +89,11 @@ class ModelIntrospectionService:
         secret_value: str | None = None,
     ) -> str:
         # Classify the endpoint's wire so the connection needs no manual type
-        # selector (provider switching, D9). Never raises — a failed probe degrades to
-        # 'unknown', which the agent page surfaces to all agents (E5).
+        # selector (provider switching, D9). Never raises: a failed or
+        # inconclusive probe degrades to 'unknown', and a connection whose
+        # protocol is 'unknown' starts scoped to EVERY agent for the user to
+        # narrow (see ``domain.provider.config.Protocol``) — the conservative
+        # answer is "ask", not "guess".
         try:
             key = self._key_for("", credential_ref, secret_value)
             return await self._port.detect_protocol(base_url=base_url, api_key=key)

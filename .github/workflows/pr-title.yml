@@ -17,8 +17,11 @@ jobs:
     name: conventional-title
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # SHA-pinned like every other workflow in this repo: a floating `@v4`
+      # re-resolves on each run, so a compromised or simply changed tag lands
+      # here without a commit.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
       - name: Install commitlint

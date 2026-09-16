@@ -49,9 +49,12 @@ class ConversationModel(Base):
     __tablename__ = "conversations"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    agent_key: Mapped[str] = mapped_column(String, nullable=False, default="builtin")
+    # No column default. It used to be ``"builtin"``, an agent that has since
+    # been withdrawn and is refused at channel create/edit — so the default
+    # could only ever mint a row no turn can route. Every writer passes the
+    # key explicitly; an absent one is a programming error, not a fallback.
+    agent_key: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
-    model_id: Mapped[str | None] = mapped_column(String, nullable=True)
     # Provider-owned per-conversation state (cwd + upstream session id + model),
     # stored as the JSON of an ``AgentConfig``; NULL = none. See
     # ConversationRepo.*_agent_config.
@@ -129,7 +132,6 @@ class ConversationRepo:
             id=row.id,
             agent_key=row.agent_key,
             title=row.title,
-            model_id=row.model_id,
             created_at=_tz(row.created_at),
             updated_at=_tz(row.updated_at),
             archived_at=_tz(row.archived_at) if row.archived_at else None,
@@ -143,7 +145,6 @@ class ConversationRepo:
                 id=conversation.id,
                 agent_key=conversation.agent_key,
                 title=conversation.title,
-                model_id=conversation.model_id,
                 created_at=conversation.created_at,
                 updated_at=conversation.updated_at,
                 channel_name=conversation.channel_name,
@@ -197,20 +198,6 @@ class ConversationRepo:
             )
             await session.execute(stmt)
             await session.commit()
-
-    async def set_model(self, conversation_id: str, model_id: str | None) -> Conversation:
-        async with self._sm() as session:
-            stmt = (
-                update(ConversationModel)
-                .where(ConversationModel.id == conversation_id)
-                .values(model_id=model_id)
-                .returning(ConversationModel)
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            if row is None:
-                raise ConversationNotFound(conversation_id)
-            await session.commit()
-            return self._to_domain(row)
 
     async def get_agent_config(self, conversation_id: str) -> AgentConfig:
         """Read the typed provider config (an empty ``AgentConfig`` when unset)."""

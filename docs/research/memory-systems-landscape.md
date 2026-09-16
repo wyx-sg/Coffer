@@ -103,7 +103,7 @@ _Confidence: high (3-0)._
 | **Cursor**            | `.mdc` markdown                                        | User / background-generated rules                                        | File load                                            | Project / User / Team            | Native only; isolated                                                                                                             | Manual                                     | Strong (git)                  |
 | **Windsurf Cascade**  | Markdown                                               | User rules + LLM auto-memories (plain notes)                             | File load                                            | global / workspace / system      | Native only; isolated                                                                                                             | Manual                                     | Strong                        |
 | **ChatGPT**           | Opaque profile + bio list                              | LLM curation + user saved                                                | Implicit profiling                                   | per-user account                 | N/A                                                                                                                               | LLM auto-curation                          | Partial (saved list editable) |
-| **Coffer**            | **Markdown files-as-truth** + rebuildable SQLite index | **Direct, no LLM at write** (see the 2026-09-09 local update below) | **grep + FTS5/BM25 + sqlite-vec** (semantic, opt-in) | global + per-project (git-root)  | **One shared store → projected into N agents' native locations** (symlink where format matches, managed block elsewhere)          | **Manual / human-curated** (no auto-dedup) | **Strong** (UI + CLI + files) |
+| **Coffer**            | **Markdown files-as-truth**, and nothing else — no index (see the 2026-09-14 local update below) | **Direct, no LLM at write** (see the 2026-09-09 local update below) | **Literal text matching only** — `coffer__recall` over files, no semantic (see the 2026-09-14 local update below) | global + per-project (git-root)  | **Removed 2026-06-18** — was "one shared store → projected into N agents' native locations"; Coffer never writes native memory now (see the 2026-06-19 verification update below) | **Manual / human-curated** (no auto-dedup) | **Strong** (UI + CLI + files) |
 
 ---
 
@@ -111,7 +111,7 @@ _Confidence: high (3-0)._
 
 1. **Coffer's "no LLM at write time" is mainstream for file-based memory, not contrarian.** Claude Code, Cursor, and Windsurf all write memory without an extraction LLM. Coffer dropping mem0's write-time LLM puts it squarely in Camp B's company, not out on a limb.
 
-2. **Coffer is actually _ahead_ of Camp B on retrieval.** The single biggest weakness of native-file memory is that retrieval is "load the whole file / substring match" — **Claude Code has no semantic search at all**. Coffer keeping files-as-truth _and_ adding FTS5/BM25 + sqlite-vec gives it Camp A's retrieval quality without Camp A's lossy vector-as-truth. This is a genuine best-of-both, and it is well-supported by the research.
+2. **Coffer was _ahead_ of Camp B on retrieval — and as of 2026-09-14 it no longer is.** The single biggest weakness of native-file memory is that retrieval is "load the whole file / substring match" — **Claude Code has no semantic search at all**. When this report was written, Coffer kept files-as-truth _and_ added FTS5/BM25 + sqlite-vec, which was Camp A's retrieval quality without Camp A's lossy vector-as-truth: a genuine best-of-both, well-supported by the research. **That advantage has since been given up.** The index and every embedding engine were removed, and both memory's `coffer__recall` and knowledge's `coffer__search` are now **literal, case-insensitive matching** over files on disk — so on this axis Coffer sits _with_ Camp B rather than ahead of it. What survives of the finding is the field observation (native-file memory retrieves badly) and the architectural point (files-as-truth does not oblige you to a lossy store); what does not survive is "Coffer has both." Coffer records the literal state as a deliberate **placeholder**, not a verdict — the design is unsettled and semantic retrieval is expected to return. See the 2026-09-14 local update below.
 
 3. **The dedup/conflict gap is real and the whole field confirms it.** Coffer inherited Camp B's weak spot: dropping mem0 dropped automatic dedup and conflict resolution, so duplicate/contradictory facts accumulate and rely on **human curation**. The research shows _everyone_ in Camp B has this same gap — but it also shows Camp A's LLM dedup is _not_ a clean win (mem0 #4896 fails on close-but-contradictory facts). So the gap is industry-wide, not a Coffer-specific defect; the open design question is whether a **lightweight optional merge/dedup pass** (mem0-style, but batch and opt-in, like Coffer already does for transcript distillation) is worth adding to get anti-bloat without sacrificing auditability. **This is now the most decision-relevant open question.**
 
@@ -189,3 +189,36 @@ All three reinforce the report's "Camp A = central store, LLM/extraction at writ
 ## Local update (2026-09-09)
 
 - **Coffer no longer distils transcripts, and the `journal` lane is gone.** Where the table row and takeaway #3 above say Coffer used an LLM for "batch transcript distillation" — the automatic INGEST half of its memory loop, which read agent transcripts and wrote summarised entries into the `journal` memory lane — that capability was removed on 2026-09-09 along with the lane it fed (`distill_wiring.py` held the lane's only writer). Three lanes survive: `knowledge` (semantic — what `recall` searches), `rules` (procedural), and `handoff` (per-branch working scene). Writes are now entirely explicit: an agent records a fact with `coffer__remember` and retrieves it with `coffer__recall`. This makes Coffer a **purer Camp B** system than this report describes — direct write, no LLM anywhere on the write path — but it is a real trade-off, not a free simplification: Coffer gives up automatic accumulation. Distillation was on the evidence working (1,320 sessions distilled, 4,669 journal entries); it was removed because the ingest→deliver loop it fed no longer exists end to end, not because it failed. The open question in takeaway #3 — whether a lightweight batch merge/dedup pass is worth adding — therefore loses its "like Coffer already does for distillation" precedent, but the question itself stands, and the AI-assisted store merge (2026-07-10) is now the nearest thing Coffer has to one.
+
+---
+
+## Local update (2026-09-14)
+
+- **There is no index, and Coffer embeds nothing.** Where the comparison table's
+  Coffer row and takeaway #2 above credited Coffer with "files-as-truth + a
+  rebuildable SQLite index" and "FTS5/BM25 + sqlite-vec (semantic, opt-in)",
+  none of that is in the product any more, and both have been corrected in
+  place with a pointer here. The knowledge layer's eleven index tables were
+  dropped on 2026-09-12 ([Knowledge Is Plain
+  Files](../decisions/knowledge-is-plain-files.md)), and ranked semantic
+  retrieval over a disposable vector sidecar — which _was_ built and shipped —
+  was deliberately removed on 2026-09-14 along with the `~/.coffer/index`
+  directory, the embeddings client and every embedding setting. Coffer embeds
+  nothing at all.
+- **Both retrieval entry points are literal.** Memory's `coffer__recall`
+  (`backend/coffer/application/memory/builtin_recall_tool.py`) is a literal,
+  case-insensitive scan over each fact's summary and body; knowledge's
+  `coffer__search`
+  (`backend/coffer/application/knowledge/builtin_search_tool.py`) is a literal
+  regex pass over files, reported one result per file. Neither ranks, chunks or
+  scores. The honest cost, recorded in the ADR: a query phrased in the caller's
+  own words no longer finds anything a distinctive phrase would not. Semantic
+  matching now rests on the model reading a generated catalogue, which works
+  while the catalogue fits in context — into the hundreds of files.
+- **This is a placeholder, not a verdict.** The knowledge and memory design is
+  explicitly not settled, and semantic retrieval is expected to return
+  ([Product Scope Is Settled](../decisions/product-scope-is-settled.md)). So
+  takeaway #2's underlying claim — that files-as-truth plus real retrieval is
+  the best-of-both position — is not refuted by this reversal; Coffer simply is
+  not standing on it at the moment. Re-check `.specify/memory/architecture.md`
+  before quoting either the table row or the takeaway.

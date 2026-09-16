@@ -145,6 +145,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The files a phrase appears in
+         * @description The same matcher `GET /grep` uses, over the same files, reported a
+         *     **file** at a time instead of a line at a time: each hit is a path,
+         *     the `title` and `description` from its frontmatter, and the lines that
+         *     matched, so a caller can judge what it found before reading any of it
+         *     (FR-024).
+         *
+         *     There is no score, no ranking, no heading and no retrieval *mode* — no
+         *     second way an answer can be reached. Matching is **literal and
+         *     case-sensitive**, so a question phrased in the caller's own words finds
+         *     nothing; give it a distinctive word or an exact phrase. It is confined
+         *     to the files the caller may see and skips hidden directories
+         *     (`.history/`, `.raw/`), and it sends a file's content nowhere: search
+         *     runs entirely on this machine and needs no connection of any kind
+         *     (FR-029).
+         *
+         *     It is a POST because the query is a body rather than a path, not
+         *     because anything is written.
+         */
+        post: operations["searchKnowledge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert a document and file it into a collection
+         * @description The entrance for a document the person did not write as Markdown
+         *     (FR-033…FR-037). The file is converted, named from a readable slug of
+         *     its title, given FR-003's frontmatter — `title` from the document
+         *     falling back to its file name, `description` from the internal
+         *     connection where one is configured and from the document's opening
+         *     prose where not — and written into `collection` (optionally into
+         *     `directory` inside it). Afterwards it is an ordinary Markdown file,
+         *     indistinguishable from one written by hand.
+         *
+         *     The bytes that were sent are kept under a single hidden `.raw/` at the
+         *     **collection's root**, at the converted file's path relative to that
+         *     root, so a bad conversion can be redone from the original. `.raw/` is
+         *     excluded from the catalogue, from grep and from search, and is removed
+         *     when its converted file is deleted. Coffer never re-converts it on a
+         *     schedule and never tracks it as an external source.
+         *
+         *     Supported inputs are exactly what `markitdown` handles (PDF, `.docx`,
+         *     `.pptx`, `.xlsx`, `.xls`, HTML, EPUB) plus plain text, Markdown and
+         *     CSV. The call is bounded: **one file**, a size ceiling, and a
+         *     refusal that names the limit. All-or-nothing — a conversion failure
+         *     leaves neither a Markdown file nor a `.raw/` original behind.
+         *
+         *     Upload is deliberately **not** an agent tool (FR-040): a document
+         *     enters through a human surface — this route, the CLI, or a channel that
+         *     confirms the collection with its paired owner.
+         */
+        post: operations["uploadKnowledgeDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/collections/{name}/tidy": {
         parameters: {
             query?: never;
@@ -157,7 +237,10 @@ export interface paths {
         /**
          * Run the tidy pass over one collection
          * @description One bounded agentic pass, driven by the internal model connection,
-         *     whose tool surface is the same five operations an agent has. It merges
+         *     whose tool surface is **four** operations — `list_files`, `read_file`,
+         *     `write_file`, `delete_file`. A pass rewrites a collection, so it never
+         *     needs `grep` or `search`, and it is not given the agents' own six. It
+         *     merges
          *     duplicate notes and rewrites them into coherent documents, copying each
          *     prior revision into the hidden `.history/` before any overwrite
          *     (FR-050). With no index behind it, there is nothing to reconcile
@@ -166,7 +249,9 @@ export interface paths {
          *     This is the manual trigger — the UI button and `coffer knowledge
          *     organize` both land here. A background worker may also run the pass on
          *     an interval, governed by one installation-wide setting that is **off by
-         *     default** (FR-051).
+         *     default** and names the one machine allowed to run it (FR-051, FR-053).
+         *     Only one pass per collection runs at a time, whoever started it
+         *     (FR-056).
          *
          *     `status` is `no_model` when no internal connection is configured (a
          *     clean no-op), `empty` when the collection holds nothing to tidy, and
@@ -323,6 +408,54 @@ export interface components {
             /** @description True when `max_matches` cut the result short. */
             truncated: boolean;
         };
+        /**
+         * @description A literal, case-sensitive query. `collection` narrows it to one
+         *     collection; omitted, every collection the caller may see is searched.
+         */
+        SearchRequest: {
+            query: string;
+            collection?: string | null;
+        };
+        /** @description One matching line inside a hit. */
+        SearchLineOut: {
+            line_number: number;
+            line: string;
+        };
+        /**
+         * @description One matching **file** — its path, the frontmatter that says what it is,
+         *     and the lines that matched, so a caller can judge it before reading it.
+         */
+        SearchHitOut: {
+            /** @description Relative to the knowledge root. */
+            path: string;
+            title: string;
+            description: string;
+            lines: components["schemas"]["SearchLineOut"][];
+        };
+        /**
+         * @description One entry per matching file, bounded to a handful of files and a few
+         *     matched lines each. There is no retrieval mode a caller picks and none
+         *     the answer reports, and no score or rank on any entry (FR-024).
+         */
+        SearchOut: {
+            results: components["schemas"]["SearchHitOut"][];
+        };
+        /**
+         * @description The converted document, as an ordinary file in the collection. Note
+         *     `converter` is reported here and written **nowhere on disk** — a file
+         *     that has landed is just a file, and FR-003's frontmatter carries five
+         *     keys and nothing else.
+         */
+        IngestedDocumentOut: {
+            /** @description The converted Markdown file, relative to the knowledge root. */
+            path: string;
+            title: string;
+            description: string;
+            /** @description Which converter produced this file. */
+            converter: string;
+            /** @description The kept original under the collection's hidden `.raw/` (FR-035). */
+            raw_path: string;
+        };
         TidyOut: {
             /**
              * @description `no_model` when no internal connection is configured — a clean
@@ -408,6 +541,63 @@ export interface components {
         };
         /** @description No file at that path (`KNOWLEDGE_FILE_NOT_FOUND`). */
         FileNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description The document could not be converted (`INGEST_REJECTED`). `details`
+         *     carries a `reason` — `unsupported_type` — and the rejected `doc_type`,
+         *     so a surface can name the format it will not take instead of failing
+         *     vaguely. Legacy `.doc`/`.ppt`, `.rtf` and `.odt` reach this case
+         *     deliberately: no converter claims them, so they are refused cleanly
+         *     rather than turned into a misleading conversion failure. Nothing
+         *     half-converted is stored.
+         */
+        IngestRejected: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description The upload is past the size ceiling (`KNOWLEDGE_UPLOAD_TOO_LARGE`).
+         *     Refused before any conversion or write is attempted, naming the limit
+         *     so the caller knows what to shrink below (FR-037).
+         */
+        UploadTooLarge: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description The matcher rejected the pattern (`GREP_PATTERN_INVALID`) — ripgrep
+         *     exited 2, or the built-in fallback could not compile the regex. Without
+         *     its own code this would masquerade as "no matches".
+         */
+        GrepPatternInvalid: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description A binary or converter library the call needs is absent
+         *     (`ENGINE_UNAVAILABLE`) — one of MarkItDown's format backends on an
+         *     upload, or the search binary with no fallback available. The daemon
+         *     stays up and the answer names the engine.
+         */
+        EngineUnavailable: {
             headers: {
                 [name: string]: unknown;
             };
@@ -661,8 +851,77 @@ export interface operations {
                     "application/json": components["schemas"]["GrepOut"];
                 };
             };
+            400: components["responses"]["GrepPatternInvalid"];
             404: components["responses"]["CollectionNotFound"];
             422: components["responses"]["ValidationFailed"];
+            503: components["responses"]["EngineUnavailable"];
+        };
+    };
+    searchKnowledge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SearchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK — an empty `results` when nothing matched, never an error */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchOut"];
+                };
+            };
+            400: components["responses"]["GrepPatternInvalid"];
+            404: components["responses"]["CollectionNotFound"];
+            422: components["responses"]["ValidationFailed"];
+            503: components["responses"]["EngineUnavailable"];
+        };
+    };
+    uploadKnowledgeDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description The document to convert. One per call.
+                     */
+                    file: string;
+                    /** @description The collection it belongs in. Must already exist. */
+                    collection: string;
+                    /** @description A folder inside that collection. Omitted, the collection's top level. */
+                    directory?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Converted and filed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestedDocumentOut"];
+                };
+            };
+            400: components["responses"]["IngestRejected"];
+            404: components["responses"]["CollectionNotFound"];
+            413: components["responses"]["UploadTooLarge"];
+            422: components["responses"]["ValidationFailed"];
+            503: components["responses"]["EngineUnavailable"];
         };
     };
     tidyKnowledgeCollection: {

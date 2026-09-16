@@ -4,35 +4,52 @@
 // `src/lib/api/generated/`. Exits 1 naming each file that drifted — a contract
 // edited without `npm run codegen`, or a generated file edited by hand — so
 // `npm run lint` (and therefore CI) catches it without a workflow change.
+//
+// Everything here works in spec ids, which may be nested paths
+// (`channels/telegram` → `generated/channels/telegram.ts`), so the walk below
+// is recursive and comparisons are made on forward-slash relative paths.
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { CONTRACTS, GENERATED_DIR, generate } from "./codegen.mjs";
+import { CONTRACTS, GENERATED_DIR, generate, generatedPath } from "./codegen.mjs";
+
+/** Every file under `dir`, at any depth, as forward-slash relative paths. */
+function walk(dir, prefix = "") {
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...walk(path.join(dir, entry.name), rel));
+    else out.push(rel);
+  }
+  return out;
+}
 
 const tmp = mkdtempSync(path.join(os.tmpdir(), "coffer-codegen-"));
 const drifted = [];
 try {
   generate(tmp, { quiet: true });
 
-  for (const name of CONTRACTS) {
-    const file = `${name}.ts`;
-    const committed = path.join(GENERATED_DIR, file);
+  for (const id of CONTRACTS) {
+    const rel = `${id}.ts`;
+    const committed = generatedPath(GENERATED_DIR, id);
     if (!existsSync(committed)) {
-      drifted.push(`${file} (missing — run \`npm run codegen\`)`);
+      drifted.push(`${rel} (missing — run \`npm run codegen\`)`);
       continue;
     }
-    const fresh = readFileSync(path.join(tmp, file), "utf8");
+    const fresh = readFileSync(generatedPath(tmp, id), "utf8");
     if (readFileSync(committed, "utf8") !== fresh) {
-      drifted.push(`${file} (out of date — run \`npm run codegen\`)`);
+      drifted.push(`${rel} (out of date — run \`npm run codegen\`)`);
     }
   }
 
   // A file in the generated dir that no contract produces is drift too: it
-  // would otherwise survive forever as an orphan nothing regenerates.
-  const expected = new Set(CONTRACTS.map((name) => `${name}.ts`));
-  for (const file of existsSync(GENERATED_DIR) ? readdirSync(GENERATED_DIR) : []) {
-    if (!expected.has(file)) drifted.push(`${file} (no contract generates it — delete it)`);
+  // would otherwise survive forever as an orphan nothing regenerates. The walk
+  // is recursive so a leftover under a renamed parent spec is caught as well.
+  const expected = new Set(CONTRACTS.map((id) => `${id}.ts`));
+  for (const rel of walk(GENERATED_DIR)) {
+    if (!expected.has(rel)) drifted.push(`${rel} (no contract generates it — delete it)`);
   }
 } finally {
   rmSync(tmp, { recursive: true, force: true });

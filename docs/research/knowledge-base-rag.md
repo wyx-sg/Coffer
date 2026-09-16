@@ -1,5 +1,26 @@
 # Competitive Research — Local-First Knowledge Base / RAG for Agents
 
+> **Historical record.** This report was written 2026-06-16 and last verified
+> **2026-06-19**; the body below is preserved as that dated record and its
+> findings are left as they were written. What has since changed is the
+> premise: Coffer's knowledge layer no longer has an index. The index and
+> every embedding engine were **removed** — the eleven index tables were
+> dropped (migration `0066`, 2026-09-12,
+> [Knowledge Is Plain Files](../decisions/knowledge-is-plain-files.md)), and
+> ranked semantic retrieval over a vector sidecar was built, shipped and then
+> deliberately taken out again (2026-09-14). Coffer embeds nothing at all now.
+> So the comparison table's `✅ coffer reindex`, `Embedding swap ✅ trivial via
+> reindex`, and §3's "index trivial (`coffer reindex`)" rest on a command that
+> **never shipped and does not exist** anywhere in the CLI, and the FTS5 /
+> sqlite-vec / retrieval-mode rows describe a substrate that is gone.
+> Retrieval today is **literal**: a generated catalogue plus ripgrep, six MCP
+> tools (`list`, `grep`, `read`, `search`, `write`, `delete`), no modes, no
+> ranking, no chunking and no scores. That is recorded as a deliberate
+> **placeholder** rather than a verdict — semantic retrieval is expected to
+> return ([Product Scope Is Settled](../decisions/product-scope-is-settled.md)).
+> Read `.specify/memory/architecture.md` for the live design; read what follows
+> as the state of the field, and of Coffer, in mid-2026.
+
 > Internal competitive-research report for Coffer's knowledge base (the
 > Knowledge Base spec, [Files as Truth](../decisions/files-as-truth-sqlite-retrieval.md)). **Date:** 2026-06-16. **Method:** deep-research harness (this run
 > also read Coffer's own KB code to verify the comparison).

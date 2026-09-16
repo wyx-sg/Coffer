@@ -22,7 +22,7 @@ The practical consequences of the SQLite choice shape every detail of the persis
 
 - **Single writer** — SQLite's write concurrency is bounded; having one writer (the daemon) eliminates all write conflicts by design. The daemon serialises every mutation; surfaces that need to write (CLI commands, HTTP handlers) go through the daemon over loopback HTTP.
 - **WAL mode** — Write-Ahead Logging allows readers (e.g., a CLI `list` command calling the REST API) to proceed concurrently with the writer without blocking on a lock. In practice this means `coffer mcp list` never hangs waiting for an ongoing migration.
-- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy, and the spec vault-sync vault export carries everything that is a system of record between machines. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
+- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy. Keeping two of your own machines in step is a separate mechanism — bidirectional convergence with a git remote you own (spec vault-sync) — and it is off until you configure one. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
 
 ## SQLAlchemy 2.0 async ORM
 
@@ -49,7 +49,7 @@ Pydantic fields that use types like `AnyUrl` or `datetime` must be serialised wi
 
 ## Alembic migrations
 
-Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with a single migration history under `backend/coffer/infrastructure/persistence/migrations/`. Twenty revisions (`0001` through `0020`) have accumulated as successive specs landed — each spec that needs new tables adds a revision rather than editing an existing one. The first three set up the MCP control plane:
+Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with a single migration history under `backend/coffer/infrastructure/persistence/migrations/`. Revisions accumulate as successive specs land — each spec that needs new tables adds one rather than editing an existing one, and the count only goes up, so the authoritative answer to "how many, and what is head" is `ls` on that directory, not a number written here (at the time of writing: eighty-two, head `0082`). The first three set up the MCP control plane:
 
 | Revision | File                                 | Creates                                         |
 | -------- | ------------------------------------ | ----------------------------------------------- |
@@ -57,7 +57,11 @@ Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-Later revisions add the skill, chat, channel and credentials tables (plus index and data-fix revisions); `20260912_0066_knowledge_is_plain_files.py` drops every table the knowledge layer ever had, replacing none of them; a later revision drops the sync tables again when continuous sync is withdrawn ([Vault Export and Import-vault-sync](/reference/adr/Vault Export and Import-vault-sync)). On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
+Later revisions add the skill, chat, channel, credentials and sync tables (plus index and data-fix revisions), and several are pure subtractions. `20260912_0066_knowledge_is_plain_files.py` drops every table the knowledge layer ever had, replacing none of them; `0078` drops `memory_overrides` when the per-fact decisions it backed were removed from the surface; and `0055`, `0069` and `0077` each purge the rows of a retired audit event type, on the argument that an event nothing can label costs more in `coffer__diagnose` than the record is worth. On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
+
+::: tip The database is copied before it is migrated
+Before `alembic upgrade head` changes an on-disk `coffer.db`, the daemon copies it — with any `-wal` / `-shm` companions — to `coffer.db.pre-<revision>`, keeping the three newest copies. An already-current schema is not copied, and neither is an in-memory database. See [Distribution](/architecture/distribution#binary-deployment-at-frozen-start).
+:::
 
 ## Table map
 
@@ -70,6 +74,7 @@ The tables that exist after applying all revisions, grouped by domain:
 | `resources`          | Kind-agnostic registry of every user-managed resource. One row per registered MCP server (or any future kind). Carries `kind`, `name`, `config_json`, `enabled` flag, and timestamps. |
 | `audit_log`          | Append-only history of every lifecycle change to any resource or capability. Records event type, actor, resource ref, timestamp, and a structured JSON payload.                       |
 | `retention_policies` | One row per prunable table, recording the configured retention window (days or forever) and the last-prune metadata.                                                                  |
+| `internal_engine_config` | A single row: the connection and model Coffer's own unattended passes run on, plus each pass's switch and interval.                                                               |
 
 **MCP gateway:**
 
@@ -93,13 +98,13 @@ The tables that exist after applying all revisions, grouped by domain:
 | --------------- | ---------------------------------------------------------------------------- |
 | `conversations` | One row per chat conversation, including archive/retention timestamps.        |
 | `chat_messages` | The messages in each conversation. Cascade-deleted with their conversation.   |
-| `chat_models`   | User-configured chat model definitions.                                       |
 
 **Channel:**
 
-| Table           | Purpose                                                              |
-| --------------- | ------------------------------------------------------------------- |
-| `channel_peers` | Paired notification channel peers (e.g. Telegram / SeaTalk).         |
+| Table                           | Purpose                                                              |
+| ------------------------------- | ------------------------------------------------------------------- |
+| `channel_peers`                 | Paired notification channel peers (e.g. Telegram / SeaTalk).         |
+| `channel_thread_conversations`  | Which Coffer conversation a given IM thread is currently bound to.   |
 
 **Skill:**
 
@@ -107,7 +112,16 @@ The tables that exist after applying all revisions, grouped by domain:
 | ---------------------- | ------------------------------------------------------------ |
 | `skill_agent_bindings` | Records which skills are bound to which agent workspaces.     |
 
-**Export / import:** no tables. Export and import are one-shot operations over the live vault; there is no configuration to persist, no last-run state, no machine registry and no tombstone ledger ([Vault Export and Import-vault-sync](/reference/adr/Vault Export and Import-vault-sync)).
+**Sync** ([Vault Sync](/reference/adr/vault-sync)):
+
+| Table                    | Purpose                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| `sync_remotes`           | The configured git remote and its worktree path (default `~/.coffer/sync`). Off until set.  |
+| `sync_runs`           | One row per converge round, with its outcome. Prunable — 90 days by default.                 |
+| `sync_convergence_state` | The last state this vault provably held, which the next diff is applied against.            |
+| `sync_held_paths`        | Paths a round stopped on rather than applying — an oversized deletion waits to be confirmed. |
+
+**Memory:** no tables. A memory partition is a `resources` row, and its facts are files under `~/.coffer/memory/`, derived from the agents' own native memory. `memory_overrides` — the one non-derived thing the kind ever stored — was dropped in revision `0078` along with the per-fact decisions it backed.
 
 ## Knowledge is plain files ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files))
 
@@ -127,15 +141,25 @@ The schema enforces several invariants that the application layer alone cannot e
 
 The full set of files Coffer writes:
 
-| Path                       | Contents                                               |
-| -------------------------- | ------------------------------------------------------ |
-| `~/.coffer/coffer.db`      | SQLite database (WAL mode) — the system of record      |
-| `~/.coffer/daemon.json`    | Daemon PID, port, and bearer token (mode `0600`)       |
-| `~/.coffer/master.key`     | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
-| `~/.coffer/knowledge/`     | One directory per collection of markdown files — the knowledge layer itself, plus the hidden `.raw/` originals behind uploaded documents and the `.history/` revisions the tidy pass superseded |
-| `~/.coffer/logs/`          | Structured JSON log files from `structlog`             |
-| `~/.coffer/bin/`           | `coffer-mcp-shim`, `coffer-daemon` and the runtime helper binaries, deployed by the daemon on a frozen start |
-| `~/.coffer/upstream-pids/` | Per-upstream subprocess PID files for session tracking |
+| Path                          | Contents                                               |
+| ----------------------------- | ------------------------------------------------------ |
+| `~/.coffer/coffer.db`         | SQLite database (WAL mode) — the system of record for control-plane state |
+| `~/.coffer/daemon.json`       | Runtime state: daemon PID, port and bearer token (mode `0600`). Unlinked on exit. |
+| `~/.coffer/daemon-config.json` | Configuration read before the database opens: the port (mode `0600`). Written only by `coffer daemon port`. |
+| `~/.coffer/master.key`        | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
+| `~/.coffer/machine-id`        | This machine's stable identity for sync                |
+| `~/.coffer/knowledge/`        | One directory per collection of markdown files — the knowledge layer itself, plus the hidden `.raw/` originals behind uploaded documents and the `.history/` revisions the tidy pass superseded |
+| `~/.coffer/memory/`           | The facts aggregated out of each agent's own native memory, one directory per partition |
+| `~/.coffer/skills/`           | The canonical master copy of every managed skill       |
+| `~/.coffer/sync/`             | The git working tree the vault converges through (default; the remote's row can name another) |
+| `~/.coffer/workspace/`        | The default working directory a chat turn runs in      |
+| `~/.coffer/vendor/`           | SDKs Coffer deliberately does not bundle — the SeaTalk client library |
+| `~/.coffer/channel-media/`    | Attachments in flight between an IM channel and an agent |
+| `~/.coffer/cache/agent/`      | Derived, rebuildable agent data (transcript summaries) |
+| `~/.coffer/state/`            | One-shot markers for things shown to the user exactly once |
+| `~/.coffer/logs/`             | Structured JSON log files from `structlog`             |
+| `~/.coffer/bin/`              | The four deployed binaries: one directory per version, with the public names as symlinks into the current one |
+| `~/.coffer/upstream-pids/`    | Per-upstream subprocess PID files for session tracking |
 
 Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (Detect-or-Spawn) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.
 
@@ -147,6 +171,7 @@ The `RetentionService.initialize_defaults()` call at daemon startup seeds the `r
 | ----------------------- | ----------------------------------------------- | ----------------- |
 | `audit_log`             | Delete rows older than the window               | 365 days          |
 | `mcp_invocations`       | Delete rows older than the window               | 30 days           |
+| `sync_runs`             | Delete converge-round history older than the window | 90 days       |
 | `conversations_archive` | Auto-archive chats idle for this many days      | 7 days            |
 | `conversations`         | Delete archived chats this many days after archival (with their messages) | 30 days |
 

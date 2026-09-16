@@ -79,6 +79,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/resources/{kind}/{name}/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read a resource's per-agent activation scope
+         * @description The framework-level reach of one resource
+         *     ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)),
+         *     served for EVERY kind by the kind-agnostic route rather than per kind.
+         *     `supports_scope` says whether this kind takes a scope at all — false
+         *     makes any non-null write a 422 — so a client can render the two-choice
+         *     Disabled/Enabled panel instead of the agent list without knowing the
+         *     kinds itself.
+         */
+        get: operations["getResourceScope"];
+        /**
+         * Set a resource's per-agent activation scope
+         * @description `scope: null` clears back to unscoped — active for every agent. A list
+         *     restricts to exactly those agents, and an empty list matches nothing,
+         *     so `{"agents": []}` is dormant. Deliberately NOT gated on the kind's
+         *     creation invariants: scope is orthogonal to them. A kind that declares
+         *     no scope rejects any non-null payload with 422, and so does an unknown
+         *     property — a client still sending the withdrawn `machines` axis would
+         *     otherwise have its restriction silently widened to "every agent".
+         *     Writing scope emits `resource_scope_updated` and fires the kind's
+         *     post-write reaction, so delivery and reclaim stay in step with the edit.
+         */
+        put: operations["updateResourceScope"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/resources/mcp_server/{name}/capabilities": {
         parameters: {
             query?: never;
@@ -536,6 +577,16 @@ export interface components {
              */
             agents: string[] | null;
         } | null;
+        /** @description GET .../scope — the resource's current scope plus whether its kind supports one. Field names MUST match `ResourceScopeOut` in `backend/coffer/surfaces/http/schemas.py`; the frontend's scope module is hand-written, so nothing checks this at compile time. */
+        ResourceScopeOut: {
+            scope?: components["schemas"]["ScopeOut"];
+            /** @description False means this kind has no scope at all and any non-null write is a 422 (`agent` is the only such kind today). */
+            supports_scope: boolean;
+        };
+        /** @description PUT .../scope body. `scope: null` clears back to unscoped — every agent. */
+        ResourceScopeUpdate: {
+            scope?: components["schemas"]["ScopeOut"];
+        };
         ResourceOut: {
             ref: components["schemas"]["ResourceRef"];
             kind: string;
@@ -610,8 +661,6 @@ export interface components {
             spawn_timeout_seconds: number;
             /** @default 120 */
             request_timeout_seconds: number;
-            /** @default 600 */
-            idle_timeout_seconds: number;
         };
         MCPToolView: {
             /** @example filesystem__read_file */
@@ -765,8 +814,6 @@ export interface components {
                 healthy?: number;
                 unhealthy?: number;
             };
-            /** @description Whether sqlite-vec's vec0 extension loaded in this daemon process. False in a frozen build that lost the native lib (vector retrieval degrades to keyword-only); asserted by the bundle smoke test. */
-            vec_available?: boolean;
         };
         TokenRotationOut: {
             /** @description New token; clients must re-read daemon.json */
@@ -1027,6 +1074,61 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getResourceScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceScopeOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateResourceScope: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResourceScopeUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK — the resource as it now stands, scope included */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResourceOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listMcpCapabilities: {

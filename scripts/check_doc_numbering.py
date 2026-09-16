@@ -78,7 +78,12 @@ def check_no_numbers(files: list[str]) -> list[str]:
                 )
     for path in DECISIONS.glob("ADR-*"):
         errors.append(f"{path.relative_to(REPO_ROOT)}: filename still carries a number")
-    for path in SPECS.iterdir():
+    # Every directory at every depth, not just `specs/*`: a spec may be a child
+    # of another (`specs/channels/telegram/`), and a numbered child is the same
+    # recycling hazard as a numbered parent. `rglob` also reaches `contracts/`,
+    # the one subfolder a spec owns, which is intended — it may not carry an
+    # ordinal either.
+    for path in sorted(SPECS.rglob("*")):
         if path.is_dir() and re.match(r"^\d", path.name):
             errors.append(
                 f"{path.relative_to(REPO_ROOT)}: directory still carries a number"
@@ -144,7 +149,10 @@ def main() -> int:
             print(error, file=sys.stderr)
         print(f"\ncheck_doc_numbering: {len(errors)} problem(s)", file=sys.stderr)
         return 1
-    specs = sum(1 for p in SPECS.iterdir() if p.is_dir())
+    # One spec is one spec.md, at whatever depth. Counting immediate
+    # subdirectories of `specs/` instead would miss every child spec once the
+    # tree nests, and would count a spec's own `contracts/` folder as a spec.
+    specs = sum(1 for _ in SPECS.rglob("spec.md"))
     print(
         f"check_doc_numbering: {len(adrs)} ADRs and {specs} specs, all named, all links resolve"
     )

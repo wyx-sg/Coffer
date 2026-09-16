@@ -2,8 +2,8 @@
 
 Two orthogonal axes describe MCP configuration across agents:
 
-- **format** — the file's serialization (``json`` / ``toml`` / ``yaml``), which
-  selects the parser/serializer (and comment-preservation strategy).
+- **format** — the file's serialization (``json`` / ``toml``), which selects the
+  parser/serializer (and comment-preservation strategy).
 - **shape** — *where* the entries live (the ``container_key`` top-level table)
   and *how* a single entry is rendered (``entry_style``).
 
@@ -26,26 +26,14 @@ class McpEntryStyle(StrEnum):
 
     #: ``{"command": <shim>, "args": [...]}`` — used by Claude Code and Codex.
     COMMAND_MAP = "command_map"
-    #: ``{"type": "local", "command": [<shim>, ...]}`` — the executable is the
-    #: first element of a ``command`` array and the entry is tagged with a
-    #: transport ``type``. Recognized extension point reserved for a future agent
-    #: type; no current agent type uses it.
-    TYPED_COMMAND_ARRAY = "typed_command_array"
-    #: ``{"type": "local", "command": [<shim>, ...], "enabled": true}`` — a
-    #: typed-command array that also carries an explicit ``enabled`` flag, for an
-    #: ``mcp`` block that treats a server object as enabled only when the flag is
-    #: present-and-true. Reserved extension point; no current agent type uses it.
-    TYPED_LOCAL_OBJECT = "typed_local_object"
 
 
-#: Default top-level container key per format, reproducing the pre-orthogonal
-#: behaviour (Claude Code JSON ``mcpServers``; Codex TOML ``mcp_servers``). The
-#: YAML slot also defaults to ``mcp_servers`` as a reserved extension point.
-#: Agents that diverge from the default pass an explicit ``container_key``.
+#: Default top-level container key per format (Claude Code JSON ``mcpServers``;
+#: Codex TOML ``mcp_servers``). Agents that diverge from the default pass an
+#: explicit ``container_key``.
 _DEFAULT_CONTAINER_KEY: dict[ConfigFileFormat, str] = {
     ConfigFileFormat.JSON: "mcpServers",
     ConfigFileFormat.TOML: "mcp_servers",
-    ConfigFileFormat.YAML: "mcp_servers",
 }
 
 

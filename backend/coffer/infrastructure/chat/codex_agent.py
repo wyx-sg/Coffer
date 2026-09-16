@@ -140,33 +140,26 @@ class CodexAppServerAdapter:
         model = self._extra.get("model")
         # Full permissions — Coffer does not gate individual tool calls; the owner
         # driving the conversation is the trust boundary.
+        # Resuming and starting take the same params; naming a thread to pick up
+        # is the whole difference, so there is one dict and one extra key.
+        thread_params: dict[str, Any] = {
+            "cwd": self._cwd,
+            "approvalPolicy": "never",
+            "sandbox": "danger-full-access",
+        }
         if self._resume:
-            thread_params: dict[str, Any] = {
-                "threadId": self._resume,
-                "cwd": self._cwd,
-                "approvalPolicy": "never",
-                "sandbox": "danger-full-access",
-            }
-            if model:
-                thread_params["model"] = model
-            if self._system_context:
-                thread_params["developerInstructions"] = self._system_context
-            thread = await rpc.request("thread/resume", thread_params)
-        else:
-            thread_params = {
-                "cwd": self._cwd,
-                "approvalPolicy": "never",
-                "sandbox": "danger-full-access",
-            }
-            if model:
-                thread_params["model"] = model
-            if self._system_context:
-                # Additive, like Claude's system-prompt "append": Codex's
-                # app-server protocol carries this as a developer-role message
-                # alongside its own base instructions, never replacing them
-                # (that would be ``baseInstructions``).
-                thread_params["developerInstructions"] = self._system_context
-            thread = await rpc.request("thread/start", thread_params)
+            thread_params["threadId"] = self._resume
+        if model:
+            thread_params["model"] = model
+        if self._system_context:
+            # Additive, like Claude's system-prompt "append": Codex's
+            # app-server protocol carries this as a developer-role message
+            # alongside its own base instructions, never replacing them
+            # (that would be ``baseInstructions``).
+            thread_params["developerInstructions"] = self._system_context
+        thread = await rpc.request(
+            "thread/resume" if self._resume else "thread/start", thread_params
+        )
         thread_id = (thread.get("thread") or {}).get("id") or self._resume or ""
 
         # ``effort`` rides on the TURN, which is where Codex takes it — the

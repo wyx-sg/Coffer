@@ -30,7 +30,7 @@ export interface FileDraftOptions {
 
 /** True when the error is the daemon refusing a save because the file changed
  *  on disk. Each file kind carries its own code for it. */
-export function isStaleConflict(error: unknown): boolean {
+function isStaleConflict(error: unknown): boolean {
   return (
     error instanceof ApiError &&
     (error.code === "CONFIG_FILE_STALE" || error.code === "SKILL_FILE_STALE")

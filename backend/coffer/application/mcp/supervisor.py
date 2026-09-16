@@ -82,11 +82,6 @@ def _max_concurrent_spawns_from_env() -> int:
     return value
 
 
-# Re-export the port under the legacy name so existing callers that imported
-# ``UpstreamConnection`` from this module keep compiling unchanged.
-UpstreamConnection = UpstreamConnectionPort
-
-
 @dataclass
 class _UpstreamEntry:
     connection: UpstreamConnectionPort | None = None
@@ -165,7 +160,7 @@ class SubprocessSupervisor:
             entry.consecutive_failures = 0
             entry.cooldown_until = None
 
-    async def get_or_spawn(self, server_name: str) -> UpstreamConnection:
+    async def get_or_spawn(self, server_name: str) -> UpstreamConnectionPort:
         """Return a live connection for `server_name`, lazily spawning if needed.
 
         Raises UpstreamUnavailable if the server is currently in cooldown

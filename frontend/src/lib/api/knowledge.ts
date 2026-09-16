@@ -63,10 +63,6 @@ export function getFile(path: string): Promise<FileOut> {
   return call<FileOut>(`${ROOT}/file?path=${enc(path)}`);
 }
 
-export function deleteFile(path: string): Promise<void> {
-  return call<void>(`${ROOT}/file?path=${enc(path)}`, { method: "DELETE" });
-}
-
 // --- tidy -------------------------------------------------------------------
 
 /**

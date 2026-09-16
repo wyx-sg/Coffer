@@ -145,8 +145,12 @@ export const routes: RouteObject[] = [
             path: "data",
             element: lazyPage(() => import("./pages/settings/DataSettings"), "DataSettings"),
           },
-          // Legacy route — embedding/chunking config is now one of the two
-          // cards on the Engine tab. Keep old bookmarks working by redirecting.
+          // Legacy route — there is no embedding configuration any more:
+          // knowledge is a directory of files an agent greps, so no index
+          // needs an embedding model (ADR knowledge-is-plain-files). An old
+          // bookmark lands on "Coffer's model" — the nearest live surface,
+          // where the model Coffer's own passes run on is configured — rather
+          // than on the 404 page.
           { path: "embedding", element: <Navigate to="/settings/engine" replace /> },
           // Legacy route — Sync was a Settings tab before it became a
           // top-level page. Keep old bookmarks and links working.

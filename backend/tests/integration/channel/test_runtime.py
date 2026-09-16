@@ -59,7 +59,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     adapter = env.created_adapters[0]
     await env.pair(resource, chat_id="owner")
     env.pairing.issue("tg")
-    assert (await env.peers.get(resource.id)) is not None
+    assert (await env.peers.owner_peer(resource.id)) is not None
 
     await env.resources.delete(resource.ref, actor="cli")
 
@@ -71,7 +71,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     # The resource row is gone and the peer row went with it (FK cascade).
     with pytest.raises(ResourceNotFound):
         await env.resources.get(resource.ref)
-    assert await env.peers.get(resource.id) is None
+    assert await env.peers.owner_peer(resource.id) is None
 
 
 @pytest.mark.acceptance(

@@ -1,7 +1,10 @@
 """Build a LangChain chat model from a resolved connection + model.
 
-This is the *only* module that may import ``langchain*`` or ``langgraph``
-outside of ``coffer.infrastructure.chat`` (enforced by importlinter Contract 9).
+``coffer.infrastructure.llm`` is the only package that may import
+``langchain*`` or ``langgraph`` at all, and this is the module inside it that
+builds the model. ``coffer.infrastructure.chat`` — where these adapters lived
+while the chat page was their only consumer — is explicitly forbidden one now
+(importlinter Contract 9a).
 
 Lazy per-provider imports prevent an ``ImportError`` when an optional
 integration package is absent. Cloud connections (anthropic/openai) need an API

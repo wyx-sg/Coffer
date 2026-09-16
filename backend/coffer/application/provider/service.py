@@ -39,10 +39,9 @@ from coffer.domain.resource import Resource, ResourceRef
 
 KIND = "provider"
 
-# Module-scope alias: a bare ``list[AgentType]`` annotation on a method declared
+# Module-scope alias: a bare ``list[CuratedModel]`` annotation on a method declared
 # AFTER ``ProviderService.list`` would resolve ``list`` to that method (class-scope
 # shadowing under PEP 563), so name the type here where ``list`` is the builtin.
-_AgentTypes = list[AgentType]
 _CuratedModels = list[CuratedModel]
 
 # Maps a back-compat wire (the ``use-builtin/{wire}`` route, the legacy

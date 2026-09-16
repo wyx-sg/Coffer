@@ -77,7 +77,6 @@ async def test_ensure_conversation_sets_active_conversation_on_the_matching_thre
         chat_id="group-1",
         display_name="Group",
         paired_at=datetime.now(tz=UTC),
-        active_conversation_id=None,
     )
     await env.peers.upsert(group)
 

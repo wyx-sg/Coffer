@@ -5,8 +5,10 @@ at 64 chars (lowercase alphanumerics, hyphen, underscore) and `description` at
 1024 chars. The optional fields `license` and the experimental `allowed-tools`
 are recognized and retained; every other extra field is tolerated
 (`extra="allow"`) so non-Coffer-authored skills validate cleanly. Coffer does
-not act on a skill's body — the agent that loads it does — but `allowed-tools`
-is parsed and retained for the skill trust layer to consume.
+not act on a skill's body — the agent that loads it does — and it does not act
+on `allowed-tools` either: the field is parsed so that round-tripping a skill's
+frontmatter preserves it, and surfaced so a reader can see what a skill asks
+for.
 """
 
 from __future__ import annotations

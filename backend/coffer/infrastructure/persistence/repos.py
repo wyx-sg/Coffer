@@ -27,12 +27,11 @@ from coffer.infrastructure.persistence.models import (
     InternalEngineConfigModel,
     ResourceModel,
 )
-from coffer.infrastructure.persistence.retention import UnknownPrunableTable  # re-export
 from coffer.infrastructure.persistence.retention_repo import (
     SqlAlchemyRetentionRepo,  # re-export (split out for file-size budget)
 )
 
-__all__ = ["SqlAlchemyRetentionRepo", "UnknownPrunableTable"]
+__all__ = ["SqlAlchemyRetentionRepo"]
 
 
 def _to_domain(row: ResourceModel) -> Resource:
@@ -323,7 +322,6 @@ class SqlAlchemyInternalEngineConfigRepo:
         self,
         *,
         model: str | None,
-        auto_tidy_enabled: bool | None = None,
         tidy_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig:
@@ -335,8 +333,6 @@ class SqlAlchemyInternalEngineConfigRepo:
                 row = InternalEngineConfigModel(id=1, updated_at=now)
                 session.add(row)
             row.model = model
-            if auto_tidy_enabled is not None:
-                row.auto_tidy_enabled = auto_tidy_enabled
             if tidy_owner_machine_id is not None:
                 # The empty string clears it back to "wherever this is read".
                 row.tidy_owner_machine_id = tidy_owner_machine_id or None

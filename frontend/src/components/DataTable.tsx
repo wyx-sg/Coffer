@@ -27,7 +27,7 @@ import {
   type TableSelection,
 } from "@/components/DataTable.types";
 // Re-exported so call sites keep importing these from "@/components/DataTable".
-export type { Column, FilterDef, ServerPagination, TableSelection };
+export type { Column, FilterDef };
 
 // Cap the body at 20 rows (row ≈ 3rem) — beyond that the container scrolls
 // vertically under the sticky header (#227), so a 50- or 100-row page keeps

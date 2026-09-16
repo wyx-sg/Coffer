@@ -47,8 +47,10 @@ class CredentialResolver:
     async def materialize_async(self, refs: dict[str, str]) -> dict[str, str]:
         """:meth:`materialize`, run in a worker thread.
 
-        The store read is a blocking SQLite call (or the OS keychain in legacy
-        setups); on the event loop it would stall every concurrent request for
-        as long as the read takes. Async consumers call this one.
+        The store read is a blocking SQLite call — on the event loop it would
+        stall every concurrent request for as long as the read takes, and can
+        deadlock against the coroutine holding the write lock. Every async
+        consumer calls this one; nothing hand-rolls ``to_thread`` around
+        :meth:`materialize` itself.
         """
         return await asyncio.to_thread(self.materialize, refs)

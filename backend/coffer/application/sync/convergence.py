@@ -3,7 +3,8 @@
 The order of the seven steps is the most important thing in this module, and
 it is the whole reason the 2026-07-10 mutual deletion cannot happen again::
 
-    0  Repair    — working tree back to the pointer if it drifted
+    0  Repair    — working tree back to the pointer if it drifted, and
+                    refuse a remote whose layout this build does not know
     1  Serialize — export the vault into the tree, commit as L
     2  Merge     — fetch, three-way-merge origin into L → M
     3  Diff      — D := L..M, exactly what the remote contributed
@@ -25,8 +26,13 @@ a document makes no change relative to its own base, and git reads "unchanged"
 as an assertion about nothing. The previous design could not say this, because
 its export rewrote the tree from local state wholesale.
 
-The round returns a ``ConvergeRun`` rather than raising for anything the user
-can be told about, so the worker's loop never decides what is survivable.
+The round returns a ``ConvergeRun`` for every **outcome**, so the worker's loop
+never decides what is survivable. The two exceptions are refusals rather than
+outcomes — a base that cannot be established (``SYNC_JOIN_AMBIGUOUS``) and a
+remote layout this build does not know (``SYNC_BUNDLE_TOO_NEW``) — and they
+raise, because what the surfaces owe the user there is a code and a next step,
+not a diff. ``ConvergeService.run_once`` records them as failed rounds, so the
+loop is still spared the judgement.
 """
 
 from __future__ import annotations
@@ -46,6 +52,7 @@ from coffer.application.sync.convergence_ops import (
     is_inapplicable,
     outstanding_holds,
     reconcile,
+    refuse_newer_layout,
     remote_tip,
     snapshot,
 )
@@ -135,6 +142,11 @@ class ConvergeRound(BackwardsMixin):
         # remote moved?" could only ever answer no, and a confirmation went on
         # to authorise deletions that arrived after the user looked.
         await self._mirror.fetch(token=token)
+        # Nothing has touched the vault or the tree yet, which is the only
+        # place this check belongs: a remote written in a layout this build
+        # does not know is refused before the round can either apply it or
+        # publish over it.
+        await refuse_newer_layout(self._mirror, f"origin/{self._branch}")
         waived = await self._waived_direction(confirmed)
 
         # --- 1 serialize ---------------------------------------------------

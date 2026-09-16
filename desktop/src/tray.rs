@@ -41,7 +41,10 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 // (daemon.rs::restart_daemon). Run off the menu-event thread:
                 // a true restart blocks for seconds (shutdown + port-free
                 // poll), which must not freeze the UI. The tray has no place
-                // to show a dialog, so the outcome is just logged.
+                // to show a dialog, so the outcome goes to the log — which
+                // `logging.rs` puts in `~/.coffer/logs/daemon.log`, where the
+                // CLI's own messages and the Activity page already send a user
+                // looking for a daemon that will not start.
                 let app = app.clone();
                 std::thread::spawn(move || match crate::daemon::restart_daemon(app) {
                     Ok(r) => {

@@ -163,11 +163,15 @@ describe("AgentMemoryStorePage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/no memory store was named/i);
   });
 
+  // The back affordance is the shared PageHeader's, so it is a real link with
+  // an href — middle-clickable, copyable — not a button that calls navigate().
   test("back returns to the agent's Memory tab", () => {
     stubTree();
     stubContent();
     renderAt();
-    fireEvent.click(screen.getByRole("button", { name: /back to/i }));
+    const back = screen.getByRole("link", { name: /back to/i });
+    expect(back).toHaveAttribute("href", "/agents/claude?tab=memory");
+    fireEvent.click(back);
     expect(screen.getByText("agent detail")).toBeInTheDocument();
   });
 });

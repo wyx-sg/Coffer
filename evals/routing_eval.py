@@ -39,16 +39,10 @@ class ModelSpec:
 def _resolve_model() -> ModelSpec:
     """Build the model spec from ``COFFER_EVAL_*`` env vars (Ollama defaults)."""
     provider = os.environ.get("COFFER_EVAL_PROVIDER", "ollama").lower()
-    model = os.environ.get("COFFER_EVAL_MODEL") or os.environ.get(
-        "OLLAMA_MODEL", "qwen2.5:0.5b"
-    )
-    default_base = (
-        "http://localhost:11434" if provider == "ollama" else "https://api.openai.com"
-    )
+    model = os.environ.get("COFFER_EVAL_MODEL") or os.environ.get("OLLAMA_MODEL", "qwen2.5:0.5b")
+    default_base = "http://localhost:11434" if provider == "ollama" else "https://api.openai.com"
     base_url = (
-        os.environ.get("COFFER_EVAL_BASE_URL")
-        or os.environ.get("OLLAMA_URL")
-        or default_base
+        os.environ.get("COFFER_EVAL_BASE_URL") or os.environ.get("OLLAMA_URL") or default_base
     ).rstrip("/")
     return ModelSpec(
         provider=provider,
@@ -87,9 +81,7 @@ def aggregate_routing(cases: list[dict], *, samples: int) -> dict:
         "pass^k": round(sum(1 for c in cases if c["correct_count"] == samples) / n, 4)
         if n
         else 0.0,
-        "pass@k": round(sum(1 for c in cases if c["correct_count"] >= 1) / n, 4)
-        if n
-        else 0.0,
+        "pass@k": round(sum(1 for c in cases if c["correct_count"] >= 1) / n, 4) if n else 0.0,
     }
 
 
@@ -110,9 +102,7 @@ def _build_prompt(catalog: list[dict], request: str) -> str:
     return "\n".join(lines)
 
 
-def _generate(
-    prompt: str, *, spec: ModelSpec, temperature: float, timeout: float
-) -> str:
+def _generate(prompt: str, *, spec: ModelSpec, temperature: float, timeout: float) -> str:
     """Generate a completion via Ollama or an OpenAI-compatible endpoint."""
     if spec.provider == "ollama":
         body = {
@@ -161,9 +151,7 @@ def run_routing_eval(
         chosen: list[str | None] = []
         for _ in range(samples):
             try:
-                raw = _generate(
-                    prompt, spec=spec, temperature=temperature, timeout=timeout
-                )
+                raw = _generate(prompt, spec=spec, temperature=temperature, timeout=timeout)
             except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
                 return None  # model server unreachable -> skip the whole suite
             chosen.append(parse_tool_choice(raw, valid))

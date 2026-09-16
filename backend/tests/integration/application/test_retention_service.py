@@ -4,6 +4,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from coffer.application.audit_service import AuditService
+from coffer.application.retention_registry import (
+    PrunableRegistry,
+    PrunableTable,
+    UnknownPrunableTable,
+)
 from coffer.application.retention_service import RetentionService
 from coffer.domain.audit import AuditEventType
 from coffer.infrastructure.persistence.base import Base
@@ -16,11 +21,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyRetentionRepo,
 )
-from coffer.infrastructure.persistence.retention import (
-    PrunableRegistry,
-    PrunableTable,
-    UnknownPrunableTable,
-)
+from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 
 
 async def _service(tmp_path, *, extra_tables=()):
@@ -40,7 +41,7 @@ async def _service(tmp_path, *, extra_tables=()):
     )
     for t in extra_tables:
         registry.register(t)
-    repo = SqlAlchemyRetentionRepo(sm)
+    repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     return RetentionService(registry=registry, repo=repo, audit=audit), sm, engine
 
@@ -230,8 +231,8 @@ async def test_prune_runs_conversation_archive_then_delete_lifecycle(tmp_path):
     now = datetime(2026, 5, 20, tzinfo=UTC)
     conv_sql = (
         "INSERT INTO conversations "
-        "(id, agent_key, title, model_id, created_at, updated_at, archived_at) "
-        "VALUES (:id, 'builtin', 't', NULL, :ts, :ts, :arch)"
+        "(id, agent_key, title, created_at, updated_at, archived_at) "
+        "VALUES (:id, 'builtin', 't', :ts, :ts, :arch)"
     )
     async with sm() as s:
         # idle 10 days, never archived -> should be archived by the sweep
@@ -274,8 +275,8 @@ async def test_conversation_archive_disabled_when_days_none(tmp_path):
         await s.execute(
             text(
                 "INSERT INTO conversations "
-                "(id, agent_key, title, model_id, created_at, updated_at, archived_at) "
-                "VALUES ('idle', 'builtin', 't', NULL, :ts, :ts, NULL)"
+                "(id, agent_key, title, created_at, updated_at, archived_at) "
+                "VALUES ('idle', 'builtin', 't', :ts, :ts, NULL)"
             ),
             {"ts": now - timedelta(days=99)},
         )

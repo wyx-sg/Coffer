@@ -112,14 +112,14 @@ def _diff_out(diff: DiffSummary) -> DiffCountsOut:
     """
     return DiffCountsOut(
         **diff.counts(),
-        changes=[DocChangeOut(path=c.path, status=c.status.value) for c in diff.changes],
+        changes=[DocChangeOut(path=c.path, status=c.status) for c in diff.changes],
     )
 
 
 def _round_out(run: ConvergeRun) -> RoundOut:
     pending = run.pending
     return RoundOut(
-        status=run.status.value,
+        status=run.status,
         join=run.join.value if run.join else None,
         applied=_diff_out(run.applied),
         published=_diff_out(run.published),

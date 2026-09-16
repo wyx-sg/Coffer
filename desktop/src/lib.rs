@@ -10,6 +10,7 @@
 //
 // The logic lives in sibling modules to keep every file under the project's
 // 400-line size cap (see `agents/stack.md`):
+//   * `logging`   — where the shell's own log records go
 //   * `sidecar`   — find a binary Tauri staged in the app bundle
 //   * `resolve`   — the five-step "where does a daemon come from" chain
 //   * `discovery` — ~/.coffer/daemon.json + liveness/shutdown probes
@@ -21,6 +22,7 @@
 mod daemon;
 mod discovery;
 mod env_path;
+mod logging;
 mod resolve;
 mod sidecar;
 mod spawn;
@@ -32,9 +34,7 @@ use tauri::{RunEvent, WindowEvent};
 #[cfg(target_os = "macos")]
 use tauri::Manager;
 
-// Re-export the close-to-tray decision function so existing integration
-// tests can keep importing it via the crate root.
-pub use tray::should_close_app;
+use tray::should_close_app;
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -42,6 +42,13 @@ pub use tray::should_close_app;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // First, before anything that might want to report a failure: install the
+    // logger. The `log` facade drops every record until one is set, and the
+    // records this crate writes — which binary the resolution chain picked, a
+    // restart asked from the tray that failed — are a user's only account of a
+    // daemon that never came up. See `logging.rs` for the file they go to.
+    logging::install();
+
     // No `dialog` / `opener` plugins: the frontend reaches OS file actions
     // through daemon HTTP routes in both hosts, so registering them here would
     // only widen the capability set for code nothing calls.
@@ -55,7 +62,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             daemon::restart_daemon,
             daemon::get_daemon_info,
-            daemon::get_app_version,
             daemon::daemon_version_matches,
         ])
         .setup(|app| {

@@ -112,7 +112,6 @@ def _conv(agent_key: str = "claude_code", *, channel_name: str | None = None) ->
         id=uuid.uuid4().hex,
         agent_key=agent_key,
         title="t",
-        model_id=None,
         created_at=now,
         updated_at=now,
         channel_name=channel_name,

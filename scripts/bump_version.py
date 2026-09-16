@@ -3,12 +3,13 @@
 
     python scripts/bump_version.py 0.2.0
 
-The version is held in five places and they must agree exactly: the desktop
-shell compares its Cargo crate version with the one `/api/v1/daemon/status`
-reports (the Python package's) by string equality, and `tauri.conf.json` names
-the `.dmg`. Bumping them by hand invites the permanent "daemon out of date"
-banner a single missed file produces, so this script rewrites all of them
-(and `tests/integration/distribution/test_packaging_specs.py` pins that they
+The version is held in six places — see TARGETS below — and they must agree
+exactly: the desktop shell compares its Cargo crate version with the one
+`/api/v1/daemon/status` reports (the Python package's) by string equality, and
+`tauri.conf.json` names the `.dmg`. Bumping them by hand invites the permanent
+"daemon out of date" banner a single missed file produces, so this script
+rewrites all of them (and
+`backend/tests/integration/distribution/test_packaging_specs.py` pins that they
 agree). Stdlib only; edits are textual and anchored so formatting elsewhere in
 each file is left alone.
 """
@@ -95,8 +96,9 @@ def _bump_package_lock(text: str, version: str) -> str:
     )
 
 
-#: Relative path -> rewriter. The test in `test_packaging_specs.py` reads the
-#: same files back, so adding a file here means adding it there.
+#: Relative path -> rewriter. Six entries; the docstring's count refers to
+#: this table. `backend/tests/integration/distribution/test_packaging_specs.py`
+#: reads the same files back, so adding a file here means adding it there.
 TARGETS: dict[str, object] = {
     "backend/pyproject.toml": _bump_pyproject,
     "frontend/package.json": lambda t, v: _bump_json_top_level(

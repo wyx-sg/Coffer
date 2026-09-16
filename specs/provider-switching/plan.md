@@ -1,47 +1,45 @@
 # Implementation Plan: Provider Switching
 
-**Branch**: `feature/G9-provider-switching`
-**Date**: 2026-06-21
 **Spec**: [./spec.md](./spec.md)
 **Status**: Draft
 
 ## Summary
 
-Add the `provider` Resource kind to Coffer: a shared registry of LLM provider
-profiles, each projected into the matching agent's native config file
-(`~/.claude/settings.json` for anthropic/Claude Code;
-`~/.codex/config.toml` for openai/Codex). Credentials are Fernet-encrypted;
-the raw key never touches a native config file. Ships with REST routes, CLI
-subcommands, a minimal frontend DataTable page, and sync / audit wiring.
+The `provider` kind is a registry of LLM connections — an endpoint, a protocol,
+a credential ref and a curated model set — projected into the native config file
+of each agent the connection's scope reaches (`~/.claude/settings.json` for
+Claude Code, `~/.codex/config.toml` for Codex). Credentials live in the Fernet
+vault; the raw key never touches a native config file. The spec fixes the
+contract; this plan fixes the layering, the boundaries and the decisions each
+layer owns.
 
 ## Technical Context
 
 | Dimension | Value |
 |---|---|
 | **Language / Version** | Python 3.12+, TypeScript 5.x |
-| **New runtime deps** | None new; `tomlkit` already in backend (MCP TOML path); `EncryptedCredentialStore` already in codebase |
-| **Storage** | Shared `resources` table (`kind='provider'`); no new migration |
-| **Testing** | 4-tier; acceptance markers tie to spec scenarios |
+| **Runtime deps** | `tomlkit` (the Codex TOML path, shared with MCP); `EncryptedCredentialStore` |
+| **Storage** | The shared `resources` table (`kind='provider'`); config in the existing JSON column, reach in the row's `scope` |
+| **Migrations** | Data migrations only, no new table — see [data-model.md](./data-model.md) |
+| **Testing** | 4-tier; acceptance markers tie to the spec's scenarios |
 | **Target Platforms** | macOS arm64+x64 (primary); Windows / Linux (existing CI) |
-| **Performance Goals** | Activate (project to disk) ≤ 200 ms |
-| **Constraints** | Local-first; credential isolation (Decision B); domain pure (no I/O) |
+| **Performance Goals** | Activate (project to disk) ≤ 200 ms. A picker read touches no network |
+| **Constraints** | Local-first; credential isolation; domain pure (no I/O) |
 
 ## Constitution Check
 
 | Clause | Compliance | Notes |
 |---|---|---|
-| I. Local-First | ✅ | Provider profiles and credentials stored locally; sync is user-controlled git |
-| II. Spec-as-Truth | ✅ | Spec committed before code |
-| III. Open-Source-Readiness | ✅ | No new closed-source deps |
+| I. Local-First | ✅ | Connections and credentials are local; sync is the user's own git remote |
+| II. Spec-as-Truth | ✅ | The spec is updated with the code |
+| III. Open-Source-Readiness | ✅ | No closed-source deps |
 | Languages | ✅ | Python + TypeScript |
-| Architecture: layered | ✅ | Pure projection functions return TEXT (domain); file write in `_project` (service); no I/O in domain layer |
-| Persistence | ✅ | Control plane in SQLite `resources` table (reuse); raw key in Fernet vault |
-| Credentials | ✅ | Raw key in vault only; `ProviderConfig` holds only `credential_ref` |
+| Architecture: layered | ✅ | Projection transforms are pure and return TEXT; every file write is in the application layer |
+| Persistence | ✅ | Control plane in the SQLite `resources` table; raw key in the Fernet vault |
+| Credentials | ✅ | `ProviderConfig` holds only `credential_ref` |
 | Network defaults | ✅ | Loopback-only HTTP API |
 
-## Project Structure
-
-### Documentation
+## Documentation
 
 ```
 specs/provider-switching/
@@ -54,308 +52,138 @@ specs/provider-switching/
 docs/decisions/provider-switching.md
 ```
 
-### New backend modules
+## Layering
 
 ```
-backend/coffer/domain/provider/
-  __init__.py
-  config.py        # WireFormat, WireApi enums + ProviderConfig (Pydantic v2)
-  projection.py    # apply_anthropic_settings / apply_codex_provider pure functions
-                   # + ProjectionTarget + target_for() + constants
+domain/provider/
+  config.py       Protocol, Modality-carrying CuratedModel, ProviderConfig,
+                  ResolvedConnection, default_scope_for_protocol
+  modality.py     Modality + the id → modality inference rule
+  errors.py       the kind's own error family
+  projection.py   pure text transforms + the target tables:
+                  apply_anthropic_settings / remove_anthropic_settings,
+                  apply_codex_provider / remove_codex_provider,
+                  codex_model_catalog_json / codex_model_catalog_path,
+                  ProjectionTarget, target_for, target_for_agent,
+                  wire_for_agent, anthropic_api_key_helper, the constants
 
-backend/coffer/application/provider/
-  __init__.py
-  service.py       # ProviderService (CRUD + activate + resolve_active_key + _project)
-                   # + ActivateResult
-  kind.py          # make_provider_kind(...) -> Kind
+domain/connection.py
+                  CODEX_ENV_KEY — the one string the provider kind and the
+                  chat kind's Codex adapter must agree on, held where neither
+                  kind has to import the other
 
-backend/coffer/surfaces/http/provider_routes.py
-backend/coffer/surfaces/http/provider_schemas.py
-backend/coffer/surfaces/http/provider_wiring.py
-backend/coffer/surfaces/cli/provider_cmd.py
+application/provider/
+  service.py            ProviderService — CRUD, activate / deactivate, key
+                        resolution, internal default
+  kind.py               make_provider_kind() — config schema, credential-ref
+                        extractor, supports_scope, default_scope
+  targets.py            scoped_targets (configured reach) vs
+                        projection_targets (reach ∩ enabled)
+  projector.py          ProviderProjector — reads, transforms, writes, and
+                        refuses a stale file
+  projection_ops.py     project / de-project one agent type for the service
+  update_ops.py         the patch path, including secret rotation
+  rename_ops.py         name, vault entry, audit trail and projection, together
+  internal_default_ops.py  the global flag and the model it drops
+  boot_reconcile.py     the start-up check that a projection is really on disk
+  sync_reconcile.py     the post-converge hook that re-projects from the rows
+  introspection.py      list-models / test-connection / detect-protocol
+  results.py            ActivateResult, DeactivateResult
+  ports.py              the ports this layer depends on
+
+application/agent/model_catalogue.py
+                  AgentModelCatalogueService — catalogue() (what the agent can
+                  run), offered() (what a picker shows), efforts(), suggest()
+
+infrastructure/provider/introspector.py
+                  the one place that calls a third-party endpoint
+
+surfaces/
+  http/provider_routes.py + provider_schemas.py + provider_dependencies.py
+       + provider_wiring.py            /api/v1/providers/*
+  http/model_routes.py                 /api/v1/models/*
+  http/internal_engine_routes.py       /api/v1/internal-engine-config[/upkeep]
+  cli/provider_cmd.py                  coffer provider …
 ```
 
-### Modified backend modules
+Reach is not in this list on purpose: which agents a connection covers is the
+framework's per-agent scope on the resource row, so it is read through
+`domain/scope.py` and written through the shared scope surface
+(`PUT /api/v1/resources/provider/{name}/scope`, `coffer scope set`).
+
+### Frontend
 
 ```
-backend/coffer/domain/audit.py           # add PROVIDER_SWITCHED to AuditEventType
-backend/coffer/surfaces/http/wiring.py  # add wire_provider_kind(...)
-backend/coffer/surfaces/http/app.py     # register provider Kind in composition root
+frontend/src/lib/api/providers.ts              hand-written client + types
+frontend/src/lib/hooks/useProviders.ts         React Query hooks
+frontend/src/pages/ModelProvidersPage.tsx      the connection library
+frontend/src/pages/ProviderDetailPage.tsx      Overview + Models tabs
+frontend/src/components/settings/
+  ConnectionsTable.tsx, ConnectionsTableActions.tsx
+  ProviderForm.tsx, providerFormSchema.ts, connectionPresets.ts
+  ProviderConfigCard.tsx, ProviderDetailHeader.tsx
+  ProviderModelsTable.tsx, ProviderModelsColumns.tsx,
+  ProviderModelsBulkActions.tsx, ModalitySelect.tsx
+  ActiveProviderBadge.tsx, ProviderWelcomePanel.tsx
+frontend/src/components/agents/AgentOverviewTab.tsx   the per-agent switch
+frontend/src/lib/hooks/useAgentConnectionDraft.ts     the draft / test / confirm
+frontend/src/router.tsx                               /model-providers[/:name]
+frontend/src/i18n/locales/{en,zh}.json
 ```
 
-### New frontend modules
+The types are hand-written: codegen covers the management API's own contract,
+not this hand-authored one.
 
-```
-frontend/src/lib/api/providers.ts                 # hand-written client + TS types
-frontend/src/lib/hooks/useProviders.ts            # React Query hooks (list, create, delete, activate)
-frontend/src/pages/settings/ProvidersPage.tsx     # Settings → Providers list page
-frontend/src/components/settings/ProviderForm.tsx # create-profile form (used by the add dialog)
-frontend/src/pages/settings/SettingsLayout.tsx    # add the Providers nav tab
-frontend/src/router.tsx                           # /settings/providers route
-frontend/src/i18n/locales/{en,zh}.json            # provider strings appended
-```
+## Boundaries the layers keep
 
----
+- **The domain does no I/O.** `apply_*` / `remove_*` take the file's existing
+  text and return the new text. Everything that reads or writes a path is in
+  `ProviderProjector`, which is also where staleness is detected: a write
+  carries the fingerprint of the content it read and is refused when the file
+  changed underneath.
+- **The domain does not know the agent kind.** `ProviderConfig` holds no agent
+  names; scope carries plain strings, and `application/provider/targets.py` is
+  the single seam that hydrates them into `AgentType`.
+- **One question, one function.** The configured reach and the effective
+  projection are separate calls, because a management surface must still show
+  the agents a disabled connection covers while the routing paths must not
+  project into them.
+- **The writer is chosen by AGENT type, not by protocol.** The protocol drives
+  model introspection and whether a key is required; the agent decides which
+  file shape is written.
+- **A picker read touches no network.** `offered()` answers from stored state
+  only — it runs on every card render and every turn.
+- **Coffer writes down no model name and no reasoning level.** Both are read
+  from the installed agent or handed to it verbatim.
 
-## Tasks
+## Composition root
 
-Tasks are grouped by disjoint file regions. Each task lists the files it touches
-and the acceptance scenarios it covers (use these titles byte-exact in
-`@pytest.mark.acceptance(spec="provider-switching", scenario="<title>")`).
-
----
-
-### Task 1 — Domain: WireFormat, WireApi, ProviderConfig, projection functions
-
-**Files touched:**
-- `backend/coffer/domain/provider/__init__.py` (new)
-- `backend/coffer/domain/provider/config.py` (new)
-- `backend/coffer/domain/provider/projection.py` (new)
-
-**What to build:**
-1. `WireFormat` and `WireApi` string enums in `config.py` (no separate `wire.py`).
-2. `ProviderConfig` Pydantic v2 model in `config.py` (all fields; no secret). Add a
-   `model_validator` that enforces `fast_model` is only meaningful for
-   `wire_format == "anthropic"` (warn, don't error — the field is ignored for
-   openai). Ensure `model_dump(mode="json")` is JSON-stable.
-3. Pure projection functions in `projection.py` that return native-config TEXT:
-   `apply_anthropic_settings(config, existing_text) -> str` and
-   `apply_codex_provider(config, profile_name, existing_text) -> str`.
-   Also: `ProjectionTarget`, `target_for(wire)`, constants
-   `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `ANTHROPIC_API_KEY_HELPER`.
-   No `ProjectionPatch` dataclass; no `build_patch()` function.
-
-**Acceptance scenarios covered:** (unit-tested, not acceptance-marked — no I/O)
-
-**Dependent tasks:** None; pure domain, safe to start first.
-
----
-
-### Task 2 — Application: ProviderService + kind factory
-
-**Files touched:**
-- `backend/coffer/application/provider/__init__.py` (new)
-- `backend/coffer/application/provider/service.py` (new)
-- `backend/coffer/application/provider/kind.py` (new)
-
-**What to build:**
-
-`ProviderService` (no separate `ProviderRepo`; provider profiles are plain
-resource rows managed by `ResourceService`):
-- `create`: validate credential source (exactly one); store secret if
-  `secret_value` given (`EncryptedCredentialStore.set`); register Resource.
-- `update`: partial patch; rotate vault entry if `secret_value` given.
-- `delete`: `find_credential_citations`; delete vault entry if owned; delete
-  Resource.
-- `activate`: sequential clear (via `ResourceService.update_config`) then set
-  for single-active invariant; call `_project` for matching agents; emit
-  `PROVIDER_SWITCHED`; return `ActivateResult`.
-- `resolve_active_key(wire: WireFormat) -> str`: find active profile by wire;
-  `EncryptedCredentialStore.get(ref)`; return plaintext (caller prints to
-  stdout; must not log). No by-name resolution.
-- `_project(profile_name, config, agent_config_dir)`: inlined private method;
-  calls `apply_anthropic_settings` or `apply_codex_provider` then writes via
-  `ConfigFileStore.write_text_atomic`. No separate `ProviderProjector` class.
-
-`make_provider_kind()` factory: returns a `Kind` with schema, CRUD hooks wired
-to `ProviderService`, and a `config_schema` that passes `ProviderConfig` validation.
-
-Model after `backend/coffer/application/knowledge_base/kind.py`.
-
-**Acceptance scenarios covered:**
-- `activating a profile deactivates the previous active profile of the same wire format`
-- `create an anthropic provider profile with an inline secret`
-- `create a profile that reuses an existing credential ref`
-- `reject a profile with an unknown wire format`
-- `reject a profile that supplies neither a secret nor a credential ref`
-- `update a provider profile`
-- `delete a provider profile cleans up its owned credential`
-- `activate a profile whose wire matches no registered agent records active but projects nothing`
-- `a provider switch is recorded in the audit log`
-- `resolve the active provider key for the apiKeyHelper`
-
-**Dependent tasks:** Task 1 (needs `WireFormat`, `ProviderConfig`, projection functions)
-
----
-
-### Task 3 — Audit + sync wiring (composition root)
-
-**Files touched:**
-- `backend/coffer/domain/audit.py` (modify: add `PROVIDER_SWITCHED`)
-- `backend/coffer/surfaces/http/wiring.py` (modify: add `wire_provider_kind`)
-- `backend/coffer/surfaces/http/app.py` (modify: register provider kind)
-
-**What to build:**
-1. Add `PROVIDER_SWITCHED = "provider_switched"` to `AuditEventType`.
-2. `wire_provider_kind(app, resource_svc, audit, sm, agent_registry) -> None`
-   in `wiring.py`: builds `ProviderService`, calls `make_provider_kind()`,
-   registers into `app.state.kinds["provider"]`. Mirror `wire_kb_kind`.
-3. Call `wire_provider_kind(...)` from the appropriate place in `app.py`.
-
-No new migration; no SCHEMA_VERSION bump.
-
-**Acceptance scenarios covered:**
-- `a provider profile round-trips through sync export and import`
-
-**Dependent tasks:** Task 2
-
----
-
-### Task 4 — HTTP routes
-
-**Files touched:**
-- `backend/coffer/surfaces/http/provider_routes.py` (new)
-- `backend/coffer/surfaces/http/provider_schemas.py` (new)
-- `backend/coffer/surfaces/http/provider_wiring.py` (new)
-
-**What to build:**
-FastAPI router with:
-- `GET  /providers` → `list_providers` (response: `ProviderListOut` = `{ "providers": [...] }`)
-- `POST /providers` → `create_provider` (body: `ProviderCreateRequest`)
-- `GET  /providers/{name}` → `get_provider`
-- `PATCH /providers/{name}` → `update_provider` (body: `ProviderPatchRequest`;
-  `wire_format` and `credential_ref` are immutable)
-- `DELETE /providers/{name}` → `delete_provider`
-- `POST /providers/{name}/activate` → `activate_provider` (returns `ActivateOut`)
-
-Response model `ProviderOut` NEVER includes the secret; maps `ProviderConfig`
-minus secrets plus `name`, `created_at`, `updated_at`.
-
-`ProviderListOut`: `{ "providers": list[ProviderOut] }`.
-
-`ProviderCreateRequest`: `{name, wire_format, base_url, model, fast_model?,
-wire_api?, credential_ref?, secret_value?}`. Service enforces exactly-one
-credential source.
-
-`ActivateOut`: `{activated: str, projected: list[str], skipped: list[str]}`.
-
-Mount under `/api/v1/providers` in `app.py` (or in wiring).
-
-**Acceptance scenarios covered:**
-- `list provider profiles`
-- (all other scenarios also exercise routes)
-
-**Dependent tasks:** Tasks 2, 3
-
----
-
-### Task 5 — CLI
-
-**Files touched:**
-- `backend/coffer/surfaces/cli/provider_cmd.py` (new)
-
-**What to build:**
-Typer (or Click) subcommand group `provider` with:
-- `list [--json]`
-- `add <name> --wire <fmt> --base-url <url> --model <m> [--fast-model <m>]
-  [--wire-api <api>] [--credential-ref <ref>] [--secret <value>]`
-  (prompts for secret if not supplied and `--credential-ref` absent)
-- `show <name> [--json]`
-- `edit <name> [field flags] [--secret <value>]`
-- `remove <name>`
-- `switch <name>` (`coffer provider switch <name>`)
-- `key --wire <fmt>` → prints raw key to stdout; resolves by active profile for the wire; no by-name form; no newline leak to logs
-
-Wire `provider_cmd` into the main Coffer CLI group (likely `backend/coffer/surfaces/cli/main.py`).
-
-**Acceptance scenarios covered:**
-- `the command line covers create, list, and switch`
-- `resolve the active provider key for the apiKeyHelper`
-
-**Dependent tasks:** Task 2
-
----
-
-### Task 6 — Frontend: API client, hooks, and page
-
-**Files touched:**
-- `frontend/src/lib/api/providers.ts` (new)
-- `frontend/src/lib/hooks/useProviders.ts` (new)
-- `frontend/src/pages/settings/ProvidersPage.tsx` (new)
-- `frontend/src/components/settings/ProviderForm.tsx` (new)
-- `frontend/src/i18n/locales/en.json` (append provider strings)
-- `frontend/src/i18n/locales/zh.json` (append provider strings)
-- `frontend/src/pages/settings/SettingsLayout.tsx` + `router.tsx` (add Providers tab/route)
-
-**What to build:**
-- `providers.ts`: hand-written `ProviderOut`, `ProviderCreateRequest`, etc.
-  types; `listProviders()`, `createProvider()`, `updateProvider()`,
-  `deleteProvider()`, `activateProvider()` fetch wrappers.
-- `useProviders.ts`: React Query hooks wrapping the above; `vi.mock`-able.
-- `ProvidersPage.tsx`: DataTable with columns name / wire_format / base_url /
-  model / active; row actions: Switch, Delete; header action: Add (create).
-  No inline edit on the page — editing is CLI/API only.
-- `ProviderForm.tsx`: controlled form for create only.
-- Tests: `vi.mock` the hooks; assert table renders profiles and calls activate
-  mutation.
-
-**Acceptance scenarios covered:**
-- `the Providers page lists profiles and can switch the active one`
-
-**Dependent tasks:** Task 4 (needs the API shape)
-
----
-
-### Task 7 — Tests
-
-**Files touched:**
-- `backend/tests/unit/domain/provider/` (new): test the pure projection functions
-  (`apply_anthropic_settings` / `apply_codex_provider`) and `ProviderConfig`
-  validation
-- `ProviderService` is covered by the integration tests below (HTTP / CLI / sync),
-  not a unit suite — it does DB + vault + filesystem I/O
-- integration: `backend/tests/integration/surfaces/http/test_provider_routes.py`,
-  `surfaces/cli/test_provider_cmd.py`, `sync/test_provider_sync.py` (full stack
-  against a real SQLite DB + temp filesystem) — acceptance markers live on these
-- `frontend/src/pages/settings/ProvidersPage.test.tsx` (new): the page acceptance test
-
-**What to build:**
-
-Unit:
-- `apply_anthropic_settings` and `apply_codex_provider` for both wires; assert
-  exact keys set and keys removed.
-- `ProviderConfig` validation: missing required fields; both/neither credential
-  source; unknown `wire_format`.
-- Single-active invariant: two anthropic profiles; activate B → A becomes
-  inactive (via service layer with mocked `ResourceService`).
-
-Integration (real temp files + DB):
-- Create with `secret_value` → `credential_ref` stored, vault has entry.
-- Activate anthropic → `settings.json` contains managed keys, preserves others.
-- Activate openai → `config.toml` contains managed keys, preserves others.
-- `.bak` file exists after activation.
-- `provider_switched` (lowercase) appears in audit log.
-- Sync export → import → profile restored, no secret in YAML.
-- Delete → owned vault entry gone.
-
-Acceptance markers (`@pytest.mark.acceptance(spec="provider-switching", scenario="<title>")`):
-All 17 scenario titles from the spec (byte-exact).
-
-TS acceptance (`acceptance("provider-switching", "the Providers page lists profiles and can switch the active one", ...)`):
-In the `ProvidersPage` test.
-
-**Acceptance scenarios covered:** All 17 listed in spec.md.
-
-**Dependent tasks:** Tasks 1–6
-
----
+`make_provider_kind()` registers the kind (config schema, credential-ref
+extractor, `supports_scope`, `default_scope`); `provider_wiring.py` builds
+`ProviderService` and mounts the routes; the sync post-import hook and the boot
+reconcile are wired beside it. The `provider` kind then gets resource CRUD,
+audit and sync convergence from the framework rather than from its own code.
 
 ## Risks
 
-- **tomlkit merge ordering**: TOML comments and ordering must be preserved when
-  merging. Use tomlkit's dict-like API, not string replacement. Validate with
-  round-trip tests: load → merge → load again → same non-Coffer keys present.
-- **settings.json race with Claude Code**: Claude Code may write `settings.json`
-  concurrently. `write_text_atomic` (write to `.tmp`, `os.replace`) mitigates
-  this but does not eliminate it. Document as a known limitation.
-- **Codex env-var seam**: `COFFER_PROVIDER_KEY` is not automatically set for
-  Codex. Quickstart documents the manual export. Auto-injection is deferred with
-  hot-switch.
+- **tomlkit merge ordering.** Comments and ordering must survive a merge, so the
+  Codex path uses tomlkit's dict-like API and never string replacement;
+  round-trip tests assert the non-Coffer keys are untouched.
+- **A native config file is shared.** Claude Code or Codex can write the file
+  Coffer is projecting into. Atomic writes plus the fingerprint refusal make a
+  concurrent edit an error rather than a silent overwrite, but they cannot
+  serialise the other program.
+- **The Codex catalogue is a contract with another program.** A malformed
+  `model_catalog_json` does not fail loudly — Codex warns and falls back to its
+  built-in list — so the document's required fields are pinned by a test.
+- **The endpoint's model list is not Coffer's.** An id the endpoint stops serving
+  is a stale menu entry, not a config error; nothing validates an id against a
+  list Coffer holds.
 
-## Open items deferred to future specs
+## Deferred
 
-- Provider drift-verify (spec 4.9): check whether live native config matches the
-  active profile.
-- Hot-switch: mid-session reload of running Claude Code / Codex process.
-- Auto env-injection of `COFFER_PROVIDER_KEY` into Coffer-spawned Codex.
-- Explicit deactivate / native-config restore.
+- Hot-switch: reloading a running Claude Code or Codex process mid-session.
+- Provider drift-verify: continuously checking the live native config against
+  the active connection (the boot self-check is the narrow version that exists).
+- Restoring a native config to its pre-Coffer state beyond the `.bak` copies.
+- Protocol translation, proxying and failover chains.

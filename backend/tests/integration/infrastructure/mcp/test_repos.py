@@ -88,26 +88,6 @@ async def test_preference_list_for(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_preference_touch_last_seen(tmp_path):
-    pref_repo, _, rid, engine = await _setup(tmp_path)
-    initial = _now() - timedelta(days=2)
-    await pref_repo.insert(
-        resource_id=rid,
-        capability_type="tool",
-        capability_key="read_file",
-        enabled=True,
-        first_seen_at=initial,
-        last_seen_at=initial,
-    )
-    later = _now()
-    await pref_repo.touch_last_seen(rid, "tool", "read_file", later)
-    p = await pref_repo.find(rid, "tool", "read_file")
-    assert p is not None
-    assert p.last_seen_at >= initial
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
 async def test_invocation_insert_and_query(tmp_path):
     _, inv_repo, _, engine = await _setup(tmp_path)
     base = datetime(2026, 5, 20, tzinfo=UTC)

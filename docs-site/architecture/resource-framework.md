@@ -4,17 +4,23 @@ The Resource framework is Coffer's core abstraction. Understanding it is the key
 
 ## Everything is a resource kind
 
-Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. Five kinds are registered today:
+Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. **Seven** kinds are registered today — one `make_<kind>_kind()` factory each, under `application/<kind>/kind.py`:
 
 | Kind             | Spec                                                   | Description                                                                                                       |
 | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `mcp_server`     | [mcp-gateway](/reference/specs/mcp-gateway/spec)         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
 | `agent`          | [agent-registry](/reference/specs/agent-registry/spec)   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
 | `skill`          | [skill-manager](/reference/specs/skill-manager/spec)     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
-| `knowledge`      | [007 — Knowledge Layer](/reference/specs/knowledge/spec)        | One collection of what agents know: a directory of markdown files — entries they wrote plus any-format documents ingested to markdown — searched literally with `ripgrep`. |
+| `knowledge`      | [knowledge](/reference/specs/knowledge/spec)             | One collection of what agents know: a directory of markdown files — entries they wrote plus any-format documents ingested to markdown — searched literally with `ripgrep`. |
+| `memory`         | [memory](/reference/specs/memory/spec)                   | One partition of the facts Coffer aggregated out of the agents' *own* native memory — `global` plus one per project — as files under `~/.coffer/memory/`. |
+| `provider`       | [provider-switching](/reference/specs/provider-switching/spec) | A vendor endpoint and its key: `{protocol, base_url, credential_ref}`. One may be the internal default Coffer's own passes run on. |
 | `channel`        | [channels](/reference/specs/channels/spec)               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
 
-`knowledge` was once two kinds — a `knowledge_base` you could only read and a `memory` only agents wrote to — but they shared their storage from the start, so the split bought nothing and forced every caller to classify its own data before it could pick a tool. They are now one kind over one storage root: a knowledge resource **is** the directory `~/.coffer/knowledge/<name>/`, and the markdown files in it are the whole of its content ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files)). The kind adds no table of its own — the `resources` row carries the collection's identity and description, the files carry everything else. A knowledge resource is **co-managed**: both you and your agents write into it. New kinds plug into the same framework without modifying it. The encrypted credential store and vault export/import are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
+`knowledge` was once two kinds — a `knowledge_base` you could only read and a `memory` only agents wrote to — but they shared their storage from the start, so the split bought nothing and forced every caller to classify its own data before it could pick a tool. They are now one kind over one storage root: a knowledge resource **is** the directory `~/.coffer/knowledge/<name>/`, and the markdown files in it are the whole of its content ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files)). The kind adds no table of its own — the `resources` row carries the collection's identity and description, the files carry everything else. A knowledge resource is **co-managed**: both you and your agents write into it.
+
+Today's `memory` kind is a different thing from that retired one, and the distinction is load-bearing: it is **derived, not co-managed**. Coffer reads each agent's native memory and normalises it into facts; it never writes back ([Aggregate Agent Memory, Never Write It](/reference/adr/aggregate-agent-memory-never-write-it)).
+
+New kinds plug into the same framework without modifying it. The encrypted credential store and vault sync are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
 
 The framework provides four things, and only four things:
 
@@ -35,7 +41,7 @@ The constitution normally defers cross-cutting abstractions until a second featu
 
 The framework spans every layer: domain entities, database schema, audit table, retention framework, surface routing (REST API sub-routers, CLI subcommand groups). If this abstraction had been designed as an `mcp_server`-specific implementation in the first spec and then extracted when a second kind arrived, the refactoring cost would not be a modest extraction — it would require re-modeling the audit table, the surface routing, and the retention framework simultaneously. The "second feature" refactor would be a substantial, risky migration, not a clean module move.
 
-The alternative of building per-kind silos with no shared abstraction was also rejected: with multiple kinds planned with high confidence (six are registered today), building identity + lifecycle + audit + surface CRUD separately for each would produce more code and more drift than one framework.
+The alternative of building per-kind silos with no shared abstraction was also rejected: with multiple kinds planned with high confidence (seven are registered today), building identity + lifecycle + audit + surface CRUD separately for each would produce more code and more drift than one framework.
 
 The consequence is that the first spec (`mcp-gateway`) carries the framework's abstraction overhead with only one concrete kind to justify it. This is accepted as a known cost, explicitly balanced against the avoided refactor.
 
@@ -100,7 +106,7 @@ Adding a new kind is mechanical: create the kind's subdirectories in each layer 
 
 The information architecture follows the same principle as the domain model: there is a single-axis navigation model where every user-facing managed entity is a resource kind, surfaced through the same sidebar group. There is no separate "surface" concept sitting beside the resource concept.
 
-This eliminates the question "is this new thing a kind or a surface?" for every future spec. Operational tooling — observability, settings — appears in a separate System group; everything the user manages appears in the Resources group.
+This eliminates the question "is this new thing a kind or a surface?" for every future spec. Operational tooling — Activity, Sync, Settings — appears in a separate System group; everything the user manages appears in the Resources group, one entry per kind with a list UI.
 
 A deliberate policy follows: **no "coming soon" placeholders**. A kind is not shown in the UI or sidebar until it actually works. The UI always reads as "here is what Coffer does", not "here is what Coffer plans to do."
 

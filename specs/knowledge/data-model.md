@@ -27,7 +27,10 @@ contents.
 │   ├── account/                    # the human's own filing; the system assigns it no meaning
 │   │   └── session-ownership.md
 │   ├── gateway-routing.md
-│   └── .history/                   # revisions the tidy pass superseded (hidden)
+│   ├── q3-review.md                # an ingested document, now ordinary Markdown
+│   ├── .history/                   # revisions the tidy pass superseded (hidden)
+│   └── .raw/                       # ingested originals, at the converted file's
+│       └── q3-review.pdf           #   path relative to the collection root (hidden)
 └── coffer/
     ├── README.md
     └── release-process.md
@@ -44,10 +47,13 @@ contents.
 - Inside a collection the nesting is the human's business. Subdirectories are
   optional, arbitrarily deep, and mean nothing to the system, which never
   requires or creates one (FR-004).
-- **Dot-prefixed entries are invisible** to the catalogue and to grep (FR-005).
-  `.history/` is the only one Coffer itself writes (FR-052). Hidden segments
+- **Dot-prefixed entries are invisible** to the catalogue, to grep and to
+  search (FR-005, FR-029). Coffer itself writes two of them: `.history/`, the
+  revisions a tidy pass superseded (FR-052), and `.raw/`, the original bytes of
+  an ingested document (FR-035). Hidden segments
   are *refused* by the path guard rather than merely skipped: handing back a
-  `.history/` revision would answer with content the live file has replaced.
+  `.history/` revision would answer with content the live file has replaced, and
+  handing back a `.raw/` original would answer with the file before conversion.
 
 ### `README.md`
 
@@ -126,13 +132,29 @@ level is produced by walking the directory and reading frontmatter at call time
 | `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at` | One file as the catalogue shows it: enough to judge relevance without reading the body. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level**, never the whole tree (FR-021). |
 | `KnowledgeFile` | the five frontmatter fields + `path`, `body`, `file_path`, `folder_path` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (FR-062). |
-| `GrepMatch` | `path`, `line_number`, `line` | One ripgrep hit. |
+| `GrepMatch` | `path`, `line_number`, `line` | One hit, a line at a time. |
 | `GrepOutcome` | `matches`, `truncated` | A bounded run; `truncated` says whether `max_matches` cut it short (FR-022). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
+Two more sit one layer up, because they shape an answer the domain has no
+opinion about. `SearchHit` / `SearchOutcome`
+(`application/knowledge/search.py`) fold the same matcher's line hits into one
+entry per **file** — `path`, `title`, `description`, and an `excerpt` of
+`(line_number, text)` pairs (FR-024). `Conversion`
+(`domain/knowledge/converter.py`) is what a converter returns for an uploaded
+document: the `markdown`, a `title` (the document's first H1, falling back to
+its file name, FR-034), and which `converter` ran — carried so a failure
+downstream can say what ran, and reported on the upload response but written
+nowhere on disk.
+
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror these one
-for one. The mirroring is deliberate rather than redundant: the domain types
+for one, and then add the shapes that describe an answer no domain type does:
+`SearchRequest`, `SearchHitOut` / `SearchLineOut` / `SearchOut` (a hit is a
+*file* with the lines that matched, FR-024) and `IngestedDocumentOut` (the
+converted file's path, title, description, which converter produced it, and the
+`.raw/` original's path). The mirroring is deliberate rather than redundant: the
+domain types
 describe what is on disk and the wire models describe what a client is
 promised, so removing a field from the wire never means hiding one from the
 layer.
@@ -155,9 +177,10 @@ file-read tools can read anything under `~/.coffer/knowledge/` directly: the
 scope prevents mistaken retrieval, not deliberate access, and the system says so
 rather than implying an isolation it does not provide (FR-014).
 
-## Errors (`domain/knowledge/errors.py`)
+## Errors
 
-The failure modes are a directory's.
+The failure modes are a directory's, plus the two its one external binary and
+its converter library have. `domain/knowledge/errors.py` holds the first group:
 
 | Class | Code | HTTP |
 | --- | --- | --- |
@@ -165,7 +188,27 @@ The failure modes are a directory's.
 | `CollectionExists` | `KNOWLEDGE_COLLECTION_EXISTS` | 409 |
 | `KnowledgeFileNotFound` | `KNOWLEDGE_FILE_NOT_FOUND` | 404 |
 | `UnsafeKnowledgePath` | `KNOWLEDGE_PATH_UNSAFE` | 400 |
+| `UploadTooLarge` | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 |
 | `KnowledgeError` (base) | `KNOWLEDGE_ERROR` | 400 |
+
+A collection an agent is not authorized for answers
+`KNOWLEDGE_COLLECTION_NOT_FOUND`, not a 403: telling an unauthorized caller that
+the name exists is itself a disclosure, so "not visible to you" and "not there"
+are the same answer.
+
+`domain/kb_errors.py` holds the other two, re-exported through
+`domain/errors.py`:
+
+| Class | Code | HTTP | When |
+| --- | --- | --- | --- |
+| `GrepPatternInvalid` | `GREP_PATTERN_INVALID` | 400 | the matcher rejected the pattern (ripgrep exit 2, or a regex the fallback cannot compile). Without it an `rg` failure masquerades as "no matches" |
+| `EngineUnavailable` | `ENGINE_UNAVAILABLE` | 503 | a binary or converter library the call needs is absent — `ripgrep` with no Python fallback available, or one of MarkItDown's format backends. The daemon stays up and the caller gets a per-format answer |
+
+And one ingest failure is not a `CofferError` at all. `UnsupportedDocument`
+(`domain/knowledge/converter.py`) carries the *rejected type* rather than a
+code, and the upload route turns it into `INGEST_REJECTED` / 400 with
+`details.reason = "unsupported_type"` and the `doc_type`, so a surface can name
+the format it will not take (FR-033).
 
 ## Audit and invocation records
 
@@ -177,10 +220,18 @@ actor (FR-041).
 
 ## The installation-wide tidy setting
 
-The one setting the layer has is not the layer's: `auto_tidy_enabled` is a
-boolean column on `internal_engine_config`, **default false** (FR-051). It
-governs only whether the background worker runs the tidy pass on an interval;
-the manual trigger never consults it.
+The one setting the layer has is not the layer's. Three columns on the singleton
+`internal_engine_config` row carry it (FR-051, FR-053):
+
+| column | notes |
+| --- | --- |
+| `auto_tidy_enabled` | the switch, **default false** — an unattended rewriter is switched on, never discovered running |
+| `tidy_interval_s` | the timer; null means the built-in cadence |
+| `tidy_owner_machine_id` | the one machine allowed to run the pass, added by migration `20260913_0074_tidy_owner_machine.py`. Null means a single-machine vault, where "here" is the only answer there is |
+
+All three govern only the background worker, which re-reads them every tick so a
+change needs no daemon restart; the manual trigger consults none of them. The
+whole row is synced state, so every machine agrees on who the owner is.
 
 ## What migration 0066 did
 
@@ -191,7 +242,8 @@ on-disk rewrite runs FIRST, reading the rows it is about to destroy.
 The rewrite turns `<scope>/{notes,docs}/<ULID>.md` into
 `<collection>/<slug-of-title>.md` carrying exactly the five frontmatter keys
 above; `global` lands in `shopee` and every `project-<ULID>` scope in `coffer`;
-`.raw/` — whose 50 files were byte-identical to their lane counterparts — is
+the old per-scope `.raw/` lane — whose files were byte-identical to their lane
+counterparts, because nothing had ever been converted — is
 deleted; emptied scope directories are removed; each collection gets a
 `README.md`; and the `knowledge` Resource rows are re-pointed from scopes to
 collections.
@@ -202,7 +254,13 @@ virtual table's drop takes its shadows with it; the explicit shadow drops cover
 an already-orphaned case), `embedding_config`, `knowledge_scope_labels` and
 `knowledge_scope_project_roots`.
 
-`downgrade` raises. The migration is one-way by design — ULID names and the
-`.raw/` copies cannot be reconstructed — and **no compatibility shim is left
-behind anywhere**. The rewrite is idempotent: a re-run finds no lane
+`downgrade` raises. The migration is one-way by design — ULID names and the old
+lane's `.raw/` copies cannot be reconstructed — and **no compatibility shim is
+left behind anywhere**. The rewrite is idempotent: a re-run finds no lane
 directories and does nothing.
+
+The `.raw/` that exists today is not that one. It holds the original bytes of a
+document somebody uploaded, at the collection's root rather than per scope, and
+it is there so a bad conversion can be redone from what the user sent (FR-035).
+The lane the migration deleted held copies of files that had never been
+converted at all.

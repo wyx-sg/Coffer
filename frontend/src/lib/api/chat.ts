@@ -22,8 +22,6 @@ type Schemas = components["schemas"];
 export type ContentBlock = Schemas["ContentBlockOut"];
 
 export type Message = Schemas["MessageOut"];
-export type MessageRole = Message["role"];
-export type MessageStatus = Message["status"];
 
 export type MessageListOut = Schemas["MessageListOut"];
 
@@ -31,7 +29,6 @@ export type MessageListOut = Schemas["MessageListOut"];
  * The IM channel binding behind a channel-originated conversation (ADR
  * chat-single-owner-live-mirror).
  */
-export type ChannelBinding = Schemas["ChannelBindingOut"];
 
 /** `archived_at` is null for an active conversation; `channel_binding` null for a web one. */
 export type Conversation = Schemas["ConversationOut"];
@@ -58,9 +55,6 @@ export type AgentConfigOut = Schemas["AgentConfigOut"];
  * Empty/whitespace or null clears the override (inherit the provider default /
  * let the agent pick its own level).
  */
-export type AgentConfigPatch = Schemas["AgentConfigPatch"];
-
-export type SendMessageRequest = Schemas["SendMessageRequest"];
 
 // ---------------------------------------------------------------------------
 // API object

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Enforce file-size limits documented in agents/stack.md.
+"""Enforce per-tier file-size limits.
 
-Limits (see agents/stack.md "Code Style"):
-  * Backend Python file:    <= 400 lines
-  * Desktop shell (.rs):    <= 400 lines
+Limits:
+  * Backend Python file:    <= 400 lines  (agents/stack.md "Code Style")
+  * Desktop shell (.rs):    <= 400 lines  (agents/stack.md "Desktop Shell")
   * Frontend page (.tsx):   <= 200 lines
   * Frontend component:     <= 250 lines
   * Frontend hook:          <= 300 lines
+  * Frontend utility:       <= 300 lines
+
+The frontend tiers have no prose home — RULES below is their definition, and
+the directories it names are the ones agents/frontend.md §2 mandates.
 
 Each rule is (glob, limit, label); first match wins. Generated dirs and lock
 files are excluded. Stdlib-only.
@@ -24,21 +28,21 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Order matters: a file is classified by the first rule it matches.
 # More-specific paths must appear before catch-all patterns for the same tree.
 #
-# lib/ sub-structure:
-#   lib/hooks/**   → hook tier (300)
-#   lib/components/**  → component tier (250)
-#   lib/**         → utility catch-all (300)
+# The globs track the layout agents/frontend.md §2 mandates — pages in
+# `src/pages/`, feature components in `src/components/<x>/`, every query and
+# mutation in `src/lib/hooks/useX.ts`, and feature-owned pure helpers elsewhere
+# under `src/lib/`. There were once rules for `src/lib/components/**` and
+# `src/hooks/**` as well; the first moved to `src/components/` and the second
+# never existed, and both left globs that matched nothing while the directories
+# they should have named were already ruled below. A glob for a path the
+# convention does not allow is worse than no glob: it reads as permission.
 RULES: list[tuple[str, int, str]] = [
     # --- frontend/src/lib --- (specific first, catch-all last)
     ("frontend/src/lib/hooks/**/*.ts", 300, "frontend hook"),
     ("frontend/src/lib/hooks/**/*.tsx", 300, "frontend hook"),
-    ("frontend/src/lib/components/**/*.tsx", 250, "frontend component"),
-    ("frontend/src/lib/components/**/*.ts", 250, "frontend component"),
     ("frontend/src/lib/**/*.ts", 300, "frontend utility"),
     ("frontend/src/lib/**/*.tsx", 300, "frontend utility"),
-    # --- frontend/src/{hooks,components,pages} ---
-    ("frontend/src/hooks/**/*.ts", 300, "frontend hook"),
-    ("frontend/src/hooks/**/*.tsx", 300, "frontend hook"),
+    # --- frontend/src/{components,pages} ---
     ("frontend/src/components/**/*.tsx", 250, "frontend component"),
     ("frontend/src/components/**/*.ts", 250, "frontend component"),
     ("frontend/src/pages/**/*.tsx", 200, "frontend page"),

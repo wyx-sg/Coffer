@@ -8,6 +8,12 @@ open-platform documentation mirrors.
 
 ## Prior art — OpenClaw and Hermes
 
+> **A dated snapshot.** This section and the landscape survey at the end of this
+> document were gathered in July 2026 and describe other products as they were
+> then. They record why Coffer's architecture is shaped the way it is; they are
+> not a claim about what those products do now, and nothing in Coffer depends on
+> them still doing it.
+
 Both products converge on the same architecture, which this spec adopts:
 
 - **Thin adapters, shared core.** An adapter implements lifecycle
@@ -18,9 +24,11 @@ Both products converge on the same architecture, which this spec adopts:
   from `id` + `setup` and adds optional capability surfaces.
 - **Capability declaration over special-casing.** OpenClaw adapters declare
   what the transport supports (editing, native streaming, media); the core
-  degrades automatically. This is what lets Telegram stream by editing one
-  message while SeaTalk falls back to ack-then-final without `if telegram`
-  branches in the core.
+  degrades automatically. Coffer took the pattern and not its flag: the question
+  its core asks is `supports_live_text` ("is there a surface I can keep updating
+  while this turn runs?"), so Telegram answers yes by editing one status message
+  and SeaTalk answers yes through its own streaming API, with no `if telegram`
+  branch anywhere (FR-037).
 - **Pairing as the default DM policy.** Both default to deny. Hermes and
   OpenClaw both use 8-character codes from an unambiguous alphabet with a
   1-hour TTL; Hermes adds per-user rate limiting and failure lockout, and has
@@ -28,7 +36,10 @@ Both products converge on the same architecture, which this spec adopts:
   fail closed.
 - **Session mapping.** Per-peer long-lived sessions keyed by
   `(channel, account, chat)` with `/new`-style reset; OpenClaw warns that
-  anything coarser shares context across users.
+  anything coarser shares context across users. Coffer keys one level finer —
+  `(channel, chat_id, thread_id)`, FR-032 — because a group's threads are
+  independent conversations and a per-chat key made two of them collide on one
+  turn lock.
 - **Long-turn UX in three layers.** Immediate ack (typing/reaction), one
   reused editable progress message (cached `(chat_id, status_key) →
 message_id`, throttled edits), final reply as its own message with
@@ -77,7 +88,7 @@ official docs (the doc site requires a developer login).
   `app_id` + `app_secret` on connect, exposes a generic event handler whose
   payload is the raw event dict above, acks by `callback_id`, and **does not
   reconnect**. One connection per app: a new registration kicks the previous
-  holder, reported as a kick. Hence FR-072's shape — an operator-supplied
+  holder, reported as a kick. Hence FR-081's shape — an operator-supplied
   optional dependency, with supervision and back-off written here.
 - **Callback URL**: http or https, must be publicly reachable (intranet IPs
   fail validation). Tunnels work. On save, SeaTalk posts
@@ -315,12 +326,12 @@ that no group endpoint existed; it does.
 | ------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Telegram transport | long polling via raw httpx                                              | local-first, no ingress; the API surface used is 7 small methods — an SDK dependency buys nothing and adds an import-confinement contract |
 | SeaTalk transport  | webhook → separate listener process + a tunnel (user-run or Coffer-supervised); websocket → one outbound connection inside the daemon | the constitution requires public-reachable surfaces to be a separate process limited to signed callback paths, which the webhook path is; the websocket path exposes nothing, so it needs no process of its own (FR-071) |
-| SeaTalk SDK        | none for outbound (raw httpx); for websocket inbound, the official SDK, supplied by the operator in `~/.coffer/vendor` and never vendored or declared | for sending, the official repo is a thin httpx-equivalent and token caching is ~20 lines; for websocket inbound there is no alternative — the protocol is unpublished — and an MIT repository can neither redistribute that SDK nor depend on something absent from PyPI (FR-072) |
+| SeaTalk SDK        | none for outbound (raw httpx); for websocket inbound, the official SDK, supplied by the operator in `~/.coffer/vendor` and never vendored or declared | for sending, the official repo is a thin httpx-equivalent and token caching is ~20 lines; for websocket inbound there is no alternative — the protocol is unpublished — and an MIT repository can neither redistribute that SDK nor depend on something absent from PyPI (FR-081) |
 | Pairing parameters | 8 chars, no `0O1I`, 1 h TTL, bounded guesses, fail closed               | matches both prior arts and Hermes' post-incident hardening                                                                               |
 | Telegram rendering | markdown → HTML, plain-text retry on rejection                          | OpenClaw-proven; MarkdownV2 escaping is a known bug farm                                                                                  |
-| Progress UX        | one editable status message, throttled; ack first; final reply separate | both prior arts; degrades naturally on SeaTalk via capability flags                                                                       |
+| Progress UX        | ONE live surface the turn grows in place, by whatever mechanism the transport has | both prior arts, but keyed on `supports_live_text` rather than on editing: Telegram edits a status message it then deletes, SeaTalk streams the reply itself, and each buffers its own cadence — the core adds no throttle (FR-037) |
 | Mid-turn input     | bounded FIFO queue, control commands bypass                             | predictable; avoids Hermes' interrupt-by-default surprise                                                                                 |
-| Session scope      | one long-lived conversation per `(channel, chat)`, `/new` resets        | matches the 1:1 product decision; group chats become new rows later                                                                       |
+| Session scope      | one long-lived conversation per `(channel, chat, thread)`, `/new` resets | a DM, a group's main chat and each of its threads are independent, so concurrent turns in two threads of one group never collide (FR-032) |
 
 ## Channels as a management plane — build-vs-adopt & landscape (2026-07-08)
 
@@ -337,7 +348,10 @@ Gathered while deciding whether to extend Coffer's own SeaTalk/Telegram adapters
   patterns (album debouncing, edit-to-stream, ack reactions, event dedup) into
   Coffer's own clean adapters, not the code.
 
-- **Official-channel landscape (2026-07).** Claude Code "Channels" are official
+- **Official-channel landscape — as surveyed, and not re-checked since.** Every
+  claim in this bullet is what the vendors' own docs said at the time; treat it
+  as the evidence the build-vs-adopt decision rested on rather than as current
+  fact. Claude Code "Channels" are official
   **local** plugins for Telegram/Discord/iMessage but are a **research preview**,
   personal-only (no groups), require the session to stay open, and cannot
   transcribe voice

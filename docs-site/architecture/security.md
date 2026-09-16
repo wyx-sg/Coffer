@@ -6,7 +6,7 @@ These rules are non-negotiable and apply to the entire codebase. They are enforc
 1. **Loopback-only binding.** The HTTP API binds exclusively to `127.0.0.1`. Any public-reachable surface runs as a separate process limited to signed callback paths — concretely, the SeaTalk callback listener (see [Channels & the public-reachable surface](#channels-the-public-reachable-surface)).
 2. **Secret plaintext never persists.** Secrets are stored only as Fernet ciphertext in the `credentials` table; configuration stores credential _references_, not values. Plaintext exists in memory solely between decrypt and the spawn/header injection that consumes it — never in SQLite as plaintext, logs, audit, or any structured event. The Fernet master key is managed exclusively by `infrastructure/credentials/`, the only place permitted to import `keyring`.
 3. **Token + CORS on the REST API.** Every management API call requires the `X-Coffer-Token` header. The daemon token lives in `~/.coffer/daemon.json` at mode `0600`.
-4. **Outbound HTTP has real paths today; SSRF-guarding is still scoped to the HTTP-transport MCP client.** The daemon makes outbound calls now — embeddings to OpenAI-compatible providers and the Telegram/SeaTalk APIs (raw httpx to fixed hosts). The constitution requires that outbound HTTP go through a SSRF-guarded client; the gap that remains is the HTTP-transport MCP client, which still uses the MCP SDK's httpx client with no IP filtering. A hardened SSRF-guarded wrapper is planned for that client. Public-reachable surfaces run as a separate process limited to signed callback paths.
+4. **Outbound HTTP has real paths today, and exactly one of them is SSRF-guarded.** The daemon makes outbound calls now: provider introspection, remote speech-to-text, the internal engine's LLM calls, the Telegram and SeaTalk APIs, and `git` for sync. A guard exists — `infrastructure/net/ssrf_guard.check_url` — but it has exactly **one** caller, the provider introspector, so "every outbound URL passes through it" is not true and is not claimed. The constitution requires outbound HTTP to go through a guarded client; the open gap is the HTTP-transport MCP client, where the target host comes from user-registered config. See [Outbound HTTP](#outbound-http-one-guarded-path-and-the-rest). Public-reachable surfaces run as a separate process limited to signed callback paths.
    :::
 
 ## Threat model and trust boundaries
@@ -19,7 +19,7 @@ Coffer is a single-user, local-first tool. The trust model is correspondingly si
 
 1. **A stray local process.** Another process on the same machine — a malicious package installed in a project's `node_modules`, a browser extension with local HTTP access — could attempt to read Coffer's database, call its management API, or exfiltrate registered secrets. The loopback binding plus token authentication raises the bar: a process must guess or steal the 256-bit random token to call any mutating endpoint. The token is not in any environment variable; it lives only in `~/.coffer/daemon.json`, which has mode `0600` (readable only by the owner).
 
-2. **A malicious upstream MCP server configuration.** A server registered with a carefully crafted `command` or `url` might attempt to reach internal network services (SSRF), exfiltrate credentials through environment variables, or write outside its working directory. The credential ref model (no literal secrets in config) and the static `env` reject-on-secret-regex check (which rejects any `env` value that looks like a token) are the current defences. A SSRF-guarded outbound HTTP client is a planned hardening per the constitution's invariant.
+2. **A malicious upstream MCP server configuration.** A server registered with a carefully crafted `command` or `url` might attempt to reach internal network services (SSRF), exfiltrate credentials through environment variables, or write outside its working directory. The credential ref model (no literal secrets in config) and the static `env` reject-on-secret-regex check (which rejects any `env` value that looks like a token) are the current defences. Coffer *has* an SSRF guard, but it is wired into the provider introspector only — routing the HTTP-transport MCP client through it is still planned hardening. See [Outbound HTTP](#outbound-http-one-guarded-path-and-the-rest).
 
 What Coffer does **not** defend against (in the default configuration): a privileged attacker who can read `~/.coffer/` directly, or a malicious Coffer binary. In the default mode the master key sits in a `0600` file beside the encrypted database — the same `~/.coffer/` boundary that already excluded a reader of that directory — so envelope encryption does not change this line. The opt-in **keychain mode** raises it: with the master key in the OS keychain, the ciphertext in `~/.coffer/coffer.db` is useless to an attacker who exfiltrates the directory's contents without also unlocking the keychain. A compromised OS keychain (in keychain mode) and a malicious Coffer binary remain out of scope for a local-first developer tool.
 
@@ -52,7 +52,7 @@ Resolution is **file-first**: the daemon looks for the file before the keychain.
 A brand-new master key is generated **only when the `credentials` table is empty**. Ciphertext present with no resolvable key is a fatal, actionable startup error (`MasterKeyMissing`) — Coffer refuses to start rather than silently lose access to existing secrets.
 
 ::: warning Copy caveat
-`coffer.db` now contains ciphertext. Reading credentials out of a copied or exported vault requires the matching `master.key` file (or the keychain entry, in keychain mode). Keep the master key somewhere you can recover it, or a copied `coffer.db` yields no secrets.
+`coffer.db` contains ciphertext. Reading credentials out of a copied or synced vault requires the matching `master.key` file (or the keychain entry, in keychain mode). Keep the master key somewhere you can recover it, or a copied `coffer.db` yields no secrets.
 :::
 
 ### Legacy keychain migration
@@ -76,15 +76,16 @@ The loopback-only invariant says a public-reachable surface runs as a separate p
 
 Secrets reach the listener the same way upstream MCP subprocesses get theirs: the signing secrets, the daemon URL, and the daemon token are injected into the child's environment at spawn, never written to disk. The spawn is recorded in the upstream-pids directory so a daemon crash leaves nothing behind — the startup orphan sweep reaps it. A daemon-token rotation respawns the listener (the token is baked into the child's env).
 
-## Export security
+## Sync security
 
-Vault export and import ([Vault Export and Import](/reference/adr/vault-sync)) move vault state between machines as a **directory the user names and carries**. Its security rests on keeping the secret material out of that directory:
+Vault sync ([Vault Sync](/reference/adr/vault-sync)) converges the vault **bidirectionally** with a git remote the user owns and configured. It is the one bounded exception to Local-First (constitution v0.6.0), and its security rests on what does and does not travel:
 
-- **No network egress at all.** Export and import touch the local filesystem only — no remote, no git subprocess, no background replication. Whatever carries the directory (`scp`, a USB drive, the user's own git repo) is outside Coffer, using the user's own tools and credentials.
-- **Credentials are opt-in.** An export omits credential material entirely unless `--with-credentials` is given, because an export directory is easy to leave somewhere careless.
-- **Ciphertext only, when included.** Credentials are written as Fernet ciphertext blobs; the bundle only ever holds undecryptable data.
-- **The master key never enters a bundle.** The Fernet master key is bootstrapped onto each machine **out-of-band**, via `coffer sync key export/import` — never written into an export.
-- **`credentials_locked` until the key is present.** A machine that imported ciphertext but does not yet have the matching master key reports `credentials_locked` and refuses to spawn the affected resources. It never silently fails decryption.
+- **Network egress is real, and it is to a remote the user named.** A converge round runs `git` against that remote, fetching and pushing. There is no Coffer-operated endpoint involved, and the feature is **off until a remote is configured**.
+- **The remote is a rendezvous, never a system of record.** Every machine's local vault stays complete, so the remote can be deleted and rebuilt from any one of them.
+- **Ciphertext only.** Credentials travel as Fernet ciphertext blobs; what lands in the remote is undecryptable on its own.
+- **The master key never travels with the data.** It is bootstrapped onto each machine **out-of-band**, via `coffer sync key export/import` — never committed.
+- **`credentials_locked` until the key is present.** A machine that converged ciphertext but does not yet have the matching master key reports `credentials_locked` and refuses to spawn the affected resources. It never silently fails decryption.
+- **An oversized deletion stops and asks.** A round applies a diff against the last state this vault provably held; when that diff would delete more than expected it is held (`sync_held_paths`) for the user to confirm or reject, and both answers are audited.
 
 ## Token authentication
 
@@ -113,7 +114,9 @@ Two properties are load-bearing:
 - **Every route that resolves to that document gets it** — the bare `/` and every client-side route served through the SPA fallback — so a bookmark, a typed address, a reload or a deep link is authenticated with no user action.
 - **It is served `Cache-Control: no-store`, with no ETag and no Last-Modified.** The document now carries a per-daemon secret, and the daemon mints a new token on every start; a cached or revalidated copy would hand the browser a dead token. Hashed files under `/assets` keep normal caching. The page persists nothing, for the same reason.
 
-`coffer open` therefore carries no credential. It reads the daemon's real port from `~/.coffer/daemon.json` (mode `0600`) — the port moves between restarts — and opens the browser there.
+`coffer open` therefore carries no credential. It reads the daemon's real port from `~/.coffer/daemon.json` (mode `0600`) and opens the browser there.
+
+The desktop shell is the one host this mechanism does **not** reach: its page is a local asset nobody served, so there was no `index.html` to inject into. The shell hands the same globals to the page over IPC instead (**FR-030**) — a second supplier of the same credential, not a second way of authenticating.
 
 ## Host-header validation (DNS rebinding)
 
@@ -123,17 +126,24 @@ So the daemon refuses any request whose `Host` header is not a loopback authorit
 
 The check covers every surface on the daemon's port. It does not cover the separate `coffer-callback` listener, which is a different process on a different port — and the only thing a tunnel is ever pointed at. That listener authenticates inbound traffic by per-channel signature and forwards to the daemon over loopback, so public callbacks are unaffected.
 
-## Outbound HTTP: real paths and planned hardening
+## Outbound HTTP: one guarded path, and the rest
 
-The daemon makes outbound HTTP calls today. The real outbound paths are:
+The daemon makes outbound calls today. Naming them precisely matters, because the guard's coverage is narrower than "outbound HTTP":
 
-- **Embeddings** to OpenAI-compatible providers (an `AsyncOpenAI` client with the `base_url` swapped per provider) when building the knowledge index.
-- **The Telegram and SeaTalk APIs** for channels — raw httpx to fixed, well-known hosts.
-- **HTTP-transport MCP servers**, via the MCP SDK's `create_mcp_http_client` (backed by `httpx`).
+| Path                                        | Where                                       | Guarded?                                  |
+| ------------------------------------------- | ------------------------------------------- | ----------------------------------------- |
+| **Provider introspection** — asking a configured vendor endpoint what it offers | `infrastructure/provider/introspector.py` | **Yes.** The one caller of `check_url`.   |
+| **Remote speech-to-text** for voice input   | `infrastructure/llm/transcription.py`       | No — the endpoint is a configured provider. |
+| **The internal engine's LLM calls** (the tidy and organise passes) | `infrastructure/llm/langchain_models.py` | No — same. |
+| **The Telegram and SeaTalk APIs**           | `infrastructure/channel/`                   | No — fixed, well-known hosts.             |
+| **HTTP-transport MCP servers**              | the MCP SDK's `create_mcp_http_client`      | No — and this is the gap that matters.    |
+| **`git` fetch/push for vault sync**         | `infrastructure/sync/`                      | Not HTTP from Coffer's own client at all — a `git` subprocess against a remote the user configured. |
 
-The constitution requires outbound HTTP to go through a SSRF-guarded client. The channel and provider clients reach fixed, well-known hosts; the open gap is the **HTTP-transport MCP client**, where the target host comes from user-registered config and the MCP SDK's httpx client applies no IP-range filtering. Implementing that guard for the MCP client — rejecting connections to loopback, RFC 1918 private ranges, and link-local addresses after DNS resolution — is planned hardening, not yet shipped.
+`infrastructure/net/ssrf_guard.check_url` rejects loopback, RFC 1918 private ranges and link-local addresses after DNS resolution. It is a real guard, and it is wired into exactly one call site. Anywhere the target host comes from *user-entered provider config*, the user entered it — so an unguarded call there is a user reaching their own endpoint, not an attacker pivoting.
 
-For stdio-transport MCP servers, there is no outbound HTTP at all — the daemon spawns a subprocess and communicates over the process's stdin/stdout. The subprocess's environment is controlled (no secret literals) and its working directory is pinned by the `cwd` config field.
+The **HTTP-transport MCP client** is the open gap, and it is different in kind: its target also comes from user-registered config, but a server registration is the thing an attacker most plausibly gets to influence (a pasted `mcpServers` block from a README), and the MCP SDK's httpx client applies no IP-range filtering. Routing that client through the same guard is planned hardening, not yet shipped.
+
+For stdio-transport MCP servers there is no outbound HTTP at all — the daemon spawns a subprocess and communicates over its stdin/stdout. The subprocess's environment is controlled (no secret literals) and its working directory is pinned by the `cwd` config field.
 
 ## See also
 

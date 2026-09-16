@@ -709,7 +709,7 @@ async def test_uninstall_codex_unknown_plugin_404(store, audit_svc):
     assert entries == []
 
 
-def testcache_dir_for_refuses_ids_that_escape_the_cache_root():
+def test_cache_dir_for_refuses_ids_that_escape_the_cache_root():
     """The guard behind the delete: only ids resolving strictly inside
     ``<config_dir>/plugins/cache`` yield a path to remove."""
     cfg_dir = pathlib.Path("/home/u/.codex")

@@ -6,9 +6,9 @@
 // preference in General settings) and reveal it in the OS file manager. The web
 // and desktop surfaces show the same buttons.
 //
-// The actions themselves live in lib/fileActionItems.ts (`useFileActionItems`)
-// so a crowded table row can fold the same open/reveal into the RowActions "⋯"
-// overflow menu instead of spelling out every button inline.
+// The actions themselves live in lib/fileActionItems.ts (`useFileActionItems`),
+// apart from this component so that this file stays component-only (React fast
+// refresh) and the descriptors can be rendered as something other than a bar.
 import { useFileActionItems } from "@/lib/fileActionItems";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

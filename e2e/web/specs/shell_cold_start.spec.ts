@@ -35,25 +35,48 @@ acceptance(
 
     await page.goto("/");
 
-    // The sidebar lists Coffer's operational surfaces — and only those.
-    // No dead "soon" entries for unbuilt features, and no entry outliving its
+    // The sidebar lists Coffer's operational surfaces — and ONLY those. No
+    // dead "soon" entries for unbuilt features, and no entry outliving its
     // feature. RESOURCES carries one entry per resource kind with a list UI,
     // which is why Model providers and Channels are in this list rather than
     // under Settings and AGENTS.
-    for (const label of [
-      /Agents/i,
-      /MCP servers/i,
-      /Skills/i,
-      /Knowledge/i,
-      /Model providers/i,
-      /Channels/i,
-      /Activity/i,
-      /Settings/i,
-    ]) {
+    //
+    // This list is the whole inventory, and the count assertion below is what
+    // makes "and only those" true: the loop alone let the sidebar grow — Chat,
+    // Memory and Sync were all absent from it while shipping — so a fence with
+    // no upper bound is not a fence. Adding a sidebar entry means adding it
+    // here. See `frontend/src/components/SidebarNav.tsx`'s NAV_GROUPS.
+    const SIDEBAR_LABELS = [
+      // Agents
+      /^Agents$/i,
+      /^Chat$/i,
+      // Resources — one per resource kind with a list UI
+      /^MCP servers$/i,
+      /^Skills$/i,
+      /^Knowledge$/i,
+      /^Memory$/i,
+      /^Model providers$/i,
+      /^Channels$/i,
+      // System
+      /^Activity$/i,
+      /^Sync$/i,
+      /^Settings$/i,
+    ];
+    // Scoped to the sidebar's own <nav>, reached through the labelled <aside>
+    // around it: the count assertion below has to see the eleven NAV_GROUPS
+    // rows and nothing else — not the logo link, which sits in the aside but
+    // outside the nav.
+    const nav = page
+      .getByRole("complementary", { name: /Primary navigation/i })
+      .getByRole("navigation");
+    for (const label of SIDEBAR_LABELS) {
       await expect(
-        page.getByRole("link", { name: label }).first(),
+        nav.getByRole("link", { name: label }).first(),
       ).toBeVisible();
     }
+    // The upper bound: no twelfth entry.
+    await expect(nav.getByRole("link")).toHaveCount(SIDEBAR_LABELS.length);
+
     // Grouped under Agents / Resources / System headings.
     await expect(page.getByText(/^Agents$/i).first()).toBeVisible();
     await expect(page.getByText(/^Resources$/i).first()).toBeVisible();
@@ -130,7 +153,8 @@ acceptance(
     // themselves, this is a fast check.
     const { token, port } = readDaemonToken();
     await context.addInitScript((tok: string) => {
-      (window as unknown as { __COFFER_TOKEN__?: string }).__COFFER_TOKEN__ = tok;
+      (window as unknown as { __COFFER_TOKEN__?: string }).__COFFER_TOKEN__ =
+        tok;
     }, token);
 
     // Defensive: delete any leftover servers via the API.

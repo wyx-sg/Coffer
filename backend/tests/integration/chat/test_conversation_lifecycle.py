@@ -49,7 +49,6 @@ def _conv(title: str = "Hello", *, offset_secs: int = 0) -> Conversation:
         id=uuid.uuid4().hex,
         agent_key="builtin",
         title=title,
-        model_id=None,
         created_at=ts,
         updated_at=ts,
     )
@@ -207,21 +206,6 @@ async def test_touch_conversation(tmp_path):  # type: ignore[no-untyped-def]
         fetched = await conv_repo.get(c.id)
         assert fetched is not None
         assert fetched.updated_at == new_ts
-    finally:
-        await engine.dispose()
-
-
-async def test_set_model_conversation(tmp_path):  # type: ignore[no-untyped-def]
-    engine, conv_repo, _ = await _setup(tmp_path)
-    try:
-        c = await conv_repo.create(_conv())
-        assert c.model_id is None
-
-        updated = await conv_repo.set_model(c.id, "model-abc")
-        assert updated.model_id == "model-abc"
-
-        cleared = await conv_repo.set_model(c.id, None)
-        assert cleared.model_id is None
     finally:
         await engine.dispose()
 
@@ -536,17 +520,6 @@ async def test_rename_missing_conversation_raises_domain_error(tmp_path):  # typ
     try:
         with pytest.raises(ConversationNotFound) as exc_info:
             await conv_repo.rename("no-such-id", "new title")
-        assert exc_info.value.conversation_id == "no-such-id"
-    finally:
-        await engine.dispose()
-
-
-async def test_set_model_missing_conversation_raises_domain_error(tmp_path):  # type: ignore[no-untyped-def]
-    """ConversationRepo.set_model on a non-existent id raises ConversationNotFound."""
-    engine, conv_repo, _ = await _setup(tmp_path)
-    try:
-        with pytest.raises(ConversationNotFound) as exc_info:
-            await conv_repo.set_model("no-such-id", "model-abc")
         assert exc_info.value.conversation_id == "no-such-id"
     finally:
         await engine.dispose()

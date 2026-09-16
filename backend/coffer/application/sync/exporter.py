@@ -100,7 +100,7 @@ class SyncExporter:
         state_docs: list[tuple[str, list[tuple[str, dict[str, object]]]]] = []
         for provider in self._state_providers:
             try:
-                area_docs, _owned = await provider.export_docs()
+                area_docs = await provider.export_docs()
             except Exception as e:
                 summary.failures.append((f"state/{provider.area}", str(e)))
                 continue

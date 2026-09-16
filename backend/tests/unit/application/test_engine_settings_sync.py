@@ -44,12 +44,11 @@ class _Repo:
         self,
         *,
         model: str | None,
-        auto_tidy_enabled: bool | None = None,
         tidy_owner_machine_id: str | None = None,
         upkeep: dict[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig:
         current = self.row or GlobalInternalEngineConfig(model=None, updated_at=_now())
-        auto_tidy = current.auto_tidy_enabled if auto_tidy_enabled is None else auto_tidy_enabled
+        auto_tidy = current.auto_tidy_enabled
         owner = current.tidy_owner_machine_id
         if tidy_owner_machine_id is not None:
             owner = tidy_owner_machine_id or None
@@ -107,9 +106,8 @@ def _chosen() -> GlobalInternalEngineConfig:
 
 async def test_a_non_default_choice_is_published_as_the_one_doc() -> None:
     state, _repo, _audit = _state(_chosen())
-    docs, owned = await state.export_docs()
+    docs = await state.export_docs()
     assert AREA == "settings"
-    assert owned == [DOC]
     assert docs == [
         (
             DOC,
@@ -135,17 +133,17 @@ async def test_deleting_the_doc_resets_to_defaults_and_publishes_nothing_after()
     assert audit.events == [("internal_engine_model_set", "sync")]
     # The reset is not re-published as a fresh document: that is what stops a
     # machine that never persisted a row from deleting it again next round.
-    assert await state.export_docs() == ([], [])
+    assert await state.export_docs() == []
 
 
 async def test_a_persisted_row_holding_the_defaults_publishes_nothing() -> None:
     state, _repo, _audit = _state(GlobalInternalEngineConfig(model=None, updated_at=_now()))
-    assert await state.export_docs() == ([], [])
+    assert await state.export_docs() == []
 
 
 async def test_no_row_publishes_nothing() -> None:
     state, _repo, _audit = _state(None)
-    assert await state.export_docs() == ([], [])
+    assert await state.export_docs() == []
 
 
 async def test_deleting_when_the_defaults_already_hold_writes_nothing() -> None:
@@ -183,7 +181,7 @@ async def test_a_switched_off_rewriter_travels_to_the_other_machines() -> None:
     )
     state, _repo, _audit = _state(row)
 
-    docs, _owned = await state.export_docs()
+    docs = await state.export_docs()
 
     assert docs[0][1]["upkeep"] == {
         AGGREGATE: {"enabled": False, "interval_s": None},
@@ -198,7 +196,7 @@ async def test_upkeep_at_its_defaults_publishes_no_document() -> None:
     # every fresh machine deletes again.
     state, _repo, _audit = _state(GlobalInternalEngineConfig(model=None, updated_at=_now()))
 
-    assert await state.export_docs() == ([], [])
+    assert await state.export_docs() == []
 
 
 async def test_a_document_written_before_upkeep_travelled_changes_nothing() -> None:

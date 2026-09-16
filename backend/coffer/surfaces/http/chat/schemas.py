@@ -76,7 +76,6 @@ class ConversationPatch(BaseModel):
     """Body for PATCH /conversations/{id}."""
 
     title: str | None = None
-    model_id: str | None = None
 
 
 class AgentConfigPatch(BaseModel):
@@ -125,7 +124,6 @@ class ConversationOut(BaseModel):
     id: str
     agent_key: str
     title: str
-    model_id: str | None
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None = None

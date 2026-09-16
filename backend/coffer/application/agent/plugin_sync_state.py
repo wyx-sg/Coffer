@@ -45,7 +45,7 @@ class AgentPluginSyncState:
         self._resources = resources
         self._plugins = plugins
 
-    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
+    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
         """One doc per agent that has plugins; agents with none are skipped.
 
         A read failure on one agent (an unreadable config dir, a config that no
@@ -53,9 +53,7 @@ class AgentPluginSyncState:
         bundle is worth more with fifteen of sixteen agents than not at all.
         """
         docs: list[tuple[str, dict[str, object]]] = []
-        owned: list[str] = []
         for resource in await self._resources.list(kind="agent"):
-            owned.append(resource.name)
             try:
                 listing = await self._plugins.list_plugins(resource.name)
             except Exception:
@@ -89,7 +87,7 @@ class AgentPluginSyncState:
                     },
                 )
             )
-        return docs, owned
+        return docs
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
         """A no-op by design: the bundle already holds the inventory.

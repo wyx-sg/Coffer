@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
@@ -18,7 +19,6 @@ import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { resourcesApi } from "@/lib/api/resources";
 import { useMcpServerRunner, useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
 import { HealthBadge } from "./HealthBadge";
-import { McpServerDeleteDialog } from "./McpServerDeleteDialog";
 
 /** Persisted health (last /test probe or most recent invocation), else "—".
  * A stdio server whose launcher is missing on THIS machine says so, with a
@@ -79,15 +79,17 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
         ariaLabel={t("mcp.table.deleteAria", { name: resource.name })}
         onDelete={() => setOpen(true)}
       />
-      <McpServerDeleteDialog
-        name={resource.name}
+      <ConfirmDialog
         open={open}
-        isPending={del.isPending}
-        error={del.error}
         onOpenChange={(o) => {
           setOpen(o);
           if (!o) del.reset();
         }}
+        title={t("mcp.server.deleteConfirmTitle", { name: resource.name })}
+        description={t("mcp.server.deleteConfirmBody")}
+        confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
+        pending={del.isPending}
+        error={del.error}
         onConfirm={() =>
           // Close only on success so a failure leaves the dialog (and error) up.
           del.mutate(

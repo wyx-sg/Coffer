@@ -72,19 +72,12 @@ _STATUS: dict[str, int] = {
     "MCP_INSTALL_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
     "SKILL_OUT_OF_SCOPE": 422,  # activation scope (ADR per-agent-resource-scope)
-    # knowledge_base kind (spec knowledge)
-    "KB_NOT_FOUND": 404,
-    "DOCUMENT_NOT_FOUND": 404,
-    "INGEST_REJECTED": 400,  # `_status_for` refines this by reason
+    # knowledge ingestion + search (spec knowledge). One code for "this upload
+    # is refused", with ``details.reason`` naming which refusal; the size
+    # ceiling gets its own code because 413 is the honest status for it.
+    "INGEST_REJECTED": 400,
     "ENGINE_UNAVAILABLE": 503,
-    "RECONVERSION_BLOCKED": 409,
     "GREP_PATTERN_INVALID": 400,
-    # memory kind (spec knowledge)
-    "MEMORY_STORE_NOT_FOUND": 404,
-    "MEMORY_STORE_MERGE_INVALID": 400,
-    "MEMORY_NOT_FOUND": 404,
-    "MEMORY_REJECTED": 422,  # empty / too-long fact rejected at the boundary
-    "SCOPE_UNRESOLVED": 400,
     # spec memory
     "MEMORY_FACT_NOT_FOUND": 404,
     "MEMORY_FILE_NOT_FOUND": 404,
@@ -174,9 +167,11 @@ def error_response(code: str, message: str, details: dict[str, Any] | None = Non
 def _status_for(exc: errors.CofferError) -> int:
     """HTTP status for a domain error — every code maps 1:1 via `_STATUS`.
 
-    The one exception this function used to carry was ``IngestRejected``, whose
-    status depended on why an upload was refused. Nothing uploads any more, so
-    the special case went with it.
+    It carried one exception once: ``IngestRejected``'s status depended on WHY
+    an upload was refused. Uploads are still live (``POST
+    /api/v1/knowledge/upload``), but a refusal now says why in
+    ``details.reason`` while the status stays 400, so the per-reason branch is
+    gone and this is the same lookup ``error_response`` does.
     """
     return _STATUS.get(exc.code, 500)
 

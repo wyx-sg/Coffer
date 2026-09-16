@@ -18,10 +18,10 @@ export function useAgentNativeMemory(name: string) {
   });
 }
 
-export const nativeMemoryFilesKey = (name: string, dir: string) =>
+const nativeMemoryFilesKey = (name: string, dir: string) =>
   ["agents", name, "native-memory", dir, "files"] as const;
 
-export const nativeMemoryFileKey = (name: string, dir: string, path: string) =>
+const nativeMemoryFileKey = (name: string, dir: string, path: string) =>
   ["agents", name, "native-memory", dir, "files", path] as const;
 
 export function useNativeMemoryFiles(name: string, dir: string) {

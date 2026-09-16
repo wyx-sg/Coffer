@@ -239,8 +239,6 @@ export interface components {
                 };
             };
         };
-        /** @enum {string} */
-        SkillSourceType: "local_import";
         SkillImportRequest: {
             /** @description Path to the existing skill folder; supports `~` expansion. */
             path: string;
@@ -261,8 +259,7 @@ export interface components {
             description: string;
             source: components["schemas"]["SkillSource"];
             enabled: boolean;
-            /** @description Agent names this skill is delivered to (null = every agent, [] = no agent). */
-            scope: string[] | null;
+            scope: components["schemas"]["ScopeOut"];
             version_hash: string;
             master_path: string;
             /** Format: date-time */
@@ -273,6 +270,15 @@ export interface components {
             updated_at: string;
             bindings: components["schemas"]["SkillBindingOut"][];
         };
+        /** @description Which agents this skill is delivered to, on THIS machine. `agents: null` means every agent; `[]` matches nothing, i.e. dormant. Shape is shared with every other kind — it is the resource framework's scope, not a skill-specific one — so it MUST stay identical to `ScopeOut` in `specs/mcp-gateway/contracts/api.openapi.yaml` and to `ScopeOut` in `backend/coffer/surfaces/http/schemas.py`. It was previously declared here as a bare `string[]`, which is the agent list one level down; the wire has always carried the object. */
+        ScopeOut: {
+            /**
+             * @example [
+             *       "claude-code"
+             *     ]
+             */
+            agents: string[] | null;
+        } | null;
         /** @description Internal delivery bookkeeping, not a user-facing toggle: a row means this agent currently holds a delivered copy of the skill. Delivery is decided by the skill's own enabled flag and scope. */
         SkillBindingOut: {
             agent_name: string;

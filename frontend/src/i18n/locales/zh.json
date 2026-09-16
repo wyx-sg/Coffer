@@ -20,12 +20,12 @@
   "common": {
     "close": "关闭",
     "save": "保存",
+    "create": "创建",
     "cancel": "取消",
     "delete": "删除",
     "dismiss": "关闭",
     "edit": "编辑",
     "loading": "加载中…",
-    "loadMore": "加载更多（已显示 {{loaded}} / {{total}}）",
     "enabled": "已启用",
     "disabled": "已禁用",
     "saving": "保存中…",
@@ -35,7 +35,6 @@
     "rawLog": "原始日志",
     "done": "完成",
     "saved": "已保存",
-    "moreActions": "更多操作",
     "showPassword": "显示",
     "hidePassword": "隐藏",
     "dateTimeFormatHint": "YYYY-MM-DD HH:mm:ss",
@@ -55,7 +54,6 @@
       "enable": "启用",
       "disable": "禁用",
       "delete": "删除",
-      "install": "安装",
       "summary": {
         "allOk": "成功 {{count}} 项",
         "partial": "成功 {{ok}} 项，失败 {{failed}} 项",
@@ -70,7 +68,6 @@
   "files": {
     "conflict": "这个文件自你打开以来在磁盘上被改过，保存已被拒绝。你的修改还在——先把它们复制到别处，再重新载入磁盘上的版本。",
     "discardAndReload": "丢弃我的修改并重新载入",
-    "readOnlyBinary": "二进制文件——只读",
     "readOnlyTruncated": "过大无法整份载入——保持只读，以免保存时把文件截断",
     "readOnlyMissing": "尚未创建——只读"
   },
@@ -103,7 +100,6 @@
     "title": "MCP 服务器",
     "subtitle": "Coffer 聚合并通过单一 shim 重新暴露的上游 MCP 服务器。",
     "addServer": "添加 MCP 服务器",
-    "all": "全部",
     "loadFailed": "加载资源失败",
     "welcome": {
       "title": "本地优先的 AI 资产金库，供你的编辑器共享",
@@ -138,8 +134,6 @@
     "missingRunner": "本机未安装 {{runner}}",
     "missingRunnerHint": "请先安装 {{runner}}，然后刷新",
     "table": {
-      "transport": "传输方式",
-      "health": "健康",
       "search": "搜索服务器…",
       "deleteAria": "删除 {{name}}"
     },
@@ -226,8 +220,6 @@
       "back": "返回",
       "import": "导入 {{count}} 个",
       "review": "确认将要导入的内容",
-      "transport": "传输方式",
-      "env": "环境变量",
       "noEnv": "无环境变量",
       "secret": "密钥",
       "secretHint": "标记为「密钥」的值会加密存入 Coffer 本地数据库；其余保留在配置中。",
@@ -257,9 +249,7 @@
       "spawn": "启动",
       "spawnHint": "启动服务器进程。5–120，默认 30。",
       "request": "请求",
-      "requestHint": "对该服务器的单次调用。5–1800，默认 120。",
-      "idle": "空闲",
-      "idleHint": "闲置连接关闭前的等待。60–86400，默认 600。"
+      "requestHint": "对该服务器的单次调用。5–1800，默认 120。"
     }
   },
   "timeRange": {
@@ -307,7 +297,6 @@
       "credential_migrated": "凭据已从系统钥匙串迁移",
       "credential_read": "已读取凭据",
       "credential_set": "已存储凭据",
-      "daemon_port_set": "设置了守护进程端口",
       "internal_engine_model_set": "设置了内部引擎使用的模型",
       "knowledge_deleted": "从 {{resource}} 删除了一篇笔记",
       "knowledge_tidied": "整理了 {{resource}} 集合",
@@ -490,7 +479,6 @@
       "addTitle": "添加模型提供商",
       "editTitle": "编辑模型提供商",
       "empty": "暂无模型提供商。",
-      "switch": "切换",
       "active": "使用中",
       "activeHint": "该提供商驱动 Coffer 自用模型（设置 → Coffer 自用模型）。",
       "reachHint": "此提供商对哪些 Agent 生效，由「生效范围」控件设置——在列表中该提供商所在行，或在它自己的详情页。",
@@ -528,12 +516,7 @@
       "renameHint": "重命名会连同已保存的密钥、历史记录以及该提供商驱动的 Agent 配置一起迁移。",
       "customProvider": "自定义",
       "wireFormat": "协议",
-      "detectType": "检测类型",
-      "detected": "已检测：{{wire}}",
-      "detectFailed": "无法自动检测——请手动选择",
       "baseUrl": "Base URL",
-      "model": "模型",
-      "fastModel": "快速模型（可选）",
       "secret": "API Key",
       "searchPlaceholder": "搜索模型提供商…",
       "allVendors": "全部厂商",
@@ -555,7 +538,6 @@
         "noModelsYet": "该接入地址没有返回任何模型。保持选择为空，它提供的所有模型就都可用。",
         "modelId": "模型",
         "modelSearchPlaceholder": "搜索模型…",
-        "modelOffered": "已提供",
         "noModelsMatch": "没有匹配的模型。",
         "modality": "类型",
         "allModalities": "全部类型",
@@ -641,7 +623,6 @@
     "CREDENTIAL_UNREADABLE": "存储的凭据无法用当前主密钥解密",
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
-    "DOCUMENT_NOT_FOUND": "未找到文档",
     "ENGINE_UNAVAILABLE": "检索引擎不可用",
     "FORBIDDEN": "无权限执行此操作。",
     "FS_PATH_NOT_BROWSABLE": "该路径无法浏览",
@@ -655,7 +636,6 @@
     "INGEST_REJECTED_unsupported_type": "暂不支持此文件类型。请转换为 PDF、Word（.docx）、PowerPoint（.pptx）、Excel（.xlsx）、HTML、EPUB、CSV 或纯文本/Markdown 后重新上传；旧版 .doc/.ppt 请先另存为 .docx/.pptx。",
     "INTERNAL_ERROR": "发生意外错误",
     "INVALID_PREFIX": "无效的前缀",
-    "KB_NOT_FOUND": "未找到知识库",
     "KNOWLEDGE_COLLECTION_EXISTS": "同名知识集合已存在",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "未找到该知识集合",
     "KNOWLEDGE_ERROR": "知识层拒绝了该操作",
@@ -672,10 +652,6 @@
     "MEMORY_DELIVERY_UNSUPPORTED": "该 Agent 类型没有记忆投递钩子",
     "MEMORY_FACT_NOT_FOUND": "未找到该记忆条目",
     "MEMORY_FILE_NOT_FOUND": "该分区里没有这个文件",
-    "MEMORY_NOT_FOUND": "未找到记忆",
-    "MEMORY_REJECTED": "记忆被拒绝（为空或过长）",
-    "MEMORY_STORE_MERGE_INVALID": "这些知识作用域无法合并",
-    "MEMORY_STORE_NOT_FOUND": "未找到记忆库",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
     "NOT_FOUND": "未找到。",
@@ -686,19 +662,16 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "已保存的凭据与内联密钥，二者必须且只能提供一个",
-    "RECONVERSION_BLOCKED": "重建索引正在进行中",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "RESOURCE_NOT_FOUND": "资源未找到",
     "SCOPE_INVALID": "该资源类型不支持此生效范围设置",
-    "SCOPE_UNRESOLVED": "无法解析记忆的作用域",
     "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim 二进制。请安装 Coffer 使 shim 位于 PATH 上，或设置 COFFER_MCP_SHIM_PATH。",
     "SKILL_DIR_NOT_WRITABLE": "技能目录不可写——请检查目录权限",
     "SKILL_FILE_STALE": "技能文件在你加载后已被磁盘上的改动覆盖，请重新加载后重试。",
     "SKILL_INVALID": "该技能无效",
     "SKILL_OUT_OF_SCOPE": "该技能的生效范围不包含本机上的此 Agent",
-    "SYNC_APPLIER_MISSING": "本机金库里没有任何模块知道该如何应用那条路径",
-    "SYNC_BUNDLE_INVALID": "该文件夹不是 Coffer 的导出包",
-    "SYNC_BUNDLE_TOO_NEW": "该导出包来自更新版本的 Coffer，请先升级再导入",
+    "SYNC_BUNDLE_INVALID": "该文件夹无法作为同步工作区使用",
+    "SYNC_BUNDLE_TOO_NEW": "该同步远端由更新版本的 Coffer 写入，请先升级本机再同步",
     "SYNC_CANNOT_RETIRE_SELF": "机器不能把自己下线",
     "SYNC_JOIN_AMBIGUOUS": "这台机器此前与该远端收敛过，但它当时到达的提交已经不在远端历史里了——请重新发起加入，并选择保留本机金库自己的文档，还是用远端重建这台机器",
     "SYNC_NOTHING_PENDING": "没有任何一轮收敛在等待确认",
@@ -722,10 +695,6 @@
     "perPage": "每页",
     "prev": "上一页",
     "next": "下一页"
-  },
-  "resourceDetail": {
-    "unknownKind": "未知类型",
-    "unknownKindBody": "没有为类型 {{kind}} 注册前端模块。"
   },
   "agents": {
     "title": "Agent",
@@ -961,7 +930,6 @@
     "degradedTooltip": "当前文件系统不支持符号链接，Coffer 向至少一个 Agent 下发了副本。在重新投递之前，这些 Agent 不会看到主技能的后续修改。",
     "title": "技能",
     "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的 Agent。",
-    "empty": "尚无技能。导入本地文件夹以开始使用。",
     "loadFailed": "加载技能失败",
     "add": "添加技能",
     "addSubtitle": "从磁盘导入本地 AgentSkills 标准目录。",
@@ -978,12 +946,8 @@
     "removeConfirmBody": "这会删除主存储文件夹以及所有 Agent 端链接。",
     "importConflictTitle": "已存在名为「{{name}}」的技能，要替换它吗？",
     "importReplace": "替换",
-    "card": {
-      "noBindings": "未绑定任何 Agent"
-    },
     "detail": {
       "back": "返回技能列表",
-      "enabled": "已启用",
       "versionHash": "版本哈希",
       "masterPath": "主存储路径",
       "lastSynced": "上次同步",
@@ -991,20 +955,7 @@
       "updated": "更新时间",
       "tabs": {
         "overview": "概览",
-        "bindings": "绑定",
         "files": "文件"
-      }
-    },
-    "bindings": {
-      "noAgents": "尚未注册任何 Agent。请先添加 Agent，再绑定此技能。",
-      "toggleAria": "切换 {{agent}}",
-      "searchPlaceholder": "搜索 Agent…",
-      "noMatches": "没有 Agent 匹配当前筛选条件。",
-      "allStatuses": "全部状态",
-      "cols": {
-        "agent": "Agent",
-        "link": "链接",
-        "status": "状态"
       }
     },
     "files": {
@@ -1012,7 +963,6 @@
       "selectFile": "选择一个文件查看。",
       "binary": "二进制文件（{{size}} 字节）",
       "truncated": "内容已截断——仅显示文件开头部分。",
-      "saved": "已保存。",
       "truncatedReadonly": "该文件过大，暂不支持在此编辑。",
       "editorLabel": "{{path}} 的内容"
     },
@@ -1037,7 +987,6 @@
     "title": "知识",
     "subtitle": "你和 Agent 共同编辑的 Markdown 文件——一个集合一个文件夹。Agent 通过 Coffer 的工具来读；只有你允许的 Agent 才看得到某个集合。",
     "add": "新建集合",
-    "empty": "还没有集合。建一个，然后往它的文件夹里放 Markdown 文件——或者等 Agent 写下第一条。",
     "loadFailed": "加载集合失败",
     "searchPlaceholder": "搜索集合…",
     "noMatches": "没有匹配的集合。",
@@ -1052,7 +1001,6 @@
       "tidy": "整理",
       "tidyHint": "根据磁盘上的 Markdown 重建每个集合的目录文件。",
       "tidyDone": "整理已完成。",
-      "searchTitle": "搜索内容",
       "emptyFolder": "这里还没有内容",
       "selectAFile": "选择一个文件来阅读",
       "treeLabel": "本集合中的文件"
@@ -1109,7 +1057,6 @@
     "delivery": {
       "title": "投递",
       "subtitle": "写在该 Agent 自己设置里的 Coffer 会话开始钩子。",
-      "loadFailed": "加载投递状态失败",
       "installed": "已安装",
       "notInstalled": "未安装",
       "installedHint": "Coffer 的 {{event}} 钩子已写入该 Agent 的设置。每一次触发都会记在活动页面。",
@@ -1343,8 +1290,6 @@
       "self": "{{name}} · 本机",
       "unbound": "未绑定",
       "unknown": "未知机器（{{id}}）",
-      "runsHere": "这个消息渠道的适配器由本机运行。",
-      "runsElsewhere": "这个消息渠道的适配器由 {{machine}} 运行，不在本机。",
       "unboundBody": "这个消息渠道没有绑定任何机器，因此没有任何守护进程会启动它，机器人永远不会回话。请选择一台应该负责应答的机器。",
       "unknownBody": "这个消息渠道绑定在 {{id}} 上，而注册表里没有任何机器认领这个 id——在重新绑定到一台真实存在的机器之前，它不会在任何地方运行。",
       "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把变更带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
@@ -1480,7 +1425,6 @@
       }
     },
     "history": {
-      "title": "历史",
       "description": "这台机器执行过的每一轮收敛，最新的在最前。什么都没变的那些轮次也会列出来——正是它们说明金库一直在收敛。",
       "searchPlaceholder": "搜索轮次…",
       "empty": "还没有执行过任何一轮。先保存远端，再点「立即收敛」。",
@@ -1568,7 +1512,6 @@
       "retire": "下线",
       "retireTitle": "下线 {{name}}？",
       "retireBody": "它的描述文件会从注册表里移除，其他任何东西都不会被改写。生效范围是在每台机器上各自设置的，并不指名任何机器，因此不受影响；而绑定在这台机器上的消息渠道仍然指名着它，在你把它重新绑到另一台机器之前不会在任何地方运行。",
-      "retired": "{{name}} 已退役。",
       "derivedNote": "本机的 id 保存在本地文件里，而不是从宿主机派生的，所以删掉 ~/.coffer 之后它会以一台新机器的身份重新出现，这一行需要手动下线。"
     }
   }

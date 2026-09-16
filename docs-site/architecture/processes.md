@@ -6,13 +6,37 @@ Coffer is built around a clear separation of concerns between processes: one lon
 
 ### coffer-daemon
 
-The daemon is the system's center of gravity. It is a FastAPI application bound to `127.0.0.1:<auto-port>` — default 8000, falling back to the next free port in a small bounded range if 8000 is taken. The daemon:
+The daemon is the system's center of gravity. It is a FastAPI application bound to `127.0.0.1:8000` — a **fixed** port, not the head of a scan (see [The port is fixed](#the-port-is-fixed) below). The daemon:
 
 - Is the **single SQLite writer**. No other process opens the database for writes. This makes WAL-mode isolation trivially correct and eliminates the class of bugs caused by concurrent schema modifications.
 - Owns all in-memory session state for connected MCP clients.
 - Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model-adr-session-subprocess-model) below).
-- Persists all control-plane and vault state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, the knowledge retrieval index, chat conversations and turns, channel bindings, and sync state.
+- Persists all control-plane state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, chat conversations and turns, channel bindings, and sync state. Knowledge and memory are **not** in that list: they are directories of Markdown files, with nothing in `coffer.db` mirroring or indexing them.
 - Does **not** auto-shutdown. The daemon keeps running until `coffer daemon stop` or a system shutdown. This is intentional: the daemon's job is to outlive any single client or CLI invocation.
+
+### The port is fixed
+
+With nothing configured the daemon binds **exactly 8000**, and when it cannot have that port it **refuses to start** rather than moving — naming the process that holds it and the commands that resolve the conflict (**FR-028**). The old behaviour, a scan forward through 8000–8009, survives only under the `COFFER_PORT_RANGE_*` environment override that the test harness uses.
+
+A drifting origin is not merely a broken bookmark. Browser `localStorage` is keyed by origin, so the UI language, sidebar state, page size and preferred editor silently reset whenever the port moves, and nothing connects the two events for the user. Fixing a default and allowing it to be changed is also what comparable local services with a web UI do (Ollama, Syncthing, Grafana, Home Assistant); the tools that scan forward — Jupyter, Vite — print their real URL on every start and nobody bookmarks them.
+
+The setting lives in **`~/.coffer/daemon-config.json`** (mode `0600`), and it has to, for two reasons that rule out every other home:
+
+- It cannot be a database-backed setting, because the port is chosen before the database is opened and before migrations have created any table to read.
+- It cannot be an environment variable, because the daemon is spawned *detached* by whichever surface first needs one — the CLI, an MCP shim, the desktop shell — and inherits **that caller's** environment. A shell profile reaches the user's own terminal and nothing else.
+
+So it is a small file beside `daemon.json`, read with nothing but the standard library. The two files are deliberately a pair and deliberately distinguishable: `daemon-config.json` is configuration, goes *in*, and survives shutdown; `daemon.json` is runtime state, comes *out*, and is unlinked on exit. A hand-mangled config file does not stop the daemon — it warns and falls back to 8000, because an unreadable file that blocked startup would be unrecoverable from a UI that needs a running daemon to appear.
+
+Its only surface is the CLI:
+
+```bash
+coffer daemon port show      # the port it will bind, and the port it is actually on
+coffer daemon port set 8123  # pin one; takes effect at the next start
+coffer daemon port clear     # back to 8000
+coffer daemon restart        # apply it
+```
+
+`coffer daemon port` reads and writes that file **directly, with no daemon involved and none required** — which is the whole point, because the state this setting most needs changing from is "no daemon is running". It deliberately has no REST endpoint and no Settings panel: a port that is correct by default does not earn a place in the UI, and the escape hatch belongs where a squatted port is actually diagnosed. It is equally deliberately **outside the audit requirement** — the audit table is unreachable on exactly the path that matters most, and recording a change only when a daemon happened to be up would be less honest than recording none.
 
 ### stdio shim (coffer-mcp-shim)
 
@@ -28,6 +52,10 @@ The shim is a lightweight bridge process, one per MCP client session. Its entire
 
 The CLI (`coffer …`) is a short-lived child process. Users invoke it for management tasks: registering servers, listing tools, checking status. It calls the daemon over loopback HTTP, carrying the `X-Coffer-Token` from `~/.coffer/daemon.json`, and exits after each command. Like the shim, it uses detect-or-spawn to ensure a daemon is running before issuing its request.
 
+### desktop shell (Coffer.app)
+
+The desktop shell is a native macOS process the *user* starts (Dock, Spotlight, Cmd-Tab), hosting the same web UI build in a webview. For the process model, what matters is that it is a **fourth detect-or-spawn caller** alongside the shim and the CLI, with one extra rule: it resolves a daemon in a fixed order — a live daemon named by `daemon.json`, then its own app bundle, then `~/.coffer/bin/`, then `PATH` — and the liveness probe comes **first**, so it takes over a running daemon rather than starting a second one. Under the fixed port that second daemon could not bind anyway, so getting the order wrong would turn "attach to what is already there" into a startup error. Quitting the app does not stop the daemon. See [Surfaces](/architecture/surfaces#desktop-shell-cofferapp) and [Distribution](/architecture/distribution#the-desktop-shell-and-what-it-owns).
+
 ### callback listener (coffer-callback)
 
 The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks (spec channels, [Channel Adapter Framework](/reference/adr/channel-adapter-framework)). Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
@@ -39,12 +67,21 @@ The callback listener is a daemon-spawned child process that exists only to acce
 
 ## Supervised background workers
 
-Beyond the subprocesses above, the daemon runs a couple of in-process background workers — supervised asyncio tasks, not separate processes — that keep vault state converging without any user action:
+Beyond the subprocesses above, the daemon runs a set of in-process background workers — supervised asyncio tasks, not separate processes — that keep vault state converging without any user action. Six are started at composition time (`surfaces/http/background_workers.py`), in dependency order, plus the channel reconciler:
 
-- **Retention worker.** Prunes log-style tables (audit log, invocation log) according to the configured retention policies.
-- **Channel adapter reconciler** ([Channel Adapter Framework](/reference/adr/channel-adapter-framework)). On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful.
+| Worker             | What it does                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Retention          | Prunes log-style tables (audit log, invocation log, sync rounds) according to the configured retention policies. |
+| Converge (sync)    | A converge round against the configured git remote on a timer, re-reading its interval from the remote. A no-op until the user configures one. Wired **first** among the vault rewriters: the tidy worker takes its lock and state. |
+| Tidy               | The knowledge tidy pass — on idle after a write, and on a periodic sweep.                                       |
+| Memory organise    | The organise pass over a memory partition.                                                                      |
+| Memory aggregate   | Re-derives Coffer's memory tree from the agents' own native memory: a catch-up pass at startup, then hourly. It only reads the agents' memory and only writes the derived tree, so it waits on none of the vault rewriters above. |
+| Transcript warm    | Warms the transcript-summary cache, so the first visit to an agent's Conversations tab is never the one that pays the cold read. |
+| Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set ([Channel Adapter Framework](/reference/adr/channel-adapter-framework)). REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
 
-Vault export and import ([Vault Export and Import](/reference/adr/vault-sync)) are deliberately **not** among them: they run only when the user asks, in the request that asked, with no worker and no background replication.
+Three of these — tidy, organise and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Engine**, and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
+
+Vault sync is emphatically *not* a request-scoped operation. `coffer sync now` forces a round, but the converge worker runs rounds on its own, and the vault converges **bidirectionally** with the remote under git's own three-way merge ([Vault Sync](/reference/adr/vault-sync)). One-shot export and import no longer exist.
 
 ## Detect-or-spawn (ADR daemon-detect-or-spawn)
 
@@ -80,7 +117,7 @@ sequenceDiagram
     SH->>FS: read daemon.json
     alt File missing or PID stale
         SH->>D: spawn detached process<br/>(os.setsid / CREATE_NO_WINDOW)
-        D->>D: bind 127.0.0.1:<auto-port>
+        D->>D: bind 127.0.0.1:8000 (fixed)<br/>or refuse to start
         D->>D: acquire port (atomic exclusive create)
         D->>FS: write {pid, port, token, started_at} (mode 0600)
         SH->>FS: poll until daemon.json appears

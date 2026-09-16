@@ -1,6 +1,6 @@
 import pytest
 
-from coffer.infrastructure.persistence.retention import (
+from coffer.application.retention_registry import (
     PrunableRegistry,
     PrunableTable,
     UnknownPrunableTable,

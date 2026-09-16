@@ -270,14 +270,19 @@ Commentary:
   enabling a skill for an agent until the user explicitly acknowledges the risk
   (409; follow/auto-bind reconcilers skip un-acked skills)**. It is explicitly
   advisory and non-authoritative — Coffer delivers but never executes skills,
-  so a clean report is not a safety guarantee (ADR skill-content-trust-layer). Note this is Coffer's
+  so a clean report is not a safety guarantee. Note this was Coffer's
   _own_ scanner; it is unrelated to the external scanner-evasion story above
   (Snyk/Cisco/VirusTotal), which concerns third-party auditors missing payloads
-  in bundled test files. [`repo:backend/coffer/domain/skill/content_scan.py`,
-  `repo:backend/coffer/domain/skill/config.py`,
-  `repo:backend/coffer/application/skill/{scan_ops,lifecycle_ops,update_ops,binding_ops}.py`,
-  `repo:backend/coffer/surfaces/http/skill_routes.py`, spec FR-028/FR-029,
-  `repo:docs/decisions/skill-content-trust-layer.md`]
+  in bundled test files.
+  **Reverted since (2026-06-20): the trust layer was removed outright.** The
+  scanner, the acknowledge-the-risk gate and the decision record that shaped
+  them are all gone — no scanning module survives anywhere under
+  `backend/coffer/`, and the ADR was deleted rather than superseded, because
+  nothing live inherits a constraint from it. Coffer delivers skills and
+  inspects their frontmatter; it does not scan their contents. This bullet
+  stands as the dated record of a gap that was closed and then deliberately
+  reopened. [`repo:backend/coffer/domain/skill/config.py`,
+  `repo:backend/coffer/surfaces/http/skill_routes.py`]
 - **§4's "no update-detection / pinning UX" gap is now CLOSED (PR #115,
   2026-06-18 — skill update detection + pinning).** The report listed
   "no 'update available' signal" as one of the two UX gaps versus

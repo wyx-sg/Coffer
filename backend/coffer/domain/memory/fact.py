@@ -110,7 +110,3 @@ class Fact:
         it was written about.
         """
         return min((o.key for o in self.origins), default=origin_key("", self.slug, ""))
-
-    @property
-    def personal(self) -> bool:
-        return self.type in PERSONAL_TYPES

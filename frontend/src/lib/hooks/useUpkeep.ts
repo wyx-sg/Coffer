@@ -25,7 +25,7 @@ const POLL_WHILE_RUNNING_MS = 1500;
 const POLL_WHILE_IDLE_MS = 5000;
 
 /** Every pass in flight. Polls itself; see the module comment for why. */
-export function useUpkeepRuns() {
+function useUpkeepRuns() {
   return useQuery({
     queryKey: upkeepRunsKey,
     queryFn: async () => (await listUpkeepRuns()).runs,

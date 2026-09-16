@@ -20,6 +20,7 @@ from starlette.testclient import TestClient
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
+from coffer.application.retention_registry import PrunableRegistry, PrunableTable
 from coffer.application.retention_service import RetentionService
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo, write
@@ -33,7 +34,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyResourceRepo,
     SqlAlchemyRetentionRepo,
 )
-from coffer.infrastructure.persistence.retention import PrunableRegistry, PrunableTable
+from coffer.infrastructure.persistence.retention_repo import allowlist_from_registry
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
@@ -106,7 +107,7 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
             description="Resource lifecycle events.",
         )
     )
-    retention_repo = SqlAlchemyRetentionRepo(sm)
+    retention_repo = SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all()))
     retention_svc = RetentionService(registry=registry, repo=retention_repo, audit=audit_svc)
     loop.run_until_complete(retention_svc.initialize_defaults())
     loop.close()

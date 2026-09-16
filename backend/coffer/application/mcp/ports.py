@@ -78,13 +78,6 @@ class MCPCapabilityPreferenceRepoPort(Protocol):
         capability_key: str,
         enabled: bool,
     ) -> MCPCapabilityPreference | None: ...
-    async def touch_last_seen(
-        self,
-        resource_id: int,
-        capability_type: CapabilityType,
-        capability_key: str,
-        when: datetime,
-    ) -> None: ...
     async def reconcile(
         self,
         resource_id: int,

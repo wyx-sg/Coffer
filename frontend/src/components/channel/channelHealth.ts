@@ -7,7 +7,7 @@
 // the brand colour.
 import { toneClass, type Tone } from "@/lib/statusColors";
 
-export function channelHealthTone(running: boolean): Tone {
+function channelHealthTone(running: boolean): Tone {
   return running ? "ok" : "warn";
 }
 

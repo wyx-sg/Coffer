@@ -1,26 +1,15 @@
 # Research — Vault Sync
 
-> **Historical record.** This file captures the research that led to
-> **continuous multi-machine sync over a user-owned git repository**. That
-> approach has since been withdrawn: spec vault-sync now ships a one-shot vault
-> **export/import** to a directory, with no remote, no workspace, and no
-> background worker ([Vault Export and Import](../../docs/decisions/vault-sync.md),
-> constitution 0.4.0). The notes below are kept as the record of the options
-> that were weighed — they do not describe the current shape. Path portability,
-> ciphertext-only credentials with an out-of-band key, and the determinism
-> requirement are the parts that survived.
->
-> **Amended 2026-09-13.** The withdrawal above was itself reversed: spec
-> vault-sync now ships **bidirectional convergence** with a user-owned git
-> remote (constitution 0.6.0). The 2026-06 notes below still describe the
-> options that were weighed, and the transport choice they reached is the one
-> in force again. What changed, and why, is appended as the last section of
-> this file rather than edited into them.
+What ships is **bidirectional convergence with a git remote the user owns**
+(constitution 0.6.0). This file records the background and the options weighed
+to get there. Decision rationale lives in
+[Vault Sync](../../docs/decisions/vault-sync.md).
 
-Decision rationale lives in
-[Vault Export and Import](../../docs/decisions/vault-sync.md) and the
-constitution 0.3.0 amendment. This file records the background and the options
-weighed.
+That answer was reached twice. Convergence was withdrawn once in favour of a
+one-shot vault export/import to a directory, and then reinstated; the section
+[Why convergence came back](#why-convergence-came-back) is the argument for the
+reinstatement, and it is the one place in this file that reasons about the
+withdrawal. Export and import are **deleted** — nothing below advocates them.
 
 ## Problem
 
@@ -40,13 +29,20 @@ until a bounded amendment allowed a **user-owned** medium.
 Git wins for a developer audience: they already have git credentials, and we get
 diff/history/merge for free.
 
-## Why a separate workspace + export/import (not commit the live dir)
+## Why a separate working tree (not commit the live dir)
 
 `coffer.db` is binary and unmergeable, and the live runtime dir mixes truth
-(knowledge/memory files) with rebuildable/local state (db, logs, daemon.json).
-A dedicated workspace with a text export keeps git diffs meaningful and lets
-SQLite remain the local system of record. Knowledge/memory are already files, so
-they mirror directly; config and credentials are projected to text.
+(knowledge and skill files) with rebuildable or machine-local state (the db,
+logs, `daemon-config.json`). A dedicated working tree that the vault is
+serialized *into* keeps git diffs meaningful and lets SQLite remain the local
+system of record. Knowledge and skills are already files, so they mirror
+directly; config and credentials are projected to text.
+
+This is the part of the 2026-06 research that is unchanged and load-bearing.
+What it was originally built to serve — a one-shot export to a directory and an
+import back — is gone, and the tree serves a converge round instead: the same
+serialization, committed as a base git can three-way-merge against. The
+argument for the tree never depended on the verb.
 
 ## Why ciphertext-only + out-of-band key
 
@@ -56,12 +52,27 @@ remote holds nothing usable. The one-time per-machine key bootstrap is the
 accepted cost; until the key is present, ciphertext is reported as locked rather
 than silently failing.
 
-## Why manual default + opt-in auto
+## Why convergence is automatic, not opt-in
 
-A single user is usually on one machine at a time, so manual `coffer sync` is
-predictable and conflict-light. Auto-sync (debounced push + interval pull) is
-offered for hands-off convergence but stays opt-in to avoid surprise background
-network and surprise conflicts.
+The 2026-06 research reached the opposite answer — manual by default, auto as
+an opt-in — on the reasoning that a single user is on one machine at a time, so
+a round taken by hand is predictable and conflict-light. That was rejected once
+convergence became the point of the feature rather than a convenience on top of
+it: a vault that only converges when someone remembers to ask is the island
+problem with an extra step, and two machines that disagree because nobody ran a
+command is exactly the outcome the spec exists to prevent.
+
+So the worker converges on the remote's interval as soon as a remote is
+configured and enabled, which a configured remote is by default. The knob that
+remains is the interval, and `enabled` is the off switch. `coffer sync` is a
+command **group**, not a command — `coffer sync now` is the manual round, and
+it is a way to not wait for the timer rather than the only way a round happens.
+
+The surprises the opt-in was meant to avoid are handled where they occur
+rather than by withholding the feature: background network is confined to
+`git fetch` / `git push` against the user's own remote, an unchanged vault
+makes no commit at all, a conflict stops the round with the vault untouched,
+and an oversized deletion is held for confirmation in both directions.
 
 ## Determinism
 
@@ -69,10 +80,10 @@ Clean merges depend on stable serialization: sorted keys, normalized timestamps,
 and excluding machine-local fields (`id`, `created_at`, `updated_at`). This is
 unit-tested because it is load-bearing for the whole merge story.
 
-## 2026-09-13 — why convergence came back
+## Why convergence came back
 
-Appended after the 0.4.0 withdrawal was reversed. Three findings drove it, and
-each is checkable against the repository rather than remembered.
+The reinstatement rests on three findings, and each is checkable against the
+repository rather than remembered.
 
 ### 1. The 2026-07-10 incident was a defect in the export, not a refutation of convergence
 
@@ -163,13 +174,13 @@ back within the same week, for a strictly weaker purpose.
   obvious; the publish side is what stops a wiped vault from exporting its own
   loss — the 2026-07-10 shape reached from the other end.
 
-### What survives from the 2026-06 research, and what is reversed
+### What survives from the earlier research, and what is reversed
 
-Survives: git as the transport, ciphertext-only credentials with an out-of-band
-key, the determinism requirement, and path portability against each machine's
-home.
+Survives: git as the transport, a separate working tree the vault serializes
+into, ciphertext-only credentials with an out-of-band key, the determinism
+requirement, and path portability against each machine's home.
 
 Reversed: **"manual default + opt-in auto"** — convergence is the point, so the
-worker runs as soon as a remote is configured. And **"a separate workspace +
-export/import"** is half-reversed: the separate workspace is exactly right and
-stays, while the export/import verb it was built to serve is deleted.
+worker runs as soon as a remote is configured and enabled. And the
+**export/import verb** the working tree was originally built to serve, which is
+deleted; the tree it needed is not.

@@ -1,23 +1,23 @@
 """Channel pairing identity as a synced state area (spec vault-sync, spec channels).
 
 A pairing says which chat on the platform belongs to the owner: the chat id,
-the sender id the owner gate checks, the name to show, and the agent that chat
-has stuck to. Every one of those is a fact about the **platform**, not about
-the machine holding the row — which is why this area exists at all. Rebind a
-channel from the laptop to the desktop and the desktop needs the same answers;
-without them the owner re-pairs from their phone every time a channel moves,
-and a rebind is supposed to be one click.
+the sender id the owner gate checks, and the name to show. Every one of those
+is a fact about the **platform**, not about the machine holding the row — which
+is why this area exists at all. Rebind a channel from the laptop to the desktop
+and the desktop needs the same answers; without them the owner re-pairs from
+their phone every time a channel moves, and a rebind is supposed to be one
+click.
 
-The area was removed once, on the reasoning that channels no longer travelled
-so there was no rebinding left to save. Channels travel again (spec channels
-``## Where a channel runs``), so the premise is gone and the area is back.
+Channels travel between machines (spec channels ``## Where a channel runs``),
+which is what makes the pairing worth publishing rather than re-deriving.
 
-**The conversation pointer never travels.** ``active_conversation_id`` names a
-row in this machine's conversation store, and conversations are deliberately
-not synced (spec vault-sync ``## What does not sync``) — a pointer published
-here would arrive on the other machine naming a conversation that does not
-exist there. So an incoming pairing keeps whatever pointer this machine already
-had, and a brand-new one starts with none.
+**What a conversation is doing never travels.** The conversation a chat is
+driving, and the agent a thread has stuck to, live in
+``channel_thread_conversations`` — per thread, on this machine, and not in this
+area. Both name things local to one machine (a conversation row; an agent that
+machine has installed), so publishing either would hand the other end an answer
+it cannot use. A pairing arriving here therefore changes who the chat is, never
+what it is in the middle of.
 """
 
 from __future__ import annotations
@@ -55,11 +55,9 @@ class ChannelPeerSyncState:
         self._resources = resources
         self._peers = peers
 
-    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
+    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
         docs: list[tuple[str, dict[str, object]]] = []
-        owned: list[str] = []
         for resource in await self._resources.list(kind="channel"):
-            owned.append(f"{resource.name}/")
             for peer in await self._peers.list_by_resource(resource.id):
                 docs.append(
                     (
@@ -69,12 +67,11 @@ class ChannelPeerSyncState:
                             "chat_id": peer.chat_id,
                             "display_name": peer.display_name,
                             "sender_id": peer.sender_id,
-                            "preferred_agent": peer.preferred_agent,
                             "paired_at": peer.paired_at.isoformat(),
                         },
                     )
                 )
-        return docs, owned
+        return docs
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
         errors: list[tuple[str, str]] = []
@@ -97,18 +94,13 @@ class ChannelPeerSyncState:
                 errors.append((path, f"channel '{channel}' is not registered here yet"))
                 continue
             try:
-                existing = await self._peers.get_by_chat(resource_id, chat_id)
                 await self._peers.upsert(
                     ChannelPeer(
                         resource_id=resource_id,
                         chat_id=chat_id,
                         display_name=str(doc.get("display_name") or ""),
                         paired_at=_parse_time(doc.get("paired_at")),
-                        active_conversation_id=(
-                            existing.active_conversation_id if existing else None
-                        ),
                         sender_id=_opt_str(doc.get("sender_id")),
-                        preferred_agent=_opt_str(doc.get("preferred_agent")),
                     )
                 )
             except Exception as e:

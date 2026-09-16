@@ -1,7 +1,7 @@
 """Contract test: the app's generated OpenAPI for the channel routes
 structurally matches specs/channels/contracts/api.openapi.yaml.
 
-Mirrors test_chat_openapi.py: every path declared in the 009 yaml must be
+Mirrors test_chat_openapi.py: every path declared in the channels yaml must be
 served, and every schema component must exist with at least the yaml's
 required fields. Drift means one side must be realigned.
 """
@@ -52,7 +52,7 @@ def test_channel_path_and_method_exists(
     path: str,
     method: str,
 ) -> None:
-    """Every path+method declared in the 009 OpenAPI spec must exist in the
+    """Every path+method declared in the channels OpenAPI contract must exist in the
     generated schema."""
     paths = generated_schema.get("paths", {})
     assert path in paths, (
@@ -72,7 +72,7 @@ def test_every_yaml_path_is_implemented(
     silently drift from the implementation."""
     generated_paths = generated_schema.get("paths", {})
     yaml_paths = spec_doc.get("paths") or {}
-    assert yaml_paths, "009 yaml declares no paths — wrong file?"
+    assert yaml_paths, "the channels yaml declares no paths — wrong file?"
     for path, methods in yaml_paths.items():
         assert path in generated_paths, (
             f"Path '{path}' is declared in api.openapi.yaml but not served by the app."
@@ -108,7 +108,7 @@ def test_channel_schema_required_fields(
     schema_name: str,
     required_fields: set[str],
 ) -> None:
-    """Every schema component in the 009 spec must exist in the generated
+    """Every schema component in the channels contract must exist in the generated
     schemas with at least the yaml's required fields."""
     components = generated_schema.get("components", {}).get("schemas", {})
     assert schema_name in components, (

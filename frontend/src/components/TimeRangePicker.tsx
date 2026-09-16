@@ -15,8 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn, formatLocalDateTime } from "@/lib/utils";
 import { TIME_PRESETS, parseLocalDate } from "@/lib/timeRange";
 
-export { TIME_PRESETS };
-
 export interface TimeRangeValue {
   /** A TIME_PRESETS key, or "custom" when from/to are set. */
   timeRange: string;

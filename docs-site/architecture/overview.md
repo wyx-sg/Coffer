@@ -1,12 +1,12 @@
 # System Overview
 
 ::: tip Mental model
-Coffer is a local-first AI agent vault: a long-lived local daemon that holds a developer's accumulated AI assets on-device and lets any AI agent (Claude Code, Codex, future ones) read and contribute through one safe interface. The vault spans five resource kinds — `mcp_server`, `agent`, `skill`, `knowledge`, and `channel` — over a kind-agnostic Resource framework, plus cross-cutting features (the turn platform that drives your registered coding agents behind those channels, and one-shot vault export/import). The MCP gateway is one of those kinds: register an upstream server once and every MCP client connects to the same daemon and sees the same namespaced tools, with names like `filesystem__read_file`. All state lives locally in SQLite (secrets as Fernet ciphertext), with a single master key in a `0600` file beside the DB (OS keychain opt-in). The daemon binds to `127.0.0.1` only — nothing is reachable from outside your machine.
+Coffer is a local-first AI agent vault: a long-lived local daemon that holds a developer's accumulated AI assets on-device and lets any AI agent (Claude Code, Codex, future ones) read and contribute through one safe interface. The vault spans **seven** resource kinds — `mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `provider`, and `channel` — over a kind-agnostic Resource framework, plus cross-cutting features (the turn platform that drives your registered coding agents behind those channels, and bidirectional convergence of the vault with a git remote you own). The MCP gateway is one of those kinds: register an upstream server once and every MCP client connects to the same daemon and sees the same namespaced tools, with names like `filesystem__read_file`. All state lives locally in SQLite (secrets as Fernet ciphertext), with a single master key in a `0600` file beside the DB (OS keychain opt-in). The daemon binds to `127.0.0.1:8000` only — a fixed port it refuses to start without — so nothing is reachable from outside your machine.
 :::
 
 ## System topology
 
-The diagram below shows how the pieces fit together. The daemon owns all vault state across the six resource kinds; for the MCP gateway kind, clients do not connect to upstream servers directly — they connect to the Coffer daemon, which manages upstream connections on their behalf. A separate callback listener process serves signed channel webhooks when a SeaTalk channel is enabled.
+The diagram below shows how the pieces fit together. The daemon owns all vault state across the seven resource kinds; for the MCP gateway kind, clients do not connect to upstream servers directly — they connect to the Coffer daemon, which manages upstream connections on their behalf. A separate callback listener process serves signed channel webhooks when a SeaTalk channel is enabled, and a native desktop shell hosts the same web UI in a window.
 
 ```mermaid
 flowchart TD
@@ -20,11 +20,12 @@ flowchart TD
         CLI["coffer CLI\n(short-lived)"]
         SHIM["coffer-mcp-shim\n(per-client session)"]
         WEBUI["Web UI\n(browser, served by the daemon)"]
-        DAEMON["coffer-daemon\nFastAPI · auto-port\n/api/v1  /mcp\n5 kinds + chat/channels/export"]
+        APP["Coffer.app\n(Tauri shell, same UI build)"]
+        DAEMON["coffer-daemon\nFastAPI · 127.0.0.1:8000\n/api/v1  /mcp\n7 kinds + chat/channels/sync"]
         CB["coffer callback listener\n(daemon-spawned child)\nPOST /seatalk/{channel}"]
         DB[("SQLite\n~/.coffer/coffer.db")]
         MK[("master.key 0600\nor OS Keychain (opt-in)")]
-        FILES[("Files-as-truth\n~/.coffer/{knowledge,skills}")]
+        FILES[("Files-as-truth\n~/.coffer/{knowledge,memory,skills}")]
     end
 
     subgraph upstream["Upstream MCP Servers"]
@@ -40,6 +41,8 @@ flowchart TD
     CLI -->|"loopback HTTP\nX-Coffer-Token"| DAEMON
     WEBUI -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
     DAEMON -->|"serves built UI\nsame-origin static files"| WEBUI
+    APP -->|"REST /api/v1\nX-Coffer-Token"| DAEMON
+    APP -->|"detect-or-spawn"| DAEMON
     DAEMON --- DB
     DAEMON --- MK
     DAEMON --- FILES
@@ -55,18 +58,20 @@ flowchart TD
 
 | Component                      | Type                                             | Role                                                                                                                                                                                                                                                                                                                  |
 | ------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `coffer-daemon`                | Long-lived process                               | FastAPI service on `127.0.0.1:<auto-port>`. Owns all state across the five resource kinds and the cross-cutting features (chat, channels, export/import). Single SQLite writer.                                                                                                                                                 |
-| Resource kinds                 | Daemon-hosted abstraction                        | Five kinds over one kind-agnostic Resource framework: `mcp_server` (gateway upstreams), `agent` (registered coding agents), `skill` (master skill bundles delivered into agents), `knowledge` (the files-as-truth + SQLite-retrieval store of entries and ingested documents), `channel` (Telegram/SeaTalk bindings). |
+| `coffer-daemon`                | Long-lived process                               | FastAPI service on `127.0.0.1:8000` — a fixed port it refuses to start without, changeable with `coffer daemon port set`. Owns all state across the seven resource kinds and the cross-cutting features (chat, channels, sync). Single SQLite writer.                                                                                                                                                 |
+| Resource kinds                 | Daemon-hosted abstraction                        | Seven kinds over one kind-agnostic Resource framework: `mcp_server` (gateway upstreams), `agent` (registered coding agents), `skill` (master skill bundles delivered into agents), `knowledge` (the files-as-truth store of entries and ingested documents), `memory` (facts aggregated out of the agents' own native memory), `provider` (vendor endpoints and their keys), `channel` (Telegram/SeaTalk bindings). |
 | Chat / channels / sync | Cross-cutting daemon features                   | The turn platform running Claude Code/Codex agents (spec channels); messaging channels relaying chat from IM apps (ADR channel-adapter-framework); bidirectional convergence of the vault with a user-owned git remote (ADR vault-sync). Not kinds — they span the kinds.                                                                               |
 | `coffer` callback listener     | Daemon-spawned child process                     | Serves only signed channel webhooks (`POST /seatalk/{channel}`) on a loopback port behind a user-run tunnel; verifies the SeaTalk signature and forwards events to the daemon. Runs while a SeaTalk channel is enabled (ADR channel-adapter-framework).                                                                                     |
 | `coffer-mcp-shim`              | Short-lived process (one per MCP client session) | Bridges MCP client stdio ↔ daemon HTTP/SSE. Detects a running daemon or spawns one.                                                                                                                                                                                                                                   |
 | `coffer` CLI                   | Short-lived child process                        | User-facing management commands. Calls the daemon over loopback HTTP.                                                                                                                                                                                                                                                 |
 | Web UI                         | Browser process                                  | Management interface. In production the daemon serves the built UI itself, as static files at its own loopback origin — same-origin with the REST API; the daemon injects its live token into the `index.html` it serves, so any page it serves is authenticated; `coffer open` only resolves the daemon's current port and launches the browser there. In development, the Vite dev server at `http://localhost:5173` serves it instead.                                                                                                                                                   |
+| `Coffer.app` (desktop shell)   | Native app process (Tauri 2) + webview            | A second host for the *same* `frontend/dist`, loaded as a local asset rather than fetched from the daemon: Dock icon, Cmd-Tab entry, resident tray (open / restart daemon / quit), detect-or-spawn of the daemon at launch, and an IPC handshake that hands the page the daemon's base URL and token. Shipped as the `.dmg`, which embeds all four binaries. Reimplements nothing the daemon exposes over HTTP (ADR desktop-shell-over-a-shared-frontend). |
 | REST API (`/api/v1`)           | HTTP surface on daemon                           | Management plane: CRUD for resources, audit log, settings. Token + CORS authenticated.                                                                                                                                                                                                                                |
 | MCP endpoint (`/mcp`)          | HTTP/SSE surface on daemon                       | MCP JSON-RPC endpoint. This is what the shim connects to. Forwards namespaced tool calls to upstream subprocesses.                                                                                                                                                                                                    |
 | SQLite (`~/.coffer/coffer.db`) | Persistent store                                 | Control-plane state: resource registrations, capability preferences, audit log, retention policies, and secrets as Fernet ciphertext in the `credentials` table. WAL mode, single writer.                                                                                                                             |
 | `master.key` / OS Keychain     | Master-key store                                 | The single Fernet master key. Default: a `0600` `~/.coffer/master.key` file beside the DB; OS keychain is an opt-in. Secrets are decrypted with it and materialized into the upstream env / headers at spawn time.                                                                                                    |
-| `~/.coffer/daemon.json`        | Discovery file (mode 0600)                       | PID + port + token. Written by the daemon on startup; read by shim and CLI to locate a running daemon.                                                                                                                                                                                                                |
+| `~/.coffer/daemon.json`        | Discovery file (mode 0600)                       | PID + port + token. Runtime state: written by the daemon on startup, unlinked on exit, read by the shim, the CLI and the desktop shell to locate a running daemon. |
+| `~/.coffer/daemon-config.json` | Pre-database settings file (mode 0600)           | The one piece of Coffer configuration that cannot live in SQLite: the port, which is chosen before the database is opened and before migrations have created a table to read it from. Configuration — goes *in*, and survives shutdown. Read and written only by `coffer daemon port`. |                                                                                                                                                                                                              |
 
 ## Authentication model
 
@@ -78,13 +83,22 @@ Every persistent artifact lives in one directory:
 
 ```
 ~/.coffer/
-├── daemon.json          # discovery: PID + port + token (0600)
-├── coffer.db            # SQLite: control-plane state + rebuildable retrieval index
+├── daemon.json          # runtime state: PID + port + token (0600); unlinked on exit
+├── daemon-config.json   # configuration read BEFORE the DB opens: the port (0600)
+├── coffer.db            # SQLite: control-plane state (no knowledge, no index)
 ├── master.key           # Fernet master key (0600; keychain opt-in moves it out)
-├── knowledge/           # knowledge files-as-truth, one dir per scope:
-│                        #   <scope>/{notes,docs,.raw,.history}/
+├── machine-id           # this machine's stable identity for sync
+├── knowledge/           # knowledge files-as-truth, one dir per collection:
+│                        #   <collection>/ + hidden .raw/ and .history/
+├── memory/              # facts aggregated out of the agents' own native memory
 ├── skills/              # canonical master skill store
-├── bin/                 # co-located coffer binaries (daemon/shim/CLI)
+├── sync/                # the git working tree the vault converges through
+├── workspace/           # the default working directory a chat turn runs in
+├── vendor/              # SDKs Coffer does not bundle (the SeaTalk client library)
+├── channel-media/       # attachments in flight between an IM channel and an agent
+├── cache/agent/         # derived, rebuildable agent data (transcript summaries)
+├── state/               # one-shot markers for things shown to the user once
+├── bin/                 # co-located coffer binaries, one dir per version + symlinks
 ├── logs/
 │   ├── daemon.log       # structured JSON logs from the daemon
 │   ├── upstream/        # one file per upstream MCP server's stderr
@@ -106,7 +120,8 @@ The pages that follow each explore one slice of the system in depth:
 | [Surfaces](/architecture/surfaces)                     | REST API, MCP endpoint, CLI, stdio shim, Web UI                           |
 | [Request lifecycle](/architecture/request-lifecycle)   | End-to-end trace of a tool call from client to upstream                   |
 | [Persistence](/architecture/persistence)               | SQLite schema, WAL, Alembic, JSON field handling                          |
-| [Security](/architecture/security)                     | Token auth, encrypted credential store, SSRF guard, loopback enforcement  |
+| [Security](/architecture/security)                     | Token auth, encrypted credential store, outbound paths, loopback enforcement |
+| [Audit & accountability](/architecture/audit)          | The audit log, the invocation log, and what earns a row in either        |
 | [Observability](/architecture/observability)           | Structured logging, trace IDs, audit log, retention                       |
 | [Distribution](/architecture/distribution)             | Package layout, install, platform support                                 |
 

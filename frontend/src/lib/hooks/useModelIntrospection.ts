@@ -91,15 +91,3 @@ export function useTestConnection() {
     mutationFn: (p: ProviderProbe) => post<TestResult>("/models/test-connection", p),
   });
 }
-
-/** Detect an endpoint's wire protocol so the dialog needs no manual type pick.
- * Returns "anthropic" | "openai" | "ollama" | "unknown" (unknown ⇒ user picks). */
-export function useDetectProtocol() {
-  return useMutation({
-    mutationFn: (p: { base_url?: string | null; secret_value?: string | null }) =>
-      post<{ protocol: string }>("/models/detect-protocol", {
-        base_url: p.base_url ?? null,
-        secret_value: p.secret_value ?? null,
-      }),
-  });
-}

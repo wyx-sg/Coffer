@@ -118,8 +118,7 @@ def wire_memory_kind(
 
     # Nothing in this layer syncs: the whole tree under ``~/.coffer/memory/``
     # is derived from the agents installed on THIS machine and is rebuilt per
-    # machine (spec vault-sync "What does not sync"). The overrides that used
-    # to be the one exception are gone with the surface that recorded them.
+    # machine (spec vault-sync "What does not sync").
 
     recall_service = RecallService(memory=service)
     register_recall_tool(builtin_tools, recall_service=recall_service)

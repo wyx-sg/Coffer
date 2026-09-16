@@ -67,12 +67,6 @@ class FakeConversationRepo:
         conv = self._store[conversation_id]
         self._store[conversation_id] = dataclasses.replace(conv, updated_at=updated_at)
 
-    async def set_model(self, conversation_id: str, model_id: str | None) -> Conversation:
-        conv = self._store[conversation_id]
-        updated = dataclasses.replace(conv, model_id=model_id)
-        self._store[conversation_id] = updated
-        return updated
-
     async def set_archived(
         self, conversation_id: str, archived_at: datetime | None
     ) -> Conversation:

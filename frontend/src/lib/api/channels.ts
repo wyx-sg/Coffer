@@ -64,13 +64,11 @@ export type ChannelStatus = Omit<Schemas["ChannelStatusOut"], "callback"> & {
 };
 
 /** The paired owner of a channel (null while unpaired). */
-export type ChannelPeer = Schemas["ChannelPeerOut"];
 
 /**
  * Something configured on the channel that the platform will not actually
  * honour. Empty is the healthy case; a diagnostic always names its fix.
  */
-export type ChannelDiagnostic = Schemas["ChannelDiagnosticOut"];
 
 export type PairingCode = Schemas["PairingCodeOut"];
 

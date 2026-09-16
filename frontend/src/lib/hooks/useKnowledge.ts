@@ -12,7 +12,6 @@ import { useToast } from "@/components/ui/toast";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import {
   createCollection,
-  deleteFile,
   getFile,
   getTree,
   listCollections,
@@ -63,25 +62,6 @@ export function useKnowledgeFile(path: string | null) {
     queryKey: knowledgeFileKey(path ?? ""),
     queryFn: () => getFile(path as string),
     enabled: Boolean(path),
-  });
-}
-
-/**
- * Delete one file. The detail view of the deleted path is REMOVED rather than
- * invalidated, so a stale preview can't refetch a 404, and the whole tree is
- * invalidated because the parent level's listing and file counts both change.
- */
-export function useDeleteKnowledgeFile() {
-  const qc = useQueryClient();
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: (path: string) => deleteFile(path),
-    onSuccess: (_data, path) => {
-      qc.removeQueries({ queryKey: knowledgeFileKey(path) });
-      void qc.invalidateQueries({ queryKey: knowledgeKey });
-    },
-    onError: (error) => toast.error(translateApiError(t, error)),
   });
 }
 

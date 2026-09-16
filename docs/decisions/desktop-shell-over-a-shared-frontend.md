@@ -1,11 +1,11 @@
 # The Desktop Shell Returns, Owning Only What a Browser Cannot Do
 
-- **Status:** Proposed
-- **Date:** 2026-09-12
-- **Deciders:** Yuxing Wu
-- **Spec:** [mcp-gateway](../../specs/mcp-gateway/spec.md) FR-024 / FR-028 / FR-029 … FR-032
-- **Supersedes in part:** the "A desktop shell" explicit non-goal recorded in the roadmap on 2026-09-09
-- **Related:** [The Daemon Serves Its Token in the Page](./daemon-serves-the-token-in-the-page.md) (which this amends — its "there is no third case" now has one), [Detect-or-Spawn](./daemon-detect-or-spawn.md), [PyInstaller Distribution](./distribution-pyinstaller.md), [The Daemon Proxies OS File Actions](./daemon-proxies-os-file-actions.md)
+**Status**: Accepted
+**Date**: 2026-09-12
+**Deciders**: Yuxing Wu
+**Spec**: [mcp-gateway](../../specs/mcp-gateway/spec.md) FR-024 / FR-028 / FR-029 … FR-032
+**Supersedes in part**: the "A desktop shell" explicit non-goal recorded in the roadmap on 2026-09-09
+**Related**: [The Daemon Serves Its Token in the Page](./daemon-serves-the-token-in-the-page.md) (which this amends — its "there is no third case" now has one), [Detect-or-Spawn](./daemon-detect-or-spawn.md), [PyInstaller Distribution](./distribution-pyinstaller.md), [The Daemon Proxies OS File Actions](./daemon-proxies-os-file-actions.md)
 
 ## Context
 

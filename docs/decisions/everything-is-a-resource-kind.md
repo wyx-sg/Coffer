@@ -1,9 +1,15 @@
 # Information Architecture — Everything Is a Resource Kind
 
-**Status**: Amended (2026-05-30, 2026-06-11) — see [Amendment](#amendment-2026-05-30) and [Amendment: frontend kind UI](#amendment-2026-06-11--frontend-kind-ui)
+**Status**: Accepted
 **Date**: 2026-05-28
 **Deciders**: Yuxing Wu
 **Related**: [Resource Framework Upfront](resource-framework-upfront.md), spec `ui-shell`
+
+The live decision is the one below **as narrowed by both amendments** at the end
+of this file: every *asset* is a resource kind under **Resources**, consumers
+(agents) and cross-cutting tooling (System) are their own role-based groups, and
+a kind chooses at design time between the generic kind registry and a bespoke
+page-set. Read the amendments as part of the Decision, not as history.
 
 ## Context
 
@@ -111,11 +117,12 @@ What changed:
     (`/resources` is kept as a legacy redirect for old bookmarks).
   - **System** — cross-cutting tooling: the **Audit log** (`/audit`) and
     **Settings** (`/settings`).
-- **The audit log lives at `/audit`, not `/observability`.** The shipped
-  router maps `/audit` → the audit-log page and keeps `/observability` as a
-  legacy redirect to `/audit`. **Observability** (system health / metrics) is
-  a DISTINCT, reserved _future_ surface — it is not the audit log and is not
-  in the sidebar yet.
+- **The audit log is a System entry, not an "Observability" one.** It was
+  first routed at `/audit`, with `/observability` kept as a legacy redirect;
+  it now lives under **Activity** (`/activity`), which carries the audit log,
+  the MCP invocation log and the daemon log as three tabs. The point the
+  amendment made stands: the audit log is a concrete System surface, and
+  "observability" was never a second name for it.
 - **List surfaces converge on one shared, searchable, paginated table.** All
   list views use a single `DataTable` component (built-in search / filter /
   pagination) where a row click opens that item's detail page and row actions
@@ -124,7 +131,12 @@ What changed:
 - **Future groups/items** (Chat, Channels, Skills, Knowledge, Memory,
   Observability) are planned but not shown today. The "no soon placeholders"
   policy from the original decision still holds: the sidebar documents the
-  role-based structure but adds no dead nav entries.
+  role-based structure but adds no dead nav entries. _Since shipped, and each
+  landed in exactly the role group this amendment predicted_: Chat joined
+  Agents, and Skills, Knowledge, Memory, Channels and Model providers joined
+  Resources. Observability is the one entry that never became a surface — the
+  logs it would have shown are Activity's three tabs — so nothing is reserved
+  for it.
 
 What survives unchanged from the original decision: the kind-agnostic
 Resource framework is still the only abstraction for _assets_; new resource

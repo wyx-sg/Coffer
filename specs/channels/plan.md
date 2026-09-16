@@ -2,20 +2,20 @@
 
 ## Summary
 
-Add a `channel` resource kind that connects IM accounts (Telegram, SeaTalk)
-to the turn platform this spec now owns. The channel core (pairing, routing, commands,
+A `channel` resource kind connects IM accounts (Telegram, SeaTalk)
+to the turn platform this spec owns. The channel core (pairing, routing, commands,
 queueing, rendering policy, notify) is kind-agnostic over
-a small adapter protocol; Telegram and SeaTalk are the first two adapters.
+an adapter protocol; Telegram and SeaTalk are its two adapters.
 A separate callback-listener process gives SeaTalk its webhook ingress, per
-the constitution's public-surface rule. The frontend gains a Channels page in
-the Agents nav group.
+the constitution's public-surface rule. The frontend carries a Channels page in
+the Agents nav group and a Chat page onto the same conversations.
 
-SeaTalk later gained a second inbound transport (FR-071): a channel on
+SeaTalk has a second inbound transport (FR-071): a channel on
 `delivery: "websocket"` holds one outbound connection instead, so it needs
 neither the listener nor a tunnel nor a signature. It is supervised inside the
 daemon — a per-channel connector reconciled the way the managed tunnel is — over
 the platform's own client library, which the operator supplies in
-`~/.coffer/vendor` and which this repository never vendors or declares (FR-072,
+`~/.coffer/vendor` and which this repository never vendors or declares (FR-081,
 [SeaTalk Inbound Over WebSocket](../../docs/decisions/seatalk-websocket-inbound.md)).
 Both transports meet at the same ingest entry point, so nothing downstream of
 ingress is aware of the difference.
@@ -31,13 +31,20 @@ ingress is aware of the difference.
   exist in channel config, so the SSRF guard (used for provider-URL checks) is not in this
   path.
 - **Adapter runtime** — a reconciler task in the daemon (RetentionWorker
-  pattern): every ~2 s, diff enabled channel resources against running
-  adapter tasks; start/stop/restart on enable, disable, config change,
-  delete. No new lifecycle hooks in the resource framework.
-- **Credential materialization** — `CredentialResolver` moves from
-  `application/mcp/` to shared `application/credentials/resolver.py` (second
-  consumer; the constitution's extraction rule). MCP imports update; behavior
-  identical.
+  pattern): every ~2 s it asks `application/channel/wanted.py` which channels
+  are this machine's to run and diffs that answer against the running adapter
+  tasks, starting, stopping and restarting on enable, disable, config change and
+  delete. The answer is **three gates**, not one — `enabled`, then the machine
+  binding (`runs_on` names this machine, FR-080), then scope (the channel may
+  drive its own `default_agent`, FR-079) — and they are asked in that order so a
+  channel that belongs to another machine is never weighed against this one's
+  agent registry. The gate also carries the two things a reader needs out of it:
+  each live channel's scope rewritten into agent keys, and a memory of which
+  bindings it has already reported, so "bound elsewhere" is logged once instead
+  of every tick. No new lifecycle hooks in the resource framework.
+- **Credential materialization** — `CredentialResolver` lives in shared
+  `application/credentials/resolver.py` rather than under `application/mcp/`,
+  because channel is its second consumer (the constitution's extraction rule).
 
 ## Constitution Check
 
@@ -65,72 +72,146 @@ ingress is aware of the difference.
 backend/coffer/
 ├── domain/channel/
 │   ├── config.py        # ChannelConfig discriminated union + ref validation
-│   ├── envelopes.py     # InboundMessage, ChannelCapabilities
-│   └── signing.py       # seatalk_signature(body, secret) — pure hashlib
+│   ├── envelopes.py     # InboundMessage/Callback/Lifecycle/Stop, ChannelCapabilities
+│   ├── commands.py      # COMMAND_ROSTER — the one list the menu, the help
+│   │                    #   text and the FR-064 privacy flag all render from
+│   ├── dedup.py         # seen-event ids (FR-039)
+│   ├── rich_content.py  # markdown → the platform's own rich format (FR-061)
+│   ├── media_retention.py # which media files are past the prune window
+│   ├── signing.py       # seatalk_signature(body, secret) — pure hashlib
+│   └── errors.py
 ├── application/
-│   ├── credentials/resolver.py   # CredentialResolver (hoisted from mcp)
-│   └── channel/
-│       ├── ports.py     # ChannelAdapter protocol + AdapterCallbacks
+│   ├── credentials/resolver.py   # CredentialResolver (kind-agnostic, shared)
+│   └── channel/         # the kind-agnostic core, ~30 modules, grouped:
+│       ├── ports.py     # ChannelAdapter + LiveText protocols, AdapterCallbacks,
+│       │                #   the peer/thread repo ports, catalogue + context ports
 │       ├── kind.py      # make_channel_kind (redactor, ref extractor, on_delete)
-│       ├── pairing.py   # PairingManager (codes, TTL, attempt bounds)
+│       ├── wanted.py    # the three gates deciding which channels run here
+│       ├── runtime.py / runtime_supervision.py / supervision_ports.py
+│       │                # the reconcile loop, and the listener / tunnel /
+│       │                #   websocket connectors it keeps in step
 │       ├── service.py   # ChannelService: pairing API, notify, status, peers
-│       ├── inbound.py   # InboundProcessor: owner gate, commands, queueing,
-│       │                #   conversation mapping, turn driving
-│       ├── runtime.py   # ChannelRuntime: reconciler loop + listener lifecycle
-│       │                #   gated by the channel's machine binding
-│       ├── wanted.py   # the three gates deciding which channels run here:
-│       │                #   enabled, the machine binding, scope
-│       └── sync_state.py # ChannelPeerSyncState: pairing identity as a
-│                        #   synced state area (never the conversation pointer)
-├── infrastructure/channel/
-│   ├── persistence.py   # ChannelPeerModel + repo
-│   ├── render.py        # markdown → telegram HTML / plain; chunking
-│   ├── telegram.py      # TelegramAdapter: long poll, send/edit, buttons
-│   ├── seatalk.py       # SeaTalkAdapter: token cache, send, cards, typing
-│   └── listener_spawn.py# spawn/stop/health of the callback listener child
+│       ├── pairing.py / callback_probe.py
+│       ├── inbound.py / inbound_events.py
+│       │                # owner gate, dedup, command dispatch, session registry
+│       ├── commands.py / agent_routing.py / model_switch.py / effort_switch.py
+│       │                # the slash commands and the switches they perform
+│       ├── selection_cards.py / card_delivery.py / ephemeral.py
+│       │                # FR-018 cards, their in-place rewrite, FR-064 delivery
+│       ├── agent_vocabulary.py
+│       │                # the one translation between scope's agent RESOURCE
+│       │                #   names and the turn platform's agent KEYS
+│       ├── conversation_ops.py / conversation_spec.py
+│       ├── turn_driver.py / turn_render.py / turn_progress.py /
+│       │   turn_text.py / turn_media.py
+│       │                # one message → one turn → the reply, rendered live
+│       ├── document_save.py / save_ports.py   # `/save` (spec knowledge FR-036)
+│       └── sync_state.py # pairing identity as a synced state area
+├── infrastructure/channel/    # the transports, ~30 modules, grouped:
+│   ├── persistence.py   # ChannelPeerModel, ChannelThreadConversationModel, repos
+│   ├── render.py        # markdown → telegram HTML / seatalk markdown; chunking
+│   ├── live_text.py     # the shared live-surface plumbing both transports use
+│   ├── telegram*.py     # transport, poll loop, updates, album debounce, media,
+│   │                    #   parse, send, cards, drafts, rich text, profile,
+│   │                    #   capability probe
+│   ├── seatalk*.py      # transport, token cache, send, cards, typing, media,
+│   │                    #   history/thread fetch, parse, stream text, the
+│   │                    #   websocket connector and its controller, SDK loader
+│   ├── listener_spawn.py / tunnel_spawn.py
+│   │                    # spawn/stop/health of the callback listener child and
+│   │                    #   of the managed `cloudflared` child
+│   └── media_retention.py # the media dir's 30-day prune (FR-033)
 └── surfaces/
     ├── callback/        # the listener process (separate uvicorn app)
     │   ├── app.py       # POST /seatalk/{channel}: challenge echo, verify,
     │   │                #   forward to daemon over loopback
     │   └── __main__.py  # python -m coffer.surfaces.callback
     ├── http/
-    │   ├── channel_routes.py   # pairing-code, status, notify, events ingest
-    │   └── channel_wiring.py   # wire_channel_kind(): kind, service, runtime
-    └── cli/channel_cmd.py      # list/register/pair/status/notify
+    │   ├── channel_routes.py   # pairing-code, status, notify, callback-test,
+    │   │                       #   events ingest
+    │   ├── channel_wiring.py   # wire_channel_kind(): kind, service, runtime
+    │   ├── chat/               # the turn platform's own routes (section E) and
+    │   │                       #   the Chat page's (section G)
+    │   └── chat_wiring.py / chat_provider_wiring.py
+    └── cli/channel_cmd.py      # list/register/bind/pair/status/notify
 ```
 
 Key seams:
 
 - `ChannelAdapter` protocol: `capabilities`, `start(callbacks)`, `stop()`,
-  `send_text`, `edit_text`, `delete_message`,
-  `send_typing`. Optional surfaces are declared by
-  `ChannelCapabilities`; the core consults capabilities, never adapter type.
-- `AdapterCallbacks` (given to adapters): `on_message(InboundMessage)`.
-  Adapters never import chat modules.
-- The SeaTalk adapter has no poll loop; the daemon's events-ingest route
-  feeds `handle_event` on the adapter via the runtime's registry.
+  `send_text`, `open_live_text`, `edit_text`, `update_card`, `delete_message`,
+  `send_typing`, `set_reaction`, `send_media`. Everything past `stop()` is
+  optional and declared by `ChannelCapabilities` — `supports_live_text`,
+  `supports_edit`, `supports_card_update`, `supports_buttons`,
+  `supports_typing`, `supports_reactions`, `supports_media`, `supports_groups`,
+  `supports_history_fetch`, plus `max_message_chars`. The core consults
+  capabilities, never adapter type, and `supports_live_text` / `supports_edit`
+  are deliberately independent (FR-037).
+- `LiveText` protocol: the ONE surface a turn grows in place — opened once,
+  offered every snapshot, closed carrying the final text. Each transport buffers
+  updates to what it can sustain; the core adds no throttle of its own.
+- `AdapterCallbacks` (given to adapters): `on_message(InboundMessage)`, plus
+  three optional ones a transport supplies only where it has them —
+  `on_callback` (a selection-card tap, FR-018), `on_lifecycle` (the bot's own
+  standing in a chat, FR-058) and `on_stop` (the platform's own stop control,
+  FR-063). Adapters never import chat modules.
+- The SeaTalk adapter has no poll loop. On webhook delivery the daemon's
+  events-ingest route feeds the adapter through the runtime's registry; on
+  websocket delivery a supervised connector feeds the same entry point from the
+  SDK's listen thread.
 - The listener child gets per-channel signing secrets, the daemon URL, and
   the daemon token via env at spawn; it keeps no other state. Source installs
   spawn `[sys.executable, -m, coffer.surfaces.callback]`; frozen builds
   locate a sibling `coffer-callback` binary (same probe pattern as
   `daemon_spawn_command`).
+- `agent_vocabulary` is the one place a channel's `scope` (agent **resource**
+  names) is translated into the turn platform's agent **keys**. Every
+  comparison between the two goes through it (FR-079).
 
 ## Module layout — frontend
+
+There is no `frontend/src/kinds/` directory. A kind's own React lives under
+`components/<kind>/`, its routed pages under `pages/`, and its data access in
+`lib/api/` + `lib/hooks/`.
 
 ```
 frontend/src/
 ├── pages/ChannelsPage.tsx            # list + add entry point
 ├── pages/ChannelDetailPage.tsx       # status, pairing, enable/disable, delete
-├── kinds/channel/                    # AddChannelDialog, schema, cards
-├── lib/api/channels.ts               # hand-written wire types (chat.ts pattern)
+├── components/channel/               # AddChannelDialog + EditChannelDialog and
+│                                     #   their secret fields, the channels
+│                                     #   table and its row cells, the status
+│                                     #   and callback cards, the delivery and
+│                                     #   machine selects, the schema, the
+│                                     #   health/binding helpers, agent labels
+├── lib/api/channels.ts               # wire types over the generated schema
 └── lib/hooks/useChannels.ts          # queries + mutations
+```
+
+The Chat page (section G) is the turn platform's own surface and sits beside it:
+
+```
+frontend/src/
+├── pages/ChatPage.tsx                # the two columns (FR-072)
+├── components/chat/                  # ConversationList + ConversationListItem,
+│                                     #   MessageThread + MessageBubble +
+│                                     #   MarkdownContent, ToolCallCard (FR-077),
+│                                     #   Composer + DraftThread + PendingQueue
+│                                     #   (FR-075), AgentModelBar + ModelPicker +
+│                                     #   EffortPicker (FR-078), ChatErrorBanner
+├── lib/api/chat.ts                   # conversations, messages, pending, SSE
+└── lib/hooks/                        # useChatController (the page's state),
+                                      #   useChatTurn + chatTurnEvents (the
+                                      #   SSE subscription and its reducer)
 ```
 
 Nav: `Channels` joins the `nav.group.agents` group (the slot
 [Everything Is a Resource Kind](../../docs/decisions/everything-is-a-resource-kind.md)
-reserved). Secrets flow through the existing keychain routes before resource
+reserved); `Chat` is its own top-level entry. Secrets flow through the existing
+keychain routes before resource
 creation, with rollback on partial failure (AddMcpServerDialog pattern).
-i18n: `channels` namespace in `en.json`/`zh.json` (parity test enforces).
+i18n: `channels` and `chat` namespaces in `en.json`/`zh.json` (parity test
+enforces) — the UI is bilingual even though the documentation is not.
 
 ## Tests
 
@@ -146,8 +227,8 @@ i18n: `channels` namespace in `en.json`/`zh.json` (parity test enforces).
   backoff; callback listener app: challenge echo, good/bad signature,
   forwarding; channel routes + CLI commands; runtime reconciler
   (enable/disable/delete/config-change).
-- **Contract**: `/openapi.json` conformance for the new routes against
-  `contracts/api.openapi.yaml`.
+- **Contract**: `/openapi.json` conformance for every channel and chat route
+  against `contracts/api.openapi.yaml`.
 - **Acceptance**: every spec.md scenario carries a
   `@pytest.mark.acceptance(spec="channels", scenario=...)` (or frontend
   `acceptance(...)`) marker; audited by `make verify-acceptance`.
@@ -158,10 +239,9 @@ SC-004 (any agent reachable).
 
 ## Importlinter & enforcement
 
-- New modules join every cross-kind `forbidden_modules` list symmetrically;
-  a new "Cross-kind imports forbidden (channel)" contract mirrors the
-  existing five; the kind-agnostic core contract (C6) adds the channel
-  modules.
+- The channel modules sit in every cross-kind `forbidden_modules` list
+  symmetrically, under a "Cross-kind imports forbidden (channel)" contract that
+  mirrors the other kinds'; the kind-agnostic core contract names them too.
 - `application/credentials/` is kind-agnostic shared code (like
   `application/audit_service.py`); both mcp and channel may import it.
 - `surfaces/callback` imports only domain/channel signing + httpx + fastapi;
@@ -172,8 +252,11 @@ SC-004 (any agent reachable).
 
 - **Telegram/SeaTalk API drift** — transports are pinned behind adapters with
   fake-server integration tests; a platform change breaks one file.
-- **Edit-rate limits on progress messages** — edits throttled ≥ 1.5 s and the
-  progress message is best-effort: failures degrade to ack-then-final.
+- **Rate limits on the live surface** — each transport buffers its own
+  updates to what it can sustain (SeaTalk ~100 ms, Telegram far slower since it
+  edits a real message) and the core adds no throttle on top, which is what
+  FR-037 requires. Every update, close and heartbeat is best-effort: a refused
+  one leaves the final reply to carry the answer, and never fails the turn.
 - **Listener port collisions** — port is env-configurable
   (`COFFER_CALLBACK_PORT`, default 8787) and surfaced in channel status so
   the tunnel target is always discoverable.

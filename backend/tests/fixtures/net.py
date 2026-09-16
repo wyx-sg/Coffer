@@ -1,7 +1,9 @@
 """Shared networking helpers for tests.
 
-TEST-003 folded the duplicated ``_free_port()`` copies from individual test
-modules into one shared helper.  Use via::
+One definition of "find me a port to start a server on", so a fix to the
+bind-and-release dance lands everywhere at once instead of in one copy. Every
+test module that needs a port imports from here; there are no local copies.
+Use via::
 
     from tests.fixtures.net import free_port
 

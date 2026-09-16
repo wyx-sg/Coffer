@@ -4,7 +4,8 @@
 // Vite dev server — none of this applies and every helper here returns a safe
 // fallback or throws, so the browser path never depends on a shell being
 // there. Inside the Tauri WebView the same build gets a native host, and these
-// are the four things it can ask that host for.
+// are the three things it can ask that host for: where the daemon is, spawn one,
+// and whether the one answering is the version this build pairs with.
 //
 // Keep this list short. The shell owns only what a browser cannot do for
 // itself; native file dialogs and "reveal in Finder" deliberately do NOT live

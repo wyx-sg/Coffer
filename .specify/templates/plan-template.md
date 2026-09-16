@@ -1,9 +1,17 @@
 # Implementation Plan: [FEATURE]
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Spec**: `[short-name]` (the folder name under `specs/`, named for the feature — never numbered) | **Branch**: `feature/[short-name]`
+**Input**: Feature specification from `specs/[short-name]/spec.md`
 
-**Note**: This template is filled in by the `/speckit-plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
+<!--
+  No date field: `agents/sdd.md` forbids time annotations in spec / plan /
+  research / data-model / quickstart. Chronology lives in git and in
+  `.specify/memory/roadmap.md`.
+
+  A child spec's plan lives beside its own spec.md
+  (`specs/<parent>/<child>/plan.md`) and its spec id is the path,
+  e.g. `channels/telegram`.
+-->
 
 ## Summary
 
@@ -38,57 +46,49 @@
 ### Documentation (this feature)
 
 ```text
-specs/[###-feature]/
-├── plan.md              # This file (/speckit-plan command output)
-├── research.md          # Phase 0 output (/speckit-plan command)
-├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
-├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+specs/[short-name]/
+├── spec.md              # The user-visible contract (authored first)
+├── plan.md              # This file
+├── research.md          # Background and alternatives, when the choice needs one
+├── data-model.md        # Entities, fields, relationships
+├── quickstart.md        # How to use the finished feature
+└── contracts/
+    └── api.openapi.yaml # The wire contract — hand-authored, PR-reviewed
 ```
 
-### Source Code (repository root)
+See [`agents/sdd.md`](../../agents/sdd.md) for which of these are required and
+which are written only when the feature needs them.
+
+### Source Code
+
 <!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
+  Coffer's layout is fixed, not chosen per feature. Name the real directories
+  this feature touches; do not invent a parallel structure.
+
+  The layering is enforced, not advisory: `scripts/check_architecture_doc.py`
+  fails `make lint` when a package exists on disk but is not named in
+  `.specify/memory/architecture.md`, and the import-linter contracts in
+  `backend/pyproject.toml` enforce the import direction — `domain/` imports
+  nothing, `application/` does not import `infrastructure/` or `surfaces/`,
+  and `infrastructure/` adapts to ports defined in `application/` and is wired
+  only at the composition root.
 -->
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+backend/coffer/
+├── domain/<slice>/        # Pure types + business rules. No I/O, no SDKs.
+├── application/<slice>/   # Services, orchestration, ports, Kind wiring.
+├── infrastructure/<slice>/# DB, transports, filesystem, credential store.
+└── surfaces/              # http/ (FastAPI), cli/ (Typer), mcp shim, callback/
 
-tests/
-├── contract/
-├── integration/
-└── unit/
+backend/tests/{unit,integration,contract}/   # Mirrors the package tree
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
+frontend/src/
+├── pages/                 # Route-level pages
+├── components/<feature>/  # Feature components, dialogs, tables
+└── lib/{hooks,api}/       # Queries + mutations, and the typed wire client
 
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+e2e/                       # Playwright web suite + MCP shim round-trip
 ```
 
 **Structure Decision**: [Document the selected structure and reference the real

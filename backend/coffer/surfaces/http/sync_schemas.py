@@ -21,6 +21,8 @@ from coffer.domain.sync.backup import (
     validate_branch,
     validate_url,
 )
+from coffer.domain.sync.convergence import ConvergeStatus
+from coffer.domain.sync.diff import ChangeStatus
 from coffer.domain.sync.errors import BackupRemoteInvalid
 
 
@@ -28,8 +30,10 @@ class DocChangeOut(BaseModel):
     """One document's fate in one round: what moved, and which way."""
 
     path: str
-    #: ``added`` | ``modified`` | ``deleted``.
-    status: str
+    #: The domain enum rather than ``str``, for the reason ``RoundOut.status``
+    #: is: the contract narrows this field, so the wire model declares the
+    #: three values once instead of restating them in a comment.
+    status: ChangeStatus
 
 
 class DiffCountsOut(BaseModel):
@@ -76,7 +80,11 @@ class PendingConfirmationOut(BaseModel):
 class RoundOut(BaseModel):
     """One converge round's outcome."""
 
-    status: str
+    #: The whole of ``ConvergeStatus``, and the field that discriminates this
+    #: one shape across every round-shaped operation. The domain enum itself
+    #: rather than ``str``, so the vocabulary is declared once and the
+    #: generated contract narrows to it instead of promising any string.
+    status: ConvergeStatus
     #: ``new`` or ``returning`` when this round joined a remote; null otherwise.
     join: str | None = None
     applied: DiffCountsOut
@@ -229,7 +237,6 @@ class RestoreIn(BaseModel):
     #: A sha, a ref, or a ``YYYY-MM-DD`` date resolving to the last commit at
     #: or before it — the tip cannot return something deleted last week.
     at: str | None = None
-    from_url: str | None = None
 
 
 class KeyMaterialIn(BaseModel):

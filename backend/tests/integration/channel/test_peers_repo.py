@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
@@ -24,7 +24,6 @@ def _peer(resource_id: int, chat_id: str = "chat-1") -> ChannelPeer:
         chat_id=chat_id,
         display_name="Owner",
         paired_at=datetime.now(tz=UTC),
-        active_conversation_id=None,
     )
 
 
@@ -32,13 +31,12 @@ async def test_upsert_then_get_roundtrips_the_peer(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.peers.upsert(_peer(resource.id))
 
-    peer = await env.peers.get(resource.id)
+    peer = await env.peers.get_by_chat(resource.id, "chat-1")
     assert peer is not None
     assert peer.resource_id == resource.id
     assert peer.chat_id == "chat-1"
     assert peer.display_name == "Owner"
     assert peer.paired_at.tzinfo is not None  # UTC re-attached on read-back
-    assert peer.active_conversation_id is None
 
 
 async def test_upsert_same_chat_replaces_in_place(env: ChannelEnv) -> None:
@@ -54,38 +52,71 @@ async def test_upsert_same_chat_replaces_in_place(env: ChannelEnv) -> None:
         chat_id=updated.chat_id,
         display_name="New Name",
         paired_at=updated.paired_at,
-        active_conversation_id=updated.active_conversation_id,
     )
     await env.peers.upsert(updated)
 
     rows = await env.peers.list_by_resource(resource.id)
     assert len(rows) == 1  # not duplicated
-    peer = await env.peers.get(resource.id)
+    peer = await env.peers.get_by_chat(resource.id, "chat-1")
     assert peer is not None
     assert peer.chat_id == "chat-1"
     assert peer.display_name == "New Name"
 
 
-async def test_set_active_conversation_updates_and_clears(env: ChannelEnv) -> None:
+async def test_owner_peer_unknown_resource_returns_none(env: ChannelEnv) -> None:
+    assert await env.peers.owner_peer(99999) is None
+
+
+async def test_owner_peer_is_the_earliest_pairing_not_whatever_sqlite_returns(
+    env: ChannelEnv,
+) -> None:
+    """The bug this pins: ``notify`` addressed "the channel's peer" through a
+    query with no ``ORDER BY``, so a private notification could land in a group
+    chat. The owner chat is the earliest pairing — a group can only be added to
+    a channel whose DM already works."""
     resource = await env.register_channel("tg")
-    await env.peers.upsert(_peer(resource.id))
+    now = datetime.now(tz=UTC)
+    group = ChannelPeer(
+        resource_id=resource.id,
+        chat_id="group-1",
+        display_name="Group",
+        paired_at=now,
+    )
+    dm = ChannelPeer(
+        resource_id=resource.id,
+        chat_id="dm-1",
+        display_name="Owner",
+        paired_at=now - timedelta(days=3),
+    )
+    # Inserted group-first so row order disagrees with pairing order.
+    await env.peers.upsert(group)
+    await env.peers.upsert(dm)
 
-    await env.peers.set_active_conversation(resource.id, "chat-1", "conv-9")
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.active_conversation_id == "conv-9"
-
-    await env.peers.set_active_conversation(resource.id, "chat-1", None)
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.active_conversation_id is None
+    owner = await env.peers.owner_peer(resource.id)
+    assert owner is not None
+    assert owner.chat_id == "dm-1"
 
 
-async def test_get_unknown_resource_returns_none(env: ChannelEnv) -> None:
-    assert await env.peers.get(99999) is None
+async def test_owner_peer_breaks_a_paired_at_tie_on_chat_id(env: ChannelEnv) -> None:
+    """Two chats paired in the same instant still resolve to one answer, the
+    same one on every call and on every machine that converged both."""
+    resource = await env.register_channel("tg")
+    now = datetime.now(tz=UTC)
+    for chat_id in ("b-chat", "a-chat"):
+        await env.peers.upsert(
+            ChannelPeer(
+                resource_id=resource.id,
+                chat_id=chat_id,
+                display_name=chat_id,
+                paired_at=now,
+            )
+        )
+
+    owner = await env.peers.owner_peer(resource.id)
+    assert owner is not None and owner.chat_id == "a-chat"
 
 
-async def test_sender_id_and_preferences_roundtrip(env: ChannelEnv) -> None:
+async def test_sender_id_roundtrips(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     await env.peers.upsert(
         ChannelPeer(
@@ -93,36 +124,22 @@ async def test_sender_id_and_preferences_roundtrip(env: ChannelEnv) -> None:
             chat_id="chat-1",
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
-            active_conversation_id=None,
             sender_id="u-42",
-            preferred_agent="codex",
         )
     )
-    peer = await env.peers.get(resource.id)
+    peer = await env.peers.get_by_chat(resource.id, "chat-1")
     assert peer is not None
     assert peer.sender_id == "u-42"
-    assert peer.preferred_agent == "codex"
 
 
-async def test_legacy_peer_reads_new_fields_as_none(env: ChannelEnv) -> None:
+async def test_peer_paired_before_sender_awareness_reads_sender_id_as_none(
+    env: ChannelEnv,
+) -> None:
     resource = await env.register_channel("tg")
-    await env.peers.upsert(_peer(resource.id))  # no new fields supplied
-    peer = await env.peers.get(resource.id)
+    await env.peers.upsert(_peer(resource.id))  # no sender_id supplied
+    peer = await env.peers.get_by_chat(resource.id, "chat-1")
     assert peer is not None
     assert peer.sender_id is None
-    assert peer.preferred_agent is None
-
-
-async def test_set_preferences_updates_and_preserves_active_conversation(env: ChannelEnv) -> None:
-    resource = await env.register_channel("tg")
-    await env.peers.upsert(_peer(resource.id))
-    await env.peers.set_active_conversation(resource.id, "chat-1", "conv-7")
-
-    await env.peers.set_preferences(resource.id, preferred_agent="claude_code")
-    peer = await env.peers.get(resource.id)
-    assert peer is not None
-    assert peer.preferred_agent == "claude_code"
-    assert peer.active_conversation_id == "conv-7"  # preferences don't disturb it
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +190,6 @@ async def test_owner_sender_id_returns_first_paired_sender(env: ChannelEnv) -> N
             chat_id="dm-1",
             display_name="Owner",
             paired_at=datetime.now(tz=UTC),
-            active_conversation_id=None,
             sender_id="u-owner",
         )
     )
@@ -281,15 +297,16 @@ def test_migration_0015_creates_channel_peers(tmp_path, monkeypatch):  # type: i
     conn = sqlite3.connect(str(db_path))
     try:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(channel_peers)")}
+        # 0084 dropped ``active_conversation_id`` and ``preferred_agent``:
+        # ``channel_thread_conversations`` (0041) owns both, per thread, and
+        # nothing had written the peer copies since.
         assert columns == {
             "id",
             "resource_id",
             "chat_id",
             "display_name",
             "paired_at",
-            "active_conversation_id",
             "sender_id",
-            "preferred_agent",
         }
         fks = conn.execute("PRAGMA foreign_key_list(channel_peers)").fetchall()
         assert len(fks) == 1

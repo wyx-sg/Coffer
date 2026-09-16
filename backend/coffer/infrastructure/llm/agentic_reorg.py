@@ -1,9 +1,10 @@
-"""Agentic langgraph tidy loop for a scope's notes (spec knowledge).
+"""Agentic langgraph tidy loop over one collection's files (spec knowledge).
 
-The create_react_agent loop driven by Coffer's internal model over the notes a
-scope already holds, with 4 internal write-capable tools. Lives in
-infrastructure.chat (Contract 9 — the only place langchain/langgraph may be
-imported).
+The create_react_agent loop driven by Coffer's internal model over the files a
+collection already holds, with 4 internal write-capable tools. Lives in
+``infrastructure.llm`` (Contract 9a — the only place langchain/langgraph may be
+imported; ``infrastructure.chat``, where these adapters once lived, is now
+forbidden one).
 
 The reorg tools are internal-only: NOT registered on the MCP gateway or
 BuiltinToolRegistry.
@@ -74,7 +75,7 @@ async def run_agentic_reorg(
 
     try:
         state = await graph.ainvoke(
-            {"messages": [HumanMessage(content="Reorganize the notes in this scope.")]},
+            {"messages": [HumanMessage(content="Reorganize the files in this collection.")]},
             config={"recursion_limit": recursion_limit},
         )
     except GraphRecursionError:

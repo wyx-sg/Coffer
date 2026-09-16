@@ -84,9 +84,21 @@ def _upkeep_from_doc(
         held = current.upkeep(name)
         entry = block.get(name)
         if not isinstance(entry, dict):
-            # The document says nothing about this pass. Tidy's switch still
-            # has its old home at the top level, so a pre-upkeep document
-            # carries that one; everything else stays as this machine has it.
+            # The document says nothing about this pass. A document written
+            # before 0082 gave every pass an ``upkeep`` block carries tidy's
+            # switch at the top level instead, so that one is read from there;
+            # everything else stays as this machine has it.
+            #
+            # This is a FLEET-UPGRADE WINDOW, not a permanent shim, and unlike
+            # a DB shim it cannot be closed by a migration: the document lives
+            # in the shared remote and is written by whatever version the OTHER
+            # machine runs. It stays readable until every machine in the vault
+            # has run 0082 — which the machine registry can answer, since each
+            # machine publishes its ``coffer_version``. **Boundary: drop this
+            # branch (and stop publishing the top-level ``auto_tidy_enabled``
+            # below) once the minimum ``coffer_version`` in the registry is
+            # past the release carrying 0082.** Until then, two places can
+            # disagree about tidy's switch, and the ``upkeep`` block wins.
             enabled = doc.get("auto_tidy_enabled") if name == TIDY else None
             out[name] = UpkeepSetting(
                 enabled=held.enabled if enabled is None else bool(enabled),
@@ -118,19 +130,19 @@ class EngineSettingsSyncState:
         self._internal = internal_engine
         self._internal_repo = internal_repo
 
-    async def export_docs(self) -> tuple[list[tuple[str, dict[str, object]]], list[str]]:
-        # Own (and publish) only a singleton this machine has actually
-        # persisted: a fresh machine exporting a synthesized default would
-        # same-path conflict with the fleet's value on its very first
+    async def export_docs(self) -> list[tuple[str, dict[str, object]]]:
+        # Publish only a singleton this machine has actually persisted: a
+        # fresh machine serializing a synthesized default would same-path
+        # conflict with the fleet's value on its very first
         # unrelated-histories merge.
         if await self._internal_repo.get() is None:
-            return [], []
+            return []
         internal = await self._internal.get()
         # And only a non-default one: a persisted row holding the defaults is
         # the same decision as no row, and publishing it would be re-adding a
         # document every fresh machine deletes again (module docstring).
         if _is_default(internal):
-            return [], []
+            return []
         doc: dict[str, object] = {
             "model": internal.model,
             "auto_tidy_enabled": internal.auto_tidy_enabled,
@@ -143,7 +155,7 @@ class EngineSettingsSyncState:
                 for name in _PASSES
             },
         }
-        return [(DOC, doc)], [DOC]
+        return [(DOC, doc)]
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
         errors: list[tuple[str, str]] = []

@@ -19,7 +19,6 @@ import { agentTranscriptSessionKey, agentTranscriptsKey } from "@/lib/api/queryK
 export const TRANSCRIPTS_PAGE_SIZE = 10;
 
 /** Search/filter/sort inputs (everything but the page window). */
-export type TranscriptFilters = Omit<TranscriptListParams, "limit" | "offset">;
 
 // ---------------------------------------------------------------------------
 // Query: list one page of transcript sessions for an agent

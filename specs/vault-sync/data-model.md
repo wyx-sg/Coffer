@@ -4,8 +4,8 @@ Sync persists in three places, and which one holds what is the whole design:
 
 | Where | What | Why there |
 | --- | --- | --- |
-| SQLite | the one sync remote's configuration | it is user-entered config, like any other |
-| a local JSON file | the pointer, the retry set, the not-applicable set | it must be readable before the DB opens and it must **never** travel |
+| SQLite | the one sync remote's configuration, and the history of rounds | it is user-entered config and machine-local record, like any other |
+| SQLite | the pointer, the held round, the retry set, the not-applicable set | `coffer.db` is already machine-local and already excluded from the tree, so this state **never** travels without a second store to reason about |
 | the working tree | every vault document, and the machine registry | it is what git merges |
 
 The vault itself keeps its existing system of record: knowledge and skills are
@@ -29,17 +29,25 @@ the tree.
 | `interval_seconds` | int | default 3600, `> 0` by check constraint |
 | `enabled` | bool | sync is off until the user configures a remote |
 | `worktree_path` | str | default `~/.coffer/sync` |
-| `last_run_at` | ts? | the most recent round |
+| `last_started_at` | ts? | when the most recent round began — the pair with `last_run_at` is what tells a surface how long a round took, and how long one that never finished has been running |
+| `last_run_at` | ts? | when the most recent round finished |
 | `last_status` | str? | see the vocabulary below |
+| `last_join` | str? | `new` / `returning` when the most recent round joined a remote; null otherwise |
 | `last_error` | str? | redacted of the push credential before it is written |
 | `last_commit` | str? | the commit the last round landed on |
+| `last_run_json` | str? | everything else that round carried, as one JSON document — the two diff summaries and their paths, the conflicted and agent-resolved paths, the per-path failures, the locked refs and any held confirmation. The same column-versus-payload split as `sync_runs` below, so the status surface reads one row and no column can disagree with the payload beside it |
 | `updated_at` | ts | |
 
 Because `credential_ref` is a reference, the whole row can be read into an API
 response or a log line without redaction.
 
-`last_status` gains the round's vocabulary: `ok`, `no_change`, `joined`,
-`conflict`, `awaiting_confirmation`, `push_failed`, `error`. The `last_*`
+`last_status` gains the round's whole vocabulary, written verbatim from
+`ConvergeStatus`: `ok`, `no_change`, `conflict`, `awaiting_confirmation`,
+`push_failed`, `failed`, `disabled`. Two of those are successes rather than
+skips — `no_change` means there was nothing to do on either side, and `disabled`
+that no remote is configured or it is switched off. Whether the round *joined* a
+remote is a different question, answered by `last_join` (`new` / `returning`),
+not a status of its own. The `last_*`
 columns are the most recent round denormalised onto the remote, so a status
 surface reads the current state without touching the history; every round,
 including that one, is also appended to `sync_runs` below.
@@ -103,6 +111,7 @@ the spec exists to prevent.
 | --- | --- |
 | `pointer` | the commit this vault has provably absorbed; the base of every diff. `NULL` means **joining**, which the round detects and resolves against the remote's registry before it does anything |
 | `pending_json` | a held round — the guard's direction, the commit it reached, the remote tip it was raised against, the per-area breaches and the paths. `NULL` when nothing is held |
+| `updated_at` | when either of the two above last changed |
 
 `sync_held_paths` carries both companion sets in one table, told apart by
 `applicable`:
@@ -166,7 +175,7 @@ the withdrawn git workspace's version (which had reached 3) nor the export
 bundle's carries over.
 
 `schema_version` is checked before a round applies anything: a tree newer than
-the running build fails closed with `SYNC_TREE_TOO_NEW`, mirroring the DB
+the running build fails closed with `SYNC_BUNDLE_TOO_NEW`, mirroring the DB
 `DB_SCHEMA_TOO_NEW` rule. The `created_at` the bundle manifest used to carry is
 **gone** — a timestamp restamped every round would make a manifest-only diff the
 one thing that always changed, and determinism is what lets a round with nothing
@@ -297,11 +306,46 @@ providers — the sync slice never imports kind modules. Current areas:
   name is a sanitised chat id and therefore only an address; the payload
   carries the true ids.
 - `settings/internal-engine.yaml` — the internal-engine singleton: `model`,
-  `auto_tidy_enabled`, and now `tidy_owner_machine_id`. The owner field is what
-  makes an unattended rewriter safe on several machines: a tidy pass is a no-op
-  on every machine but the owner. The document is exported only once this
-  machine has persisted the singleton locally, so a fresh machine never
-  publishes its defaults over the fleet's configured values.
+  `tidy_owner_machine_id`, and an `upkeep` block carrying an `enabled` flag and
+  an `interval_s` for each of the three unattended passes (`aggregate`,
+  `organise`, `tidy`). `auto_tidy_enabled` is also written at the top level,
+  because that is where every document written so far put tidy's switch, and a
+  document that carries no `upkeep` block is still read for it.
+
+  ```yaml
+  model: <model id>
+  auto_tidy_enabled: false
+  tidy_owner_machine_id: a3f21c9e4b7d2610
+  upkeep:
+    aggregate: { enabled: true, interval_s: null }
+    organise: { enabled: true, interval_s: null }
+    tidy: { enabled: false, interval_s: null }
+  ```
+
+  An `interval_s` of `null` means "the pass's own default", so the default
+  stays in the worker that owns the pass and raising it later reaches every
+  vault that never chose one. An `upkeep` entry that IS present is
+  authoritative in both halves, `interval_s: null` included — that is a
+  fleet-wide "back to the default" and must clear an interval this machine
+  chose. A pass the document says nothing about is left exactly as this machine
+  has it, because an older machine in the fleet is not a decision.
+
+  What the passes are *allowed* to do travels with the model for one reason:
+  switching a rewriter off is exactly the decision a second machine must not be
+  left out of. `tidy_owner_machine_id` is what makes an unattended rewriter
+  safe on several machines: a tidy pass is a no-op on every machine but the
+  owner, and `NULL` means "wherever this is read", which is correct for a
+  single-machine vault.
+
+  The area publishes a **decision, not a row**. Nothing is written while the
+  singleton holds the defaults — no model, no tidy owner, aggregate and organise
+  on, tidy off — and a machine that has persisted no singleton at all writes
+  nothing either. So the tree holds this document exactly while some machine
+  holds a non-default choice, a deletion of it means "back to the defaults",
+  and honouring that deletion leaves nothing to republish. Had a machine
+  published its defaults as a document, a fresh machine — which never persists
+  a default it already has — would delete it on every round, and the two would
+  ping-pong forever.
 
 Skill delivery bindings (`skill_agent_bindings`) stay machine-local by decision:
 delivery is a side-effectful file operation against directories that differ per

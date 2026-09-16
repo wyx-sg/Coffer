@@ -14,7 +14,11 @@ import pytest
 
 from coffer.application.knowledge.ingest import MAX_UPLOAD_BYTES, IngestedDocument, IngestService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.domain.knowledge.converter import UnsupportedDocument
+from coffer.domain.knowledge.converter import (
+    Conversion,
+    EmptyConversion,
+    UnsupportedDocument,
+)
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import CollectionNotFound, KnowledgeFileNotFound, UploadTooLarge
 from coffer.domain.provider.config import ProviderConfig, ResolvedConnection
@@ -105,6 +109,20 @@ def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     )
 
 
+class _EmptyRegistry:
+    """A converter registry whose converter succeeds and produces no text.
+
+    Stands in for MarkItDown on an image-only PDF, which returns ``""`` and
+    raises nothing.
+    """
+
+    def __init__(self, markdown: str = "") -> None:
+        self._markdown = markdown
+
+    async def convert(self, data: bytes, filename: str) -> Conversion:
+        return Conversion(markdown=self._markdown, title="Scan", converter="markitdown")
+
+
 def _service(knowledge, *, models=None, completion=None, credential_resolver=None):  # type: ignore[no-untyped-def]
     return IngestService(
         knowledge=knowledge,
@@ -183,6 +201,49 @@ async def test_an_unsupported_type_is_refused_and_writes_nothing(knowledge) -> N
     assert not paths.raw_dir("shopee").exists()
 
 
+@pytest.mark.acceptance(spec="knowledge", scenario="a document is never stored half-converted")
+async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing(  # type: ignore[no-untyped-def]
+    knowledge,
+) -> None:
+    """FR-037. The real case is an image-only PDF: MarkItDown extracts no text,
+    returns ``""``, and reports no error — it did its job, the document simply
+    has no text layer. Stored, that is a titled knowledge file with an empty
+    body: search will never find it and nothing says why.
+
+    Driven through a converter that returns empty markdown rather than through
+    a real scanned PDF, because the rule is about ANY converter producing
+    nothing, and a fixture PDF would only prove the one format.
+    """
+    service = IngestService(
+        knowledge=knowledge,
+        registry=_EmptyRegistry(),
+        credential_resolver=lambda ref: "k",
+    )
+
+    with pytest.raises(EmptyConversion) as exc_info:
+        await service.ingest(
+            collection="shopee", filename="scan.pdf", data=b"%PDF-1.7 image only", actor="tester"
+        )
+
+    assert exc_info.value.doc_type == "pdf"
+    assert fs.list_level("shopee").files == ()
+    assert not paths.raw_dir("shopee").exists()
+
+
+async def test_a_whitespace_only_conversion_counts_as_nothing(knowledge) -> None:  # type: ignore[no-untyped-def]
+    """A page of blank lines is as unfindable as an empty one."""
+    service = IngestService(
+        knowledge=knowledge,
+        registry=_EmptyRegistry(markdown="\n   \n\t\n"),
+        credential_resolver=lambda ref: "k",
+    )
+
+    with pytest.raises(EmptyConversion):
+        await service.ingest(collection="shopee", filename="blank.docx", data=b"x", actor="tester")
+
+    assert fs.list_level("shopee").files == ()
+
+
 async def test_oversize_upload_is_refused_naming_the_limit(knowledge) -> None:  # type: ignore[no-untyped-def]
     service = _service(knowledge)
     data = b"x" * (MAX_UPLOAD_BYTES + 1)
@@ -250,14 +311,23 @@ async def test_description_falls_back_to_opening_prose_when_the_model_call_raise
 async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all(  # type: ignore[no-untyped-def]
     knowledge,
 ) -> None:
-    """An empty CSV converts to an empty document — no paragraph to fall back
-    to at all — so the description must still be non-empty (FR-003 makes it
-    required); the title is the only thing left to fall back to."""
+    """A document can convert to real content and still contain no PROSE — a
+    file that is nothing but a heading is the case. ``_fallback_description``
+    skips heading lines, so there is no paragraph left, and FR-003 makes the
+    description required: the title is the only thing left to use.
+
+    This used to be driven with a completely EMPTY CSV. That is no longer a
+    stored document at all — a conversion that produces nothing is refused
+    (``EmptyConversion``, FR-037) — so the vehicle has to be a document that
+    converts to something and still yields no prose.
+    """
     service = _service(knowledge)
 
-    result = await service.ingest(collection="shopee", filename="team.csv", data=b"", actor="t")
+    result = await service.ingest(
+        collection="shopee", filename="team.md", data=b"# Team\n", actor="t"
+    )
 
-    assert result.description == result.title == "team"
+    assert result.description == result.title == "Team"
 
 
 # ----- atomicity: nothing half-lands (FR-037) ---------------------------

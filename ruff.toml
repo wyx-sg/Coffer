@@ -1,0 +1,26 @@
+# Root ruff config — it exists for `evals/` alone.
+#
+# Ruff discovers its settings by walking UP from each file. `backend/**` finds
+# backend/pyproject.toml, which is and remains the project's real ruff config.
+# `evals/**` used to walk past this directory, find nothing, and fall back to
+# ruff's built-in defaults: line-length 88 instead of 100, and the starter
+# `E4,E7,E9,F` rule set instead of the full selection. `make lint` checked
+# `evals` under those defaults and `make format` would have reflowed it to
+# them.
+#
+# This file closes that gap by inheriting the real config. It does NOT apply to
+# `backend/**`: the nearest config wins, and backend/pyproject.toml is nearer.
+#
+# It is a file rather than a `--config backend/pyproject.toml` flag on the
+# Makefile's ruff invocations for a specific reason. Ruff resolves relative
+# paths inside a config against the CURRENT WORKING DIRECTORY when the config
+# arrives via `--config`, but against the config file's own directory when it
+# arrives via discovery. With the flag, isort's `src` resolved to the repo root,
+# `coffer` stopped being first-party, and ruff wanted to re-sort the import
+# block of 308 backend test files. Discovery has no such hazard, and an editor
+# or a bare `ruff check` picks this up too.
+extend = "backend/pyproject.toml"
+
+# Both packages `evals/` imports are first-party: `coffer` lives under
+# backend/, `evals` at the repo root. Without this they sort as third-party.
+src = ["backend", "."]

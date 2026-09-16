@@ -51,8 +51,6 @@ class ConversationRepo(Protocol):
         """Bump ``updated_at`` for the given conversation."""
         ...
 
-    async def set_model(self, conversation_id: str, model_id: str | None) -> Conversation: ...
-
     async def get_agent_config(self, conversation_id: str) -> AgentConfig:
         """Typed provider-owned per-conversation state (empty when unset)."""
         ...
@@ -160,7 +158,6 @@ class ChatService:
             id=uuid.uuid4().hex,
             agent_key=agent_key,
             title=_PLACEHOLDER_TITLE,
-            model_id=None,
             created_at=now,
             updated_at=now,
             channel_name=channel_name,
@@ -200,16 +197,6 @@ class ChatService:
         """Rename a conversation.  Raises ``ConversationNotFound`` if absent."""
         await self.get_conversation(conversation_id)  # existence check
         return await self._conversations.rename(conversation_id, new_title)
-
-    async def set_conversation_model(
-        self,
-        conversation_id: str,
-        *,
-        model_id: str | None,
-    ) -> Conversation:
-        """Override (or clear) the model for a conversation."""
-        await self.get_conversation(conversation_id)  # existence check
-        return await self._conversations.set_model(conversation_id, model_id)
 
     async def get_agent_config(self, conversation_id: str) -> AgentConfig:
         """The provider-private agent config (cwd, session id, model) for a

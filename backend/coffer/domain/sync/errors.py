@@ -1,4 +1,4 @@
-"""Export/import error family (spec vault-sync). Surfaces map these to HTTP codes."""
+"""Vault-sync error family (spec vault-sync). Surfaces map these to HTTP codes."""
 
 from __future__ import annotations
 
@@ -6,17 +6,19 @@ from coffer.domain.error_base import CofferError
 
 
 class SyncBundleTooNew(CofferError):  # noqa: N818
-    """The bundle was written by a newer Coffer build. Maps to 409.
+    """The remote's tree was written by a newer Coffer build. Maps to 409.
 
-    Mirrors ``DB_SCHEMA_TOO_NEW``: refuse to apply a layout this build does
-    not understand instead of importing a partially-understood snapshot.
+    Mirrors ``DB_SCHEMA_TOO_NEW``: refuse a layout this build does not
+    understand rather than half-applying it — and rather than publishing over
+    it, which is the worse half on a remote the user's other machines share.
+    Raised by ``domain.sync.manifest.refuse_if_too_new``.
     """
 
     code = "SYNC_BUNDLE_TOO_NEW"
 
     def __init__(self, found: int, supported: int) -> None:
         super().__init__(
-            f"bundle schema version {found} is newer than this build "
+            f"the sync remote's layout version {found} is newer than this build "
             f"supports ({supported}); upgrade Coffer on this machine"
         )
         self.found = found
@@ -24,18 +26,23 @@ class SyncBundleTooNew(CofferError):  # noqa: N818
 
 
 class SyncBundleInvalid(CofferError):  # noqa: N818
-    """The path given is not a readable export bundle. Maps to 422."""
+    """The working tree cannot hold the vault's layout. Maps to 422.
+
+    Raised while serializing, not while reading someone's archive: the tree
+    the vault converges through is the "bundle" now, and this is a directory
+    in it that is not a directory, or a root that is a file.
+    """
 
     code = "SYNC_BUNDLE_INVALID"
 
     def __init__(self, path: str, reason: str) -> None:
-        super().__init__(f"not a usable export bundle ({reason}): {path}")
+        super().__init__(f"not a usable sync working tree ({reason}): {path}")
         self.path = path
         self.reason = reason
 
 
 class SyncSerializationError(CofferError):
-    """A bundle document is malformed. Maps to 422."""
+    """A document in the working tree is malformed. Maps to 422."""
 
     code = "SYNC_SERIALIZATION_INVALID"
 

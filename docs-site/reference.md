@@ -8,19 +8,24 @@ Browse everything in the left sidebar or use the search box at the top.
 
 ## Specs
 
-| Spec                       | Status                          | Read                                         |
-| -------------------------- | ------------------------------- | -------------------------------------------- |
-| MCP Gateway                | Accepted — code merged (PR #14) | [spec](/reference/specs/mcp-gateway/spec)    |
-| UI Shell & Visual Language | Accepted — code merged (PR #23) | [spec](/reference/specs/ui-shell/spec)       |
-| Agent Registry             | Accepted — in development       | [spec](/reference/specs/agent-registry/spec) |
-
-The MCP Gateway Desktop spec is **retired**: the Tauri desktop shell was removed, and the
-requirements worth keeping were absorbed into spec mcp-gateway as FR-022 – FR-026 (single-tier release
-archive, aggregated `SHA256SUMS`, daemon-served web UI, `coffer open`, and frozen-start binary
-deployment). See [Distribution](/architecture/distribution).
+Every spec folder under `specs/` is mirrored here, and the **left sidebar is the index** — it
+is generated from the repository at build time, so it cannot fall behind the way a
+hand-written table does. Each spec states its own `Status` in its first few lines; read it
+there rather than from a second copy.
 
 Each spec folder also contains supplementary documents — plan, data model, quickstart,
 and research — where applicable; they are visible in the sidebar under each spec entry.
+
+Spec folders are named, not numbered — they were renamed from numbered ids to names. An
+older document that cites a spec by a number is a fossil: the knowledge spec, for example,
+is `specs/knowledge/` and is cited as spec `knowledge`.
+
+The desktop spec that once sat beside `mcp-gateway` is gone as a separate document, but its
+subject is not: the Tauri desktop shell was retired in 2026-09 and **restored** in
+2026-09-12, and its requirements live in spec `mcp-gateway` as FR-022 – FR-032 (the release
+binary set, aggregated `SHA256SUMS`, daemon-served web UI, `coffer open`, frozen-start binary
+deployment, the fixed daemon port, and the shell's IPC handshake and restart control). See
+[Distribution](/architecture/distribution).
 
 ## Architecture Decision Records (ADRs)
 

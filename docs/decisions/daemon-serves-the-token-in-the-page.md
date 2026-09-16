@@ -1,11 +1,11 @@
 # The Daemon Serves Its Token in the Page, Guarded by the Host Header
 
-- **Status:** Accepted
-- **Date:** 2026-09-11
-- **Deciders:** Yuxing Wu
-- **Spec:** [mcp-gateway](../../specs/mcp-gateway/spec.md) FR-024 / FR-025 / FR-027
-- **Related:** [Detect-or-Spawn](./daemon-detect-or-spawn.md) (the daemon's port moves between restarts, which is the other half of why a browser could not find its way back)
-- **Amended by:** [The Desktop Shell Returns](./desktop-shell-over-a-shared-frontend.md) (2026-09-12) — a third case now exists; the decision below is unchanged for browsers
+**Status**: Accepted
+**Date**: 2026-09-11
+**Deciders**: Yuxing Wu
+**Spec**: [mcp-gateway](../../specs/mcp-gateway/spec.md) FR-024 / FR-025 / FR-027
+**Related**: [Detect-or-Spawn](./daemon-detect-or-spawn.md) (the daemon's port moves between restarts, which is the other half of why a browser could not find its way back)
+**Amended by**: [The Desktop Shell Returns](./desktop-shell-over-a-shared-frontend.md) (2026-09-12) — a third case now exists; the decision below is unchanged for browsers
 
 ## Context
 

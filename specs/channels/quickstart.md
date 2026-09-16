@@ -46,7 +46,10 @@ page.
 > longer a chat target.
 
 Commands: `/new` fresh conversation · `/stop` interrupt the running turn ·
-`/status` what's active · `/help`.
+`/status` what's active · `/agent` switch agent · `/model` switch model ·
+`/effort` switch reasoning level · `/save` file the document you just sent into
+a knowledge collection · `/help`. `/help` is rendered from the same roster the
+bot registers its menu from, so it can never fall behind.
 
 ## SeaTalk
 
@@ -96,10 +99,22 @@ paste the app secret.
 
 Then switch the app's event delivery to **WebSocket** in the Developer Portal.
 Enable the channel in Coffer first: the portal's **Re-verify** only passes while
-the connection is actually live, so verify after
-`coffer channel status my-seatalk` reports the channel **connected**. The same
-command is where you watch the connection afterwards — `connecting`,
-`connected`, `kicked`, `sdk_missing`, or `error` with the last error text.
+the connection is actually live, so verify once the channel is up.
+
+Where to read the connection's state: every surface says it. The channel's page
+in the web UI names it in words — `connecting`, `connected`, `kicked`,
+`sdk_missing`, or `error` with the last error text — `coffer channel status
+my-seatalk --json` carries the same two fields, `websocket_state` and
+`websocket_error`, and the plain-text `coffer channel status my-seatalk` prints
+
+```
+inbound:  websocket (connected)
+```
+
+with a verbatim `ws error:` line when there is one. On a websocket channel it
+prints no listener port, no path and no tunnel line: those are the webhook
+path's facts, and FR-071 requires the absent ones to read as absent rather
+than as a zero rendered like an address.
 
 Two things to know about this path. **One connection per SeaTalk app**: if the
 same app is registered from somewhere else — a second machine, a colleague
@@ -147,9 +162,17 @@ managed tunnel is up.
 Either way, set the app's **Event Callback URL** to
 `<public-url>/seatalk/my-seatalk` on the Open Platform. SeaTalk sends a
 verification challenge; the listener answers it automatically — the portal shows
-the URL as verified. `coffer channel status my-seatalk` shows the exact port and
-path, the public callback URL, and whether the listener and the managed tunnel
-are running.
+the URL as verified. `coffer channel status my-seatalk` prints the whole chain:
+
+```
+inbound:  webhook 127.0.0.1:8790/seatalk/my-seatalk (listener up)
+tunnel:   managed (up)
+register: https://<public-host>/seatalk/my-seatalk
+```
+
+The tunnel line reads `not managed by Coffer` when you front the callback
+yourself, which is a choice rather than a fault. The same facts are on the
+channel's page and in `--json` as `tunnel_managed` and `tunnel_running`.
 
 ### 3. Pair and chat
 
@@ -204,7 +227,7 @@ only comes up when you want to move one.
 
 ```bash
 coffer channel bind my-telegram              # run it here
-coffer channel bind my-telegram <machine-id> # run it there (coffer sync machines lists them)
+coffer channel bind my-telegram <machine-id> # run it there (coffer sync machine list names them)
 ```
 
 or pick the machine in the **Runs on** column, or on the channel's page.

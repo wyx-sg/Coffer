@@ -12,7 +12,7 @@ type Schemas = components["schemas"];
 // Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
 export type AgentType = Schemas["AgentType"];
 
-export type ConfigFileFormat = Schemas["ConfigFileFormat"];
+type ConfigFileFormat = Schemas["ConfigFileFormat"];
 
 /**
  * Hand-written rather than the contract's `ConfigFileInfo`: the contract makes
@@ -96,8 +96,6 @@ export interface AgentPatch {
   wire_api?: string | null;
 }
 
-export type AgentCandidate = Schemas["AgentCandidate"];
-
 export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
 
 // Agent workspace wire types (MCP entries / plugins / unmanaged skills) live in
@@ -105,7 +103,6 @@ export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
 // `from "@/lib/api/agents"` import paths keep working.
 export type {
   AdoptMcpEntryBody,
-  MarketplaceOut,
   McpEntriesResponse,
   McpEntryOut,
   PluginOut,

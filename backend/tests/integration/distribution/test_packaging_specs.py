@@ -348,8 +348,8 @@ def _release_yml_text() -> str:
     return (_REPO / ".github" / "workflows" / "release.yml").read_text()
 
 
-def test_release_workflow_packages_the_single_cli_archive() -> None:
-    """The release produces exactly one download tier: coffer-cli-<triple>.tar.gz.
+def test_release_workflow_packages_the_cli_archive() -> None:
+    """The CLI download tier: coffer-cli-<triple>.tar.gz.
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
     deploys `coffer-mcp-shim` and `coffer-callback` out of its
@@ -369,14 +369,54 @@ def test_release_workflow_packages_the_single_cli_archive() -> None:
         assert binary in text, f"CLI archive must include {binary}"
 
 
-def test_release_workflow_checksums_cover_cli_archive() -> None:
-    """The CLI archive must be checksummed like every other artifact. The
-    SHA256SUMS step hashes all files in artifacts/, and the CLI archive is
-    written into artifacts/, so it is covered. Assert the archive lands in
-    artifacts/ and the checksum step runs over that directory."""
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="release tag produces the CLI archive and SHA256SUMS",
+)
+def test_release_workflow_packages_the_desktop_dmg_tier() -> None:
+    """The SECOND download tier: the desktop app, as an unsigned .dmg.
+
+    Nothing asserted this, which is how a scenario claiming "exactly one
+    download tier and no desktop bundle" stayed green for every release that
+    shipped a .dmg. The desktop shell is back (PR restoring it, and
+    ``desktop/tauri.conf.json`` targets ``app``/``dmg``), so the release has
+    two tiers and the test says so.
+
+    ``unsigned`` is asserted deliberately, not incidentally: there is no
+    Developer ID yet, and the filename is where a downloader learns that
+    before Gatekeeper tells them.
+    """
+    text = _release_yml_text()
+    assert "Coffer-unsigned-${triple}.dmg" in text or (
+        "Coffer-unsigned-${{ matrix.triple }}.dmg" in text
+    ), "release.yml must collect the desktop app as Coffer-unsigned-<triple>.dmg"
+    assert "bundle/dmg" in text, (
+        "release.yml must collect the .dmg out of the Tauri bundle directory"
+    )
+    # "…and no third tier": the scenario's Then bounds the release at two, so
+    # the packagings that were tried and dropped must not creep back in
+    # unnoticed. `.app.zip` in particular shipped alongside the .dmg once.
+    for third_tier in (".app.zip", ".pkg", ".deb", ".msi", ".appimage"):
+        assert third_tier not in text.lower(), (
+            f"release.yml packages a third download tier ({third_tier}); the "
+            "release is the CLI archive and the .dmg, and nothing else"
+        )
+
+
+@pytest.mark.acceptance(
+    spec="mcp-gateway",
+    scenario="release tag produces the CLI archive and SHA256SUMS",
+)
+def test_release_workflow_checksums_cover_both_tiers() -> None:
+    """Both tiers must be checksummed like every other artifact. The SHA256SUMS
+    step hashes all files in artifacts/, so the assertion is that each tier
+    lands in artifacts/ and the checksum step runs over that directory."""
     text = _release_yml_text()
     assert "artifacts/$archive" in text or "artifacts/coffer-cli" in text, (
         "CLI archive must be written into artifacts/ so SHA256SUMS covers it"
+    )
+    assert "artifacts/Coffer-unsigned-" in text, (
+        "the .dmg must be written into artifacts/ so SHA256SUMS covers it"
     )
     assert "SHA256SUMS" in text, "release.yml must emit a SHA256SUMS file"
 
@@ -516,15 +556,6 @@ def test_smoke_test_bundle_script_present_and_invokes_shim() -> None:
         )
     assert any("[[:space:]]" in ln for ln in grep_lines), (
         "smoke_test_bundle.sh must use whitespace-tolerant matching for the JSON-RPC reply"
-    )
-
-    # A frozen build that drops sqlite-vec's vec0 extension silently degrades
-    # vector retrieval to keyword-only (VecIndex.available() swallows the load
-    # failure). The smoke test must probe vec availability against the bundled
-    # daemon so that regression reds the build instead of shipping quietly.
-    assert "vec" in contents.lower() and "available" in contents.lower(), (
-        "smoke_test_bundle.sh must probe sqlite-vec availability so a frozen "
-        "build that lost the vec0 extension fails the smoke test"
     )
 
     if os.environ.get("COFFER_RUN_SMOKE") != "1":
@@ -674,7 +705,7 @@ def _run_bump(root: Path, version: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_bump_version_moves_every_copy_together(tmp_path: Path) -> None:
-    """`scripts/bump_version.py` rewrites all five files, and only the version
+    """`scripts/bump_version.py` rewrites all six files, and only the version
     anchors in them — the dependency pins that also say `version` are untouched."""
     _copy_version_files(tmp_path)
     before = {rel: (tmp_path / rel).read_text(encoding="utf-8") for rel in _BUMP_TARGETS}

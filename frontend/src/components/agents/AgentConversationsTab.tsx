@@ -32,7 +32,7 @@ import type {
   TranscriptSort,
 } from "@/lib/api/agentTranscripts";
 import { useDefaultPageSize } from "@/lib/preferences";
-import { useDebouncedValue } from "@/lib/hooks/usePagedList";
+import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { TRANSCRIPTS_PAGE_SIZE, useAgentTranscripts } from "@/lib/hooks/useAgentTranscripts";
 
 function TimeCell({ value }: { value: string | null }) {

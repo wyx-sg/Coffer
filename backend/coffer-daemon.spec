@@ -29,12 +29,15 @@ hidden = (
     # PyInstaller's static analysis cannot trace them. Declare them explicitly
     # so a frozen build can extract inbound attachments and drive the built-in
     # chat agent.
-    #   markitdown — chat/document_extract.py (channel attachments, FR-030)
+    #   markitdown — knowledge/converters/markitdown_converter.py (file → markdown
+    #                at ingest) and chat/document_extract.py (channel attachments,
+    #                FR-030)
     #   openai     — providers/*
     #   langgraph / langchain — llm/*, chat/*
-    # The knowledge layer declares nothing here: it is a directory of markdown
-    # files with no converter, no index and no embedding client to bundle
-    # (ADR knowledge-is-plain-files).
+    # The knowledge layer needs no index and no embedding client bundled: it is
+    # a directory of markdown files an agent greps (ADR knowledge-is-plain-files).
+    # Converters it does need — markitdown below turns an uploaded document into
+    # markdown at ingest, which is why its format readers are declared too.
     + collect_submodules("markitdown")
     # MarkItDown imports its format backends lazily *inside* each converter.
     # PyInstaller's import graph MAY trace them transitively (the converter
@@ -93,13 +96,12 @@ a = Analysis(
     runtime_hooks=[],
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
-        # any of it: transcription is remote (spec channels FR-022), so nothing
-        # local decodes or runs a model. The exclude stays as a guard — a
-        # transitive pull would inflate every binary from ~95 MB to ~260 MB,
-        # and torch is fragile under PyInstaller.
+        # any of it: nothing local decodes audio or runs a model — voice is
+        # transcribed through the user's own connection (spec channels FR-022).
+        # The exclude stays as a guard — a transitive pull would inflate every
+        # binary from ~95 MB to ~260 MB, and torch is fragile under PyInstaller.
         "torch",
         "mlx",
-        "mlx_whisper",
         "numba",
         "llvmlite",
         "scipy",

@@ -92,9 +92,8 @@ def _state() -> tuple[McpPreferenceSyncState, _Prefs]:
 async def test_export_writes_a_doc_only_for_servers_with_something_disabled() -> None:
     state, _prefs = _state()
     await state.delete_docs(["smart"])
-    docs, owned = await state.export_docs()
+    docs = await state.export_docs()
     assert AREA == "mcp-preferences"
-    assert owned == ["jira", "smart"]
     assert docs == [("jira", {"server": "jira", "disabled": [{"type": "tool", "key": "search"}]})]
 
 
@@ -111,7 +110,7 @@ async def test_deleting_a_servers_doc_re_enables_everything_on_that_server_only(
 async def test_export_after_delete_no_longer_carries_the_server() -> None:
     state, _prefs = _state()
     await state.delete_docs(["jira"])
-    docs, _owned = await state.export_docs()
+    docs = await state.export_docs()
     assert [rel for rel, _ in docs] == ["smart"]
 
 

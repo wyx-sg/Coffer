@@ -50,15 +50,21 @@ async function disableTool(
   toolName: string,
 ): Promise<void> {
   const { port, token } = readDaemonToken();
+  // The capability key travels in the BODY, not the path. A path-shaped
+  // variant used to exist alongside this one and was deleted as legacy; this
+  // helper was its last caller anywhere, and it lived in the one tier
+  // `make verify` does not run, so nothing local caught the 404.
   const url =
     `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${serverName}` +
-    `/capabilities/tool/${toolName}/disable`;
+    `/capabilities/tool/disable`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "X-Coffer-Token": token,
       "X-Coffer-Actor": "e2e-cap-disable",
+      "Content-Type": "application/json",
     },
+    body: JSON.stringify({ capability_key: toolName }),
   });
   if (!response.ok) {
     const body = await response.text();

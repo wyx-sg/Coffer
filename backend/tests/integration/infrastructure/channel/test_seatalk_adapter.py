@@ -1008,7 +1008,7 @@ async def test_fetch_thread_downloads_thread_images(
     assert all(pathlib.Path(a.path).read_bytes() == fake_seatalk.file_bytes for a in atts)
 
 
-async def testmessage_to_item_maps_non_text_tags() -> None:
+async def test_message_to_item_maps_non_text_tags() -> None:
     from coffer.infrastructure.channel.seatalk_parse import message_to_item
 
     image_item = message_to_item(

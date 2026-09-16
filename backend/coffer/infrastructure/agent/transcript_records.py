@@ -133,8 +133,13 @@ def claude_turn(record: dict[object, object]) -> tuple[str, str] | None:
 def codex_inner(record: dict[object, object]) -> dict[object, object]:
     """The record's payload envelope, or the record itself when it has none.
 
-    A real persisted rollout nests every event under ``payload``; the flat
-    fixture shape and the live ``codex exec --json`` stream do not.
+    A real persisted rollout nests every event under ``payload``; the live
+    ``codex exec --json`` stream does not.
+
+    Measured, because this parses another tool's file format and guessing is
+    how a reader silently drops turns: 1,937 rollout files on a developer
+    machine, spanning months of use, are ``response_item`` records with a
+    ``payload`` — every single one. Not one flat record among them.
     """
     payload = record.get("payload")
     return payload if isinstance(payload, dict) else record
@@ -156,7 +161,13 @@ def codex_turn(record: dict[object, object]) -> tuple[str, str] | None:
     if kind == "response_item" and inner.get("type") == "message":
         role: object = inner.get("role")
         content: object = inner.get("content")
-    elif kind == "message":  # flat fixture / legacy shape
+    elif kind == "message":
+        # Tolerance, not a format anything is known to write. No real rollout
+        # on hand uses it (see ``codex_inner``), so this branch is reachable
+        # only from a Codex version nobody here has run — kept because Codex
+        # owns this file format and the cost of being wrong is asymmetric:
+        # three lines of tolerance against a transcript reader that silently
+        # loses every turn. Delete it the day Codex's format is versioned.
         role = record.get("role")
         content = record.get("content")
     elif kind == "item.completed":  # live stream shape — keep agent_message only

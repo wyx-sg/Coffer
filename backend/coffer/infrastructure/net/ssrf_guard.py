@@ -1,7 +1,7 @@
 """SSRF guard: refuse outbound requests to loopback, private, or link-local hosts.
 
-Used to validate user-supplied outbound URLs (e.g. an LLM provider or
-embedding base URL via `provider_introspector`) before any network
+Used to validate user-supplied outbound URLs (e.g. an LLM connection's base
+URL, via `coffer.infrastructure.provider.introspector`) before any network
 round-trip. Resolves the host to one or more IPs; if any of them fall into
 the blocked ranges, the URL is rejected.
 
