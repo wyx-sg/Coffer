@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 
 import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
 import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
+import { firstHumanLine } from "@/lib/transcriptText";
 import { cn } from "@/lib/utils";
 
 /** One line of the outline: which turn it is, and what it says. */
@@ -34,15 +35,22 @@ export const turnDomId = (index: number) => `transcript-turn-${index}`;
  *
  * A prompt can be a thousand lines of pasted context; the outline shows the
  * first non-empty one, which is what the reader would have recognised it by.
- * Empty and whitespace-only turns are dropped — they index nothing.
+ *
+ * The line is the first the PERSON wrote (``firstHumanLine``), not the first in
+ * the turn — a harness prepends `<system-reminder>` and `<task-notification>`
+ * blocks to the same turn, and indexing by those produced an outline that said
+ * `<task-notification>` twelve times in fifteen entries: as long as the thing it
+ * indexes, and useless for finding anything in it. A turn that is nothing but
+ * those blocks is dropped for the same reason empty turns are — the reader did
+ * not write it and is not looking for it.
  */
 export function outlineOf(messages: TranscriptMessage[]): OutlineEntry[] {
   const out: OutlineEntry[] = [];
   messages.forEach((message, index) => {
     if (message.role !== "user") return;
-    const firstLine = message.text.split("\n").find((line) => line.trim().length > 0);
-    if (!firstLine) return;
-    out.push({ index, label: firstLine.trim() });
+    const label = firstHumanLine(message.text);
+    if (!label) return;
+    out.push({ index, label });
   });
   return out;
 }

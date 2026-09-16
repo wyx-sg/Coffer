@@ -105,6 +105,30 @@ describe("AgentConversationPage", () => {
     expect(screen.getByText("guard").tagName).toBe("STRONG");
   });
 
+  test("folds the harness's blocks away and leads with the question", () => {
+    // "Like a real back-and-forth" (what this page was asked for) cannot mean
+    // opening every other turn with eight lines of machinery the person did
+    // not type. It is folded, not dropped: the record stays complete.
+    stub({
+      messages: [
+        {
+          role: "user",
+          text: "<system-reminder>\nYou are in a git worktree.\n</system-reminder>\n\nwhy is the redirect looping",
+          timestamp: null,
+          truncated: false,
+        },
+      ],
+    });
+    renderAt();
+
+    const turns = within(screen.getByTestId("transcript-turns"));
+    expect(turns.getByText("why is the redirect looping")).toBeInTheDocument();
+    // Present but behind a disclosure, not inline in the bubble.
+    const disclosure = turns.getByText(/harness context/i);
+    expect(disclosure.tagName).toBe("SUMMARY");
+    expect(turns.getByText(/You are in a git worktree/)).toBeInTheDocument();
+  });
+
   test("says how much of the conversation is on screen", () => {
     // A reader looking at the first 200 turns of 812 must be told so, or a
     // short page reads as a short conversation.

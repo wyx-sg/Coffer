@@ -282,6 +282,22 @@ def test_a_scope_naming_the_agent_key_instead_of_the_resource_is_refused():
         _validate_scope(Scope(agents=["claude_code"]))
 
 
+def test_the_refusal_says_what_the_scope_drives_not_only_what_it_names():
+    # Printing only the names produced the one message nobody can act on —
+    # "scope (may drive: claude_code) excludes ... 'claude_code'", the same
+    # string on both sides of an exclusion. What the name RESOLVES to is the
+    # half that explains it.
+    with pytest.raises(ValueError, match="no registered agent"):
+        _validate_scope(Scope(agents=["claude_code"]))
+
+
+def test_a_genuine_narrowing_is_refused_in_both_vocabularies():
+    # And when the names do resolve, the message shows the resolution rather
+    # than leaving the reader to guess why two different words collide.
+    with pytest.raises(ValueError, match=r"codex → codex"):
+        _validate_scope(Scope(agents=["codex"]))
+
+
 def test_a_channel_with_an_explicit_default_agent_is_read_from_its_config():
     _validate_scope(Scope(agents=["codex"]), {"channel_type": "telegram", "default_agent": "codex"})
 
