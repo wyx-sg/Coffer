@@ -1,4 +1,4 @@
-# Conventional Commits enforcement. Mirrors agents/workflow.md "Commits".
+# Conventional Commits enforcement. Mirrors .agents/workflow.md "Commits".
 #
 # Activated locally via `pre-commit install --hook-type commit-msg`.
 # See .pre-commit-config.yaml for the hook wiring.

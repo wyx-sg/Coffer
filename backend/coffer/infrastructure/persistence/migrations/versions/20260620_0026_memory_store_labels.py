@@ -1,4 +1,4 @@
-"""add memory_store_labels (user-set display label for a memory store, 007 FR-017c)
+"""add memory_store_labels (user-set display label for a memory store)
 
 Revision ID: 0026
 Revises: 0025
@@ -8,6 +8,9 @@ A per-project memory store is named ``project-<ULID>``; when its originating
 git-root was never recorded the UI shows that opaque name. This table lets the
 user attach a readable display label to any store (``store_name -> label``),
 mirroring ``memory_store_project_roots``. Additive — no existing row changes.
+
+The requirement behind it is retired and no current spec carries it: 0052
+renamed this table to ``knowledge_scope_labels`` and 0066 dropped it.
 """
 
 from __future__ import annotations

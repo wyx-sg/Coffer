@@ -1,7 +1,7 @@
 name: pr-title
 
 # The PR title becomes the squash-merge commit subject (per
-# agents/workflow.md). We lint it with the same commitlint config that the
+# .agents/workflow.md). We lint it with the same commitlint config that the
 # local pre-commit commit-msg hook uses (.commitlintrc.yaml), so PR title
 # rules and per-commit rules can never drift.
 

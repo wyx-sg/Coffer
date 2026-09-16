@@ -100,7 +100,7 @@ export function ChannelMachineSelect({ name, config, runsOn, runsHere, compact =
             {labelFor(option)}
           </SelectItem>
         ))}
-        {/* FR-080 requires the surface offering the rebind to say what a
+        {/* FR-027 requires the surface offering the rebind to say what a
             rebind actually costs: binding a channel to the machine you are
             sitting at, while another still holds it, leaves both live until
             that machine's next round. It belongs in the menu rather than

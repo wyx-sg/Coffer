@@ -122,8 +122,7 @@ resource's **reach**, and reach is machine-local.
    runs.
 
    `channel` converges like every other kind, and answers "which machine runs
-   it" with a field of its own — `runs_on`, in its config (spec channels
-   FR-080). It is deliberately not a scope axis: reach is the LOCAL answer to
+   it" with a field of its own — `runs_on`, in its config (spec channels FR-026). It is deliberately not a scope axis: reach is the LOCAL answer to
    what runs here, which is why it never travels, while the machine that runs a
    channel is one answer the machines share. A channel briefly did not converge
    at all, for want of anywhere to say that.
@@ -136,7 +135,7 @@ resource's **reach**, and reach is machine-local.
    | `mcp_server` | The gateway filters the server's tools by the session's agent, so a server scoped away from that agent presents no tools to it. |
    | `skill` | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. |
    | `knowledge` | The built-in knowledge tools filter the collections a session may list, grep, read and write. |
-   | `memory` | Recall filters the partitions a session may read, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-014). |
+   | `memory` | Recall filters the partitions a session may read, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-012). |
    | `channel` | **Inverted.** A channel is consumed by no agent, so its scope names the agents the channel may **drive**: `/agent` lists, offers and accepts only those, and a channel that may drive nothing does not start its adapter at all. |
    | `provider` | The projection seam: the switch, the per-agent key lookup, the post-import reconcile and the boot self-heal read scope (∩ `enabled`) to decide which agents a connection is written into. |
    | `agent` | None. It IS the agent, so there is nothing for a scope to narrow. A non-null scope is rejected at validation. |
@@ -175,9 +174,9 @@ resource's **reach**, and reach is machine-local.
    authorization is the reason it is a Resource at all: the kind declares
    `supports_scope`, and an agent lists, greps, reads and writes only the
    collections activated for it ([Knowledge Is Plain Files](knowledge-is-plain-files.md),
-   spec knowledge FR-010…FR-012). Enforcement sits at the MCP tool surface
+   spec knowledge FR-007…FR-011). Enforcement sits at the MCP tool surface
    only, so it prevents mistaken retrieval, not deliberate filesystem access by
-   an agent that also holds shell tools (FR-014).
+   an agent that also holds shell tools (spec knowledge FR-011).
    Chat history, audit logs, runtime state and machine-local settings stay
    machine-local (restated as a boundary, not a new decision).
 

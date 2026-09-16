@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu (project owner)
-**Related**: [`constitution.md`](../../.specify/memory/constitution.md) amendments 0.4.0 → 0.5.0 → 0.6.0; [`roadmap.md`](../../.specify/memory/roadmap.md) `## Revision log`; [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); specs [mcp-gateway](../../specs/mcp-gateway/spec.md), [channels](../../specs/channels/spec.md), [vault-sync](../../specs/vault-sync/spec.md), [ui-shell](../../specs/ui-shell/spec.md), [knowledge](../../specs/knowledge/spec.md), [memory](../../specs/memory/spec.md)
+**Related**: [`constitution.md`](../../.specify/memory/constitution.md) amendments 0.4.0 → 0.5.0 → 0.6.0; [`roadmap.md`](../../.specify/memory/roadmap.md) `## Revision log`; [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); specs [mcp-gateway](../../specs/mcp-gateway/spec.md), [channels](../../specs/channels/spec.md), [vault-sync](../../specs/vault-sync/spec.md), [web-ui](../../specs/web-ui/spec.md), [knowledge](../../specs/knowledge/spec.md), [memory](../../specs/memory/spec.md)
 
 ## Context
 
@@ -51,14 +51,14 @@ carefully that a reader could take the removal as final.
 removal, and a proposal to remove one is a proposal to amend this ADR, decided
 by the project owner:
 
-1. **The desktop shell** — spec mcp-gateway FR-029 – FR-032,
+1. **The desktop shell** — spec desktop-app FR-001 – FR-014,
    [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md).
-2. **The web Chat page** — spec channels FR-072 – FR-078,
+2. **The web Chat page** — spec chat FR-029 – FR-041,
    [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md).
 3. **Bidirectional vault sync with a user-owned remote** — spec vault-sync,
    [Vault Sync](vault-sync.md), constitution 0.6.0.
 4. **The Activity page** — the audit log, the MCP invocation log and the
-   daemon log, each with its own tab (spec ui-shell; the records themselves
+   daemon log, each with its own tab (spec web-ui; the records themselves
    are spec mcp-gateway's).
 5. **The knowledge layer and the memory layer, as two kinds** — specs
    knowledge and memory, [Knowledge Is Plain Files](knowledge-is-plain-files.md),

@@ -5,7 +5,7 @@
 // Configuration card the Edit dialog owns every change of, and Models, the
 // table deciding which of the endpoint's models this connection offers at all.
 // The open tab lives in the URL (`?tab=models`) so a refresh, a deep link or
-// the back button lands on the same tab (agents/frontend.md §3).
+// the back button lands on the same tab (.agents/frontend.md §3).
 import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";

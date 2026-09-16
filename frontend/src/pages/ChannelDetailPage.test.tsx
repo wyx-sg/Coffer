@@ -447,7 +447,7 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
 
 describe("ChannelDetailPage — platform diagnostics and pairing link", () => {
   test("reports a configuration the platform will not honour", () => {
-    // FR-060: privacy mode makes "act on unaddressed group messages" a setting
+    // spec channels/telegram FR-004: privacy mode makes "act on unaddressed group messages" a setting
     // that reads correctly in Coffer and does nothing in the chat.
     stubResource();
     stubStatus({
@@ -475,7 +475,7 @@ describe("ChannelDetailPage — platform diagnostics and pairing link", () => {
   });
 
   test("offers the pairing link alongside the code", () => {
-    // FR-066: one tap instead of transcribing eight characters on a phone.
+    // FR-051: one tap instead of transcribing eight characters on a phone.
     stubResource();
     stubStatus();
     stubPairing({

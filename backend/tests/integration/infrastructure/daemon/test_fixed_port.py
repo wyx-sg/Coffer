@@ -1,4 +1,4 @@
-"""spec mcp-gateway FR-028 — the daemon binds one port, or it does not start.
+"""spec daemon FR-011 — the daemon binds one port, or it does not start.
 
 The daemon has exactly one port: the one the user pinned, or 8000 when they
 pinned none. There is no scan left on a user-facing start, so the two
@@ -53,7 +53,7 @@ def _hold(port: int) -> socket.socket:
     return squatter
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="a configured daemon port survives restarts")
+@pytest.mark.acceptance(spec="daemon", scenario="a configured daemon port survives restarts")
 def test_fixed_port_is_bound_on_every_start(_isolated_home: Path) -> None:
     """Two consecutive starts land on the same port — the one the user chose.
 
@@ -78,7 +78,7 @@ def test_fixed_port_is_bound_on_every_start(_isolated_home: Path) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="a port that is taken refuses to start and says what holds it",
 )
 def test_taken_fixed_port_refuses_to_start_with_an_actionable_message(
@@ -149,7 +149,7 @@ def test_no_configured_port_binds_the_default_and_never_scans(
     assert asked_for == [daemon_config.DEFAULT_PORT]
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="the daemon binds the same port every start")
+@pytest.mark.acceptance(spec="daemon", scenario="the daemon binds the same port every start")
 def test_an_unconfigured_daemon_binds_the_default_on_every_start(
     _isolated_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -182,7 +182,7 @@ def test_an_unconfigured_daemon_binds_the_default_on_every_start(
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="a port that is taken refuses to start and says what holds it",
 )
 def test_a_held_default_port_refuses_to_start_with_nothing_configured(

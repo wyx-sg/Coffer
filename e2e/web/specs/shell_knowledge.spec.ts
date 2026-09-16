@@ -4,7 +4,7 @@
 // dialog, put a file in it over the REST API, then walk the catalogue and read
 // the file in the real DOM.
 //
-// Nothing auto-provisions a collection any more (spec knowledge FR-010), so a
+// Nothing auto-provisions a collection any more (spec knowledge FR-007), so a
 // walk starts by making one. State is provisioned through the daemon's REST API
 // so the tests stay robust against UI churn; the page render is exercised
 // against the real DOM.
@@ -62,7 +62,7 @@ acceptance("knowledge", "the catalogue lists one level of a collection", async (
 
   await page.getByText(name).first().click();
   // The collection's own level: the root file and the folder, not the file
-  // inside the folder — the catalogue descends a level per request (FR-021).
+  // inside the folder — the catalogue descends a level per request (FR-013).
   await expect(page.getByText("Top level note")).toBeVisible();
   await expect(page.getByText("nested")).toBeVisible();
   await expect(page.getByText("Nested note")).toHaveCount(0);

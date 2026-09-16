@@ -1,6 +1,6 @@
 """The background worker that re-aggregates the agents' native memory.
 
-Spec memory FR-007: aggregation MUST run on a worker on an interval and MUST
+Spec spec memory FR-007: aggregation MUST run on a worker on an interval and MUST
 also be triggerable by hand. It ran only by hand for its whole first life —
 the Memory page's Sync button and `coffer memory sync` — which made a layer
 whose entire premise is "what your agents already learned is here" quietly
@@ -9,7 +9,7 @@ Coffer until someone clicked.
 
 Shaped like ``organise_worker.OrganiseWorker``, and on for the same reason:
 a pass only *reads* the agents' own files and only *writes* the derived tree
-under ``~/.coffer/memory/`` (FR-023 — deleting that tree and re-running
+under ``~/.coffer/memory/`` (FR-016 — deleting that tree and re-running
 reproduces it), so there is no unattended-write risk to gate behind an
 operator switch. It is also cheap to repeat: FR-006 skips any source file
 whose content hash is unchanged, so a pass over an idle machine parses
@@ -49,7 +49,7 @@ async def _unset_interval() -> int | None:
 
 
 #: The actor recorded on an unattended pass's audit event, so the log can tell
-#: a scheduled aggregation apart from one the user asked for (FR-063).
+#: a scheduled aggregation apart from one the user asked for (FR-032).
 WORKER_ACTOR = "system:memory-aggregate-worker"
 
 

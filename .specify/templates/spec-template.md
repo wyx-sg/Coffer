@@ -16,7 +16,7 @@
   2. A named folder, not a numbered one. `scripts/check_doc_numbering.py`
      rejects numbered spec directories and any `spec <NNN>` token in prose.
   3. No date or time annotation in the header or body (see
-     `agents/sdd.md` "Markdown Style for spec.md"). Chronology lives in git
+     `.agents/sdd.md` "Markdown Style for spec.md"). Chronology lives in git
      and in `.specify/memory/roadmap.md`, not in the spec.
 
   A spec may nest: a parent spec owns the requirements its children share,

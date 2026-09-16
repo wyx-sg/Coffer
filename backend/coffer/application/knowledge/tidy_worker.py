@@ -2,7 +2,7 @@
 
 It is off unless the operator turns it on. That default is the point rather
 than caution: the pass rewrites files a human and an agent manage together,
-with no diff to approve before it lands (spec knowledge FR-051), so an
+with no diff to approve before it lands (spec knowledge FR-031), so an
 unattended rewriter should be something the operator switched on, never
 something they discover running.
 

@@ -415,13 +415,17 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
             allow_lifecycle_kind=True,
         )
         stored = await svc.get(ResourceRef(KIND_KNOWLEDGE, "shopee"))
-        # A collection carries no config at all (spec knowledge FR-081).
+        # A collection carries no config at all (spec knowledge FR-038).
         assert stored.config == {}
     finally:
         await engine.dispose()
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="credentials",
+    scenario="deleting a resource releases the credentials nothing else cites",
+)
 async def test_delete_releases_credentials_only_it_cited(tmp_path):
     """Deleting a resource drops the credentials nothing else cites; a ref
     still cited by another resource survives (2026-07-10 orphan incident)."""

@@ -1,6 +1,4 @@
-"""HTTP coverage for /api/v1/agents/{name}/unmanaged-skills (spec skill-manager
-FR-022/023).
-"""
+"""HTTP coverage for /api/v1/agents/{name}/unmanaged-skills (spec skill-manager FR-016/023)."""
 
 from __future__ import annotations
 

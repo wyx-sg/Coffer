@@ -44,7 +44,7 @@ Secrets are stored as **Fernet ciphertext** in the `credentials` table of `~/.co
 
 Envelope encryption means there is exactly one piece of secret material outside the database: the Fernet **master key**. It lives in **exactly one** of two places:
 
-- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely. See [Envelope-Encrypted Credentials](/reference/adr/envelope-encrypted-credential-store).)
+- **`~/.coffer/master.key`** — a `0600` file beside the database. This is the **default**: zero keychain prompts. (Why: macOS pins keychain ACLs to the binary's cdhash, so every rebuild of the unsigned daemon re-prompted for every secret. A file-backed master key removes the prompts entirely.)
 - **The OS keychain** (service `coffer`, ref `master-key`) — opt-in hardening via **Settings → Security** or `coffer credentials storage --set keychain`. macOS may prompt once per daemon start. This is the mode that defends against offline exfiltration of `~/.coffer/`.
 
 Resolution is **file-first**: the daemon looks for the file before the keychain. This makes relocation **crash-safe** — `relocate` moves only the master key and removes the old copy **last**, so an interrupted move always resolves back to a working state. The ciphertext in the `credentials` table is never touched by a relocation (the key moves; the data stays); switching storage modes does not re-encrypt.
@@ -67,7 +67,7 @@ The `StdioTransport` config schema has a second layer of defence: its `env` fiel
 
 ## Channels & the public-reachable surface
 
-The loopback-only invariant says a public-reachable surface runs as a separate process limited to signed callback paths. The **SeaTalk callback listener** is the concrete instantiation of that rule (spec channels, [Channel Adapter Framework](/reference/adr/channel-adapter-framework)). SeaTalk delivers events only by public webhook, so it is the one place Coffer accepts inbound traffic that originated off the machine — and it does so through a process the daemon never lets the network reach.
+The loopback-only invariant says a public-reachable surface runs as a separate process limited to signed callback paths. The **SeaTalk callback listener** is the concrete instantiation of that rule. SeaTalk delivers events only by public webhook, so it is the one place Coffer accepts inbound traffic that originated off the machine — and it does so through a process the daemon never lets the network reach.
 
 - **Separate process, never the daemon.** The listener is a daemon-spawned child that runs only while a SeaTalk channel is enabled. It serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon. The daemon itself stays loopback-only — it is never exposed.
 - **Signature verification.** Every callback POST carries a `Signature` header that SeaTalk computes as `sha256(raw_body + signing_secret)` (lowercase hex). The listener recomputes the same digest from the raw body and the channel's signing secret and compares it in constant time (`hmac.compare_digest`). An empty secret or empty signature never verifies — an empty secret would collapse the MAC to `sha256(body)`, computable by anyone. The platform's `event_verification` challenge is answered inline; every other valid event is forwarded to the daemon over loopback carrying the daemon token.
@@ -78,7 +78,7 @@ Secrets reach the listener the same way upstream MCP subprocesses get theirs: th
 
 ## Sync security
 
-Vault sync ([Vault Sync](/reference/adr/vault-sync)) converges the vault **bidirectionally** with a git remote the user owns and configured. It is the one bounded exception to Local-First (constitution v0.6.0), and its security rests on what does and does not travel:
+Vault sync converges the vault **bidirectionally** with a git remote the user owns and configured. It is the one bounded exception to Local-First (constitution v0.6.0), and its security rests on what does and does not travel:
 
 - **Network egress is real, and it is to a remote the user named.** A converge round runs `git` against that remote, fetching and pushing. There is no Coffer-operated endpoint involved, and the feature is **off until a remote is configured**.
 - **The remote is a rendezvous, never a system of record.** Every machine's local vault stays complete, so the remote can be deleted and rebuilt from any one of them.
@@ -105,9 +105,9 @@ In production the daemon serves the built web UI itself, so the UI and the API s
 
 ## Getting the token into the browser
 
-The web UI is a browser page, so it needs the API token that the CLI and shim read straight out of `daemon.json`. Handing it over in a query string would be the obvious shortcut and is exactly what Coffer does **not** do: query strings and paths land in browser history, in the session-restore store, and in anything that syncs history across devices — which would undo the loopback-plus-token posture of FR-012 / FR-013.
+The web UI is a browser page, so it needs the API token that the CLI and shim read straight out of `daemon.json`. Handing it over in a query string would be the obvious shortcut and is exactly what Coffer does **not** do: query strings and paths land in browser history, in the session-restore store, and in anything that syncs history across devices — which would undo Coffer's loopback-plus-token posture.
 
-The daemon serves the page itself, so it hands the token over **in the response body** instead (**FR-025**): the `index.html` it serves carries `window.__COFFER_TOKEN__` in its head, sourced from the same in-process token the header check compares against, so the injected value cannot drift from the accepted one. A body reaches neither history, nor the session-restore store, nor a screenshot, nor a pasted bug report, which is what made the URL unusable and makes this usable.
+The daemon serves the page itself, so it hands the token over **in the response body** instead: the `index.html` it serves carries `window.__COFFER_TOKEN__` in its head, sourced from the same in-process token the header check compares against, so the injected value cannot drift from the accepted one. A body reaches neither history, nor the session-restore store, nor a screenshot, nor a pasted bug report, which is what made the URL unusable and makes this usable.
 
 Two properties are load-bearing:
 
@@ -116,13 +116,13 @@ Two properties are load-bearing:
 
 `coffer open` therefore carries no credential. It reads the daemon's real port from `~/.coffer/daemon.json` (mode `0600`) and opens the browser there.
 
-The desktop shell is the one host this mechanism does **not** reach: its page is a local asset nobody served, so there was no `index.html` to inject into. The shell hands the same globals to the page over IPC instead (**FR-030**) — a second supplier of the same credential, not a second way of authenticating.
+The desktop shell is the one host this mechanism does **not** reach: its page is a local asset nobody served, so there was no `index.html` to inject into. The shell hands the same globals to the page over IPC instead — a second supplier of the same credential, not a second way of authenticating.
 
 ## Host-header validation (DNS rebinding)
 
 Binding to loopback stops a remote host from reaching the daemon. It does not stop a **browser**: a page on an attacker's origin whose hostname resolves to `127.0.0.1` is, as far as the browser is concerned, still same-origin with that attacker's origin — so CORS never applies and the page can read the response body. That bought nothing while the daemon's HTML held no secret; with the token in the document, a single `fetch("/")` would take the whole vault.
 
-So the daemon refuses any request whose `Host` header is not a loopback authority — `127.0.0.1`, `localhost` or `::1`, with or without a port — answering `421` with error code `HOST_NOT_LOOPBACK` (**FR-027**). Rebinding does not change the `Host` header: the browser sends the hostname from the URL it fetched, so a rebound request still names the attacker's own host and is refused before it reaches any route. `COFFER_ALLOWED_HOSTS` can add authorities; the backend test suite sets it because it drives the app in-process, and nothing in a real deployment needs it.
+So the daemon refuses any request whose `Host` header is not a loopback authority — `127.0.0.1`, `localhost` or `::1`, with or without a port — answering `421` with error code `HOST_NOT_LOOPBACK`. Rebinding does not change the `Host` header: the browser sends the hostname from the URL it fetched, so a rebound request still names the attacker's own host and is refused before it reaches any route. `COFFER_ALLOWED_HOSTS` can add authorities; the backend test suite sets it because it drives the app in-process, and nothing in a real deployment needs it.
 
 The check covers every surface on the daemon's port. It does not cover the separate `coffer-callback` listener, which is a different process on a different port — and the only thing a tunnel is ever pointed at. That listener authenticates inbound traffic by per-channel signature and forwards to the daemon over loopback, so public callbacks are unaffected.
 
@@ -144,8 +144,3 @@ The daemon makes outbound calls today. Naming them precisely matters, because th
 The **HTTP-transport MCP client** is the open gap, and it is different in kind: its target also comes from user-registered config, but a server registration is the thing an attacker most plausibly gets to influence (a pasted `mcpServers` block from a README), and the MCP SDK's httpx client applies no IP-range filtering. Routing that client through the same guard is planned hardening, not yet shipped.
 
 For stdio-transport MCP servers there is no outbound HTTP at all — the daemon spawns a subprocess and communicates over its stdin/stdout. The subprocess's environment is controlled (no secret literals) and its working directory is pinned by the `cwd` config field.
-
-## See also
-
-- [Constitution reference](/reference/project/constitution) — Local-First, Credentials, and Network defaults invariants
-- [Architecture reference](/reference/project/architecture) — Cross-cutting concerns table and the credentials module location

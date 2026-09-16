@@ -6,7 +6,7 @@ for the conversation's provider, has the provider build a configured adapter, an
 spawns the detached turn task (``turn_runner.run_turn_task``) which drives the
 adapter and **publishes** events to the conversation's :class:`ConversationBus`.
 
-Turn lifecycle + pending queue (spec channels FR-050…FR-054)
+Turn lifecycle + pending queue (spec chat FR-018…spec chat FR-020)
 -------------------------------------
 Starting a turn is decoupled from consuming its events. Every turn's events are
 published to a per-conversation bus; any number of clients ``subscribe`` (the web
@@ -121,12 +121,12 @@ class TurnOrchestrator:
 
         Returns ``True`` when the message was queued, ``False`` when its turn
         started immediately. Raises ``ConversationNotFound`` when the conversation
-        does not exist. A message sent during a turn is never rejected (spec
-        channels FR-050) — from the web composer or from a channel.
+        does not exist. A message sent during a turn is never rejected (spec chat FR-018) — from the
+        web composer or from a channel.
 
         ``attachments`` (channel media) are persisted into the user message as
-        references (FR-033) and ``title_hint`` names a conversation still under
-        its placeholder title (FR-048). ``on_start`` is a channel's renderer
+        references (FR-034) and ``title_hint`` names a conversation still under
+        its placeholder title (spec chat FR-011). ``on_start`` is a channel's renderer
         hook: called with the turn's dedicated event queue (ending in ``None``)
         the moment the turn begins — now, or when the queue reaches it.
         """
@@ -203,7 +203,7 @@ class TurnOrchestrator:
         """Stop a running turn (keeping its partial output) and pause the queue.
 
         A no-op when no turn is in flight. Pausing holds queued messages until the
-        owner resumes (any send / ``set_pending`` clears the pause) — FR-051.
+        owner resumes (any send / ``set_pending`` clears the pause) — spec chat FR-019.
         """
         state = peek(conversation_id)
         if state is None:
@@ -267,7 +267,7 @@ class TurnOrchestrator:
             log.exception("auto-advance turn failed for conversation %s", conversation_id)
             # Re-insert the head and pause so the message is neither lost nor
             # retried in a spin; the owner resumes (send / set_pending) after
-            # fixing the cause (FR-018a — a queued message must not vanish).
+            # fixing the cause (spec chat FR-022 — a queued message must not vanish).
             state.queue.insert(0, message)
             state.paused = True
             self._broadcast_queue_changed(conversation_id)
@@ -294,10 +294,10 @@ class TurnOrchestrator:
         Attachments (channel media) are persisted INTO the user message as
         ``AttachmentBlock`` references (path/mime/filename, no bytes) after the
         text — the single source of truth. The turn task re-materialises them for
-        the adapter by reading them back from history (FR-033), so they survive a
+        the adapter by reading them back from history (FR-034), so they survive a
         daemon restart and are not threaded down as a separate param. The title
         hint rides along to the persisted user message, where the
-        placeholder-title rule uses it instead of the raw text (FR-048)."""
+        placeholder-title rule uses it instead of the raw text (spec chat FR-011)."""
         state = state_for(conversation_id)
         if message.on_start is not None and primary_queue is None:
             primary_queue = asyncio.Queue()

@@ -19,7 +19,7 @@ help:
 	@echo "  make install-e2e-browsers  download the Playwright chromium build (heavy)"
 	@echo "  make hooks                 install pre-commit + commit-msg git hooks"
 	@echo ""
-	@echo "  Verification (4 test tiers + lint, see agents/testing.md):"
+	@echo "  Verification (4 test tiers + lint, see .agents/testing.md):"
 	@echo "  make verify                fast path: lint + unit + integration + contract + acceptance audit"
 	@echo "  make verify-all            verify + e2e (full suite)"
 	@echo "  make verify-unit           unit tier only (includes purity guardrail)"
@@ -142,7 +142,7 @@ verify-unit:
 		echo "verify-unit: $(FRONTEND)/node_modules missing — skipping frontend"; \
 	fi
 
-# Backend-only, as agents/testing.md documents. The frontend has no
+# Backend-only, as .agents/testing.md documents. The frontend has no
 # tier-by-directory layout: its tests are co-located `*.test.tsx` beside the
 # module they cover and all of them run in `verify-unit`'s `vitest run src`.
 # A `frontend/tests/integration` leg used to sit here; that directory was the
@@ -158,7 +158,7 @@ verify-integration:
 verify-benchmark:
 	COFFER_RUN_BENCHMARKS=1 $(PY) -m pytest $(BACKEND)/tests -m benchmark
 
-# Backend-only, as agents/testing.md documents. The one frontend contract test
+# Backend-only, as .agents/testing.md documents. The one frontend contract test
 # (`frontend/src/bootstrap.contract.test.ts`) is co-located and runs in
 # `verify-unit`; `frontend/tests/contract/` has never existed, so the leg that
 # used to guard on it only ever printed a skip.

@@ -128,7 +128,7 @@ export interface paths {
          *     master library. Foreign/user content (replaced_with_regular), a missing master,
          *     and orphan_master entries are left intact and returned in `remaining`. Each
          *     repair is audited. This endpoint is the HTTP surface for `coffer skill verify
-         *     --fix`; `POST /skills/verify` remains report-only (FR-016).
+         *     --fix`; `POST /skills/verify` remains report-only (FR-014).
          */
         post: operations["repairSkillDrift"];
         delete?: never;
@@ -151,7 +151,7 @@ export interface paths {
          * List skill-shaped folders in the agent's workspace that Coffer doesn't manage
          * @description Read-only scan of the agent's skill locations — `<config_dir>/skills`
          *     for both types, plus `~/.agents/skills` for codex — derived at request
-         *     time, never stored (FR-022). Coffer-managed links (symlinks resolving
+         *     time, never stored (FR-016). Coffer-managed links (symlinks resolving
          *     inside `~/.coffer/skills/`) and dot-entries such as Codex's `.system`
          *     are excluded. Symlinks pointing outside the master store are listed
          *     with `foreign_link=true` and are never adoptable.
@@ -182,7 +182,7 @@ export interface paths {
         /**
          * Delete an unmanaged skill folder from the agent's workspace
          * @description Removes only that entry from disk — never master content or bindings
-         *     (FR-024). Audited as `skill_unmanaged_deleted`.
+         *     (FR-018). Audited as `skill_unmanaged_deleted`.
          */
         delete: operations["deleteUnmanagedSkill"];
         options?: never;
@@ -207,7 +207,7 @@ export interface paths {
          * @description Validates the folder, moves it to `~/.coffer/skills/<name>/`,
          *     registers the `skill` resource, delivers the managed link to
          *     `<config_dir>/skills/<name>`, and records an enabled binding for the
-         *     agent — in that order (FR-023). Adopting from `~/.agents/skills`
+         *     agent — in that order (FR-017). Adopting from `~/.agents/skills`
          *     consolidates: the original folder there is removed and the link lands
          *     in `<config_dir>/skills`. Any failure before registration leaves the
          *     original folder unmoved. Audited as `skill_adopted`.

@@ -281,13 +281,12 @@ def effort_card(
 
 
 def collection_card(*, choices: Sequence[str], page: int | None = None) -> SelectionCard:
-    """Pick which collection a pending `/save` document lands in (spec
-    knowledge FR-036).
+    """Pick which collection a pending `/save` document lands in (spec channels FR-014).
 
     Unlike agent/model there is no "current" choice to tick — every save is a
     fresh decision, never a toggle a card must show as already in effect. A
     single-collection vault still renders one button rather than acting on it
-    unasked: FR-036 requires the owner confirm, and a lone collection is not
+    unasked: FR-038 requires the owner confirm, and a lone collection is not
     an exemption from that.
     """
     options = [

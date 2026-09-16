@@ -11,7 +11,7 @@ YAML, no agent-specific knowledge. The two adapters that actually walk a
 disk live in `coffer.infrastructure.memory.readers`; this module is what they
 both promise to satisfy, and what the aggregation pass composes against
 instead of a concrete reader class (so a third agent, when one earns the
-abstraction per FR-073, is one more adapter, not a change here).
+abstraction per FR-037, is one more adapter, not a change here).
 """
 
 from __future__ import annotations
@@ -56,12 +56,12 @@ class RawFact:
     description: str
     #: One of `coffer.domain.memory.fact.FACT_TYPES`.
     type: str
-    #: The source's own words, verbatim (FR-021) — never a paraphrase, so the
+    #: The source's own words, verbatim (FR-014) — never a paraphrase, so the
     #: fact stays quotable back to where it came from.
     body: str
     #: Where inside the source file this fact lives — a heading, a bullet's
     #: content hash, or empty when the whole file is the fact. Half of the
-    #: stable identity FR-022 needs; the reader is responsible for it being
+    #: stable identity FR-015 needs; the reader is responsible for it being
     #: the same string on a second, unchanged read.
     anchor: str
     #: Absolute project root this fact was learned in, or "" when the fact is

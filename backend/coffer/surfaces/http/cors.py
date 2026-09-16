@@ -2,7 +2,7 @@
 
 The same built UI has two hosts, and only one of them needs CORS at all.
 
-**Daemon-served, in a browser** (spec mcp-gateway FR-024): the page comes from
+**Daemon-served, in a browser** (spec daemon FR-016): the page comes from
 the daemon's own origin, so every call is same-origin and a browser does not
 preflight it. Nothing has to be allowed for this path.
 

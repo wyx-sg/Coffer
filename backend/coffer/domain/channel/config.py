@@ -58,7 +58,7 @@ class _CommonChannelFields(BaseModel):
     # value reaches turn time and fails with UNKNOWN_AGENT.
     default_agent: str = DEFAULT_AGENT
     default_agent_config: dict[str, Any] | None = None
-    # Group inbound gating (FR-035). ``require_mention`` (default on) keeps the
+    # Group inbound gating (FR-037). ``require_mention`` (default on) keeps the
     # bot silent in a group until @mentioned / replied-to; ``ignore_other_mentions``
     # (opt-in) drops a group message that @mentions any non-bot user, even when
     # it also mentions the bot, so the bot never butts into human-aimed traffic.
@@ -109,7 +109,7 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     channel_type: Literal["seatalk"] = "seatalk"
     app_id: str = Field(min_length=1, max_length=128)
     app_secret_ref: str = Field(min_length=1, max_length=256)
-    # FR-071: how SeaTalk delivers this bot's events. "webhook" is the HTTPS
+    # spec channels/seatalk FR-004: how SeaTalk delivers this bot's events. "webhook" is the HTTPS
     # Event Callback — a public URL the platform POSTs to, which needs a signing
     # secret and some form of ingress. "websocket" is the platform's WebSocket
     # Event Callback: the bot holds one outbound connection and needs no public
@@ -164,7 +164,7 @@ class SeaTalkChannelConfig(_CommonChannelFields):
 
     @model_validator(mode="after")
     def _delivery_decides_which_fields_exist(self) -> SeaTalkChannelConfig:
-        """FR-071: each delivery method owns a disjoint set of fields.
+        """spec channels/seatalk FR-004: each delivery method owns a disjoint set of fields.
 
         A field that decides nothing is a lie about the system, so a websocket
         channel may not carry a signing secret, a public base URL or a tunnel

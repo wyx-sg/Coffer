@@ -226,7 +226,8 @@ def _register_st(name: str = "st", *, delivery: str = "webhook") -> Any:
         delivery,
     ]
     if delivery == "webhook":
-        # Only webhook delivery has anything signed to verify (FR-071); the CLI
+        # Only webhook delivery has anything signed to verify (spec channels/seatalk FR-004); the
+        # CLI
         # refuses the flag on websocket delivery.
         argv += ["--signing-secret-ref", _ST_SIGNING_REF]
     return runner.invoke(app, argv)
@@ -401,7 +402,7 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
     assert "no pending code" in r.output
     assert "peer:     Yu (chat emp-1)" in r.output
     assert "inbound:  webhook 127.0.0.1:8787/seatalk/st (listener up)" in r.output
-    # FR-071: not managed is said, not left blank — the owner may front the
+    # spec channels/seatalk FR-004: not managed is said, not left blank — the owner may front the
     # callback themselves and needs to know Coffer is not doing it.
     assert "tunnel:   not managed by Coffer" in r.output
 
@@ -423,13 +424,13 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="channels/seatalk",
     scenario="status reports webhook-only facts as absent rather than as defaults",
 )
 def test_status_of_a_websocket_channel_reports_no_webhook_facts(
     channel_daemon: _Daemon,
 ) -> None:
-    """FR-071. The service reports ``port=0`` / ``listener_running=False`` /
+    """spec channels/seatalk FR-004. The service reports ``port=0`` / ``listener_running=False`` /
     ``path=""`` for a websocket channel deliberately — there is no listener to
     have. The CLI used to render those as ``callback: 127.0.0.1:0 (listener
     down)``, i.e. a healthy channel described as broken ingress at a port

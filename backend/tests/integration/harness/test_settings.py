@@ -8,7 +8,7 @@ from .conftest import HOOKS_DIR, REPO_ROOT
 
 SETTINGS = REPO_ROOT / ".claude" / "settings.json"
 
-#: Every hook script `agents/harness.md` documents, keyed by the event + matcher
+#: Every hook script `.agents/harness.md` documents, keyed by the event + matcher
 #: it must be wired on. A script that exists on disk but is not wired here is
 #: documentation, not enforcement — which is exactly how `verify_before_commit`
 #: went unwired while the harness doc claimed it ran on every commit.

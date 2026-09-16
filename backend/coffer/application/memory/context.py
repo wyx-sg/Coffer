@@ -1,7 +1,6 @@
-"""Composing the session-start context: L0 always, L1 when it fits (spec
-memory FR-050, FR-051).
+"""Composing the session-start context: L0 always, L1 when it fits (spec memory FR-021, FR-022).
 
-Delivery has exactly three layers (FR-050): **L0**, always — who the
+Delivery has exactly three layers (FR-021): **L0**, always — who the
 developer is, what this project's memory holds, and how to ask for more;
 **L1**, when the budget allows it — the current project partition's digest,
 one line per fact; **L2** — ``coffer__recall`` (``recall.py``), on request,
@@ -19,14 +18,14 @@ Three things this module is deliberately narrow about:
   second judgement applied on top any more: the developer's hide/pin/
   supersede/settle overrides are gone with the surface that recorded them, so
   what a fact's own frontmatter says is what delivery says.
-* **It does not render a fact line of its own.** FR-050's L1 *is* the
+* **It does not render a fact line of its own.** FR-021's L1 *is* the
   partition's digest, so the line comes from ``digest.fact_line`` — the same
   renderer that writes ``summary.md`` — rather than from a second version of
   it here. What it does not borrow is the file: the digest on disk is
   organise's output, which may not exist yet and which this module has no
   filesystem access to reach by design. Composition stays from the
   ``MemoryPort``; only the wording is shared.
-* **The budget is spent in FR-051's stated preference order**: ``global``'s
+* **The budget is spent in FR-022's stated preference order**: ``global``'s
   personal facts, then the current project's most recent — by filling L0 (the
   global side of that order) completely before L1 ever gets a look at what is
   left. A tiny budget can therefore ship L0 alone with L1 entirely absent; it
@@ -53,7 +52,7 @@ from coffer.domain.memory.partition import GLOBAL_PARTITION
 DEFAULT_BUDGET_TOKENS = 600
 
 #: Tokens reserved, unconditionally, for the closing line that names how
-#: many facts were left out and how to reach the rest (FR-051). Reserved
+#: many facts were left out and how to reach the rest (FR-022). Reserved
 #: before any fact line is considered, so trimming can never crowd out the
 #: one line the budget rule exists to guarantee. Generous relative to a
 #: realistic pointer sentence — see ``_pointer`` — on the same "approximate
@@ -80,7 +79,7 @@ class MemoryPort(Protocol):
 class ComposedContext:
     """What ``compose_context`` hands back: the text, which partition it
     resolved ``cwd`` to, and enough accounting for a caller — or a test — to
-    confirm the budget rule actually held (FR-051)."""
+    confirm the budget rule actually held (FR-022)."""
 
     text: str
     partition: str
@@ -92,7 +91,7 @@ class ComposedContext:
 
 
 def _ordered(facts: Iterable[Fact]) -> tuple[Fact, ...]:
-    """Most recent first — the whole of FR-051's within-partition order now
+    """Most recent first — the whole of FR-022's within-partition order now
     that pinning is gone.
 
     The sort key is ``digest.recency``, not a second definition of "newest":
@@ -107,8 +106,8 @@ def _pointer(omitted: int) -> str:
 
     It asks for a **distinctive word or phrase**, not a question, because that
     is the only shape recall can answer: matching is a literal,
-    case-insensitive substring scan (FR-052), and the tool's own description
-    says so (FR-060). This line used to ask for "a natural-language query" —
+    case-insensitive substring scan (FR-023), and the tool's own description
+    says so (FR-027). This line used to ask for "a natural-language query" —
     the first thing an agent reads every session, contradicting the tool it
     points at — so an agent that followed it sent a whole question, matched
     nothing, and read the empty answer as an empty memory.

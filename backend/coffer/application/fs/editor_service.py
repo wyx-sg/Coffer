@@ -1,7 +1,7 @@
 """Detect installed GUI editors for the preferred-editor picker.
 
-Spec ui-shell (the preferred-editor preference) + spec agent-registry
-FR-039 (the /fs surface). The preference itself is a free-form string, but
+Spec web-ui (the preferred-editor preference) + spec daemon FR-021 (the /fs surface). The preference
+itself is a free-form string, but
 typing it blind is error-prone — so this service enumerates common code editors
 that are *actually installed* on the host, letting the settings UI offer them as
 a picker (the user keeps a "custom" escape hatch for anything unlisted).

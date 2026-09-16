@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Enforce unit-tier purity: no I/O imports in backend/tests/unit/.
 
-The unit tier (see agents/testing.md) tests pure logic — value objects,
+The unit tier (see .agents/testing.md) tests pure logic — value objects,
 domain functions, single-class behavior. Any test that needs to spawn a
 subprocess, hit a real database, make HTTP calls, or boot the FastAPI
 app belongs in the integration tier instead.

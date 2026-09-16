@@ -8,8 +8,11 @@
 // what it literally is on disk, a folder under `~/.coffer/memory/`, so the
 // file types below carry no fingerprint and there is no write shape to send.
 //
-// There is no memory OpenAPI contract under `specs/*/contracts/` for
-// `npm run codegen` to read, so these are hand-written. Field names match
+// These are hand-written rather than generated: `specs/memory`'s contract
+// names the file shapes `FileNodeOut` / `FileTreeOut` / `FileContentOut`,
+// while every consumer here imports the `Memory…`-prefixed names below, so the
+// memory contract is deliberately absent from `CONTRACTS` in
+// `scripts/codegen.mjs` until that rename is made. Field names match
 // `backend/coffer/surfaces/http/memory/schemas.py` exactly.
 
 /** One partition: a project's slug, or `global` for facts about the person. */
@@ -79,7 +82,7 @@ export interface OrganiseResultOut {
 
 /** Per-agent delivery state — whether Coffer's hook is written into that
  *  agent's settings. Whether it has fired is read from the audit log, one
- *  entry per fire (FR-055), not from here. */
+ *  entry per fire (FR-026), not from here. */
 export interface DeliveryStatusOut {
   agent: string;
   installed: boolean;

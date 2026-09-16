@@ -28,7 +28,7 @@ Coffer project alone, because that one is loaded into context automatically.
 | Capability | State on the live installation |
 | --- | --- |
 | Vector retrieval (sqlite-vec, embeddings, hybrid RRF, `embed_pending` retry) | `embedding_config` is an **empty table**; no scope has ever listed `vector` |
-| Periodic tidy (FR-033–FR-035) | **Zero** knowledge audit events; `.history/` **does not exist** anywhere on disk |
+| Periodic tidy (spec knowledge FR-030–FR-033) | **Zero** knowledge audit events; `.history/` **does not exist** anywhere on disk |
 | Any-format conversion (MarkItDown, csv converter) | **50 of 50** documents carry `converter: passthrough` and `source_format: md` |
 | `.raw/` provenance lane | 50 files, **byte-identical** to their `docs/` counterparts |
 | External source tracking (`check-sources`, `update-source`, `auto_update_sources`) | Zero invocations |
@@ -128,7 +128,7 @@ There is no derived index and nothing to reconcile.**
   duplicate notes and rewrites them into coherent documents, copying every prior
   revision into `.history/` first. Its tool surface is the same five tools, and
   with no index there is nothing to reconcile afterwards. It is always available
-  by hand (a button, and `coffer knowledge organize`); the background worker that
+  by hand (a button, and `coffer knowledge tidy`); the background worker that
   runs it on an interval is governed by one installation-wide setting, **off by
   default**, because an unattended rewriter of a jointly managed corpus should be
   something the human switches on rather than something they discover running.
@@ -241,7 +241,7 @@ affordance.
     only while the user is sitting at the machine — it remains a complete one,
     with no import and no registration. But their live entrance is a phone, and a
     channel already accepts a document and already extracts it for a turn (spec
-    [channels](../../specs/channels/spec.md) FR-030); letting that document land
+    [channels](../../specs/channels/spec.md) FR-031); letting that document land
     in a collection instead of evaporating with the turn is the path this layer
     lacked. The Web upload is the same entrance's other end, which is why it is
     worth having back.
@@ -274,9 +274,10 @@ affordance.
     similarity is computed in-process, because the corpus this serves is hundreds
     of files and a native index for that is precisely the over-build the reduction
     was right about.
-  - Spec [knowledge](../../specs/knowledge/spec.md) carries the detail: FR-025–
-    FR-029 (ranked retrieval), FR-032–FR-037 (writing and ingestion), FR-080–
-    FR-082 (constraints).
+  - Spec [knowledge](../../specs/knowledge/spec.md) carries the detail:
+    spec knowledge FR-017–FR-018 (retrieval — the ranked tier these added was
+    removed again two days later, below), spec knowledge FR-021–FR-026 (writing
+    and ingestion), spec knowledge FR-037–FR-038 (constraints).
 - **2026-09-14** — **Ranked retrieval is removed again, and with it every use of
   embeddings anywhere in Coffer.** `coffer__search` and `coffer__recall` keep
   their names and keep answering; what each returns is the tier that used to be
@@ -305,7 +306,7 @@ affordance.
     distinctive phrase finds the file. `coffer__recall` can no longer answer
     "what do I know that bears on *this*" for a caller with no exact words —
     the dependency spec `memory` had on ranking is not met any more, and
-    FR-052 now asks for the scan rather than the loop. Embeddings may return;
+    FR-032 now asks for the scan rather than the loop. Embeddings may return;
     when they do it should be because that gap was felt, not because the
     component is available.
   - **No migration drops a table**, because none was left to drop: the

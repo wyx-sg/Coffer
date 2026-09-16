@@ -9,12 +9,12 @@ by the project owner, not the cleanup of something unused.
 
 It costs more than the four buttons. ``memory_overrides`` was the only
 non-derived state the memory layer held, and therefore the only part of it
-that converged with the sync remote (spec memory FR-043): everything under
-``~/.coffer/memory/`` is aggregated from the agents installed on *this*
-machine and deliberately stays here (FR-023). So dropping this table removes
-the last memory-related thing that travelled between the user's machines. A
-hide made on the laptop will no longer be known to the desktop, because there
-are no hides.
+that converged with the sync remote — the requirement saying so is retired in
+this same change: everything under ``~/.coffer/memory/`` is aggregated from the
+agents installed on *this* machine and deliberately stays here (spec memory
+FR-016). So dropping this table removes the last memory-related thing that
+travelled between the user's machines. A hide made on the laptop will no longer
+be known to the desktop, because there are no hides.
 
 The rows go with the table rather than being kept "just in case". They are
 keyed by a fact key and nothing reads a fact key any more; a row no code can

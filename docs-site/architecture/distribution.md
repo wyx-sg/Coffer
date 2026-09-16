@@ -12,7 +12,7 @@ The requirement, stated precisely in the spec: a user on a clean machine with no
 
 ## The desktop shell, and what it owns
 
-Coffer ships a Tauri 2 desktop application (`desktop/`) that renders the web UI in a native window. It was retired on 2026-09-09 and **restored on 2026-09-12** ([The Desktop Shell Returns](/reference/adr/desktop-shell-over-a-shared-frontend)), and both halves of that history matter.
+Coffer ships a Tauri 2 desktop application (`desktop/`) that renders the web UI in a native window. It was retired on 2026-09-09 and **restored on 2026-09-12**, and both halves of that history matter.
 
 The retirement's reasoning was about **the operating cost of every update**, and it was sound: every change had to travel through a rebuild _and_ a reinstall before it could be seen, and the built artifact kept drifting from source. Two incidents are on the record — a build produced before fetching shipped an app quietly running stale code, and an app built from a separately pinned directory made UI bug reports untrustworthy until re-verified against `main`.
 
@@ -32,24 +32,24 @@ So the shell came back owning **only** what a browser cannot do for itself, whic
 
 1. An already-running daemon named by `~/.coffer/daemon.json` — **taken over, never re-spawned**.
 2. A `coffer-daemon` inside the app bundle (`externalBin`).
-3. `~/.coffer/bin/coffer-daemon`, where the daemon's own frozen-start path deploys it (**FR-026**).
+3. `~/.coffer/bin/coffer-daemon`, where the daemon's own frozen-start path deploys it.
 4. `coffer-daemon` on `$PATH`.
 5. Otherwise, a message telling the user to install the Coffer CLI.
 
-The liveness probe has to come first. Steps 2–4 all answer *which binary would we spawn*; step 1 answers a different question — *whether to spawn at all*. Asked the other way round, a bundled build opens a second daemon beside the one the user already started from the CLI, and under the fixed-port default (**FR-028**, see [Daemon & processes](/architecture/processes)) that second daemon cannot bind and refuses to start. The symptom would be an error on an app that should simply have attached to what was already there.
+The liveness probe has to come first. Steps 2–4 all answer *which binary would we spawn*; step 1 answers a different question — *whether to spawn at all*. Asked the other way round, a bundled build opens a second daemon beside the one the user already started from the CLI, and under the fixed-port default (see [Daemon & processes](/architecture/processes)) that second daemon cannot bind and refuses to start. The symptom would be an error on an app that should simply have attached to what was already there.
 
 **The shell hosts the UI; it does not reimplement it.** `tauri.conf.json` keeps `frontendDist: ../frontend/dist`, so the window loads the built SPA as a **local asset** rather than `http://127.0.0.1:<port>/`. That is what makes it a native app instead of a bookmarked browser window: the UI is rendered before the daemon answers, so a daemon that is slow, absent or wedged produces a real page with an actionable banner rather than a connection error. It also makes the port invisible to the UI — only API calls carry it, read from the same `~/.coffer/daemon.json` every other client reads.
 
-Because the page is a local asset, nobody injected a token into it, so the browser's mechanism (**FR-025**) cannot apply. The shell supplies the same two globals through an IPC command instead (**FR-030**):
+Because the page is a local asset, nobody injected a token into it, so the browser's mechanism cannot apply. The shell supplies the same two globals through an IPC command instead:
 
 ```
-browser  → daemon injects window.__COFFER_TOKEN__ into index.html   (FR-025)
-Tauri    → shell invokes get_daemon_info → setDaemonConnection(…)   (FR-030)
+browser  → daemon injects window.__COFFER_TOKEN__ into index.html
+Tauri    → shell invokes get_daemon_info → setDaemonConnection(…)
 ```
 
 Both hosts converge on the same globals, which is why this is a second *supplier* and not a second *path*. The handshake runs alongside the first render and never before it — it may have to spawn a daemon and poll, and blocking would put an empty window in front of the user for exactly as long as that takes.
 
-What the shell deliberately does **not** own: deploying helper binaries, and native file actions (folder picking, opening a file in an editor, revealing it in Finder). Both are the daemon's, reached over loopback HTTP, which a webview does exactly as a browser tab does. The frontend has no `isTauri()` fan-out for them, and only two affordances are host-gated — a **restart control on the offline banner** (**FR-031**, impossible in a browser, where a down daemon cannot serve the page the button would live on) and a **daemon version-skew check** (the app pairs with a daemon; a browser has no such pairing).
+What the shell deliberately does **not** own: deploying helper binaries, and native file actions (folder picking, opening a file in an editor, revealing it in Finder). Both are the daemon's, reached over loopback HTTP, which a webview does exactly as a browser tab does. The frontend has no `isTauri()` fan-out for them, and only two affordances are host-gated — a **restart control on the offline banner** (impossible in a browser, where a down daemon cannot serve the page the button would live on) and a **daemon version-skew check** (the app pairs with a daemon; a browser has no such pairing).
 
 ## Developer install path
 
@@ -92,12 +92,12 @@ Alongside these, the release archive carries the **runtime helper binaries** the
 
 Alembic migration files ship as data files inside the daemon binary via PyInstaller's `datas` mechanism. On first launch, the daemon runs `alembic upgrade head` against a fresh database before accepting connections — the end-user gets correct schema creation with no separate step.
 
-The daemon binary also bundles the heavier knowledge and engine dependencies: `markitdown` for document conversion, `openai` for the OpenAI-compatible provider calls and remote speech-to-text, and the `langchain*` / `langgraph` stack that Coffer's **internal engine** runs the knowledge tidy and memory-organise passes on. (None of these drives a chat persona — Coffer has none; chat drives the user's own Claude Code and Codex agents. See [Built-in agent is an internal capability](/reference/adr/builtin-agent-is-internal-capability).) All of them are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, transcribe audio and run its unattended passes.
+The daemon binary also bundles the heavier knowledge and engine dependencies: `markitdown` for document conversion, `openai` for the OpenAI-compatible provider calls and remote speech-to-text, and the `langchain*` / `langgraph` stack that Coffer's **internal engine** runs the knowledge tidy and memory-organise passes on. (None of these drives a chat persona — Coffer has none; chat drives the user's own Claude Code and Codex agents.) All of them are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, transcribe audio and run its unattended passes.
 
-The built web UI (spec ui-shell) also ships as data files inside the daemon binary, which is what lets the frozen daemon serve the UI from its own origin.
+The built web UI also ships as data files inside the daemon binary, which is what lets the frozen daemon serve the UI from its own origin.
 
 ::: warning Bundle verification — the web UI is a data file
-`coffer-daemon.spec` folds `frontend/dist` in as `webui/` **only if `index.html` is already there when PyInstaller runs**. Build the binaries without building the frontend first and the result is a daemon that serves an API and no interface — a build that fails nothing, reports `status: ready`, and answers `--version` perfectly well. The release smoke test therefore asks the running daemon for its root and requires a hashed `assets/index-*.js` reference back, which proves the data files reached the archive, `webui.resolve_webui_dir()` found them inside the bundle, and the route serves them ([PyInstaller Distribution](/reference/adr/distribution-pyinstaller)).
+`coffer-daemon.spec` folds `frontend/dist` in as `webui/` **only if `index.html` is already there when PyInstaller runs**. Build the binaries without building the frontend first and the result is a daemon that serves an API and no interface — a build that fails nothing, reports `status: ready`, and answers `--version` perfectly well. The release smoke test therefore asks the running daemon for its root and requires a hashed `assets/index-*.js` reference back, which proves the data files reached the archive, `webui.resolve_webui_dir()` found them inside the bundle, and the route serves them.
 :::
 
 ::: tip Why PyInstaller, not alternatives
@@ -109,7 +109,7 @@ Two alternatives were explicitly considered and rejected for v0:
 
 ## One set of binaries, two wrappers
 
-Every release publishes one binary set (**FR-022**) in two wrappers, and the wrappers carry *the same four files* — the `.dmg` is a copy of `dist/`, not a second PyInstaller run, because freezing these takes the better part of an hour and it is already done.
+Every release publishes one binary set in two wrappers, and the wrappers carry *the same four files* — the `.dmg` is a copy of `dist/`, not a second PyInstaller run, because freezing these takes the better part of an hour and it is already done.
 
 `coffer-cli-<triple>.tar.gz` contains:
 
@@ -122,23 +122,23 @@ Every release publishes one binary set (**FR-022**) in two wrappers, and the wra
 
 The archive is what a headless server, a CI environment or a terminal-first workstation wants: extract, run `coffer-daemon` (or `coffer daemon start`), and open the UI with `coffer open` — on a headless box you simply never open it. The `.dmg` is what a workstation wants when the terminal is not the way in.
 
-Instead of a per-file `.sha256` sidecar file, the release publishes **one aggregated `SHA256SUMS`** covering every artifact in the release (**FR-023**), the `.dmg` included, so a single `shasum -c SHA256SUMS` verifies the whole download set.
+Instead of a per-file `.sha256` sidecar file, the release publishes **one aggregated `SHA256SUMS`** covering every artifact in the release, the `.dmg` included, so a single `shasum -c SHA256SUMS` verifies the whole download set.
 
 ## The daemon serves the web UI
 
-The daemon serves the built web UI itself, as static files, at its own loopback origin (**FR-024**). The UI and the REST API are therefore **same-origin**: the page is fetched from `http://127.0.0.1:<port>/` and calls `http://127.0.0.1:<port>/api/v1/`. This is the browser host. The desktop shell is the other host — it loads the same `frontend/dist` as a local asset — and the frontend has no build-time branching for "am I inside a desktop shell": one build, two suppliers of the connection globals.
+The daemon serves the built web UI itself, as static files, at its own loopback origin. The UI and the REST API are therefore **same-origin**: the page is fetched from `http://127.0.0.1:<port>/` and calls `http://127.0.0.1:<port>/api/v1/`. This is the browser host. The desktop shell is the other host — it loads the same `frontend/dist` as a local asset — and the frontend has no build-time branching for "am I inside a desktop shell": one build, two suppliers of the connection globals.
 
-Because the daemon serves the document, the response body is a channel to the browser, and that is where the credential travels (**FR-025**): the daemon injects its live API token into the `index.html` it serves, as a `window.__COFFER_TOKEN__` global in the head. Every route that resolves to that document gets it — the bare `/` and every client-side route served through the SPA fallback — and the document is served `Cache-Control: no-store` with no ETag or Last-Modified, because a cached copy would hand a restarted daemon's browser the previous daemon's dead token. Hashed files under `/assets` keep normal caching.
+Because the daemon serves the document, the response body is a channel to the browser, and that is where the credential travels: the daemon injects its live API token into the `index.html` it serves, as a `window.__COFFER_TOKEN__` global in the head. Every route that resolves to that document gets it — the bare `/` and every client-side route served through the SPA fallback — and the document is served `Cache-Control: no-store` with no ETag or Last-Modified, because a cached copy would hand a restarted daemon's browser the previous daemon's dead token. Hashed files under `/assets` keep normal caching.
 
-`coffer open` therefore carries no credential at all. What it still does is read the daemon's real port from `~/.coffer/daemon.json` (mode `0600`) and open the browser at that origin, spawning a daemon first if none is running. The port is `8000` unless the user pinned another one (**FR-028**), and reading it from the discovery file rather than assuming the default is what keeps `coffer open` correct either way.
+`coffer open` therefore carries no credential at all. What it still does is read the daemon's real port from `~/.coffer/daemon.json` (mode `0600`) and open the browser at that origin, spawning a daemon first if none is running. The port is `8000` unless the user pinned another one, and reading it from the discovery file rather than assuming the default is what keeps `coffer open` correct either way.
 
-The token never appears in a URL, and the page persists nothing. Putting it in a URL would write it into browser history, which contradicts the loopback-plus-token posture of spec mcp-gateway (FR-012 / FR-013); persisting it would outlive the daemon that minted it, which was the previous design's failure. What makes serving it in the body safe is the `Host` check (**FR-027**) — see [Security](/architecture/security).
+The token never appears in a URL, and the page persists nothing. Putting it in a URL would write it into browser history, which contradicts Coffer's loopback-plus-token posture; persisting it would outlive the daemon that minted it, which was the previous design's failure. What makes serving it in the body safe is the `Host` check — see [Security](/architecture/security).
 
 Because the UI is same-origin with the API, CORS is **same-origin by default**. The Vite dev-server origins remain available behind the existing `COFFER_DEV_CORS` opt-in for frontend development. See [Security](/architecture/security) for the full posture.
 
 ## Binary deployment at frozen start
 
-Deploying `coffer-mcp-shim` onto the user's `PATH` was the desktop shell's job in its first incarnation. It is the daemon's now, and stayed the daemon's when the shell returned — the shell is explicitly forbidden from doing it (**FR-032**), because two processes writing `~/.coffer/bin/` race. The daemon does it at startup, and only when it detects that it is running as a frozen build (**FR-026**). Four binaries are deployed: `coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-callback`. `coffer` is on that list precisely so a user who installed only the `.dmg` has the management CLI on disk after the first launch.
+Deploying `coffer-mcp-shim` onto the user's `PATH` was the desktop shell's job in its first incarnation. It is the daemon's now, and stayed the daemon's when the shell returned — the shell is explicitly forbidden from doing it, because two processes writing `~/.coffer/bin/` race. The daemon does it at startup, and only when it detects that it is running as a frozen build. Four binaries are deployed: `coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-callback`. `coffer` is on that list precisely so a user who installed only the `.dmg` has the management CLI on disk after the first launch.
 
 **Each build lands in its own directory, and the public names are symlinks into it:**
 
@@ -178,9 +178,3 @@ xattr -dr com.apple.quarantine /Applications/Coffer.app
 ```
 
 The `.dmg` filename says `unsigned` for the same reason: a downloader should know before Gatekeeper tells them. A binary installed by the one-line installer is never quarantined, so that path skips this step.
-
-## See also
-
-- [Distribution — PyInstaller-bundled daemon, shim and CLI](/reference/adr/distribution-pyinstaller) — decision record, rejected alternatives, and revision history
-- [The Desktop Shell Returns](/reference/adr/desktop-shell-over-a-shared-frontend) — why it was retired, why it came back, and the four things it owns
-- [MCP Gateway spec reference](/reference/specs/mcp-gateway/spec) — FR-022 the release binary set, FR-023 aggregated `SHA256SUMS`, FR-024 daemon-served web UI, FR-025 the token injected into the served page, FR-026 frozen-start binary deployment, FR-027 the loopback-`Host` requirement, FR-028 the fixed daemon port, FR-030 the shell's IPC handshake, FR-031 the tray/banner restart control

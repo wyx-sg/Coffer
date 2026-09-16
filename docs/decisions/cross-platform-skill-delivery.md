@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec `skill-manager` (FR-009, FR-012, SC-007), spec `agent-registry` (`AgentConfig.skill_dir`), [Everything Is a Resource Kind](everything-is-a-resource-kind.md)
+**Related**: spec `skill-manager` (FR-008, FR-011, SC-007), spec `agent-registry` (`AgentConfig.skill_dir`), [Everything Is a Resource Kind](everything-is-a-resource-kind.md)
 
 ## Context
 

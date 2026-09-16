@@ -1,4 +1,4 @@
-# Implementation Plan: UI Shell & Visual Language
+# Implementation Plan: Web UI
 
 **Spec**: [./spec.md](./spec.md)
 **Status**: Accepted
@@ -11,12 +11,14 @@ architecture (Agents / Resources / System) decided in
 [Everything Is a Resource Kind](../../docs/decisions/everything-is-a-resource-kind.md) (assets are resource kinds; agents are a separate consumer axis),
 and end-to-end flows that make the gateway usable for a first-time visitor.
 
-It adds **no backend surface of its own**. Every screen renders over REST
-routes another spec owns, and the entities behind them are documented where
-they are owned: the kind-agnostic ones (`Resource` — its `scope` field
-included — `Kind`, `AuditEntry`, `MCPInvocation`, `RetentionPolicy`) in
-[`specs/mcp-gateway/data-model.md`](../mcp-gateway/data-model.md), and each
-kind's own config in that kind's spec. The **reach** control this spec
+It adds **no backend surface of its own**, so this folder carries no
+`contracts/` directory and never will. Every screen renders over REST routes
+another spec owns, and the entities behind them are documented where they are
+owned: the kind-agnostic ones (`Resource` — its `scope` field included —
+`Kind`, `MCPInvocation`) in
+[`specs/mcp-gateway/data-model.md`](../mcp-gateway/data-model.md), the records
+the framework keeps for every kind in the constitution, and each kind's own
+config in that kind's spec. The **reach** control this spec
 specifies more than any other element is a view of exactly two of those
 fields — `Resource.enabled` and `Resource.scope` — read and written through
 `GET`/`PUT /resources/{kind}/{name}/scope`; its wire shapes are `ScopeOut`,
@@ -38,9 +40,9 @@ See [./spec.md](./spec.md) for the user-visible contract,
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Language / Version**   | TypeScript 5.x, React 18                                                                                                                                                                                                                                                             |
 | **Primary Dependencies** | React 18 + Vite 5; TanStack Query 5 for server state; React Router 6 for routing; Tailwind CSS 3 + shadcn/ui (Radix-based primitives) for visual language; react-i18next + i18next for i18n; react-hook-form + zod for forms; openapi-typescript + openapi-fetch for the API client. |
-| **Backend dependency**   | Pure consumer of the REST contract in [`specs/mcp-gateway/contracts/api.openapi.yaml`](../mcp-gateway/contracts/api.openapi.yaml). No new endpoints; no schema changes.                                                                                                      |
+| **Backend dependency**   | Pure consumer of the REST contracts other specs publish — no endpoint and no schema is this spec's, so it carries no `contracts/api.openapi.yaml` of its own. |
 | **Storage**              | Browser localStorage only — sidebar collapsed state, selected language. No client-side persistence of user data.                                                                                                                                                                     |
-| **Testing**              | `vitest` for unit/component tests; `Playwright` for e2e in `e2e/`. Acceptance markers (`acceptance("ui-shell", "…", …)`) bind tests to scenarios in [spec.md](./spec.md); coverage audited by `scripts/audit_acceptance.py`.                                                     |
+| **Testing**              | `vitest` for unit/component tests; `Playwright` for e2e in `e2e/`. Acceptance markers (`acceptance("web-ui", "…", …)`) bind tests to scenarios in [spec.md](./spec.md); coverage audited by `scripts/audit_acceptance.py`.                                                     |
 | **Target Platforms**     | Modern evergreen browsers (Chromium / Firefox / Safari current-2).                                                                                                                                                                                                                   |
 | **Project Type**         | SPA bundled by Vite; served by the daemon's static file route in production, served by `vite dev` against the daemon in development.                                                                                                                                                 |
 | **Performance Goals**    | First content paint within 2 s on a cold load against a local daemon (spec's `cold-start renders authenticated content` scenario). Language switch on the very next render — no full page reload.                                                                                    |
@@ -65,16 +67,17 @@ See [./spec.md](./spec.md) for the user-visible contract,
 ### Documentation (this feature)
 
 ```text
-specs/ui-shell/
+specs/web-ui/
 ├── spec.md           # user-visible contract (committed)
 ├── plan.md           # this file
 └── quickstart.md     # end-user walkthrough (make dev → first server → invocations)
 ```
 
-This folder deliberately has **no** `data-model.md` — every entity a screen
-renders is owned by the spec that owns its behaviour (see Summary) — and **no**
-`tasks.md`: the unit of change here is "one redesigned screen", which does not
-decompose into an atomic-task TDD breakdown.
+This folder deliberately has **no** `contracts/` — this spec publishes no
+endpoint — **no** `data-model.md` — every entity a screen renders is owned by
+the spec that owns its behaviour (see Summary) — and **no** `tasks.md`: the
+unit of change here is "one redesigned screen", which does not decompose into
+an atomic-task TDD breakdown.
 
 ### Source code
 
@@ -120,7 +123,7 @@ frontend/src/
 frontend/
 ├── vite.config.ts                          # dev-only token-injection plugin (reads daemon.json)
 ├── scripts/codegen.mjs                     # regenerates lib/api/generated/<spec>.ts from specs/*/contracts
-├── tailwind.config.js                      # visual-language tokens (see agents/visual-language.md)
+├── tailwind.config.js                      # visual-language tokens (see .agents/visual-language.md)
 └── components.json                         # shadcn config
 ```
 
@@ -148,7 +151,7 @@ generated types in `lib/api/` (codegen from every spec's contract into
 `lib/api/generated/*.ts`), query keys in `lib/api/queryKeys.ts`, and routes
 added lazily via `lazyPage()` in `router.tsx`. `pages/ResourceDetailPage.tsx`
 dispatches on `kind` directly. A new kind adds its own files in those places
-and nothing else; `agents/frontend.md` is the canonical statement of the
+and nothing else; `.agents/frontend.md` is the canonical statement of the
 layout.
 
 The backend went the same way the same day: its composition pattern is now a
@@ -160,7 +163,7 @@ The backend went the same way the same day: its composition pattern is now a
 
 The Tailwind config (`frontend/tailwind.config.js`) is the single source of
 truth for spacing, typography, and colour tokens. See
-[`agents/visual-language.md`](../../agents/visual-language.md)
+[`.agents/visual-language.md`](../../.agents/visual-language.md)
 for the catalogue and the conventions agents should follow when adding new
 screens.
 
@@ -212,9 +215,13 @@ generic error where a next action exists.
 point above.
 
 **Activity and Settings are compositions of routes this spec does not own.**
-Activity renders three records through three read-only routes; Settings renders
-preferences that live in `localStorage` alongside daemon-side settings routes.
-Both are grouping decisions, which is why they belong to this spec at all.
+Activity renders three records through three read-only routes with three
+different owners — the audit log the framework keeps for every kind, spec
+mcp-gateway's cross-server invocation log, and spec daemon's own log; Settings
+renders preferences that live in `localStorage` alongside daemon-side settings
+routes. Both are grouping decisions, which is why they belong to this spec at
+all, and why `spec.md` records what it assumes of those routes rather than
+requiring it of them.
 
 ## Complexity Tracking
 
@@ -231,8 +238,8 @@ Both are grouping decisions, which is why they belong to this spec at all.
 - Quickstart: [quickstart.md](./quickstart.md)
 - IA decision: [Everything Is a Resource Kind](../../docs/decisions/everything-is-a-resource-kind.md)
 - Resource framework: [Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md)
-- Backend contract (consumed, not owned): [`specs/mcp-gateway/contracts/api.openapi.yaml`](../mcp-gateway/contracts/api.openapi.yaml)
+- Backend contracts (consumed, never owned — this spec publishes none): [`specs/mcp-gateway/contracts/api.openapi.yaml`](../mcp-gateway/contracts/api.openapi.yaml), and each other spec's own
 - Kind-agnostic entities (consumed, not owned — `Resource`, its `scope`, `Kind`, `AuditEntry`, `MCPInvocation`, `RetentionPolicy`): [`specs/mcp-gateway/data-model.md`](../mcp-gateway/data-model.md)
-- Visual-language reference: [`agents/visual-language.md`](../../agents/visual-language.md)
+- Visual-language reference: [`.agents/visual-language.md`](../../.agents/visual-language.md)
 - Architecture overview: [`.specify/memory/architecture.md`](../../.specify/memory/architecture.md)
 - Constitution: [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md)

@@ -1,6 +1,6 @@
-"""Answers that belong to one member of a group, not to the room (FR-064).
+"""Answers that belong to one member of a group, not to the room (FR-049).
 
-FR-024 stops the bot *acting* on everything said in a group. This is the other
+FR-022 stops the bot *acting* on everything said in a group. This is the other
 half: stopping it from *saying* everything out loud. ``/status``, ``/help`` and
 the selection cards are the asker's own business — announcing each one to
 everybody is how a useful bot becomes an unwelcome one.
@@ -84,9 +84,9 @@ async def safe_send(
     confirmations, the turn's own output — which is why it is the place the two
     routing decisions that depend on the chat kind are made:
 
-    * FR-068: only a group needs the reply pointer. In a DM every message is
+    * FR-053: only a group needs the reply pointer. In a DM every message is
       plainly an answer, and a reply chain there is just noise.
-    * FR-064: ``ephemeral`` is passed through for the transport to honour or
+    * FR-049: ``ephemeral`` is passed through for the transport to honour or
       ignore; it is a request, never a guarantee.
 
     A failed send is logged, not raised: one undeliverable line must not take

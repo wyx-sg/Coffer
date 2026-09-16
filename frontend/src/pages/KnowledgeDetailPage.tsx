@@ -9,14 +9,14 @@
 // Read-only is deliberate and load-bearing. Correcting a file happens in the
 // user's own editor, reached from the FileActions bar on the preview; with no
 // index behind the files, that edit is live on the very next read with nothing
-// to reconcile (spec knowledge FR-061).
+// to reconcile (spec knowledge FR-035).
 //
 // Reach (ScopeControl) lives in the header, as on every other scoped Resource's
 // detail page: which agents this collection is exposed to is a property of the
 // collection, not of the file open in the pane.
 //
 // The open file lives in the URL (`?file=`), so a reload or a shared link opens
-// the same file — addressable state belongs to the router (agents/frontend.md).
+// the same file — addressable state belongs to the router (.agents/frontend.md).
 //
 // The filter box narrows the tree by title/filename as you type, entirely
 // client-side — it is the tree's own narrowing, not a search. Reading the files

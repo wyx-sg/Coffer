@@ -66,10 +66,10 @@ async def wire_resource_kinds(
     # The one knowledge kind: a directory of markdown files. Also builds ranked
     # retrieval and ingestion, and registers its built-in tools.
     knowledge = wire_knowledge_kind(
-        app, resource_svc, audit, builtin_tools, provider.service, credential_resolver
+        app, resource_svc, audit, builtin_tools, provider.internal_connection, credential_resolver
     )
 
-    # The layer's delivery half (spec knowledge FR-042): a skill that tells an
+    # The layer's delivery half (spec knowledge FR-029): a skill that tells an
     # agent this directory is here, shipped down the skill channel that already
     # reaches every managed agent. Best-effort — a failed seed must not stop the
     # daemon, and the tools work either way.
@@ -81,7 +81,7 @@ async def wire_resource_kinds(
         resource_svc,
         audit,
         builtin_tools,
-        provider.service,
+        provider.internal_connection,
         credential_resolver,
         agent_skill.agent_service,
     )

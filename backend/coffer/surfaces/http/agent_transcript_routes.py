@@ -21,7 +21,7 @@ back as ``BAD_REQUEST``. A path that is not this agent's transcript, or names a
 file that is gone, is ``NOT_FOUND`` — the two are one answer on purpose, so a
 caller cannot use the difference to probe what exists outside the sessions dir.
 
-Neither route audits: FR-011 exempts every workspace listing, and reading one of
+Neither route audits: FR-048 exempts every workspace listing, and reading one of
 the listed items is the same act at a smaller scale.
 """
 

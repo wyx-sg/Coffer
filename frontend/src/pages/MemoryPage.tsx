@@ -1,4 +1,4 @@
-// frontend/src/pages/MemoryPage.tsx — the Memory surface (spec memory FR-062).
+// frontend/src/pages/MemoryPage.tsx — the Memory surface (spec memory FR-029).
 //
 // Lists partitions: `global` plus one per project, aggregated read-only from
 // the agents' own native memories (ADR aggregate-agent-memory-never-write-it)

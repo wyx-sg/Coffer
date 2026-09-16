@@ -86,7 +86,7 @@ async def test_grep_spans_every_authorized_collection(service) -> None:  # type:
 @pytest.mark.acceptance(spec="knowledge", scenario="grep skips hidden directories")
 async def test_grep_never_returns_an_archived_revision(service) -> None:  # type: ignore[no-untyped-def]
     """``.history/`` holds what tidy replaced; answering with it would hand back
-    content the live file has superseded (FR-052)."""
+    content the live file has superseded (FR-032)."""
     written = fs.write_file(
         directory="personal", title="Superseded", description="d", body="登录态 old revision"
     )

@@ -1,6 +1,6 @@
 // frontend/src/lib/api/call.ts
 //
-// THE hand-written request helper (agents/frontend.md §4 / §9.1) — every
+// THE hand-written request helper (.agents/frontend.md §4 / §9.1) — every
 // `src/lib/api/*` module and every hook that talks to a route outside the
 // generated `client.ts` goes through it. It owns URL building against the
 // daemon's loopback origin, the `X-Coffer-Token` + `X-Coffer-Actor: "ui"`

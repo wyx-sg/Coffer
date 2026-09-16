@@ -1,5 +1,5 @@
-"""Per-agent adapters for Coffer's own session-start-like hook (spec memory
-FR-054/FR-055): which config-file key holds it, which event it sits on, and
+"""Per-agent adapters for Coffer's own session-start-like hook (spec memory FR-025/FR-026): which
+config-file key holds it, which event it sits on, and
 how to build/find/remove the installed entry.
 
 `application.memory.delivery.DeliveryService` composes against these two

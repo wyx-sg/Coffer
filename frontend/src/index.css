@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Design tokens for the spec ui-shell "Coffer warm" visual language.
+   Design tokens for the spec web-ui "Coffer warm" visual language.
 
    Palette is built around a cream paper background (#FAF9F5) and a clay
    accent (#C96442) — both chosen for an Anthropic / Claude.ai-adjacent feel
@@ -61,7 +61,7 @@
     --highlight-active: 251 191 36;
   }
 
-  /* Dark mode is intentionally omitted — see spec ui-shell §Out of Scope. */
+  /* Dark mode is intentionally omitted — see spec web-ui §Out of Scope. */
 }
 
 @layer base {

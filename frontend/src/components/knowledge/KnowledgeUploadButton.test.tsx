@@ -1,6 +1,6 @@
 // frontend/src/components/knowledge/KnowledgeUploadButton.test.tsx
 //
-// Upload into the collection (and folder) in view (spec knowledge FR-061).
+// Upload into the collection (and folder) in view (spec knowledge FR-035).
 // `useUploadKnowledgeFile` runs as a REAL react-query mutation against the
 // mocked wire layer (`@/lib/api/knowledge`), so a successful call really
 // does invalidate `["knowledge"]` — the mechanism a mounted tree query relies

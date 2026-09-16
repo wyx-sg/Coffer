@@ -2,7 +2,7 @@
 //!
 //! This module used to also COPY the bundled binaries into `~/.coffer/bin/`
 //! on every launch. That job now belongs to the daemon's own frozen-start
-//! path (spec mcp-gateway FR-026,
+//! path (spec daemon FR-027,
 //! `backend/coffer/application/binary_deploy.py`), which deploys `coffer`,
 //! `coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` itself. Doing it
 //! here as well would put two processes in a race to write the same

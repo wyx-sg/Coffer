@@ -14,10 +14,19 @@ On top of the registry the feature carries the agent's whole workspace:
 3. **The agent's own MCP entries** — list what the agent itself has configured, remove one, or adopt it into Coffer's gateway with its secrets routed into the vault.
 4. **Plugins** — list them with their marketplace and enabled state, toggle one, uninstall one (by config edit for Codex, by the agent's own CLI for Claude Code).
 5. **Read-only views of the agent's own stores** — its native memory and its session transcripts.
+6. **The agent's model binding and catalogue** — the `model` / `fast_model` / `wire_api` fields the agent carries, and the read-only catalogue of what the installed agent can be put on, re-derived from the agent on every request and never written down in Coffer.
+
+The type axis is cut into two child specs. Everything above is the contract both
+types share; where a type differs — its config directory, its allowlist, its MCP
+entry shape, its plugin inventory and uninstall strategy, its catalogue sources
+and effort source, its native-memory layout, its transcript location — that is
+`agent-registry/claude-code` or `agent-registry/codex`. The facet axis stays in
+the parent: cutting it too would produce a child per type per facet, each too
+thin to own anything.
 
 The kind exposes an `on_delete` hook that spec skill-manager wires for skill-binding cleanup. Every facet ships through REST routes, CLI subcommands, and the web Agents page.
 
-This spec is the second consumer of the kind-agnostic Resource framework introduced in spec mcp-gateway, validating the framework's portability.
+This spec is the second consumer of the kind-agnostic Resource framework introduced in spec resource-framework, validating the framework's portability.
 
 ## Technical Context
 
@@ -27,7 +36,7 @@ This spec is the second consumer of the kind-agnostic Resource framework introdu
 | **New runtime dependencies** | `tomlkit` (MIT) — format-preserving TOML edit for Codex `config.toml`.                                                                                                                                                                    |
 | **Storage**                  | SQLite at `~/.coffer/coffer.db`. No table of its own — agents are rows in the generic `resources` table, so this spec introduces no Alembic revision. Config files, MCP-install state, plugins, native memory and transcripts are NOT persisted — the agent's own files on disk are the source of truth. |
 | **Testing**                  | 4-tier (unit / integration / contract / e2e); acceptance markers tie to scenarios.                                                                                                                                                        |
-| **Target Platforms**         | macOS arm64 (the one platform the release builds; see spec mcp-gateway FR-022). The code paths are POSIX + Windows aware, but only macOS is exercised.                                                                                     |
+| **Target Platforms**         | macOS arm64 (the one platform the release builds; see spec daemon FR-025). The code paths are POSIX + Windows aware, but only macOS is exercised.                                                                                     |
 | **Performance Goals**        | Discovery scan ≤ 200 ms cold. CRUD operations ≤ 50 ms each. The transcript listing pages rather than loading, and warms its derived sidecar off the request path.                                                                          |
 | **Constraints**              | Local-first 127.0.0.1 only; layered architecture preserved; no new credential storage of its own (adoption routes secrets into the existing credential store).                                                                             |
 | **Scale**                    | ≤ 8 registered agents per user; an agent's transcript directory runs to thousands of files.                                                                                                                                                |
@@ -56,7 +65,14 @@ specs/agent-registry/
   data-model.md
   contracts/api.openapi.yaml
   quickstart.md
+  claude-code/spec.md  (child spec — the `claude_code` type's mechanics)
+  codex/spec.md        (child spec — the `codex` type's mechanics)
 ```
+
+Each child carries `spec.md` and nothing else: a child spec is the prose
+reading of one `AGENT_DESCRIPTORS` record, so it has no endpoints, no entities
+and no plan of its own — the routes, the entities and this plan are the
+parent's, and the child says only how one type realises them.
 
 ### Backend modules
 
@@ -74,9 +90,9 @@ backend/coffer/domain/agent/
   plugin_capability.py # PluginCapability / PluginModel / UninstallStrategy
   plugin_state.py      # Codex/Claude plugin + marketplace parsing and enabled-state transforms
   plugin_bundle.py     # plugin manifest shapes
-  native_memory.py     # the per-type native-memory layouts (FR-040)
+  native_memory.py     # the per-type native-memory layouts (FR-039)
   codex_memory.py      # the Codex task-group document parser
-  transcripts.py       # transcript session summaries + turn shaping (FR-047/FR-048)
+  transcripts.py       # transcript session summaries + turn shaping (FR-040/FR-042)
   scan.py              # per-type skill-scan locations, for spec skill-manager's unmanaged scan
   model_catalogue.py   # the shape of a discovered model catalogue
 
@@ -89,18 +105,12 @@ backend/coffer/application/agent/
   plugin_service.py       # AgentPluginService (list / set_enabled / uninstall)
   plugin_uninstall.py     # the two uninstall strategies
   plugin_views.py         # PluginsOut/PluginView + the PluginCliRunner / PluginDetailReader ports
-  native_memory_service.py # the read-only store scan + store-file read (FR-040/FR-049)
-  transcript_service.py   # the session listing + single-session read (FR-047/FR-048)
+  native_memory_service.py # the read-only store scan + store-file read (FR-039/FR-043)
+  transcript_service.py   # the session listing + single-session read (FR-040/FR-042)
   transcript_warm_worker.py # background warm of the derived summary sidecar
   model_catalogue.py      # reads each agent's own model catalogue
   sync_reconcile.py       # re-reconcile delivery after a sync import
   kind.py                 # make_agent_kind(...) -> Kind
-
-backend/coffer/application/fs/
-  browse_service.py      # read-only folder browse (FR-024)
-  pick_service.py        # the one native dialog: pick-folder (FR-042)
-  open_service.py        # open / reveal through the daemon (FR-039)
-  editor_service.py      # enumerate installed GUI editors (FR-039)
 
 backend/coffer/infrastructure/agent/
   config_file_store.py   # read_text / stat / list_dir / write_text_atomic (+ .bak) / delete_with_backup
@@ -119,7 +129,6 @@ backend/coffer/surfaces/http/
   agent_transcript_routes.py     # /agents/{name}/transcripts[/session]
   agent_unmanaged_skill_routes.py # /agents/{name}/unmanaged-skills* (spec skill-manager's facet)
   agent_skill_wiring.py          # the agent + skill kind wiring (called from kind_wiring.py)
-  fs_routes.py                   # /fs/browse, /fs/pick-folder, /fs/open, /fs/reveal, /fs/editors
 
 backend/coffer/surfaces/cli/
   agent_cmd.py              # coffer agent {list, add, show, edit, rm, detect} + the config/mcp typers
@@ -153,7 +162,7 @@ frontend/src/i18n/locales/{en,zh}.json             # agents.* strings
 ```
 
 The agent detail page (`/agents/:name`) has **seven** tabs — Overview, Skills,
-MCP servers, Plugins, Memory, Conversations, Config files (FR-009). Of those,
+MCP servers, Plugins, Memory, Conversations, Config files (FR-044). Of those,
 only Plugins acts on the agent; Memory and Conversations are read-only views of
 the agent's own stores; Config files is a two-pane editor whose right pane is
 editable behind an explicit Edit, with an unsaved draft guarded three ways
@@ -164,10 +173,14 @@ reveal beside it.
 
 - **Agents are a Resource kind, not their own table.** A separate `agents` table was rejected: it would lose the framework's audit, CRUD and UI uniformity, and there would be nothing to hang a future agent-as-peer facet on.
 - **Per-type behaviour lives in data, not in branches.** `AGENT_DESCRIPTORS` is the one per-type table; there is no `_DISPLAY` map and no per-type `if`. Adding a product is one enum value plus one descriptor record.
-- **Two types only.** The registry briefly carried `opencode`, `hermes`, `cursor` and `openclaw`; they were removed in the 2026-09 narrowing to `claude_code` + `codex` because none was installed on the maintainer's machine and so no facet could be regression-tested locally. The separate `claude_desktop` chat app was never in scope.
+- **Two types only.** The registry briefly carried `opencode`, `hermes`, `cursor` and `openclaw`; they were removed in the narrowing to `claude_code` + `codex` because none was installed on the maintainer's machine and so no facet could be regression-tested locally. The separate `claude_desktop` chat app was never in scope.
 - **Discovery is presence of a marker.** The type's `default_config_dir` existing surfaces that type as a candidate; command-on-PATH detection is left to a future spec.
 - **Coffer writes only documented surfaces.** An agent's internal state files (`installed_plugins.json`, `auth.json`, session files) are read, never written; where a write must reach internal state, Coffer delegates to the agent's own CLI.
 - **Every write is addressable by allowlist key, never by path**, and is atomic with a `.bak`.
+- **The `/fs/*` routes are consumed, not owned.** The folder picker, the folder
+  browser, open, reveal and the installed-editor enumeration are spec daemon's:
+  they are the loopback process's business, and three different specs' surfaces
+  call them. This spec calls them and validates what they return.
 
 ## Risks / unknowns
 

@@ -6,7 +6,7 @@
 //! loopback requests.
 //!
 //! Split out of `daemon.rs` to keep every file under the project's 400-line
-//! cap (see `agents/stack.md`).
+//! cap (see `.agents/stack.md`).
 
 use std::env;
 use std::fs;

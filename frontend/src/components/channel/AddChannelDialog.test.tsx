@@ -134,39 +134,43 @@ describe("AddChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
-  test("seatalk happy path writes both secrets, then registers with refs", async () => {
-    const api = installApi(mockApiClient());
-    renderDialog();
+  acceptance(
+    "credentials",
+    "a surface lifts a pasted secret into the store before registering",
+    async () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
 
-    fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
-    fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
-    fireEvent.change(screen.getByLabelText(/app secret/i), { target: { value: "s1" } });
-    fireEvent.change(screen.getByLabelText(/signing secret/i), { target: { value: "s2" } });
-    submit();
+      fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
+      fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
+      fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
+      fireEvent.change(screen.getByLabelText(/app secret/i), { target: { value: "s1" } });
+      fireEvent.change(screen.getByLabelText(/signing secret/i), { target: { value: "s2" } });
+      submit();
 
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
-    expect(api.POST.mock.calls.map((c) => c[0])).toEqual([
-      "/credentials",
-      "/credentials",
-      "/resources",
-    ]);
-    expect(api.POST.mock.calls[2][1]).toEqual({
-      body: {
-        kind: "channel",
-        name: "st",
-        config: {
-          channel_type: "seatalk",
-          delivery: "webhook",
-          app_id: "app-1",
-          app_secret_ref: "channel/st/app-secret",
-          signing_secret_ref: "channel/st/signing-secret",
-          default_agent: "claude_code",
-          runs_on: HERE,
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
+      expect(api.POST.mock.calls.map((c) => c[0])).toEqual([
+        "/credentials",
+        "/credentials",
+        "/resources",
+      ]);
+      expect(api.POST.mock.calls[2][1]).toEqual({
+        body: {
+          kind: "channel",
+          name: "st",
+          config: {
+            channel_type: "seatalk",
+            delivery: "webhook",
+            app_id: "app-1",
+            app_secret_ref: "channel/st/app-secret",
+            signing_secret_ref: "channel/st/signing-secret",
+            default_agent: "claude_code",
+            runs_on: HERE,
+          },
         },
-      },
-    });
-  });
+      });
+    },
+  );
 
   describe("seatalk delivery method", () => {
     function pickSeatalk() {
@@ -257,7 +261,7 @@ describe("AddChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
-  test("rolls back the written secrets when registration fails", async () => {
+  acceptance("credentials", "a failed registration leaves no orphaned credential", async () => {
     const api = installApi(
       mockApiClient({
         POST: vi.fn(async (path: string) =>

@@ -20,10 +20,10 @@
 // setting ON a model rather than part of its name, and only the agent knows
 // which of its models take one.
 //
-// The wire type stays hand-written: the channels contract's `AgentModelOut`
+// The wire type stays hand-written: the contract's `AgentModelOut`
 // marks `label`, `description`, `efforts` and `default_effort` optional, while
 // the backend always sends them and the pickers index `efforts` directly.
-// Transport via the shared `call` (agents/frontend.md §4).
+// Transport via the shared `call` (.agents/frontend.md §4).
 
 import { call, enc } from "@/lib/api/call";
 

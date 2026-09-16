@@ -16,7 +16,7 @@ import { acceptance } from "./_acceptance";
 import { readDaemonToken } from "./_helpers";
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "cold-start renders authenticated content",
   async ({ page }) => {
     // No beforeEachInjectToken — rely on the vite plugin to inject token
@@ -89,7 +89,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "daemon-offline banner appears when daemon is unreachable",
   async ({ page }) => {
     // Same setup as the token-missing scenario below — pointing at a
@@ -114,7 +114,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "token-missing renders an actionable empty state",
   async ({ page }) => {
     // Point the FE at a base URL that won't resolve to a daemon. That
@@ -143,7 +143,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "empty resources list renders a welcome view",
   async ({ page, context }) => {
     // Inject a valid token so the API calls succeed, but ensure no

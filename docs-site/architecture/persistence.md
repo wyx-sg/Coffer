@@ -8,7 +8,7 @@ All Coffer state lives on the user's machine. The daemon is the single writer. E
 
 Coffer is a local-first developer tool: the user's accumulated AI assets — registered MCP servers, capability preferences, audit history, knowledge, chat conversations, channels, and sync state — must never depend on a cloud service to be readable or writable. That constraint demands a persistence layer that is self-contained, zero-configuration, and trivially backed up.
 
-The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — the knowledge agents and the user write, and documents ingested to markdown — lives as plain files under `~/.coffer/knowledge/`, and the files are the whole of it: no table in `coffer.db` mirrors them and no index sits over them ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files)). There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
+The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — the knowledge agents and the user write, and documents ingested to markdown — lives as plain files under `~/.coffer/knowledge/`, and the files are the whole of it: no table in `coffer.db` mirrors them and no index sits over them. There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
 
 ## Why SQLite, not Postgres
 
@@ -22,7 +22,7 @@ The practical consequences of the SQLite choice shape every detail of the persis
 
 - **Single writer** — SQLite's write concurrency is bounded; having one writer (the daemon) eliminates all write conflicts by design. The daemon serialises every mutation; surfaces that need to write (CLI commands, HTTP handlers) go through the daemon over loopback HTTP.
 - **WAL mode** — Write-Ahead Logging allows readers (e.g., a CLI `list` command calling the REST API) to proceed concurrently with the writer without blocking on a lock. In practice this means `coffer mcp list` never hangs waiting for an ongoing migration.
-- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy. Keeping two of your own machines in step is a separate mechanism — bidirectional convergence with a git remote you own (spec vault-sync) — and it is off until you configure one. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
+- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy. Keeping two of your own machines in step is a separate mechanism — bidirectional convergence with a git remote you own — and it is off until you configure one. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
 
 ## SQLAlchemy 2.0 async ORM
 
@@ -112,7 +112,7 @@ The tables that exist after applying all revisions, grouped by domain:
 | ---------------------- | ------------------------------------------------------------ |
 | `skill_agent_bindings` | Records which skills are bound to which agent workspaces.     |
 
-**Sync** ([Vault Sync](/reference/adr/vault-sync)):
+**Sync:**
 
 | Table                    | Purpose                                                                                     |
 | ------------------------ | ------------------------------------------------------------------------------------------- |
@@ -123,7 +123,7 @@ The tables that exist after applying all revisions, grouped by domain:
 
 **Memory:** no tables. A memory partition is a `resources` row, and its facts are files under `~/.coffer/memory/`, derived from the agents' own native memory. `memory_overrides` — the one non-derived thing the kind ever stored — was dropped in revision `0078` along with the per-fact decisions it backed.
 
-## Knowledge is plain files ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files))
+## Knowledge is plain files
 
 The control-plane tables above are the system of record for their rows. **Knowledge has no such row.** The markdown files under `~/.coffer/knowledge/` are not a projection of anything and are not projected into anything — they are the knowledge layer, whole.
 
@@ -176,8 +176,3 @@ The `RetentionService.initialize_defaults()` call at daemon startup seeds the `r
 | `conversations`         | Delete archived chats this many days after archival (with their messages) | 30 days |
 
 Conversations follow a two-stage lifecycle: idle threads are auto-archived, then archived threads are deleted later. Any policy can be changed by the user via `PATCH /api/v1/retention/{table_name}` or the equivalent CLI command; the change itself is audited.
-
-## See also
-
-- [Data model reference](/reference/specs/mcp-gateway/data-model) — full DDL, ORM mapping table, cascade rules, and default seeds
-- [Architecture reference](/reference/project/architecture) — persistence section and the full cross-cutting concerns table

@@ -7,7 +7,7 @@
 // that conversation's own page, which is where the open / reveal actions moved
 // to from the old per-row "⋯" menu, so what this suite pins about a row is the
 // URL it navigates to — keyed by source_path, because session_id repeats across
-// subagent sidechain files. We mock the hook module (per agents/frontend.md §8)
+// subagent sidechain files. We mock the hook module (per .agents/frontend.md §8)
 // and useNavigate so the component renders deterministically without network.
 
 import type { PropsWithChildren } from "react";

@@ -91,8 +91,8 @@ def _make_skill_service(
 
 
 @pytest.mark.acceptance(
-    spec="channels",
-    scenario="skills are reachable as tools",
+    spec="skill-manager",
+    scenario="an agent lists the skill library as a tool",
 )
 async def test_list_skills_returns_catalogue(tmp_path: pathlib.Path) -> None:
     """list_skills must return {"skills": [{"name": ..., "description": ...}]}."""
@@ -138,6 +138,10 @@ async def test_list_skills_empty(tmp_path: pathlib.Path) -> None:
     assert result == {"skills": []}
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="an agent loads one skill's SKILL.md as a tool",
+)
 async def test_load_skill_returns_content(tmp_path: pathlib.Path) -> None:
     """load_skill returns {"name": ..., "content": ...} with the SKILL.md text."""
     skills = [_make_resource("format-python", "Formats Python code.")]

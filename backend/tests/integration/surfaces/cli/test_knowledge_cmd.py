@@ -4,7 +4,7 @@ We boot the full FastAPI app (via ``create_app``) so the knowledge kind is
 wired with its production routes — real SQLite, real markdown files under a
 temp HOME — then route ``_cli_client.client_or_exit`` at a Starlette
 ``TestClient`` over that app. Nothing auto-provisions any more: every
-collection in here exists because a test created it (spec knowledge FR-010).
+collection in here exists because a test created it (spec knowledge FR-007).
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def test_create_registers_a_resource_and_lists_it(knowledge_cli_daemon):
     assert [c["name"] for c in collections] == ["shopee"]
 
     # The description a caller gave becomes the collection's README, so the
-    # catalogue reads it back off disk rather than out of a row (FR-013).
+    # catalogue reads it back off disk rather than out of a row (FR-010).
     assert collections[0]["description"] == "Internal systems"
 
 
@@ -256,7 +256,7 @@ def test_write_needs_exactly_one_target(knowledge_cli_daemon):
 )
 def test_cli_search_returns_the_files_a_phrase_appears_in(knowledge_cli_daemon):
     """The CLI half of the same scenario the HTTP suite covers: `search` runs
-    ripgrep over the visible collections and answers with the files (FR-024)."""
+    ripgrep over the visible collections and answers with the files (FR-016)."""
     _make_collection("shopee")
     _runner.invoke(
         cli_app,

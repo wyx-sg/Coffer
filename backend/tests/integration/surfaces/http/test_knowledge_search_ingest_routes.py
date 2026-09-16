@@ -1,6 +1,6 @@
 """Integration tests for the knowledge layer's search and ingest routes:
-``POST /search`` and ``POST /upload`` (spec knowledge FR-024..FR-027,
-FR-033..FR-037, FR-060).
+``POST /search`` and ``POST /upload`` (spec knowledge FR-016..FR-018,
+FR-022..FR-026, FR-034).
 
 We boot the full FastAPI app (via ``create_app``) so these routes are wired
 exactly as production wires them — real SQLite, real markdown files under a
@@ -63,9 +63,9 @@ def test_search_over_an_unknown_collection_is_not_found(client) -> None:
     spec="knowledge", scenario="search spans only the collections the caller may see"
 )
 async def test_builtin_search_tool_spans_only_the_agents_collections(client) -> None:
-    """REST ``search`` is the owner's unscoped surface (FR-060); the same
+    """REST ``search`` is the owner's unscoped surface (FR-034); the same
     ``SearchService`` this route wires is also what the built-in ``search``
-    MCP tool calls with an ``agent``, and that call IS scoped (FR-012). Restrict
+    MCP tool calls with an ``agent``, and that call IS scoped (FR-009). Restrict
     a second collection to an unrelated agent (via the framework's scope
     route) and confirm this caller's results never cross into it."""
     _create_collection(client, "shopee")
@@ -147,7 +147,7 @@ def test_upload_lands_as_markdown_with_frontmatter(client) -> None:
     spec="knowledge", scenario="an uploaded original is kept under .raw/ and stays out of retrieval"
 )
 def test_upload_keeps_the_original_under_raw_and_out_of_retrieval(client, tmp_path) -> None:
-    """FR-035: the original is kept, and retrieval never reaches it.
+    """FR-024: the original is kept, and retrieval never reaches it.
 
     The arrangement is what makes this provable, and it is the reason the
     fixture is HTML rather than the `.txt` this test used to send. Passthrough
@@ -238,7 +238,7 @@ def test_upload_of_unsupported_type_is_refused_with_its_reason(client) -> None:
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a document is never stored half-converted")
 def test_upload_of_a_pdf_with_no_text_layer_is_refused_as_scanned(client, monkeypatch) -> None:
-    """FR-037, end to end, including the reason the UI keys its message off.
+    """FR-026, end to end, including the reason the UI keys its message off.
 
     A real image-only PDF is not worth carrying as a fixture: the rule is that
     ANY conversion producing no text is refused, so the converter is made to

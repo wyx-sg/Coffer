@@ -103,7 +103,7 @@ class SeaTalkTransport:
         single-chat endpoint, so every caller (text chunks, cards, media)
         shares one routing decision.
 
-        ``thread_id`` goes INSIDE the message body on BOTH endpoints (FR-026):
+        ``thread_id`` goes INSIDE the message body on BOTH endpoints (spec channels/seatalk FR-018):
         verified live that a top-level thread_id is ignored (the reply falls to
         the group main chat), while ``message.thread_id`` threads it and roots
         a new thread when none exists yet.

@@ -44,7 +44,7 @@ def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> None:
     assert r.status_code == 201, r.text
 
 
-@pytest.mark.acceptance(spec="agent-registry", scenario="list an agent's config files")
+@pytest.mark.acceptance(spec="agent-registry/claude-code", scenario="list an agent's config files")
 def test_list_and_read_config_file(tmp_path, monkeypatch):
     app, _ = _app(tmp_path, monkeypatch, 59700)
     with _client(app) as c:
@@ -61,7 +61,7 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
         assert items["settings"]["files"] is None
         assert items["subagents"]["kind"] == "directory"
         # The read-only viewer needs absolute paths for open/reveal
-        # (FR-038): a file entry exposes its own path + its containing folder.
+        # (FR-047): a file entry exposes its own path + its containing folder.
         assert items["settings"]["path"] == str(settings_path)
         assert items["settings"]["folder_path"] == str(claude_dir)
         # A directory entry's path IS the folder; folder_path is its parent.
@@ -295,7 +295,7 @@ def test_mcp_install_lifecycle(tmp_path, monkeypatch):
         assert r.json()["installed"] is True
         assert r.json()["command"] == str(shim)
         data = json.loads((tmp_path / ".claude.json").read_text())
-        # Agent Registry FR-019 (amended): install writes `--agent <name>` so the
+        # Agent Registry FR-015 (amended): install writes `--agent <name>` so the
         # shim self-reports its identity at the MCP handshake.
         assert data["mcpServers"]["coffer"] == {
             "command": str(shim),

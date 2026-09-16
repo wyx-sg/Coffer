@@ -1,4 +1,4 @@
-"""``render_digest`` — pure, no model, no filesystem (FR-032's mechanical
+"""``render_digest`` — pure, no model, no filesystem (FR-019's mechanical
 path). Every test here could run with no internal connection ever
 configured, which is the entire point: the digest must be usable on its own.
 """
@@ -75,7 +75,7 @@ def test_newest_first_within_a_type_group() -> None:
 
 
 def test_no_facts_still_produces_a_usable_digest() -> None:
-    """FR-032: the digest step is never a no-op, even with nothing to show."""
+    """FR-019: the digest step is never a no-op, even with nothing to show."""
     text = render_digest([], partition="global")
 
     assert "global" in text

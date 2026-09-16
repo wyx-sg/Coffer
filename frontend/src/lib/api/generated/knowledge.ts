@@ -28,7 +28,7 @@ export interface paths {
          * @description Creates one collection: a directory under the knowledge root and one
          *     `knowledge` Resource for it, so the framework's per-agent scope has
          *     something to authorize. Nothing else creates one — not a read, not a
-         *     write, not an agent's working directory (FR-010).
+         *     write, not an agent's working directory (FR-007).
          *
          *     `name` is a single path segment. Names that would escape the root
          *     (containing `/`, `\` or `..`, or dot-only) are rejected, as is a name
@@ -61,7 +61,7 @@ export interface paths {
          *     `path` is relative to the knowledge root; `shopee` is a collection,
          *     `shopee/account` a folder inside it. The catalogue is generated at call
          *     time by walking the directory and reading frontmatter, never
-         *     materialized (FR-020, FR-021). Hidden entries are absent.
+         *     materialized (FR-012, FR-013). Hidden entries are absent.
          */
         get: operations["readKnowledgeTree"];
         put?: never;
@@ -83,10 +83,10 @@ export interface paths {
          * Read a file
          * @description The file's full text, plus its frontmatter fields and the two absolute
          *     on-disk paths the UI needs to offer open-in-editor and
-         *     reveal-in-file-manager on the file and on its folder (FR-062).
+         *     reveal-in-file-manager on the file and on its folder (FR-036).
          *
          *     Whole file, always: no chunking, no passage granularity, no `top_k`
-         *     (FR-023). Bytes come off disk at call time, so an edit made in the
+         *     (FR-015). Bytes come off disk at call time, so an edit made in the
          *     person's own editor is what comes back.
          */
         get: operations["readKnowledgeFile"];
@@ -99,7 +99,7 @@ export interface paths {
          *     Giving both, or neither, is a 400.
          *
          *     A write is a plain file write — no LLM, no conversion, no indexing step
-         *     (FR-030). `description` is required, not optional: with no ranked index
+         *     (FR-019). `description` is required, not optional: with no ranked index
          *     the catalogue is the retrieval surface, so a file that fails to
          *     describe itself is unfindable (FR-003).
          */
@@ -128,7 +128,7 @@ export interface paths {
          * Grep the files
          * @description Ripgrep over the Markdown files themselves — literal or regex,
          *     recursive, returning file, line number and matching line. There is no
-         *     index; this *is* the search (FR-022, FR-024). No tokenizer is involved,
+         *     index; this *is* the search (FR-014, FR-016). No tokenizer is involved,
          *     so CJK content matches like anything else.
          *
          *     `collection` narrows the run to one collection; omitted, it spans every
@@ -160,7 +160,7 @@ export interface paths {
          *     **file** at a time instead of a line at a time: each hit is a path,
          *     the `title` and `description` from its frontmatter, and the lines that
          *     matched, so a caller can judge what it found before reading any of it
-         *     (FR-024).
+         *     (FR-016).
          *
          *     There is no score, no ranking, no heading and no retrieval *mode* — no
          *     second way an answer can be reached. Matching is **literal and
@@ -169,7 +169,7 @@ export interface paths {
          *     to the files the caller may see and skips hidden directories
          *     (`.history/`, `.raw/`), and it sends a file's content nowhere: search
          *     runs entirely on this machine and needs no connection of any kind
-         *     (FR-029).
+         *     (FR-018).
          *
          *     It is a POST because the query is a body rather than a path, not
          *     because anything is written.
@@ -193,7 +193,7 @@ export interface paths {
         /**
          * Convert a document and file it into a collection
          * @description The entrance for a document the person did not write as Markdown
-         *     (FR-033…FR-037). The file is converted, named from a readable slug of
+         *     (FR-022…FR-026). The file is converted, named from a readable slug of
          *     its title, given FR-003's frontmatter — `title` from the document
          *     falling back to its file name, `description` from the internal
          *     connection where one is configured and from the document's opening
@@ -214,7 +214,7 @@ export interface paths {
          *     refusal that names the limit. All-or-nothing — a conversion failure
          *     leaves neither a Markdown file nor a `.raw/` original behind.
          *
-         *     Upload is deliberately **not** an agent tool (FR-040): a document
+         *     Upload is deliberately **not** an agent tool (FR-027): a document
          *     enters through a human surface — this route, the CLI, or a channel that
          *     confirms the collection with its paired owner.
          */
@@ -243,15 +243,18 @@ export interface paths {
          *     merges
          *     duplicate notes and rewrites them into coherent documents, copying each
          *     prior revision into the hidden `.history/` before any overwrite
-         *     (FR-050). With no index behind it, there is nothing to reconcile
+         *     (FR-030). With no index behind it, there is nothing to reconcile
          *     afterwards.
          *
-         *     This is the manual trigger — the UI button and `coffer knowledge
-         *     organize` both land here. A background worker may also run the pass on
-         *     an interval, governed by one installation-wide setting that is **off by
-         *     default** and names the one machine allowed to run it (FR-051, FR-053).
+         *     This is the manual trigger — the UI button and `coffer knowledge tidy`
+         *     both land here. The route keeps its own spelling, `/tidy`; the CLI now
+         *     spells the pass the same way. A background worker may also run it on an
+         *     interval, governed by one installation-wide setting that is **off by
+         *     default** and names the one machine allowed to run it (FR-031). What
+         *     that owner machine obliges a pass to do once the vault is synced is spec
+         *     vault-sync's rule.
          *     Only one pass per collection runs at a time, whoever started it
-         *     (FR-056).
+         *     (FR-033).
          *
          *     `status` is `no_model` when no internal connection is configured (a
          *     clean no-op), `empty` when the collection holds nothing to tidy, and
@@ -261,7 +264,7 @@ export interface paths {
          *     pass over the same collection is still running is refused with `409`
          *     rather than started: the two would be two writers over one directory,
          *     not one faster pass. Which collections are being rewritten right now is
-         *     readable at `GET /api/v1/upkeep/runs` (spec mcp-gateway's contract), so
+         *     readable at `GET /api/v1/upkeep/runs` (spec resource-framework's contract), so
          *     a surface that mounts mid-pass shows the button as already running
          *     instead of inviting the second click.
          */
@@ -289,7 +292,7 @@ export interface components {
             name: string;
             /**
              * @description The first paragraph of the collection's `README.md`, empty when
-             *     there is none. Never stored in the database (FR-013).
+             *     there is none. Never stored in the database (FR-010).
              */
             description: string;
             /** @description Markdown files in the collection, counted recursively, hidden entries excluded. */
@@ -363,9 +366,9 @@ export interface components {
             updated_at: string;
             /** @description The Markdown body, frontmatter stripped. */
             body: string;
-            /** @description Absolute on-disk path of the file (FR-062). */
+            /** @description Absolute on-disk path of the file (FR-036). */
             file_path: string;
-            /** @description Absolute on-disk path of its containing folder (FR-062). */
+            /** @description Absolute on-disk path of its containing folder (FR-036). */
             folder_path: string;
         };
         /**
@@ -435,7 +438,7 @@ export interface components {
         /**
          * @description One entry per matching file, bounded to a handful of files and a few
          *     matched lines each. There is no retrieval mode a caller picks and none
-         *     the answer reports, and no score or rank on any entry (FR-024).
+         *     the answer reports, and no score or rank on any entry (FR-016).
          */
         SearchOut: {
             results: components["schemas"]["SearchHitOut"][];
@@ -453,7 +456,7 @@ export interface components {
             description: string;
             /** @description Which converter produced this file. */
             converter: string;
-            /** @description The kept original under the collection's hidden `.raw/` (FR-035). */
+            /** @description The kept original under the collection's hidden `.raw/` (FR-024). */
             raw_path: string;
         };
         TidyOut: {
@@ -529,7 +532,7 @@ export interface components {
         /**
          * @description No such collection (`KNOWLEDGE_COLLECTION_NOT_FOUND`). An unknown name
          *     is always an error — nothing is conjured into existence by being asked
-         *     for (FR-010).
+         *     for (FR-007).
          */
         CollectionNotFound: {
             headers: {
@@ -568,7 +571,7 @@ export interface components {
         /**
          * @description The upload is past the size ceiling (`KNOWLEDGE_UPLOAD_TOO_LARGE`).
          *     Refused before any conversion or write is attempted, naming the limit
-         *     so the caller knows what to shrink below (FR-037).
+         *     so the caller knows what to shrink below (FR-026).
          */
         UploadTooLarge: {
             headers: {

@@ -5,7 +5,7 @@ import { AddMcpServerDialog } from "@/components/mcp/AddMcpServerDialog";
 /**
  * First-run welcome card — shown on `/mcp-servers` when no resource is
  * registered yet. Explains Coffer in one sentence and offers the single
- * obvious next step (spec ui-shell §User Story 1).
+ * obvious next step (spec web-ui §User Story 1).
  */
 export function WelcomePanel() {
   const { t } = useTranslation();

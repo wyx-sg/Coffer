@@ -46,14 +46,14 @@ def test_channel_capabilities_carries_strategy_fields():
     # supports_edit is literal (can this transport rewrite a delivered message?);
     # supports_live_text is the question the core asks (is there a surface I can
     # keep updating?). A transport opts into each separately — SeaTalk streams
-    # without being able to edit (FR-037).
+    # without being able to edit (FR-039).
     assert caps.supports_live_text is False  # default off; transports opt in
     assert caps.supports_media is False  # default off; media-capable transports opt in
     assert caps.supports_reactions is False  # default off; reaction-capable transports opt in
     # Narrower than supports_edit: SeaTalk can rewrite a delivered interactive
     # card while being unable to rewrite a text message.
     assert caps.supports_card_update is False  # default off; transports opt in
-    # FR-070: the only non-boolean strategy fields — how the transport spells an
+    # FR-055: the only non-boolean strategy fields — how the transport spells an
     # @mention, by id and (where it has a second form) by address. Both empty by
     # default, which is what makes a reply carry none.
     assert caps.mention_template == ""

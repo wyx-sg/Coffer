@@ -115,12 +115,46 @@ def test_register_then_appears_in_list(...):
 
 Marker is registered in `backend/pyproject.toml` under `[tool.pytest.ini_options]` with `--strict-markers` enabled — typos fail collection.
 
+**TypeScript (Vitest / Playwright):**
+
+```ts
+import { acceptance } from "@/test/acceptance";
+
+acceptance("chat", "chat runs on the built-in model when no connection", () => {
+  ...
+});
+```
+
+`acceptance()` is a thin wrapper over `test()` exported from
+`frontend/src/test/acceptance.ts`; the audit strips comments before matching, so
+a commented-out call does not count as coverage.
+
+**Rust (the desktop crate):**
+
+```rust
+// acceptance(spec = "desktop-app", scenario = "a spawned daemon outlives the app")
+#[test]
+fn a_spawned_daemon_leaves_the_apps_process_group() { ... }
+```
+
+Rust has no user-defined test attribute without a proc-macro crate, so the marker
+is a line comment the compiler ignores. It counts **only** when a `#[test]` or
+`#[tokio::test]` follows before the next `fn` — a marker that drifts away from
+its test stops counting and its scenario resurfaces as uncovered, rather than
+reporting green on nothing. `#[ignore]` makes it a dead marker, the Rust
+analogue of `@pytest.mark.skip`. Stack several markers to cover several
+scenarios with one test. Doc comments (`//!`, `///`) are never matched.
+
+These tests are gated by `.github/workflows/desktop.yml` (`make desktop-lint`,
+`make desktop-test`), **not** by `make verify`, which excludes the crate — so a
+local `make verify` proves nothing about the desktop shell.
+
 **Coverage audit** — `scripts/audit_acceptance.py` (run via `make verify-acceptance`) scans every `specs/*/spec.md` and every test file, then fails on:
 
 - scenarios listed in spec.md without a covering marker (missing coverage)
 - markers referring to a scenario / spec ID that doesn't exist (orphan marker — usually means a spec was renamed)
 
-Stdlib-only, runs in milliseconds — it covers all nine specs under `specs/`.
+Stdlib-only, runs in milliseconds — it covers all nineteen specs under `specs/`.
 
 ## Unit-Tier Purity Guardrail
 

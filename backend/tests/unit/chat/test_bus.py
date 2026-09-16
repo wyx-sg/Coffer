@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+import pytest
+
 from coffer.application.chat.bus import ConversationBus
 from coffer.domain.chat.events import AgentEvent, QueueChanged, TextDelta, TurnStarted
 
@@ -39,6 +41,10 @@ def test_late_subscriber_replays_current_turn_buffer() -> None:
     assert _drain(late) == [e1, e2]
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a completed turn is not replayed on top of its persisted rows",
+)
 def test_end_turn_clears_replay_buffer() -> None:
     bus = ConversationBus()
     bus.begin_turn()
@@ -57,6 +63,10 @@ def test_queue_changed_replayed_to_new_subscriber() -> None:
     assert _drain(late) == [qc]
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a completed turn is not replayed on top of its persisted rows",
+)
 def test_queue_snapshot_survives_begin_turn() -> None:
     bus = ConversationBus()
     qc: AgentEvent = QueueChanged(pending=["a"])

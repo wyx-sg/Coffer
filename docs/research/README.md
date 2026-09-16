@@ -59,7 +59,7 @@ column says so.
 | 13 | [Platform-level competitors](./platform-competitors.md) | Whole-product (re-sweep) — no single spec | **Blind-spot fix (2026-06-20):** the prior 12 reports missed cc-switch (~105k) + the whole Chinese ecosystem; no incumbent covers Coffer's full 10-capability matrix. |
 | 14 | [Machine × agent resource scope](./machine-agent-scope.md) | spec `vault-sync` + the resource framework's scope facility | _Design note (2026-07-10), not a competitive report._ **Historical record** — it designed a machine × agent scope matrix; a resource's reach is now machine-local and `scope` names agents and nothing else. |
 
-Two named specs have no report here: `provider-switching` and `ui-shell`.
+Two named specs have no report here: `provider-switching` and `web-ui`.
 
 ## Cross-cutting themes (as of 2026-06-20)
 

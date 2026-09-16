@@ -4,7 +4,7 @@
 // `as const` tuple. Keys are hierarchical: the first segment is the feature
 // noun and a detail/sub-resource extends its parent, so a prefix invalidation
 // (`qc.invalidateQueries({ queryKey: agentsKey })`) sweeps the whole subtree
-// (agents/frontend.md §3). Never inline a string-array `queryKey` at a call
+// (.agents/frontend.md §3). Never inline a string-array `queryKey` at a call
 // site — an ESLint rule (eslint.config.js) rejects it outside this file.
 //
 // A bare root (`["mcp"]`) is declared only where something actually invalidates
@@ -168,7 +168,7 @@ export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as
 export const memoryKey = ["memory"] as const;
 export const memoryPartitionsKey = ["memory", "partitions"] as const;
 /** A partition's own directory, and one file in it — the tree the detail page
- *  browses (spec memory FR-062). */
+ *  browses (spec memory FR-029). */
 export const memoryPartitionFilesKey = (partition: string) =>
   ["memory", "partitions", partition, "files"] as const;
 export const memoryPartitionFileKey = (partition: string, path: string) =>

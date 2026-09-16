@@ -8,17 +8,17 @@ Every user-managed entity in Coffer is a **Resource**, identified by a stable st
 
 | Kind             | Spec                                                   | Description                                                                                                       |
 | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `mcp_server`     | [mcp-gateway](/reference/specs/mcp-gateway/spec)         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
-| `agent`          | [agent-registry](/reference/specs/agent-registry/spec)   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
-| `skill`          | [skill-manager](/reference/specs/skill-manager/spec)     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
-| `knowledge`      | [knowledge](/reference/specs/knowledge/spec)             | One collection of what agents know: a directory of markdown files — entries they wrote plus any-format documents ingested to markdown — searched literally with `ripgrep`. |
-| `memory`         | [memory](/reference/specs/memory/spec)                   | One partition of the facts Coffer aggregated out of the agents' *own* native memory — `global` plus one per project — as files under `~/.coffer/memory/`. |
-| `provider`       | [provider-switching](/reference/specs/provider-switching/spec) | A vendor endpoint and its key: `{protocol, base_url, credential_ref}`. One may be the internal default Coffer's own passes run on. |
-| `channel`        | [channels](/reference/specs/channels/spec)               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
+| `mcp_server`     | `mcp-gateway`         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
+| `agent`          | `agent-registry`   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
+| `skill`          | `skill-manager`     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
+| `knowledge`      | `knowledge`             | One collection of what agents know: a directory of markdown files — entries they wrote plus any-format documents ingested to markdown — searched literally with `ripgrep`. |
+| `memory`         | `memory`                   | One partition of the facts Coffer aggregated out of the agents' *own* native memory — `global` plus one per project — as files under `~/.coffer/memory/`. |
+| `provider`       | `provider-switching` | A vendor endpoint and its key: `{protocol, base_url, credential_ref}`. One may be the internal default Coffer's own passes run on. |
+| `channel`        | `channels`               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
 
-`knowledge` was once two kinds — a `knowledge_base` you could only read and a `memory` only agents wrote to — but they shared their storage from the start, so the split bought nothing and forced every caller to classify its own data before it could pick a tool. They are now one kind over one storage root: a knowledge resource **is** the directory `~/.coffer/knowledge/<name>/`, and the markdown files in it are the whole of its content ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files)). The kind adds no table of its own — the `resources` row carries the collection's identity and description, the files carry everything else. A knowledge resource is **co-managed**: both you and your agents write into it.
+`knowledge` was once two kinds — a `knowledge_base` you could only read and a `memory` only agents wrote to — but they shared their storage from the start, so the split bought nothing and forced every caller to classify its own data before it could pick a tool. They are now one kind over one storage root: a knowledge resource **is** the directory `~/.coffer/knowledge/<name>/`, and the markdown files in it are the whole of its content. The kind adds no table of its own — the `resources` row carries the collection's identity and description, the files carry everything else. A knowledge resource is **co-managed**: both you and your agents write into it.
 
-Today's `memory` kind is a different thing from that retired one, and the distinction is load-bearing: it is **derived, not co-managed**. Coffer reads each agent's native memory and normalises it into facts; it never writes back ([Aggregate Agent Memory, Never Write It](/reference/adr/aggregate-agent-memory-never-write-it)).
+Today's `memory` kind is a different thing from that retired one, and the distinction is load-bearing: it is **derived, not co-managed**. Coffer reads each agent's native memory and normalises it into facts; it never writes back.
 
 New kinds plug into the same framework without modifying it. The encrypted credential store and vault sync are deliberately **cross-cutting concerns, not kinds**: they serve every kind rather than being managed entities in their own right.
 
@@ -94,13 +94,13 @@ stateDiagram-v2
 
 Every state transition is recorded in the audit log with an actor. The audit log cannot be modified or deleted through the normal API — it is append-only.
 
-For `mcp_server` specifically, there is a parallel capability-level state: each individual tool, resource, or prompt exposed by an upstream server can be individually enabled or disabled (per [Capability State Model](/reference/adr/capability-state-model)). The database stores only user preference flags for these capabilities — it does not cache capability schemas or descriptions. Those are fetched live from the upstream on each request and held in a per-session in-memory cache with a 60-second TTL.
+For `mcp_server` specifically, there is a parallel capability-level state: each individual tool, resource, or prompt exposed by an upstream server can be individually enabled or disabled. The database stores only user preference flags for these capabilities — it does not cache capability schemas or descriptions. Those are fetched live from the upstream on each request and held in a per-session in-memory cache with a 60-second TTL.
 
 ## Kind registration at the composition root
 
 The framework uses no global registry and no import side effects. Each kind exposes a factory — `make_<kind>_kind()` in `application/<kind>/kind.py` — that returns a frozen `Kind`, and the composition root wires the kind in explicitly: one `*_wiring.py` module per kind builds its services, registers its routers and returns a typed dataclass the root passes forward. The composition roots are `surfaces/http/app.py` (FastAPI wiring) and `surfaces/cli/main.py` (Typer wiring).
 
-A `Kind` carries the small set of answers the framework needs and the kind alone can give: whether the generic `POST /api/v1/resources` may create one (`generic_create_allowed`), whether it has a per-agent activation scope (`supports_scope`), and whether its rows converge with the sync remote (`converges`). The last of those exists so the sync layer has one rule rather than a list of exceptions — `memory` is the only kind that answers no, because a partition row is derived from the agents installed on one machine (spec memory FR-023). A kind nobody has declared anything about converges, so the flag can only ever withhold.
+A `Kind` carries the small set of answers the framework needs and the kind alone can give: whether the generic `POST /api/v1/resources` may create one (`generic_create_allowed`), whether it has a per-agent activation scope (`supports_scope`), and whether its rows converge with the sync remote (`converges`). The last of those exists so the sync layer has one rule rather than a list of exceptions — `memory` is the only kind that answers no, because a partition row is derived from the agents installed on one machine. A kind nobody has declared anything about converges, so the flag can only ever withhold.
 
 Adding a new kind is mechanical: create the kind's subdirectories in each layer (`domain/<kind>/`, `application/<kind>/`, `infrastructure/<kind>/`, `surfaces/http/<kind>/`, `surfaces/cli/<kind>/`), implement the kind-specific logic, write its `make_<kind>_kind()` factory, and add one wiring module the composition root calls. The audit, retention, and resource-list surfaces are inherited automatically.
 
@@ -111,7 +111,3 @@ The information architecture follows the same principle as the domain model: the
 This eliminates the question "is this new thing a kind or a surface?" for every future spec. Operational tooling — Activity, Sync, Settings — appears in a separate System group; everything the user manages appears in the Resources group, one entry per kind with a list UI.
 
 A deliberate policy follows: **no "coming soon" placeholders**. A kind is not shown in the UI or sidebar until it actually works. The UI always reads as "here is what Coffer does", not "here is what Coffer plans to do."
-
----
-
-**See also:** [Resource framework upfront](/reference/adr/resource-framework-upfront), [Everything is a resource kind](/reference/adr/everything-is-a-resource-kind), [Resource identifier format](/reference/adr/resource-identifier-format), [Capability state model](/reference/adr/capability-state-model)

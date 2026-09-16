@@ -58,7 +58,7 @@ async function registerFakeServer(name: string): Promise<void> {
   if (!r.ok) throw new Error(`register failed: ${r.status} ${await r.text()}`);
 }
 
-acceptance("ui-shell", "legacy /audit redirects to activity", async ({ page }) => {
+acceptance("web-ui", "legacy /audit redirects to activity", async ({ page }) => {
   const name = generateUniqueName("e2eactivity");
   try {
     await registerFakeServer(name);

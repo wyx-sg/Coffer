@@ -8,7 +8,7 @@ with. Authority is [`spec.md`](./spec.md) and
 
 ## There is no schema
 
-**The knowledge layer owns no table** (FR-081, SC-004). Markdown files are the
+**The knowledge layer owns no table** (FR-038, SC-004). Markdown files are the
 sole source of truth, and nothing derives anything from them: no `documents`
 row, no chunks, no full-text index, no embeddings — therefore no content hash
 to compare, no reindex, and no reconciliation of any kind (FR-001).
@@ -41,16 +41,16 @@ contents.
   `infrastructure/knowledge/paths.py` (FR-006).
 - A **collection** is a top-level subdirectory *and* one `knowledge` Resource.
   It is created deliberately; nothing provisions one from a read, a write, or
-  an agent's working directory (FR-010). There is no `global`, no
+  an agent's working directory (FR-007). There is no `global`, no
   `project-<ULID>`, no git-root resolution and no scope-to-project-root table
-  (FR-011).
+  (FR-008).
 - Inside a collection the nesting is the human's business. Subdirectories are
   optional, arbitrarily deep, and mean nothing to the system, which never
   requires or creates one (FR-004).
 - **Dot-prefixed entries are invisible** to the catalogue, to grep and to
-  search (FR-005, FR-029). Coffer itself writes two of them: `.history/`, the
-  revisions a tidy pass superseded (FR-052), and `.raw/`, the original bytes of
-  an ingested document (FR-035). Hidden segments
+  search (FR-005, FR-018). Coffer itself writes two of them: `.history/`, the
+  revisions a tidy pass superseded (FR-032), and `.raw/`, the original bytes of
+  an ingested document (FR-024). Hidden segments
   are *refused* by the path guard rather than merely skipped: handing back a
   `.history/` revision would answer with content the live file has replaced, and
   handing back a `.raw/` original would answer with the file before conversion.
@@ -59,7 +59,7 @@ contents.
 
 A collection describes itself in a `README.md` in its own directory; the
 catalogue's one-line description of a collection is that file's first paragraph,
-and is empty when there is no README (FR-013). It is never stored in the
+and is empty when there is no README (FR-010). It is never stored in the
 database, so it cannot drift from what the person browsing the folder reads.
 `POST /api/v1/knowledge/collections` writes one when given a `description`.
 
@@ -123,17 +123,17 @@ file, then `replace`.
 
 These are the **shape of an answer, never the shape of a row**: a catalogue
 level is produced by walking the directory and reading frontmatter at call time
-(FR-020), so none of them is persisted and none of them can be stale.
+(FR-012), so none of them is persisted and none of them can be stale.
 
 | Type | Fields | What it is |
 | --- | --- | --- |
 | `CollectionEntry` | `name`, `description`, `file_count` | One collection at the catalogue's top level. `description` is the README's first paragraph; `file_count` is recursive, hidden entries excluded. |
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
 | `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at` | One file as the catalogue shows it: enough to judge relevance without reading the body. |
-| `CatalogueLevel` | `path`, `directories`, `files` | **One level**, never the whole tree (FR-021). |
-| `KnowledgeFile` | the five frontmatter fields + `path`, `body`, `file_path`, `folder_path` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (FR-062). |
+| `CatalogueLevel` | `path`, `directories`, `files` | **One level**, never the whole tree (FR-013). |
+| `KnowledgeFile` | the five frontmatter fields + `path`, `body`, `file_path`, `folder_path` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (FR-036). |
 | `GrepMatch` | `path`, `line_number`, `line` | One hit, a line at a time. |
-| `GrepOutcome` | `matches`, `truncated` | A bounded run; `truncated` says whether `max_matches` cut it short (FR-022). |
+| `GrepOutcome` | `matches`, `truncated` | A bounded run; `truncated` says whether `max_matches` cut it short (FR-014). |
 
 Constants: `ACTOR_AGENT = "agent"`, `ACTOR_USER = "user"`.
 
@@ -141,17 +141,17 @@ Two more sit one layer up, because they shape an answer the domain has no
 opinion about. `SearchHit` / `SearchOutcome`
 (`application/knowledge/search.py`) fold the same matcher's line hits into one
 entry per **file** — `path`, `title`, `description`, and an `excerpt` of
-`(line_number, text)` pairs (FR-024). `Conversion`
+`(line_number, text)` pairs (FR-016). `Conversion`
 (`domain/knowledge/converter.py`) is what a converter returns for an uploaded
 document: the `markdown`, a `title` (the document's first H1, falling back to
-its file name, FR-034), and which `converter` ran — carried so a failure
+its file name, FR-023), and which `converter` ran — carried so a failure
 downstream can say what ran, and reported on the upload response but written
 nowhere on disk.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror these one
 for one, and then add the shapes that describe an answer no domain type does:
 `SearchRequest`, `SearchHitOut` / `SearchLineOut` / `SearchOut` (a hit is a
-*file* with the lines that matched, FR-024) and `IngestedDocumentOut` (the
+*file* with the lines that matched, FR-016) and `IngestedDocumentOut` (the
 converted file's path, title, description, which converter produced it, and the
 `.raw/` original's path). The mirroring is deliberate rather than redundant: the
 domain types
@@ -162,20 +162,20 @@ layer.
 ## The `knowledge` Resource
 
 `make_knowledge_kind()` declares `supports_scope=True` — per-agent
-authorization is the whole reason a collection is a Resource (FR-012). An agent
+authorization is the whole reason a collection is a Resource (FR-009). An agent
 sees, greps, reads and writes exactly the collections activated for it, with no
 rule that leaves an authorized collection out of a default.
 
 `KnowledgeConfig` (`domain/knowledge/config.py`) is **empty and forbids unknown
 keys**. A collection has no settings at all: no retrieval modes, no chunk size,
 no entry-length cap, no embedding fields, no auto-update flag, no display label
-(FR-081). Anything that used to be configured per scope was configuring
+(FR-038). Anything that used to be configured per scope was configuring
 machinery that no longer exists.
 
 Enforcement is at the MCP tool surface only. An agent that also holds shell or
 file-read tools can read anything under `~/.coffer/knowledge/` directly: the
 scope prevents mistaken retrieval, not deliberate access, and the system says so
-rather than implying an isolation it does not provide (FR-014).
+rather than implying an isolation it does not provide (FR-011).
 
 ## Errors
 
@@ -208,7 +208,7 @@ And one ingest failure is not a `CofferError` at all. `UnsupportedDocument`
 (`domain/knowledge/converter.py`) carries the *rejected type* rather than a
 code, and the upload route turns it into `INGEST_REJECTED` / 400 with
 `details.reason = "unsupported_type"` and the `doc_type`, so a surface can name
-the format it will not take (FR-033).
+the format it will not take (FR-022).
 
 ## Audit and invocation records
 
@@ -216,12 +216,12 @@ Unchanged and still database-backed, because they are not knowledge — they are
 Coffer's own bookkeeping. A built-in tool call records one `mcp_invocations`
 row (tool, actor, duration, outcome — never arguments, never content), and a
 write or delete additionally records an `audit_log` event with the agent as
-actor (FR-041).
+actor (FR-028).
 
 ## The installation-wide tidy setting
 
 The one setting the layer has is not the layer's. Three columns on the singleton
-`internal_engine_config` row carry it (FR-051, FR-053):
+`internal_engine_config` row carry it (FR-031):
 
 | column | notes |
 | --- | --- |
@@ -231,11 +231,14 @@ The one setting the layer has is not the layer's. Three columns on the singleton
 
 All three govern only the background worker, which re-reads them every tick so a
 change needs no daemon restart; the manual trigger consults none of them. The
-whole row is synced state, so every machine agrees on who the owner is.
+whole row is synced state, so every machine agrees on who the owner is — what
+that agreement obliges a pass to do is spec
+[vault-sync](../vault-sync/spec.md)'s rule, not this layer's.
 
 ## What migration 0066 did
 
-`20260912_0066_knowledge_is_plain_files.py` (FR-070, FR-071). **The order is
+`20260912_0066_knowledge_is_plain_files.py`, recorded in the spec's Migration
+history rather than as a requirement. **The order is
 the whole point**: a document's title lived only in `documents.title`, so the
 on-disk rewrite runs FIRST, reading the rows it is about to destroy.
 
@@ -261,6 +264,6 @@ directories and does nothing.
 
 The `.raw/` that exists today is not that one. It holds the original bytes of a
 document somebody uploaded, at the collection's root rather than per scope, and
-it is there so a bad conversion can be redone from what the user sent (FR-035).
+it is there so a bad conversion can be redone from what the user sent (FR-024).
 The lane the migration deleted held copies of files that had never been
 converted at all.

@@ -4,13 +4,13 @@
 // web Chat page talks to. The registry of agents a turn can run on is NOT here:
 // it outlived the page under an honest name and lives in `agentProviders.ts`.
 //
-// Wire types are the channels contract's generated schemas (the chat routes
-// live in `specs/channels/contracts/api.openapi.yaml` → `generated/channels.ts`),
-// re-exported under the names the hooks and pages already import. Transport is
-// the shared `call` (agents/frontend.md §4).
+// Wire types are the chat contract's generated schemas
+// (`specs/chat/contracts/api.openapi.yaml` → `generated/chat.ts`), re-exported
+// under the names the hooks and pages already import. Transport is the shared
+// `call` (.agents/frontend.md §4).
 
 import { call } from "@/lib/api/call";
-import type { components } from "@/lib/api/generated/channels";
+import type { components } from "@/lib/api/generated/chat";
 
 type Schemas = components["schemas"];
 
@@ -18,7 +18,7 @@ type Schemas = components["schemas"];
 // Types
 // ---------------------------------------------------------------------------
 
-/** `attachment` blocks carry the file's name/mime (channel media); no path (FR-033). */
+/** `attachment` blocks carry the file's name/mime (channel media); no path (FR-034). */
 export type ContentBlock = Schemas["ContentBlockOut"];
 
 export type Message = Schemas["MessageOut"];

@@ -180,7 +180,7 @@ machine-local side effect no document can carry.
 
 Credential sync: credentials already sync as Fernet ciphertext (not plaintext)
 at `credentials/<ref>.enc`. The master key never leaves a machine. This is the
-same pattern used by MCP server credentials (spec mcp-gateway).
+same pattern used by MCP server credentials (spec credentials).
 
 **Audit**: `RESOURCE_CREATED`, `RESOURCE_UPDATED`, `RESOURCE_DELETED` are
 emitted automatically by `ResourceService`. Adding `PROVIDER_SWITCHED` as a

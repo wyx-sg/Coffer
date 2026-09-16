@@ -1,13 +1,5 @@
 import { defineConfig } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
-import { readFileSync } from 'node:fs'
-
-let refSidebar: any[] = []
-try {
-  refSidebar = JSON.parse(
-    readFileSync(new URL('./reference-sidebar.json', import.meta.url), 'utf8'),
-  )
-} catch {}
 
 // ---- sidebar sections ----
 const guide = [
@@ -79,7 +71,7 @@ export default withMermaid(
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,
-    appearance: false, // light-only: no dark mode (spec ui-shell)
+    appearance: false, // light-only: no dark mode
     ignoreDeadLinks: true,
     lang: 'en',
     themeConfig: {
@@ -88,14 +80,12 @@ export default withMermaid(
       nav: [
         { text: 'Guide', link: '/guide/introduction' },
         { text: 'Architecture', link: '/architecture/overview' },
-        { text: 'Reference', link: '/reference' },
         { text: 'Contributing', link: '/contributing/' },
       ],
       sidebar: {
         '/guide/': guide,
         '/architecture/': arch,
         '/contributing/': contrib,
-        '/reference': refSidebar,
       },
     },
   }),

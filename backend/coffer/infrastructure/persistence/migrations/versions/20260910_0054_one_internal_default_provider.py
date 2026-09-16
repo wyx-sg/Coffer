@@ -1,10 +1,11 @@
-"""enforce the single internal-default provider invariant (spec provider-switching FR-021)
+"""enforce the single internal-default provider invariant (spec provider-switching FR-024)
 
-FR-021 says at most one connection carries ``internal_default=true`` — it names
-the connection Coffer's own LLM engine runs on, and "the internal engine" is
-singular. ``ProviderService.set_internal_default`` upholds it by clearing every
-other flag before setting this one, but that is the only path that does. A
-config written straight through the generic resource-update route, the CLI's
+Spec provider-switching FR-024 says at most one connection carries
+``internal_default=true`` — it names the connection Coffer's own LLM engine runs
+on, and "the internal engine" is singular.
+``ProviderService.set_internal_default`` upholds it by clearing every other flag
+before setting this one, but that is the only path that does. A config written
+straight through the generic resource-update route, the CLI's
 ``provider edit``, or a hand-edited row bypasses it entirely — and a live vault
 was found holding **two** true, which makes "which connection does the internal
 engine use?" a question with no defined answer.

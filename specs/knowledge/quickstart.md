@@ -61,7 +61,7 @@ a document enters through a human surface.
   **file** at a time rather than a line at a time: each hit is a path, its
   `title` and `description`, and the lines that matched. Matching is literal,
   so give it a distinctive word or an exact phrase, not a question in your own
-  words (FR-024).
+  words (FR-016).
 
 The motion is catalogue-then-grep — descend to choose *which file*, grep to find
 *which line*:
@@ -123,7 +123,7 @@ coffer knowledge delete coffer/release-process.md
 coffer knowledge upload ./q3-review.pdf --collection shopee
 
 # Tidy one collection (see below).
-coffer knowledge organize shopee
+coffer knowledge tidy shopee
 ```
 
 `--json` works on `collections`, `ls`, `read`, `grep` and `search`.
@@ -188,7 +188,7 @@ them into coherent documents, copying every prior revision into the hidden
 connections) it is a clean no-op.
 
 ```bash
-coffer knowledge organize shopee
+coffer knowledge tidy shopee
 ```
 
 The web-UI equivalent is the **Tidy** button. A background worker can also run
@@ -216,7 +216,7 @@ than queued.
    file and its containing folder each offer **open in external editor** and
    **reveal in file manager** (real OS actions performed by the local daemon;
    which editor opens is the global preferred-editor preference, spec
-   ui-shell). Your edit takes effect immediately — there is nothing to
+   web-ui). Your edit takes effect immediately — there is nothing to
    reconcile.
 3. **Upload** files a document into the collection in view, through the same
    conversion path the CLI and the channel use.

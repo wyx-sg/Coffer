@@ -1,11 +1,14 @@
 // frontend/src/lib/hooks/useAgentModels.ts — TanStack Query binding for an
 // agent's model catalogue (/agent-providers/{key}/models).
 //
-// The catalogue is what the agent can actually run on its own login. It is
-// server-owned rather than a frontend constant, so the chat page's model picker
-// reads it here instead of hardcoding tiers that drift. Nothing narrows it, on
-// either side: no surface curates over this list, so what the agent reports is
-// what the picker offers.
+// What the route answers is what a picker should OFFER. On the agent's own
+// built-in login that is the agent's own catalogue, read back from the installed
+// agent rather than held as a frontend constant that drifts. With a Coffer
+// connection projected into this agent, its curated ids are the list instead —
+// the turns go to that endpoint, so the agent's own names would be rejected.
+// The narrowing happens once, in the daemon: this hook adds nothing to the
+// answer and the picker unions nothing into it, which is what keeps the web
+// picker and a channel's `/model` card giving the same answer.
 import { useQuery } from "@tanstack/react-query";
 
 import { agentModelsApi, type AgentModel } from "@/lib/api/agentModels";

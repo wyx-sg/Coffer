@@ -1,7 +1,7 @@
 //! Tray icon + close-to-tray logic.
 //!
 //! Split out of `lib.rs` to keep the top-level entry-point file under the
-//! project's 400-line cap (see `agents/stack.md`).
+//! project's 400-line cap (see `.agents/stack.md`).
 
 use tauri::{
     image::Image,
@@ -12,7 +12,7 @@ use tauri::{
 
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open Coffer", true, None::<&str>)?;
-    // The tray must offer "Restart daemon" (spec mcp-gateway FR-031). It is one
+    // The tray must offer "Restart daemon" (spec desktop-app FR-006). It is one
     // of the two places that action lives; the other is the offline banner.
     let restart = MenuItem::with_id(app, "restart_daemon", "Restart daemon", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Coffer", true, None::<&str>)?;
@@ -77,12 +77,23 @@ pub fn should_close_app(code: Option<i32>) -> bool {
 mod tests {
     use super::*;
 
+    /// The load-bearing half of close-to-tray: an exit request carrying no
+    /// code is the OS closing the last window, and answering `false` to it is
+    /// what makes `lib.rs` call `api.prevent_exit()` — the process stays alive
+    /// with its tray entry rather than ending.
+    ///
+    /// The other two halves of the scenario are Tauri-runtime callbacks with
+    /// no pure decision to extract: hiding the window (`api.prevent_close()` +
+    /// `window.hide()`) and restoring it on `RunEvent::Reopen` both need a
+    /// live window handle. They are exercised by launching the app, not here.
+    // acceptance(spec = "desktop-app", scenario = "closing the window hides the app to the tray")
     #[test]
     fn test_should_close_app_returns_false_when_no_code() {
         // OS close / last-window-closed path — stay in tray.
         assert!(!should_close_app(None));
     }
 
+    // acceptance(spec = "desktop-app", scenario = "closing the window hides the app to the tray")
     #[test]
     fn test_should_close_app_returns_true_when_code_present() {
         // Quit menu calls app.exit(0) — actually exit.

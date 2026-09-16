@@ -1,4 +1,4 @@
-"""``coffer__recall`` — memory's L2 layer (spec memory FR-052, FR-060).
+"""``coffer__recall`` — memory's L2 layer (spec memory FR-023, FR-027).
 
 L0/L1 (``context.py``) are a small, budgeted push; this is the pull that
 answers whatever they left out. It used to reuse knowledge's ranked-retrieval
@@ -14,7 +14,7 @@ corpus size spec memory assumes — "hundreds of facts per partition" — the fa
 are in hand already and shelling out buys nothing, and the memory kind has no
 standing import of the knowledge kind's search substrate regardless. It never
 raises and never returns empty for want of a connection, because there is no
-connection left for it to want (FR-052).
+connection left for it to want (FR-023).
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class MemoryPort(Protocol):
 
 @dataclass(frozen=True)
 class RecalledFact:
-    """One fact ``recall`` answers with — its origins intact (FR-052)."""
+    """One fact ``recall`` answers with — its origins intact (FR-023)."""
 
     path: str
     title: str
@@ -85,7 +85,7 @@ class RecallService:
         return self._literal(query.strip(), by_path, top_k)
 
     def _literal(self, query: str, by_path: Mapping[str, Fact], top_k: int) -> RecallOutcome:
-        """A substring scan over the facts already in hand (FR-052).
+        """A substring scan over the facts already in hand (FR-023).
 
         A fact matches on its body first; failing that, on its title or
         description, so a fact whose one-line summary is the only place the

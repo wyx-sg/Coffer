@@ -470,7 +470,7 @@ def test_toggle_unknown_codex_plugin_404(tmp_path, monkeypatch):
         assert (tmp_path / ".codex" / "config.toml").read_bytes() == before
 
 
-@pytest.mark.acceptance(spec="agent-registry", scenario="uninstall a Codex plugin")
+@pytest.mark.acceptance(spec="agent-registry/codex", scenario="uninstall a Codex plugin")
 def test_uninstall_codex_plugin(tmp_path, monkeypatch):
     """Codex uninstall drops the config entry and deletes the cache dir."""
     app = _app(tmp_path, monkeypatch, 59940)
@@ -490,7 +490,7 @@ def test_uninstall_codex_plugin(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="uninstall a Claude Code plugin via its CLI"
+    spec="agent-registry/claude-code", scenario="uninstall a Claude Code plugin via its CLI"
 )
 def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
     """Claude uninstall shells out to `claude plugin uninstall`; Coffer writes
@@ -536,7 +536,8 @@ def test_claude_plugin_cli_failure_is_422(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="reject Claude uninstall when its CLI is unavailable"
+    spec="agent-registry/claude-code",
+    scenario="reject Claude uninstall when its CLI is unavailable",
 )
 def test_reject_claude_uninstall_no_cli(tmp_path, monkeypatch):
     """No `claude` on PATH → uninstall refuses, and the listing hides the

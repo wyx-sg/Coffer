@@ -566,13 +566,14 @@ async def test_a_second_internal_default_cannot_be_written_behind_the_service(
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="provider-switching",
+    spec="internal-engine",
     scenario="choose the model the internal engine runs on",
 )
 async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
     from httpx import ASGITransport, AsyncClient
 
     from coffer.surfaces.http.dependencies import get_audit_service
+    from coffer.surfaces.http.engine_config_composition import internal_engine_connection
     from coffer.surfaces.http.provider_dependencies import get_provider_service
 
     app = _app(tmp_path, monkeypatch, 59880)
@@ -596,16 +597,16 @@ async def test_internal_engine_model_overlay(tmp_path, monkeypatch):
         events = await get_audit_service().query(event_type="internal_engine_model_set")
         assert len(events) >= 1
 
-        # resolve_internal_connection overlays the chosen model onto the connection
-        # (whose own model is "conn-model").
-        resolved = await get_provider_service().resolve_internal_connection()
+        # The engine's resolution overlays the chosen model onto the flagged
+        # connection (whose own model is "conn-model").
+        resolved = await internal_engine_connection(get_provider_service()).get_default()
         assert resolved is not None
         assert resolved.model == "picked-model"
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="provider-switching",
+    spec="internal-engine",
     scenario="switch off and re-time the passes Coffer runs unattended",
 )
 async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):

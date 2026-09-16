@@ -9,6 +9,7 @@ import sys
 import time
 
 import psutil
+import pytest
 
 from coffer.infrastructure.daemon.orphan_sweep import (
     _pid_dir,
@@ -48,6 +49,10 @@ def test_sweep_no_dir_returns_zero(tmp_path, monkeypatch):
     assert sweep_orphans() == 0
 
 
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="the daemon reaps only the children it can prove are its own",
+)
 def test_sweep_kills_live_orphan(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     # Spawn a real long-sleeping child

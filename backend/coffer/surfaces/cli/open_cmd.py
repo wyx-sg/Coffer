@@ -1,14 +1,14 @@
 """``coffer open`` — open the web UI in a browser.
 
-The daemon serves the UI at its own loopback origin (spec mcp-gateway FR-024)
-and injects its live API token into the ``index.html`` it serves (FR-025), so a
-browser that lands on that origin is authenticated by the act of loading the
-page. There is nothing for this command to hand over.
+The daemon serves the UI at its own loopback origin (spec daemon FR-016)
+and injects its live API token into the ``index.html`` it serves (spec daemon
+FR-017), so a browser that lands on that origin is authenticated by the act of
+loading the page. There is nothing for this command to hand over.
 
-What is left is starting the thing. The port no longer moves — FR-028 pinned it
-to 8000, and a daemon that cannot have it refuses to start rather than drifting
-to another one (the 8000-8009 scan survives only behind the
-``COFFER_PORT_RANGE_*`` test override). So this command reads the live port out
+What is left is starting the thing. The port no longer moves — spec daemon
+FR-011 pinned it to 8000, and a daemon that cannot have it refuses to start
+rather than drifting to another one (the 8000-8009 scan survives only behind
+the ``COFFER_PORT_RANGE_*`` test override). So this command reads the live port out
 of ``~/.coffer/daemon.json`` for correctness rather than for discovery, and what
 it actually saves the user is detect-or-spawn: it starts a daemon when none is
 running, then opens the page that daemon is serving.

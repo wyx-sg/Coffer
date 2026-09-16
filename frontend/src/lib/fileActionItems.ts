@@ -6,7 +6,7 @@
 // itself.
 //
 // The actual open/reveal goes through useFsActions, which calls the loopback
-// daemon (spec agent-registry FR-039, ADR daemon-proxies-os-file-actions). Coffer's viewers are read-only — editing happens in the user's own
+// daemon (spec daemon FR-021, ADR daemon-proxies-os-file-actions). Coffer's viewers are read-only — editing happens in the user's own
 // editor, not in-app.
 import { useTranslation } from "react-i18next";
 import { ExternalLink, FolderOpen, type LucideIcon } from "lucide-react";

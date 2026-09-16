@@ -1,6 +1,6 @@
 """Live-text surfaces: one message that grows in place while a turn runs.
 
-FR-037. The core asks an adapter for a :class:`~coffer.application.channel.ports.LiveText`
+FR-039. The core asks an adapter for a :class:`~coffer.application.channel.ports.LiveText`
 handle and writes ONE code path; the mechanism underneath differs per transport:
 
 * Telegram edits a message it already sent (``editMessageText``).
@@ -285,7 +285,7 @@ class SeaTalkLiveText(LiveTextSurface):
     * ``format`` is 1 for Markdown and 2 for plain text. EVERY snapshot here is
       1, including the opening one — an @mention is markup, and the platform
       decides @ notifications when a message is created, so the mention has to
-      be in what ``init_stream`` posts (FR-070). Interim snapshots used to go
+      be in what ``init_stream`` posts (FR-055). Interim snapshots used to go
       out as 2 to keep a reply cut mid-word from being parsed as half a markdown
       run; that protection now comes from ESCAPING the partial text
       (``interim_snapshot``) instead of from asking for plain text.
@@ -321,7 +321,7 @@ class SeaTalkLiveText(LiveTextSurface):
     def _content(self, text: str) -> dict[str, Any]:
         """The ``text`` object both endpoints carry. ``format: 1`` is SeaTalk
         markdown, and every snapshot uses it — the message must be able to carry
-        an @mention from the moment it is created (FR-070), and a tag in a
+        an @mention from the moment it is created (FR-055), and a tag in a
         ``format: 2`` message would reach the reader as its own literal source.
         Partial text is kept literal by escaping it, not by dropping to plain."""
         return {"format": 1, "content": text}

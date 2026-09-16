@@ -24,7 +24,7 @@ export default tseslint.config(
   },
   {
     // Query keys come from one module so a prefix invalidation can reach every
-    // subtree (agents/frontend.md §3). An inline `queryKey: ["…", …]` at a call
+    // subtree (.agents/frontend.md §3). An inline `queryKey: ["…", …]` at a call
     // site is the drift this rule stops; tests may still spell keys out.
     files: ["src/**/*.{ts,tsx}"],
     ignores: ["src/lib/api/queryKeys.ts", "src/**/*.test.{ts,tsx}"],

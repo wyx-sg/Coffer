@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from coffer.application.credential_migration import migrate_legacy_keychain
 from coffer.domain.errors import CredentialLocked
 
@@ -75,6 +77,10 @@ def _mcp_kinds() -> dict[str, Any]:
     }
 
 
+@pytest.mark.acceptance(
+    spec="credentials",
+    scenario="a legacy keychain secret migrates once and then does nothing",
+)
 async def test_moves_legacy_secret_and_audits() -> None:
     legacy, store, audit = _FakeStore(), _FakeStore(), _FakeAudit()
     legacy.store["gh-token"] = "s3cret"

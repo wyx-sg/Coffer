@@ -1,7 +1,7 @@
 // frontend/src/lib/hooks/useKnowledge.ts
 //
 // ALL queries + mutations for the `knowledge` kind, so the page, the tree and
-// the viewer stay thin views (agents/frontend.md §3). The keys are
+// the viewer stay thin views (.agents/frontend.md §3). The keys are
 // hierarchical under one `["knowledge"]` root, so a write can invalidate the
 // whole subtree with a prefix — the tree is fetched one directory per key and
 // a tidy pass may touch any of them.
@@ -104,7 +104,7 @@ export function useTidyCollection(collection: string) {
  * with it, so the rest of the `["knowledge"]` subtree is invalidated — the
  * same breadth as an upload, and for the same reason.
  *
- * No `onError` toast, against the default (agents/frontend.md §5): the only
+ * No `onError` toast, against the default (.agents/frontend.md §5): the only
  * caller is a ConfirmDialog, which renders the failure in place and stays open
  * so it can be read. A toast would say the same thing twice.
  */

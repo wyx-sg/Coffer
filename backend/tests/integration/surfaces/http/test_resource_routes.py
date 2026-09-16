@@ -75,6 +75,10 @@ async def test_register_resource(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="reject an invalid registration and persist nothing",
+)
 async def test_register_duplicate_returns_409(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
@@ -145,6 +149,10 @@ async def test_register_unknown_kind_returns_400(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="reject an invalid registration and persist nothing",
+)
 async def test_register_invalid_config_returns_422(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
@@ -158,6 +166,10 @@ async def test_register_invalid_config_returns_422(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="the kind-agnostic surface serves every kind",
+)
 async def test_list_resources(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
@@ -217,6 +229,10 @@ async def test_update_resource_config(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="the kind-agnostic surface serves every kind",
+)
 async def test_enable_disable(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:

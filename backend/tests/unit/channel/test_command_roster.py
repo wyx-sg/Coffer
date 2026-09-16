@@ -1,5 +1,5 @@
 """The command roster is the single source for the help text and the
-platform's command menu (FR-065)."""
+platform's command menu (FR-050)."""
 
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ def test_the_current_effort_is_marked_selected_on_its_card() -> None:
     assert [b.value for b in effort_card(current=None, levels=["low"]).buttons if b.selected] == []
 
 
-# -- private answers in a group (FR-064) --------------------------------------
+# -- private answers in a group (FR-049) --------------------------------------
 
 
 def test_the_asker_only_commands_are_registered_as_ephemeral() -> None:

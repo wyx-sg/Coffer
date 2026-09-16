@@ -1,4 +1,4 @@
-"""Process-global per-conversation turn state (spec channels FR-050, FR-053).
+"""Process-global per-conversation turn state (spec chat FR-018, spec chat FR-026).
 
 Single-daemon by design: everything the orchestrator holds for one conversation
 — the live-event bus, the in-flight turn, the pending queue and its pause flag —
@@ -31,10 +31,10 @@ TurnSink = Callable[["asyncio.Queue[AgentEvent | None]"], None]
 
 @dataclass(frozen=True)
 class PendingMessage:
-    """One message waiting for its turn (FR-050).
+    """One message waiting for its turn (spec chat FR-018).
 
     ``text`` is what the turn commits as the user message; ``attachments`` and
-    ``title_hint`` are what a channel adds to it (FR-033, FR-048); ``on_start``
+    ``title_hint`` are what a channel adds to it (FR-034, spec chat FR-011); ``on_start``
     is how a channel gets its renderer attached to the turn the moment it
     begins. A web message carries only its text.
     """
@@ -66,7 +66,7 @@ class TurnState:
     active: ActiveTurn | None = None
     queue: list[PendingMessage] = field(default_factory=list)
     # Set by an interrupt; blocks auto-advance until the owner resumes (any
-    # ``enqueue_message`` / ``set_pending`` clears it) — FR-051.
+    # ``enqueue_message`` / ``set_pending`` clears it) — spec chat FR-019.
     paused: bool = False
 
     @property

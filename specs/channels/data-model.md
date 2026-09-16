@@ -4,22 +4,25 @@
 
 Channels are rows in the existing `resources` table (kind = `channel`).
 `config_json` is validated by a discriminated Pydantic union on
-`channel_type`:
+`channel_type`. The per-type halves are specified in the children
+([`channels/telegram`](./telegram/spec.md), [`channels/seatalk`](./seatalk/spec.md));
+this file is where their storage shape lives, because a child spec carries only
+a `spec.md`:
 
 ```
 ChannelConfig (discriminator: channel_type)
 ├── common (both types, _CommonChannelFields)
-│   ├── default_agent: str = "claude_code"  # chat provider key; must name a registered agent
+│   ├── default_agent: str = "claude_code"  # turn-platform provider key; must name a registered agent
 │   ├── default_agent_config: dict | None
-│   ├── require_mention: bool = True        # group gating (FR-035)
-│   ├── ignore_other_mentions: bool = False # group gating (FR-035)
-│   └── runs_on: str | None = None          # machine_id that runs the adapter (FR-080)
+│   ├── require_mention: bool = True        # group gating (FR-036)
+│   ├── ignore_other_mentions: bool = False # group gating (FR-036)
+│   └── runs_on: str | None = None          # machine_id that runs the adapter (FR-026)
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
 └── SeaTalkChannelConfig
     ├── channel_type: "seatalk"
-    ├── delivery: "webhook" | "websocket" = "webhook"  # inbound transport (FR-071)
+    ├── delivery: "webhook" | "websocket" = "webhook"  # inbound transport (spec channels/seatalk)
     ├── app_id: str                     # required on both
     ├── app_secret_ref: str             # credential-store ref; required on both
     ├── signing_secret_ref: str | None  # webhook: required — websocket: forbidden
@@ -34,7 +37,7 @@ Validation rules:
   store) — same posture as `mcp_server`'s static-value secret rejection.
 - The kind declares `credential_ref_extractor`, so `ResourceService` probes
   every ref before the row is written; a dangling ref aborts registration.
-- `default_agent` is a chat **provider key** (e.g. `claude_code`, underscore) —
+- `default_agent` is a turn-platform **provider key** (e.g. `claude_code`, underscore) —
   the key the turn orchestrator resolves an agent by — not the `claude-code`
   resource name; a hyphenated value passes registration but fails at turn time
   with `UNKNOWN_AGENT`, leaving the bot silently dead. It is validated against
@@ -54,7 +57,7 @@ Validation rules:
   (house rule) — `_CommonChannelFields` forbids extra keys, so a row still
   carrying them would fail to validate on load.
 - `runs_on` is the `machine_id` of the one machine whose daemon starts this
-  channel's adapter (FR-080). It lives in `config_json` and not in a column of
+  channel's adapter (FR-026). It lives in `config_json` and not in a column of
   its own because it must TRAVEL: config is what a resource document carries
   between machines, while the row's `enabled` / `scope_json` carry reach, which
   deliberately stays home. `None` is unbound and runs nowhere — never "runs
@@ -75,7 +78,8 @@ Validation rules:
   the registry door every round.
 - `delivery` decides which of the SeaTalk fields are legal, and one
   `model_validator(mode="after")` holds the whole rule so the allowed and the
-  forbidden combination can never drift apart (FR-071):
+  forbidden combination can never drift apart (spec channels/seatalk
+  FR-002–FR-005):
 
   | field                | `delivery: "webhook"`               | `delivery: "websocket"` |
   | -------------------- | ----------------------------------- | ----------------------- |
@@ -163,12 +167,12 @@ refused with "a turn is already running".
 
 Constraints: `UNIQUE (resource_id, chat_id, thread_id)`; index on `resource_id`.
 
-`active_conversation_id` is a soft reference into the chat platform's
+`active_conversation_id` is a soft reference into the turn platform's
 `conversations` table (no FK across the seam): if the conversation was deleted,
 the next inbound message detects the dangling id and opens a fresh one, built
 from this row's sticky agent plus the channel's defaults. The sticky agent is
 dropped in favour of the channel default once the channel's scope no longer
-admits it (FR-079), so narrowing a scope takes effect on the next conversation.
+admits it (FR-025), so narrowing a scope takes effect on the next conversation.
 This table is machine-local and does **not** sync — it names conversations, and
 conversations do not travel.
 
@@ -184,8 +188,8 @@ that already holds the table; reversible by dropping it.
 | `20260710_0047_channel_runs_on_to_scope.py` | backfills `scope_json` from the then-current `config_json.runs_on`, for the machine axis on reach that has since been withdrawn |
 | `20260912_0068_drop_channel_model_curation.py` | strips `default_model` and `models` off every stored channel config |
 | `20260914_0079_bind_channels_to_this_machine.py` | writes this machine's id into every channel that carries no `runs_on` |
-| `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given (FR-080) |
-| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names**, at the moment the comparison starts reading them that way (FR-079) |
+| `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given (FR-026) |
+| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names**, at the moment the comparison starts reading them that way (FR-025) |
 
 All five are one-direction and data-only, with no load-time shim (house rule).
 
@@ -201,34 +205,34 @@ All five are one-direction and data-only, with no load-time shim (house rule).
 **The channel keeps no message queue of its own.** A message arriving mid-turn
 goes to the orchestrator's `enqueue_message` exactly as a web message does, so
 both surfaces drain one FIFO per conversation and a turn finishing on either
-advances it (FR-050). What the channel owns is a *refusal threshold*:
+advances it (spec chat). What the channel owns is a *refusal threshold*:
 `QUEUE_MAX = 10` is compared against that conversation's own pending queue, and
 past it the chat is told the bot is busy rather than the message being buffered
 here. The web composer is not bounded.
 
 Crash behavior: all of it evaporates with the daemon; turns are swept failed
-by the chat platform's startup sweep, codes are re-issued, queues are empty.
+by the turn platform's startup sweep, codes are re-issued, queues are empty.
 Nothing the user relies on lives only in memory.
 
 ## Normalized envelopes (domain value objects)
 
 ```
 InboundAttachment:  on-disk path, mime, filename — the bytes are already
-                    downloaded and never enter the chat DB (FR-020)
+                    downloaded and never enter the chat DB (FR-017)
 InboundMessage:     channel name, chat_id, text, platform message id, timestamp;
                     the sender as three values — sender_id (the owner gate),
                     sender_mention_id and sender_mention_email (the @mention,
-                    FR-070) — plus sender_display; chat_kind, chat_title,
+                    FR-054) — plus sender_display; chat_kind, chat_title,
                     thread_id, quoted_message_id; addressed and mentions_others
-                    (group gating, FR-024/FR-035); attachments; ephemeral_id
+                    (group gating, FR-021/FR-036); attachments; ephemeral_id
 InboundCallback:    a selection-card tap: the opaque `data` value, callback_id,
                     platform message id, and the same chat/thread/sender
-                    identity a message carries (FR-018, FR-034)
+                    identity a message carries (FR-015, FR-035)
 InboundLifecycle:   the bot's own standing in a chat changed — removed, or the
-                    group turned external (FR-058)
-InboundStop:        the platform's own stop control was pressed (FR-063)
+                    group turned external (FR-042)
+InboundStop:        the platform's own stop control was pressed (FR-047)
 ChoiceButton:       label + opaque value; a list of them renders as a card
-EphemeralTarget:    who a privately-delivered reply is addressed to (FR-064)
+EphemeralTarget:    who a privately-delivered reply is addressed to (FR-048)
 SentMessage:        what a send returned, so a later rewrite can address it
 ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
                     supports_card_update, supports_buttons, supports_typing,
@@ -239,7 +243,7 @@ ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
 Adapters translate platform payloads to/from these; the application core
 never sees a Telegram update or SeaTalk event shape. `supports_live_text` and
 `supports_edit` are independent on purpose — SeaTalk answers yes to the first
-and no to the second (FR-037).
+and no to the second (FR-038).
 
 ## Audit events (spec channels)
 

@@ -160,7 +160,7 @@ describe("MessageThread", () => {
     expect(onSetPending).toHaveBeenCalledWith(["second queued"]);
   });
 
-  acceptance("channels", "editing a queued message re-queues it at the tail", async () => {
+  acceptance("chat", "editing a queued message re-queues it at the tail", async () => {
     // The edit affordance pulls a queued message back into the composer to amend;
     // re-sending it (still streaming) re-queues it at the tail via the send path.
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
@@ -201,7 +201,7 @@ describe("MessageThread", () => {
     expect(screen.queryAllByText(/thinking/i)).toHaveLength(0);
   });
 
-  test("renders the just-sent user message echo while the reply streams", async () => {
+  acceptance("chat", "a just-sent prompt is shown before its row lands", async () => {
     // P0-4: the prompt must be visible immediately, not only after the next
     // messages fetch. The echo comes from the turn hook, not from the thread.
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
@@ -307,7 +307,7 @@ describe("MessageThread", () => {
     expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
   });
 
-  test("Retry on a failed turn re-sends the failed message", async () => {
+  acceptance("chat", "a failed turn offers a retry in the thread", async () => {
     chatApiMock.listMessages.mockResolvedValue({
       messages: [makeMsg({ role: "user", content: [{ type: "text", text: "try again" }] })],
     });
@@ -347,7 +347,7 @@ describe("MessageThread", () => {
     );
   });
 
-  acceptance("channels", "second message queues during a streaming turn", async () => {
+  acceptance("chat", "second message queues during a streaming turn", async () => {
     // Fire-and-return + persistent subscription: while a reply streams the
     // composer stays usable, and a message sent mid-turn shows up as a queued
     // chip (the queue_changed event surfaced it) instead of being blocked.

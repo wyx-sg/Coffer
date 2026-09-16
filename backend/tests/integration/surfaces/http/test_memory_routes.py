@@ -1,9 +1,9 @@
-"""Integration tests for ``/api/v1/memory/*`` (spec memory FR-060..FR-063).
+"""Integration tests for ``/api/v1/memory/*`` (spec memory FR-027..FR-032).
 
 Boots the full FastAPI app (via ``create_app``) so every route is wired
 exactly as production wires it — real SQLite, a real Claude Code fixture tree
 under a temp HOME, no internal connection configured (organise/recall both
-degrade rather than error, per FR-032/FR-052). ``COFFER_MEMORY_ROOT``,
+degrade rather than error, per FR-019/FR-023). ``COFFER_MEMORY_ROOT``,
 ``COFFER_KNOWLEDGE_ROOT`` are all pinned into
 ``tmp_path`` so nothing here ever touches a real ``~/.coffer``.
 """
@@ -180,7 +180,7 @@ def test_organise_unknown_partition_is_not_found(client) -> None:
 def test_a_second_organise_over_the_same_partition_is_refused(client, tmp_path) -> None:
     """The bug this is here for: the button's spinner used to live in a browser
     component, so navigating away mid-pass and back showed an idle button and
-    the next click started a SECOND pass over the same files (FR-066). The
+    the next click started a SECOND pass over the same files (FR-033). The
     daemon now holds that fact, and refuses.
 
     The in-flight pass is simulated by claiming the partition's key directly —
@@ -217,7 +217,7 @@ def test_a_second_organise_over_the_same_partition_is_refused(client, tmp_path) 
     assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
 
 
-# ----- context + delivery: FR-055's whole point -----------------------------
+# ----- context + delivery: FR-026's whole point -----------------------------
 
 
 def test_context_composes_and_stays_bounded(client, tmp_path) -> None:
@@ -256,7 +256,7 @@ def test_context_scope_enforcement_does_not_leak_an_out_of_scope_partition(
     client, tmp_path
 ) -> None:
     """The one route a real agent's own session reaches must be scope-checked
-    (spec memory FR-014): an agent outside a project partition's scope must
+    (spec memory FR-012): an agent outside a project partition's scope must
     never see its facts, even when its own cwd resolves to that partition."""
     _register_agent(client, "cc")
     _register_agent(client, "outsider", agent_type="codex")
@@ -269,7 +269,7 @@ def test_context_scope_enforcement_does_not_leak_an_out_of_scope_partition(
         for p in client.get("/api/v1/memory/partitions").json()["partitions"]
         if p["name"] != "global"
     )
-    # Default scope from aggregation is {"cc"} (FR-014) — confirm "outsider"
+    # Default scope from aggregation is {"cc"} (FR-012) — confirm "outsider"
     # is excluded, then compose context for it against the SAME cwd.
     scope = client.get(f"/api/v1/resources/memory/{partition}/scope").json()
     assert scope["scope"] == {"agents": ["cc"]}
@@ -368,7 +368,7 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
 
 
 def test_partition_files_are_read_only(client, tmp_path) -> None:
-    """No write reaches this family. The tree is derived (FR-023), so an edit
+    """No write reaches this family. The tree is derived (FR-016), so an edit
     would survive only until the next aggregation pass."""
     _register_agent(client, "cc")
     partition = _synced_partition(client, tmp_path)

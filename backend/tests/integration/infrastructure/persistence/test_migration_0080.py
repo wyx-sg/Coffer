@@ -1,4 +1,4 @@
-"""0080 repairs a ``runs_on`` that cannot be a machine id (spec channels FR-080).
+"""0080 repairs a ``runs_on`` that cannot be a machine id (spec channels FR-026).
 
 The case that made this necessary was real: a vault carried
 ``runs_on: 01KX…`` — a ULID written by the retired machine axis (#382) — since

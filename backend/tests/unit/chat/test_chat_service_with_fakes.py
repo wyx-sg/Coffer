@@ -190,7 +190,7 @@ async def test_first_user_message_sets_title() -> None:
 
 
 @pytest.mark.acceptance(
-    spec="channels",
+    spec="chat",
     scenario="a conversation the owner named keeps its name",
 )
 @pytest.mark.asyncio

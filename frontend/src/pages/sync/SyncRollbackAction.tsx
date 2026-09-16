@@ -71,7 +71,7 @@ export function SyncRollbackAction({ run }: { run: RunRecord }) {
         error={rollback.error}
         onConfirm={() =>
           // Closes only in `onSuccess`, so a daemon that refuses the rollback
-          // leaves the dialog up with its reason (agents/frontend.md §5).
+          // leaves the dialog up with its reason (.agents/frontend.md §5).
           rollback.mutate(undefined, { onSuccess: () => setOpen(false) })
         }
       >

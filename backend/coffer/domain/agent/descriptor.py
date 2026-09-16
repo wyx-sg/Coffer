@@ -47,7 +47,7 @@ class AgentDescriptor:
     #: How Coffer installs its own ``coffer`` MCP entry (None = MCP not managed).
     mcp: McpInjectionSpec | None = None
     #: Allowlist keys of files scanned when listing the agent's *own* MCP
-    #: entries (FR-025). Defaults to the MCP injection file when unset.
+    #: entries (FR-019). Defaults to the MCP injection file when unset.
     mcp_source_keys: tuple[str, ...] = ()
     #: Subpath of the skills-delivery directory under the config dir
     #: (``skills``). Coffer delivers a managed skill by symlinking (copy

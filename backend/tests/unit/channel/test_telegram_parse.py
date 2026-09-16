@@ -214,7 +214,7 @@ def test_prepend_context_combines_forward_and_reply():
     assert "Bob: hi" in out
 
 
-# -- build_inbound_message: mentions_others (FR-035) -------------------------
+# -- build_inbound_message: mentions_others (FR-037) -------------------------
 
 
 def _build(message):
@@ -303,7 +303,8 @@ def test_mention_without_astral_characters_is_unchanged() -> None:
     assert (addressed, stripped) == (True, "status")
 
 
-# -- unfetchable attachment notes (FR-067) ------------------------------------
+# -- unfetchable attachment notes (spec channels/telegram FR-014)
+# ------------------------------------
 
 
 def test_notes_are_appended_to_the_turn_text() -> None:

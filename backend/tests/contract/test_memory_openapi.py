@@ -137,7 +137,7 @@ def test_no_memory_route_is_undocumented(
 
 def test_the_management_plane_is_eleven_routes(spec_doc: dict[str, Any]) -> None:
     """The contract's own ``info.description`` says eleven routes and that this
-    is the whole management plane (FR-061). A twelfth arriving is a decision,
+    is the whole management plane (FR-028). A twelfth arriving is a decision,
     not an accident, so the count is pinned."""
     assert len(_declared_operations(spec_doc)) == 11
 
@@ -222,7 +222,7 @@ def test_the_read_only_file_shape_carries_no_fingerprint(
 def test_delivery_status_answers_only_installed_or_not(
     generated_schema: dict[str, Any],
 ) -> None:
-    """A fire is an event, not a property of an agent (FR-055, FR-064): there is
+    """A fire is an event, not a property of an agent (FR-026, FR-030): there is
     deliberately no last-fired field, so a hook installed a minute ago is not
     flagged for its own normal state."""
     delivery = generated_schema["components"]["schemas"]["DeliveryStatusOut"]
@@ -246,7 +246,7 @@ def test_the_fact_type_and_status_values_are_the_domains(spec_doc: dict[str, Any
 
 
 def test_the_context_layers_are_l0_and_l1(spec_doc: dict[str, Any]) -> None:
-    """A tiny budget can ship L0 alone; it can never ship half of L0 (FR-050).
+    """A tiny budget can ship L0 alone; it can never ship half of L0 (FR-021).
     Two layers, and the contract says which two."""
     layers = spec_doc["components"]["schemas"]["ComposedContextOut"]["properties"]["layers"]
     assert set(layers["items"]["enum"]) == {"L0", "L1"}

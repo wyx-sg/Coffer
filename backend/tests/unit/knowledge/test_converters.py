@@ -2,7 +2,7 @@
 
 No file is written and no ``.raw/`` copy is kept here — those belong to the
 ingestion pipeline that calls this layer. This tests only what turns bytes
-into ``Conversion`` (spec knowledge FR-033..FR-035).
+into ``Conversion`` (spec knowledge FR-022..FR-024).
 """
 
 from __future__ import annotations

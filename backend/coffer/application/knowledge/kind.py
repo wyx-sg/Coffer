@@ -4,7 +4,7 @@ A collection carries no config and no lifecycle beyond existing, so the kind is
 almost all default. The two fields that are not:
 
 - ``supports_scope`` is True, because per-agent authorization is the reason a
-  collection is a Resource at all (spec knowledge FR-012). Without it a
+  collection is a Resource at all (spec knowledge FR-009). Without it a
   directory would not need the framework.
 - ``generic_create_allowed`` is False, because a collection is a directory as
   much as a row: the generic ``POST /resources`` path would create the row with

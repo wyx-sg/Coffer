@@ -2,7 +2,7 @@ name: desktop
 
 # `desktop/` is a real Rust crate and, until this workflow existed, NOTHING in
 # CI compiled it: `grep cargo .github/workflows/` matched only cache paths.
-# `make verify` deliberately excludes it (agents/stack.md "Desktop Shell"), so
+# `make verify` deliberately excludes it (.agents/stack.md "Desktop Shell"), so
 # the crate's only gate was whoever remembered to run `make desktop-test` by
 # hand — which is how references to deleted modules and retired spec ids
 # survived in it for months.

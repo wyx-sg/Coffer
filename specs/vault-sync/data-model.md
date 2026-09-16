@@ -196,13 +196,13 @@ config: { ... }          # the validated, json-mode config; keys sorted
 - `created_at` / `updated_at` / the local `id` are **excluded** — machine-local,
   and they would make every round produce a commit.
 - `enabled` and `scope` are **excluded** for a stronger reason than churn: they
-  are one thing, the resource's reach, and reach is machine-local (spec
-  `## What does not sync`). A document written by an older build still carries
+  are one thing, the resource's reach, and reach is machine-local (FR-014).
+  A document written by an older build still carries
   them; they are parsed and discarded, never rejected, so one machine that has
   not upgraded cannot stall convergence for the rest.
 - A `channel` gets an ordinary document like every other kind. It once got none
   at all; it travels now because its config names the one machine whose daemon
-  runs its adapter (`runs_on`, spec channels FR-080), so the document can move
+  runs its adapter (`runs_on`, spec channels FR-026), so the document can move
   without the adapter moving with it.
 - Mapping keys are sorted; there is exactly one document per resource, so an
   unchanged vault produces an unchanged tree.
@@ -282,8 +282,9 @@ back under a new identity becomes a ghost — it rejoins as a stranger, its old
 descriptor lingers with nobody to update it, and anything that named it stops
 meaning this machine.
 
-Applying a diff does **nothing** with `machines/*.yaml` in either direction: the
-registry is read from the tree, never projected into anything local.
+Applying a diff does **nothing** with `machines/*.yaml` in either direction
+(FR-054): the registry is read from the tree, never projected into anything
+local.
 
 ### State areas (`state/<area>/...yaml`)
 
@@ -337,7 +338,8 @@ providers — the sync slice never imports kind modules. Current areas:
   owner, and `NULL` means "wherever this is read", which is correct for a
   single-machine vault.
 
-  The area publishes a **decision, not a row**. Nothing is written while the
+  The area publishes a **decision, not a row** — the general rule every state
+  area follows (FR-058). Nothing is written while the
   singleton holds the defaults — no model, no tidy owner, aggregate and organise
   on, tidy off — and a machine that has persisted no singleton at all writes
   nothing either. So the tree holds this document exactly while some machine

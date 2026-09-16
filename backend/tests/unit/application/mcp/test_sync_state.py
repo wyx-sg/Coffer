@@ -13,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+import pytest
+
 from coffer.application.mcp.sync_state import AREA, McpPreferenceSyncState
 from coffer.domain.mcp.capability import CapabilityType, MCPCapabilityPreference
 
@@ -89,6 +91,10 @@ def _state() -> tuple[McpPreferenceSyncState, _Prefs]:
     return McpPreferenceSyncState(resources, prefs), prefs  # type: ignore[arg-type]
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a state area decides what its own document's deletion means",
+)
 async def test_export_writes_a_doc_only_for_servers_with_something_disabled() -> None:
     state, _prefs = _state()
     await state.delete_docs(["smart"])
@@ -97,6 +103,10 @@ async def test_export_writes_a_doc_only_for_servers_with_something_disabled() ->
     assert docs == [("jira", {"server": "jira", "disabled": [{"type": "tool", "key": "search"}]})]
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a state area decides what its own document's deletion means",
+)
 async def test_deleting_a_servers_doc_re_enables_everything_on_that_server_only() -> None:
     state, prefs = _state()
 

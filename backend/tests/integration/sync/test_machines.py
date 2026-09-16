@@ -324,6 +324,10 @@ async def test_renaming_a_machine_rewrites_nothing_in_the_vault(pair) -> None:
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a machine identity survives reinstalling Coffer"
 )
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="the raw host identifier never reaches the repository",
+)
 async def test_a_reinstalled_machine_returns_under_the_same_id(tmp_path: pathlib.Path) -> None:
     """``~/.coffer`` is deleted and Coffer reinstalled on a host that exposes a
     stable identifier.

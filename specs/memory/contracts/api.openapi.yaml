@@ -3,7 +3,7 @@ info:
   title: Coffer — Memory API
   version: 0.4.0
   description: |
-    REST surface for the one `memory` resource kind (spec memory, FR-061).
+    REST surface for the one `memory` resource kind (spec memory, FR-028).
     Eleven routes, and that is the whole management plane.
 
     ## Everything here is derived
@@ -12,21 +12,21 @@ info:
     native memory, read-only, and never writes it
     ([Aggregate Agent Memory, Never Write It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md)).
     Everything under `~/.coffer/memory/` is derived from those sources: delete
-    it, `POST /sync`, and the same facts come back (FR-023). There is **no
+    it, `POST /sync`, and the same facts come back (FR-016). There is **no
     memory table** — facts, digests and partition metadata are Markdown files
-    and the one Resource row a partition already has (FR-070).
+    and the one Resource row a partition already has (FR-034).
 
     ## A partition is the only boundary
 
     A **partition** is a top-level directory under the memory root and one
     `memory` Resource: exactly one per project plus one named `global`, and no
-    other partitioning axis exists (FR-010). Partitions are created by
+    other partitioning axis exists (FR-008). Partitions are created by
     aggregation, never by a client and never by an agent's working directory —
-    so there is no `POST /partitions` on this surface (FR-013).
+    so there is no `POST /partitions` on this surface (FR-011).
 
     A project partition is named by a readable slug from its project root,
     never an opaque id, and the absolute root travels on `PartitionOut`
-    (FR-011).
+    (FR-009).
 
     ## These routes are the owner's view, and are unscoped
 
@@ -37,12 +37,12 @@ info:
     Scope **is** enforced on the one route a real agent's session reaches —
     `POST /context`, which composes over the partitions that agent is
     authorized for — and on `coffer__recall`, which this surface does not
-    expose at all: L2 is MCP-only (FR-060).
+    expose at all: L2 is MCP-only (FR-027).
 
     ## The file family is read-only, and that is the design
 
     `GET /partitions/{name}/files` and `.../files/content` walk one
-    partition's own directory and read a file out of it (FR-062). There is
+    partition's own directory and read a file out of it (FR-029). There is
     deliberately **no write**: the tree is derived, so an edit would survive
     exactly until the next aggregation pass, and offering one would be
     offering a lie. `FileContentOut` therefore carries no fingerprint, unlike
@@ -65,12 +65,12 @@ info:
     ## Why per-agent delivery status has no last-fired field
 
     `DeliveryStatusOut` answers exactly one question: installed or not
-    (FR-055, FR-064). A fire is an **event**, not a property of an agent — every
+    (FR-026, FR-030). A fire is an **event**, not a property of an agent — every
     fire writes one `memory_delivery_fired` audit row, and "has it ever run"
     is read on the vault-wide audit surface. A hook installed a minute ago has
     legitimately never fired, so a status field flagging that would be crying
     wolf on its own normal state. This layer carries no audit surface of its
-    own either (FR-065).
+    own either (FR-031).
 
     ## Errors
 
@@ -80,10 +80,10 @@ info:
     The codes this family raises: `RESOURCE_NOT_FOUND` (404, no `memory`
     Resource by that name), `MEMORY_FACT_NOT_FOUND` (404),
     `MEMORY_FILE_NOT_FOUND` (404), `MEMORY_UNSAFE_PATH` (400, a path escaping
-    the partition — FR-072), `MEMORY_DELIVERY_UNSUPPORTED` (the agent type has
+    the partition — FR-036), `MEMORY_DELIVERY_UNSUPPORTED` (the agent type has
     no hook adapter), `MEMORY_DELIVERY_CONFIG_INVALID` (its settings file is
     not a JSON object Coffer can edit) and `UPKEEP_ALREADY_RUNNING` (409, a
-    second organise over a partition already being organised — FR-066).
+    second organise over a partition already being organised — FR-033).
 
 servers:
   - url: http://127.0.0.1:8000
@@ -226,10 +226,10 @@ paths:
       description: |
         Merges duplicates across agents, marks a fact superseded when a later
         one contradicts it, flags a pair it cannot settle, and rewrites the
-        partition's digest (FR-030). With no internal connection configured it
+        partition's digest (FR-017). With no internal connection configured it
         still writes a usable digest mechanically and proposes nothing
-        (FR-032). Only one pass per partition runs at a time; a second request
-        while one is in flight is refused rather than queued (FR-066), and the
+        (FR-019). Only one pass per partition runs at a time; a second request
+        while one is in flight is refused rather than queued (FR-033), and the
         in-flight pass is readable on the shared upkeep-runs surface.
       parameters:
         - $ref: "#/components/parameters/PartitionName"
@@ -261,9 +261,9 @@ paths:
 
         This is the one route a real agent's own session reaches, and it is
         therefore the one that enforces the calling agent's per-agent scope
-        (FR-014). `record_fired` is what the installed hook sets; a management
+        (FR-012). `record_fired` is what the installed hook sets; a management
         surface previewing the payload leaves it false so it never records a
-        fire that did not happen (FR-055).
+        fire that did not happen (FR-026).
       requestBody:
         required: true
         content:
@@ -305,7 +305,7 @@ paths:
       summary: Install Coffer's session-start hook into one agent's own settings.
       description: |
         An **explicit** act, never a side effect of registering an agent or
-        aggregating memory (FR-054). Idempotent, marker-scoped, and it leaves
+        aggregating memory (FR-025). Idempotent, marker-scoped, and it leaves
         every hook Coffer did not write exactly as it was. Writes the agent's
         *settings* file — never any file that is an agent's memory. Records a
         `memory_delivery_installed` audit event with the actor.
@@ -404,7 +404,7 @@ components:
           type: string
           description: |
             The absolute project root this partition was minted for. Empty for
-            `global` (FR-011).
+            `global` (FR-009).
         fact_count:
           type: integer
           description: Counted from the partition's `facts/` directory at call time.
@@ -432,7 +432,7 @@ components:
           type: string
           description: |
             Where inside that file — a heading or a bullet — or empty when the
-            whole file is the fact. Part of the fact's identity (FR-022).
+            whole file is the fact. Part of the fact's identity (FR-015).
         captured_at:
           type: string
           description: When Coffer read it.
@@ -450,7 +450,7 @@ components:
           description: |
             How one fact names another across a recomputation — the smallest of
             the fact's origin keys, so gaining a second origin never moves its
-            identity (FR-022).
+            identity (FR-015).
         slug:
           type: string
           description: Readable slug; also the file name inside the partition.
@@ -465,7 +465,7 @@ components:
           enum: [user, feedback, project]
           description: |
             `user` and `feedback` are about the person and file into `global`
-            whichever project they came from (FR-012).
+            whichever project they came from (FR-010).
         status:
           type: string
           enum: [active, superseded]
@@ -479,7 +479,7 @@ components:
           description: |
             Keys of facts organise flagged this one as disagreeing with. The
             model's finding, and only ever that — nothing settles a conflict by
-            hand (FR-033).
+            hand (FR-020).
 
     FactOut:
       allOf:
@@ -491,7 +491,7 @@ components:
               type: string
               description: |
                 The source's own words, never a paraphrase — a fact stays
-                quotable back to its origin (FR-021).
+                quotable back to its origin (FR-014).
             origins:
               type: array
               items:
@@ -547,7 +547,7 @@ components:
           type: boolean
           description: |
             False when no internal connection is configured — the digest is
-            still written, mechanically (FR-032).
+            still written, mechanically (FR-019).
 
     ContextQuery:
       type: object
@@ -561,7 +561,7 @@ components:
           default: null
           description: |
             The calling agent's registered name. It is what the per-agent scope
-            is evaluated against (FR-014).
+            is evaluated against (FR-012).
         budget_tokens:
           type: [integer, "null"]
           default: null
@@ -570,7 +570,7 @@ components:
           type: boolean
           default: false
           description: |
-            Whether serving this payload counts as a real delivery (FR-055).
+            Whether serving this payload counts as a real delivery (FR-026).
             The installed hook always sets it; a preview must not.
 
     ComposedContextOut:
@@ -582,7 +582,7 @@ components:
           description: |
             The payload, bounded by the token budget. When facts were left out it
             says how many and names `coffer__recall` as the way to reach them
-            (FR-051).
+            (FR-022).
         partition:
           type: string
           description: The project partition the cwd resolved to.
@@ -597,7 +597,7 @@ components:
             enum: [L0, L1]
           description: |
             Which layers the budget admitted. A tiny budget can ship L0 alone;
-            it can never ship half of L0 (FR-050).
+            it can never ship half of L0 (FR-021).
 
     FileNodeOut:
       type: object
@@ -664,7 +664,7 @@ components:
       required: [agent, installed, command, event]
       description: |
         Installed or not, and nothing else. There is deliberately no
-        last-fired field — see the `info.description` above (FR-055, FR-064).
+        last-fired field — see the `info.description` above (FR-026, FR-030).
       properties:
         agent:
           type: string
@@ -681,7 +681,7 @@ components:
             The agent's own lifecycle event the entry is attached to —
             `SessionStart` for Claude Code, `UserPromptSubmit` with a
             once-per-session guard for Codex, which publishes no session-start
-            event (FR-054).
+            event (FR-025).
 
     DeliveryStatusListOut:
       type: object

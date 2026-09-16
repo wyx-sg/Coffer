@@ -1,7 +1,7 @@
-"""A small, honest token estimator (spec memory FR-051).
+"""A small, honest token estimator (spec memory FR-022).
 
 Coffer has no tokenizer anywhere in this codebase, and composing the session
-context is not a good enough reason to add one: FR-051 only needs the
+context is not a good enough reason to add one: FR-022 only needs the
 composed payload to stay *roughly* inside its budget and to say how much it
 left out, never to match one specific model's byte-exact accounting. Adding
 a real BPE dependency (``tiktoken`` or similar) for that would be a real

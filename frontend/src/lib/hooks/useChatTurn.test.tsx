@@ -7,6 +7,7 @@ import type { PropsWithChildren } from "react";
 import { useChatTurn } from "./useChatTurn";
 import { ApiError } from "@/lib/api/errors";
 import type { AgentEvent } from "@/lib/chat/streamClient";
+import { acceptance } from "@/test/acceptance";
 
 // Mock the streamClient module — useChatTurn opens a GET /events subscription.
 vi.mock("@/lib/chat/streamClient", () => ({
@@ -489,7 +490,7 @@ describe("useChatTurn", () => {
     expect(result.current.isStreaming).toBe(false);
   });
 
-  test("re-subscribes after a mid-turn drop and recovers the missed turn_done", async () => {
+  acceptance("chat", "a dropped event stream reconnects and is bounded", async () => {
     // The stream drops mid-turn (only turn_start + a partial delta, no turn_done)
     // while the reply has NOT yet landed server-side. The hook must RE-SUBSCRIBE
     // — GET /events replays the in-flight turn on reattach — so the missed
@@ -599,7 +600,7 @@ describe("useChatTurn", () => {
     expect(result.current.liveMessage).toBeNull();
   });
 
-  test("a subscription failure surfaces as an error", async () => {
+  acceptance("chat", "a dropped event stream reconnects and is bounded", async () => {
     subscribeMock.mockImplementation(async function* () {
       yield { event: "turn_start", data: {} };
       throw new Error("network failure");

@@ -1,7 +1,7 @@
 // frontend/src/components/memory/MemoryPartitionsTable.tsx
 //
 // The partitions list: one row per project partition plus `global`, each one
-// a `memory` Resource (spec memory FR-010). A row carries what a partition
+// a `memory` Resource (spec memory FR-008). A row carries what a partition
 // has — its name, the project root it was named from, how many facts it
 // holds — plus the reach control every scoped Resource gets (ScopeControl),
 // exactly as the mcp-servers and skills lists render it per row, and a bulk

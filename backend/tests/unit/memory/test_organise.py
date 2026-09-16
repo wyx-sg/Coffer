@@ -215,7 +215,7 @@ async def test_prose_instead_of_json_degrades_cleanly(fake_connection) -> None: 
 
 
 @pytest.mark.acceptance(
-    spec="memory", scenario="organize regenerates the summary without an internal connection"
+    spec="memory", scenario="organise regenerates the summary without an internal connection"
 )
 async def test_organize_regenerates_the_summary_without_an_internal_connection() -> None:
     fact_a = _fact(slug="a", title="Only fact")

@@ -13,7 +13,7 @@ test carrying the acceptance marker for it, and `scripts/audit_acceptance.py`
 fails `make verify` on a scenario with no covering test, on a marker naming a
 scenario that does not exist, and on a marker whose test is unconditionally
 skipped. A spec is "shipped" only when the end-to-end deliverable works AND
-every scenario is covered (see [`agents/sdd.md`](../../agents/sdd.md)).
+every scenario is covered (see [`.agents/sdd.md`](../../.agents/sdd.md)).
 
 **This file is transient.** It is a checkbox list to tick through while
 building, and it is deleted once the work ships — it describes work to be

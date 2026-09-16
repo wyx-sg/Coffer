@@ -1,7 +1,7 @@
 // frontend/src/components/agents/AgentMemoryDelivery.test.tsx
 //
 // One agent's delivery state, on that agent's own page (spec memory
-// FR-054/FR-055, ADR aggregate-agent-memory-never-write-it). The card answers
+// FR-025/FR-026, ADR aggregate-agent-memory-never-write-it). The card answers
 // exactly one question — installed or not. Whether the hook has fired is a
 // stream of events and is read on the Activity page, one audit entry per fire,
 // so this surface must not speculate about it.

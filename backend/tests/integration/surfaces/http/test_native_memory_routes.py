@@ -42,7 +42,8 @@ def _register_claude(c: TestClient, config_dir: pathlib.Path) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="the native memory scan lists an agent's own per-project stores"
+    spec="agent-registry/claude-code",
+    scenario="the native memory scan lists an agent's own per-project stores",
 )
 def test_list_native_memory_returns_store(tmp_path, monkeypatch):
     config_dir = tmp_path / "cc-config"
@@ -70,7 +71,8 @@ def test_list_native_memory_returns_store(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="the native memory scan lists Codex's global memory by project"
+    spec="agent-registry/codex",
+    scenario="the native memory scan lists Codex's global memory by project",
 )
 def test_list_native_memory_codex_global_by_project(tmp_path, monkeypatch):
     config_dir = tmp_path / "codex-config"
@@ -203,7 +205,7 @@ def test_store_files_tree_and_content(tmp_path, monkeypatch):
         assert body["content"] == "alpha fact"
         assert body["binary"] is False
         assert body["truncated"] is False
-        # The absolute path is what the viewer's open / reveal act on (FR-038).
+        # The absolute path is what the viewer's open / reveal act on (spec agent-registry FR-047).
         assert body["abs_path"] == str(mem / "notes" / "a.md")
 
 
@@ -237,7 +239,7 @@ def test_store_files_refuses_a_dir_that_is_not_a_store(tmp_path, monkeypatch):
 
 
 def test_store_files_emit_no_audit_event(tmp_path, monkeypatch):
-    """FR-011: workspace listings do not audit, and neither does opening one."""
+    """FR-009: workspace listings do not audit, and neither does opening one."""
     config_dir = tmp_path / "cc-config"
     mem = config_dir / "projects" / "-X" / "memory"
     mem.mkdir(parents=True)

@@ -84,16 +84,12 @@ application/provider/
   projection_ops.py     project / de-project one agent type for the service
   update_ops.py         the patch path, including secret rotation
   rename_ops.py         name, vault entry, audit trail and projection, together
-  internal_default_ops.py  the global flag and the model it drops
+  internal_default_ops.py  the global flag; the model-drop is the engine's
   boot_reconcile.py     the start-up check that a projection is really on disk
   sync_reconcile.py     the post-converge hook that re-projects from the rows
   introspection.py      list-models / test-connection / detect-protocol
   results.py            ActivateResult, DeactivateResult
   ports.py              the ports this layer depends on
-
-application/agent/model_catalogue.py
-                  AgentModelCatalogueService — catalogue() (what the agent can
-                  run), offered() (what a picker shows), efforts(), suggest()
 
 infrastructure/provider/introspector.py
                   the one place that calls a third-party endpoint
@@ -102,9 +98,16 @@ surfaces/
   http/provider_routes.py + provider_schemas.py + provider_dependencies.py
        + provider_wiring.py            /api/v1/providers/*
   http/model_routes.py                 /api/v1/models/*
-  http/internal_engine_routes.py       /api/v1/internal-engine-config[/upkeep]
   cli/provider_cmd.py                  coffer provider …
 ```
+
+Two things are deliberately absent. The per-agent model CATALOGUE
+(`application/agent/model_catalogue.py`) is spec
+[agent-registry](../agent-registry/spec.md)'s — this kind only contributes a
+connection's curated ids to what a picker is offered. Coffer's own ENGINE — the
+settings row, its routes and the passes it runs unattended — is spec
+[internal-engine](../internal-engine/spec.md); this kind owns the
+`internal_default` flag and notifies the engine when it moves.
 
 Reach is not in this list on purpose: which agents a connection covers is the
 framework's per-agent scope on the resource row, so it is read through
@@ -151,10 +154,14 @@ not this hand-authored one.
 - **The writer is chosen by AGENT type, not by protocol.** The protocol drives
   model introspection and whether a key is required; the agent decides which
   file shape is written.
-- **A picker read touches no network.** `offered()` answers from stored state
-  only — it runs on every card render and every turn.
+- **A picker read touches no network.** What a connection contributes to a
+  picker is answered from stored state only — it runs on every card render and
+  every turn.
 - **Coffer writes down no model name and no reasoning level.** Both are read
   from the installed agent or handed to it verbatim.
+- **The engine is reached through a port, never imported.** The internal-default
+  operation notifies spec internal-engine; this package never reads or writes
+  the engine's settings row.
 
 ## Composition root
 

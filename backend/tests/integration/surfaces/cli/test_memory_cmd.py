@@ -1,4 +1,4 @@
-"""Integration tests for ``coffer memory ...`` (spec memory FR-061).
+"""Integration tests for ``coffer memory ...`` (spec memory FR-028).
 
 Most commands are thin HTTP shells, tested the same way
 ``test_knowledge_cmd.py`` tests its own: boot the real app, route
@@ -239,9 +239,9 @@ def test_context_prints_the_composed_text_and_records_a_fire(memory_cli_daemon, 
 
 # ----- `ls` / `read`: the partition's own directory from the terminal -------
 #
-# The REST half has existed since FR-062 (GET /memory/partitions/{name}/files
+# The REST half has existed since FR-029 (GET /memory/partitions/{name}/files
 # and .../files/content) but `coffer memory` could reach facts and partitions
-# and not the files they are stored in, which is the one thing FR-061 names
+# and not the files they are stored in, which is the one thing FR-028 names
 # that the group did not do. The verbs are `ls` and `read` so that browsing
 # memory and browsing knowledge are the same two words.
 

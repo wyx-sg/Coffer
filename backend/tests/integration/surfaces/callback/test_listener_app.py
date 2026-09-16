@@ -86,7 +86,10 @@ async def test_verification_handshake_echoes_challenge_without_forwarding(
     assert stub.received == []  # answered locally, never forwarded
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a signed seatalk event reaches the channel")
+@pytest.mark.acceptance(
+    spec="channels/seatalk",
+    scenario="a signed seatalk event reaches the channel",
+)
 async def test_signed_event_is_forwarded_to_the_daemon_with_token(
     listener: tuple[httpx.AsyncClient, _StubDaemon],
 ) -> None:
@@ -107,7 +110,7 @@ async def test_signed_event_is_forwarded_to_the_daemon_with_token(
     assert actor == "system"
 
 
-@pytest.mark.acceptance(spec="channels", scenario="a tampered seatalk event is rejected")
+@pytest.mark.acceptance(spec="channels/seatalk", scenario="a tampered seatalk event is rejected")
 async def test_tampered_event_is_rejected_and_never_forwarded(
     listener: tuple[httpx.AsyncClient, _StubDaemon],
 ) -> None:
@@ -208,7 +211,7 @@ def _counting_chunks(total: int, chunk: int = 64 * 1024) -> tuple[Any, list[int]
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="an oversized callback body is refused before it is read"
+    spec="channels/seatalk", scenario="an oversized callback body is refused before it is read"
 )
 async def test_a_declared_oversized_body_is_413_before_a_byte_is_read(
     listener: tuple[httpx.AsyncClient, _StubDaemon],
@@ -230,7 +233,7 @@ async def test_a_declared_oversized_body_is_413_before_a_byte_is_read(
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="an oversized callback body is refused before it is read"
+    spec="channels/seatalk", scenario="an oversized callback body is refused before it is read"
 )
 async def test_a_chunked_body_is_cut_off_the_moment_it_passes_the_cap(
     listener: tuple[httpx.AsyncClient, _StubDaemon],

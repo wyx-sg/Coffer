@@ -174,7 +174,7 @@ Primary (project repos/docs):
   Cursor / OpenCode / OpenClaw / Hermes (`enabled=False`), and exactly 2 are
   enabled (Claude Code, Codex). `repo:backend/coffer/domain/agent/descriptor.py`
 - **Coffer ingests config bi-directionally (the "ingest half").** The
-  agent-registry spec frames the workspace amendment as ingest→hub→deliver; US10 / FR-028 define "Adopt a
+  agent-registry spec frames the workspace amendment as ingest→hub→deliver; US10 / FR-021 define "Adopt a
   direct MCP server into Coffer" as "the ingest half of Coffer's hub-and-spoke
   model." `adopt()` registers an `mcp_server` resource, verifies read-back via
   `self._rs.get(...)`, then removes the direct entry — and drift-awareness is
@@ -198,8 +198,8 @@ Primary (project repos/docs):
   §2 "Rules/instructions distribution" row).** The report's single most important
   finding — "Coffer does NOT distribute rules/instructions from one source to many
   agents, the defining feature of this entire category" — is **no longer true as of
-  PR #112** ("master-instructions hub with per-agent delivery", spec agent-registry US13 /
-  FR-041–FR-046). Coffer now keeps one canonical **master instructions** document in
+  PR #112** ("master-instructions hub with per-agent delivery", specced at the time as
+  spec agent-registry's master-instructions requirements). Coffer now keeps one canonical **master instructions** document in
   its hub (`~/.coffer/instructions/AGENTS.md`) and **delivers** it into each agent's
   native instructions file (`CLAUDE.md` / `AGENTS.md` / `SOUL.md`) as a Coffer-managed
   block fenced by distinct markers (`<!-- coffer:instructions:start (managed, do not
@@ -213,11 +213,15 @@ Primary (project repos/docs):
   row flips from "❌ not a hub asset" to a hub-delivered asset with merge semantics, and
   closes the §3 gap #1 / §4 takeaway #1 that the rest of the report framed as Coffer's
   central differentiator gap (with adopt, it is now arguably best-in-class on this axis,
-  not absent). `repo:backend/coffer/application/agent/instructions_service.py`,
+  not absent).
+  **Gone since:** the master-instructions hub was removed outright — no requirement
+  for it survives in spec agent-registry, and none of the modules cited below exists
+  any more, so the §2 row this bullet flipped has flipped back.
+  `repo:backend/coffer/application/agent/instructions_service.py`,
   `repo:backend/coffer/domain/agent/instructions.py`,
   `repo:backend/coffer/domain/agent/managed_block.py`,
   `repo:backend/coffer/surfaces/http/agent_instructions_routes.py`,
-  `repo:specs/agent-registry/spec.md` (US13, FR-041–FR-046)
+  `repo:specs/agent-registry/spec.md` (the master-instructions requirements, since removed)
 - **Coffer agent count (§4 takeaway #4 / area table).** Old: "4 wired, 2 enabled"
   → corrected: **6 wired total, 2 enabled, 4 hidden.** The manifest defines 6
   `AgentDescriptor` records, not 4; the named-and-hidden set and "2 enabled" were

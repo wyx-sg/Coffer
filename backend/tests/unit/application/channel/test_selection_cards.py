@@ -1,4 +1,4 @@
-"""The selection cards' pure rendering rules (FR-017/FR-018).
+"""The selection cards' pure rendering rules (FR-013/FR-015).
 
 The model card is built from the agent's whole model catalogue — 29 entries for
 ``claude_code`` — but a card is a window onto that list, not the list: SeaTalk
@@ -125,7 +125,7 @@ class TestPaging:
         assert _nav(card) == ["page:agent:0", "page:agent:2"]
 
     def test_the_collection_card_pages_by_the_same_rule_too(self):
-        # spec knowledge FR-036: a `/save` card is a third instance of the same
+        # spec channels FR-014: a `/save` card is a third instance of the same
         # rule, not a special case — including its own navigation namespace.
         choices = [f"c{i}" for i in range(20)]
 
@@ -145,7 +145,7 @@ class TestTheCollectionCardHasNoCurrentChoice:
         assert card.pages == 1
 
     def test_a_single_collection_still_renders_as_a_card_not_a_default(self):
-        # FR-036: confirm, never guess — a lone collection is still a tap.
+        # FR-038: confirm, never guess — a lone collection is still a tap.
         card = collection_card(choices=["only-one"])
 
         assert _values(card) == ["collection:only-one"]

@@ -161,7 +161,7 @@ def test_toml_uninstall_noop_for_scalar_mcp_servers():
     assert tomlkit.parse(out)["mcp_servers"] == "coffer-ish"
 
 
-# --- self-reported agent identity (spec agent-registry FR-019 amended, Task 9) -------------
+# --- self-reported agent identity (spec agent-registry FR-015 amended, Task 9) -------------
 
 
 def test_entry_fields_command_map_with_agent_name():

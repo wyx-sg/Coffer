@@ -83,6 +83,10 @@ def test_select_excludes_different_executables() -> None:
     ) == [200]
 
 
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="the daemon reaps only the children it can prove are its own",
+)
 def test_select_spares_a_daemon_serving_another_vault() -> None:
     """The regression: a smoke test / live test daemon under a throwaway HOME
     runs the same binary but owns none of our state. Killing it took down the

@@ -20,7 +20,7 @@ disagree about, and which pair simply disagrees — so it hands the model one
 compact, structured prompt per chunk and parses one JSON answer. There is
 nothing for a tool to call.
 
-**Never delete, never rewrite a body (FR-031).** A "duplicate" proposal does
+**Never delete, never rewrite a body (FR-018).** A "duplicate" proposal does
 not delete either file: it enriches the surviving fact with the other's
 origins and marks the other fact ``superseded`` — the record other surfaces
 already understand — so both files remain on disk and only the derived
@@ -28,7 +28,7 @@ metadata (status, ``superseded_by``, ``conflicts_with``) changes. A fact's
 ``title``/``description``/``body`` are never touched here.
 
 **Everything this pass writes is the model's finding, and nothing else is
-(FR-033).** Facts used to carry a ``proposed`` flag so a surface could tell a
+(FR-020).** Facts used to carry a ``proposed`` flag so a surface could tell a
 model's supersession apart from one the developer had settled by hand. The
 developer's side is gone — there is no per-fact action left to record — so
 every supersession and every conflict on a fact is now, unambiguously, this
@@ -39,7 +39,7 @@ removed with the decisions it used to contrast against.
 model that answers in prose, returns invalid JSON, names a fact that does not
 exist, or names the same fact twice in one pair contributes no proposals for
 whatever it got wrong — logged, not raised. The mechanical digest still gets
-written either way (FR-032), so an organise pass can never make delivery
+written either way (FR-019), so an organise pass can never make delivery
 worse than doing nothing would have.
 """
 
@@ -107,7 +107,7 @@ class OrganiseResult:
     #: Conflict pairs flagged (counted once per pair, not per fact).
     conflicts: int
     #: Whether an internal connection was configured and consulted at all —
-    #: false only when no model exists to ask (FR-032's mechanical path).
+    #: false only when no model exists to ask (FR-019's mechanical path).
     model_used: bool
 
 
@@ -281,10 +281,10 @@ async def organise_partition(
 
     With no internal connection configured, ``model_used`` is false and no
     proposal is made at all — the digest is still regenerated mechanically
-    (FR-032; ``digest.render_digest`` needs no model either). This mirrors
+    (FR-019; ``digest.render_digest`` needs no model either). This mirrors
     ``run_tidy``'s ``no_model``/``ok`` split, except organise never has an
     "empty" no-op: an empty partition still gets a (trivial) digest, because
-    FR-032 requires the digest step itself to never be a no-op.
+    FR-019 requires the digest step itself to never be a no-op.
     """
     all_facts = store.list_facts(partition)
     by_key: dict[str, Fact] = {f.key: f for f in all_facts}

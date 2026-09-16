@@ -5,18 +5,10 @@ on:
     branches: [main]
     paths:
       - "docs-site/**"
-      - "specs/**"
-      - "docs/decisions/**"
-      - ".specify/memory/**"
-      - "agents/**"
       - ".github/workflows/pages.yml"
   pull_request:
     paths:
       - "docs-site/**"
-      - "specs/**"
-      - "docs/decisions/**"
-      - ".specify/memory/**"
-      - "agents/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -38,8 +30,6 @@ jobs:
           cache: npm
           cache-dependency-path: docs-site/package-lock.json
       - run: npm ci
-        working-directory: docs-site
-      - run: npm test
         working-directory: docs-site
       - run: npm run build
         working-directory: docs-site

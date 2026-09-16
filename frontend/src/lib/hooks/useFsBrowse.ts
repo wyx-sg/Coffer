@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useFsBrowse.ts
 // One directory level of the host filesystem, read through the loopback
-// daemon (spec agent-registry FR-023). Backs the in-app folder browser the
+// daemon (spec agent-registry FR-050). Backs the in-app folder browser the
 // FolderPicker falls back to when this host has no native directory dialog.
 import { useQuery } from "@tanstack/react-query";
 

@@ -2,7 +2,7 @@
 
 Thin HTTP shells over the daemon, matching the other CLI groups and their
 exit-code mapping (``_cli_client.check``). ``search`` and ``upload`` round out
-the group with literal search and document ingestion (spec knowledge FR-060).
+the group with literal search and document ingestion (spec knowledge FR-034).
 """
 
 from __future__ import annotations
@@ -173,8 +173,8 @@ def grep(
         typer.echo("… more matches exist", err=True)
 
 
-@app.command("organize")
-def organize(
+@app.command("tidy")
+def tidy(
     ctx: typer.Context,
     collection: str = typer.Argument(..., help="Collection to tidy"),
 ) -> None:

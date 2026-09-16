@@ -12,7 +12,7 @@
  * The tempting change is real: firing queries before the token lands means they
  * come back `UNAUTHENTICATED` for a moment, and `await`ing the handshake makes
  * that flicker go away. It buys the flicker with the blank window, which is the
- * worse trade and the one spec mcp-gateway FR-029/FR-030 rule out.
+ * worse trade and the one spec desktop-app FR-001/FR-004 rule out.
  *
  * Reading the source is unusual for a frontend test; it is how the repo already
  * pins release-pipeline invariants whose feedback loop is too long to rely on
@@ -20,14 +20,15 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, test } from "vitest";
+import { describe, expect } from "vitest";
+import { acceptance } from "@/test/acceptance";
 
 // Resolved from the Vitest root (frontend/) rather than `import.meta.url`,
 // which the test transform does not leave as a file: URL.
 const MAIN = readFileSync(resolve(process.cwd(), "src/main.tsx"), "utf-8");
 
 describe("main.tsx bootstrap", () => {
-  test("does not await the desktop handshake before rendering", () => {
+  acceptance("desktop-app", "the window renders before the daemon answers", () => {
     // The call must exist — otherwise the desktop host never gets a token.
     expect(MAIN).toContain("connectToShellDaemon");
 
@@ -46,7 +47,7 @@ describe("main.tsx bootstrap", () => {
     expect(call).toMatch(/\.then\(/);
   });
 
-  test("refetches once the handshake lands", () => {
+  acceptance("desktop-app", "the window renders before the daemon answers", () => {
     // Queries that went out before the token arrived hold a 401 that nothing
     // else clears; the invalidate is the repair, not a nicety.
     expect(MAIN).toMatch(/invalidateQueries\(\)/);

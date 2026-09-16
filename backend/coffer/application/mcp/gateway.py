@@ -128,10 +128,15 @@ class MCPGatewaySession:
         # once — the honest value, since nothing has been hidden yet.
         self.last_hidden_count = 0
         self._initialized = False
-        # FR-004: the agent's launch cwd, reported by the shim at the
-        # ``initialize`` handshake (params._meta["coffer/cwd"]). Threaded into
-        # memory built-in tool calls so project-scope resolution works. Falls
-        # back to the daemon's own cwd when the client omits it.
+        # The agent's launch cwd, reported by the shim at the ``initialize``
+        # handshake (params._meta["coffer/cwd"]). Threaded into memory built-in
+        # tool calls so project-scope resolution works. Falls back to the
+        # daemon's own cwd when the client omits it.
+        # No spec states this handshake field: the requirement it was written
+        # for was deleted with the per-project store that read the launch cwd,
+        # and spec memory FR-011 now says the opposite (a partition MUST NOT be
+        # created from an agent's cwd at read time). The shim still stamps it
+        # and this still threads it, so the behaviour outlives its requirement.
         self._session_cwd: str | None = None
         # Track which servers we've subscribed to notifications on so we
         # only attach the handler once per (session, server) pair.

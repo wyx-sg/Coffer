@@ -100,7 +100,7 @@ class TestMarkdownToSeatalk:
         assert markdown_to_seatalk("**bold** and `code`") == "**bold** and `code`"
 
     @pytest.mark.acceptance(
-        spec="channels", scenario="seatalk markdown escapes a literal marker character"
+        spec="channels/seatalk", scenario="seatalk markdown escapes a literal marker character"
     )
     def test_stray_markers_are_escaped_with_a_single_backslash(self):
         # `snake_case` must survive as typed instead of being read as markup.
@@ -148,7 +148,7 @@ class TestMarkdownToSeatalk:
         assert markdown_to_seatalk("") == ""
 
     @pytest.mark.acceptance(
-        spec="channels",
+        spec="channels/seatalk",
         scenario="a mention target survives the markdown escaper unchanged",
     )
     def test_a_mention_tag_is_never_escaped_whatever_its_target_holds(self):

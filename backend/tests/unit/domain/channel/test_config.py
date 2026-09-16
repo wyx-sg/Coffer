@@ -192,7 +192,7 @@ def test_default_agent_override_kept():
 
 
 def test_group_gating_flags_default_on_both_channel_types():
-    """FR-035: require_mention defaults on (group @mention required), and
+    """FR-037: require_mention defaults on (group @mention required), and
     ignore_other_mentions defaults off (opt-in), on both channel types."""
     tg = parse_channel_config(TELEGRAM_CONFIG)
     assert tg.require_mention is True

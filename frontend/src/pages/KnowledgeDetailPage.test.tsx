@@ -139,7 +139,7 @@ describe("KnowledgeDetailPage", () => {
     // The body renders…
     expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
     // …and the actions that change it hand the file to the user's own tools
-    // (spec knowledge FR-021/FR-061) — there is no in-app editor, because the
+    // (spec knowledge FR-013/FR-035) — there is no in-app editor, because the
     // files are the only copy and an edit made elsewhere is live on the next
     // read with nothing to reconcile.
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();

@@ -9,7 +9,7 @@
 //      there. Knowledge is a different layer with its own page and its own tab
 //      pointer — this one must not send the user there.
 //   B. Delivery — whether Coffer's session-start hook is installed in THIS
-//      agent's own settings (spec memory FR-054/FR-055; whether it has fired is
+//      agent's own settings (spec memory FR-025/FR-026; whether it has fired is
 //      read as events on the Activity page, not guessed at here). The only
 //      section here that writes anything, and the only
 //      one that is per-agent rather than per-partition: a hook lives in one

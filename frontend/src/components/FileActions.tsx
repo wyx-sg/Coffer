@@ -1,5 +1,5 @@
 // frontend/src/components/FileActions.tsx
-// Coffer's file viewers are read-only (the ui-shell, agent-registry,
+// Coffer's file viewers are read-only (the web-ui, agent-registry,
 // skill-manager and knowledge specs): editing happens in the user's own editor,
 // not in-app. This shared action bar takes a managed file to those external
 // tools — open it in the preferred editor (see the "preferred editor"

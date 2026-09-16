@@ -1,4 +1,4 @@
-"""Capability latching (FR-059) and rich-markdown normalisation (FR-061)."""
+"""Capability latching (FR-044) and rich-markdown normalisation (FR-046)."""
 
 from __future__ import annotations
 

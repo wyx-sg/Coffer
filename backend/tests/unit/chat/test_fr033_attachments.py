@@ -1,4 +1,4 @@
-"""FR-033 — inbound attachments persisted as references + re-materialised.
+"""FR-034 — inbound attachments persisted as references + re-materialised.
 
 Covers the elegant seam: the channel turn persists an ``AttachmentBlock`` into
 the user message (single source of truth); the turn task derives the adapter's
@@ -49,6 +49,10 @@ async def test_channel_turn_persists_attachment_block() -> None:
 
 @pytest.mark.acceptance(
     spec="channels",
+    scenario="a later turn re-materialises the attachment from history",
+)
+@pytest.mark.acceptance(
+    spec="chat",
     scenario="a later turn re-materialises the attachment from history",
 )
 @pytest.mark.asyncio

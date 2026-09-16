@@ -1,4 +1,4 @@
-"""Skill-location helpers for agent workspace scanning (FR-022).
+"""Skill-location helpers for agent workspace scanning (FR-018).
 
 ``scan_locations`` returns the ordered list of directories to scan for
 unmanaged skills for a given agent type.  It lives here (in the *agent*
@@ -31,7 +31,7 @@ def scan_locations(
     *,
     home: pathlib.Path | None = None,
 ) -> list[pathlib.Path]:
-    """Ordered skill locations to scan for *agent_type* (FR-022).
+    """Ordered skill locations to scan for *agent_type* (FR-018).
 
     Args:
         agent_type: The agent product whose skill directories to resolve.

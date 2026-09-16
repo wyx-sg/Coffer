@@ -124,7 +124,7 @@ __all__ = [
 
 #: Resolves the models an agent could be switched to, for the per-turn note.
 ModelLister = Callable[[str], Awaitable[Sequence[str]]]
-#: (agent_key, cwd) -> the memory digest for this turn, or None (spec memory FR-053).
+#: (agent_key, cwd) -> the memory digest for this turn, or None (spec memory FR-024).
 MemoryContextComposer = Callable[[str, str], Awaitable[str | None]]
 
 
@@ -143,11 +143,11 @@ async def compose_system_context(
 
     * a channel-originated conversation drives the agent from a phone chat, so
       tell it so — concise replies, no clickable dialogs;
-    * a channel-driven turn also carries the memory digest (spec memory
-      FR-053): Coffer composes this turn's context itself, so memory reaches
+    * a channel-driven turn also carries the memory digest (spec memory FR-024): Coffer composes
+    this turn's context itself, so memory reaches
       the agent with no session-start hook and no install. **Only** a channel
       turn gets it — an agent the developer drives themselves receives memory
-      through its own hook (FR-054), never both;
+      through its own hook (spec chat FR-020), never both;
     * every conversation gets the model note, because the agent cannot see
       which model Coffer put it on and otherwise invents an answer.
 

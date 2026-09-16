@@ -55,7 +55,7 @@ class InboundEvents:
     #: Looks up (creating if absent) the session for one ``(channel, chat,
     #: thread)`` — the same registry ``InboundProcessor``/``TurnDriver`` share.
     #: A card tap needs it only for a ``collection:`` choice (spec knowledge
-    #: FR-036): the pending document a `/save` tap saves lives there.
+    #: FR-038): the pending document a `/save` tap saves lives there.
     session: SessionAccessor
 
     async def on_callback(self, binding: ChannelBinding, cb: InboundCallback) -> None:
@@ -155,10 +155,10 @@ class InboundEvents:
         await self.safe_send(binding, event.chat_id, EXTERNAL_GROUP_WARNING, chat_kind="group")
 
     async def on_stop(self, binding: ChannelBinding, event: InboundStop, *, session: Any) -> None:
-        """The user pressed the platform's own stop control (FR-063).
+        """The user pressed the platform's own stop control (FR-048).
 
         Routed to exactly the path a typed ``/stop`` takes, so the two cannot
-        drift apart: same cancellation, same queue pause (FR-051), same thing
+        drift apart: same cancellation, same queue pause (spec chat FR-019), same thing
         said back. Owner-gated like everything else — a stop press from a chat
         that was never paired is ignored in silence rather than answered, which
         would confirm to a stranger that this channel exists.

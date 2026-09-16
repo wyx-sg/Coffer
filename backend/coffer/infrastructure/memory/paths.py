@@ -2,7 +2,7 @@
 
 Mirrors ``infrastructure/knowledge/paths.py`` on purpose: one root, one guard,
 one override for tests. Everything under this root is derived and rebuildable
-(spec memory FR-023) — a partition is a directory holding a ``README.md`` that
+(spec memory FR-016) — a partition is a directory holding a ``README.md`` that
 says what it is, a ``summary.md`` digest another package writes, and a
 ``facts/`` folder of one Markdown file per fact. ``$COFFER_MEMORY_ROOT``
 overrides the root, exactly like knowledge's own override, so a test can never
@@ -27,7 +27,7 @@ _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
 
 
 class UnsafeMemoryPath(CofferError):  # noqa: N818
-    """A path segment that is hidden, all dots, or otherwise unsafe (FR-072)."""
+    """A path segment that is hidden, all dots, or otherwise unsafe (FR-036)."""
 
     code = "MEMORY_UNSAFE_PATH"
 
@@ -51,7 +51,7 @@ def check_segment(segment: str) -> None:
 
     A partition name is produced by ``domain.memory.partition.partition_slug``
     / ``disambiguate``, which already yield safe slugs — this guard is defence
-    in depth for the case a caller builds one another way, per FR-072: every
+    in depth for the case a caller builds one another way, per FR-036: every
     path built from a source's contents must pass a traversal guard.
     """
     if not segment:
@@ -87,7 +87,7 @@ def summary_path(name: str) -> pathlib.Path:
 
 
 def readme_path(name: str) -> pathlib.Path:
-    """The partition's self-description, naming its project root (FR-011)."""
+    """The partition's self-description, naming its project root (FR-009)."""
     return partition_dir(name) / README_NAME
 
 

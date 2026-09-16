@@ -1,6 +1,6 @@
 // frontend/src/pages/MemoryPage.test.tsx
 //
-// The Memory page is a list page and must read as one (spec memory FR-062):
+// The Memory page is a list page and must read as one (spec memory FR-029):
 // a table, in the same shape whether the vault holds partitions or none, and
 // nothing else. Two surfaces that used to render above and below that table
 // are asserted ABSENT here, because both were duplicates of somewhere better:

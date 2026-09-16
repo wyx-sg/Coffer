@@ -31,7 +31,7 @@ class LlmCompletionPort(Protocol):
     Ingestion uses it to write a document's one-line ``description``, which the
     catalogue then lives or dies by. Like every other use of the internal
     connection in this layer it is optional: with none configured the caller
-    falls back to the document's own opening prose (spec knowledge FR-034).
+    falls back to the document's own opening prose (spec knowledge FR-023).
     """
 
     async def complete(

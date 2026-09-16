@@ -239,7 +239,7 @@ describe("ActivityPage", () => {
   });
 });
 
-acceptance("ui-shell", "activity gives each record its own tab", async () => {
+acceptance("web-ui", "activity gives each record its own tab", async () => {
   mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />));
 
@@ -267,7 +267,7 @@ acceptance("ui-shell", "activity gives each record its own tab", async () => {
   expect(screen.queryByText("search_issues")).not.toBeInTheDocument();
 });
 
-acceptance("ui-shell", "activity row expands to its raw record", async () => {
+acceptance("web-ui", "activity row expands to its raw record", async () => {
   mockApi({ audit: [AUDIT_ENTRY], daemon: [DAEMON_RECORD] });
   render(wrap(<ActivityPage />));
 
@@ -300,7 +300,7 @@ acceptance("ui-shell", "activity row expands to its raw record", async () => {
   });
 });
 
-acceptance("ui-shell", "a failing record shows its error inside its own tab", async () => {
+acceptance("web-ui", "a failing record shows its error inside its own tab", async () => {
   // An older daemon serves /audit and /mcp/invocations but not /daemon/logs.
   mockApi({ audit: [AUDIT_ENTRY], invocations: [INVOCATION], failing: "/daemon/logs" });
   render(wrap(<ActivityPage />));
@@ -321,7 +321,7 @@ acceptance("ui-shell", "a failing record shows its error inside its own tab", as
   expect(await screen.findByText("Registered filesystem")).toBeInTheDocument();
 });
 
-acceptance("ui-shell", "legacy /audit redirects to activity", async () => {
+acceptance("web-ui", "legacy /audit redirects to activity", async () => {
   mockApi();
   // The real route table under a memory router (rather than a data router:
   // react-router's data-router navigation builds a fetch Request, and jsdom's

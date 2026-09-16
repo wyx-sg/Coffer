@@ -1,9 +1,9 @@
-# Feature Specification: UI Shell & Visual Language
+# Feature Specification: Web UI
 
 **Status**: Accepted
 **Input**: The mcp-gateway UI shipped as a functional skeleton: bare tailwind defaults, ad-hoc spacing, no first-run onboarding. This spec turns the skeleton into a real product shell — a coherent visual language, an information architecture built on a single unifying concept (every managed entity is a _resource kind_), and the end-to-end flows that make the gateway usable for a first-time visitor (not just for Playwright fixtures that bypass auth).
 
-**Scope note**: Coffer's specs are split along the backend/frontend line. `mcp-gateway` owns the daemon, MCP gateway, REST API, and CLI. **This spec owns the web UI** — the visual language, the information architecture, and internationalisation. It adds no backend of its own, so entities live in the owning kind's spec and no separate `tasks.md` tracker is kept here. See [`plan.md`](./plan.md) and [`quickstart.md`](./quickstart.md) for the companion docs.
+**Scope note**: **This spec owns the web UI** — the information architecture, the visual language, the list and detail conventions every surface shares, and internationalisation. It adds no REST route and no backend of its own, so it has no `contracts/` directory and no separate `tasks.md` tracker. Every screen renders over routes and entities other specs own, and those are named where they are used: no single spec owns all of them. See [`plan.md`](./plan.md) and [`quickstart.md`](./quickstart.md) for the companion docs.
 
 ## Information Architecture
 
@@ -59,7 +59,7 @@ the vault rather than living in it, and collapsing the group would lose that
 distinction to save two lines.
 
 The app's index (`/`) redirects to `/agents`, so a first-time visitor lands on
-the Agents surface. It is grouped into **Agents** (the consumers and the chat with one), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Activity, Sync and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` and `/mcp-servers/mcp_server/:name` are kept as legacy redirects for old bookmarks.) The agent detail page's own tabs belong to spec agent-registry (FR-009), which owns what they show; this spec owns only that they are tabs on a detail page laid out like every other.
+the Agents surface. It is grouped into **Agents** (the consumers and the chat with one), **Resources** (the resource kinds), and **System** (cross-cutting tooling: Activity, Sync and Settings) so the navigation stays stable as Coffer grows. Agents live at `/agents` (list) and `/agents/:name` (detail) and do not appear in the `/mcp-servers` kind browser. (`/resources` and `/mcp-servers/mcp_server/:name` are kept as legacy redirects for old bookmarks.) The agent detail page's own tabs belong to spec agent-registry (FR-TBD — see `## Assumptions`), which owns what they show; this spec owns only that they are tabs on a detail page laid out like every other.
 
 All list surfaces (agents, MCP servers, skills, knowledge, memory, model providers, channels, each Activity tab, each Sync tab) use one shared, searchable, filterable, paginated table: a row click opens that item's detail page, and row actions are an icon plus its label — never a bare icon, which reads as a different affordance from the labelled action beside it. Cards are reserved for welcome / empty states only.
 
@@ -152,14 +152,14 @@ inside its own tab: one failing lane must not take the other two down with
 it. There is no manual refresh control — switching tab or changing a filter
 changes the query and refetches.
 
-The page is a consumer of three routes it does not own: `GET /api/v1/audit`,
-`GET /api/v1/mcp/invocations` (cross-server, each row naming its server) and
-`GET /api/v1/daemon/logs`. All three are spec mcp-gateway's, whose contract
-carries them — every REST route in the product is that spec's, and this one adds
-none. What this spec requires of them is only what the page needs: that the
-second and third exist as read-only, cross-cutting lanes, and that the daemon-log
-route is authenticated (the daemon router leaves `/status` open, and log
-contents are not status).
+The page is a consumer of three routes it does not own, and they have three
+different owners: `GET /api/v1/audit` is the resource framework's record,
+written for every kind; `GET /api/v1/mcp/invocations` (cross-server, each row
+naming its server) is spec mcp-gateway's; and `GET /api/v1/daemon/logs` is spec
+daemon's. This spec adds no route of its own — which is not the same claim as
+every route in the product belonging to whichever spec's UI came first. What
+the page needs of the three, and does not itself provide, is recorded under
+`## Assumptions`.
 
 `coffer audit` and `coffer mcp invocations` stay as they are — a script that
 read the log before this page existed still does.
@@ -208,7 +208,7 @@ A developer opens Settings and finds tabs grouped by what they manage, not by ho
 
 Coffer's model and Security are here because both configure Coffer ITSELF rather than anything served to an agent, and because both do something on a timer or at every start that the user should be able to see and change: a pass that rewrites their own files, and a key whose location decides what the OS asks for on every daemon launch. Neither is a daemon-status readout. The daemon remains an implementation detail — there is no "Daemon" tab and no read-only daemon-status panel, and a user never needs to know Coffer runs a background daemon.
 
-The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`. It MUST also expose a **preferred external editor** preference — the application Coffer uses when the user opens a managed file (or its containing folder) from a read-only file viewer. The default is the operating system's default application; the user MAY override it by **picking an editor the daemon detected as installed** (enumerated via `GET /api/v1/fs/editors`, spec agent-registry FR-039 — a browser can't list installed apps) or by entering a custom application / launch command. Like the other display preferences the chosen value is persisted in `localStorage` and never sent to the daemon (except transiently as the target when opening a file).
+The **General** tab MUST expose the default page-size preference (the rows-per-page every list table seeds from), persisted in `localStorage`. It MUST also expose a **preferred external editor** preference — the application Coffer uses when the user opens a managed file (or its containing folder) from a read-only file viewer. The default is the operating system's default application; the user MAY override it by **picking an editor the daemon detected as installed** (enumerated via `GET /api/v1/fs/editors`, spec daemon FR-TBD — see `## Assumptions`; a browser can't list installed apps) or by entering a custom application / launch command. Like the other display preferences the chosen value is persisted in `localStorage` and never sent to the daemon (except transiently as the target when opening a file).
 
 **Why this priority**: P2 — the underlying controls already function; this story is reorganisation and subtraction, not new capability. An unorganised Settings page is exactly the "feels like a scaffold" signal US2 fights, and the user flagged it as confusing.
 
@@ -393,6 +393,83 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 ---
 
+## Requirements
+
+### Functional Requirements
+
+**Information architecture**
+
+- **FR-001**: The sidebar MUST be grouped by role rather than on one axis: AGENTS for the consumers (the agents, and the chat held with one) and RESOURCES for the assets those agents draw on, with SYSTEM for the cross-cutting tooling. Agents are not a resource kind and MUST NOT be listed under Resources.
+- **FR-002**: Every scoped resource kind MUST have its own list surface, so the navigation and each list page carry no kind-specific branch.
+- **FR-003**: The sidebar MUST list only surfaces that have shipped. It MUST NOT carry "not yet implemented" placeholders; an entry leaves the sidebar when its feature does, and returns with it.
+- **FR-004**: The sidebar's entries MUST be exactly the ones listed under `## Information Architecture`, in those three groups and at those routes — eleven today, and no twelfth.
+- **FR-005**: RESOURCES MUST hold exactly one entry per resource kind that has a list UI — today six kinds, six entries.
+- **FR-006**: A surface MUST carry one name in every place it is named — sidebar, page header, welcome panel and dialogs — because a surface the user reaches two ways must not have two names.
+- **FR-007**: The sidebar MUST collapse to an icon-only rail and back, and that choice MUST persist across sessions (`localStorage`).
+
+**Routing**
+
+- **FR-008**: The app's index (`/`) MUST redirect to `/agents`. Agents live at `/agents` (list) and `/agents/:name` (detail), and MUST NOT appear in the `/mcp-servers` kind browser.
+- **FR-009**: The legacy paths `/resources` and `/mcp-servers/mcp_server/:name` MUST resolve as redirects rather than as a "page not found" view.
+
+**List and detail conventions**
+
+- **FR-010**: Every list surface MUST use one shared searchable, filterable, paginated table, and a row click MUST open that item's detail page.
+- **FR-011**: A row action MUST be an icon plus its label, never a bare icon — a bare icon reads as a different affordance from the labelled action beside it. Cards are reserved for welcome and empty states.
+- **FR-012**: Every detail page MUST lay its tabs out the same way as every other. What a tab shows belongs to the spec that owns that kind — the agent detail page's tabs are spec agent-registry FR-TBD's.
+
+**Reach control**
+
+- **FR-013**: Every list surface MUST carry a **reach** column: one button labelled with the answer it already holds — "Every agent", "2 agents", "Disabled", or "No agent selected" for a scope narrowed to nobody — so the reader learns the reach by reading it rather than by comparing which of three side-by-side segments looks pressed. Every detail page MUST carry the same button in its header.
+- **FR-014**: The button MUST open a panel where "who does this reach?" is a single choice between Disabled, Every agent and Only selected agents, the last over the scope's list of agents. A kind that declares no scope gets the same button over a two-choice Disabled / Enabled panel.
+- **FR-015**: The panel MUST stage its agent list and write exactly once, when it closes — the two whole-value choices close it themselves — so a panel that is opened and dismissed writes nothing, and no write can refetch the list and move the row the panel is anchored to.
+- **FR-016**: The reach control MUST be one component mounted in three places — the list row, the detail header and the multi-select bar — so the three can never drift into three different answers to one question.
+- **FR-017**: A multi-select MUST apply that same choice to the whole selection. A bulk write is a new intent, so its button reads "Set reach…" and its panel opens with nothing chosen rather than on any one row's value, and a row that fails MUST be reported in the batch's one summary rather than silently skipped. Delete stays its own button beside it.
+- **FR-018**: The list's reach filter MUST offer the same states the panel does, rather than a bare enabled / disabled pair, and the column, the filter and the button MUST all use the word *reach*, because they are all asking the one question.
+
+**First run, empty, loading and error states**
+
+- **FR-019**: No surface may render a blank page, or a generic error, where a next action exists. Empty, loading and error states are first-class on every surface, not an afterthought on some of them.
+- **FR-020**: No view may show the literal text "unexpected error" or `INTERNAL_ERROR`.
+- **FR-021**: A list with nothing in it MUST render a welcome card — a short pitch and one primary action — and MUST NOT render an empty table or a placeholder ghost row.
+- **FR-022**: When the daemon cannot be reached at all, the app MUST render a "Daemon not running" view naming the one recovery its host can actually offer, and the sidebar MUST stay visible so the user can orient themselves.
+- **FR-023**: When an authenticated request fails to connect while the app is open, a daemon-offline banner MUST render above the workspace, naming the recovery the host can offer — in a browser the `coffer daemon start` command, in the desktop shell a Restart control, because only one of the two can spawn a daemon. The banner MUST clear itself once the daemon is reachable again, with no manual page reload.
+
+**Visual language**
+
+- **FR-024**: Every surface MUST be expressed in one visual language — a distinct typographic hierarchy and consistent spacing, drawn from the shared design tokens rather than restated per screen.
+
+**MCP surfaces**
+
+- **FR-025**: An MCP server's detail page MUST open on a primary "what is this server doing?" Overview, before the per-capability toggles.
+- **FR-026**: The Tools, Resources and Prompts tabs MUST be uniform — each carrying the same search box, status filter and per-row enable toggle — and MUST keep that chrome even when the upstream exposes none of that kind, rendering the empty state inside the table rather than as a bare card.
+- **FR-027**: "Add MCP server" MUST be a modal that takes the standard `mcpServers` JSON block, one server or many at once, with a review step where the user confirms which `env` values are secrets. Secrets MUST be lifted into the encrypted credential store with only their refs kept in the resource config, and the server MUST be registered before its secrets are written, so a failed registration leaves no orphan credential entry.
+- **FR-028**: A payload that is not valid JSON, or a valid JSON document that does not match the `mcpServers` shape, MUST keep the dialog open with a readable error — the parse location, or the failing field — and MUST NOT send a request.
+- **FR-029**: A server's **Invocations** tab MUST render the same table Activity's MCP calls tab renders, scoped to that one server, rather than a second table that would have to be kept in step with the first.
+
+**Activity**
+
+- **FR-030**: The three records Coffer keeps MUST reach a person through one page at `/activity`, under System, carrying one tab per record — Changes, MCP calls, Daemon — each a newest-first table with the columns that record actually has.
+- **FR-031**: Every Activity tab MUST filter by free text and time range plus the one filter its own record affords (actor, call status, errors only), and any row MUST expand to its raw underlying record, pretty-printed in a monospace, scrollable block.
+- **FR-032**: Only the visible tab queries. A record whose route fails MUST render its error inside its own tab, leaving the other two working, and there MUST be no manual refresh control — switching tab or changing a filter is what refetches.
+- **FR-033**: The Activity page MUST add no route of its own: each tab reads the read-only route belonging to whichever spec owns that record. What those routes guarantee is recorded under `## Assumptions`, not required here.
+- **FR-034**: Bringing the three records onto one page MUST NOT change or withdraw the command-line readers — `coffer audit` and `coffer mcp invocations` keep working as they are, so a script that read a record before this page existed still does.
+- **FR-035**: Event types MUST render as plain-language activity lines ("Enabled demo-fs") in both locales, guarded the way error codes are: a new event type with no string fails CI rather than showing a reader a raw `resource_enabled`.
+- **FR-036**: The legacy `/audit` and `/observability` paths MUST redirect to `/activity` rather than resolving to a "page not found" view.
+
+**Settings**
+
+- **FR-037**: Settings MUST carry exactly five tabs, in this order — General, Coffer's model, Data, Security, About — and MUST open on General. Clicking a tab swaps the right pane without a full page reload.
+- **FR-038**: The General tab MUST expose the default page-size preference — the rows-per-page every list table seeds from — persisted in `localStorage`.
+- **FR-039**: The General tab MUST also expose a **preferred external editor**: the application Coffer uses when the user opens a managed file, or its containing folder, from a read-only file viewer. The default is the operating system's default application; the user MAY override it by picking an editor the daemon detected as installed (a browser cannot list installed applications — spec daemon FR-TBD) or by entering a custom application or launch command. Like the other display preferences the value is persisted in `localStorage` and never sent to the daemon, except transiently as the target when opening a file.
+- **FR-040**: The Data tab MUST carry the retention policy per log table — Keep forever, or a number of days — and a manual prune, with a saved value surviving a reload.
+- **FR-041**: The daemon MUST NOT be surfaced as a user-facing concept: there is no Daemon tab and no read-only daemon-status panel, and a user never needs to know Coffer runs a background daemon.
+- **FR-042**: No tab may expose a "Shutdown daemon" or "Rotate token" control — both belong on the CLI — and the About tab shows version, license and source only, with no language picker and no installed-resource-kind list.
+
+**Internationalisation**
+
+- **FR-043**: The sidebar MUST carry the English / 中文 switcher, so it is reachable from every screen. Every sidebar label, page title and form label MUST switch on the very next render, with no full page reload, and the choice MUST persist in `localStorage` under `coffer.language`.
+
 ## Success Criteria
 
 - Every scenario above has at least one covering test (unit, integration, or e2e) and `scripts/audit_acceptance.py` passes for this spec alongside the others.
@@ -401,3 +478,10 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 - The three records Coffer keeps — the audit log, the MCP invocation log and the daemon log — reach a person through one page at `/activity`, a tab and a table each, and an agent through one call to `coffer__diagnose`, which returns them joined; `/audit` and the legacy `/observability` URL redirect there rather than 404ing. Scripts keep `GET /api/v1/audit` / `coffer audit` and `coffer mcp invocations`. Observability (system health / metrics) is a reserved future surface, and is not this.
 - Settings groups data controls (retention and prune) under a Data tab; the daemon is never surfaced as a user-facing concept, and no tab exposes a shutdown or token-rotation control.
 - `make verify` + `make verify-e2e` are green.
+
+## Assumptions
+
+- **Each Activity tab's route belongs to the spec that owns that record, and this page only reads it.** The audit log is the resource framework's own record, written for every kind (see [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md)); the cross-server MCP invocation log is spec mcp-gateway's; the daemon log is spec daemon's. Three owners, not one — this spec adds no REST route, which is a different statement from every route belonging to whichever spec's UI came first. What the page needs of those routes, and does not itself provide: that the invocation and daemon-log routes exist as read-only, cross-cutting lanes, and that the daemon-log route is authenticated (the daemon router leaves `/status` open, and log contents are not status).
+- **Normalising the daemon log onto one field set is spec daemon's work, not this page's.** The Daemon tab's columns only exist because every writer in `daemon.log` — Coffer's own structlog JSON, the stdlib formatter, uvicorn, rich, and the cloudflared child's zerolog — is normalised onto the same fields before it reaches the page, escape sequences are stripped, a traceback rides with the record that raised it, and a line no format fits is kept whole rather than dropped. That reading happens in the log route, on the daemon's side of the wire, and spec daemon owns it. This spec assumes it and renders what it is given; the Daemon-tab scenario under `## Acceptance Scenarios` still guards the result end to end.
+- **Correlating the three records for an agent is `coffer__diagnose`'s job, not this page's.** The page deliberately never joins them — that is what made the merged-timeline attempt fail. An agent that asks "what happened" gets the audit entries and the log records already joined, newest first and with no secret values, from the built-in tool under the reserved `coffer__` prefix (spec mcp-gateway). This spec assumes the tool; it specifies nothing about it, and the scenario under `## Acceptance Scenarios` is kept because it guards the pairing a reader of this page depends on.
+- **Three outbound citations are placeholders.** `FR-TBD` marks a requirement in another spec whose id is being reassigned by the same restructure that gave this spec its ids. Two are in this file: the agent detail page's tabs (FR-012, spec agent-registry) and the installed-editor enumeration behind `GET /api/v1/fs/editors` (FR-039, spec daemon, which is where the filesystem-action endpoints now live). The third is in [`quickstart.md`](./quickstart.md), where the daemon's fixed-port refusal was cited as a bare `FR-028`. All three must be replaced with real ids once those specs settle; a wrong number would be worse than a visible gap.

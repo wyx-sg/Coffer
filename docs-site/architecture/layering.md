@@ -86,7 +86,7 @@ Both are run on every PR. The combination means that any import that violates th
 
 ## Code layout (ADR code-layout-layer-first)
 
-The layer-first layout is specified by [Layer-First Code Layout](/reference/adr/code-layout-layer-first). The full directory tree:
+The full directory tree:
 
 ```
 backend/coffer/
@@ -163,7 +163,7 @@ A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `inf
 
 ### Why layer-first, not feature-first (vertical slices)?
 
-The [Layer-First Code Layout](/reference/adr/code-layout-layer-first) ADR considered and rejected the vertical-slice alternative — a `kinds/` top-level directory where each kind would contain its own `domain/`, `application/`, `infrastructure/`, and `surfaces/` subtree.
+The layer-first decision considered and rejected the vertical-slice alternative — a `kinds/` top-level directory where each kind would contain its own `domain/`, `application/`, `infrastructure/`, and `surfaces/` subtree.
 
 The rejection rests on three observations:
 
@@ -208,7 +208,3 @@ graph TD
 ```
 
 Cross-kind imports within a layer are also forbidden: `domain/mcp/` may not import `domain/some_other_kind/`, and vice versa.
-
----
-
-**See also:** [Code layout — layer-first](/reference/adr/code-layout-layer-first), [Architecture reference](/reference/project/architecture)

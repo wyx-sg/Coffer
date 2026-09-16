@@ -7,7 +7,7 @@ tools). KB tools (no ``cwd`` property) are left untouched. The gateway never
 special-cases the memory kind — it dispatches generically off the schema.
 
 The agent identity is the exception to "opt in by schema": it is the basis of
-per-agent scope (spec mcp-gateway FR-020/FR-021), so every built-in call
+per-agent scope (spec mcp-gateway FR-012/FR-013), so every built-in call
 carries the SESSION's identity and never the client's — whatever the client
 put under ``agent`` is dropped before the tool sees the arguments.
 """
@@ -48,7 +48,7 @@ async def test_initialize_without_meta_leaves_cwd_none():
 
 @pytest.mark.asyncio
 async def test_initialize_captures_agent_from_meta():
-    """MCP Gateway FR-021 (amended): the shim's self-reported agent identity rides
+    """MCP Gateway FR-013 (amended): the shim's self-reported agent identity rides
     the same ``_meta`` extension bag as the launch cwd."""
     session = _session_with(BuiltinToolRegistry())
     await session.handle_initialize(

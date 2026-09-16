@@ -60,7 +60,7 @@ async def open_conversation(
     thread_id: str = "",
 ) -> str:
     """Create a conversation from this thread's sticky choices + channel
-    defaults (resolver) and make it the thread's active conversation (FR-032).
+    defaults (resolver) and make it the thread's active conversation (FR-033).
 
     Conversation identity is per ``(resource_id, chat_id, thread_id)`` — a DM
     (``thread_id=""``) and each group thread open independently, so concurrent

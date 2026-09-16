@@ -31,8 +31,8 @@ from coffer.surfaces.shim.main import _Bridge, _parse_args
 
 
 def test_inject_meta_stamps_cwd_and_agent(monkeypatch):
-    """FR-004: the shim reports its launch cwd at the initialize handshake so
-    the daemon can resolve the per-project memory store. MCP Gateway FR-021
+    """spec mcp-gateway FR-004: the shim reports its launch cwd at the initialize handshake so
+    the daemon can resolve the per-project memory store. spec mcp-gateway FR-013
     (amended): when a ``--agent`` name is known, it rides the same ``_meta``
     bag under ``coffer/agent``."""
     monkeypatch.setattr("os.getcwd", lambda: "/work/my-repo")

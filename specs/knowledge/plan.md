@@ -24,7 +24,7 @@ One entrance exists beside the filesystem. A document — a PDF, a docx, a
 spreadsheet — is uploaded from the Knowledge page or forwarded to a Coffer
 channel, converted to Markdown, and lands in a collection indistinguishable
 from a file written by hand, with the original kept under a hidden `.raw/`
-(FR-033…FR-037). It is an additional entrance and never a required one:
+(FR-022…FR-026). It is an additional entrance and never a required one:
 dropping a Markdown file in the directory is still a complete way in.
 
 What this layer does NOT hold — no index of any kind, no storage lanes, no
@@ -37,8 +37,8 @@ the reasoning. The ADR carries the audit of the live installation behind it.
 | Dimension | Value |
 | --- | --- |
 | **Language / Version** | Python 3.12+, TypeScript 5.x |
-| **Primary dependencies added by this spec** | `PyYAML` (frontmatter); `ripgrep` on `PATH` (preferred, not required — FR-022 has a pure-Python fallback); and `markitdown` for document conversion, whose only two consumers are this layer and the channel's media path, held there by an importlinter contract. No index or embedding library of any kind (FR-080). |
-| **Storage** | Markdown files under `~/.coffer/knowledge/<collection>/`. **No database table** (FR-081): a collection is a row in the kind-agnostic `resources` table like every other Resource. |
+| **Primary dependencies added by this spec** | `PyYAML` (frontmatter); `ripgrep` on `PATH` (preferred, not required — FR-014 has a pure-Python fallback); and `markitdown` for document conversion, whose only two consumers are this layer and the channel's media path, held there by an importlinter contract. No index or embedding library of any kind (FR-037). |
+| **Storage** | Markdown files under `~/.coffer/knowledge/<collection>/`. **No database table** (FR-038): a collection is a row in the kind-agnostic `resources` table like every other Resource. |
 | **Testing** | 4-tier model with acceptance markers. No fake embedding provider is needed, because nothing embeds. |
 | **Constraints** | Path construction confined to one module; hidden entries unaddressable; no module may import an index, embedding or conversion library. |
 | **Scale** | Single user; a corpus small enough that a catalogue fits in an agent's context — roughly 40 tokens an entry, so hundreds of files are comfortable and thousands are not. |
@@ -53,6 +53,18 @@ file tree, frontmatter, the ripgrep adapter and the converters. PyYAML lives onl
 `infrastructure/knowledge/frontmatter.py`, `markitdown` only in
 `infrastructure/knowledge/converters/`, and path construction only in
 `infrastructure/knowledge/paths.py`.
+
+**The fence between this layer and memory is asymmetric, on purpose.** Two
+`forbidden` import-linter contracts in `backend/pyproject.toml` hold it. This
+layer's contract names all five memory modules, so nothing here reaches into
+memory at all. Memory's contract names only this layer's **facade** —
+`application/knowledge`, its HTTP routes and its CLI group — and deliberately
+leaves `domain/knowledge` and `infrastructure/knowledge` importable, because
+path layout, frontmatter parsing and the ripgrep wrapper are substrate every
+kind may use. Memory's contract also carries two recorded `ignore_imports`
+waivers for the agent vocabulary its readers share; this layer's carries none.
+Neither contract is a summary of the other, so reading one and assuming the
+other is symmetric gets the boundary wrong.
 
 ## Project Structure
 
@@ -120,9 +132,9 @@ frontend/src/
 - **MCP — six tools**: `list`, `grep`, `read`, `search`, `write`, `delete`.
   None takes a
   `scope`, a `mode`, a `top_k` or a `cwd`; a call spans every collection the
-  session's agent identity is authorized for (FR-012, FR-024). Upload is
+  session's agent identity is authorized for (FR-009, FR-016). Upload is
   deliberately not among them — a document enters through a human surface
-  (FR-040).
+  (FR-027).
 - **HTTP — ten routes** under `/api/v1/knowledge`: list and create
   collections, `GET /tree`, `GET`/`PUT`/`DELETE /file`, `GET /grep`,
   `POST /search`, `POST /upload`, and
@@ -130,7 +142,7 @@ frontend/src/
   `DELETE /api/v1/resources/knowledge/{name}` — a collection's lifecycle is a
   Resource's. See [`contracts/api.openapi.yaml`](./contracts/api.openapi.yaml).
 - **CLI — ten commands**: `collections`, `create`, `ls`, `read`, `write`,
-  `delete`, `grep`, `search`, `upload`, `organize`.
+  `delete`, `grep`, `search`, `upload`, `tidy`.
 - **UI**: one tree, read-only preview, upload into the collection in view, and
   open-in-editor and reveal on a file and
   its folder ([Daemon Proxies File Actions](../../docs/decisions/daemon-proxies-os-file-actions.md)).
@@ -139,7 +151,7 @@ frontend/src/
   [skill-manager](../skill-manager/spec.md)). Idempotent — the bundled folder is
   re-imported every boot, so an edit ships with the next daemon start and a
   user who deleted the skill gets it back. No hook, no session injection, no
-  write into any agent's memory files (FR-042).
+  write into any agent's memory files (FR-029).
 
 ## Tidy
 
@@ -157,14 +169,15 @@ boot, then on an interval, a failing pass logged without killing the loop — bu
 every tick it asks `internal_engine_config` three questions: is
 `auto_tidy_enabled` on (**default false**), does `tidy_owner_machine_id` name
 this machine (null means a single-machine vault, where here is the only answer),
-and is a converge round waiting on the user (FR-054). The default is the point
+and is a converge round waiting on the user (spec
+[vault-sync](../vault-sync/spec.md)). The default is the point
 rather
 than caution: the pass rewrites files a human and an agent manage together with
 no diff to approve, so an unattended rewriter should be something the operator
-switched on, never something they discover running (FR-051). Only one pass per
+switched on, never something they discover running (FR-031). Only one pass per
 collection runs at a time, whoever asked: a manual trigger arriving mid-pass is
 refused (`UPKEEP_ALREADY_RUNNING`, 409) and the worker skips that collection
-rather than waiting behind it (FR-056).
+rather than waiting behind it (FR-033).
 
 ## Migration
 
@@ -172,7 +185,8 @@ One revision, `0066_knowledge_is_plain_files`, and **the order is the whole
 point**. A document's title lived only in `documents.title`, so `upgrade` runs
 the on-disk rewrite first — reading the rows it is about to destroy — and only
 then drops eleven tables, each drop guarded so a database missing any of them
-still upgrades (FR-070, FR-071). `downgrade` raises: the ULID names and the
+still upgrades — recorded in the spec's Migration history rather than as a
+requirement, because it has run and cannot run again. `downgrade` raises: the ULID names and the
 `.raw/` copies cannot be reconstructed, and no compatibility shim is left behind
 anywhere. Details in [`data-model.md`](./data-model.md).
 
@@ -184,7 +198,7 @@ anywhere. Details in [`data-model.md`](./data-model.md).
 | **Tidy rewrites a jointly managed artifact with no review step.** Nothing diffs the output before it lands. | `.history/` is the entire safety net, and the worker ships off by default so the human stays in the loop until they decide otherwise. |
 | **Ranking is the agent's problem.** A broad grep over a large corpus returns many matches. | The catalogue keeps it tractable, which puts real weight on file names and `description` lines — hence `description` being required. |
 | **Migration is destructive and one-way.** | Deliberate. Titles are written into file names and frontmatter *before* the tables are dropped; there is no second chance and no shim. |
-| **Per-agent authorization is a convention, not a security boundary.** An agent with shell tools can read any file under the root. | Stated as such on every surface (FR-014). Real isolation would need a separate vault or filesystem permissions, and is out of scope. |
+| **Per-agent authorization is a convention, not a security boundary.** An agent with shell tools can read any file under the root. | Stated as such on every surface (FR-011). Real isolation would need a separate vault or filesystem permissions, and is out of scope. |
 | **Whether a delivered skill actually makes agents reach for the layer is unproven.** Tool descriptions demonstrably did not. | It is a hypothesis with evidence behind it — the `coffer-*` skills Coffer already delivers are natively discovered — and it is cheap to verify: the invocation log records every knowledge call, so a week of ordinary work answers it with no new instrumentation. |
 
 ## Out of scope
@@ -193,7 +207,7 @@ anywhere. Details in [`data-model.md`](./data-model.md).
   reindex, lazy reindex-on-read.
 - Re-converting an ingested original on a schedule, tracking it as an external
   source, or locking it against edits. The original is kept under `.raw/` so a
-  bad conversion can be redone by hand (FR-035) and for nothing else.
+  bad conversion can be redone by hand (FR-024) and for nothing else.
 - Any derived boundary: cwd-resolved scopes, auto-provisioning,
   `project-<ULID>` naming, git-root resolution.
 - An in-app editor. The UI renders; the user's own editor edits.
@@ -204,5 +218,7 @@ anywhere. Details in [`data-model.md`](./data-model.md).
   [vault-sync](../vault-sync/spec.md) converges the vault bidirectionally with a
   git remote the user owns — but nothing in this layer knows about it. What this
   layer owes that mechanism is one rule: an unattended rewriter runs on exactly
-  one machine (FR-053), because two machines merging the same notes produce two
-  different topic documents that git merges cleanly.
+  one machine, because two machines merging the same notes produce two different
+  topic documents that git merges cleanly. The rule itself is spec
+  [vault-sync](../vault-sync/spec.md)'s — it holds across every tree that layer
+  syncs, not for this one alone.

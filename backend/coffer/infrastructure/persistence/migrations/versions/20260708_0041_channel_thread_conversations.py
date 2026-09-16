@@ -9,7 +9,8 @@ to a per-thread binding keyed ``(resource_id, chat_id, thread_id)``. A DM (or a
 group's main chat) is ``thread_id=""``; each thread in a group is its own row
 with its own active conversation and its own sticky agent — so concurrent turns
 in different threads never collide on one conversation ("a turn is already
-running"), and one bot can run different agents in different threads (FR-040).
+running"), and one bot can run different agents in different threads (spec
+channels FR-028).
 
 Pairing/owner identity stays on ``channel_peers``. Every existing peer's active
 conversation + sticky agent are backfilled into the new table as its

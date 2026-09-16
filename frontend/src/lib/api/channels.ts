@@ -5,7 +5,7 @@
 // Wire types are the channels contract's generated schemas
 // (`specs/channels/contracts/api.openapi.yaml` → `generated/channels.ts`),
 // re-exported under the names the hooks and pages already import. Transport is
-// the shared `call` (agents/frontend.md §4).
+// the shared `call` (.agents/frontend.md §4).
 
 import { call, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/generated/channels";

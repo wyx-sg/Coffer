@@ -1,7 +1,7 @@
 """The channel command roster — one source for the help text, the dispatch
 switch, and the platform's own command menu.
 
-FR-065: a command the help text offers but the registered menu omits is a
+FR-050: a command the help text offers but the registered menu omits is a
 drift bug, not a design choice. Both are derived from :data:`COMMAND_ROSTER`
 here, so they cannot disagree; a new command is one tuple entry plus its
 handler branch.
@@ -30,7 +30,7 @@ class ChannelCommand:
     #: One line, ≤ 256 characters — used verbatim both in the help text and as
     #: the platform menu's description.
     description: str
-    #: FR-064: the answer is for the asker alone, so in a group it is delivered
+    #: FR-049: the answer is for the asker alone, so in a group it is delivered
     #: privately where the transport can (Telegram ephemeral messages) rather
     #: than announced to the room. ``/new`` and ``/stop`` change shared state
     #: and stay visible; the rest are the asker's own business.
@@ -56,7 +56,7 @@ def names() -> frozenset[str]:
 
 def is_group_private(command: str) -> bool:
     """Whether ``command`` (typed form, e.g. ``"/status"``) answers the asker
-    alone rather than the room (FR-064). An unknown command is private: an
+    alone rather than the room (FR-049). An unknown command is private: an
     "unknown command" scolding is the least useful thing to broadcast."""
     wanted = command.lstrip("/").lower()
     for entry in COMMAND_ROSTER:

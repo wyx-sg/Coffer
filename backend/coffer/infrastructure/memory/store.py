@@ -1,9 +1,9 @@
 """Reads and writes one partition's fact files.
 
 Every fact is one Markdown file: a YAML frontmatter block carrying everything
-structured about it, then the source's own words underneath (FR-020, FR-021).
+structured about it, then the source's own words underneath (FR-013, FR-014).
 The whole tree this module writes is derived and can be deleted and rebuilt
-from the agents' native memory at any time (FR-023) — which only holds if a
+from the agents' native memory at any time (FR-016) — which only holds if a
 fact that goes through this module comes back exactly as it went in. That is
 why the frontmatter split/render here does not trim or reflow the body the
 way ``infrastructure/knowledge/frontmatter.py`` does: knowledge's files only
@@ -162,7 +162,7 @@ def list_facts(partition: str) -> tuple[Fact, ...]:
 
 def list_partitions() -> tuple[str, ...]:
     """Every partition directory present on disk, ``global`` included when it
-    exists — this module creates none of them itself (FR-013: aggregation
+    exists — this module creates none of them itself (FR-011: aggregation
     creates partitions, not this substrate)."""
     root = paths.memory_root()
     if not root.is_dir():
@@ -193,7 +193,7 @@ def clear_facts(partition: str) -> None:
 
 
 def write_readme(partition: str, project_root: str) -> None:
-    """Say what this partition is, restating its project root (FR-011).
+    """Say what this partition is, restating its project root (FR-009).
 
     ``global`` is not a project, so it gets a fixed description of what it
     holds instead of a root to name — ``project_root`` is accepted for every

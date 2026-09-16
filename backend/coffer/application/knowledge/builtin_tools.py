@@ -1,7 +1,7 @@
 """The knowledge layer's six built-in MCP tools.
 
 ``list``, ``grep``, ``read``, ``search``, ``write``, ``delete`` — registered
-under the reserved ``coffer__`` prefix the gateway adds (spec knowledge FR-040).
+under the reserved ``coffer__`` prefix the gateway adds (spec knowledge FR-027).
 
 The motion these tools are shaped around is **catalogue, then grep**, with
 ``search`` for the case that motion cannot serve. ``list`` walks the directory
@@ -10,15 +10,14 @@ descriptions; ``grep`` finds *which line* once it knows where to look;
 ``search`` answers when the agent cannot afford the catalogue or has no exact
 words to grep for. The three are deliberately not modes of one tool — an agent
 picks by what it knows, not by a flag — and none of them takes a scope,
-because a call spans every collection the agent is authorized for (FR-012).
+because a call spans every collection the agent is authorized for (FR-009).
 That authorization is the only argument the layer resolves for itself:
 the gateway writes the session's handshake identity into every call as
-``agent``, an argument no tool advertises and no caller can set (spec
-mcp-gateway FR-021).
+``agent``, an argument no tool advertises and no caller can set (spec mcp-gateway FR-013).
 
-``search`` never fails for want of an index: with no internal connection
-configured it answers literally and says so (FR-027), so an agent may always
-reach for it.
+``search`` never fails for want of an index: there is none, and no connection
+behind it either — it matches literally over the files at call time (spec
+knowledge FR-018), so an agent may always reach for it.
 """
 
 from __future__ import annotations
@@ -163,7 +162,7 @@ def register_knowledge_builtin_tools(
         written = await svc.write(
             title=_required(args, "title"),
             description=_required(args, "description"),
-            # Optional, matching the REST surface and FR-030: a file whose
+            # Optional, matching the REST surface and FR-019: a file whose
             # whole content is its title and description is a legitimate
             # thing to write, and rejecting it would be a rule only one of
             # the two write surfaces had.

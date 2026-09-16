@@ -136,7 +136,7 @@ ORIGIN_HEADER = "[Message origin]"
 
 
 def turn_body(text: str) -> str:
-    """The user's own text from a turn prompt, with the FR-042 origin block
+    """The user's own text from a turn prompt, with the FR-035 origin block
     stripped.
 
     Every turn now opens with a provenance block; tests about queueing,
@@ -237,7 +237,7 @@ class FakeChannelAdapter:
             supports_groups=supports_groups,
             supports_history_fetch=supports_history_fetch,
             supports_reactions=supports_reactions,
-            # FR-070: how this transport spells an @mention, if it can at all.
+            # FR-055: how this transport spells an @mention, if it can at all.
             # Shaped like SeaTalk's tag in the tests that set it; "" is the
             # Telegram-shaped default, where a reply carries no mention.
             mention_template=mention_template,
@@ -249,7 +249,7 @@ class FakeChannelAdapter:
             # a transport that never gained the group call.
         )
         # When True, ``set_reaction`` raises — proves the best-effort suppression
-        # at the call sites (a failed ack must never break the turn) (FR-036).
+        # at the call sites (a failed ack must never break the turn) (FR-038).
         self._set_reaction_fails = set_reaction_fails
         self.started = False
         self.stopped = False
@@ -259,13 +259,13 @@ class FakeChannelAdapter:
         # full routing detail, kept separate so every existing ``.sent``/
         # ``.texts()`` assertion above stays a plain 2-tuple.
         self.sent_routed: list[tuple[str, str, str, str]] = []
-        # FR-068: the reply target of each send_text, positionally aligned with
+        # FR-053: the reply target of each send_text, positionally aligned with
         # ``sent`` ("" when the send answered nothing in particular).
         self.sent_reply_targets: list[str] = []
         #: The EphemeralTarget of each send_text, positionally aligned with
         #: ``sent`` (None when the answer was said out loud).
         self.sent_ephemeral: list[Any] = []
-        # FR-067/chat action: what each send_typing claimed to be doing.
+        # spec channels/telegram FR-014/chat action: what each send_typing claimed to be doing.
         self.typing_actions: list[str] = []
         # (chat_id, text, buttons) for sends that carried a selection card.
         self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
@@ -281,7 +281,7 @@ class FakeChannelAdapter:
         # routing detail, kept separate so existing ``.typing`` assertions stay
         # a plain list of chat ids (mirrors ``sent_routed``).
         self.typing_routed: list[tuple[str, str, str]] = []
-        # (chat_id, message_id, emoji) for every set_reaction call (FR-036).
+        # (chat_id, message_id, emoji) for every set_reaction call (FR-038).
         self.reactions: list[tuple[str, str, str]] = []
         # (chat_id, path, caption, as_photo) for each uploaded file.
         self.media: list[tuple[str, str, str | None, bool]] = []
@@ -292,7 +292,7 @@ class FakeChannelAdapter:
         # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
         # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
         self.thread_items: list[ForwardedItem] = []
-        # Scriptable thread-history attachments (FR-029) — the images/files the
+        # Scriptable thread-history attachments (FR-030) — the images/files the
         # thread's own messages carry, already downloaded; unset yields ``()``.
         self.thread_attachments: tuple[InboundAttachment, ...] = ()
         # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
@@ -303,7 +303,7 @@ class FakeChannelAdapter:
         # with ``fetch_thread_calls`` — a DM thread reads a different endpoint
         # from a group one, so the kind the core passed is worth asserting.
         self.fetch_thread_kinds: list[str] = []
-        # FR-037: every live-text handle the core opened this session, and the
+        # FR-039: every live-text handle the core opened this session, and the
         # switch that makes the transport refuse to open one.
         self.live_handles: list[FakeLiveText] = []
         self.live_text_unavailable = False
@@ -344,11 +344,11 @@ class FakeChannelAdapter:
         reply_to_message_id: str = "",
         ephemeral: Any = None,
     ) -> SentMessage:
-        # FR-064: which sends were addressed to one member of the group only.
+        # FR-049: which sends were addressed to one member of the group only.
         self.sent_ephemeral.append(ephemeral)
         self.sent.append((chat_id, markdown))
         self.sent_routed.append((chat_id, markdown, thread_id, chat_kind))
-        # FR-068: what each send pointed back at, so a test can assert a group
+        # FR-053: what each send pointed back at, so a test can assert a group
         # reply is attached to the message it answers.
         self.sent_reply_targets.append(reply_to_message_id)
         if buttons:
@@ -432,7 +432,7 @@ class FakeChannelAdapter:
 
 
 class FakeLiveText:
-    """The fake's live surface (FR-037), shaped like Telegram's: the first
+    """The fake's live surface (FR-039), shaped like Telegram's: the first
     update sends a message, later ones edit it, and closing deletes it and hands
     the whole final text back for the ordinary send path."""
 
@@ -504,8 +504,8 @@ class FakeModelSuggestions:
 
 @dataclass
 class FakeIngestedDocument:
-    """Duck-typed stand-in for the real ``IngestedDocument`` (spec knowledge
-    FR-036) — only the two attributes `/save`'s confirmation message reads."""
+    """Duck-typed stand-in for the real ``IngestedDocument`` (spec channels FR-014) — only the two
+    attributes `/save`'s confirmation message reads."""
 
     path: str
     title: str
@@ -814,7 +814,7 @@ class ChannelEnv:
         self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
     ) -> str | None:
         """The conversation a turn drives for this ``(chat, thread)`` — the
-        per-thread binding (FR-032), which replaced ``peer.active_conversation_id``
+        per-thread binding (FR-033), which replaced ``peer.active_conversation_id``
         as the source of truth."""
         row = await self.threads.get(resource.id, chat_id, thread_id)
         return row.active_conversation_id if row is not None else None

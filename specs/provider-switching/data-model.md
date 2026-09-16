@@ -1,8 +1,9 @@
 # Data Model — Provider Switching
 
 Entities, fields, and reuse anchors for the provider registry.
-Depends on the agent kind from spec agent-registry and the kind-agnostic
-Resource framework from spec mcp-gateway.
+Depends on the agent kind and its config-file store from spec
+[agent-registry](../agent-registry/spec.md), on the Fernet vault from spec
+credentials, and on the kind-agnostic Resource framework.
 
 ## Domain entities (`backend/coffer/domain/provider/`)
 
@@ -76,9 +77,11 @@ pre-fills. Nothing infers at load time: a stored entry is taken as written.
 ### `ResolvedConnection` (`domain/provider/config.py`)
 
 A frozen dataclass pairing a `ProviderConfig` with the `model` to run on it.
-Since the model lives apart from the connection, the two travel together when
-the internal engine builds a chat model: `resolve_internal_connection()` returns
-one (or `None`), and `build_chat_model(resolved, resolver)` consumes it.
+The model lives apart from the connection, so the two travel together whenever a
+caller needs both. Its one consumer is Coffer's own engine, which does the
+pairing and builds a chat model from the result (spec
+[internal-engine](../internal-engine/spec.md)); this kind only declares the
+value object.
 
 ### Errors (`domain/provider/errors.py`)
 
@@ -144,37 +147,20 @@ pointer is dropped before the file is deleted, so Codex never reads a
 `model_catalog_json` path that is not there. The pointer is removed only when it
 names the Coffer-owned filename.
 
-### Internal engine (`application/provider/`, `infrastructure/chat/`)
+### The internal-engine default flag (`application/provider/`)
 
-- `set_internal_default(name)` — clears the flag on every other connection then
-  sets it on the target (serialised by the single-process daemon); emits
-  `provider_internal_default_set`. When the connection actually moves it also
-  clears the internal-engine model unless the newly chosen connection curates
-  that id.
-- `resolve_internal_connection() -> ResolvedConnection | None` — pairs the
-  flagged connection with the global internal-engine model. `None` when no
-  connection is flagged OR no model is set; there is no fallback to a model on
-  the connection, because it carries none.
-- `build_chat_model(resolved, ...)` — dispatched by `protocol` (anthropic /
-  openai / ollama) to build the engine's chat model.
+`set_internal_default(name)` clears the flag on every other connection then sets
+it on the target (serialised by the single-process daemon), emits
+`provider_internal_default_set`, and notifies the engine that the connection
+moved. `internal_default` is a field on the provider row and the partial unique
+index `ux_provider_single_internal_default` is over the provider table, which is
+why both are here.
 
-#### `GlobalInternalEngineConfig` (`domain/internal_engine_config.py`)
-
-The internal engine's model and its unattended passes are one global singleton
-(one row, fixed `SINGLETON_ID = 1`), decoupled from the connection.
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `model` | `str \| None` | The model Coffer's own passes run on; `None` until chosen. |
-| pass switches / intervals | per pass | Aggregation, organise and tidy each carry a switch and an interval; an interval the operator has not chosen is reported as unchosen alongside the default that runs. |
-| `updated_at` | `datetime` | Last write. |
-
-`InternalEngineConfigService.get()` returns the row or an unset default;
-`.update(...)` normalises empty → `None`, persists, and emits
-`internal_engine_model_set`. Stored by
-`SqlAlchemyInternalEngineConfigRepo` (table `internal_engine_config`) and
-exposed over `GET` / `PUT /api/v1/internal-engine-config` and
-`PUT /api/v1/internal-engine-config/upkeep`.
+What the flagged connection is USED for — the model paired with it, the chat
+model built from the pair, the settings row, and the rule that drops a model the
+new connection does not curate — is spec
+[internal-engine](../internal-engine/spec.md). Nothing about that row is stored,
+read or migrated by this kind.
 
 ## Reuse anchors
 
@@ -192,8 +178,8 @@ All implementation MUST reuse these existing components; do not re-implement.
 
 | Component | Path | Used for |
 |---|---|---|
-| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write + `.bak` (rotating `.bak.1` / `.bak.2`) |
-| `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection; retiring the Codex catalogue |
+| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write + `.bak` (rotating `.bak.1` / `.bak.2`) — spec agent-registry FR-017 |
+| `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection (spec agent-registry FR-036); retiring the Codex catalogue |
 | `spec_for` / `config_files_for` | `backend/coffer/domain/agent/config_files.py` | resolve the canonical path for an `AgentType` + key |
 | `AgentType` descriptors | `backend/coffer/domain/agent/descriptor.py` | `claude_code` `settings` → `~/.claude/settings.json`; `codex` `config` → `~/.codex/config.toml` |
 
@@ -266,7 +252,6 @@ curated set, `0063` took it back off, and `0061` forced the agent binding's
 | `provider_switched` | a successful `POST /providers/{name}/activate` or `POST /providers/use-builtin/{wire}`; details `{from, to, protocol, agents}` |
 | `provider_internal_default_set` | a successful `POST /providers/{name}/internal-default`; details `{from, to}` |
 | `provider_projection_refused` | a native-config write refused because the file changed under Coffer |
-| `internal_engine_model_set` | a write to the internal-engine singleton |
 
 `resource_created` / `resource_updated` / `resource_deleted` / `resource_renamed`
 come from `ResourceService`; a change to the curated model set rides
@@ -289,8 +274,7 @@ kind declares no redactor because its config holds no secret).
 | `resolve_connection_key(name) -> str` | The named connection's key — what the projected `apiKeyHelper` calls. |
 | `resolve_active_key_for_agent(agent_type) -> str` | The key of the connection active for that agent (what Codex's env var is filled from). |
 | `resolve_active_key(wire) -> str` | The legacy wire-keyed form, resolving through the wire's agent. |
-| `set_internal_default(name) -> Resource` | The global flag, and the model it drops. |
-| `resolve_internal_connection() -> ResolvedConnection \| None` | The engine's endpoint + model, or `None` (→ the internal passes are a clean no-op). |
+| `set_internal_default(name) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
 
 Decrypted values are returned to the caller and never logged.
 

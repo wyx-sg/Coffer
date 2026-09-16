@@ -1,4 +1,4 @@
-"""Serve the built web UI from the daemon itself (spec mcp-gateway FR-024).
+"""Serve the built web UI from the daemon itself (spec daemon FR-016).
 
 The same built ``frontend/dist`` has two hosts: the Tauri desktop shell bundles
 it into the app, and the daemon serves it here at its own loopback origin for

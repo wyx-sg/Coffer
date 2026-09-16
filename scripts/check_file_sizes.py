@@ -2,15 +2,15 @@
 """Enforce per-tier file-size limits.
 
 Limits:
-  * Backend Python file:    <= 400 lines  (agents/stack.md "Code Style")
-  * Desktop shell (.rs):    <= 400 lines  (agents/stack.md "Desktop Shell")
+  * Backend Python file:    <= 400 lines  (.agents/stack.md "Code Style")
+  * Desktop shell (.rs):    <= 400 lines  (.agents/stack.md "Desktop Shell")
   * Frontend page (.tsx):   <= 200 lines
   * Frontend component:     <= 250 lines
   * Frontend hook:          <= 300 lines
   * Frontend utility:       <= 300 lines
 
 The frontend tiers have no prose home — RULES below is their definition, and
-the directories it names are the ones agents/frontend.md §2 mandates.
+the directories it names are the ones .agents/frontend.md §2 mandates.
 
 Each rule is (glob, limit, label); first match wins. Generated dirs and lock
 files are excluded. Stdlib-only.
@@ -28,7 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Order matters: a file is classified by the first rule it matches.
 # More-specific paths must appear before catch-all patterns for the same tree.
 #
-# The globs track the layout agents/frontend.md §2 mandates — pages in
+# The globs track the layout .agents/frontend.md §2 mandates — pages in
 # `src/pages/`, feature components in `src/components/<x>/`, every query and
 # mutation in `src/lib/hooks/useX.ts`, and feature-owned pure helpers elsewhere
 # under `src/lib/`. There were once rules for `src/lib/components/**` and
@@ -147,7 +147,7 @@ def main() -> int:
         rel = path.relative_to(REPO_ROOT)
         print(f"  {rel}: {lines} lines > {limit} ({label})", file=sys.stderr)
     print(
-        "\n  Limits are guidance for splitting. See agents/stack.md.",
+        "\n  Limits are guidance for splitting. See .agents/stack.md.",
         file=sys.stderr,
     )
     return 1

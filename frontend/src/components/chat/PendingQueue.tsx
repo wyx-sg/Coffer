@@ -3,7 +3,7 @@
 // is still streaming wait here (they queue server-side). Each row shows the full
 // (wrapped, clamped) text plus edit — pull it back into the composer to amend —
 // and remove controls. Extracted from MessageThread to keep that file within the
-// component size budget (agents/stack.md).
+// component size budget (.agents/stack.md).
 import { useTranslation } from "react-i18next";
 import { Pencil, X } from "lucide-react";
 

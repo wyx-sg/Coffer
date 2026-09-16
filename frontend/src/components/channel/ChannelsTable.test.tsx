@@ -1,6 +1,6 @@
 // frontend/src/components/channel/ChannelsTable.test.tsx
 //
-// The channels list (spec channels, FR-041). Each row carries the platform type,
+// The channels list (spec channels, FR-029). Each row carries the platform type,
 // default agent, a live runtime-health badge (Running/Stopped), the machine the
 // channel is bound to, the reach control, a paired-owner cell and a delete
 // action — the health, machine and paired cells fed by the per-row

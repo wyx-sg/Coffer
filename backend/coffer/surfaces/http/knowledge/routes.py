@@ -2,17 +2,17 @@
 
 Create a collection, list them, walk one level of the catalogue, read a file,
 write one, delete one, grep, tidy — plus ``search`` and document ``upload``
-(spec knowledge FR-060).
+(spec knowledge FR-034).
 Deleting a collection goes through the kind-agnostic Resource route, since
 collection lifecycle is a Resource concern.
 
 These routes are the *user's* surface and therefore unscoped: per-agent
-authorization (FR-012) governs what an agent sees through the MCP tools, not
+authorization (FR-009) governs what an agent sees through the MCP tools, not
 what the person who owns the vault sees in their own UI. ``search`` and
 ``upload`` follow the same rule — neither takes an ``agent``.
 
 Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``
-— including ``UploadTooLarge`` (FR-037), which ``IngestService`` itself raises
+— including ``UploadTooLarge`` (FR-026), which ``IngestService`` itself raises
 before doing any conversion or write. ``UnsupportedDocument`` is the one
 exception ``upload`` maps by hand: it is raised by the converter registry, a
 plain-Python layer below the domain, so it is not a ``CofferError``.
@@ -228,7 +228,7 @@ async def upload(
 ) -> Any:
     data = await file.read()
     try:
-        # A size ceiling and a refusal naming it (FR-037) both come from
+        # A size ceiling and a refusal naming it (FR-026) both come from
         # ``IngestService.ingest`` itself — it raises ``UploadTooLarge``
         # (a ``CofferError``) before any conversion or write, so the
         # app-wide handler maps it without help from this route.

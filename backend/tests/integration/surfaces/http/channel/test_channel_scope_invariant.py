@@ -1,4 +1,4 @@
-"""One invariant, both write paths (spec channels FR-079).
+"""One invariant, both write paths (spec channels FR-025).
 
 A channel's ``default_agent`` must be an agent the channel may drive. Two
 endpoints can break that — ``PATCH /resources/channel/{name}`` edits the config

@@ -1,6 +1,6 @@
 // e2e/web/specs/shell_mcp_flows.spec.ts
 //
-// Spec ui-shell §User Story 3 — day-to-day MCP work, tested through the
+// Spec web-ui §User Story 3 — day-to-day MCP work, tested through the
 // redesigned UI: registration round-trip and capability toggle
 // round-trip. The 001-spec tests already cover the backend correctness;
 // here we pin the new look-and-feel: welcome-card → add → detail → tabs.
@@ -74,7 +74,7 @@ async function refreshCapabilities(name: string): Promise<void> {
 }
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "MCP server registration round-trip via JSON import",
   async ({ page }) => {
     const name = generateUniqueName("e2e002reg");
@@ -118,7 +118,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "capability toggle uses the redesigned tab layout",
   async ({ page }) => {
     const name = generateUniqueName("e2e002tog");
@@ -126,7 +126,7 @@ acceptance(
       await registerFakeServer(name);
       await page.goto(`/mcp-servers/${name}`);
       // Tabs row uses the new design tokens but the role + tab names are
-      // unchanged (spec ui-shell explicitly requires backwards-compatible
+      // unchanged (spec web-ui explicitly requires backwards-compatible
       // selectors here).
       await page.getByRole("tab", { name: "Tools" }).click();
       await expect(page.getByText("read_file").first()).toBeVisible({
@@ -155,7 +155,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "resource capability toggle works via the Resources tab",
   async ({ page }) => {
     const name = generateUniqueName("e2e002res");
@@ -203,7 +203,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "prompt capability toggle works via the Prompts tab",
   async ({ page }) => {
     const name = generateUniqueName("e2e002prm");
@@ -248,7 +248,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "add-server form navigates to detail then back to list shows card",
   async ({ page }) => {
     const name = generateUniqueName("e2e002back");
@@ -287,7 +287,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "JSON import shows readable error for malformed JSON",
   async ({ page }) => {
     // UI Shell §Acceptance: pasting a non-JSON payload into the Add
@@ -350,7 +350,7 @@ acceptance(
 );
 
 acceptance(
-  "ui-shell",
+  "web-ui",
   "capability search box narrows the tool list",
   async ({ page }) => {
     const name = generateUniqueName("e2e002src");

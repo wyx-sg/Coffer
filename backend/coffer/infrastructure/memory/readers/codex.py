@@ -17,7 +17,7 @@ Two files matter, both under `<config_dir>/memories/`:
 
 Neither file gives a bullet a title the way Claude Code's frontmatter does,
 so this reader derives one from the bullet's first clause and keeps the
-bullet's full text as both the description and the body (FR-021) — see
+bullet's full text as both the description and the body (FR-014) — see
 `_bullet_title`. An anchor is built from the group, the section heading and
 a content hash of the bullet (`_anchor`): the same triple two runs apart
 names the same fact, and two different bullets that happen to start with the
@@ -110,7 +110,7 @@ def _read_groups(text: str) -> tuple[RawFact, ...]:
     for entry in parse_codex_memory(text):
         # A group can route to more than one cwd (`applies_to: cwd=A and B`);
         # attributing every fact to all of them would give the same anchor
-        # two homes and blur which partition an override belongs to (FR-022),
+        # two homes and blur which partition an override belongs to (FR-015),
         # so — same as the un-ambiguous, overwhelmingly common single-cwd
         # case — the first recorded cwd is the one project a group's facts
         # are filed under. A group with none files under "" (global).
@@ -164,7 +164,7 @@ def _bullet_title(bullet: str) -> str:
     Codex's bullets are freeform prose with no author-given title (unlike
     Claude Code's frontmatter `name`). The first clause — up to the first
     `->`, `. ` or `; ` — reads as a reasonable stand-in; the full bullet
-    stays intact as the description and body (FR-021), so nothing is lost by
+    stays intact as the description and body (FR-014), so nothing is lost by
     a title that trims it.
     """
     clause = re.split(r"\s*->\s*|\.\s|;\s", bullet, maxsplit=1)[0].strip().rstrip(".")
@@ -176,7 +176,7 @@ def _bullet_title(bullet: str) -> str:
 
 
 def _anchor(group: str, heading: str, bullet: str) -> str:
-    """Stable identity for one bullet (FR-022): group + section + content.
+    """Stable identity for one bullet (FR-015): group + section + content.
 
     Two different bullets in the same section hash differently; the same
     bullet re-read on a later sync hashes the same, which is the whole point

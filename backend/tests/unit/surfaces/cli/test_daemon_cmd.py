@@ -200,6 +200,10 @@ def test_daemon_stop_sends_sigterm_and_succeeds(
     assert signals_sent == [(info.pid, signal.SIGTERM)]
 
 
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a recorded pid that is not ours is never signalled",
+)
 def test_daemon_stop_does_not_sigterm_an_unverified_pid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

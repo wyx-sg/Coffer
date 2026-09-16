@@ -134,11 +134,13 @@ class _Bridge:
             except _json.JSONDecodeError as e:
                 _logger.warning("shim.bad_json_from_stdin", extra={"error": str(e)})
                 continue
-            # FR-004 / spec mcp-gateway FR-021 (amended): report the agent's launch cwd
+            # spec mcp-gateway FR-013 (amended): report the agent's launch cwd
             # AND, when known, its self-reported `--agent` identity at session
             # handshake. Both ride ``initialize`` params under ``_meta`` (an
             # MCP-reserved extension key); the gateway threads cwd into tools
-            # and captures the agent identity onto the session.
+            # and captures the agent identity onto the session. (No FR states
+            # the cwd half any more — it outlived the per-project memory store
+            # that first asked for it.)
             if envelope.get("method") == "initialize":
                 _inject_meta(envelope, self._agent)
                 # Cache it so a daemon restart can be recovered transparently by

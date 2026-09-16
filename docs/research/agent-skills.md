@@ -201,13 +201,13 @@ Commentary:
 - **Coffer pins a skill's source to a `git_ref`.** `GitSource` carries
   `git_url`/`git_ref`/`git_subpath` (`repo:backend/coffer/domain/skill/source.py`),
   and a fetch/clone resolves and copies exactly that ref into the master store
-  (spec FR-006). The report's accompanying claim that there is **no**
-  update-detection / out-of-date signal was already stale when this check ran —
-  PR #115 added one (see ✏️ below). (The pinning fact itself no longer holds:
-  skills became local-import only and the whole Git fetch lifecycle — `GitSource`
-  and the FR-006 that specced the pinned ref — was deleted. The skill-manager
-  spec's FR-006 was later reused for the in-app viewer's open/reveal
-  affordances, so that number no longer resolves to anything in this passage.)
+  (spec skill-manager, the requirement that specced the pinned ref). The report's
+  accompanying claim that there is **no** update-detection / out-of-date signal was
+  already stale when this check ran — PR #115 added one (see ✏️ below). (The pinning
+  fact itself no longer holds: skills became local-import only and the whole Git fetch
+  lifecycle — `GitSource` and the requirement that specced the pinned ref — was
+  deleted. Its number has since been reused twice over in spec skill-manager, so this
+  passage names the requirement rather than a number that now means something else.)
   [`repo:backend/coffer/domain/skill/source.py`,
   `repo:specs/skill-manager/{spec,plan}.md`]
 - **SKILL.md frontmatter is now aligned to the agentskills.io constraints
@@ -219,7 +219,7 @@ Commentary:
   consumes). Two gaps the report flagged remain by design, not omission: it
   still does **not** enforce `name == parent-directory`, and the `name` regex
   still tolerates underscores (see ✏️ below). [`repo:backend/coffer/domain/skill/frontmatter.py`,
-  `repo:specs/skill-manager/{spec,data-model,plan}.md`, spec FR-004/FR-027]
+  `repo:specs/skill-manager/{spec,data-model,plan}.md`, spec skill-manager FR-004 / FR-005]
 - **Reversec "Skill Issues" post is real and as described.** "Skill Issues:
   Compromising Claude Code with malicious skills & agents — Part 1," James
   Henderson, published **May 5, 2026** (report's "May 2026" is correct). Thesis
@@ -251,10 +251,10 @@ Commentary:
 - **Internal nit: §1 says `name` is "lowercase alphanumeric + hyphens," but
   Coffer's regex `^[a-z0-9][a-z0-9_-]{0,63}$` also permits underscores**, which
   the standard does not. PR #105 (frontmatter alignment) did **not** remove the
-  underscore — it is now documented in-code and in spec FR-004 as a _deliberate
+  underscore — it is now documented in-code and in spec skill-manager FR-004 as a _deliberate
   backward-compat superset_ (to keep skills already on disk valid), so the
   divergence stands by design, not as an oversight. [`repo:backend/coffer/domain/skill/frontmatter.py`,
-  spec FR-004, agentskills.io/specification]
+  spec skill-manager FR-004, agentskills.io/specification]
 - **§2/§3/§4's headline "no skill scanner / content not scanned" gap is now
   CLOSED (PR #111, 2026-06-18 — skill content trust layer L2).** The report's
   capability table marked Coffer "None (content not scanned)" and named a
@@ -288,14 +288,16 @@ Commentary:
   "no 'update available' signal" as one of the two UX gaps versus
   ClaudeKit/ccpi and recommended exactly "update-detection + explicit
   pin/unpin." Coffer now ships both. An on-demand `check_for_updates`
-  (spec FR-030) re-fetches a Git-sourced skill at its pinned `git_ref`,
+  (then a requirement of spec skill-manager, since removed) re-fetches a Git-sourced
+  skill at its pinned `git_ref`,
   re-validates the upstream SKILL.md, and compares the upstream content hash
   (and frontmatter `name`, to catch renames) against the stored
   `version_hash` — **without applying anything** — then caches the result
   (`update_available`, `available_version_hash`, `last_update_check_at`) on
   `SkillConfig`; applying an update clears the signal, and every check is
-  audited (`skill_update_checked`). A `pinned` flag (spec FR-031,
-  `coffer skill pin`/`unpin`, audited `skill_pinned`/`skill_unpinned`)
+  audited (`skill_update_checked`). A `pinned` flag (its own requirement in spec
+  skill-manager at the time, `coffer skill pin`/`unpin`, audited
+  `skill_pinned`/`skill_unpinned`)
   suppresses the signal so a deliberately-frozen skill stops surfacing as
   out-of-date; `SkillOut` exposes the resolved `update_pending =
   update_available and not pinned`. It is surfaced across all three surfaces:
@@ -309,4 +311,7 @@ Commentary:
   `repo:backend/coffer/surfaces/http/skill_trust_routes.py`,
   `repo:backend/coffer/surfaces/cli/skill_cmd.py`,
   `repo:frontend/src/components/skills/SkillDetailTabs.tsx`,
-  spec FR-030/FR-031]
+  the update-detection and pinning requirements of spec skill-manager]
+  **Gone since:** skills are local-import only, so update detection and pinning
+  were removed with the Git source; neither requirement survives in spec
+  skill-manager, and this gap is open again.

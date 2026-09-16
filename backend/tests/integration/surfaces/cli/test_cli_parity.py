@@ -88,9 +88,14 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "delete",
         "grep",
         "ls",
-        "organize",
         "read",
         "search",
+        # The pass a model runs over a collection is called `tidy` on every
+        # other surface — the spec, the route, the settings switch — and was
+        # called `organize` here alone. The two kinds' passes are NOT the same
+        # pass, which is why they do not share a verb: tidy rewrites the
+        # user's own files, organise rewrites a derived digest.
+        "tidy",
         "upload",
         "write",
     },
@@ -102,7 +107,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "fact",
         "facts",
         "ls",
-        "organize",
+        # `organise`, matching the route and the spec. The spelling is the
+        # one thing that was inconsistent: the route has always said
+        # `/organise` and this command alone said `organize`.
+        "organise",
         "partitions",
         "read",
         "sync",
@@ -136,6 +144,14 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "sync key": {"export", "import", "fingerprint"},
     "sync machine": {"list", "rename", "remove"},
     "sync remote": {"show", "set", "clear"},
+    # Coffer's own operating settings (spec internal-engine FR-020/FR-021):
+    # the model its passes think with, and the switch and timer of each pass
+    # it runs unattended. Listed here because `.agents/sdd.md` requires every
+    # management operation to be reachable from a terminal, and one of these
+    # passes rewrites the user's own knowledge files on a timer.
+    "engine": {"model", "upkeep"},
+    "engine model": {"show", "set", "clear"},
+    "engine upkeep": {"list", "set"},
 }
 
 #: The groups whose surface is options rather than subcommands. Each is
@@ -210,20 +226,20 @@ def _long_options(path: str) -> set[str]:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="resource-framework",
     scenario="command line covers every visual operation",
 )
 def test_cli_covers_every_visual_operation():
     """The CLI's command tree is exactly the reviewed table above.
 
-    The oracle names all fifteen command groups the composition root registers
+    The oracle names all sixteen command groups the composition root registers
     plus their nested groups, and this asserts exact equality against the live
     tree — in both directions. A new UI operation cannot ship a CLI
     counterpart without it appearing here for a reviewer to see, and a CLI
     command cannot appear without someone deciding it belongs.
 
-    It used to name five groups of the fifteen, which is why this could not
-    fail on the ten it never mentioned. What it still cannot see on its own is
+    It used to name five groups of the sixteen, which is why this could not
+    fail on the ones it never mentioned. What it still cannot see on its own is
     a UI operation the CLI simply never grew: that was carried as a table of
     named exemptions, each asserted from the absent side, and all three are now
     closed — see the note above ``_subcommands`` for how to write one back.
@@ -251,7 +267,7 @@ def test_cli_covers_every_visual_operation():
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="resource-framework",
     scenario="command line covers every visual operation",
 )
 def test_every_command_group_renders_its_help():
@@ -264,7 +280,7 @@ def test_every_command_group_renders_its_help():
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="resource-framework",
     scenario="command line surfaces same errors",
 )
 def test_cli_surfaces_same_errors(tmp_path, monkeypatch):

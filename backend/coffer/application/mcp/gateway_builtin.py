@@ -164,7 +164,7 @@ def inject_session_context(
     """Thread what the session knows about its caller into a built-in call.
 
     Two arguments, two rules. ``agent`` is the caller's identity and the basis
-    of per-agent scope (spec mcp-gateway FR-020/FR-021), so it is ALWAYS the
+    of per-agent scope (spec mcp-gateway FR-012/FR-013), so it is ALWAYS the
     session's: whatever the client sent under that name is dropped, the
     handshake's identity is written in its place, and when the session never
     reported one the argument is absent — the tool then treats the caller as

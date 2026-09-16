@@ -93,7 +93,7 @@ class _ActiveProviderModels:
 
     Narrowed to ``text``: the question is what a CHAT picker may offer, and the
     same endpoint's embedding, image, video and speech models would be rejected
-    by every turn that tried them (spec provider-switching FR-030).
+    by every turn that tried them (spec provider-switching FR-032).
     """
 
     async def curated_models(self, agent_key: str) -> list[str] | None:

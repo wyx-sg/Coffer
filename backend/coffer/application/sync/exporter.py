@@ -39,7 +39,7 @@ from coffer.domain.sync.serialization import resource_to_doc
 #
 # What decides now is ``Kind.converges``, declared where the kind is defined.
 # The one kind that answers False is ``memory``: a partition row is derived
-# from the agents installed on THIS machine, and spec memory FR-023 forbids it
+# from the agents installed on THIS machine, and spec memory FR-016 forbids it
 # converging for a concrete reason — the second machine would show a partition
 # naming a project root it may not have, with no facts behind it, because the
 # derived tree stayed home. That is a rule about the kind, not about sync, so
@@ -65,8 +65,8 @@ class SyncExporter:
     end had already answered for itself.
 
     Beyond that, only a kind that declares ``converges=False`` is held back —
-    ``memory``, whose rows each machine derives for itself (spec memory
-    FR-023). Every other kind is exported, ``channel`` included: a channel's
+    ``memory``, whose rows each machine derives for itself (spec memory FR-016). Every other kind is
+    exported, ``channel`` included: a channel's
     own config now names the machine that runs it, so the document can travel
     without the adapter travelling with it."""
 

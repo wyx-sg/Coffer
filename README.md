@@ -203,9 +203,9 @@ e2e/                  Playwright suites — the web UI and the MCP gateway
 evals/                AI eval harness — tool-search and tool-routing suites
 scripts/              repo gates (file sizes, doc naming, acceptance audit) and maintenance
 docs-site/            VitePress source for the published documentation site
-specs/                Speckit specs (one per feature)
+specs/                Speckit specs (one per feature; a spec may nest a child)
 docs/decisions/       Architectural Decision Records (ADRs)
-agents/               Guides: workflow, SDD, stack, frontend, visual language, testing, harness
+.agents/              Guides: workflow, SDD, stack, frontend, visual language, testing, harness
 ```
 
 The `surfaces/callback/` process is the `coffer-callback` binary above: a standalone
@@ -235,8 +235,8 @@ ADRs: [docs/decisions/](docs/decisions/).
 
 ## Contributing
 
-- **Conventional Commits** required — see [agents/workflow.md](agents/workflow.md)
-- **Spec-driven development** — every feature starts with a spec under `specs/<short-name>/` — see [agents/sdd.md](agents/sdd.md)
+- **Conventional Commits** required — see [.agents/workflow.md](.agents/workflow.md)
+- **Spec-driven development** — every feature starts with a spec under `specs/<short-name>/` — see [.agents/sdd.md](.agents/sdd.md)
 - **Architecture contracts** — 20 importlinter contracts must stay green (defined in [backend/pyproject.toml](backend/pyproject.toml))
 - **Credentials** — secrets are stored only as Fernet ciphertext in the `credentials` table via `coffer.infrastructure.credentials`; plaintext never reaches the DB, logs, or audit
 

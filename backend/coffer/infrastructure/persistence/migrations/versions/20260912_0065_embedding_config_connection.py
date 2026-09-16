@@ -4,9 +4,10 @@
 id), ``base_url`` and ``credential_ref`` — a second, parallel place to type an
 endpoint and a key that the Connections page already holds. It now carries
 ``connection``: the NAME of a ``provider`` resource, plus the model id, exactly
-the "pick a provider, then pick a model" shape the internal-engine setting has
-(spec knowledge FR-077). The wire, base URL and credential are read from that
-connection at use time.
+the "pick a provider, then pick a model" shape the internal-engine setting has.
+The wire, base URL and credential are read from that connection at use time.
+The knowledge requirement that said so is retired: embedding was removed
+altogether soon after, and 0066 drops ``embedding_config`` with it.
 
 Mapping the existing row: the connection it MEANT is the one pointing at the
 same place, so this matches on ``base_url`` first (normalised for a trailing

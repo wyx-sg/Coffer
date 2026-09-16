@@ -148,7 +148,7 @@ The `memory_*` prefix here belongs to today's `memory` kind. It is **not** the r
 | `provider_internal_default_set` | When a connection becomes Coffer's internal engine           |
 | `provider_projection_refused`   | When a projection write refused because the agent's native config file changed on disk between Coffer's read and its write (optimistic concurrency) |
 
-**Sync** ([Vault Sync](/reference/adr/vault-sync)) — the vault converges bidirectionally with a git remote the user owns, so both the rounds and the decisions about them are recorded:
+**Sync** — the vault converges bidirectionally with a git remote the user owns, so both the rounds and the decisions about them are recorded:
 
 | Event                  | Trigger                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------- |
@@ -249,8 +249,3 @@ An asyncio task running inside the daemon polls the `retention_policies` table o
 - Updates `last_pruned_at` and `last_pruned_rows` in `retention_policies` after each successful prune.
 - Does not block the event loop between tables — it yields between each table's delete.
 - Does not cascade-delete across tables: audit entries for a deleted server are retained (the retention policy is per-table, not per-resource).
-
-## See also
-
-- [Architecture reference](/reference/project/architecture) — Audit, Retention, and cross-cutting concerns table
-- [MCP Gateway spec reference](/reference/specs/mcp-gateway/spec) — Invocation log invariant, token authentication, and `X-Coffer-Actor` header semantics

@@ -3,8 +3,9 @@
 //!
 //! Where a daemon comes from lives in `resolve.rs` (the five-step chain);
 //! reading `daemon.json` and probing a port lives in `discovery.rs`; starting
-//! one lives in `spawn.rs`. This file owns only the policy: rate limiting,
-//! stop-then-start, and the credential handshake.
+//! one lives in `spawn.rs`; the pure restart policy — the rate-limit window
+//! and the stop-then-start sequence — lives in `restart.rs`. This file owns
+//! the commands themselves and the credential handshake.
 
 use tauri::AppHandle;
 
@@ -12,6 +13,7 @@ use crate::discovery::{
     daemon_responds_ok, read_daemon_info, request_daemon_shutdown, wait_for_port_free,
 };
 use crate::resolve::{daemon_source, DaemonSource};
+use crate::restart::{record_restart_outcome, restart_rate_limit_refusal, stop_running_daemon};
 use crate::spawn::spawn_resolved_daemon;
 
 #[derive(serde::Serialize)]
@@ -25,20 +27,6 @@ pub struct RestartResult {
 /// avoid an accidental tight-loop spawning many daemon processes.
 static LAST_RESTART_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 const RESTART_MIN_INTERVAL_SECS: u64 = 5;
-
-/// Pure rate-limit decision for `restart_daemon`, split out so it can be
-/// unit-tested without spawning processes. Returns `true` when `now` is less
-/// than `min_interval` after the previous restart (so the call is refused).
-fn restart_is_rate_limited(
-    prev: Option<std::time::Instant>,
-    now: std::time::Instant,
-    min_interval: std::time::Duration,
-) -> bool {
-    match prev {
-        Some(p) => now.duration_since(p) < min_interval,
-        None => false,
-    }
-}
 
 /// Restart the daemon: stop the running one (if any), spawn a fresh one.
 ///
@@ -68,17 +56,12 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     // spawn — we do NOT record `now` yet. The timestamp is recorded only
     // after we actually spawn a new daemon (see step 3), so a failed spawn
     // does not consume the rate-limit window and the user can retry at once.
-    {
-        let now = Instant::now();
-        let min_interval = Duration::from_secs(RESTART_MIN_INTERVAL_SECS);
-        if restart_is_rate_limited(*guard, now, min_interval) {
-            let elapsed = now.duration_since(guard.expect("rate-limited implies a prior restart"));
-            let remaining = RESTART_MIN_INTERVAL_SECS - elapsed.as_secs();
-            return Err(format!(
-                "restart_daemon: rate-limited; retry in {}s",
-                remaining.max(1)
-            ));
-        }
+    if let Some(refusal) = restart_rate_limit_refusal(
+        *guard,
+        Instant::now(),
+        Duration::from_secs(RESTART_MIN_INTERVAL_SECS),
+    ) {
+        return Err(refusal);
     }
 
     // (2) True restart: when a daemon is responsive, ask it to shut down
@@ -86,25 +69,21 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     // before spawning the replacement. A silent no-op here would mean
     // "Restart daemon" did nothing exactly when a user reaches for it (a
     // wedged-but-listening daemon).
-    if let Some((port, token)) = read_daemon_info() {
-        if daemon_responds_ok(port) {
-            request_daemon_shutdown(port, &token)?;
-            if !wait_for_port_free(port, Duration::from_secs(8)) {
-                return Err(format!(
-                    "daemon on port {port} did not stop within 8s of the shutdown request"
-                ));
-            }
-            log::info!("daemon on port {} stopped for restart", port);
-        }
+    if let Some(port) = stop_running_daemon(
+        read_daemon_info,
+        daemon_responds_ok,
+        request_daemon_shutdown,
+        |port| wait_for_port_free(port, Duration::from_secs(8)),
+    )? {
+        log::info!("daemon on port {} stopped for restart", port);
     }
 
-    // (3) Resolve + spawn detached.
-    let pid = spawn_resolved_daemon(&app)?;
-
-    // Record the rate-limit timestamp ONLY now — after a successful spawn —
-    // so the window is never consumed by a failed one. We still hold the
-    // guard acquired at the top of the function.
-    *guard = Some(Instant::now());
+    // (3) Resolve + spawn detached. The rate-limit timestamp is recorded ONLY
+    // for a spawn that succeeded, so the window is never consumed by a failed
+    // one. We still hold the guard acquired at the top of the function.
+    let spawned = spawn_resolved_daemon(&app);
+    record_restart_outcome(&mut guard, Instant::now(), &spawned);
+    let pid = spawned?;
 
     log::info!("daemon restarted (pid {})", pid);
     Ok(RestartResult { pid, started: true })
@@ -191,38 +170,6 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{Duration, Instant};
-
-    #[test]
-    fn rate_limited_within_interval() {
-        let prev = Instant::now();
-        let now = prev + Duration::from_secs(2);
-        assert!(restart_is_rate_limited(
-            Some(prev),
-            now,
-            Duration::from_secs(5)
-        ));
-    }
-
-    #[test]
-    fn not_rate_limited_after_interval() {
-        let prev = Instant::now();
-        let now = prev + Duration::from_secs(6);
-        assert!(!restart_is_rate_limited(
-            Some(prev),
-            now,
-            Duration::from_secs(5)
-        ));
-    }
-
-    #[test]
-    fn not_rate_limited_on_first_call() {
-        assert!(!restart_is_rate_limited(
-            None,
-            Instant::now(),
-            Duration::from_secs(5)
-        ));
-    }
 
     // --- version skew: the app must detect when it has reused an old
     // detached daemon whose reported version differs from what this build

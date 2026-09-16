@@ -1,8 +1,8 @@
 """The Python fallback and ripgrep answer a grep identically.
 
 Run the same queries through both engines over one fixture tree and compare
-the hit sets — the parity that lets a caller not care which one ran (spec
-knowledge FR-022). Skipped where ``rg`` is not installed, because then there
+the hit sets — the parity that lets a caller not care which one ran (spec knowledge FR-014). Skipped
+where ``rg`` is not installed, because then there
 is nothing to compare against.
 """
 

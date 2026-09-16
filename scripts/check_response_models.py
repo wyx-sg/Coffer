@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Enforce that every FastAPI route declares its wire shape.
 
-Per agents/stack.md "HTTP Contracts (Wire Format)":
+Per .agents/stack.md "HTTP Contracts (Wire Format)":
 
     Every HTTP route declares `response_model=<Foo>Response` against a
     Pydantic `BaseModel` — never `dict[str, Any]`.
@@ -106,7 +106,7 @@ def main() -> int:
         file=sys.stderr,
     )
     print(
-        "  See agents/stack.md 'HTTP Contracts (Wire Format)'.",
+        "  See .agents/stack.md 'HTTP Contracts (Wire Format)'.",
         file=sys.stderr,
     )
     return 1

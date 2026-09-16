@@ -7,8 +7,9 @@
 An **LLM connection** is a credentialed endpoint — a name, a base URL, a
 detected protocol, an encrypted credential and a curated set of the models it
 offers. One connection is used both ways: projected into the native config file
-of each agent it reaches, and available as the endpoint Coffer's own internal
-engine runs on. Coffer's differentiator over per-tool switching scripts is
+of each agent it reaches, and borrowed as the endpoint Coffer's own internal
+engine runs on (spec [internal-engine](../internal-engine/spec.md)). Coffer's
+differentiator over per-tool switching scripts is
 governance: Fernet-encrypted credentials, a full audit trail, and one registry
 that converges across the user's machines.
 
@@ -39,9 +40,9 @@ the chat surface offers the agent's own models and runs.
   agent, but two things do key off it.** It drives model introspection and
   whether a key is required. Which agent a connection is written into comes
   from its scope, not its wire (F1) — but a keyless (`ollama`) connection
-  reaches no agent whatever that scope says (FR-019), and `use-builtin <wire>`
+  reaches no agent whatever that scope says (FR-022), and `use-builtin <wire>`
   finds the agent to revert *through* the wire. Both are why the wire cannot
-  move under a connection that is switched on (FR-034).
+  move under a connection that is switched on (FR-019).
   `anthropic`, `openai`, `ollama` and `unknown` are the values; `unknown` means
   a probe was inconclusive. Coffer can detect it
   (`POST /api/v1/models/detect-protocol`), but the create surface asks for it
@@ -51,30 +52,11 @@ the chat surface offers the agent's own models and runs.
   selector, and the CLI takes `--protocol`. The detect route stays for other
   callers.
 - **E3 — The model is chosen at the point of use.** The per-agent binding
-  (`AgentConfig.model` / `fast_model`), the internal-engine selector and the
-  conversation each pick a model from what the chosen connection offers. The
-  **internal-engine model** is its own global singleton, read and written via
-  `GET` / `PUT /api/v1/internal-engine-config` and audited as
-  `internal_engine_model_set`; `resolve_internal_connection()` pairs it with the
-  resolved internal-default connection.
-- **E3a — The same singleton carries what Coffer does unattended.** Coffer runs
-  three passes on its own behalf: aggregation reads the agents' own memory into
-  the derived tree (spec [memory](../memory/spec.md) FR-007), organise lets the
-  model rewrite that derived digest (FR-030), and tidy lets it rewrite the
-  user's own knowledge files (spec [knowledge](../knowledge/spec.md) FR-051).
-  Each carries a **switch and an interval** the operator can see and change,
-  written through `PUT /api/v1/internal-engine-config/upkeep` — one pass per
-  request, each other pass untouched when it is not sent, so a settings surface
-  toggling one row cannot write back a stale copy of the other two. An interval
-  the operator has not chosen is reported as unchosen ALONGSIDE the default that
-  then runs, so the default lives in one place — the worker that owns the pass —
-  and raising it later reaches every vault that never chose. A worker picks a
-  change up without a restart, and no pass may be scheduled below a floor that
-  would busy-loop a model over the user's files. The two passes that write only
-  derived files ship ON; tidy, which rewrites the only copy of the user's own
-  writing, ships OFF. These settings travel with the model choice (spec
-  [vault-sync](../vault-sync/spec.md)): switching a rewriter off is exactly the
-  decision a second machine must not be left out of.
+  (`AgentConfig.model` / `fast_model`) and the conversation each pick a model
+  from what the chosen connection offers, and so does Coffer's own engine — from
+  a singleton of its own (spec
+  [internal-engine](../internal-engine/spec.md) FR-004). A connection carries no
+  model for any of them to fall back to.
 - **E4 — Projection input = the connection (endpoint + key + protocol) + the
   agent's binding (model).** A connection with no binding on an agent projects
   no model key at all, so that agent runs on its own default model.
@@ -231,54 +213,19 @@ written to `settings.json`, `config.toml`, or any other native config file.
   that curates SOMETHING but nothing `text` offers no chat model rather than
   falling back to the endpoint's whole catalogue.
 
-### The model catalogue
+### What a connection contributes to a picker
+
+The catalogue itself — what models an agent can be put on, read back from the
+installed agent and never written down in Coffer — is spec
+[agent-registry](../agent-registry/spec.md)'s, and so is the rule that no
+surface carries a model list of its own. What follows is only what a CONNECTION
+contributes to that picture.
 
 - **D4 — A model is chosen from a fixed list, never typed.** Every Coffer
   surface that offers a model offers a dropdown with no free-text entry, and the
   current value is always among the options so it stays selectable. Non-chat
   models are never offered. A model name is still raw passthrough everywhere the
   CLI accepts one.
-- **H1 — The catalogue is a backend surface, per agent, and Coffer names no
-  model in it.** `AgentModelCatalogueService` answers, per agent, which models
-  that agent can be put on;
-  `GET /api/v1/agent-providers/{agent_key}/models` is that answer on the wire.
-  Its readers are the web Chat page's picker, the agent detail page, and the
-  channel `/model` card, which reads the same service in-process. Every entry —
-  id, label, description — is read back from the installed agent, never written
-  into Coffer, because a list written down here goes stale on the next CLI
-  release. Three sources answer, and their order is the order of the picker:
-  Claude Code's embedded **alias table**, Codex's own `model/list` app-server
-  RPC, and each CLI's native config for the local choices only it knows (Claude
-  Code publishes `additionalModelOptionsCache` in `~/.claude.json`; Codex's
-  `config.toml` names its configured models). Every source degrades to nothing
-  on its own — a missing CLI, a changed bundle layout, an unauthenticated or
-  wedged agent costs the models that source would have added and nothing else.
-  An unknown `agent_key` is a 404. Contract:
-  [`specs/channels/contracts/api.openapi.yaml`](../channels/contracts/api.openapi.yaml),
-  where the agent-provider routes live.
-- **H2 — One source of truth.** No surface carries a model list of its own, and
-  none computes one: the catalogue is owned in one place, and owned by the
-  agents themselves, so a newly released model reaches every surface with no
-  Coffer release at all. "Owned in one place" is load-bearing rather than
-  decorative — the one time a surface answered the question for itself, the
-  page and the chat gave the same user two different menus (FR-032).
-- **M1 — For Claude Code the catalogue IS the alias table.** The ids are the
-  aliases the CLI itself accepts (`opus`, `sonnet`, `haiku`, `fable` — whatever
-  the table holds), and each label is the display name of the model that alias
-  resolves to on a first-party account, so a release that moves an alias
-  relabels the picker on its own. Both halves come from one embedded blob,
-  located structurally; an anchor that stops matching costs this source
-  entirely rather than falling back to something else. The reason is
-  entitlement: the versioned catalog is cumulative and account-blind, nothing on
-  the machine says which of nineteen models a given account may run, and the
-  CLI's own picker offers four aliases and resolves each against the account at
-  turn time. Two attempts to have someone curate the remainder — first on the
-  agent, then on the channel — were both removed; nothing in Coffer curates an
-  agent's models. The accepted cost: a model that is not the current head of its
-  family cannot be PICKED from a Coffer surface. It stays typeable, and the
-  account's own extra options still reach the picker from `.claude.json`.
-- **M2 — Codex answers from its own `model/list`**, and both CLIs' native
-  configs still contribute their local choices.
 - **K1 — An active connection's curated set IS what a picker offers.** When a
   connection is active, reaches the agent type and curates models, `offered()` /
   `suggest()` answer with those ids, in the user's order, without consulting the
@@ -338,29 +285,12 @@ written to `settings.json`, `config.toml`, or any other native config file.
 
 ### Reasoning effort
 
-- **N1 — The effort travels BESIDE the id, never inside it.** `AgentModel`
-  carries `efforts: tuple[str, ...]` — the levels the agent reported, in the
-  order it reported them, empty for an agent that takes no such setting — and
-  `default_effort`, the level it would use when none is chosen; the `…/models`
-  route exposes both. Beside, because that is what the protocols do: the effort
-  is its own field on a turn, so folding four levels into the name would
-  multiply one model into four entries under names Coffer invented, which J3
-  forbids. A reported default is kept only when it is one of the offered levels.
-  Nothing is invented for a model that reports none. The stakes are not
-  cosmetic: the same prompt on the same model reported 53 reasoning output
-  tokens at `low` and 2569 at `xhigh`.
-- **O1 — The levels come from the RUNTIME, not from the model.** For Codex they
-  are per model, because `model/list` reports `supportedReasoningEfforts` and a
-  `defaultReasoningEffort` per entry. For Claude Code they are the same for every
-  entry, read once from the installed Claude Agent SDK's own `EffortLevel` alias
-  — `ClaudeAgentOptions.effort` renders as the CLI's `--effort` flag — rather
-  than written down here. An SDK that declares none yields an empty tuple: the
-  controls hide themselves and turns are unchanged.
-- **O2 — No default is named for Claude Code.** `ClaudeAgentOptions.effort`
-  defaults to `None`, meaning "whatever the CLI decides", and the CLI does not
-  say what that is. Prose documentation naming one level is not a
-  machine-readable fact, and a picker naming the wrong default is worse than one
-  naming none.
+Where the levels come from, and what an agent reports about them, is spec
+[agent-registry](../agent-registry/spec.md)'s: the effort travels beside the id
+rather than inside it, the levels are the RUNTIME's, and no default is invented
+for an agent that names none. What follows is what this spec and the surfaces it
+feeds do with them.
+
 - **N2 — Stored per conversation, next to the model.** It goes in the same
   provider-owned `AgentConfig` blob the model already lives in — `cwd`,
   `session_id`, `model`, `effort` — because it is the same kind of fact: a choice
@@ -389,7 +319,7 @@ written to `settings.json`, `config.toml`, or any other native config file.
 - **O4 — Both agents, on every surface that offers a model.** The web Chat
   page's draft bar carries the effort picker the open conversation has (spec
   channels FR-078), and a channel has `/effort`, `/model`'s sibling in every
-  respect (spec channels FR-017).
+  respect (spec channels FR-013).
 
 ### Codex's `wire_api`
 
@@ -472,24 +402,28 @@ no redactor, because its config holds no secret. This spec adds
   keep only the ref); the projection service that writes an agent's native
   config; the switch / activate / use-builtin operations; per-connection key
   resolution for Claude Code's `apiKeyHelper` and Codex's env var.
-- Internal-engine selection: the global `internal_default` flag,
-  `set_internal_default(name)` + `resolve_internal_connection()`, the
-  `provider_internal_default_set` event, and the separate internal-engine model
-  and upkeep singleton.
+- The internal-engine default flag: `set_internal_default(name)`, the partial
+  unique index that makes a second flagged row unrepresentable, and the
+  `provider_internal_default_set` event. What the flagged connection is USED for
+  is spec [internal-engine](../internal-engine/spec.md).
 - The connection's curated `models` set, each entry carrying a modality, applied
   by every picker that offers that connection's models.
-- The per-agent model catalogue read back from the installed agents, with the
-  reasoning levels their runtimes report.
-- CLI: `coffer provider list|add|show|edit|rm|switch|use-builtin|key|internal-default`,
-  plus the per-agent model binding on `coffer agent edit`.
-- HTTP: the `/api/v1/providers` routes, `/api/v1/models/*` introspection, and
-  `/api/v1/internal-engine-config[/upkeep]`.
+- CLI: `coffer provider list|add|show|edit|rm|switch|use-builtin|key|internal-default`.
+- HTTP: the `/api/v1/providers` routes and `/api/v1/models/*` introspection.
 - Frontend: the Model providers library page, a connection detail page with
   Overview and Models tabs, and the per-agent switch on the Agent detail page.
 - Tests across all tiers, with acceptance markers tying to the scenarios below.
 
 ### Out of scope (explicit non-goals)
 
+- **Coffer's internal engine** — the model it runs, the passes it runs
+  unattended, their switches and timers. This spec owns the flag that names its
+  connection and nothing beyond it (spec
+  [internal-engine](../internal-engine/spec.md)).
+- **The per-agent model catalogue** — what models an agent can be put on, the
+  reasoning levels its runtime reports, and where both are read from, are spec
+  [agent-registry](../agent-registry/spec.md)'s. This spec owns only what a
+  CONNECTION contributes to a picker.
 - **Hot-switch** — reloading a running Claude Code or Codex process mid-session.
 - **Provider drift-verify** — continuously reconciling the live native config
   against the active connection. The boot self-check (H6) is the narrow version
@@ -516,34 +450,39 @@ The authoritative field list, with types and constraints, is
 
 Which file is written is decided by the AGENT (F2); the managed key set per
 agent, and the ownership markers that make de-projection safe, are in
-[data-model.md](./data-model.md). Two rules are normative here:
+[data-model.md](./data-model.md). One rule is normative here:
 
 - Coffer MERGES into the user's existing file and never replaces it. Everything
-  outside its managed keys is preserved, and the write is atomic (temp file +
-  rename) with a `.bak` copy rotated through three generations.
-- A write carries the fingerprint of the content it read and is REFUSED with 409
-  `CONFIG_FILE_STALE` — audited as `provider_projection_refused` — when the file
-  changed on disk in between, so a concurrent edit by the user or by the agent's
-  own CLI is never silently overwritten.
+  outside its managed keys is preserved.
+
+The write itself is spec [agent-registry](../agent-registry/spec.md)'s
+machinery, not this spec's: it is atomic with a rotated `.bak` (agent-registry
+FR-017), and it carries the fingerprint of the content it read, so a write onto a
+file that changed underneath it is refused rather than applied (agent-registry
+FR-036). What this spec adds to that refusal is its own name and its own record:
+the projection surfaces it as 409 `CONFIG_FILE_STALE` and audits it as
+`provider_projection_refused`.
 
 An `ollama` connection projects into no agent: it has no key to write, it is
 never `is_active`, and it is used solely by Coffer's internal engine.
 
-## Internal engine
+## The internal-engine default
 
-The global `internal_default` flag (at most one across all connections) selects
-the connection Coffer's own passes run on.
+The global `internal_default` flag — at most one across all connections, enforced
+by the database as well as by the operation — names the connection Coffer's own
+passes borrow for their endpoint and key.
 
 - `set_internal_default(name)` clears the flag on every other connection, then
-  sets it on the target, and emits `provider_internal_default_set`.
-- `resolve_internal_connection()` pairs that connection with the global
-  internal-engine model, or returns `None` — with which the internal passes are a
-  clean no-op rather than an error.
-- `build_chat_model(resolved, …)` builds the engine's chat model from the
-  resolved pair, dispatched by protocol.
+  sets it on the target, emits `provider_internal_default_set`, and notifies the
+  engine so it can apply its own drop rule (spec
+  [internal-engine](../internal-engine/spec.md) FR-007).
+- What that connection is USED for — the model paired with it, the passes that
+  run on it, and what happens when it moves — is spec internal-engine. This spec
+  stops at the flag.
 
 A connection may be BOTH active (projected into the agents it reaches) AND the
-internal default — one key, two uses.
+internal default — one key, two uses. An `ollama` connection is only ever the
+second.
 
 ## HTTP API
 
@@ -560,7 +499,7 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
   rotates the stored secret; `models` is a whole-value replace (`null` leaves it
   alone, `[]` clears the restriction). A `protocol` that actually MOVES is
   refused with `409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the connection
-  is `is_active` (FR-034); re-sending the wire it already has is not a change,
+  is `is_active` (FR-019); re-sending the wire it already has is not a change,
   so a client that submits a whole form is never told its unchanged dropdown is
   a conflict. Reach is not a patch field — it is a scope
   edit, and `ProviderOut.compatible_agents` reports the CONFIGURED reach
@@ -586,8 +525,10 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
 All three accept an inline `secret_value` so a connection can be tested before
 it is saved.
 
-**Internal engine** — `GET` / `PUT /api/v1/internal-engine-config` and
-`PUT /api/v1/internal-engine-config/upkeep` (one pass per request).
+The engine's OWN settings — which model Coffer's internal passes run on, and
+what it does unattended — are spec [internal-engine](../internal-engine/spec.md)
+and live under `/api/v1/internal-engine-config`. This spec's only internal-engine
+surface is the flag above.
 
 **Reach** is the framework's own surface:
 `GET` / `PUT /api/v1/resources/provider/{name}/scope`.
@@ -610,7 +551,7 @@ with `--json` on `list`.
   use.
 - `edit <name> [--protocol <wire>] [--base-url <url>] [--secret <value>]` —
   `credential_ref` is the one that cannot move. The wire can, subject to
-  FR-034.
+  FR-019.
 - `use-builtin <wire>` is `switch`'s other half: it puts that wire's agents
   back on their OWN built-in login, de-projecting Coffer's config and clearing
   the active connection. Idempotent, so it succeeds when nothing was active.
@@ -632,7 +573,7 @@ a rename is available over HTTP or from the connection's detail page.
   the activate/deactivate answers come from this spec's generated contract; the
   connection shapes are hand-written.
 - **Model providers** (route `/model-providers`, in the sidebar's RESOURCES
-  group — spec ui-shell's IA rule puts a resource kind with a list UI there) is
+  group — spec web-ui's IA rule puts a resource kind with a list UI there) is
   the connection library: a `DataTable` of name / vendor / base URL / reach, an
   Add action in the header, and Delete per row. There is no per-row switch (F5)
   and no internal-engine badge: which connection Coffer's own engine runs on is a
@@ -675,7 +616,7 @@ a rename is available over HTTP or from the connection's detail page.
 
 ## Acceptance Scenarios
 
-Per `agents/sdd.md`, every scenario in this section is referenced by at least
+Per `.agents/sdd.md`, every scenario in this section is referenced by at least
 one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="…")`
 (Python) or `acceptance("provider-switching", "…", …)` (TypeScript).
 
@@ -725,14 +666,18 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 - **Given** a connection that is switched on and projected into an agent,
 - **When** the user patches its `protocol` to a different wire,
 - **Then** the request is refused `409` `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`, the stored wire is unchanged, and the message names `coffer provider use-builtin <wire>` as the way out
-- **And** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (FR-034)
+- **And** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (FR-019)
 
 ### Scenario: every surface offers the same models
 
-- **Given** an agent with an active connection that curates two model ids, and an agent catalogue of its own that names different ones,
-- **When** the model list is read for the web Chat page and for a channel's `/model` card,
-- **Then** both are exactly the connection's curated ids, in the user's order — the agent's own ids are absent, because the turns go to that endpoint and not to the account those ids belong to
-- **And** neither read touches the network, so an unreachable endpoint cannot silently shorten either list (FR-032, H2)
+- **Given** an agent with an active connection that curates two model ids, and
+  an agent catalogue of its own that names different ones,
+- **When** the model list is read for the web Chat page and for a channel's
+  `/model` card,
+- **Then** both are exactly the connection's curated ids, in the user's order —
+  the agent's own ids are absent, because the turns go to that endpoint,
+- **And** neither read touches the network, so an unreachable endpoint cannot
+  silently shorten either list (FR-033, H2).
 
 ### Scenario: list provider profiles
 
@@ -939,39 +884,6 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   internal default globally, enforced by the database as well as by the
   operation).
 
-### Scenario: switching the internal engine's connection drops a model it does not serve
-
-- **Given** connection A is the internal default and the internal-engine model
-  is one of A's models,
-- **When** the user makes connection B the internal default,
-- **Then** the internal-engine model is cleared — so
-  `resolve_internal_connection()` is `None` until a model is picked again —
-  unless B's curated `models` already lists that id, in which case it is kept;
-  nothing is probed over the network, and re-setting A, which is already the
-  internal default, changes nothing.
-
-### Scenario: switch off and re-time the passes Coffer runs unattended
-
-- **Given** a fresh vault, where aggregation and organise run on their own
-  timers and tidy does not,
-- **When** the operator switches one pass on or off, or gives it an interval,
-  or returns it to its own default (`PUT /api/v1/internal-engine-config/upkeep`,
-  one pass per request),
-- **Then** that pass's switch and interval change and no other pass's do, the
-  reported default interval says what runs while none is chosen, an interval
-  below the floor and an unknown pass name are both refused, and the running
-  worker picks the change up without a restart.
-
-### Scenario: choose the model the internal engine runs on
-
-- **Given** a connection is the internal default,
-- **When** the operator sets a model on the global internal-engine config
-  (`PUT /api/v1/internal-engine-config`),
-- **Then** `GET /api/v1/internal-engine-config` returns that model, an
-  `internal_engine_model_set` audit entry is recorded, and
-  `resolve_internal_connection()` pairs the chosen model with the resolved
-  internal-default connection (the model lives apart from the connection, E3).
-
 ### Scenario: the agent's model picker offers a fixed list without free-form entry
 
 - **Given** an agent whose model is being chosen — on its detail page or in a
@@ -1099,14 +1011,16 @@ connection's existing curated selection is left exactly as it was.
 
 **Projection**
 
-- **FR-007**: System MUST project into `~/.claude/settings.json` via
-  `ConfigFileStore.write_text_atomic` (atomic, with `.bak` rotated through three
-  generations), merging only the managed keys and preserving everything else.
-  `ANTHROPIC_API_KEY` MUST NOT be written. Every projection write (this one,
-  FR-008's, and their de-projections) MUST carry the fingerprint of the content
-  it read and MUST be refused with 409 `CONFIG_FILE_STALE` — audited as
-  `provider_projection_refused` — when the file changed on disk in between, so a
-  concurrent edit is never silently overwritten.
+- **FR-007**: System MUST project into `~/.claude/settings.json` through spec
+  [agent-registry](../agent-registry/spec.md)'s config-write machinery — the
+  atomic write with its rotated `.bak` (agent-registry FR-017) and the
+  fingerprint that refuses a write onto content that changed underneath it
+  (agent-registry FR-036) — merging only the managed keys and preserving
+  everything else. `ANTHROPIC_API_KEY` MUST NOT be written. Every projection
+  write — this one, FR-008's, and their de-projections — MUST surface such a
+  refusal as 409 `CONFIG_FILE_STALE` and MUST audit it as
+  `provider_projection_refused`, so a concurrent edit by the user or by the
+  agent's own CLI is never silently overwritten.
 - **FR-008**: System MUST project into `~/.codex/config.toml` via `tomlkit`
   (comment/order-preserving), merging only the managed keys and preserving
   everything else. When the connection curates `text` models it MUST also write
@@ -1115,13 +1029,9 @@ connection's existing curated selection is left exactly as it was.
   drop that pointer only when it names the Coffer-owned filename.
 - **FR-009**: The model keys MUST come from the AGENT's binding. An unset
   `model` or `fast_model` MUST leave the corresponding key out of — or removed
-  from — the native config, so the agent runs on its own default. That binding
-  MUST be settable without the web UI: `PATCH /api/v1/agents/{name}` carries
-  `model` / `fast_model` / `wire_api`, and `coffer agent edit` exposes them as
-  `--model` / `--fast-model` / `--wire-api`, with `--clear-fast-model` for the
-  explicit null that unbinds the fast slot. It is an option on the verb that
-  edits the agent rather than a command of its own, because it is a field of
-  the agent.
+  from — the native config, so the agent runs on its own default. The surface
+  that SETS that binding is spec agent-registry's, since the field is the
+  agent's; this requirement is about what the projection reads.
 - **FR-010**: Domain projection logic MUST be pure (no I/O): the `apply_*` /
   `remove_*` functions in `domain/provider/projection.py` take the existing text
   and return the new native-config TEXT; `ProviderProjector` performs the file
@@ -1145,18 +1055,18 @@ connection's existing curated selection is left exactly as it was.
   non-empty `skipped` list — NOT an error.
 - **FR-013**: System MUST emit an audit event with value `"provider_switched"`
   and details `{from, to, protocol, agents}`.
-- **FR-013a**: `POST /api/v1/providers/use-builtin/{wire}` MUST remove Coffer's
+- **FR-014**: `POST /api/v1/providers/use-builtin/{wire}` MUST remove Coffer's
   managed keys from the agent behind that wire and clear the active connection's
   flag, idempotently, reverting a connection that reaches several agents as a
   unit.
-- **FR-013b**: At boot, for each agent type with an active connection reaching
+- **FR-015**: At boot, for each agent type with an active connection reaching
   it, System MUST check that the agent's native config actually carries the
   projection and MUST clear `is_active` when it does not. It MUST NOT write the
   projection back; the opposite drift MUST be reported rather than removed.
 
 **Key resolution**
 
-- **FR-014**: `coffer provider key --connection <name>` /
+- **FR-016**: `coffer provider key --connection <name>` /
   `GET /api/v1/providers/{name}/key` MUST resolve exactly that connection's
   credential ref, decrypt via `EncryptedCredentialStore.get(ref)`, and print or
   return it without logging the value. The wire-keyed form
@@ -1165,7 +1075,7 @@ connection's existing curated selection is left exactly as it was.
 
 **Convergence**
 
-- **FR-015**: The `provider` kind MUST be registered into the composition root's
+- **FR-017**: The `provider` kind MUST be registered into the composition root's
   kind table so the sync exporter and the resource applier carry it
   automatically. An incoming document MUST NOT change the local row's reach
   (`enabled` / `scope`), and after a round the kind's post-import hook MUST
@@ -1173,7 +1083,7 @@ connection's existing curated selection is left exactly as it was.
 
 **Audit**
 
-- **FR-016**: `PROVIDER_SWITCHED` (`"provider_switched"`),
+- **FR-018**: `PROVIDER_SWITCHED` (`"provider_switched"`),
   `PROVIDER_INTERNAL_DEFAULT_SET` (`"provider_internal_default_set"`) and
   `PROVIDER_PROJECTION_REFUSED` (`"provider_projection_refused"`) MUST be in
   `AuditEventType` and emitted from the switch, the internal-default operation
@@ -1183,20 +1093,19 @@ connection's existing curated selection is left exactly as it was.
 
 **Surfaces**
 
-- **FR-034**: A connection's `protocol` MUST be correctable — the probe that
+- **FR-019**: A connection's `protocol` MUST be correctable — the probe that
   guessed the wire can be wrong, and re-entering the key to fix it is a worse
   answer than editing it. But the wire is **not inert**, so changing it MUST be
   refused while the connection is active, with a conflict that names the way
   out. Two things key off it: a keyless (`ollama`) connection covers no agent
-  whatever its scope says (FR-019), and `use-builtin <wire>` finds the agent to
+  whatever its scope says (FR-022), and `use-builtin <wire>` finds the agent to
   revert through the wire. Moving the wire of a connection that is currently
   projected would leave the native config Coffer already wrote standing, with
   nothing left that would ever take it off. Silently de-projecting instead MUST
   NOT be the answer: the developer asked to change a field, not to take their
   agents off a gateway. The refusal MUST be reachable on every surface that
   offers the edit — REST, `coffer provider edit`, and the connection's form.
-
-- **FR-017**: Create, switch, revert-to-built-in, rename and delete MUST be
+- **FR-020**: Create, switch, revert-to-built-in, rename and delete MUST be
   available via (a) the REST API, (b) `coffer provider …` with `--json` on
   `list`, and (c) the web surfaces — the Model providers library for create and
   delete, the Agent detail page for the switch, the connection's own page for
@@ -1206,23 +1115,23 @@ connection's existing curated selection is left exactly as it was.
   the field immutable. Reverting is `coffer provider use-builtin <wire>`: a
   surface that can put an agent onto a Coffer connection and not take it off
   again is half an operation.
-- **FR-018**: The CLI `key` subcommand MUST accept `--connection <name>` as its
+- **FR-021**: The CLI `key` subcommand MUST accept `--connection <name>` as its
   primary form and `--wire <wire>` as the back-compat form, and MUST refuse a
   call naming neither.
 
-**Internal engine connection**
+**Internal-engine connection**
 
-- **FR-019**: The `ollama` protocol is internal-only: such a connection MUST
+- **FR-022**: The `ollama` protocol is internal-only: such a connection MUST
   reach no agent whatever its scope says, MUST never be `is_active`, and
   activating it MUST write no native config. The rule is enforced in
   `application/provider/targets.py::scoped_targets`, which answers `[]` for
   `ollama` **before** the scope is read — it is a rule about projection, not
   about the config's shape, and scope lives outside the config.
-- **FR-020**: `credential_ref` MUST be optional — required for `anthropic` /
+- **FR-023**: `credential_ref` MUST be optional — required for `anthropic` /
   `openai` / `unknown`, absent for `ollama`. On create, supplying neither
   `secret_value` nor `credential_ref` is valid ONLY for `ollama`; elsewhere
   FR-004's exactly-one rule stands.
-- **FR-021**: At most one connection globally MUST have `internal_default=true`.
+- **FR-024**: At most one connection globally MUST have `internal_default=true`.
   `set_internal_default` MUST clear the flag on all others, then set the target
   (sequential clear-then-set, serialised by the single-process daemon).
   Converging more than one MUST normalise: keep the most-recently-updated.
@@ -1235,44 +1144,30 @@ connection's existing curated selection is left exactly as it was.
   internal engine use?" a question with no defined answer. A partial unique index
   restricted to flagged provider rows makes a second one unrepresentable,
   whatever writes it.
-
-  A change of connection MUST also DROP the internal-engine model (E3). That
-  model is a global singleton with no link to the connection, so carrying the
-  previous connection's model across left Coffer's own passes aimed at a model
-  the new endpoint has never heard of. The one model kept is one the newly-chosen
-  connection CURATES: a curated `models` list is that connection's own catalogue,
-  so an id on it is still servable. Nothing is probed to decide — a settings
-  write MUST NOT depend on an endpoint being reachable. Cleared, the model falls
-  to `None`, `resolve_internal_connection()` returns `None` (FR-023's clean
-  no-op), and the model dropdown shows its placeholder over the new connection's
-  models. Setting the connection that is ALREADY the internal default MUST change
-  nothing. The rule lives in `set_internal_default`, so the HTTP route and
-  `coffer provider internal-default` both get it.
-- **FR-022**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
-  connection as the internal-engine default (applying FR-021), emit a
+- **FR-025**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
+  connection as the internal-engine default (applying FR-024), emit a
   `provider_internal_default_set` audit event, and return the updated
-  `ProviderOut`.
-- **FR-023**: `resolve_internal_connection()` MUST return the internal-default
-  connection paired with the global internal-engine model, or `None` when no
-  connection is marked or no model is chosen. When `None`, Coffer's internal
-  passes MUST be a clean no-op rather than an error.
-- **FR-024**: Coffer MUST keep no second model registry: the internal engine
-  builds its chat model from the internal-default connection via
-  `build_chat_model(resolved, …)`, dispatched by protocol. The introspection
-  routes (`POST /api/v1/models/list-models`, `/test-connection`,
-  `/detect-protocol`) MUST be retained.
+  `ProviderOut`. Setting the internal default MUST notify the engine so it can
+  apply its own drop rule (spec
+  [internal-engine](../internal-engine/spec.md) FR-007); the notification is a
+  port, not an import, so this operation never reads or writes the engine's own
+  settings row.
+- **FR-026**: The endpoint-introspection routes MUST remain available to callers
+  holding a connection that is not saved yet: `POST /api/v1/models/list-models`,
+  `/test-connection` and `/detect-protocol` each accept an inline `secret_value`
+  instead of a `credential_ref` and persist nothing.
 
 **Curated model set**
 
-- **FR-025**: `ProviderConfig` MUST carry `models` — the set of model ids the
-  connection OFFERS downstream (**refined by FR-029** into a list of
+- **FR-027**: `ProviderConfig` MUST carry `models` — the set of model ids the
+  connection OFFERS downstream (**refined by FR-031** into a list of
   `{id, modality}` objects). An EMPTY list MUST mean no restriction (every model
   the endpoint serves) and MUST be the default. The field MUST NOT be read as a
   chosen model: the choice stays at the point of use (E1/E3). Ids MUST be
   validated for shape only — non-blank, deduplicated preserving order, at most
   200 ids of at most 200 characters — and MUST NEVER be checked against a list of
   model names Coffer writes down.
-- **FR-026**: `ProviderCreate.models` (`null` ⇒ empty) and `ProviderPatch.models`
+- **FR-028**: `ProviderCreate.models` (`null` ⇒ empty) and `ProviderPatch.models`
   MUST carry the set; `ProviderOut.models` MUST return it. A `PATCH` MUST replace
   the whole value — `null` leaves it unchanged, `[]` clears the restriction — and
   MUST NOT require a route of its own. A change MUST ride the `resource_updated`
@@ -1280,7 +1175,7 @@ connection's existing curated selection is left exactly as it was.
 
 **Rename**
 
-- **FR-027**: A connection MUST be renamable through a route of its own
+- **FR-029**: A connection MUST be renamable through a route of its own
   (`POST /api/v1/providers/{name}/rename`), NOT a `ProviderPatch` field. The
   operation MUST move, together: the resource row, the vault entry the
   connection owns (`provider/<name>/key` — unless another resource also cites
@@ -1293,22 +1188,22 @@ connection's existing curated selection is left exactly as it was.
 
 **Model introspection on the connection detail page**
 
-- **FR-028**: The Models tab MUST introspect the endpoint when it opens, without
+- **FR-030**: The Models tab MUST introspect the endpoint when it opens, without
   a user action, and MUST show that it is doing so. A probe that FAILS MUST say
   so on the surface and offer a retry — it MUST NOT fail silently. A failed or
   empty probe MUST leave the curated `models` selection unchanged, and the
-  empty-means-unrestricted semantics of FR-025 MUST be unaffected.
+  empty-means-unrestricted semantics of FR-027 MUST be unaffected.
 
 **Model modality**
 
-- **FR-029**: `ProviderConfig.models` MUST be a list of OBJECTS, not of strings:
+- **FR-031**: `ProviderConfig.models` MUST be a list of OBJECTS, not of strings:
   each entry is a `CuratedModel` of `{id: str, modality: Modality}`, where
   `Modality` is a `StrEnum` over `text` (the default), `embedding`, `image`,
-  `video` and `audio`. The id keeps every property FR-025 gives it (opaque,
+  `video` and `audio`. The id keeps every property FR-027 gives it (opaque,
   verbatim to the vendor, shape-validated only, deduplicated preserving order,
   empty list = no restriction). The **stored** modality is the truth: Coffer MUST
   infer a modality in exactly two places — the one-shot Alembic migration that
-  converts stored plain-string entries, and endpoint introspection (FR-030) —
+  converts stored plain-string entries, and endpoint introspection (FR-032) —
   both correctable by the user from the connection editor. There MUST be **no
   load-time shim**: reading a stored row MUST NOT re-derive a modality. The
   inference rule, identical in both places, operates on the lowercased id: one
@@ -1319,8 +1214,8 @@ connection's existing curated selection is left exactly as it was.
   The long names MUST match as substrings and the short ones (`sd`, `veo`, `tts`)
   as whole tokens (the id split on non-alphanumerics), so an unrelated id is not
   mis-tagged.
-- **FR-030**: `POST /api/v1/models/list-models` MUST return an inferred modality
-  alongside each discovered id (by the FR-029 rule), so the connection editor
+- **FR-032**: `POST /api/v1/models/list-models` MUST return an inferred modality
+  alongside each discovered id (by the FR-031 rule), so the connection editor
   pre-fills a sensible value the user can correct; the value it returns is a
   suggestion, never a stored fact. Every CHAT model picker MUST narrow the active
   connection's curated set to modality `text` — the ids fed to
@@ -1334,28 +1229,21 @@ connection's existing curated selection is left exactly as it was.
   semantics are unchanged (`null` leaves the set alone, `[]` clears the
   restriction).
 
-**The model catalogue**
+**What the connection contributes to a picker**
 
-- **FR-031**: `GET /api/v1/agent-providers/{agent_key}/models` MUST answer, per
-  agent type, which models that agent can be put on, read back from the
-  installed agent and never written down in Coffer. Each entry MUST carry `id`,
-  `label`, `description`, the reasoning `efforts` its runtime reports and the
-  `default_effort` it would use, keeping a reported default only when it is one
-  of the offered levels. Every source MUST degrade to nothing on its own; an
-  unknown `agent_key` MUST be a 404.
-- **FR-032**: What a picker is OFFERED MUST be: the active reaching connection's
+- **FR-033**: What a picker is OFFERED MUST be: the active reaching connection's
   curated `text` ids when it curates any, and otherwise the agent's own
-  catalogue. That read MUST NOT touch the network. Levels MUST survive it — an
-  id the agent also reports keeps the levels the agent reported. **Every surface
-  that offers a model MUST get this answer from the same place**:
-  `GET /api/v1/agent-providers/{agent_key}/models` serves it, and a channel's
-  `/model` card resolves it in-process through the same function. No surface may
-  compute its own. The web picker used to: it pulled the connections into the
-  browser, introspected the endpoint on each first open, and offered the UNION
-  of that and the agent's catalogue — so it listed ids the endpoint would
+  catalogue (spec agent-registry). That read MUST NOT touch the network. Levels
+  MUST survive it — an id the agent also reports keeps the levels the agent
+  reported. **Every surface that offers a model MUST get this answer from the
+  same place**: `GET /api/v1/agent-providers/{agent_key}/models` serves it, and a
+  channel's `/model` card resolves it in-process through the same function. No
+  surface may compute its own. The web picker used to: it pulled the connections
+  into the browser, introspected the endpoint on each first open, and offered the
+  UNION of that and the agent's catalogue — so it listed ids the endpoint would
   reject, disagreed with the same user's `/model` card, and silently shortened
   its list whenever the endpoint was unreachable.
-- **FR-033**: Every Coffer surface that chooses a model MUST offer a fixed list
+- **FR-034**: Every Coffer surface that chooses a model MUST offer a fixed list
   with no free-text entry, always including the current value. A model name and
   a reasoning level MUST both be passed to the agent verbatim, with no
   validation against a list of Coffer's own.
@@ -1369,12 +1257,12 @@ connection's existing curated selection is left exactly as it was.
   row's per-agent `scope`.
 - **`CuratedModel` / `Modality`**: one curated entry, `{id, modality}`, and the
   `StrEnum` over `text` / `embedding` / `image` / `video` / `audio` it carries
-  (FR-029). The modality is Coffer's own note about an opaque id — stored, never
+  (FR-031). The modality is Coffer's own note about an opaque id — stored, never
   re-derived at read time — and it is what narrows a connection's curated set to
   the chat models a picker may offer.
 - **`ResolvedConnection`**: a connection paired with the model to run on it,
-  since the model lives apart from the connection; what
-  `resolve_internal_connection()` returns and `build_chat_model` consumes.
+  since the model lives apart from the connection. The value object is declared
+  in this kind's domain; what it is FOR is spec internal-engine's.
 - **`apply_anthropic_settings` / `apply_codex_provider`** (and their `remove_*`
   inverses): pure functions in `domain/provider/projection.py` that return the
   new native-config TEXT, analogous to `domain/agent/mcp_install.py`'s
@@ -1388,11 +1276,9 @@ connection's existing curated selection is left exactly as it was.
   protocol (E3/F1).
 - **`scoped_targets` / `projection_targets`**: the configured reach, and the
   reach intersected with `enabled` — two questions kept apart on purpose.
-- **`AgentModelCatalogueService`**: `catalogue()` (what an agent can run),
-  `offered()` (what a picker shows), `efforts()`, `suggest()`.
-- **`ProviderService.set_internal_default(name)` /
-  `resolve_internal_connection()`**: the global internal-engine flag, the model
-  it drops, and the resolved pair the engine runs on.
+- **`ProviderService.set_internal_default(name)`**: the global internal-engine
+  flag — clear-then-set, the audit event, and the notification that lets the
+  engine apply its own drop rule.
 
 ## Success Criteria
 
@@ -1407,17 +1293,22 @@ connection's existing curated selection is left exactly as it was.
 - **SC-004**: `make verify` passes locally and in CI.
 - **SC-005**: Activating a connection writes the target native-config key set
   and does NOT touch any key outside the managed set.
-- **SC-006**: With an `internal_default` connection and a model configured,
-  Coffer's own passes run on it; with neither, they are a clean no-op.
-- **SC-007**: A model newly released by an agent's own CLI reaches every Coffer
-  picker with no Coffer release.
+- **SC-006**: Exactly one connection at a time is the internal-engine default,
+  whatever writes the flag — the operation, a generic resource update, the CLI
+  or an incoming synced document.
 
 ## Assumptions
 
-- Spec agent-registry is in place: `AgentType`, `AgentConfig`, and agent CRUD
-  with its `on_delete` hook are available.
-- `EncryptedCredentialStore` (the Fernet vault) and
-  `ConfigFileStore.write_text_atomic` are available (spec mcp-gateway).
+- Spec [agent-registry](../agent-registry/spec.md) is in place: `AgentType`,
+  `AgentConfig`, agent CRUD with its `on_delete` hook, the per-agent model
+  binding this spec's projection reads, and the config-file store whose atomic
+  write, `.bak` rotation (agent-registry FR-017) and fingerprint refusal
+  (agent-registry FR-036) every projection write goes through.
+- The Fernet vault (`EncryptedCredentialStore`) is available — spec
+  credentials.
+- Spec [internal-engine](../internal-engine/spec.md) owns what the connection
+  flagged `internal_default` is USED for: the engine's model, its unattended
+  passes, and the rule that drops a model when the flag moves.
 - `tomlkit` is already a backend dependency (added for the MCP TOML path).
 - Coffer runs as a single-user personal tool; no multi-user access control is
   needed beyond the existing `X-Coffer-Token` gate.

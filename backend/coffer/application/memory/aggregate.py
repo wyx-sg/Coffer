@@ -10,11 +10,11 @@ filesystem and no database at all.
 Two decisions live here and are documented where they are made, not just in
 this docstring:
 
-- :func:`merge_duplicates` implements FR-022's "only on an exact signal" rule.
+- :func:`merge_duplicates` implements FR-015's "only on an exact signal" rule.
   Two facts merge into one (union of origins) only when they are identical in
   a way that cannot be a coincidence: the same normalised body text, or the
   same ``(type, partition, normalised title)``. Nothing softer — a fuzzy
-  match belongs to the organise pass's model (spec memory FR-030), which can
+  match belongs to the organise pass's model (spec memory FR-017), which can
   weigh a judgement call; a deterministic guess here would silently drop a
   fact no one asked it to drop.
 - :func:`assign_slugs` gives every fact a stable, readable file name, on the
@@ -118,7 +118,7 @@ def build_fact(
     )
 
 
-# ----- FR-022: merge only what is certain -----------------------------------
+# ----- FR-015: merge only what is certain -----------------------------------
 
 
 def _normalize(text: str) -> str:
@@ -127,7 +127,7 @@ def _normalize(text: str) -> str:
 
 def merge_duplicates(facts: Sequence[Fact]) -> tuple[Fact, ...]:
     """Merge facts that are certainly the same thing; leave everything else
-    apart. See the module docstring for the exact-signal rule (FR-022).
+    apart. See the module docstring for the exact-signal rule (FR-015).
 
     Uses union-find over the two signals so the merge is transitive: if A and
     B share a body and B and C share a title, all three land in one fact

@@ -147,7 +147,7 @@ class InboundProcessor:
             # alone, leaving the bot silent. Interrupt the live turn so its
             # partial reply is the contract — not a turn that completes
             # undelivered. (The interrupt also pauses the conversation's queue,
-            # FR-051, so nothing queued behind it runs into a bot that is gone.)
+            # spec chat FR-019, so nothing queued behind it runs into a bot that is gone.)
             if session.running_conversation_id is not None:
                 with contextlib.suppress(Exception):
                     self._turns.interrupt_turn(session.running_conversation_id)
@@ -176,7 +176,7 @@ class InboundProcessor:
                 # owner-gated by the sender_id checks below).
                 return
             if binding.ignore_other_mentions and msg.mentions_others:
-                # FR-035: a group message that @mentions another user is aimed
+                # FR-037: a group message that @mentions another user is aimed
                 # at a human — drop it silently (no reply), before the owner
                 # gate, so a bot in a busy group never butts in regardless of
                 # who sent it.
@@ -232,15 +232,15 @@ class InboundProcessor:
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
         )
-        # FR-048: taken where the person's own message is still intact — before
+        # spec chat FR-011: taken where the person's own message is still intact — before
         # the context blocks below fold in, and from this message's own files.
         title_hint = conversation_title_hint(text, attachments)
         if attachments:
             # Remember it (owner-gated already) for a `/save` that follows
-            # (spec knowledge FR-036) — never the thread-history attachments
+            # (spec channels FR-014) — never the thread-history attachments
             # folded in below. The turn below still runs unchanged; `/save`
             # only ALSO makes this saveable. One slot, first file only: the
-            # ingest service takes one file per call (FR-037).
+            # ingest service takes one file per call (FR-039).
             session = self._session(binding.name, peer.chat_id, msg.thread_id)
             session.pending_document = attachments[0]
         # A slash command is text-only; a caption starting with "/" alongside an
@@ -265,7 +265,7 @@ class InboundProcessor:
             # else yet — skip the fetch rather than echo it back into its own
             # context. Platforms with no history-fetch API (Telegram) never
             # reach here at all. The thread's own images/files download
-            # alongside its text (FR-029) so a picture in the thread reaches the
+            # alongside its text (FR-030) so a picture in the thread reaches the
             # vision agent, not a dead file link.
             fetcher = cast(ContextFetchPort, binding.adapter)
             items, thread_atts = await fetcher.fetch_thread(
@@ -296,14 +296,14 @@ class InboundProcessor:
                 peer,
                 text,
                 self._session(binding.name, peer.chat_id, msg.thread_id),
-                # FR-064: a command answer is the asker's business, not the room's.
+                # FR-049: a command answer is the asker's business, not the room's.
                 private_send(safe_send, target_for_command(msg, text)),
                 chat_kind=msg.chat_kind,
                 thread_id=msg.thread_id,
             )
             return
         # A media message with no caption still needs non-blank text to persist.
-        # FR-042: the turn opens with its own provenance (platform, chat kind +
+        # FR-035: the turn opens with its own provenance (platform, chat kind +
         # title + id, thread, sender) so the agent knows which group/thread it is
         # answering in instead of inferring it from the bot's group list. Folded
         # in AFTER command detection (a prefixed "/help" would stop being a
@@ -311,9 +311,9 @@ class InboundProcessor:
         # It rides on EVERY turn, not just the first: ``/agent`` can swap the
         # agent mid-conversation and a resumed session would otherwise lose it.
         # The inbound platform_message_id rides along so the turn can react on it
-        # (FR-036 receipt/completion ack) where the transport supports reactions,
+        # (FR-038 receipt/completion ack) where the transport supports reactions,
         # and the sender's mention id so a group reply opens by @mentioning
-        # whoever asked (FR-070).
+        # whoever asked (FR-055).
         origin = format_origin(msg, platform=binding.channel_type)
         await self._turn_driver.submit(
             binding,
@@ -346,7 +346,7 @@ class InboundProcessor:
         await self._events.on_lifecycle(binding, event)
 
     async def on_stop(self, event: InboundStop) -> None:
-        """The user pressed the platform's own stop control (FR-063)."""
+        """The user pressed the platform's own stop control (FR-048)."""
         binding = self._bindings.get(event.channel)
         if binding is None:
             return

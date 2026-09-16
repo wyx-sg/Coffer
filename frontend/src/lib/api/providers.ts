@@ -33,7 +33,7 @@ export type Protocol = Schemas["Protocol"];
 type AgentType = Schemas["AgentType"];
 
 /**
- * What KIND of model a curated entry names (provider-switching FR-029). One
+ * What KIND of model a curated entry names (spec provider-switching FR-031). One
  * endpoint serves more than chat — the same base URL and key answer for
  * embeddings, images, video and speech — so every picker asks for the kind it
  * needs instead of being handed every id: a chat dropdown takes `text`. This

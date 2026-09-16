@@ -1,5 +1,5 @@
-"""Channel health: configuration the platform will not honour (FR-060), and
-the one-tap pairing link (FR-066)."""
+"""Channel health: configuration the platform will not honour (spec channels/telegram FR-004), and
+the one-tap pairing link (FR-051)."""
 
 from __future__ import annotations
 
@@ -32,7 +32,8 @@ async def _running(env: ChannelEnv, adapter: FakeChannelAdapter, **config: objec
 
 
 @pytest.mark.acceptance(
-    spec="channels", scenario="privacy mode is reported when it contradicts the configuration"
+    spec="channels/telegram",
+    scenario="privacy mode is reported when it contradicts the configuration",
 )
 async def test_privacy_mode_is_reported_when_it_contradicts_the_configuration(
     env: ChannelEnv,
@@ -80,7 +81,7 @@ async def test_a_transport_without_an_identity_reports_nothing(env: ChannelEnv) 
     assert (await env.service.status(name)).diagnostics == ()
 
 
-# -- the pairing link (FR-066) ------------------------------------------------
+# -- the pairing link (FR-051) ------------------------------------------------
 
 
 @pytest.mark.acceptance(spec="channels", scenario="pairing by link claims the code")
@@ -105,7 +106,7 @@ async def test_a_channel_with_no_known_username_still_issues_a_code(env: Channel
     assert pair_url == ""  # the typed code is the only way in
 
 
-# -- private answers in a group, end to end (FR-064) --------------------------
+# -- private answers in a group, end to end (FR-049) --------------------------
 
 
 async def test_a_group_status_answers_the_asker_alone(env: ChannelEnv) -> None:
@@ -149,13 +150,13 @@ async def test_a_group_new_still_answers_the_room(env: ChannelEnv) -> None:
 
 
 async def test_a_group_selection_card_is_not_delivered_privately(env: ChannelEnv) -> None:
-    """FR-064 excludes cards on purpose.
+    """FR-049 excludes cards on purpose.
 
-    A card is the one surface that must be REWRITTEN after it is used (FR-018),
+    A card is the one surface that must be REWRITTEN after it is used (FR-015),
     and Telegram rewrites an ephemeral message through a different address space
     (`receiver_user_id` + `ephemeral_message_id`) with an edit it documents as
     not guaranteed to arrive. A card that cannot be reliably rewritten keeps
-    offering the option already taken — exactly what FR-018 prevents — so it
+    offering the option already taken — exactly what FR-015 prevents — so it
     stays an ordinary message even though the command that produced it is
     private.
     """

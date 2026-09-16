@@ -2,7 +2,7 @@
 
 Entities, fields, relationships, and SQLite additions for the skill manager.
 Depends on the agent kind from spec agent-registry and the kind-agnostic Resource
-framework from spec mcp-gateway.
+framework from spec resource-framework.
 
 ## Domain entities (`backend/coffer/domain/skill/`)
 
@@ -87,7 +87,7 @@ String-valued enum.
 ### Unmanaged Skill (`domain/skill/scan.py` + `domain/agent/scan.py`) — workspace amendment
 
 A derived (never stored) view of a skill-shaped entry found in an agent's
-skill locations that Coffer does not manage (FR-022). The filesystem is the
+skill locations that Coffer does not manage (FR-016). The filesystem is the
 source of truth; adoption or deletion are the only mutations.
 
 `scan_locations(agent_type, config_dir)` lives in `domain/agent/scan.py`
@@ -207,8 +207,8 @@ The workspace amendment adds:
 
 | Value                     | When emitted                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-023)                                       |
-| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-024)                                   |
+| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-017)                                       |
+| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-018)                                   |
 | `skill_relinked`          | A delivered copy's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 
 Skill **removal** has no dedicated event — deleting a skill goes through
@@ -289,10 +289,12 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 
 | Method                                                                 | Purpose                                                                                                                                                                          |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-022 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
-| `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-023: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
-| `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-024: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
-| delivery reconciliation (`delivery_ops.py`)                            | FR-025: `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
+| `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-016 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
+| `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-017: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
+| `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-018: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
+| `list_skills() -> list[Resource]` (behind `coffer__list_skills`)       | FR-026: every registered `skill` row, name and description only, with no per-agent filter. |
+| `get_skill(name)` + `master_path(name)` (behind `coffer__load_skill`)  | FR-027: resolve the name through the registry, then read that master folder's `SKILL.md` verbatim; no other file is reachable. |
+| delivery reconciliation (`delivery_ops.py`)                            | FR-019: `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
 
 ### File viewer (`application/skill/file_ops.py`)
 
@@ -300,9 +302,10 @@ Stateless helpers beside `service.py` (same pattern as
 `verify_ops.py`) that expose a skill's master folder to
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
 in-app viewer and surface each node's absolute on-disk path so the UI can offer
-open-in-external-editor / reveal-in-file-manager affordances (FR-006). A
+open-in-external-editor / reveal-in-file-manager affordances (spec.md
+`## Assumptions`). A
 **write** helper (`write_skill_file`) is the only mutation here, and it serves
-the in-app editor and programmatic REST/CLI clients alike (FR-028) — one
+the in-app editor and programmatic REST/CLI clients alike (FR-025) — one
 endpoint, one code path. The conditional half of that write (comparing the
 caller's `expected_fingerprint` against the bytes on disk and raising for a 409)
 lives one layer up in `content_ops.py`, so the containment helpers stay free of
@@ -315,7 +318,7 @@ approach from `domain/skill/validator.py`.
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `build_file_tree(master_folder) -> FileNode`                       | Recursively list the master folder; skip symlinks whose real target escapes the folder; never descend symlinked dirs. Each node carries its absolute on-disk path.                                                                                 |
 | `read_skill_file(master_folder, relpath) -> FileContent`           | Resolve `master_folder/relpath`, verify it stays inside the folder (else `ValueError`), read with a size cap, detect binary; returns the file's absolute path and containing folder's absolute path.                                               |
-| `write_skill_file(master_folder, relpath, content) -> FileContent` | FR-028 overwrite of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Returns the NEW fingerprint, so an editor holding the buffer open can save again without a re-read. |
+| `write_skill_file(master_folder, relpath, content) -> FileContent` | FR-025 overwrite of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Returns the NEW fingerprint, so an editor holding the buffer open can save again without a re-read. |
 
 #### File-node shape (`FileNode` / `SkillFileNodeOut`)
 
@@ -325,7 +328,7 @@ One node in the recursive tree. The root node has `path == ""`.
 | ---------- | ----------------- | -------------------------------------------------------------------------- |
 | `name`     | `str`             | entry's base name                                                          |
 | `path`     | `str`             | POSIX path relative to the master folder root (`""` for the root)          |
-| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal, FR-006)    |
+| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal)               |
 | `type`     | `"file" \| "dir"` | node kind                                                                  |
 | `size`     | `int \| None`     | byte size for files; `null` for directories                                |
 | `children` | `list[FileNode]`  | populated for directories (sorted dirs-first then by name); `[]` for files |
@@ -333,13 +336,13 @@ One node in the recursive tree. The root node has `path == ""`.
 #### File-content shape (`FileContent` / `SkillFileContentOut`)
 
 A single file's contents — what the in-app viewer renders and edits, and what
-the write returns (FR-028).
+the write returns (FR-025).
 
 | Field             | Type   | Notes                                                                            |
 | ----------------- | ------ | -------------------------------------------------------------------------------- |
 | `path`            | `str`  | POSIX path relative to the master folder root                                    |
-| `abs_path`        | `str`  | absolute on-disk path of the file (FR-006)                                       |
-| `folder_abs_path` | `str`  | absolute on-disk path of the file's containing folder (FR-006)                   |
+| `abs_path`        | `str`  | absolute on-disk path of the file                                                |
+| `folder_abs_path` | `str`  | absolute on-disk path of the file's containing folder                            |
 | `content`         | `str`  | file text; empty (`""`) when `binary` is true                                    |
 | `truncated`       | `bool` | true when the file exceeded the 256 KiB read cap and only the prefix is returned |
 | `binary`          | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |

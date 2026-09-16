@@ -301,7 +301,7 @@ MCP invocation records and conversations, none of which sync.
   grounds that a channel is an inbound surface bound to one machine and so
   travels to be at best inert and at worst a second machine answering the same
   conversation. That objection is answered rather than avoided by a binding
-  (spec channels FR-080): the document travels, the adapter does not, and only
+  (spec channels FR-026): the document travels, the adapter does not, and only
   the machine the document names starts one. The reversal is written up in spec
   vault-sync's `## What does not sync` amendment.
 - Coffer now writes the vault without a human in the loop. That is the real

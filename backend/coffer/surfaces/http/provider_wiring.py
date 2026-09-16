@@ -16,6 +16,7 @@ from fastapi import FastAPI
 
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
+from coffer.application.engine.resolve import InternalEngineConnection
 from coffer.application.provider.boot_reconcile import ProviderProjectionBootHeal
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.projector import ProviderProjector
@@ -24,7 +25,10 @@ from coffer.application.provider.sync_reconcile import ProviderProjectionReconci
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.surfaces.http.dependencies import get_internal_engine_config_service
+from coffer.surfaces.http.engine_config_composition import (
+    internal_default_model_guard,
+    internal_engine_connection,
+)
 from coffer.surfaces.http.provider_dependencies import set_provider_service
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
@@ -33,11 +37,14 @@ _log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ProviderWiring:
-    """What the provider kind hands back: its service (later kinds resolve the
-    internal connection through it) and the boot heal the lifespan runs."""
+    """What the provider kind hands back: its service, the boot heal the
+    lifespan runs, and the internal-engine connection tied over it — the seam
+    later kinds and the background workers resolve Coffer's own engine through,
+    so none of them has to hold this kind's service to reach it."""
 
     service: ProviderService
     boot_heal: ProviderProjectionBootHeal
+    internal_connection: InternalEngineConnection
 
 
 class _BootHeal(Protocol):
@@ -45,22 +52,6 @@ class _BootHeal(Protocol):
     test can hand in a fake without building a ``ProviderService``."""
 
     async def heal(self) -> list[str]: ...
-
-
-async def _resolve_internal_model() -> str | None:
-    """The internal-engine model (spec provider-switching amendment), resolved
-    lazily PER CALL: this runs at request time, long after wiring, so the
-    config service is read through its getter rather than captured here."""
-    return (await get_internal_engine_config_service().get()).model
-
-
-async def _clear_internal_model(actor: str) -> None:
-    """Forget the internal-engine model — what the provider service calls when
-    the internal default moves to a connection that does not curate the model
-    in force (spec provider-switching E3). Resolved lazily per call for the
-    same reason as the getter above, and audited like any other write of the
-    singleton."""
-    await get_internal_engine_config_service().update(model=None, actor=actor)
 
 
 def wire_provider_kind(
@@ -79,8 +70,10 @@ def wire_provider_kind(
         config_store=ConfigFileStore(),
         agents=agent_service,
         audit=audit,
-        resolve_internal_model=_resolve_internal_model,
-        clear_internal_model=_clear_internal_model,
+        # Coffer's own engine, told when the connection it runs on moves. The
+        # engine decides the fate of its model; this kind only reports the move
+        # and the new connection's catalogue (spec internal-engine FR-005).
+        engine=internal_default_model_guard(),
     )
     set_provider_service(provider_svc)
 
@@ -104,7 +97,13 @@ def wire_provider_kind(
         config_store=ConfigFileStore(),
         deactivate=provider_svc.deactivate,
     )
-    return ProviderWiring(service=provider_svc, boot_heal=boot_heal)
+    return ProviderWiring(
+        service=provider_svc,
+        boot_heal=boot_heal,
+        # Tied here because this is where both halves exist: the engine's rule
+        # (application.engine) and the kind that knows which row is flagged.
+        internal_connection=internal_engine_connection(provider_svc),
+    )
 
 
 async def run_provider_projection_sweep(heal: _BootHeal) -> None:

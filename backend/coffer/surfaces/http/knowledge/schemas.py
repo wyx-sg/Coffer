@@ -54,7 +54,7 @@ class FileOut(BaseModel):
     created_at: str
     updated_at: str
     body: str
-    #: Absolute on-disk paths, so the UI can offer open / reveal (FR-062).
+    #: Absolute on-disk paths, so the UI can offer open / reveal (FR-036).
     file_path: str
     folder_path: str
 
@@ -110,7 +110,7 @@ class SearchHitOut(BaseModel):
 
 class SearchOut(BaseModel):
     #: One entry per matching file. There is no retrieval mode a caller picks
-    #: and none the answer reports: search is literal, always (FR-024).
+    #: and none the answer reports: search is literal, always (FR-016).
     results: list[SearchHitOut]
 
 
@@ -121,5 +121,5 @@ class IngestedDocumentOut(BaseModel):
     description: str
     #: Which converter produced this file.
     converter: str
-    #: Path of the kept original under the collection's hidden ``.raw/`` (FR-035).
+    #: Path of the kept original under the collection's hidden ``.raw/`` (FR-024).
     raw_path: str

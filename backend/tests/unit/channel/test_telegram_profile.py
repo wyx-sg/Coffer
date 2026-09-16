@@ -1,4 +1,4 @@
-"""Start-up introspection and self-description (FR-059 / FR-065)."""
+"""Start-up introspection and self-description (FR-044 / FR-050)."""
 
 from __future__ import annotations
 
@@ -60,7 +60,8 @@ async def test_privacy_mode_on_is_reported_as_cannot_read() -> None:
 @pytest.mark.asyncio
 async def test_missing_privacy_field_stays_unknown() -> None:
     # An older Bot API server omits the field; unknown must never be reported
-    # as a problem (FR-060), so it stays None rather than defaulting to False.
+    # as a problem (spec channels/telegram FR-004), so it stays None rather than defaulting to
+    # False.
     assert (await probe_identity(_Calls({"getMe": {"id": 1}}))).reads_all_group_messages is None
 
 

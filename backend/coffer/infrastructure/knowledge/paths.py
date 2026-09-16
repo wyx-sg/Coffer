@@ -6,7 +6,7 @@ system assigns none of it any meaning (spec knowledge FR-004). The only
 directories Coffer itself creates inside a collection are ``.history/``,
 holding the revisions the tidy pass superseded, and ``.raw/``, holding the
 original bytes behind an uploaded document — both dot-prefixed so ripgrep
-skips them and the catalogue walks past them (FR-005, FR-035, FR-052).
+skips them and the catalogue walks past them (FR-005, FR-024, FR-032).
 
 ``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
 becomes a path component goes through the traversal guard here (FR-006).
@@ -165,7 +165,7 @@ def raw_path(relpath: str, original_name: str) -> pathlib.Path:
     one original per converted file, so nesting it the same way keeps the two
     trees walkable side by side and needs no collision-avoiding flattening.
     The converted file's own extension (``.md``) is replaced with the
-    original's own extension (FR-035) — the original is a ``.pdf`` or
+    original's own extension (FR-024) — the original is a ``.pdf`` or
     ``.docx``, not a Markdown file.
     """
     segments = split(relpath)

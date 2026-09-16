@@ -73,6 +73,7 @@ def test_another_pid_that_is_not_a_live_daemon_is_not_a_supersession(
     assert bootstrap.superseded_by() is None
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="a superseded daemon stands down")
 def test_another_live_daemon_supersedes_us(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     _write_daemon_json(tmp_path, pid=os.getpid() + 1, port=8007)

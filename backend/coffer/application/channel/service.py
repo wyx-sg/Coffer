@@ -41,7 +41,8 @@ _logger = logging.getLogger(__name__)
 class CallbackInfo:
     """How this SeaTalk channel receives events, and whether that is working.
 
-    FR-071: the block covers both delivery methods, and every field that belongs
+    spec channels/seatalk FR-004: the block covers both delivery methods, and every field that
+    belongs
     to the other one reports its absent value rather than a plausible-looking
     lie. On websocket delivery there is no port, no path, no public URL, no
     listener and no tunnel — ``websocket_state`` carries the whole truth instead.
@@ -71,7 +72,8 @@ class CallbackInfo:
 class ChannelDiagnostic:
     """Something about the channel that looks configured but will not work.
 
-    FR-060: the failure mode this exists for is a setting that reads correctly
+    spec channels/telegram FR-004: the failure mode this exists for is a setting that reads
+    correctly
     in Coffer and does nothing in the chat. A diagnostic always names the fix —
     reporting a problem the user cannot act on is just noise.
     """
@@ -95,7 +97,7 @@ class ChannelStatus:
     # the pointer names a row in THIS machine's conversation store.
     peer_conversation_id: str | None
     callback: CallbackInfo | None
-    # FR-041/FR-060: contradictions between the configuration and what the
+    # FR-029/spec channels/telegram FR-004: contradictions between the configuration and what the
     # platform actually permits. Empty is the healthy case.
     diagnostics: tuple[ChannelDiagnostic, ...] = ()
     # The machine this channel is bound to, and whether that machine is this
@@ -143,7 +145,7 @@ class ChannelService:
 
         Returns the code, its expiry, and — where the platform has a
         parameterised start link and the bot's username is known — a link that
-        carries the code (FR-066), so the owner pairs by opening it instead of
+        carries the code (FR-051), so the owner pairs by opening it instead of
         transcribing eight characters on a phone. The link is "" when there is
         none; the typed code always works.
         """
@@ -202,7 +204,7 @@ class ChannelService:
     def _privacy_mode_diagnostics(
         self, name: str, resource: Resource
     ) -> tuple[ChannelDiagnostic, ...]:
-        """FR-060: a Telegram bot runs with privacy mode ON by default, which
+        """spec channels/telegram FR-004: a Telegram bot runs with privacy mode ON by default, which
         withholds ordinary group messages from it entirely. A channel told to
         act on unaddressed group messages under that setting looks correct in
         Coffer and does nothing in the chat."""
@@ -262,7 +264,7 @@ class ChannelService:
         )
 
     def _callback_info(self, name: str, resource: Resource) -> CallbackInfo:
-        """The inbound-transport block for a SeaTalk channel (FR-071)."""
+        """The inbound-transport block for a SeaTalk channel (spec channels/seatalk FR-004)."""
         if str(resource.config.get("delivery") or "webhook") == "websocket":
             state = self._runtime.websocket_state(name)
             return CallbackInfo(

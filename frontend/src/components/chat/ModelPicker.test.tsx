@@ -160,7 +160,7 @@ describe("ModelPicker", () => {
     expect(onCommit).toHaveBeenCalledWith("gpt-5-codex");
   });
 
-  test("the current value is always selectable even when not in the source list", () => {
+  acceptance("chat", "the model picker always offers the current value", () => {
     // codex agent, no openai override; the bound value is a one-off id.
     render(<ModelPicker agentKey="codex" value="my-finetune" onCommit={vi.fn()} />);
     const trigger = screen.getByRole("combobox", { name: /agent model/i });

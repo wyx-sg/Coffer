@@ -33,7 +33,7 @@ def interim_snapshot(text: str) -> str:
     """One in-flight snapshot, ready for the wire: clipped to the stream budget
     and escaped so nothing in it is interpreted.
 
-    FR-070 shapes the order. Every snapshot — the opening one included — carries
+    FR-055 shapes the order. Every snapshot — the opening one included — carries
     the @mention at its head, because the platform decides @ notifications when
     the message is CREATED. So the mention is split off before the tail clip
     (which shortens from the front and would otherwise eat it) and re-joined

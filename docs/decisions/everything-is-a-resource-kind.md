@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-28
 **Deciders**: Yuxing Wu
-**Related**: [Resource Framework Upfront](resource-framework-upfront.md), spec `ui-shell`
+**Related**: [Resource Framework Upfront](resource-framework-upfront.md), spec `web-ui`
 
 The live decision is the one below **as narrowed by both amendments** at the end
 of this file: every *asset* is a resource kind under **Resources**, consumers
@@ -17,7 +17,7 @@ Spec `mcp-gateway` introduced the `mcp_server` resource kind on top of a
 kind-agnostic Resource framework (see [Resource Framework Upfront](resource-framework-upfront.md)).
 `mcp_server` is the kind that ships today.
 
-Spec `ui-shell` has to decide how resource kinds — and cross-cutting
+Spec `web-ui` has to decide how resource kinds — and cross-cutting
 user-facing concepts that are not resources in the domain sense (the audit
 log, settings) — surface in the navigation. The naïve approach is to
 introduce a second top-level concept in the IA: a "surface" axis sitting
@@ -81,7 +81,7 @@ Concrete consequences:
 **Show unbuilt kinds in the sidebar as disabled / "soon" placeholders.**
 Rejected.
 
-- Reads as an unfinished scaffold (the explicit anti-goal in spec ui-shell's
+- Reads as an unfinished scaffold (the explicit anti-goal in spec web-ui's
   motivation).
 - The forward-visibility benefit is real but small, and already provided by
   `.specify/memory/roadmap.md`.

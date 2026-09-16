@@ -37,7 +37,7 @@ def get_channel_service() -> ChannelService:
 class PairingCodeOut(BaseModel):
     code: str
     expires_at: datetime
-    # FR-066: a link that carries the code, so the owner pairs by opening it.
+    # FR-051: a link that carries the code, so the owner pairs by opening it.
     # "" when the platform has no such link or the bot's username is unknown —
     # the typed code always works.
     pair_url: str = ""
@@ -51,7 +51,7 @@ class ChannelPeerOut(BaseModel):
 
 
 class CallbackInfoOut(BaseModel):
-    """How a SeaTalk channel receives events (FR-071).
+    """How a SeaTalk channel receives events (spec channels/seatalk FR-004).
 
     Covers both delivery methods. On ``websocket`` the webhook-only fields report
     their absent/false values — there is no port, path, public URL, listener or

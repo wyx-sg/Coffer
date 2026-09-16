@@ -2,11 +2,11 @@
 
 Every operation resolves to a filesystem operation over
 ``~/.coffer/knowledge/``. What this layer adds on top of the directory is
-exactly one thing: **which collections the caller may see** (spec knowledge
-FR-012). A collection is a Resource, so the framework's per-agent scope
+exactly one thing: **which collections the caller may see** (spec knowledge FR-009). A collection is
+a Resource, so the framework's per-agent scope
 decides, and this service is the enforcement point for it.
 
-That enforcement is a convention, not a security boundary (FR-014): an agent
+That enforcement is a convention, not a security boundary (FR-011): an agent
 holding shell tools can read the directory itself. It prevents mistaken
 retrieval, not deliberate access.
 """
@@ -56,7 +56,7 @@ class KnowledgeService:
         """The collections ``agent`` may read, in name order.
 
         An agent's calls span every collection activated for it — there is no
-        rule that leaves one out of a default (FR-012), because a collection an
+        rule that leaves one out of a default (FR-009), because a collection an
         agent is authorized for but never searches is the death the named
         collections of the previous design died.
         """
@@ -79,7 +79,7 @@ class KnowledgeService:
     ) -> CollectionEntry:
         """Register a collection and create its directory.
 
-        Deliberate creation is the whole point (FR-010): nothing here is
+        Deliberate creation is the whole point (FR-007): nothing here is
         reachable from a read or a write, so a typo cannot conjure a collection.
         """
         try:
@@ -175,7 +175,7 @@ class KnowledgeService:
         collection = await self.require_visible(relpath, agent)
         fs.delete_file(relpath)
         # A converted file's original is kept only to stand behind the
-        # Markdown that came from it (FR-035); once that file is gone the
+        # Markdown that came from it (FR-024); once that file is gone the
         # original has nothing left to justify it.
         fs.remove_raw_original(relpath)
         await self._audit.record(

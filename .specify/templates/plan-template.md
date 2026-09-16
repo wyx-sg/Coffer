@@ -4,7 +4,7 @@
 **Input**: Feature specification from `specs/[short-name]/spec.md`
 
 <!--
-  No date field: `agents/sdd.md` forbids time annotations in spec / plan /
+  No date field: `.agents/sdd.md` forbids time annotations in spec / plan /
   research / data-model / quickstart. Chronology lives in git and in
   `.specify/memory/roadmap.md`.
 
@@ -56,7 +56,7 @@ specs/[short-name]/
     └── api.openapi.yaml # The wire contract — hand-authored, PR-reviewed
 ```
 
-See [`agents/sdd.md`](../../agents/sdd.md) for which of these are required and
+See [`.agents/sdd.md`](../../.agents/sdd.md) for which of these are required and
 which are written only when the feature needs them.
 
 ### Source Code

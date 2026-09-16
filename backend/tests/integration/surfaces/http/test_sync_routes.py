@@ -167,6 +167,10 @@ async def test_put_remote_refuses_what_git_would_read_as_an_option(client, body)
     "where",
     ["knowledge_root", "skills_root", "root", "relative"],
 )
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a working tree pointed inside the vault is refused",
+)
 async def test_put_remote_refuses_a_working_tree_inside_the_vault(client, fleet, where) -> None:
     """spec vault-sync ``## Concepts`` (working tree): the round mirrors the
     vault *into* the tree and ``reset --hard``s it, so a tree at, inside or

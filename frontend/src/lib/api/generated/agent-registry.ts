@@ -526,7 +526,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/fs/browse": {
+    "/agent-providers/{agent_key}/models": {
         parameters: {
             query?: never;
             header?: never;
@@ -534,117 +534,25 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the subdirectories of a local directory
-         * @description Read-only filesystem browse backing the web folder picker for choosing
-         *     an agent's config directory (a browser can't read absolute paths, but
-         *     the loopback daemon can). Returns a directory's path, its parent, and
-         *     its immediate subdirectories only — never file contents.
+         * List the models a picker should offer for an agent
+         * @description On the agent's own built-in login, what the installed agent itself
+         *     offers, in the order its own sources offer it (FR-032/FR-033). With a
+         *     Coffer connection projected into this agent, that connection's curated
+         *     ids are the list instead, in the user's own order — the turns go to
+         *     that endpoint, so the agent's own names would be rejected. A connection
+         *     that curates nothing narrows nothing. The read never touches the
+         *     network. Every entry — id, label, description — is
+         *     read back from the agent, never written into Coffer, because a list
+         *     written down here goes stale on the next CLI release. Each source
+         *     degrades to nothing on its own: a missing CLI, a changed bundle
+         *     layout, an unauthenticated or wedged agent costs the models that
+         *     source would have added and nothing else. Reasoning levels travel
+         *     beside the id, never inside it (FR-036). Read-only; emits no audit
+         *     event.
          */
-        get: operations["browseFilesystem"];
+        get: operations["listAgentModels"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fs/open": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Open a local path in an application
-         * @description Open an existing absolute path (a managed file or its folder) in an
-         *     application — the preferred editor (`with`) or the OS default. Backs the
-         *     read-only file viewers' "open in editor" action on the web, where a
-         *     browser can't reach the OS but the loopback daemon — always on the user's
-         *     own machine — can (ADR daemon-proxies-os-file-actions). Validated absolute-and-existing before any
-         *     launch; creates nothing.
-         */
-        post: operations["openFilesystemPath"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fs/reveal": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reveal a local path in the OS file manager
-         * @description Select / reveal an existing absolute path in the OS file manager (Finder /
-         *     Explorer; on Linux, where there is no portable "select", the containing
-         *     folder is opened). Backs the read-only file viewers' "reveal" action on
-         *     the web via the loopback daemon (ADR daemon-proxies-os-file-actions). Validated absolute-and-existing;
-         *     creates nothing.
-         */
-        post: operations["revealFilesystemPath"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fs/editors": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List GUI editors installed on this machine
-         * @description Enumerate common GUI code editors detected as installed, for the
-         *     preferred-editor picker in Settings (spec ui-shell). Detection is
-         *     per-OS: macOS returns app-bundle names (for `open -a`), Linux/Windows
-         *     return commands found on PATH. The returned `value` is exactly what
-         *     `/fs/open`'s `with` field accepts. The chosen preference itself stays
-         *     client-side (localStorage); this endpoint only lists candidates.
-         */
-        get: operations["listEditors"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fs/pick-folder": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Open the host's native folder dialog
-         * @description Open the OS-native directory dialog via the loopback daemon (macOS
-         *     `osascript`, Linux `zenity`/`kdialog`) and return the chosen absolute
-         *     path. A web browser cannot open a native dialog, so this is the daemon
-         *     counterpart to the in-app folder browser (`/fs/browse`). `available:false`
-         *     means this host has no native dialog tool (caller falls back to the in-app
-         *     browser); `available:true` with `path:null` means the user cancelled.
-         *     This is the ONLY native dialog the daemon opens: the open-file and
-         *     save-file dialogs are gone (FR-042) — the browser's own
-         *     `<input type="file">` / `<a download>` cover those better.
-         */
-        post: operations["pickFolder"];
         delete?: never;
         options?: never;
         head?: never;
@@ -671,11 +579,11 @@ export interface components {
         AgentPatch: {
             config_dir?: string;
             description?: string | null;
-            /** @description Per-agent model binding (spec provider-switching amendment 2026-06-22b) → ANTHROPIC_MODEL / Codex model. */
+            /** @description The agent's model binding (FR-031); spec provider-switching projects it into the native config. */
             model?: string | null;
-            /** @description Fast slot → ANTHROPIC_SMALL_FAST_MODEL (anthropic only). Explicit null clears it. */
+            /** @description The binding's fast slot (FR-031). Explicit null clears it. */
             fast_model?: string | null;
-            /** @description Codex wire for this agent's binding. Only "responses" is accepted — Codex refuses to load a config carrying the retired "chat". */
+            /** @description The binding's wire (FR-031). Only "responses" is accepted — see agent-registry/codex FR-011. */
             wire_api?: string | null;
         };
         AgentOut: {
@@ -684,7 +592,7 @@ export interface components {
             /** @description Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills. */
             config_dir: string;
             description?: string | null;
-            /** @description Per-agent model binding (null = unbound, falls back to the active connection during rollout). */
+            /** @description The agent's model binding (FR-031); null = unbound, so the agent runs on its own default. */
             model: string | null;
             fast_model: string | null;
             wire_api: string | null;
@@ -964,49 +872,18 @@ export interface components {
             /** @description The resolved coffer-mcp-shim command written/found, when installed. */
             command?: string | null;
         };
-        FsEntry: {
-            /** @description Directory name. */
-            name: string;
-            /** @description Resolved absolute path. */
-            path: string;
+        AgentModelOut: {
+            /** @description The id passed verbatim to the agent's CLI — whatever that agent calls the choice, which for Claude Code is a tier alias and for Codex a versioned model name. */
+            id: string;
+            label?: string;
+            description?: string;
+            /** @description The reasoning-effort levels this model runs at, in the agent's own order; empty for an agent that takes no such setting. An effort is not part of the model name — it is its own field on a turn — so it is chosen beside the model, not instead of one. */
+            efforts?: string[];
+            /** @description The level the agent itself would use when none is chosen, kept only when it is one of the offered levels. Null when the runtime publishes no machine-readable default. */
+            default_effort?: string | null;
         };
-        FsBrowseOut: {
-            /** @description The resolved directory that was listed. */
-            path: string;
-            /** @description Parent directory, or null at the filesystem root. */
-            parent: string | null;
-            /** @description Immediate subdirectories (no files). */
-            entries: components["schemas"]["FsEntry"][];
-        };
-        FsOpenRequest: {
-            /** @description Absolute path of an existing file or folder to open. */
-            path: string;
-            /** @description Application to open with (the preferred-editor preference). Omitted / null opens with the OS default application. */
-            with?: string | null;
-        };
-        FsRevealRequest: {
-            /** @description Absolute path of an existing file or folder to reveal. */
-            path: string;
-        };
-        EditorOption: {
-            /** @description Human-readable editor name (e.g. "Visual Studio Code"). */
-            label: string;
-            /** @description Launcher value for the preferred-editor preference — a macOS app name (`open -a`) or a Linux/Windows command on PATH. */
-            value: string;
-        };
-        FsEditorsOut: {
-            /** @description GUI editors detected as installed on this machine. */
-            editors: components["schemas"]["EditorOption"][];
-        };
-        FsPickFolderRequest: {
-            /** @description Absolute path to seed the dialog's starting directory. */
-            start?: string | null;
-        };
-        FsPickFolderOut: {
-            /** @description Whether this host has a native folder-dialog tool. When false the caller falls back to the in-app folder browser (`/fs/browse`). */
-            available: boolean;
-            /** @description The chosen absolute directory, or null if cancelled/unavailable. */
-            path: string | null;
+        AgentModelsOut: {
+            models: components["schemas"]["AgentModelOut"][];
         };
         ErrorOut: {
             error: {
@@ -1782,14 +1659,14 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    browseFilesystem: {
+    listAgentModels: {
         parameters: {
-            query?: {
-                /** @description Directory to list. Defaults to the user's home directory. */
-                path?: string;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description The agent type key (`claude_code`, `codex`). */
+                agent_key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -1800,105 +1677,11 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["FsBrowseOut"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    openFilesystemPath: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FsOpenRequest"];
-            };
-        };
-        responses: {
-            /** @description The launcher was spawned. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    revealFilesystemPath: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FsRevealRequest"];
-            };
-        };
-        responses: {
-            /** @description The file manager was opened. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    listEditors: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FsEditorsOut"];
+                    "application/json": components["schemas"]["AgentModelsOut"];
                 };
             };
             401: components["responses"]["Unauthorized"];
-        };
-    };
-    pickFolder: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FsPickFolderRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FsPickFolderOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

@@ -15,7 +15,7 @@ __all__ = ["clip_stream_preview", "mention_prefix", "with_mention"]
 #: that reaches here is opaque and platform-issued (SeaTalk's ``seatalk_id`` is
 #: digits), so anything outside this set means the payload was not what we read
 #: it as — and a mention built from it would reach the chat as broken markup
-#: rather than as a name. Dropping it is the FR-070 silent degrade.
+#: rather than as a name. Dropping it is the FR-055 silent degrade.
 _MENTION_ID_SAFE = re.compile(r"\A[A-Za-z0-9_.:-]+\Z")
 
 #: The same gate for the EMAIL form of a mention, which a transport may offer as
@@ -66,7 +66,7 @@ def with_mention(
     email_template: str = "",
     user_email: str = "",
 ) -> str:
-    """FR-070: ``body`` opened by an @mention of whoever asked, where that is right.
+    """FR-055: ``body`` opened by an @mention of whoever asked, where that is right.
 
     Applied to EVERY snapshot of a reply, not just the last one, because a
     platform decides @ notifications when a message is CREATED. A streamed reply
@@ -93,7 +93,7 @@ def with_mention(
 
 
 def clip_stream_preview(text: str, limit: int) -> str:
-    """FR-037: clip the accumulating reply to the platform's per-message limit for
+    """FR-039: clip the accumulating reply to the platform's per-message limit for
     an interim live update — a snapshot longer than the cap would be rejected.
     Keep the TAIL (the most recent words) behind a leading ellipsis, so the user
     watches the answer's latest text grow."""

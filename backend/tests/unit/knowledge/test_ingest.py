@@ -1,6 +1,6 @@
 """Document ingestion: convert, describe, write, keep the original.
 
-The contract under test (spec knowledge FR-032..FR-037): an upload becomes an
+The contract under test (spec knowledge FR-021..FR-026): an upload becomes an
 ordinary knowledge file — same frontmatter, same scope enforcement, same audit
 event as a hand-written one — with its original bytes kept under ``.raw/``,
 and the whole thing is all-or-nothing: nothing lands unless everything does.
@@ -163,7 +163,7 @@ async def test_a_markdown_upload_lands_with_frontmatter_and_its_original_kept(kn
     assert raw.is_file()
     assert raw.read_bytes() == data
 
-    # The original stays out of the catalogue and its count (FR-035).
+    # The original stays out of the catalogue and its count (FR-024).
     assert fs.list_collections()[0].file_count == 1
 
 
@@ -205,7 +205,7 @@ async def test_an_unsupported_type_is_refused_and_writes_nothing(knowledge) -> N
 async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing(  # type: ignore[no-untyped-def]
     knowledge,
 ) -> None:
-    """FR-037. The real case is an image-only PDF: MarkItDown extracts no text,
+    """FR-026. The real case is an image-only PDF: MarkItDown extracts no text,
     returns ``""``, and reports no error — it did its job, the document simply
     has no text layer. Stored, that is a titled knowledge file with an empty
     body: search will never find it and nothing says why.
@@ -318,7 +318,7 @@ async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all
 
     This used to be driven with a completely EMPTY CSV. That is no longer a
     stored document at all — a conversion that produces nothing is refused
-    (``EmptyConversion``, FR-037) — so the vehicle has to be a document that
+    (``EmptyConversion``, FR-026) — so the vehicle has to be a document that
     converts to something and still yields no prose.
     """
     service = _service(knowledge)
@@ -330,7 +330,7 @@ async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all
     assert result.description == result.title == "Team"
 
 
-# ----- atomicity: nothing half-lands (FR-037) ---------------------------
+# ----- atomicity: nothing half-lands (FR-026) ---------------------------
 
 
 async def test_a_write_failure_leaves_no_partial_file_and_no_orphan_original(knowledge) -> None:  # type: ignore[no-untyped-def]
@@ -374,7 +374,7 @@ async def test_ingest_into_a_collection_the_caller_may_not_see_fails(knowledge) 
     assert not paths.collection_dir("restricted").exists()
 
 
-# ----- deletion symmetry (FR-035), exercised through KnowledgeService ---
+# ----- deletion symmetry (FR-024), exercised through KnowledgeService ---
 
 
 async def test_deleting_an_ingested_file_removes_its_raw_original(knowledge) -> None:  # type: ignore[no-untyped-def]

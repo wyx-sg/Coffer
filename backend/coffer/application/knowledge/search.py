@@ -6,7 +6,7 @@ all, and they are why there is nothing here to keep level with the disk:
 
 * **Freshness is decided from the file, never from a record of an edit.** A
   file the human changed in their editor, an agent wrote, or `git` pulled is
-  searchable the instant it lands (FR-028).
+  searchable the instant it lands (FR-017).
 * **Nothing derived is authoritative.** Titles, descriptions and content always
   come off disk, because there is nowhere else they could come from.
 
@@ -25,7 +25,7 @@ from coffer.domain.knowledge.errors import CollectionNotFound
 from coffer.infrastructure.knowledge import fs, paths
 
 #: Files returned per call. The catalogue already answers "what exists" a level
-#: at a time (FR-021); this is ``search``'s analogue — enough results to scan on
+#: at a time (FR-013); this is ``search``'s analogue — enough results to scan on
 #: one screen without turning a query into a second full-corpus dump. A caller
 #: that wants fewer passes a smaller ``top_k``.
 DEFAULT_TOP_K = 8

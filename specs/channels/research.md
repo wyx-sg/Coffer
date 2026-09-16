@@ -28,7 +28,7 @@ Both products converge on the same architecture, which this spec adopts:
   its core asks is `supports_live_text` ("is there a surface I can keep updating
   while this turn runs?"), so Telegram answers yes by editing one status message
   and SeaTalk answers yes through its own streaming API, with no `if telegram`
-  branch anywhere (FR-037).
+  branch anywhere (FR-038).
 - **Pairing as the default DM policy.** Both default to deny. Hermes and
   OpenClaw both use 8-character codes from an unambiguous alphabet with a
   1-hour TTL; Hermes adds per-user rate limiting and failure lockout, and has
@@ -76,7 +76,7 @@ official docs (the doc site requires a developer login).
   no polling. Either the platform POSTs each event to a public callback URL, or
   the bot holds one outbound WebSocket and the platform pushes events down it
   (**WebSocket Event Callback**, documented later than the rest of this research
-  and adopted in spec channels FR-071). The event body is the same either way:
+  and adopted in spec channels/seatalk FR-002). The event body is the same either way:
   `{event_id, event_type, timestamp, app_id, event}`. Single chat messages are
   `event_type: "message_from_bot_subscriber"`; the sender is identified by
   `employee_code`.
@@ -88,7 +88,7 @@ official docs (the doc site requires a developer login).
   `app_id` + `app_secret` on connect, exposes a generic event handler whose
   payload is the raw event dict above, acks by `callback_id`, and **does not
   reconnect**. One connection per app: a new registration kicks the previous
-  holder, reported as a kick. Hence FR-081's shape — an operator-supplied
+  holder, reported as a kick. Hence spec channels/seatalk FR-007's shape — an operator-supplied
   optional dependency, with supervision and back-off written here.
 - **Callback URL**: http or https, must be publicly reachable (intranet IPs
   fail validation). Tunnels work. On save, SeaTalk posts
@@ -247,7 +247,7 @@ building group/@mention/thread/forward support (feature/channel-group-mention-ri
 
 ## SeaTalk streaming messages (re-read 2026-09-11)
 
-The first implementation of FR-037's SeaTalk surface was written from these docs
+The first implementation of FR-038's SeaTalk surface was written from these docs
 but never verified against the live API, and no summary of them was recorded
 here — so a payload missing two mandatory fields shipped, its unit tests pinned
 the invented shape, and the platform refused every stream with a bare
@@ -325,18 +325,18 @@ that no group endpoint existed; it does.
 | Decision           | Choice                                                                  | Rationale                                                                                                                                 |
 | ------------------ | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Telegram transport | long polling via raw httpx                                              | local-first, no ingress; the API surface used is 7 small methods — an SDK dependency buys nothing and adds an import-confinement contract |
-| SeaTalk transport  | webhook → separate listener process + a tunnel (user-run or Coffer-supervised); websocket → one outbound connection inside the daemon | the constitution requires public-reachable surfaces to be a separate process limited to signed callback paths, which the webhook path is; the websocket path exposes nothing, so it needs no process of its own (FR-071) |
-| SeaTalk SDK        | none for outbound (raw httpx); for websocket inbound, the official SDK, supplied by the operator in `~/.coffer/vendor` and never vendored or declared | for sending, the official repo is a thin httpx-equivalent and token caching is ~20 lines; for websocket inbound there is no alternative — the protocol is unpublished — and an MIT repository can neither redistribute that SDK nor depend on something absent from PyPI (FR-081) |
+| SeaTalk transport  | webhook → separate listener process + a tunnel (user-run or Coffer-supervised); websocket → one outbound connection inside the daemon | the constitution requires public-reachable surfaces to be a separate process limited to signed callback paths, which the webhook path is; the websocket path exposes nothing, so it needs no process of its own (spec channels/seatalk FR-002) |
+| SeaTalk SDK        | none for outbound (raw httpx); for websocket inbound, the official SDK, supplied by the operator in `~/.coffer/vendor` and never vendored or declared | for sending, the official repo is a thin httpx-equivalent and token caching is ~20 lines; for websocket inbound there is no alternative — the protocol is unpublished — and an MIT repository can neither redistribute that SDK nor depend on something absent from PyPI (spec channels/seatalk FR-007) |
 | Pairing parameters | 8 chars, no `0O1I`, 1 h TTL, bounded guesses, fail closed               | matches both prior arts and Hermes' post-incident hardening                                                                               |
 | Telegram rendering | markdown → HTML, plain-text retry on rejection                          | OpenClaw-proven; MarkdownV2 escaping is a known bug farm                                                                                  |
-| Progress UX        | ONE live surface the turn grows in place, by whatever mechanism the transport has | both prior arts, but keyed on `supports_live_text` rather than on editing: Telegram edits a status message it then deletes, SeaTalk streams the reply itself, and each buffers its own cadence — the core adds no throttle (FR-037) |
+| Progress UX        | ONE live surface the turn grows in place, by whatever mechanism the transport has | both prior arts, but keyed on `supports_live_text` rather than on editing: Telegram edits a status message it then deletes, SeaTalk streams the reply itself, and each buffers its own cadence — the core adds no throttle (FR-038) |
 | Mid-turn input     | bounded FIFO queue, control commands bypass                             | predictable; avoids Hermes' interrupt-by-default surprise                                                                                 |
 | Session scope      | one long-lived conversation per `(channel, chat, thread)`, `/new` resets | a DM, a group's main chat and each of its threads are independent, so concurrent turns in two threads of one group never collide (FR-032) |
 
 ## Channels as a management plane — build-vs-adopt & landscape (2026-07-08)
 
 Gathered while deciding whether to extend Coffer's own SeaTalk/Telegram adapters
-(FR-028…FR-041) or adopt an agent-native gateway wholesale.
+(the management-plane requirements) or adopt an agent-native gateway wholesale.
 
 - **Build-vs-adopt decision.** Do NOT fork OpenClaw or Hermes channel code. Both
   are TypeScript/Node monorepos (MIT) whose channel layers are coupled to their

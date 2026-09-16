@@ -1,4 +1,4 @@
-"""Inbound Telegram media downloads that fail (spec channels, FR-067).
+"""Inbound Telegram media downloads that fail (spec channels, spec channels/telegram FR-014).
 
 The file endpoint's URL carries the bot token (``/file/bot<token>/<path>``),
 so a failed download is the one place the adapter could put the token into the
@@ -83,7 +83,8 @@ def _connect_refused(request: httpx.Request) -> httpx.HTTPError:
     [pytest.param(404, id="download-404"), pytest.param(_connect_refused, id="connect-error")],
 )
 @pytest.mark.acceptance(
-    spec="channels", scenario="a failed telegram download never puts the bot token in the log"
+    spec="channels/telegram",
+    scenario="a failed telegram download never puts the bot token in the log",
 )
 async def test_a_failed_download_is_noted_without_the_token_reaching_the_log(
     fake_telegram: FakeTelegram,

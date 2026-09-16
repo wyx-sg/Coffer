@@ -11,7 +11,7 @@
 // `DELETE /resources/knowledge/{name}` (`useDeleteResource`) like every other
 // kind. Only files are deleted here.
 //
-// Transport via the shared `call` (agents/frontend.md §4); wire types in
+// Transport via the shared `call` (.agents/frontend.md §4); wire types in
 // `knowledgeTypes.ts`.
 
 import { call, enc } from "@/lib/api/call";

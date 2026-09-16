@@ -50,7 +50,7 @@ async def fetch_thread_context(
     """The thread's own messages, when the message landed inside a thread.
 
     Returns their flattened text AND the images/files they carry, downloaded
-    (FR-029) so a picture in the thread reaches the vision agent instead of a
+    (FR-030) so a picture in the thread reaches the vision agent instead of a
     dead auth-gated file link. Degrades to ``([], ())`` on ANY error so a
     transient failure never breaks the turn, which still runs on the message
     alone. Group-main @mentions fetch no history — that permission is

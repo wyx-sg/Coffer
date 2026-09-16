@@ -238,14 +238,17 @@ paths:
       operationId: setInternalDefaultProvider
       summary: Set a connection as Coffer's internal-engine default
       description: |
-        Marks this connection as the one Coffer's internal LLM engine uses
-        (memory organizer, reorg, distill). At most one
-        connection globally is the internal default; setting one clears the
-        previous one (sequential clear-then-set, serialised by the
-        single-process daemon).
+        Marks this connection as the one Coffer's own internal engine borrows
+        for its endpoint and key. At most one connection globally is the
+        internal default; setting one clears the previous one (sequential
+        clear-then-set, serialised by the single-process daemon), and the
+        database enforces the same invariant against every other writer.
 
         Emits a `PROVIDER_INTERNAL_DEFAULT_SET` audit event with details
-        `{from, to}` and returns the updated `ProviderOut`.
+        `{from, to}` and returns the updated `ProviderOut`. It also notifies the
+        engine, which applies its own rule about the model it was paired with
+        (spec internal-engine FR-007); the engine's own settings live under
+        `/api/v1/internal-engine-config` and are not this document's.
       responses:
         "200":
           description: OK
@@ -342,77 +345,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DeactivateOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "500": { $ref: "#/components/responses/InternalError" }
-
-  /internal-engine-config:
-    get:
-      tags: [internal-engine]
-      operationId: getInternalEngineConfig
-      summary: Get the global internal-engine model selection
-      description: |
-        The single, global model Coffer's internal LLM engine (memory organizer,
-        reorg, distill) runs on. The engine takes its endpoint +
-        key from the `internal_default` connection but its MODEL from this
-        singleton (spec provider-switching E3). `model` is `null` until one is chosen.
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "500": { $ref: "#/components/responses/InternalError" }
-
-    put:
-      tags: [internal-engine]
-      operationId: updateInternalEngineConfig
-      summary: Set the global internal-engine model
-      description: |
-        Sets the model the internal engine runs on (`null`/empty clears it).
-        Overlaid onto the resolved `internal_default` connection before the
-        engine builds its chat model. Emits an `internal_engine_model_set` audit
-        event.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/InternalEngineConfigUpdate" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "500": { $ref: "#/components/responses/InternalError" }
-
-  /internal-engine-config/upkeep:
-    put:
-      tags: [internal-engine]
-      operationId: updateUpkeep
-      summary: Change one unattended pass's switch or timer
-      description: |
-        Coffer runs three passes on its own behalf — `aggregate` (spec memory
-        FR-007), `organise` (FR-030) and `tidy` (spec knowledge FR-051) — each
-        with a switch and an interval. One pass per request, and each half left
-        alone when it is not sent: a settings page toggles one row at a time,
-        and a body carrying all three would make every toggle a chance to write
-        back a stale copy of the other two. `use_default_interval` returns a
-        pass to its own built-in interval, which a null `interval_s` cannot
-        express. Emits an `internal_engine_model_set` audit event.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/UpkeepUpdate" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "500": { $ref: "#/components/responses/InternalError" }
 
   /models/list-models:
@@ -861,73 +793,6 @@ components:
         value:
           type: string
           description: The decrypted provider API key.
-
-    InternalEngineConfigOut:
-      type: object
-      description: >-
-        Coffer's own operating settings: the model its internal engine runs on
-        (the connection used is the `internal_default` — endpoint + key), and
-        the switch and timer of every pass it runs unattended.
-      properties:
-        model:
-          type: string
-          nullable: true
-          description: The chosen model id, or null when unset.
-        updated_at:
-          type: string
-          format: date-time
-          nullable: true
-        upkeep:
-          type: object
-          description: >-
-            Keyed by pass name (`aggregate`, `organise`, `tidy`).
-          additionalProperties: { $ref: "#/components/schemas/UpkeepSettingOut" }
-
-    UpkeepSettingOut:
-      type: object
-      required: [enabled, default_interval_s]
-      description: One unattended pass's switch and timer.
-      properties:
-        enabled:
-          type: boolean
-        interval_s:
-          type: integer
-          nullable: true
-          description: The chosen interval, or null while none has been chosen.
-        default_interval_s:
-          type: integer
-          description: >-
-            What runs while `interval_s` is null — reported so a settings
-            surface can name the default rather than show a blank.
-
-    UpkeepUpdate:
-      type: object
-      required: [pass]
-      description: >-
-        Change one pass. An omitted field leaves that half of the pass alone.
-      properties:
-        pass:
-          type: string
-          enum: [aggregate, organise, tidy]
-        enabled:
-          type: boolean
-          nullable: true
-        interval_s:
-          type: integer
-          nullable: true
-          minimum: 60
-        use_default_interval:
-          type: boolean
-          default: false
-          description: Return this pass to its own built-in interval.
-
-    InternalEngineConfigUpdate:
-      type: object
-      description: Set the internal-engine model; null/empty clears it.
-      properties:
-        model:
-          type: string
-          nullable: true
 
     ErrorOut:
       type: object

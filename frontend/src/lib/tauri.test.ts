@@ -18,6 +18,7 @@ import {
 } from "./tauri";
 import { getCofferBaseUrl, getCofferToken } from "./auth";
 import { getApiClient, resetApiClient } from "./api/client";
+import { acceptance } from "@/test/acceptance";
 
 // `@tauri-apps/api/core` is dynamically imported inside each helper. We stub it
 // with a shared `invoke` mock so we can assert command name + args.
@@ -121,7 +122,7 @@ describe("connectToShellDaemon", () => {
     delete w.__COFFER_TOKEN__;
   });
 
-  test("publishes the shell's connection info on the globals the app reads", async () => {
+  acceptance("desktop-app", "the handshake credentials a locally-hosted page", async () => {
     enterTauri();
     invokeMock.mockResolvedValue({ baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh-token" });
 

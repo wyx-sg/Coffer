@@ -1,4 +1,4 @@
-"""FR-042: every channel turn carries its own origin.
+"""FR-035: every channel turn carries its own origin.
 
 The agent used to see only the message text, so "which group am I in?" was a
 guess it could only answer by listing the bot's groups and inferring. The turn

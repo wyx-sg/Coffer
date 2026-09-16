@@ -780,7 +780,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="audit lifecycle changes")
+@pytest.mark.acceptance(spec="resource-framework", scenario="audit lifecycle changes")
 @pytest.mark.asyncio
 async def test_enable_capability_creates_audit_event(
     tmp_path: Path,
@@ -1215,7 +1215,7 @@ async def test_refresh_unknown_server_returns_404(
 
 
 # ---------------------------------------------------------------------------
-# FR-019 (amendment 2026-07-10) — missing stdio launcher surfaced
+# FR-011 (amendment 2026-07-10) — missing stdio launcher surfaced
 # ---------------------------------------------------------------------------
 
 

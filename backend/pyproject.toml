@@ -99,7 +99,7 @@ coffer-mcp-shim = "coffer.surfaces.shim.main:run"
 packages = ["coffer"]
 
 [tool.setuptools.package-data]
-# The knowledge skill seeded at boot (spec knowledge FR-042) is a file, so an
+# The knowledge skill seeded at boot (spec knowledge FR-029) is a file, so an
 # installed wheel has to carry it alongside the modules.
 coffer = ["application/knowledge/skill_assets/**/*.md"]
 
@@ -241,12 +241,13 @@ source_modules = ["coffer.surfaces.cli"]
 forbidden_modules = ["coffer.infrastructure.credentials"]
 
 # Contract 5: cross-kind imports forbidden. Each kind's modules may not import
-# any other kind's modules; the kind-agnostic core (Resource/Audit/etc.), the
-# knowledge substrate, and the kind-agnostic infrastructure packages
-# (``infrastructure.net``, ``infrastructure.agent_files``, ``infrastructure.llm``,
-# ``infrastructure.persistence``) are the only shared ground. Only the
-# composition root (``surfaces.http.app`` + ``*_wiring.py``,
-# ``surfaces.cli.main``) may see two kinds at once.
+# any other kind's modules; the kind-agnostic core (Resource/Audit/etc.),
+# Coffer's own engine (``application.engine`` and the engine modules listed in
+# Contract 6), the knowledge substrate, and the kind-agnostic infrastructure
+# packages (``infrastructure.net``, ``infrastructure.agent_files``,
+# ``infrastructure.llm``, ``infrastructure.persistence``) are the only shared
+# ground. Only the composition root (``surfaces.http.app`` + ``*_wiring.py``,
+# ``*_composition.py``, ``surfaces.cli.main``) may see two kinds at once.
 #
 # One contract per kind, all nine generated from ONE table
 # (``scripts``-free: the table is the list below, kept symmetric by hand — a
@@ -955,6 +956,18 @@ source_modules = [
     "coffer.application.retention_service",
     "coffer.application.retention_worker",
     "coffer.application.builtin_tools",
+    # Coffer's own engine — what it runs on its OWN behalf. It belongs to no
+    # kind (knowledge's tidy, memory's organise, vault-sync's conflict
+    # resolver and chat's voice transcription all ride it), so it is fenced
+    # here rather than filed under whichever kind happened to consume it
+    # first. The package itself, plus the engine modules that until now sat in
+    # no contract at all, fenced in neither direction.
+    "coffer.application.engine",
+    "coffer.application.engine_ports",
+    "coffer.application.internal_engine_config_service",
+    "coffer.application.engine_settings_sync",
+    "coffer.application.upkeep_schedule",
+    "coffer.surfaces.http.internal_engine_routes",
     "coffer.domain.resource",
     "coffer.domain.audit",
     "coffer.domain.retention",
@@ -1043,7 +1056,7 @@ ignore_imports = [
 # ``infrastructure.chat.document_extract``, which turns an inbound channel
 # attachment into text (spec channels FR-030), and
 # ``infrastructure.knowledge.converters``, which turns an uploaded document
-# into a Markdown file (spec knowledge FR-033/FR-080) — so the rule keeps it
+# into a Markdown file (spec knowledge FR-022/FR-037) — so the rule keeps it
 # out of every other package rather than granting either an exemption. The
 # vector-index and embedding SDKs it also used to fence are gone from the
 # dependency set entirely and are banned by Contract 8 instead, so a

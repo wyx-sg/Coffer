@@ -66,7 +66,7 @@ class AttachmentBlock:
     never the bytes. Persisted in the user message so the attachment survives in
     history, shows in the web Chat page, and is re-materialised for the agent on
     later turns. See the channel-media and persisted-attachment-reference ADRs
-    (FR-033)."""
+    (FR-034)."""
 
     path: str  # absolute local path in the media dir (NOT emitted to the wire)
     mime: str

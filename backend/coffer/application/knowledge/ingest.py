@@ -1,9 +1,9 @@
 """Turning an uploaded document into an ordinary knowledge file.
 
 Placing a Markdown file in the directory is already a complete way to add
-knowledge (FR-032); this module is the *additional* entrance for the cases
+knowledge (FR-021); this module is the *additional* entrance for the cases
 where the filesystem is out of reach — the Knowledge page's upload button and
-a channel attachment (FR-036). Nothing here changes what a knowledge file is:
+a channel attachment (spec channels FR-014). Nothing here changes what a knowledge file is:
 the output of :meth:`IngestService.ingest` must be indistinguishable from a
 file a human typed by hand, so it goes through :meth:`KnowledgeService.write`
 rather than touching the filesystem itself — the same audit event, the same
@@ -18,7 +18,7 @@ Two things this module owns that ``write`` does not need to think about:
   ranked index the catalogue entry is the whole retrieval surface (FR-003), so
   a document that arrives with no internal connection configured — or whose
   connection fails or stalls — still gets a description, drawn from its own
-  opening prose (spec knowledge FR-034).
+  opening prose (spec knowledge FR-023).
 
 Following ``tidy.py``'s shape: the internal connection is reached through
 ``ModelSelectorPort`` + ``LlmCompletionPort``, both optional, and their
@@ -58,15 +58,15 @@ class ConverterRegistry(Protocol):
 
 
 #: One upload at a time, bounded so a single call cannot exhaust memory or
-#: disk (FR-037). 20 MB matches the tightest existing bound in this codebase
+#: disk (FR-026). 20 MB matches the tightest existing bound in this codebase
 #: for a document passed hand-to-hand rather than streamed — Telegram's own
 #: bot-API download cap (``infrastructure/channel/telegram_media.py``) — which
-#: keeps the two entrances FR-036 unifies (the Knowledge page and a channel
+#: keeps the two entrances spec channels FR-014 unifies (the Knowledge page and a channel
 #: attachment) under one honest ceiling rather than the page silently
 #: accepting what a phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
-#: A one-line description is a small job (spec knowledge FR-034), not an
+#: A one-line description is a small job (spec knowledge FR-023), not an
 #: agentic loop; bounded generously so a slow provider cannot hang an upload,
 #: but nowhere near indefinite.
 _DESCRIPTION_TIMEOUT_SECONDS = 20.0
@@ -134,19 +134,19 @@ class IngestService:
         ``EmptyConversion`` when a converter ran and produced no text, and
         whatever ``KnowledgeService.write`` raises for an unauthorized or
         otherwise invalid target — in every one of those cases nothing is
-        written, converted or kept (FR-037).
+        written, converted or kept (FR-026).
         """
         if len(data) > MAX_UPLOAD_BYTES:
             raise UploadTooLarge(len(data), MAX_UPLOAD_BYTES)
 
         target_directory = f"{collection}/{directory.strip('/')}" if directory else collection
-        # The same enforcement point `write` itself uses (FR-012/FR-014):
+        # The same enforcement point `write` itself uses (FR-009/FR-011):
         # calling it here, before conversion, refuses an unauthorized upload
         # without first paying for the conversion.
         await self._knowledge.require_visible(target_directory, agent)
 
         conversion = await self._registry.convert(data, filename)
-        # FR-037: a converter that succeeds but extracts nothing (an image-only
+        # FR-026: a converter that succeeds but extracts nothing (an image-only
         # PDF is the real case) must not be stored as a titled file with an
         # empty body. Checked here rather than in each converter so every
         # format is covered by one rule, and BEFORE the describe call so a
@@ -170,7 +170,7 @@ class IngestService:
             raw_target.parent.mkdir(parents=True, exist_ok=True)
             raw_target.write_bytes(data)
         except Exception:
-            # Half of FR-037's all-or-nothing: the Markdown file must not
+            # Half of FR-026's all-or-nothing: the Markdown file must not
             # outlive the original it was supposed to stand next to.
             with contextlib.suppress(Exception):
                 fs.delete_file(written.path)

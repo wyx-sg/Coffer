@@ -8,7 +8,7 @@ needs exactly one fact per source — its last-seen digest — so this is a flat
 
 Dot-prefixed and derived, like everything else this layer keeps outside the
 partition tree proper: deleting it is safe (the next pass just re-parses
-everything and gets the same facts back, per FR-023) and it is never addressed
+everything and gets the same facts back, per FR-016) and it is never addressed
 through the partition path helpers in ``paths.py``, so it does not need their
 traversal guard.
 """
@@ -31,7 +31,7 @@ def load() -> dict[str, str]:
     """The digest recorded for each native path last pass, or ``{}``.
 
     Tolerant of a missing or corrupt file — losing this state only costs a
-    pass of unnecessary re-parsing, never correctness (FR-023's whole point).
+    pass of unnecessary re-parsing, never correctness (FR-016's whole point).
     """
     path = _state_path()
     if not path.is_file():

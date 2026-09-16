@@ -154,7 +154,7 @@ async def test_no_level_floor_filters_nothing(monkeypatch, tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="ui-shell", scenario="the daemon tab reads every writer in the log")
+@pytest.mark.acceptance(spec="web-ui", scenario="the daemon tab reads every writer in the log")
 async def test_errors_only_reads_every_writers_own_level(monkeypatch, tmp_path) -> None:
     """The log is not all structlog. An `INF` line from the cloudflared child
     is an info line — before, every non-JSON line counted as an error and the
@@ -178,7 +178,8 @@ async def test_errors_only_reads_every_writers_own_level(monkeypatch, tmp_path) 
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="ui-shell", scenario="the daemon tab reads every writer in the log")
+@pytest.mark.acceptance(spec="web-ui", scenario="the daemon tab reads every writer in the log")
+@pytest.mark.acceptance(spec="daemon", scenario="the daemon log tail reads every writer's format")
 async def test_every_format_in_the_file_fills_the_three_columns(monkeypatch, tmp_path) -> None:
     """The page shows time / level / logger / message. ``daemon.log`` carries
     several writers' formats at once, and a row must carry what its own line
@@ -213,7 +214,7 @@ async def test_every_format_in_the_file_fills_the_three_columns(monkeypatch, tmp
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="ui-shell", scenario="the daemon tab reads every writer in the log")
+@pytest.mark.acceptance(spec="web-ui", scenario="the daemon tab reads every writer in the log")
 async def test_a_colour_escaped_line_arrives_without_escapes(monkeypatch, tmp_path) -> None:
     """The Codex app-server colours its stderr even into a pipe, and the daemon
     relays it verbatim. A viewer rendering `ESC[31m` as text is broken."""
@@ -235,7 +236,7 @@ async def test_a_colour_escaped_line_arrives_without_escapes(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="ui-shell", scenario="the daemon tab reads every writer in the log")
+@pytest.mark.acceptance(spec="web-ui", scenario="the daemon tab reads every writer in the log")
 async def test_a_traceback_rides_with_the_record_that_raised(monkeypatch, tmp_path) -> None:
     """Otherwise a single failure fills the table with rows that have no time,
     no level and no logger, and pushes the record explaining them off the page."""

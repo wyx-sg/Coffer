@@ -1,4 +1,4 @@
-"""Remote transcription (spec channels FR-022).
+"""Remote transcription (spec channels FR-019).
 
 The gate matters more than the happy path: audio must NEVER leave the machine
 unless the user designated an internal connection that can take it. Every test

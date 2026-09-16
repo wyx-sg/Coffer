@@ -1,4 +1,4 @@
-"""Filesystem scanner for unmanaged-skill discovery (FR-022).
+"""Filesystem scanner for unmanaged-skill discovery (FR-016).
 
 Implements ``WorkspaceScanPort``: walks one agent skill location and builds
 ``ScanEntry`` values for the pure classifier in

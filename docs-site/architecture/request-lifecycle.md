@@ -80,7 +80,7 @@ It then:
 
 ## Session model and lazy spawn
 
-Each downstream client connection creates one `MCPGatewaySession` in the daemon (per [Session Subprocess Model](/reference/adr/session-subprocess-model)). This session owns the upstream subprocesses for that connection. Subprocesses are not started at session creation — they are started lazily on first need, meaning the first `tools/list` or `tools/call` that routes to a given upstream pays the subprocess spawn and `initialize` handshake cost once. Subsequent calls in the same session reuse the running upstream.
+Each downstream client connection creates one `MCPGatewaySession` in the daemon. This session owns the upstream subprocesses for that connection. Subprocesses are not started at session creation — they are started lazily on first need, meaning the first `tools/list` or `tools/call` that routes to a given upstream pays the subprocess spawn and `initialize` handshake cost once. Subsequent calls in the same session reuse the running upstream.
 
 Two MCP clients connected simultaneously (e.g., Claude Code and Codex both running) produce two independent `MCPGatewaySession` objects, each with their own upstream subprocess set. They share no state. This prevents a crash in one client's upstream from affecting the other client, and preserves MCP protocol correctness: each upstream `initialize` negotiates capabilities fresh for each session, without the daemon needing to multiplex or fabricate session state.
 
@@ -191,7 +191,7 @@ The daemon adds no wrapper or extra fields to the upstream's success result. The
 
 ## Agent-turn lifecycle
 
-A turn drives a different lifecycle from a gateway call: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. This path is specified by [spec channels](/reference/specs/channels/spec) (the turn platform, FR-043…FR-055; the web Chat page that also rides it, FR-072…FR-078).
+A turn drives a different lifecycle from a gateway call: instead of forwarding a single JSON-RPC call to an upstream, it runs a multi-step **agent turn** that may itself call several of Coffer's own gateway tools before producing a reply. The channel layer specifies this path — both the turn platform itself and the web Chat page that rides on it.
 
 1. **Turn start.** A channel delivers a user message, or the web Chat page posts one. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming. Only one turn runs per conversation at a time; a message arriving during a turn is enqueued rather than rejected.
 
@@ -201,7 +201,7 @@ A turn drives a different lifecycle from a gateway call: instead of forwarding a
 
 ### The chat REST/SSE surface
 
-The web Chat page is the second client of that same seam, under `/api/v1/chat` — the routes exist so a browser can watch and steer a conversation the owner is driving from their phone ([Chat Is a Single-Owner Live Mirror](/reference/adr/chat-single-owner-live-mirror)):
+The web Chat page is the second client of that same seam, under `/api/v1/chat` — the routes exist so a browser can watch and steer a conversation the owner is driving from their phone:
 
 | Route | What it does |
 | --- | --- |
@@ -218,7 +218,7 @@ Because sending and consuming are separate routes, "the turn I started" and "the
 
 ## Channel-inbound lifecycle
 
-Messaging channels (Telegram, SeaTalk) are how a user reaches an agent away from the desktop. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform (per [Channel Adapter Framework](/reference/adr/channel-adapter-framework)):
+Messaging channels (Telegram, SeaTalk) are how a user reaches an agent away from the desktop. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform:
 
 - **SeaTalk (webhook).** SeaTalk delivers events only by public webhook. A separate **callback-listener process** (`coffer-callback`, spawned by the daemon while any SeaTalk channel is enabled) serves `POST /seatalk/{channel}` on a loopback port. It answers the platform's verification challenge, verifies the request signature (`sha256(body + signing_secret)`), normalises the event, and forwards it to the daemon — which feeds it into the orchestrator.
 
@@ -228,7 +228,7 @@ Progress is rendered from the agent's capabilities, not the adapter type: Telegr
 
 ## Knowledge search lifecycle
 
-Search requests — `coffer__search` and `coffer__grep`, and the REST `search` / `grep` routes — have almost no lifecycle left, and that is the point ([Knowledge Is Plain Files](/reference/adr/knowledge-is-plain-files)). There is no index between the caller and the disk, so there is no pipeline to walk:
+Search requests — `coffer__search` and `coffer__grep`, and the REST `search` / `grep` routes — have almost no lifecycle left, and that is the point. There is no index between the caller and the disk, so there is no pipeline to walk:
 
 1. **Resolve what the caller may see.** The service turns the caller's identity into the set of collection directories under `~/.coffer/knowledge/` it is allowed to search. This is the only knowledge-specific step.
 2. **Run `ripgrep` over those directories.** One literal text search, hidden entries excluded so the `.history/` revisions and `.raw/` originals never answer a query.
@@ -237,7 +237,3 @@ Search requests — `coffer__search` and `coffer__grep`, and the REST `search` /
 `coffer__recall`, memory's pull tool, is the same shape one layer over: a case-insensitive substring scan across the facts the caller may see, already loaded in memory.
 
 Three consequences follow from having no index at all. **Freshness is decided from the file**, so a file the user edited in their editor, an agent wrote, or `git` pulled is searchable the instant it lands — a write (`coffer__write`, or an ingest) is done when the markdown is on disk, with nothing to update afterwards. **Nothing derived is authoritative**, because nothing is derived. And **matching is byte-level**, so CJK text matches without a tokenizer and the user can grep and edit the same content with ordinary tools.
-
----
-
-**See also:** [MCP Gateway spec](/reference/specs/mcp-gateway/spec), [Session subprocess model](/reference/adr/session-subprocess-model), [Channels spec](/reference/specs/channels/spec), [Channel adapter framework](/reference/adr/channel-adapter-framework), [Chat is a single-owner live mirror](/reference/adr/chat-single-owner-live-mirror), [Knowledge is plain files](/reference/adr/knowledge-is-plain-files)

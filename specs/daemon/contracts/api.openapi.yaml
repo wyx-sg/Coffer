@@ -1,0 +1,453 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Daemon API
+  version: "0.1.0"
+  description: |
+    The daemon's own routes: its lifecycle and its log, and the OS actions it
+    performs on the user's behalf for a web surface that cannot reach the
+    filesystem itself. Merged into the main Coffer Management API at runtime;
+    this document scopes only the routes spec daemon owns.
+
+    Authentication: every request carries `X-Coffer-Token`, the per-daemon
+    random token published in `~/.coffer/daemon.json` (spec daemon FR-013).
+    `GET /daemon/status` is the one deliberate exemption — it is the readiness
+    probe that must answer before the daemon has wired itself up, and every
+    liveness decision in spec daemon FR-005 is made against it.
+
+    Every route is served on the loopback interface only, and a request whose
+    `Host` header does not name a loopback authority is refused `421`
+    (`HOST_NOT_LOOPBACK`, spec daemon FR-015) before it reaches any handler
+    below.
+
+    Hand-written; NOT contract-test-gated. Sync with the implementation manually.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+        description: >-
+          The daemon binds exactly one port — 8000 unless
+          `~/.coffer/daemon-config.json` names another — and records it in
+          `~/.coffer/daemon.json` (spec daemon FR-011).
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: daemon
+    description: Lifecycle of the local daemon process, and its log
+  - name: fs
+    description: >
+      OS actions performed by the loopback daemon for a caller that cannot
+      perform them itself — browsing directories, the one native folder
+      dialog, opening and revealing a path, and listing installed editors.
+
+paths:
+  /daemon/status:
+    get:
+      tags: [daemon]
+      operationId: getDaemonStatus
+      summary: Readiness, port, start time, version and executable
+      security: [] # unauthenticated on purpose: this is the liveness probe (FR-004)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonStatusOut" }
+
+  /daemon/logs:
+    get:
+      tags: [daemon]
+      operationId: listDaemonLogs
+      summary: The tail of daemon.log, newest-first
+      description: |
+        `daemon.log` interleaves several writers' formats, normalised onto one
+        set of fields before they reach a caller (spec daemon FR-022, FR-023).
+        Read from the tail, so a large file is never pulled into memory whole.
+      parameters:
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+          description: >-
+            Only records at or after this instant. A naive value is read as
+            UTC, which is the only clock the log keeps.
+        - in: query
+          name: level
+          required: false
+          schema: { type: string }
+          description: >-
+            Severity floor — `debug`, `info`, `warning`, `error`. Everything at
+            or above it survives. Empty means no floor.
+        - in: query
+          name: errors_only
+          required: false
+          schema: { type: boolean, default: false }
+          description: >-
+            The older, coarser form of `level`. Kept for callers that already
+            send it.
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 100, minimum: 1, maximum: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonLogListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /daemon/shutdown:
+    post:
+      tags: [daemon]
+      operationId: shutdownDaemon
+      summary: Stop this daemon
+      description: >-
+        Answers `204` and then signals this same process, so an API stop and a
+        `SIGTERM` stop take the identical exit path (spec daemon FR-008).
+      responses:
+        "204": { description: No Content }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /daemon/rotate-token:
+    post:
+      tags: [daemon]
+      operationId: rotateDaemonToken
+      summary: Mint a new API token and republish it
+      description: >-
+        Rewrites `~/.coffer/daemon.json` atomically at mode 0600, publishes the
+        new value to the in-process check, and records a `token_rotated` audit
+        entry (spec daemon FR-014). Clients holding the previous token are
+        rejected from the next call onward.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenRotationOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503":
+          description: The discovery file is missing, so there is nothing to rewrite.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /fs/browse:
+    get:
+      tags: [fs]
+      operationId: browseFilesystem
+      summary: List the subdirectories of a local directory
+      description: |
+        Read-only filesystem browse (spec daemon FR-019). Returns a directory's
+        path, its parent, and its immediate subdirectories only — never file
+        contents.
+      parameters:
+        - in: query
+          name: path
+          required: false
+          schema: { type: string }
+          description: Directory to list. Defaults to the user's home directory.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FsBrowseOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /fs/open:
+    post:
+      tags: [fs]
+      operationId: openFilesystemPath
+      summary: Open a local path in an application
+      description: |
+        Open an existing absolute path in an application — the preferred editor
+        (`with`) or the OS default (spec daemon FR-021). Validated
+        absolute-and-existing before any launch; the launcher is invoked with a
+        fixed argument vector and creates nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FsOpenRequest" }
+      responses:
+        "204": { description: The launcher was spawned. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /fs/reveal:
+    post:
+      tags: [fs]
+      operationId: revealFilesystemPath
+      summary: Reveal a local path in the OS file manager
+      description: |
+        Select / reveal an existing absolute path in the OS file manager; on a
+        platform with no portable "select" primitive the containing folder is
+        opened instead (spec daemon FR-021). Validated absolute-and-existing;
+        creates nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FsRevealRequest" }
+      responses:
+        "204": { description: The file manager was opened. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /fs/editors:
+    get:
+      tags: [fs]
+      operationId: listEditors
+      summary: List GUI editors installed on this machine
+      description: |
+        Enumerate common GUI code editors detected as installed (spec daemon
+        FR-021). Detection is per-OS: macOS returns app-bundle names for
+        `open -a`, Linux and Windows return commands found on PATH. The
+        returned `value` is exactly what `/fs/open`'s `with` field accepts.
+        Reads nothing but app presence. Its consumers are spec agent-registry
+        FR-038 and spec web-ui's preferred-editor setting, which stores the
+        chosen preference on its own side.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FsEditorsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /fs/pick-folder:
+    post:
+      tags: [fs]
+      operationId: pickFolder
+      summary: Open the host's native folder dialog
+      description: |
+        The one native dialog the daemon opens (spec daemon FR-020): macOS
+        `osascript`, Linux `zenity`/`kdialog`, invoked with a fixed argument
+        vector. `available: false` means this host has no native dialog tool;
+        `available: true` with `path: null` means the user cancelled. Creates
+        nothing. The open-file and save-file dialogs are deliberately absent —
+        the browser's own `<input type="file">` and `<a download>` cover those
+        better.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FsPickFolderRequest" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FsPickFolderOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  responses:
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: >-
+                Stable machine-readable code. `HOST_NOT_LOOPBACK` (421) and
+                `FS_PATH_NOT_OPENABLE` (400) are this spec's own.
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+
+    DaemonStatusOut:
+      type: object
+      required: [status, version, executable, started_at, port]
+      properties:
+        status:
+          type: string
+          enum: [starting, ready, draining]
+          description: The daemon's lifecycle phase.
+        version:
+          type: string
+          description: >-
+            The build's version, read from package metadata rather than a
+            literal, so an old daemon reused by a new install is detectable.
+        executable:
+          type: string
+          description: >-
+            Which build is answering — the frozen binary's path, or the
+            interpreter of a run-from-source daemon. A CLI or shim whose
+            version differs from `version` names it in its skew warning
+            (spec daemon FR-006).
+        started_at: { type: string, format: date-time }
+        port: { type: integer }
+        upstream_summary:
+          $ref: "#/components/schemas/UpstreamSummary"
+
+    UpstreamSummary:
+      type: object
+      nullable: true
+      description: >-
+        A count of registered MCP upstreams, when the daemon has finished
+        wiring them up. Null while it is still starting — the probe must answer
+        either way.
+      properties:
+        registered: { type: integer }
+        enabled: { type: integer }
+        healthy: { type: integer }
+        unhealthy: { type: integer }
+
+    TokenRotationOut:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: New token; clients must re-read `~/.coffer/daemon.json`.
+
+    DaemonLogRecordOut:
+      type: object
+      required: [record]
+      properties:
+        timestamp:
+          type: string
+          nullable: true
+        level:
+          type: string
+          nullable: true
+        event:
+          type: string
+          nullable: true
+          description: >-
+            The message — the structured writer's `event` field, or the text
+            another writer put after its level.
+        record:
+          type: object
+          additionalProperties: true
+          description: >-
+            The whole parsed record, normalised onto `timestamp` / `level` /
+            `logger` / `event`, plus `continuation` for the lines (a traceback,
+            a wrapped message) that belong to this record. A line no writer's
+            format fits is kept whole as `{"raw": "<line>"}`.
+
+    DaemonLogListOut:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          description: Newest-first, at most `limit` entries.
+          items: { $ref: "#/components/schemas/DaemonLogRecordOut" }
+
+    FsEntry:
+      type: object
+      required: [name, path]
+      properties:
+        name: { type: string, description: "Directory name." }
+        path: { type: string, description: "Resolved absolute path." }
+
+    FsBrowseOut:
+      type: object
+      required: [path, parent, entries]
+      properties:
+        path:
+          type: string
+          description: The resolved directory that was listed.
+        parent:
+          type: string
+          nullable: true
+          description: Parent directory, or null at the filesystem root.
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/FsEntry" }
+          description: Immediate subdirectories (no files).
+
+    FsOpenRequest:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: Absolute path of an existing file or folder to open.
+        with:
+          type: string
+          nullable: true
+          description: >-
+            Application to open with (the preferred-editor preference, one of
+            the `value`s from `/fs/editors`). Omitted or null opens with the OS
+            default application.
+
+    FsRevealRequest:
+      type: object
+      required: [path]
+      properties:
+        path:
+          type: string
+          description: Absolute path of an existing file or folder to reveal.
+
+    EditorOption:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+          description: Human-readable editor name, e.g. "Visual Studio Code".
+        value:
+          type: string
+          description: >-
+            Launcher value for the preferred-editor preference — a macOS app
+            name (`open -a`) or a Linux/Windows command on PATH.
+
+    FsEditorsOut:
+      type: object
+      required: [editors]
+      properties:
+        editors:
+          type: array
+          items: { $ref: "#/components/schemas/EditorOption" }
+          description: GUI editors detected as installed on this machine.
+
+    FsPickFolderRequest:
+      type: object
+      properties:
+        start:
+          type: string
+          nullable: true
+          description: Absolute path to seed the dialog's starting directory.
+
+    FsPickFolderOut:
+      type: object
+      required: [available, path]
+      properties:
+        available:
+          type: boolean
+          description: >-
+            Whether this host has a native folder-dialog tool. When false the
+            caller falls back to the in-app folder browser (`/fs/browse`).
+        path:
+          type: string
+          nullable: true
+          description: The chosen absolute directory, or null if cancelled or unavailable.

@@ -3,9 +3,9 @@ info:
   title: Coffer — Vault Sync API
   version: 0.4.0
   description: |
-    REST surface for vault sync (spec vault-sync). Eighteen routes: the round
-    and its answers, the remote's configuration, the run history, the machine
-    registry, and the master key.
+    REST surface for vault sync (spec vault-sync FR-083). Eighteen operations:
+    the round and its answers, the remote's configuration, the run history, the
+    machine registry, and the master key.
 
     Sync is a **cross-cutting service, not a resource kind**, so it has its own
     route family rather than riding `/resources`.
@@ -13,12 +13,13 @@ info:
     ## One operation: the round
 
     The vault **converges bidirectionally** with a git remote the user owns.
-    Every write path here is the same round — apply what the remote has, publish
-    what this vault has, on a diff against a recorded base. `POST /run` is that
-    round; `POST /adopt` is the same round on a machine joining a remote, and
-    joining is detected by the absence of a pointer rather than by the route, so
-    configuring a remote on a machine that forgot its pointer cannot route around
-    the new-versus-returning distinction.
+    Every write path here is the same round (FR-035) — apply what the remote
+    has, publish what this vault has, on a diff against a recorded base.
+    `POST /run` is that round; `POST /adopt` is the same round on a machine
+    joining a remote, and joining is detected by the absence of a pointer rather
+    than by the route (FR-049), so configuring a remote on a machine that forgot
+    its pointer cannot route around the new-versus-returning distinction
+    (FR-042).
 
     There is deliberately **no export and no import route**. Writing a bundle to
     a directory and reading one back was a wholesale overwrite with no base — the
@@ -29,35 +30,40 @@ info:
 
     ## The deletion guard, and the three answers to it
 
-    A round whose diff would delete more of one side than the guard permits does
-    not run: it is **held**, and `RoundOut.pending` carries which direction
-    tripped, the per-area breaches and the paths. Three routes answer a held
-    round, and they are three separate routes rather than flags on one:
+    A round whose diff would delete more of one side than the guard permits
+    does not run (FR-066): it is **held** (FR-067), and `RoundOut.pending`
+    carries which direction tripped (FR-068), the per-area breaches and the
+    paths. Three routes answer a held round, and they are three separate routes
+    rather than flags on one:
 
     - `POST /confirm` — apply it anyway.
     - `POST /reject` — leave everything as it is.
     - `POST /rebuild` — rebuild **this** machine from the remote, discarding
-      local-only documents. Destructive on purpose: it is the answer for a
-      machine whose vault is gone, which rejoins with a valid base and nothing
-      to publish but the loss, so neither other answer serves it.
+      local-only documents (FR-047). Destructive on purpose: it is the answer
+      for a machine whose vault is gone, which rejoins with a valid base and
+      nothing to publish but the loss (FR-045), so neither other answer serves
+      it.
 
-    `POST /rollback` undoes the last round; `POST /restore` brings the vault
-    back to a sha, a ref, or the last commit at or before a `YYYY-MM-DD` date.
+    `POST /rollback` undoes the last round (FR-065); `POST /restore` brings the
+    vault back to a sha, a ref, or the last commit at or before a `YYYY-MM-DD`
+    date (FR-080). Restore is always explicit — no round reaches back into
+    history on its own (FR-081).
 
     ## Credentials never appear on this surface
 
     Every remote shape carries `credential_ref` — a name in the credential
     store — and **never** the push credential itself, so a remote can be
     rendered in a browser, logged, or pasted into a bug report with nothing to
-    redact. The daemon resolves the ref at push time and nowhere else.
+    redact. The daemon resolves the ref at push time and nowhere else
+    (FR-079).
 
-    The **master key never travels inside the repository**; moving it is a
-    separate, deliberate act. `POST /key/export` hands its material back over
+    The **master key never travels inside the repository** (FR-077); moving it
+    is a separate, deliberate act. `POST /key/export` hands its material back over
     the token-guarded loopback API and the caller decides where it lands — the
     daemon never writes to a path a caller named, because a browser has no path
     to give it. Ciphertext applied onto a machine without the matching key is
-    stored as-is and reported in `locked_refs`; the affected resources refuse to
-    spawn rather than failing decryption silently.
+    stored as-is and reported in `locked_refs` (FR-078); the affected resources
+    refuse to spawn rather than failing decryption silently.
 
     These two routes are the only survivors of the deleted export/import pair,
     and they move key **material** only — never documents.
@@ -71,10 +77,10 @@ info:
     ## Reach is machine-local, so no machine id is a foreign key
 
     Retiring a machine removes its descriptor and nothing else — nothing in the
-    vault references a machine id, because per-agent reach is machine-local and
-    no scope can name one. That is why `MachineRemovedOut` has no second half.
-    Renaming is free for the same reason: scope references the derived id, never
-    the label.
+    vault references a machine id, because per-agent reach is machine-local
+    (FR-014) and no scope can name one (FR-032). That is why
+    `MachineRemovedOut` has no second half. Renaming is free for the same
+    reason: the id is derived and the name is only a label (FR-025).
 
     ## Errors
 
@@ -84,7 +90,7 @@ info:
     `pattern` catches the shape and the domain's full rule runs in a validator,
     so a bad name is refused here rather than becoming a `git` error later.
     Neither may begin with `-`: git would read it as an option, and
-    `--receive-pack=<cmd>` is a command.
+    `--receive-pack=<cmd>` is a command (FR-016).
 
 servers:
   - url: http://127.0.0.1:8000

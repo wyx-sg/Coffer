@@ -5,7 +5,7 @@ The router owns the structural switch (/agent → a fresh conversation, sticky o
 the peer) and the parametric switch (/model → next turn, same conversation).
 Conversation creation is delegated to ``conversation_ops`` so the inbound
 turn-driver and this router agree on how a channel conversation is born.
-``/save`` (spec knowledge FR-036), ``/model`` and ``/effort`` each live in their
+``/save`` (spec channels FR-014), ``/model`` and ``/effort`` each live in their
 own sibling module (``document_save``/``model_switch``/``effort_switch``) for
 this file's size budget — ``handle`` below still dispatches every command from
 one place.
@@ -44,7 +44,7 @@ from coffer.domain.channel.commands import help_text
 from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget
 from coffer.domain.errors import CofferError
 
-#: FR-065: rendered from the one roster the platform's command menu also reads,
+#: FR-050: rendered from the one roster the platform's command menu also reads,
 #: so the help text can never offer a command the menu omits.
 HELP_TEXT = help_text()
 
@@ -154,7 +154,7 @@ class ChannelCommands:
             bound = row.active_conversation_id if row is not None else None
             conv = bound or "none yet"
             agent = effective_agent(binding, row.preferred_agent if row is not None else None)
-            # The queue is the conversation's own (FR-050) — the same one the
+            # The queue is the conversation's own (spec chat FR-018) — the same one the
             # web's pending chips show.
             queued = len(self._turns.pending(bound)) if bound is not None else 0
             await send(
@@ -187,8 +187,8 @@ class ChannelCommands:
         """Stop the turn running for this ``(chat, thread)``.
 
         Shared by the typed ``/stop`` and the platform's own stop control
-        (FR-063) so both take exactly one path: same cancellation, same queue
-        pause (FR-051), same thing said back to the user.
+        (FR-048) so both take exactly one path: same cancellation, same queue
+        pause (spec chat FR-019), same thing said back to the user.
 
         The turn that is actually draining wins over the thread's bound
         conversation: after ``/new`` rebinds the thread, a turn can still be
@@ -212,7 +212,7 @@ class ChannelCommands:
                 thread_id=thread_id,
             )
 
-    # `/save` (spec knowledge FR-036) lives in ``document_save`` (this file's
+    # `/save` (spec channels FR-014) lives in ``document_save`` (this file's
     # size budget): ``handle`` and a collection-card tap call it directly.
 
     # -- structural switches (open a fresh conversation, sticky on the peer) ------
@@ -276,7 +276,7 @@ class ChannelCommands:
         thread_id: str = "",
     ) -> None:
         """The structural switch to ``key`` (assumes ``key`` already validated):
-        stick it on THIS thread and open a fresh conversation for it (FR-032/040
+        stick it on THIS thread and open a fresh conversation for it (FR-033/040
         — a different thread of the same group can run a different agent). Shared
         by the text ``/agent <key>`` path and a card tap."""
         await self._threads.set_preferred_agent(binding.resource_id, peer.chat_id, thread_id, key)
@@ -336,15 +336,15 @@ class ChannelCommands:
         """Route a selection-card tap (``data`` = the tapped ``ChoiceButton.value``)
         to the same switch the text command performs (the processor owner-gated it).
         ``chat_kind``/``thread_id`` route the confirmation back into a group tap's
-        own group/thread, not a DM (FR-034).
+        own group/thread, not a DM (FR-036).
 
         ``card_message_id`` is the card that was tapped: the message a Prev/Next
         turn rewrites, and the one rewritten after a switch lands so it shows
         the new choice — otherwise it sits in the chat still offering the option
         the user just took, which is the one thing a selection card must never
         do. The routing itself lives in ``card_delivery`` beside the rendering
-        it drives. ``session`` is read only by a ``collection:`` tap (spec
-        knowledge FR-036), for the pending document held there."""
+        it drives. ``session`` is read only by a ``collection:`` tap (spec channels FR-014), for the
+        pending document held there."""
         await dispatch_card_tap(
             self,
             binding,

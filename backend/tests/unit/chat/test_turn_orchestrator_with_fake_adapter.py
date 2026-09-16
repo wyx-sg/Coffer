@@ -141,9 +141,7 @@ async def test_happy_path_persists_assistant_message() -> None:
     assert "Paris is the capital" in "".join(texts)
 
 
-@pytest.mark.acceptance(
-    spec="channels", scenario="token usage is recorded on the assistant message"
-)
+@pytest.mark.acceptance(spec="chat", scenario="token usage is recorded on the assistant message")
 @pytest.mark.asyncio
 async def test_completed_turn_records_token_usage() -> None:
     scripted: list[AgentEvent] = [
@@ -180,7 +178,38 @@ async def test_history_passed_to_adapter_includes_the_user_message() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="channels", scenario="model selection is recorded")
+@pytest.mark.acceptance(spec="chat", scenario="a long conversation is not loaded whole")
+async def test_only_the_most_recent_two_hundred_messages_reach_the_adapter() -> None:
+    """A conversation is not bounded, but what one turn carries is.
+
+    Handing the whole thread to the adapter makes an old conversation slower
+    and more expensive with every turn, and eventually unrunnable. The window
+    is ``HISTORY_LIMIT`` and it is the most RECENT messages, not the first.
+    """
+    from coffer.application.chat.turn_runner import HISTORY_LIMIT
+
+    adapter = FakeAgentAdapter(
+        [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")]
+    )
+    orchestrator, _conv_repo, msg_repo, _prov = make_orchestrator(adapter=adapter)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+    for i in range(HISTORY_LIMIT + 20):
+        await msg_repo.append(make_message(i, f"old {i}", conversation_id=conv.id))
+
+    queue = await orchestrator.start_turn(conv.id, "the newest thing")
+    await drain_queue(queue)
+
+    history = adapter.recorded_histories[0]
+    assert len(history) == HISTORY_LIMIT
+    # The window is the tail: the turn's own user message is in it, the first
+    # messages of the conversation are not.
+    assert history[-1].content[0].text == "the newest thing"  # type: ignore[union-attr]
+    texts = [b.text for m in history for b in m.content if isinstance(b, TextBlock)]
+    assert "old 0" not in texts
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="model selection is recorded")
 async def test_model_id_recorded_from_adapter() -> None:
     adapter = FakeAgentAdapter(
         [TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")],
@@ -337,7 +366,7 @@ async def test_cancel_turn_noop_when_no_active_turn() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(spec="channels", scenario="stop a running turn")
+@pytest.mark.acceptance(spec="chat", scenario="stop a running turn")
 async def test_interrupt_persists_the_partial_message() -> None:
     orchestrator, _, msg_repo, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial answer")])
@@ -501,7 +530,7 @@ async def test_turn_completion_bumps_conversation_updated_at() -> None:
 async def test_in_flight_turn_leaves_a_streaming_assistant_row() -> None:
     """While a turn streams, a placeholder assistant message with
     status='streaming' must exist, so a daemon crash leaves a row the startup
-    sweep can flip to 'failed' (FR-022) rather than a silently-missing reply."""
+    sweep can flip to 'failed' (FR-020) rather than a silently-missing reply."""
     orchestrator, _, msg_repo, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial")])
     )
@@ -539,6 +568,7 @@ async def test_completed_turn_finalizes_the_same_row_not_a_duplicate() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(spec="chat", scenario="a crashed turn leaves no message stuck streaming")
 async def test_sweep_streaming_flips_streaming_to_failed() -> None:
     msg_repo = FakeMessageRepo()
     msg_repo._messages = [

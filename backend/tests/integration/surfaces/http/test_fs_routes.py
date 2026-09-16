@@ -1,4 +1,4 @@
-"""HTTP coverage for /api/v1/fs/* (spec agent-registry FR-024/FR-039/FR-042)."""
+"""HTTP coverage for /api/v1/fs/* (spec daemon FR-019/FR-020/FR-021)."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def _client(app) -> TestClient:
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="browse local folders to choose a config dir"
+    spec="daemon", scenario="the daemon browses a folder without revealing its files"
 )
 def test_fs_browse_lists_subdirectories(tmp_path, monkeypatch):
     """GET /fs/browse returns a directory's path, parent, and immediate subdirs."""
@@ -90,9 +90,6 @@ def _capture_spawn(monkeypatch, platform: str = "darwin") -> list[list[str]]:
     return calls
 
 
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="open a managed file via the daemon (web open/reveal)"
-)
 def test_fs_open_launches_default_app(tmp_path, monkeypatch):
     """POST /fs/open with no editor → default TEXT editor (`open -t`), 204.
 
@@ -133,6 +130,10 @@ def test_fs_reveal_selects_in_file_manager(tmp_path, monkeypatch):
     assert calls == [["open", "-R", str(f)]]
 
 
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a path that is not absolute is refused before anything is launched",
+)
 def test_fs_open_rejects_relative_path(tmp_path, monkeypatch):
     """A non-absolute path is rejected with 400 before any spawn."""
     calls = _capture_spawn(monkeypatch)
@@ -144,6 +145,10 @@ def test_fs_open_rejects_relative_path(tmp_path, monkeypatch):
     assert calls == []
 
 
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a path that is not absolute is refused before anything is launched",
+)
 def test_fs_open_rejects_missing_path(tmp_path, monkeypatch):
     """An absolute path that doesn't exist is rejected with 400."""
     calls = _capture_spawn(monkeypatch)
@@ -200,9 +205,7 @@ def _stub_dialog(monkeypatch, *, returncode: int, stdout: str = "") -> list[list
     return calls
 
 
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="browse local folders to choose a config dir"
-)
+@pytest.mark.acceptance(spec="daemon", scenario="a native folder dialog reports its own absence")
 def test_fs_pick_folder_returns_the_chosen_directory(tmp_path, monkeypatch):
     """POST /fs/pick-folder → available=True and the absolute path the user chose.
 
@@ -242,6 +245,7 @@ def test_fs_pick_folder_reports_a_cancelled_dialog_as_no_path(tmp_path, monkeypa
     assert "default location" not in calls[0][-1]
 
 
+@pytest.mark.acceptance(spec="daemon", scenario="a native folder dialog reports its own absence")
 def test_fs_pick_folder_reports_unavailable_when_the_host_has_no_dialog(tmp_path, monkeypatch):
     """No native dialog tool on this host → available=False, so the caller
     knows to fall back to the in-app folder browser rather than assume the

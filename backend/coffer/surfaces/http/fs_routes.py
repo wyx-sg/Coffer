@@ -1,4 +1,4 @@
-"""/api/v1/fs/* — local filesystem browse + open/reveal (spec agent-registry FR-024/FR-039).
+"""/api/v1/fs/* — local filesystem browse + open/reveal (spec daemon FR-019/FR-021).
 
 Backs the web folder picker (browse) and the read-only file viewers' open/reveal
 actions. A browser can't read absolute paths or reach the OS, but the loopback
@@ -120,7 +120,7 @@ async def pick_folder(
     return FsPickFolderOut(available=result.available, path=result.path)
 
 
-# --- Installed-editor detection (backs the preferred-editor picker, spec ui-shell) ---
+# --- Installed-editor detection (backs the preferred-editor picker, spec web-ui) ---
 
 
 class EditorOptionOut(BaseModel):

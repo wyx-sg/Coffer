@@ -22,6 +22,10 @@ security:
 tags:
   - name: agents
     description: Local AI agent registry
+  - name: agent-providers
+    description: >-
+      What an agent can be put on. The model catalogue is read back from the
+      installed agent on every request and never written down in Coffer.
 
 paths:
   /agents:
@@ -758,121 +762,40 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /fs/browse:
+  /agent-providers/{agent_key}/models:
     get:
-      tags: [fs]
-      operationId: browseFilesystem
-      summary: List the subdirectories of a local directory
+      tags: [agent-providers]
+      operationId: listAgentModels
+      summary: List the models a picker should offer for an agent
       description: |
-        Read-only filesystem browse backing the web folder picker for choosing
-        an agent's config directory (a browser can't read absolute paths, but
-        the loopback daemon can). Returns a directory's path, its parent, and
-        its immediate subdirectories only — never file contents.
+        On the agent's own built-in login, what the installed agent itself
+        offers, in the order its own sources offer it (FR-032/FR-033). With a
+        Coffer connection projected into this agent, that connection's curated
+        ids are the list instead, in the user's own order — the turns go to
+        that endpoint, so the agent's own names would be rejected. A connection
+        that curates nothing narrows nothing. The read never touches the
+        network. Every entry — id, label, description — is
+        read back from the agent, never written into Coffer, because a list
+        written down here goes stale on the next CLI release. Each source
+        degrades to nothing on its own: a missing CLI, a changed bundle
+        layout, an unauthenticated or wedged agent costs the models that
+        source would have added and nothing else. Reasoning levels travel
+        beside the id, never inside it (FR-036). Read-only; emits no audit
+        event.
       parameters:
-        - in: query
-          name: path
-          required: false
+        - in: path
+          name: agent_key
+          required: true
           schema: { type: string }
-          description: Directory to list. Defaults to the user's home directory.
+          description: The agent type key (`claude_code`, `codex`).
       responses:
         "200":
           description: OK
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/FsBrowseOut" }
-        "400": { $ref: "#/components/responses/BadRequest" }
+              schema: { $ref: "#/components/schemas/AgentModelsOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /fs/open:
-    post:
-      tags: [fs]
-      operationId: openFilesystemPath
-      summary: Open a local path in an application
-      description: |
-        Open an existing absolute path (a managed file or its folder) in an
-        application — the preferred editor (`with`) or the OS default. Backs the
-        read-only file viewers' "open in editor" action on the web, where a
-        browser can't reach the OS but the loopback daemon — always on the user's
-        own machine — can (ADR daemon-proxies-os-file-actions). Validated absolute-and-existing before any
-        launch; creates nothing.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/FsOpenRequest" }
-      responses:
-        "204": { description: The launcher was spawned. }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /fs/reveal:
-    post:
-      tags: [fs]
-      operationId: revealFilesystemPath
-      summary: Reveal a local path in the OS file manager
-      description: |
-        Select / reveal an existing absolute path in the OS file manager (Finder /
-        Explorer; on Linux, where there is no portable "select", the containing
-        folder is opened). Backs the read-only file viewers' "reveal" action on
-        the web via the loopback daemon (ADR daemon-proxies-os-file-actions). Validated absolute-and-existing;
-        creates nothing.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/FsRevealRequest" }
-      responses:
-        "204": { description: The file manager was opened. }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /fs/editors:
-    get:
-      tags: [fs]
-      operationId: listEditors
-      summary: List GUI editors installed on this machine
-      description: |
-        Enumerate common GUI code editors detected as installed, for the
-        preferred-editor picker in Settings (spec ui-shell). Detection is
-        per-OS: macOS returns app-bundle names (for `open -a`), Linux/Windows
-        return commands found on PATH. The returned `value` is exactly what
-        `/fs/open`'s `with` field accepts. The chosen preference itself stays
-        client-side (localStorage); this endpoint only lists candidates.
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/FsEditorsOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /fs/pick-folder:
-    post:
-      tags: [fs]
-      operationId: pickFolder
-      summary: Open the host's native folder dialog
-      description: |
-        Open the OS-native directory dialog via the loopback daemon (macOS
-        `osascript`, Linux `zenity`/`kdialog`) and return the chosen absolute
-        path. A web browser cannot open a native dialog, so this is the daemon
-        counterpart to the in-app folder browser (`/fs/browse`). `available:false`
-        means this host has no native dialog tool (caller falls back to the in-app
-        browser); `available:true` with `path:null` means the user cancelled.
-        This is the ONLY native dialog the daemon opens: the open-file and
-        save-file dialogs are gone (FR-042) — the browser's own
-        `<input type="file">` / `<a download>` cover those better.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/FsPickFolderRequest" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/FsPickFolderOut" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
 components:
   securitySchemes:
@@ -920,9 +843,9 @@ components:
       properties:
         config_dir: { type: string }
         description: { type: string, nullable: true }
-        model: { type: string, nullable: true, description: "Per-agent model binding (spec provider-switching amendment 2026-06-22b) → ANTHROPIC_MODEL / Codex model." }
-        fast_model: { type: string, nullable: true, description: "Fast slot → ANTHROPIC_SMALL_FAST_MODEL (anthropic only). Explicit null clears it." }
-        wire_api: { type: string, nullable: true, description: "Codex wire for this agent's binding. Only \"responses\" is accepted — Codex refuses to load a config carrying the retired \"chat\"." }
+        model: { type: string, nullable: true, description: "The agent's model binding (FR-031); spec provider-switching projects it into the native config." }
+        fast_model: { type: string, nullable: true, description: "The binding's fast slot (FR-031). Explicit null clears it." }
+        wire_api: { type: string, nullable: true, description: "The binding's wire (FR-031). Only \"responses\" is accepted — see agent-registry/codex FR-011." }
 
     AgentOut:
       type: object
@@ -946,7 +869,7 @@ components:
             description: "Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills.",
           }
         description: { type: string, nullable: true }
-        model: { type: string, nullable: true, description: "Per-agent model binding (null = unbound, falls back to the active connection during rollout)." }
+        model: { type: string, nullable: true, description: "The agent's model binding (FR-031); null = unbound, so the agent runs on its own default." }
         fast_model: { type: string, nullable: true }
         wire_api: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
@@ -1503,96 +1426,43 @@ components:
           nullable: true
           description: "The resolved coffer-mcp-shim command written/found, when installed."
 
-    FsEntry:
+    AgentModelOut:
       type: object
-      required: [name, path]
+      required: [id]
       properties:
-        name: { type: string, description: "Directory name." }
-        path: { type: string, description: "Resolved absolute path." }
-
-    FsBrowseOut:
-      type: object
-      required: [path, parent, entries]
-      properties:
-        path:
-          {
-            type: string,
-            description: "The resolved directory that was listed.",
-          }
-        parent:
+        id:
           type: string
-          nullable: true
-          description: "Parent directory, or null at the filesystem root."
-        entries:
-          type: array
-          items: { $ref: "#/components/schemas/FsEntry" }
-          description: "Immediate subdirectories (no files)."
-
-    FsOpenRequest:
-      type: object
-      required: [path]
-      properties:
-        path:
-          type: string
-          description: "Absolute path of an existing file or folder to open."
-        with:
-          type: string
-          nullable: true
           description: >-
-            Application to open with (the preferred-editor preference). Omitted /
-            null opens with the OS default application.
-
-    FsRevealRequest:
-      type: object
-      required: [path]
-      properties:
-        path:
-          type: string
-          description: "Absolute path of an existing file or folder to reveal."
-
-    EditorOption:
-      type: object
-      required: [label, value]
-      properties:
+            The id passed verbatim to the agent's CLI — whatever that agent
+            calls the choice, which for Claude Code is a tier alias and for
+            Codex a versioned model name.
         label:
           type: string
-          description: "Human-readable editor name (e.g. \"Visual Studio Code\")."
-        value:
+        description:
           type: string
-          description: >-
-            Launcher value for the preferred-editor preference — a macOS app
-            name (`open -a`) or a Linux/Windows command on PATH.
-
-    FsEditorsOut:
-      type: object
-      required: [editors]
-      properties:
-        editors:
+        efforts:
           type: array
-          items: { $ref: "#/components/schemas/EditorOption" }
-          description: "GUI editors detected as installed on this machine."
-
-    FsPickFolderRequest:
-      type: object
-      properties:
-        start:
-          type: string
-          nullable: true
-          description: "Absolute path to seed the dialog's starting directory."
-
-    FsPickFolderOut:
-      type: object
-      required: [available, path]
-      properties:
-        available:
-          type: boolean
+          items: { type: string }
           description: >-
-            Whether this host has a native folder-dialog tool. When false the
-            caller falls back to the in-app folder browser (`/fs/browse`).
-        path:
+            The reasoning-effort levels this model runs at, in the agent's own
+            order; empty for an agent that takes no such setting. An effort is
+            not part of the model name — it is its own field on a turn — so it
+            is chosen beside the model, not instead of one.
+        default_effort:
           type: string
           nullable: true
-          description: "The chosen absolute directory, or null if cancelled/unavailable."
+          description: >-
+            The level the agent itself would use when none is chosen, kept
+            only when it is one of the offered levels. Null when the runtime
+            publishes no machine-readable default.
+
+    AgentModelsOut:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/AgentModelOut" }
 
     ErrorOut:
       type: object

@@ -3,7 +3,7 @@
 Ties the two finished native-memory readers to the derived, project-
 partitioned fact store: :class:`MemoryService.aggregate` reads, files and
 writes; :func:`make_memory_kind` wires the ``memory`` Resource kind's
-lifecycle. Delivery (FR-050..055) is a separate concern and is not
+lifecycle. Delivery (FR-021..055) is a separate concern and is not
 re-exported here.
 """
 

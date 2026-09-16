@@ -9,8 +9,9 @@ still carrying a removed field fails to load — and ``GET /api/v1/agents``
 answers 422, taking the Agents page down on every install that predates the
 removal. Two such keys accumulated without ever being stripped at rest:
 
-- ``disable_native_memory`` — removed with FR-046 (#323), which retired the
-  hook that turned the agent's own write-side memory off.
+- ``disable_native_memory`` — removed in #323 along with the hook that turned
+  the agent's own write-side memory off (spec agent-registry, "Not provided:
+  the ``coffer-hook`` binary and the session-context route").
 - ``auto_detected`` — removed when detection became confirm-based (a detected
   agent registers exactly like a manual add), so the flag had nothing to say.
 

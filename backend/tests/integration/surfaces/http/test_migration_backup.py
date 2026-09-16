@@ -62,7 +62,7 @@ def test_sqlite_file_identifies_only_existing_on_disk_databases(tmp_path: pathli
     assert sqlite_file("not a url at all ::") is None
 
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="a schema upgrade keeps a copy of the vault")
+@pytest.mark.acceptance(spec="daemon", scenario="a schema upgrade keeps a copy of the vault")
 def test_upgrade_from_a_fresh_file_leaves_a_pre_migration_copy(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

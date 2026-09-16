@@ -3,9 +3,9 @@
 One pass (``aggregate``) does everything spec memory's Aggregation section
 asks for: read every registered, enabled agent's native memory through its
 reader, skip what has not changed (FR-006), isolate what cannot be parsed
-(FR-005), file each fact into its project's partition or ``global`` (FR-012),
-merge only what is certainly the same fact (FR-022, in ``aggregate.py``), and
-rewrite the affected partitions (FR-023). Everything under
+(FR-005), file each fact into its project's partition or ``global`` (FR-010),
+merge only what is certainly the same fact (FR-015, in ``aggregate.py``), and
+rewrite the affected partitions (FR-016). Everything under
 ``~/.coffer/memory/`` is derived, so a partition is free to be cleared and
 rewritten from scratch on every pass that touches it — the one thing worth
 avoiding is doing that when nothing actually changed, which is why the write
@@ -62,7 +62,7 @@ class MemoryPartitionConfig(BaseModel):
     One field: the absolute project root a partition was minted for (empty
     for ``global``, and for any partition read before this field existed).
     Recorded so a later pass can find this partition by its root again
-    (FR-011) instead of reminting a name that might now collide with a
+    (FR-009) instead of reminting a name that might now collide with a
     different project — the mapping is persisted on the Resource, not
     recomputed from a directory name every time.
     """
@@ -74,14 +74,14 @@ class MemoryPartitionConfig(BaseModel):
 
 @dataclass(frozen=True)
 class PartitionSummary:
-    """One partition as the management surface lists it (FR-062)."""
+    """One partition as the management surface lists it (FR-029)."""
 
     name: str
     project_root: str
     fact_count: int
 
 
-#: The two readers this layer supports (spec memory FR-004, FR-073 — a third
+#: The two readers this layer supports (spec memory FR-004, FR-037 — a third
 #: agent earns an abstraction, not before). Built once; a caller that wants a
 #: fake substitutes the whole mapping rather than reaching inside it.
 DEFAULT_READERS: Mapping[str, MemoryReader] = {
@@ -107,7 +107,7 @@ def _home_dir() -> str:
     """The developer's home directory, by the same rule ``paths.py`` uses.
 
     A source whose project root IS this directory is about the person, not a
-    project, and files into ``global`` regardless of its fact type (FR-012).
+    project, and files into ``global`` regardless of its fact type (FR-010).
     """
     return str(pathlib.Path(os.environ.get("HOME", "~")).expanduser()).rstrip("/")
 
@@ -172,7 +172,7 @@ class MemoryService:
                 # The digest match alone is not enough to skip: if the store
                 # (or just this partition) was cleared by hand since the last
                 # pass, there is nothing to reuse, and skipping would silently
-                # drop the fact rather than reproduce it (FR-023 — the whole
+                # drop the fact rather than reproduce it (FR-016 — the whole
                 # tree, or any part of it, must be safe to delete and rebuild).
                 if old_state.get(source.path) == source.digest and by_native_path.get(source.path):
                     sources_skipped += 1
@@ -219,7 +219,7 @@ class MemoryService:
             final = assign_slugs(merge_duplicates(partition_facts))
             result_partitions.append(partition)
             if set(final) == set(existing_facts.get(partition, ())):
-                continue  # nothing actually changed — write nothing (FR-023)
+                continue  # nothing actually changed — write nothing (FR-016)
             store.clear_facts(partition)
             for fact in final:
                 store.write_fact(fact)
@@ -266,7 +266,7 @@ class MemoryService:
             actor=actor,
             allow_lifecycle_kind=True,
         )
-        # Default scope: the agents it was aggregated from (FR-014), so
+        # Default scope: the agents it was aggregated from (FR-012), so
         # memory flows back to its own sources with no setup step. A
         # partition that already existed is never touched here — only a
         # brand-new registration reaches this method.
@@ -281,7 +281,7 @@ class MemoryService:
         try:
             await self._resources.get(ref)
         except ResourceNotFound:
-            # No matching Resource row (should not happen under FR-013, but a
+            # No matching Resource row (should not happen under FR-011, but a
             # stray directory is still worth clearing defensively).
             store.delete_partition(name)
             return
@@ -294,7 +294,7 @@ class MemoryService:
 
     async def list_partitions(self) -> list[PartitionSummary]:
         """Every partition, with its fact count — an unfiltered management
-        view (FR-062), not the agent-scoped read path below."""
+        view (FR-029), not the agent-scoped read path below."""
         rows = await self._resources.list(kind=KIND_MEMORY)
         return [
             PartitionSummary(
@@ -307,14 +307,14 @@ class MemoryService:
 
     async def list_facts(self, partition: str, *, agent: str | None = None) -> tuple[Fact, ...]:
         """Every fact in ``partition``, or none at all when ``agent`` is given
-        and is out of that partition's scope (FR-014) — reported as absent
+        and is out of that partition's scope (FR-012) — reported as absent
         rather than forbidden, mirroring ``KnowledgeService``."""
         if agent is not None and partition not in await self.visible_partitions(agent):
             return ()
         return store.list_facts(partition)
 
     async def visible_partitions(self, agent: str | None) -> list[str]:
-        """The partitions ``agent`` may see (FR-014), mirroring
+        """The partitions ``agent`` may see (FR-012), mirroring
         ``KnowledgeService.visible_collections``."""
         rows = await self._resources.list(kind=KIND_MEMORY, enabled=True)
         return sorted(r.name for r in rows if is_active(r.scope, agent))
@@ -336,7 +336,7 @@ def _resolve_partition(
     name_to_root: dict[str, str],
     claimed_names: set[str],
 ) -> str:
-    """Which partition ``raw`` files into (FR-012).
+    """Which partition ``raw`` files into (FR-010).
 
     A personal-typed fact, one with no project root, or one whose root IS the
     developer's home directory all go to ``global``. Anything else belongs to

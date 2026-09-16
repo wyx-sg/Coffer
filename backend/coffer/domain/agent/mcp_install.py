@@ -60,7 +60,7 @@ def _entry_fields(
     """The key/value pairs of a single stdio ``coffer`` entry for the style.
 
     ``agent_name``, when given, threads the installing agent's own name
-    through as ``--agent <name>`` (spec agent-registry FR-019, amended) so the
+    through as ``--agent <name>`` (spec agent-registry FR-015, amended) so the
     shim can self-report its identity at the MCP handshake. The command-map
     style carries it as a separate ``args`` list, mirroring how Claude Code /
     Codex already render stdio server args. ``agent_name=None`` (the default)

@@ -115,7 +115,7 @@ class Kind:
     # installed on one machine: publishing those produces, at the other end, a
     # row naming something that machine does not have, with nothing behind it,
     # which the next local pass would recompute away anyway. `memory` is the
-    # only kind that sets it False today (spec memory FR-023). Declared here
+    # only kind that sets it False today (spec memory FR-016). Declared here
     # rather than listed in the exporter so the sync layer keeps one rule
     # instead of a table of exceptions — the shape the retired machine-local
     # kind list had.
@@ -199,7 +199,7 @@ class Kind:
     # It is deliberately a function of the CONFIG alone, so the kind-agnostic
     # register path can call it with what it already has. A kind whose starting
     # scope depends on something outside the config — `memory` defaults to the
-    # agents a partition was aggregated FROM (spec memory FR-014) — cannot use
+    # agents a partition was aggregated FROM (spec memory FR-012) — cannot use
     # this hook and sets the scope itself right after registering.
     default_scope: Callable[[dict[str, Any]], Scope | None] | None = None
 

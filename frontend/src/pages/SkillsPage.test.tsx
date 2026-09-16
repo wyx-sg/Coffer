@@ -107,7 +107,7 @@ describe("SkillsPage", () => {
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
   });
 
-  test("a copy_fallback delivery is badged as degraded on the row (FR-012)", () => {
+  test("a copy_fallback delivery is badged as degraded on the row (FR-011)", () => {
     // The agent Skills tab no longer repeats the delivered skills, so this list
     // is where the degradation has to show.
     stubHooks({

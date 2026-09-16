@@ -3,7 +3,9 @@
 The ordering is the point. A document's title lived ONLY in ``documents.title``
 — the file on disk was named by a ULID and its frontmatter never carried one —
 so this migration reads the rows it is about to destroy, writes the titles into
-the tree, and only then drops the tables (spec knowledge FR-071).
+the tree, and only then drops the tables. The move is no longer a
+requirement — it ran once and is recorded in spec knowledge
+``## Migration history``.
 """
 
 from __future__ import annotations
@@ -130,7 +132,7 @@ def test_0066_registers_collections_that_are_already_on_disk(tmp_path, monkeypat
     migrated by an earlier run — or restored from a backup — reports no work
     done, so the scopes' rows were deleted and nothing registered in their
     place, leaving every file on disk invisible to every agent (the per-agent
-    scope reads the Resource rows, spec knowledge FR-012).
+    scope reads the Resource rows, spec knowledge FR-009).
     """
     db_path = tmp_path / "m.db"
     root = tmp_path / "knowledge"

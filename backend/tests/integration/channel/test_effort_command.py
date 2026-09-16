@@ -1,4 +1,4 @@
-"""`/effort` — the second half of the model choice, from a chat (FR-017).
+"""`/effort` — the second half of the model choice, from a chat (FR-013).
 
 `/model`'s sibling: no argument reports what is in effect (or renders a card
 where the transport takes one), an argument applies it to the next turn of the
@@ -33,7 +33,7 @@ async def _effort(env: ChannelEnv, resource: Resource) -> str | None:
     return cfg.effort
 
 
-# -- the roster (FR-064 / FR-065) ---------------------------------------------
+# -- the roster (FR-049 / FR-050) ---------------------------------------------
 
 
 def test_effort_is_on_the_roster_the_menu_and_help_are_built_from() -> None:

@@ -117,3 +117,4 @@ section that future readers most often want — don't skip it.>
 | [`budget-driven-tool-tiering`](budget-driven-tool-tiering.md) | Budget-Driven Tool Tiering at the Gateway | Accepted |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK | Accepted |
 | [`product-scope-is-settled`](product-scope-is-settled.md) | Product Scope Is Settled | Accepted |
+| [`fr-ids-reset-once`](fr-ids-reset-once.md) | FR Ids Reset Once, Then Are Never Reused Again | Accepted |

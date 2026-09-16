@@ -1,4 +1,4 @@
-"""The loopback-Host guard (spec mcp-gateway FR-027).
+"""The loopback-Host guard (spec daemon FR-015).
 
 The daemon's served index.html carries the live API token, so a DNS-rebound
 page — one on ``evil.com`` whose hostname resolves to 127.0.0.1, which the
@@ -44,7 +44,7 @@ def test_loopback_authorities_are_accepted(authority: str) -> None:
 
 
 @pytest.mark.acceptance(
-    spec="mcp-gateway",
+    spec="daemon",
     scenario="a rebound page is refused before it can read the token",
 )
 @pytest.mark.parametrize(
