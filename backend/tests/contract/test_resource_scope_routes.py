@@ -39,10 +39,13 @@ from coffer.surfaces.http.resource_routes import router as resource_router
 async def _client(tmp_path):
     """Wire a real app with the production mcp_server/knowledge/agent/skill Kinds.
 
-    mcp_server and agent are the two ends of the spectrum (supports_scope
-    True vs False); skill and knowledge are lifecycle kinds
-    (generic_create_allowed=False) that DO support scope, proving update_scope
-    is not gated on that flag.
+    Four real kinds, chosen so the two flags vary independently — because
+    `supports_scope` and `generic_create_allowed` answer unrelated questions
+    and the route must not confuse them. `mcp_server` and `agent` are the two
+    ends of the scope spectrum among generically-creatable kinds; `skill` is a
+    lifecycle kind (`generic_create_allowed=False`) that DOES support scope,
+    proving update_scope is not gated on that flag, and `knowledge` is a
+    lifecycle kind that supports NONE, proving the refusal is not either.
     """
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
@@ -173,9 +176,16 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_put_scope_on_knowledge_kind_narrows_the_collection(tmp_path):
-    """A collection IS a Resource so that it can be authorized (spec knowledge FR-010): per-agent
-    scope is the only reason the kind is in the framework."""
+async def test_scope_on_a_lifecycle_kind_that_declares_none_is_reported_and_refused(tmp_path):
+    """`knowledge` withdrew from reach, and the route must say so on both verbs.
+
+    A collection is still a Resource, but for its lifecycle and its audit trail
+    rather than for authorization: reach over a collection was non-disclosure
+    only — the corpus is files on disk and the delivered skill tells the agent
+    to grep the whole root — so the kind stopped declaring it. The refusal has
+    to come from `supports_scope` alone and not from the kind being a lifecycle
+    kind, which is why this is asserted on `knowledge` as well as on `agent`.
+    """
     c, engine, svc = await _client(tmp_path)
     async with c:
         await svc.register(
@@ -185,12 +195,16 @@ async def test_put_scope_on_knowledge_kind_narrows_the_collection(tmp_path):
             actor="cli",
             allow_lifecycle_kind=True,
         )
+        get_r = await c.get(f"/api/v1/resources/{KIND_KNOWLEDGE}/shopee/scope")
+        assert get_r.status_code == 200, get_r.text
+        assert get_r.json() == {"scope": None, "supports_scope": False}
+
         r = await c.put(
             f"/api/v1/resources/{KIND_KNOWLEDGE}/shopee/scope",
             json={"scope": {"agents": ["claude-code"]}},
         )
-        assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"agents": ["claude-code"]}
+        assert r.status_code == 422, r.text
+        assert r.json()["error"]["code"] == "SCOPE_INVALID"
     await engine.dispose()
 
 

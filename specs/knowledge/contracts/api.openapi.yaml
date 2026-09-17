@@ -124,9 +124,10 @@ info:
     additionally read an optional `X-Coffer-Actor` header. Every error response
     uses the app-wide envelope `{ "error": { code, message, details } }`.
 
-    These routes are the **owner's** surface and are therefore unscoped:
-    per-agent authorization governs what an agent is told through delivery
-    (FR-010), not what the person who owns the vault sees in their own UI.
+    Nothing here is filtered per agent, and neither is what an agent reaches: a
+    collection carries no per-agent reach, so every **enabled** collection is
+    catalogued into every agent's delivered skill and a **disabled** one into
+    none (FR-010). `enabled` gates delivery, not readability (FR-012).
 
     ## Reading this file against the code
 
@@ -187,7 +188,8 @@ paths:
       description: |
         Creates one collection: a directory under the knowledge root holding
         both lanes (`sources/` and `topics/`), and one `knowledge` Resource for
-        it so the framework's per-agent scope has something to authorize.
+        it — which is what gives the collection a lifecycle, an audit trail and
+        its one `enabled` switch.
         Nothing else creates one — not a read, not a write, not an agent's
         working directory (FR-008).
 

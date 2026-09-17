@@ -113,10 +113,10 @@ class CurationWorker:
     async def run_once(self) -> None:
         """Re-deliver the skills, then sweep — or not, when curation is off."""
         # Delivery runs on every tick and OUTSIDE the enabled check, because it
-        # is not part of curating: a collection created, deleted or re-scoped
-        # changes what each agent must be told, and that is true on a machine
-        # where curation is switched off or which is not the owner (FR-035). It
-        # is cheap and skips a copy that already matches.
+        # is not part of curating: a collection created, deleted, enabled or
+        # disabled changes what every agent must be told, and that is true on a
+        # machine where curation is switched off or which is not the owner
+        # (FR-035). It is cheap and skips a copy that already matches.
         if self._deliver is not None:
             try:
                 await self._deliver()

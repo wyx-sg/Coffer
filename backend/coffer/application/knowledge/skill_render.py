@@ -1,8 +1,9 @@
-"""Rendering the per-agent knowledge skill.
+"""Rendering the knowledge skill.
 
 This is the whole of the layer's delivery half (spec knowledge FR-034 to FR-037),
 and it is pure: text in, text out, no filesystem and no ports. The writing of
-it is ``skill_delivery``.
+it is ``skill_delivery``. One rendering serves every agent — the catalogue it
+carries is the whole enabled corpus, not a per-agent slice of it.
 
 Two levels, and they are not interchangeable:
 
@@ -142,7 +143,7 @@ def render_body(root: str, catalogue: Catalogue) -> str:
         "",
     ]
     if not catalogue:
-        lines.append("_No collections are available to you._")
+        lines.append("_No collections have been created yet._")
     for entry, topics in catalogue:
         lines += _catalogue_lines(root, entry, topics)
         lines.append("")
@@ -157,7 +158,7 @@ def render_body(root: str, catalogue: Catalogue) -> str:
 
 
 def render(root: str, catalogue: Catalogue) -> str:
-    """The complete `SKILL.md` for one agent."""
+    """The complete `SKILL.md`, as every agent receives it."""
     description = render_description(catalogue)
     return (
         "---\n"

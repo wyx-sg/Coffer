@@ -30,7 +30,6 @@ from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.note import TYPE_PROJECT
 from coffer.domain.memory.reader import RawEntry, SourceFile
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.domain.scope import Scope
 from coffer.infrastructure.memory import store
 
 
@@ -91,11 +90,6 @@ class FakeResources:
     ) -> Resource:
         row = await self.get(ref)
         row.config = dict(new_config)
-        return row
-
-    async def update_scope(self, ref: ResourceRef, scope: Scope, *, actor: str) -> Resource:
-        row = await self.get(ref)
-        row.scope = scope
         return row
 
     async def delete(self, ref: ResourceRef, actor: str) -> None:

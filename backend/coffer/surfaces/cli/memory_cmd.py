@@ -275,7 +275,7 @@ def distil(
 
 @app.command("context")
 def context(
-    agent: str = typer.Option(..., "--agent", help="Calling agent's registered name"),
+    agent: str = typer.Option(..., "--agent", help="Which agent's hook is firing"),
     cwd: str = typer.Option(..., "--cwd", help="The session's working directory"),
     ceiling_tokens: int = typer.Option(0, "--ceiling-tokens", help="0 = the server's default"),
 ) -> None:
@@ -284,6 +284,11 @@ def context(
     This is exactly what an installed session-start hook invokes
     (``domain.memory.delivery.hook_command``) — see the module docstring for
     why every failure here is silent rather than raised.
+
+    ``--agent`` says who fired, and only that: the payload is the same for
+    every agent, and the name travels so the daemon can record the fire
+    against it (FR-033). It is still required, because an unattributed fire is
+    a hook nobody can tell is working.
     """
     try:
         info = live_daemon()

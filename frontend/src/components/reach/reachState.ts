@@ -60,10 +60,14 @@ export function liveMode(
  * The button's text: the state, said plainly.
  *
  * `null` names no state — the bulk bar, where a mixed selection has no single
- * reach — so it names the action instead. Where the control has a row in hand
- * it can be more specific than `reachModeName` and count the agents; the
- * states it cannot count it names through that function, so the button and the
- * filter option for one state can never read differently.
+ * reach — so it names the action instead, and which action that is depends on
+ * what the kind can express: "set reach" for a kind with agents to choose
+ * between, "set status" for one where the only choice is on or off. Naming the
+ * first for a `knowledge` or `memory` selection would offer a panel with no
+ * agent list in it. Where the control has a row in hand it can be more
+ * specific than `reachModeName` and count the agents; the states it cannot
+ * count it names through that function, so the button and the filter option
+ * for one state can never read differently.
  *
  * An empty agent list is reported as its own thing, never as "Disabled": the
  * user did not switch that resource off, its list currently names nobody, and
@@ -75,7 +79,7 @@ export function reachLabel(
   supportsScope: boolean,
   scope: Scope | null,
 ): string {
-  if (live === null) return t("scope.setReach");
+  if (live === null) return t(supportsScope ? "scope.setReach" : "scope.setStatus");
   if (live === "disabled") return reachModeName(t, "disabled");
   if (!supportsScope) return t("common.enabled");
   if (live === "everywhere") return reachModeName(t, "everywhere");

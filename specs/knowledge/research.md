@@ -202,14 +202,16 @@ original is an ordinary visible file beside the text extracted from it — which
 also the truer description of what it is. A PDF somebody chose to upload is the
 most source-like thing in the collection.
 
-## 7. Boundaries: one, and it exists to be authorized
+## 7. Boundaries: one, and it is the human's filing
 
 **Question**: how is knowledge separated?
 
 **Decision**: by **collection**, and by nothing else. A collection is a
-top-level folder the human created deliberately, and it is a Resource so the
-framework's per-agent scope can authorize it
-([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)).
+top-level folder the human created deliberately, and being a Resource gives it a
+lifecycle, an audit trail and one `enabled` switch. It carries no per-agent
+reach: that was tried and withdrawn
+([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md),
+revised 2026-09-18).
 
 The earlier `global` ÷ `project-<ULID>` ÷ collection axis tried to say "what is
 this knowledge about", which is a property of the content, and paid the full
@@ -217,17 +219,19 @@ cost of physical structure for it: migrations, empty shells auto-provisioned by
 a read-only search, and cross-boundary fusion at query time. That retrieval had
 to fuse across scopes by reciprocal rank to be useful at all was the tell — the
 isolation was never the point. Nothing is derived from a cwd now, nothing
-auto-provisions, and an agent reaches every collection it is authorized for.
+auto-provisions, and every agent reaches every enabled collection.
 
-**Where the scope is enforced moved, and nothing else about it did.** There is no
-retrieval tool left to check a scope at, so it is checked at **delivery**: the
-skill rendered for an agent names only the collections activated for it, and an
-unauthorized collection's name, subjects, catalogue and paths never appear in
-that agent's file. `coffer__write` checks it too, on the way in. Authorization is
-still **non-disclosure, not access control** — an agent holding shell or
-file-read tools can read anything under `~/.coffer/knowledge/`, exactly as it
-could before — so the system says so rather than implying an isolation it does
-not provide. The previous enforcement point was equally bypassable; what changed
+**The per-agent half of this went away, and the reasoning is worth keeping.**
+There was no retrieval tool left to check a scope at, so the check moved to
+**delivery**: the skill rendered for an agent named only the collections
+activated for it. But that was **non-disclosure, not access control** — an agent
+holding shell or file-read tools can read anything under `~/.coffer/knowledge/`,
+and the skill it was narrowing hands over the root and says to grep it. So the
+narrowing withheld a name and nothing else, it was never once configured, and it
+is now gone: `enabled` is the only switch, a disabled collection appears in no
+agent's file, and an enabled one appears in every agent's. What is left to state
+plainly is that `enabled` gates **delivery** rather than readability. The
+enforcement point that preceded delivery was equally bypassable; what changed
 is that the new one is where the agent's *knowledge of the path* comes from,
 which is the only thing that was ever actually being controlled.
 

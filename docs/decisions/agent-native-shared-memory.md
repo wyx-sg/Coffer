@@ -40,9 +40,12 @@ write into any agent's native memory files.**
 What that commits to, independently of layout:
 
 - **One resource kind, one storage root.** Not one store per agent, and not a
-  per-agent view over a shared one. The framework's
-  [per-agent scope](per-agent-resource-scope.md) decides which agent may reach a
-  given collection; the store itself is undivided.
+  per-agent view over a shared one. The store is undivided and so is the reach:
+  every enabled collection is served to every agent. A collection could once
+  carry the framework's
+  [per-agent scope](per-agent-resource-scope.md), and that was withdrawn on
+  2026-09-18 — see that ADR's revision history — because a per-agent view over
+  a shared store is precisely what this decision declines to build.
 - **One tool surface, identical for every agent.** The `coffer__*` knowledge
   tools are agent-agnostic, so **adding a new agent adds no knowledge-layer code
   at all**. That property is the whole return on the decision, and the rejected

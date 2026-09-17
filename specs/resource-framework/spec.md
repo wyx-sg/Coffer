@@ -47,20 +47,21 @@ With audit and retention inside it the picture changes, and the five tests in
 
 A user has registered MCP servers, agents, skills, channels and knowledge
 collections. They want one place that lists everything Coffer holds, one way to
-turn a thing on or off, one way to say which agents it reaches, and one way to
-delete it — instead of learning nine near-identical per-kind surfaces and
-discovering that one of them forgot to audit the change or to release the
-secret the deleted thing referenced.
+turn a thing on or off, one way to say which agents it reaches *where that
+question applies to the kind at all*, and one way to delete it — instead of
+learning a near-identical surface per kind and discovering that one of them
+forgot to audit the change or to release the secret the deleted thing
+referenced.
 
 **Why this priority**: Every other spec is a kind. Without this one, each of
 them re-implements identity, validation, enable/disable, reach, deletion and
 auditing slightly differently, and the differences are only found in
 production.
 
-**Independent Test**: With one kind registered, list resources through the
-kind-agnostic surface, read one back by `<kind>:<name>`, disable it, set its
-reach to a single agent, clear the reach, delete it, and see every one of those
-steps in the audit log.
+**Independent Test**: With one reach-supporting kind registered, list resources
+through the kind-agnostic surface, read one back by `<kind>:<name>`, disable it,
+set its reach to a single agent, clear the reach, delete it, and see every one
+of those steps in the audit log.
 
 **Covering scenarios** (full Given/When/Then under `## Acceptance Scenarios` below):
 

@@ -38,7 +38,6 @@ from coffer.application.memory.service import KIND_MEMORY
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER, Note, Origin
 from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import Scope
 from coffer.infrastructure.memory import paths, source_state, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
 from tests.unit.memory.conftest import (
@@ -522,11 +521,19 @@ async def test_a_pass_over_an_idle_machine_writes_nothing_and_reports_it() -> No
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="memory",
-    scenario="a partition is registered as a resource scoped to the agents it came from",
+    scenario="a partition is registered as a resource keyed on its repository",
 )
-async def test_a_new_partitions_scope_is_the_agents_it_was_aggregated_from(
+async def test_a_new_partition_is_registered_with_its_repository_and_no_scope(
     tmp_path: pathlib.Path,
 ) -> None:
+    """Registration writes the repository's identity and nothing else.
+
+    It used to write a per-agent scope too, seeded with the agents the
+    partition had been aggregated from — which meant a partition filled from
+    one agent was withheld from every other one working in the same
+    repository. ``scope is None`` is asserted here because that absence is
+    the fix, not an incidental detail of the row.
+    """
     root = _repository(tmp_path, "coffer", remote="git@github.com:owner/coffer.git")
     resources = FakeResources()
     resources.add_agent("codex", "codex", "/cx")
@@ -538,19 +545,27 @@ async def test_a_new_partitions_scope_is_the_agents_it_was_aggregated_from(
     await _aggregate(resources, {"codex": reader})
 
     row = await resources.get(ResourceRef(KIND_MEMORY, "coffer"))
-    assert row.scope == Scope(agents=["codex"])
     assert row.config["repository_path"] == str(root)
     assert row.config["repository_key"] == "remote:github.com/owner/coffer"
+    assert row.scope is None
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="memory",
-    scenario="a partition is registered as a resource scoped to the agents it came from",
+    scenario="a partition is registered as a resource keyed on its repository",
 )
-async def test_a_later_pass_leaves_a_scope_the_developer_narrowed_alone(
+async def test_a_partition_two_agents_filled_is_one_row_serving_both(
     tmp_path: pathlib.Path,
 ) -> None:
+    """Two agents, one repository, one partition — and no reach on it.
+
+    This is the case the old default got wrong in the most visible way: the
+    partition was created on the first agent's pass and scoped to it, so the
+    second agent's own entries landed in a partition it was then not served.
+    A later pass must not invent a reach either, so the row is checked again
+    after one of the sources changes.
+    """
     root = _repository(tmp_path, "coffer")
     resources = FakeResources()
     resources.add_agent("codex", "codex", "/cx")
@@ -567,12 +582,15 @@ async def test_a_later_pass_leaves_a_scope_the_developer_narrowed_alone(
     await _aggregate(resources, readers)
 
     ref = ResourceRef(KIND_MEMORY, "coffer")
-    await resources.update_scope(ref, Scope(agents=["codex"]), actor="user")
-    codex.set_digest("/cx", "/cx/memories/MEMORY.md", "d2")
+    assert (await resources.get(ref)).scope is None
+    assert {e.agent for e in list_raw_entries("coffer")} == {"codex", "claude-code"}
 
+    codex.set_digest("/cx", "/cx/memories/MEMORY.md", "d2")
     await _aggregate(resources, readers)
 
-    assert (await resources.get(ref)).scope == Scope(agents=["codex"])
+    row = await resources.get(ref)
+    assert row.scope is None
+    assert row.config["repository_path"] == str(root)
 
 
 @pytest.mark.asyncio
@@ -626,24 +644,29 @@ async def test_a_partitions_notes_are_read_from_disk_on_every_call(tmp_path: pat
 
 
 @pytest.mark.asyncio
-async def test_a_partition_out_of_an_agents_scope_reads_as_absent_rather_than_forbidden(
-    tmp_path: pathlib.Path,
-) -> None:
+async def test_a_disabled_partition_is_not_served_and_an_enabled_one_is_served_to_all() -> None:
+    """``enabled`` is the only gate, and it is not per-agent.
+
+    A partition used to carry the framework's reach, defaulted to the agents
+    it had been aggregated from, so ``coffer`` was served to Claude Code and
+    withheld from Codex working in the same checkout. There is no agent
+    argument left to withhold anything from; switching the row off is the one
+    way to stop it being served.
+    """
     resources = FakeResources()
-    await resources.register(
-        kind=KIND_MEMORY, name="coffer", config={}, actor="t", allow_lifecycle_kind=True
-    )
-    await resources.update_scope(
-        ResourceRef(KIND_MEMORY, "coffer"), Scope(agents=["codex"]), actor="t"
-    )
-    store.write_note(
-        Note(slug="n", title="N", description="d", type=TYPE_PROJECT, body="b", partition="coffer")
-    )
+    for name in ("coffer", "retired-project"):
+        await resources.register(
+            kind=KIND_MEMORY, name=name, config={}, actor="t", allow_lifecycle_kind=True
+        )
+        store.write_note(
+            Note(slug="n", title="N", description="d", type=TYPE_PROJECT, body="b", partition=name)
+        )
+    resources.rows[(KIND_MEMORY, "retired-project")].enabled = False
     service = memory_service(resources, {})  # type: ignore[arg-type]
 
-    assert await service.list_notes("coffer", agent="claude-code") == ()
-    assert [n.slug for n in await service.list_notes("coffer", agent="codex")] == ["n"]
-    assert await service.visible_partitions("claude-code") == []
+    assert await service.enabled_partitions() == ["coffer"]
+    # The read itself is unconditional: it opens the directory it is asked for.
+    assert [n.slug for n in await service.list_notes("coffer")] == ["n"]
 
 
 @pytest.mark.asyncio

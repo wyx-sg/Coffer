@@ -14,10 +14,16 @@ recreate the thing this layer just removed: a tool standing between an agent
 and a file. The previous version returned whole bodies, and was called five
 times in its lifetime.
 
-**No score, no mode, no connection.** Matching is a case-insensitive literal
-scan over the notes this caller may see. There is no ranking to explain and
-no embedder to be missing; an installation with no internal connection gets
-the same recall as any other (FR-024).
+**No score, no mode, no connection — and no caller identity either.**
+Matching is a case-insensitive literal scan over every enabled partition's
+notes (FR-013), the same corpus for whoever asks. There is no ranking to
+explain and no embedder to be missing; an installation with no internal
+connection gets the same recall as any other (FR-024). The scan used to be
+narrowed to the asking agent's per-agent scope, and that scope was never
+chosen by anybody: it defaulted to the agents a partition had been aggregated
+from, so on a real vault Codex could not recall a single note about the
+repository it was working in. Notes are shared or they are pointless, so the
+narrowing is gone.
 
 **And never a retired note.** That is FR-025, and it is a bug being fixed
 rather than a property being restated: the previous version filtered nothing
@@ -51,9 +57,10 @@ DEFAULT_TOP_K = 10
 
 
 class MemoryPort(Protocol):
-    """The slice of ``MemoryService`` recall needs: scope and reads, never
-    aggregation. Matches ``MemoryService``'s real signatures structurally, so
-    a unit test can fake it with no database at all.
+    """The slice of ``MemoryService`` recall needs: which partitions are
+    served and what is in them, never aggregation. Matches
+    ``MemoryService``'s real signatures structurally, so a unit test can fake
+    it with no database at all.
 
     ``list_notes`` answers from the partition's ``notes/`` directory only.
     That is what keeps a retired note and a raw entry out of this answer
@@ -61,9 +68,9 @@ class MemoryPort(Protocol):
     module applies afterwards.
     """
 
-    async def visible_partitions(self, agent: str | None) -> Sequence[str]: ...
+    async def enabled_partitions(self) -> Sequence[str]: ...
 
-    async def list_notes(self, partition: str, *, agent: str | None = None) -> Sequence[Note]: ...
+    async def list_notes(self, partition: str) -> Sequence[Note]: ...
 
 
 @dataclass(frozen=True)
@@ -95,14 +102,11 @@ class RecallService:
     def __init__(self, *, memory: MemoryPort) -> None:
         self._memory = memory
 
-    async def recall(
-        self, query: str, *, agent: str | None = None, top_k: int = DEFAULT_TOP_K
-    ) -> RecallOutcome:
-        """Locate the notes matching ``query``, within ``agent``'s scope."""
-        visible = await self._memory.visible_partitions(agent)
+    async def recall(self, query: str, *, top_k: int = DEFAULT_TOP_K) -> RecallOutcome:
+        """Locate the notes matching ``query``, across every enabled partition."""
         by_path: dict[str, Note] = {}
-        for partition in visible:
-            for note in await self._memory.list_notes(partition, agent=agent):
+        for partition in await self._memory.enabled_partitions():
+            for note in await self._memory.list_notes(partition):
                 by_path[_abspath(note)] = note
 
         if not by_path or not query.strip():

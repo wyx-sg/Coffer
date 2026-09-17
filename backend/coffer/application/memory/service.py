@@ -5,8 +5,17 @@ every registered, enabled agent's native memory and writes what it read,
 verbatim, under each partition's hidden ``.raw/`` (``aggregate.py``).
 **Distil** turns those entries into Coffer's own notes and rewrites the index
 (``distil.py``). This service is where each pass meets the database: which
-agents are registered, which partitions have a Resource row, what scope a new
-partition starts with, and the audit event that says a pass happened.
+agents are registered, which partitions have a Resource row, which repository
+each row records, and the audit event that says a pass happened.
+
+**A partition carries no per-agent reach (FR-013), and the read path here has
+no ``agent`` parameter to narrow by.** It used to: a new partition was scoped
+to the agents it had been aggregated from, which on a real vault meant
+``coffer`` was scoped to ``claude-code`` alone and Codex got no project memory
+at all, while the ``account*`` partitions were scoped to ``codex`` and Claude
+Code got nothing from them. Memory aggregated from several agents exists so
+each of them can read what the others learned, so ``enabled`` is now the only
+gate — see ``kind.py``.
 
 Everything it hands back it reads **from disk at call time**, and that is
 structural rather than stylistic. A note has no status any more: a retirement
@@ -44,7 +53,6 @@ from coffer.domain.memory.note import Note
 from coffer.domain.memory.partition import GLOBAL_PARTITION
 from coffer.domain.memory.reader import MemoryReader
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.domain.scope import Scope, is_active
 from coffer.infrastructure.memory import store
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
 
@@ -189,12 +197,18 @@ class MemoryService:
         return result
 
     async def _register_partition(self, touch: PartitionTouch, *, actor: str) -> None:
-        """Give a newly-filled partition its Resource row and its scope.
+        """Give a newly-filled partition its Resource row — and nothing else.
 
         The row is created through the lifecycle opt-in (CODE-REG): the kind
         sets ``generic_create_allowed=False`` so nothing but a pass can conjure
         a partition, which is FR-012 — an agent's working directory must not
         bring one into existence merely by being read.
+
+        One write, deliberately. This method used to follow the registration
+        with a scope naming the agents the partition had been aggregated from,
+        and that second write was the layer's worst bug: a partition filled
+        only from Claude Code became invisible to Codex working in the very
+        same repository. Registration is the whole job now.
         """
         await self._resources.register(
             kind=KIND_MEMORY,
@@ -203,15 +217,6 @@ class MemoryService:
             actor=actor,
             allow_lifecycle_kind=True,
         )
-        # Default scope: the agents it was aggregated from (FR-013), so memory
-        # flows back to its own sources with no setup step. Only a brand-new
-        # registration reaches this method, which is what keeps a later pass
-        # from overwriting a scope the developer has since narrowed by hand.
-        await self._resources.update_scope(
-            ResourceRef(KIND_MEMORY, touch.placement.name),
-            Scope(agents=list(touch.agents)),
-            actor=actor,
-        )
 
     async def _record_repository(self, placement: Placement, *, actor: str) -> None:
         """Write a repository identity onto a partition that lacked one, or
@@ -219,9 +224,7 @@ class MemoryService:
 
         Only reached when the pass resolved something different from what the
         row says, so an unchanged partition is never rewritten and never
-        records a spurious ``resource_updated`` event. The scope column is not
-        touched: this is the config, and FR-013 gives the scope to the
-        developer once it exists.
+        records a spurious ``resource_updated`` event.
         """
         await self._resources.update_config(
             ResourceRef(KIND_MEMORY, placement.name),
@@ -277,29 +280,37 @@ class MemoryService:
     # ----------------------------------------------------------------- #
 
     async def list_partitions(self) -> list[PartitionSummary]:
-        """Every partition, counted from ``notes/`` — an unfiltered management
-        view (FR-037), not the agent-scoped read path below."""
+        """Every partition, counted from ``notes/`` — the management view
+        (FR-037), which includes the disabled ones the read path below skips."""
         rows = await self._resources.list(kind=KIND_MEMORY)
         return [_summary_of(row, _placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
 
-    async def list_notes(self, partition: str, *, agent: str | None = None) -> tuple[Note, ...]:
+    async def list_notes(self, partition: str) -> tuple[Note, ...]:
         """Every note in ``partition``, read from its ``notes/`` directory now.
 
-        None at all when ``agent`` is given and is out of that partition's
-        scope (FR-013) — reported as absent rather than forbidden, mirroring
-        ``KnowledgeService``. Per FR-046 that scope governs what *Coffer*
-        serves, not what a process on this machine can open: a note is a file,
-        and an agent already holding its path holds the file.
+        No caller identity, because there is nothing to decide with one: a
+        note is a file, and the payload composed at session start hands the
+        agent the directory's absolute path anyway. Whether the partition is
+        served at all is ``enabled_partitions`` below.
         """
-        if agent is not None and partition not in await self.visible_partitions(agent):
-            return ()
         return store.list_notes(partition)
 
-    async def visible_partitions(self, agent: str | None) -> list[str]:
-        """The partitions ``agent`` may see (FR-013), mirroring
-        ``KnowledgeService.visible_collections``."""
+    async def enabled_partitions(self) -> list[str]:
+        """The partitions Coffer serves — every enabled one, to every agent
+        (FR-013).
+
+        ``enabled`` is the whole gate, and that is the point: it is a switch
+        the developer sets, not a default derived from which agent happened to
+        contribute first. Mirrors ``KnowledgeService``'s own read path.
+
+        It gates what *Coffer* serves and nothing more. A note is a file, and
+        a disabled partition is one nothing points the agent at — not a
+        directory the agent is prevented from opening. FR-013 asks the layer
+        to say so wherever it presents the flag rather than let it be read as
+        a filesystem boundary it is not.
+        """
         rows = await self._resources.list(kind=KIND_MEMORY, enabled=True)
-        return sorted(r.name for r in rows if is_active(r.scope, agent))
+        return sorted(r.name for r in rows)
 
     # ----------------------------------------------------------------- #
     # Lifecycle                                                          #

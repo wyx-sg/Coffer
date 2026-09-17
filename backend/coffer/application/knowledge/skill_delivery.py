@@ -2,18 +2,18 @@
 
 The knowledge skill is **not** a skill-manager Resource, and that is the point
 of this module existing separately from ``application.skill``. A managed skill
-is one folder the user owns, delivered to every agent by symlink, so every
-agent sees identical bytes. This one's content *depends on the agent* — it
-names the collections that agent is activated for and no others — so delivery
-is where the layer's authorization is enforced (spec knowledge FR-010, FR-035).
-A shared master could not express that, and the removed ``coffer__load_skill``
-would have handed any agent the master anyway.
+is one folder the user owns; this one is Coffer's own output, regenerated from
+the corpus whenever the corpus changes, so it cannot be a row the user edits.
 
-So Coffer writes a real directory per agent, into the same
-``<config_dir>/skills/`` that skill-manager delivers into, and owns those bytes
-outright: they are regenerated from the corpus, never edited, and a person
-changing them loses the change at the next pass. Nothing about them is a
-truth — the truth is `topics/`, and this is a rendering of it.
+Every agent gets the same text — the corpus carries no per-agent reach, so
+there is one catalogue and it is rendered once — but each agent still gets its
+own real directory of its own real bytes (FR-035). That is not authorization;
+it is that an agent reads only its own ``<config_dir>/skills/``, and the bytes
+are Coffer's to own outright: never edited, and a person changing them loses
+the change at the next pass. Nothing about them is a truth — the truth is
+`topics/`, and this is a rendering of it. A vault upgraded from the earlier
+shared-master delivery still has a symlink where one of those directories
+belongs, which ``_replace`` removes rather than writes through.
 
 Delivery is idempotent and never raises. A failure here leaves the layer
 working — the files are still on disk at paths a person can give an agent — so
@@ -47,7 +47,7 @@ SkillDirResolver = Callable[[object], pathlib.Path]
 
 
 class KnowledgeSkillDelivery:
-    """Renders and writes the knowledge skill for every registered agent."""
+    """Renders the knowledge skill once and writes it for every agent."""
 
     def __init__(
         self,
@@ -66,25 +66,35 @@ class KnowledgeSkillDelivery:
         Safe to call on a timer: a copy whose rendered text already matches
         what is on disk is left alone, so the common tick costs a directory
         walk and two string comparisons rather than a write.
+
+        The corpus is read and rendered once for the whole sweep, because the
+        text does not vary by agent — a walk of every collection's ``topics/``
+        lane per agent would be the same walk repeated.
         """
         try:
             agents = await self._list_agents()
         except Exception:
             logger.warning("knowledge.skill_delivery.list_agents_failed", exc_info=True)
             return 0
+        try:
+            text = render(str(paths.knowledge_root()), await self._service.catalogue())
+        except Exception:
+            # A corpus that cannot be read leaves every copy as it was, which
+            # is the honest outcome: stale paths still resolve, and an empty
+            # rendering would delete a catalogue over a transient read error.
+            logger.warning("knowledge.skill_delivery.render_failed", exc_info=True)
+            return 0
         written = 0
         for agent in agents:
             name = str(getattr(agent, "name", "") or "")
             if not name:
                 continue
-            if await self._deliver_one(agent, name):
+            if self._deliver_one(agent, name, text):
                 written += 1
         return written
 
-    async def _deliver_one(self, agent: object, name: str) -> bool:
+    def _deliver_one(self, agent: object, name: str, text: str) -> bool:
         try:
-            catalogue = await self._service.catalogue(name)
-            text = render(str(paths.knowledge_root()), catalogue)
             folder = self._resolve_skill_dir(agent) / SKILL_NAME
             changed = _replace(folder, text)
         except Exception:
@@ -106,7 +116,10 @@ def _replace(folder: pathlib.Path, text: str) -> bool:
     shared-master delivery has one here, and writing through it would edit the
     master every other agent still points at. Note the branch order — a link is
     replaced *without* comparing text, because a copy that merely happens to
-    match is still not the independent file FR-035 asks for.
+    match is still not the independent file FR-035 asks for. That matters even
+    though every agent's text is identical: the master is outside every agent's
+    directory, so nothing regenerates it and it is the one file here that can
+    go stale without anyone noticing.
     """
     target = folder / "SKILL.md"
     if folder.is_symlink():

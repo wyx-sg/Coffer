@@ -109,20 +109,23 @@ from still lives in your agent's own memory, so **without the record the next
 pass would simply re-open the note the last one removed**. `RETIRED.md` is part
 of every pass's input, which is what makes a removal stick.
 
-## Scoping a partition
+## Switching a partition off
 
-A partition is a Resource, so the framework's per-agent scope applies. Its
-default scope is the set of agents it was aggregated from — memory flows back
-to its own sources with no setup — and narrowing it is yours to do; a later
-pass never overwrites your choice.
+A partition carries **no per-agent reach**: every enabled partition is delivered
+to, and recalled by, every agent. Switching one off is the only gate, and it
+stops Coffer serving it anywhere.
 
 ```bash
-coffer scope show memory:coffer
-coffer scope set memory:coffer --agents claude-code
-coffer scope clear memory:coffer            # back to every agent
+coffer resource disable memory:coffer
+coffer resource enable memory:coffer
 ```
 
-Scope governs **what Coffer serves**, not what a process on your machine can
+It used to carry a reach, defaulted to the agents it had been aggregated from —
+which meant a repository's notes were withheld from the other agent working in
+that same repository, the opposite of what aggregating several agents' memory is
+for. Nobody had chosen those values; a default had.
+
+`enabled` governs **what Coffer serves**, not what a process on your machine can
 open. Delivery hands an agent an absolute directory path, and an agent holding
 a path can read the file. That is the same thing spec
 [knowledge](../knowledge/spec.md) says about collections, and it is stated
@@ -189,10 +192,10 @@ you, plus the absolute path of the directory the bodies live in:
 Known about you:
 - **Reply in Chinese** (`reply-in-chinese.md`) — this project's conversations are answered in 简体中文.
 ...
-Project 'coffer' — /Users/you/WorkEnv/AI/Coffer
+Memory for this repository — partition `coffer` (/Users/you/WorkEnv/AI/Coffer):
 - **Worktree development** (`worktree-development.md`) — always develop in a git worktree; a shared checkout is edited by other sessions concurrently.
 ...
-Bodies are files: read /Users/you/.coffer/memory/coffer/notes/<name>.md
+Each line names its note's file. The bodies are Markdown files in /Users/you/.coffer/memory/coffer/notes — read one as a file, the way you read your own memory.
 ```
 
 It names no tool, because it does not need one: every agent that receives this

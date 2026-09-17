@@ -159,9 +159,9 @@ async def run_curation(
     for a source past :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop
     raised, and ``ok`` otherwise. Only ``ok`` writes the watermark.
     """
-    # Raises CollectionNotFound for a name the caller may not see, which is
-    # what the HTTP route turns into a 404.
-    await service.require_visible(collection, None)
+    # Raises CollectionNotFound for a name that is not an enabled collection,
+    # which is what the HTTP route turns into a 404.
+    await service.require_enabled(collection)
 
     model = await models.get_default()
     if model is None:

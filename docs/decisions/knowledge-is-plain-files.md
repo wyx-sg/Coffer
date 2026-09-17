@@ -1,7 +1,7 @@
 # The knowledge layer is a directory of files, not an index
 
 **Status**: Accepted
-**Date**: 2026-09-12 (revised 2026-09-14 and 2026-09-17; see Revision history)
+**Date**: 2026-09-12 (revised 2026-09-14, 2026-09-17 and 2026-09-18; see Revision history)
 **Deciders**: Yuxing Wu
 **Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md)
 **Related**: spec [knowledge](../../specs/knowledge/spec.md); [Everything Is a Resource Kind](everything-is-a-resource-kind.md) and [Per-Agent Resource Scope](per-agent-resource-scope.md), both of which survive; [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)
@@ -95,8 +95,8 @@ agent reads with its own tools. There is still no derived index.**
   are Coffer's to decide — and because it is the one place an invocation record
   still gets written. Deletion becomes a person's action on the human surfaces.
 - **The skill is generated per agent, and it carries the catalogue.** Its
-  frontmatter description names the subjects of the collections that agent may
-  see, drawn from their READMEs — that description is the only part of this
+  frontmatter description names the subjects of the enabled collections, drawn
+  from their READMEs — that description is the only part of this
   layer always in a model's context, so it must carry matchable specifics. Its
   body carries the absolute knowledge root and, per collection, every topic
   document's path, title and description: roughly 5.2K tokens for 58 documents,
@@ -109,6 +109,14 @@ agent reads with its own tools. There is still no derived index.**
   master folder. `coffer__load_skill`, which reads that master unscoped, is
   deleted with `coffer__list_skills`: both existed for agents without a native
   skill mechanism, and both agents Coffer supports have one.
+
+  *Withdrawn 2026-09-18.* The per-agent scope this bullet moved is gone — no
+  collection ever carried one, and this decision's own delivered skill hands the
+  agent the knowledge root and tells it to grep, so the omission authorized
+  nothing. Every enabled collection is now named in every agent's copy. The
+  independent **copy** survives on its own merit: it is what keeps a delivery
+  from writing through a link into a folder every other agent reads. See
+  [Per-Agent Resource Scope](per-agent-resource-scope.md)'s revision history.
 
 **Removed:** `coffer__list`, `coffer__grep`, `coffer__read`, `coffer__search`,
 `coffer__delete`, `coffer__list_skills`, `coffer__load_skill`; `.history/` and
@@ -163,7 +171,9 @@ itself in its own `README.md`; the `knowledge` Resource kind; no table in
 
 - **Per-agent authorization remains non-disclosure, not access control.** An
   agent holding shell tools can read any file under `~/.coffer/knowledge/`. This
-  was equally true before; only the enforcement point moved.
+  was equally true before; only the enforcement point moved. *(Withdrawn
+  2026-09-18 — an authorization that authorizes nothing was removed rather than
+  described more carefully.)*
 - **Delivery still happens at the agent's initiative.** Nothing is pushed into a
   session and no agent's memory is written. What changed is what prompts the
   reach, not who initiates it.
@@ -187,3 +197,13 @@ itself in its own `README.md`; the `knowledge` Resource kind; no table in
   this one concludes the layer should expose none, and spend its effort on
   what the agent is told instead. Files as truth narrows to **sources** as
   truth, which is what makes the curation this layer always needed safe to run.
+- **2026-09-18** — **Per-agent reach withdrawn from the kind.** The delivery
+  bullet above moved authorization to the skill; this revision removes it.
+  Measured on the maintainer's own vault: no collection had ever carried a
+  scope, so the mechanism had never once narrowed anything — and it could not
+  have, because the skill it narrows hands the agent the knowledge root and
+  tells it to grep. Every enabled collection is now served to every agent, and
+  `enabled` is the only gate the kind has. What survives is the independent
+  per-agent skill **copy**, which earns its place by keeping a delivery from
+  writing through a shared link. See
+  [Per-Agent Resource Scope](per-agent-resource-scope.md).

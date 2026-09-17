@@ -56,8 +56,9 @@ resource's **reach**, and reach is machine-local.
    - Unknown names are legal and simply never match — a resource can be scoped
      to an agent before that agent has appeared.
    - A kind that declares no scope rejects a non-null value at validation (422).
-     Today `agent` is the only such kind, and every other kind declares scope —
-     so that rule is now the exception rather than the common case.
+     Four kinds declare scope — `mcp_server`, `skill`, `provider`, `channel` —
+     and three declare none: `agent`, `knowledge` and `memory` (item 7). A kind
+     is expected to say which, not to inherit either answer.
    - A kind may also **pre-validate a proposed scope** (`Kind.validate_scope_for`),
      the scope path's counterpart to the config path's `on_update_config`: it is
      handed the resource as it stands plus the scope being proposed, and raising
@@ -134,11 +135,10 @@ resource's **reach**, and reach is machine-local.
    | --- | --- |
    | `mcp_server` | The gateway filters the server's tools by the session's agent, so a server scoped away from that agent presents no tools to it. |
    | `skill` | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. |
-   | `knowledge` | The built-in knowledge tools filter the collections a session may list, grep, read and write. |
-   | `memory` | Recall filters the partitions a session may read, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-013). |
    | `channel` | **Inverted.** A channel is consumed by no agent, so its scope names the agents the channel may **drive**: `/agent` lists, offers and accepts only those, and a channel that may drive nothing does not start its adapter at all. |
    | `provider` | The projection seam: the switch, the per-agent key lookup, the post-import reconcile and the boot self-heal read scope (∩ `enabled`) to decide which agents a connection is written into. |
    | `agent` | None. It IS the agent, so there is nothing for a scope to narrow. A non-null scope is rejected at validation. |
+   | `knowledge`, `memory` | None, as of 2026-09-18. Both serve files an agent is handed the path to, so reach could only have hidden them from a well-behaved retrieval — never withheld them. See item 7. |
 
 5. **Shim self-reported `--agent` identity.** The shim install writes
    `coffer-mcp-shim --agent <name>` into the agent's config; the shim reports
@@ -166,19 +166,49 @@ resource's **reach**, and reach is machine-local.
    always meant. Per-skill exclusion keeps its full power; it is expressed on
    the skill rather than on the agent.
 
-7. **A knowledge collection scopes — revised 2026-09-12.** This ADR originally
-   said the `knowledge` kind declares no scope, because a collection was then
-   one of three storage scopes over *content* (`global` / `project-<ULID>` /
-   named collection) rather than a boundary anyone drew. With the layer reduced
-   to plain files, a collection is the **only** boundary it has, and
-   authorization is the reason it is a Resource at all: the kind declares
-   `supports_scope`, and an agent lists, greps, reads and writes only the
-   collections activated for it ([Knowledge Is Plain Files](knowledge-is-plain-files.md),
-   spec knowledge FR-008…FR-012). Enforcement sits at the MCP tool surface
-   only, so it prevents mistaken retrieval, not deliberate filesystem access by
-   an agent that also holds shell tools (spec knowledge FR-012).
-   Chat history, audit logs, runtime state and machine-local settings stay
-   machine-local (restated as a boundary, not a new decision).
+7. **`knowledge` and `memory` declare no reach — withdrawn 2026-09-18.** Both
+   kinds have been on both sides of this. `knowledge` declared none originally
+   (a collection was then one of three storage scopes over *content* rather
+   than a boundary anyone drew), took it up on 2026-09-12 when the layer was
+   reduced to plain files and a collection became its only boundary, and gives
+   it up again now. `memory` shipped with `supports_scope` from the start. The
+   withdrawal rests on one argument and two observations.
+
+   The argument is that for these two kinds reach was **non-disclosure, never
+   withholding**. Both serve files on disk to an agent that is handed the path,
+   and enforcement sat at the MCP tool surface only — a point the previous
+   revision of this item already conceded, describing it as preventing mistaken
+   retrieval rather than deliberate filesystem access by an agent that also
+   holds shell tools. Knowledge goes further than conceding it: the skill the
+   layer delivers *tells* the agent to grep the whole root. A control that the
+   system's own instructions route around is not a boundary, and the page was
+   presenting it as one.
+
+   The observations come from the vault this was measured against. **Knowledge
+   never used it once** — every `kind='knowledge'` row carried
+   `scope_json IS NULL`, unrestricted, for the whole life of the field. And
+   **memory's use of it was nobody's decision**: every partition carried a
+   value, all of them written automatically by the aggregation pass to "the
+   agents this partition was aggregated from". That default did real harm.
+   `memory/coffer` was scoped to `["claude-code"]`, so a Codex session in the
+   Coffer repository was served no project memory at all; the `account*`
+   partitions were scoped to `["codex"]`, so Claude Code was served none of
+   theirs. A layer that exists so several agents can read what the others
+   learned was defaulting to hiding it — invisibly, because nobody set it and
+   so nobody thought to look.
+
+   Dropping the column therefore **widens reach deliberately**, which is the
+   point of the change rather than a side effect it has to survive: migration
+   `0088` NULLs `scope_json` for both kinds and is one-way, because the values
+   it clears were an auto-default worth losing. It is safe precisely because
+   neither kind's reach was ever a boundary; the four kinds that keep theirs —
+   where reach decides what is exposed, delivered, written into a config file
+   or allowed to drive an agent — are untouched.
+
+   Both kinds remain Resources: `<kind>:<name>` identity, the lifecycle
+   surface, the audit trail and the enable switch are all still worth having
+   without a scope. Chat history, audit logs, runtime state and machine-local
+   settings stay machine-local (restated as a boundary, not a new decision).
 
 8. **A channel scopes, and its scope is inverted — added 2026-09-13.** This ADR
    originally said `channel` declares no scope, reasoning that scope names the
@@ -230,9 +260,14 @@ resource's **reach**, and reach is machine-local.
    writes it out concretely, then strips the dead key — and the framework grows
    one small hook, `Kind.default_scope`, so a newly created connection is
    pre-filled from its wire instead of starting out reaching everything. The hook
-   is a function of the config alone; `memory`, whose starting scope is the set
-   of agents a partition was aggregated FROM, cannot be expressed that way and
-   keeps setting its own scope right after registering.
+   is a function of the config alone. `memory` was the counter-example that
+   justified leaving the hook optional: its starting scope was the set of agents
+   a partition had been aggregated FROM, which is not a function of the config,
+   so it set its own scope right after registering instead. That auto-default is
+   what item 7 withdraws, and `provider` is now the only user of the hook —
+   which is the honest reading of it: a *sensible* starting reach is a rare
+   thing for a kind to know, and a kind that cannot name one should declare no
+   reach rather than invent one.
 
    Two flags survive side by side here, and they are not redundant: `enabled` is
    the user's switch on the resource (a disabled connection projects nowhere and
@@ -286,11 +321,13 @@ resource's **reach**, and reach is machine-local.
 - Scoping a skill out reclaims it from an agent that already has it, so scope
   edits have visible filesystem effects — audited like any other delivery
   change.
-- Scope is now the vault's ONE answer to "which agents does this reach", for
-  every kind but `agent` itself. A user who learns the control once can apply it
-  to servers, skills, collections, memory partitions, channels and connections,
-  and a kind that grows the question later declares the field rather than
-  inventing a field of its own.
+- Scope is the vault's ONE answer to "which agents does this reach" wherever
+  the question is asked at all. A user who learns the control once can apply it
+  to servers, skills, channels and connections, and a kind that grows the
+  question later declares the field rather than inventing a field of its own.
+  What the framework does not do is put the question to every kind: `agent`,
+  `knowledge` and `memory` answer it with nothing, and a surface reads
+  `supports_scope` rather than assuming a control belongs on every row.
 - Two kinds read scope with a consequence beyond filtering: a dormant channel
   does not run, and a dormant connection projects into no agent. "Dormant" is
   therefore not always merely invisible — for those two it is off. Off is still
@@ -333,3 +370,19 @@ resource's **reach**, and reach is machine-local.
   stopped converging at all along with it (item 3), and has since started again
   — on a machine binding of its own rather than on an axis of `scope`. The
   machine **registry** is untouched: it belongs to sync, not to permissions.
+- **2026-09-18** — `knowledge` and `memory` withdraw from per-agent reach
+  (Decision item 7); both kinds stop declaring `supports_scope` and migration
+  `0088` NULLs their `scope_json`. For both, reach was non-disclosure only —
+  the corpus is files on disk that an agent is handed the path to, and
+  knowledge's own delivered skill tells the agent to grep the whole root — so
+  it could prevent a mistaken retrieval but never withhold anything. The vault
+  bears that out: **knowledge never used it once** (every row's `scope_json`
+  was already `NULL`), while **memory's every row carried an auto-default** the
+  aggregation pass wrote to "the agents this partition was aggregated from",
+  chosen by nobody and actively working against the layer's purpose —
+  `memory/coffer` scoped to `["claude-code"]` served a Codex session in the
+  Coffer repository no project memory at all, and the `account*` partitions
+  scoped to `["codex"]` served Claude Code none of theirs. Stripping the column
+  widens reach on purpose. The decision itself stands unchanged for
+  `mcp_server`, `skill`, `provider` and `channel`, where reach decides what is
+  exposed, delivered, written into a config file or allowed to drive an agent.

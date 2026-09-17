@@ -335,8 +335,8 @@ async def test_a_retired_note_reaches_neither_delivery_nor_recall(vault: _Vault)
     await _retire_one(vault)
     service = vault.service()
 
-    composed = await compose_context(service, agent="codex", cwd=str(vault.repository))
-    recalled = await RecallService(memory=service).recall("session injection", agent="codex")
+    composed = await compose_context(service, cwd=str(vault.repository))
+    recalled = await RecallService(memory=service).recall("session injection")
 
     assert composed.partition == _PARTITION
     assert "session-injection.md" not in composed.text
@@ -353,9 +353,7 @@ async def test_a_retired_note_reaches_neither_delivery_nor_recall(vault: _Vault)
 async def test_recall_locates_a_live_note_by_its_absolute_path(vault: _Vault) -> None:
     await _retire_one(vault)
 
-    recalled = await RecallService(memory=vault.service()).recall(
-        "removed in September", agent="codex"
-    )
+    recalled = await RecallService(memory=vault.service()).recall("removed in September")
 
     assert len(recalled.notes) == 1
     found = recalled.notes[0]
