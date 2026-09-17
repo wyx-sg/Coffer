@@ -370,20 +370,22 @@ Open `/settings` for five tabs: **General**, **Engine**, **Data** (retention pol
 prune), **Security** (master-key storage) and **About** (version, license, source). Sync is
 not among them — it is a top-level page of its own under SYSTEM.
 
-**Engine** is where Coffer's own machinery is configured, as opposed to anything served to
-an agent. Two cards:
+**Coffer's model** is where Coffer's own machinery is configured, as opposed to anything
+served to an agent. Two cards:
 
 - **Internal engine** — which provider connection and model Coffer's own passes run on.
-- **Upkeep** — the work Coffer does when nobody asked. Three passes run on a timer, each
-  with its own switch and interval: **aggregate** reads the agents' native memory into the
-  derived tree, **organise** lets the model rewrite that derived digest, and **tidy** lets
-  it rewrite your own knowledge files. Each row says what its pass actually *writes*,
-  because that is the difference that matters: two rewrite derived files that deleting and
-  re-running reproduces, and one rewrites the only copy — that last one is the only row
-  carrying a warning. Something that rewrites your files on a timer should be something you
-  can see and stop, which is why the card exists. Edits auto-save, like every settings
-  surface here. What the passes are doing right now is also readable from
-  `GET /api/v1/upkeep/runs`.
+- **Automatic upkeep** — the work Coffer does when nobody asked. Three passes run on a
+  timer, each with its own switch and interval: **Read from agents** reads the agents'
+  native memory into Coffer's derived tree with no model involved, **Distil memory** lets
+  the model turn those entries into Coffer's own notes, and **Derive documents from
+  sources** lets it write the `topics/` documents your agents read. Each row says what its
+  pass actually *writes*, because that is the difference that matters: all three write
+  derived files that deleting and re-running reproduces, and none of them edits something
+  you wrote — the curation row carries a caution for the opposite reason, that switching it
+  off means nothing is ever derived and the lane agents read stays empty. Something that
+  rewrites files on a timer should be something you can see and stop, which is why the card
+  exists. Edits auto-save, like every settings surface here. What the passes are doing right
+  now is also readable from `GET /api/v1/upkeep/runs`.
 
 There is no "Daemon" tab and no daemon-status panel — the daemon is an implementation
 detail surfaced only by the offline banner when something goes wrong, and its one setting
