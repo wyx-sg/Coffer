@@ -1,10 +1,14 @@
 // frontend/src/lib/api/knowledge.ts
 //
-// Request helpers for the `knowledge` kind. Nothing here reads an index: the
-// catalogue is produced by walking `~/.coffer/knowledge/` and reading
-// frontmatter at call time (ADR knowledge-is-plain-files), so a file someone
-// dropped into the folder by hand is visible on the very next call and there
-// is nothing to reindex, reconcile or re-embed.
+// Request helpers for the `knowledge` kind. Nothing here retrieves and nothing
+// here reads an index: a collection is two folders (`sources/` and `topics/`)
+// walked a level at a time, frontmatter read at call time (ADR
+// knowledge-is-plain-files), so a file someone dropped into `sources/` by hand
+// is visible on the very next call and there is nothing to reindex or re-embed.
+//
+// There is no `search` and no `grep` here because the daemon serves neither
+// (FR-050). Writing and deleting reach `sources/` only — `topics/` is
+// curation's lane, and `curateCollection` is the one way anything gets into it.
 //
 // Deleting a COLLECTION is deliberately absent: a collection is one `knowledge`
 // Resource, so it goes through the kind-agnostic
@@ -18,9 +22,9 @@ import { call, enc } from "@/lib/api/call";
 import type {
   CollectionListOut,
   CollectionOut,
+  CurationOut,
   FileOut,
   IngestedDocumentOut,
-  TidyOut,
   TreeOut,
 } from "./knowledgeTypes";
 
@@ -51,9 +55,11 @@ export function createCollection(payload: {
 // --- catalogue --------------------------------------------------------------
 
 /**
- * List ONE level of the tree: the immediate subdirectories and files under
- * `path` (relative to the knowledge root). The catalogue descends a level per
- * request — there is no recursive listing to ask for.
+ * List ONE level of ONE lane: the immediate subdirectories and files under
+ * `path` (relative to the knowledge root, lane included —
+ * `shopee/sources/account`). The tree descends a level per request, and the
+ * page asks once per lane rather than this route carrying a lane parameter the
+ * path already spells.
  */
 export function getTree(path: string): Promise<TreeOut> {
   return call<TreeOut>(`${ROOT}/tree?path=${enc(path)}`);
@@ -64,10 +70,12 @@ export function getFile(path: string): Promise<FileOut> {
 }
 
 /**
- * Remove ONE file. `path` is relative to the knowledge root, the same string
- * the tree and `getFile` use — the daemon refuses anything that escapes it.
+ * Remove ONE source. `path` is relative to the knowledge root, the same string
+ * the tree and `getFile` use — the daemon refuses anything that escapes it,
+ * and refuses a `topics/` path outright: a topic document is derived and is
+ * removed by being retired in a pass, never from here (FR-027).
  *
- * The file is the only copy: there is no index to fall out of step and nothing
+ * A source is the only copy: there is no index to fall out of step and nothing
  * to restore it from but the sync remote's history, which is why every caller
  * confirms first. 204, so nothing comes back.
  */
@@ -75,34 +83,50 @@ export function deleteFile(path: string): Promise<void> {
   return call<void>(`${ROOT}/file?path=${enc(path)}`, { method: "DELETE" });
 }
 
-// --- tidy -------------------------------------------------------------------
+// --- curation ---------------------------------------------------------------
 
 /**
- * Run the tidy pass over one collection NOW — the manual trigger for the pass
- * the background worker otherwise runs on an interval (off by default). Only
- * `status` is read here: a pass with no internal model configured returns a
- * clean no-op status rather than an error.
+ * Run ONE curation pass over one collection now — the manual trigger for the
+ * pass the background sweep otherwise runs on an interval. It reads one source
+ * and writes only `topics/`.
+ *
+ * `source` names a particular source to fold in; omitted, the pass takes the
+ * oldest one whose watermark is behind its own modification time, which is
+ * what the page's button wants. A pass with no internal model configured comes
+ * back `no_model` — a clean 200, not an error — so every status here is
+ * something the page reports rather than something it treats as a failure.
+ *
+ * A second pass over the same collection is refused with 409
+ * `UPKEEP_ALREADY_RUNNING` rather than queued (FR-039).
  */
-export function tidyCollection(name: string): Promise<TidyOut> {
-  return call<TidyOut>(`${ROOT}/collections/${enc(name)}/tidy`, { method: "POST" });
+export function curateCollection(name: string, source?: string | null): Promise<CurationOut> {
+  return call<CurationOut>(`${ROOT}/collections/${enc(name)}/curate`, {
+    method: "POST",
+    body: { source: source ?? null },
+  });
 }
 
 // --- ingestion ----------------------------------------------------------------
 
 /**
- * Convert an uploaded document into an ordinary knowledge file. `directory` is
- * relative to the COLLECTION root (not the knowledge root) — mirroring
- * `IngestService.ingest`, which joins it onto `collection` itself.
+ * Convert an uploaded document into an ordinary source. `folder` is relative to
+ * the collection's `sources/` LANE (not the knowledge root and not the
+ * collection root) — mirroring `IngestService.ingest`, which joins it onto that
+ * lane itself, so an upload can never be aimed at `topics/`.
+ *
+ * Both the original and the Markdown extracted from it land in `sources/`; the
+ * response names the original's path, which is an ordinary visible file the
+ * tree lists beside its conversion.
  */
 export function uploadFile(params: {
   collection: string;
-  directory?: string | null;
+  folder?: string | null;
   file: File;
 }): Promise<IngestedDocumentOut> {
   const form = new FormData();
   form.append("file", params.file);
   form.append("collection", params.collection);
-  if (params.directory) form.append("directory", params.directory);
+  if (params.folder) form.append("folder", params.folder);
   // A FormData body goes out with no Content-Type: the browser sets the
   // multipart boundary itself (see `call`).
   return call<IngestedDocumentOut>(`${ROOT}/upload`, { method: "POST", body: form });

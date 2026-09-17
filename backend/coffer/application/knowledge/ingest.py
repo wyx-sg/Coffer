@@ -1,26 +1,33 @@
-"""Turning an uploaded document into an ordinary knowledge file.
+"""Turning an uploaded document into ordinary files in the sources lane.
 
-Placing a Markdown file in the directory is already a complete way to add
-knowledge (FR-021); this module is the *additional* entrance for the cases
+Dropping a Markdown file into ``sources/`` is already a complete way to add
+knowledge (FR-015); this module is the *additional* entrance, for the cases
 where the filesystem is out of reach — the Knowledge page's upload button and
-a channel attachment (spec channels FR-014). Nothing here changes what a knowledge file is:
-the output of :meth:`IngestService.ingest` must be indistinguishable from a
-file a human typed by hand, so it goes through :meth:`KnowledgeService.write`
-rather than touching the filesystem itself — the same audit event, the same
-frontmatter, the same scope enforcement as any other write.
+a channel attachment (FR-018). Nothing here changes what a source is: the
+output of :meth:`IngestService.ingest` must be indistinguishable from a file a
+person put there by hand, so it goes through
+:meth:`KnowledgeService.write_source` rather than touching the filesystem
+itself — the same audit event, the same frontmatter, the same scope
+enforcement as any other write.
 
-Two things this module owns that ``write`` does not need to think about:
+Two things this module owns that ``write_source`` does not need to think about:
 
-* **The original bytes are worth keeping.** A bad conversion should be
-  redoable from what the user actually sent, so the upload is copied to
-  ``.raw/`` (``paths.raw_path``) once the converted file's name is known.
-* **The description is optional input, never optional output.** With no
-  ranked index the catalogue entry is the whole retrieval surface (FR-003), so
-  a document that arrives with no internal connection configured — or whose
-  connection fails or stalls — still gets a description, drawn from its own
-  opening prose (spec knowledge FR-023).
+* **The original bytes are worth keeping, and worth seeing.** A bad conversion
+  has to be redoable from what the user actually sent. The original used to go
+  into a hidden ``.raw/`` directory, and the only thing hiding it bought was
+  keeping it out of retrieval — an original is bytes, not prose, and a ranked
+  index that surfaced it would be answering with noise. Coffer exposes no
+  retrieval surface any more (FR-033): an agent reads the files it is given
+  paths to, and nothing sweeps the lane. So the original is now an ordinary,
+  visible file in ``sources/`` beside the text extracted from it (FR-016),
+  which is also what a person scrolling their own lane should see.
+* **The description is optional input, never optional output.** The catalogue
+  the delivered skill carries is how an agent learns a document exists
+  (FR-037), so a document that arrives with no internal connection configured
+  — or whose connection fails or stalls — still gets a description, drawn from
+  its own opening prose (FR-017).
 
-Following ``tidy.py``'s shape: the internal connection is reached through
+Following ``curate.py``'s shape: the internal connection is reached through
 ``ModelSelectorPort`` + ``LlmCompletionPort``, both optional, and their
 absence degrades cleanly rather than failing the ingest.
 """
@@ -39,7 +46,7 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.converter import Conversion, EmptyConversion
 from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import UploadTooLarge
-from coffer.infrastructure.knowledge import fs, paths
+from coffer.infrastructure.knowledge import fs
 
 
 @runtime_checkable
@@ -58,15 +65,15 @@ class ConverterRegistry(Protocol):
 
 
 #: One upload at a time, bounded so a single call cannot exhaust memory or
-#: disk (FR-026). 20 MB matches the tightest existing bound in this codebase
+#: disk (FR-019). 20 MB matches the tightest existing bound in this codebase
 #: for a document passed hand-to-hand rather than streamed — Telegram's own
 #: bot-API download cap (``infrastructure/channel/telegram_media.py``) — which
-#: keeps the two entrances spec channels FR-014 unifies (the Knowledge page and a channel
+#: keeps the two entrances FR-018 unifies (the Knowledge page and a channel
 #: attachment) under one honest ceiling rather than the page silently
 #: accepting what a phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
-#: A one-line description is a small job (spec knowledge FR-023), not an
+#: A one-line description is a small job (spec knowledge FR-017), not an
 #: agentic loop; bounded generously so a slow provider cannot hang an upload,
 #: but nowhere near indefinite.
 _DESCRIPTION_TIMEOUT_SECONDS = 20.0
@@ -87,16 +94,21 @@ _FALLBACK_DESCRIPTION_CHARS = 240
 
 @dataclass(frozen=True)
 class IngestedDocument:
-    """What one successful ingest produced."""
+    """What one successful ingest produced: two files in the same lane."""
 
-    #: Knowledge-root-relative path of the Markdown file ``write`` created.
+    #: Knowledge-root-relative path of the Markdown ``write_source`` created.
     path: str
     title: str
     description: str
     #: Name of the converter that produced the Markdown (``Conversion.converter``).
     converter: str
-    #: Absolute path of the kept original, under ``.raw/``.
-    raw_path: str
+    #: Knowledge-root-relative path of the original, sitting in ``sources/``
+    #: beside the Markdown extracted from it (FR-016). Relative like ``path``
+    #: because it is now an ordinary file in the lane a person browses, not a
+    #: hidden location only an absolute path could name. Equal to ``path`` when
+    #: the upload was already Markdown: the file that landed *is* the original,
+    #: and a second copy of it would be curated as a second source.
+    original_path: str
 
 
 class IngestService:
@@ -123,30 +135,33 @@ class IngestService:
         collection: str,
         filename: str,
         data: bytes,
-        directory: str | None = None,
+        folder: str | None = None,
         actor: str,
         agent: str | None = None,
     ) -> IngestedDocument:
-        """Convert ``data`` (named ``filename``) into a knowledge file.
+        """Convert ``data`` (named ``filename``) into a source file.
+
+        ``folder`` is an optional subdirectory *inside* the collection's
+        ``sources/``; the lane segment itself is never spelled by a caller
+        (FR-013), so no entrance can aim an upload at ``topics/``.
 
         Raises ``UploadTooLarge`` over the size ceiling, ``UnsupportedDocument``
         (``domain.knowledge.converter``) for a type no converter handles,
         ``EmptyConversion`` when a converter ran and produced no text, and
-        whatever ``KnowledgeService.write`` raises for an unauthorized or
-        otherwise invalid target — in every one of those cases nothing is
-        written, converted or kept (FR-026).
+        whatever ``KnowledgeService.write_source`` raises for an unauthorized
+        or otherwise invalid target — in every one of those cases nothing is
+        written, converted or kept (FR-019).
         """
         if len(data) > MAX_UPLOAD_BYTES:
             raise UploadTooLarge(len(data), MAX_UPLOAD_BYTES)
 
-        target_directory = f"{collection}/{directory.strip('/')}" if directory else collection
-        # The same enforcement point `write` itself uses (FR-009/FR-011):
-        # calling it here, before conversion, refuses an unauthorized upload
-        # without first paying for the conversion.
-        await self._knowledge.require_visible(target_directory, agent)
+        # The same enforcement point `write_source` itself uses
+        # (FR-010/FR-012): calling it here, before conversion, refuses an
+        # unauthorized upload without first paying for the conversion.
+        await self._knowledge.require_visible(collection, agent)
 
         conversion = await self._registry.convert(data, filename)
-        # FR-026: a converter that succeeds but extracts nothing (an image-only
+        # FR-019: a converter that succeeds but extracts nothing (an image-only
         # PDF is the real case) must not be stored as a titled file with an
         # empty body. Checked here rather than in each converter so every
         # format is covered by one rule, and BEFORE the describe call so a
@@ -155,23 +170,36 @@ class IngestService:
             raise EmptyConversion(pathlib.Path(filename).suffix.lstrip(".").lower())
         description = await self._describe(conversion.markdown, title=conversion.title)
 
-        written = await self._knowledge.write(
+        written = await self._knowledge.write_source(
             title=conversion.title,
             description=description,
             body=conversion.markdown,
-            directory=target_directory,
+            collection=collection,
+            folder=folder or None,
             actor_kind=ACTOR_USER,
             actor=actor,
             agent=agent,
         )
 
-        raw_target = paths.raw_path(written.path, filename)
+        # A Markdown upload converts by passthrough, so the "original" would be
+        # the bytes already sitting in the file just written — two copies of one
+        # document in the lane a person browses, and two curation passes over
+        # the same facts. The live vault's 50 documents were all passthrough, so
+        # this is the common case rather than a corner one.
+        if _is_the_same_bytes(conversion.markdown, data):
+            return IngestedDocument(
+                path=written.path,
+                title=written.title,
+                description=written.description,
+                converter=conversion.converter,
+                original_path=written.path,
+            )
+
         try:
-            raw_target.parent.mkdir(parents=True, exist_ok=True)
-            raw_target.write_bytes(data)
+            original_path = fs.write_original(collection, filename, data)
         except Exception:
-            # Half of FR-026's all-or-nothing: the Markdown file must not
-            # outlive the original it was supposed to stand next to.
+            # Half of FR-019's all-or-nothing: the Markdown must not outlive
+            # the original it was supposed to stand next to.
             with contextlib.suppress(Exception):
                 fs.delete_file(written.path)
             raise
@@ -181,7 +209,7 @@ class IngestService:
             title=written.title,
             description=written.description,
             converter=conversion.converter,
-            raw_path=str(raw_target),
+            original_path=original_path,
         )
 
     async def _describe(self, markdown: str, *, title: str) -> str:
@@ -204,6 +232,20 @@ class IngestService:
                     if cleaned:
                         return cleaned
         return _fallback_description(markdown, title=title)
+
+
+def _is_the_same_bytes(markdown: str, data: bytes) -> bool:
+    """Whether the conversion is just the upload, decoded.
+
+    Compared on content rather than on the converter's name: what matters is
+    that keeping the original would store the same text twice, and a converter
+    that happens to be a no-op for some input is the same situation as one
+    that is a no-op by design.
+    """
+    try:
+        return markdown.strip() == data.decode("utf-8").strip()
+    except UnicodeDecodeError:
+        return False
 
 
 def _fallback_description(markdown: str, *, title: str) -> str:

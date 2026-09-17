@@ -81,8 +81,9 @@ _PROVIDERS: list[_Provider] = [
     ),
     # skill kind
     *_pairs(skill_deps, "_skill_service"),
-    # knowledge kind
-    *_pairs(knowledge_deps, "_knowledge_service", "_search_service", "_ingest_service"),
+    # knowledge kind — two services, not three: there is no search service to
+    # provide any more (spec knowledge FR-033).
+    *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service"),
     # memory kind
     *_pairs(memory_deps, "_memory_service", "_memory_delivery_service"),
     # turn platform (chat)

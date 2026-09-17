@@ -82,20 +82,18 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "agent plugin": {"list", "enable", "disable", "uninstall"},
     "channel": {"register", "list", "status", "pair", "bind", "notify"},
     "skill": {"list", "show", "import", "adopt", "rm", "unmanaged", "rm-unmanaged", "verify"},
+    # Exactly FR-039's list and nothing beyond it. `grep` and `search` are
+    # gone with the retrieval surface (spec knowledge FR-033) — the corpus is
+    # plain Markdown under ~/.coffer/knowledge/, so a person's own grep beats
+    # anything this group could wrap — and `organize` went with the tidy pass
+    # `curate` replaces.
     "knowledge": {
         "collections",
         "create",
+        "curate",
         "delete",
-        "grep",
         "ls",
         "read",
-        "search",
-        # The pass a model runs over a collection is called `tidy` on every
-        # other surface — the spec, the route, the settings switch — and was
-        # called `organize` here alone. The two kinds' passes are NOT the same
-        # pass, which is why they do not share a verb: tidy rewrites the
-        # user's own files, organise rewrites a derived digest.
-        "tidy",
         "upload",
         "write",
     },

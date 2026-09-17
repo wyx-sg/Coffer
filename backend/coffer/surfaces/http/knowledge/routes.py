@@ -1,18 +1,30 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
-Create a collection, list them, walk one level of the catalogue, read a file,
-write one, delete one, grep, tidy — plus ``search`` and document ``upload``
-(spec knowledge FR-034).
-Deleting a collection goes through the kind-agnostic Resource route, since
-collection lifecycle is a Resource concern.
+Create a collection, list them, walk one level of a lane, read a file, write a
+source, upload a document, delete a source, trigger curation (spec knowledge
+FR-039). Deleting a collection goes through the kind-agnostic Resource route,
+since collection lifecycle is a Resource concern.
+
+Two properties shape every handler below.
+
+**Nothing here retrieves.** There is no ``search`` and no ``grep``: the layer
+keeps no index and exposes no retrieval anywhere, so the person reads through
+``tree``/``file`` and an agent reads the files itself at the paths its
+delivered skill carries (FR-033, invariant 4). The one input beside a tree on
+the web page narrows the names already on screen, client-side (FR-040).
+
+**Writing is split by lane.** ``PUT`` and ``DELETE`` reach ``sources/`` and
+only ``sources/`` — ``topics/`` is curation's to write and no one else's
+(FR-013, FR-021), so a request aiming at a topic path is refused by the
+path layer rather than by a check each handler remembers to make.
 
 These routes are the *user's* surface and therefore unscoped: per-agent
-authorization (FR-009) governs what an agent sees through the MCP tools, not
-what the person who owns the vault sees in their own UI. ``search`` and
-``upload`` follow the same rule — neither takes an ``agent``.
+authorization (FR-010) governs what an agent is told through delivery, not
+what the person who owns the vault sees in their own UI. ``upload`` follows
+the same rule — it takes no ``agent``.
 
 Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``
-— including ``UploadTooLarge`` (FR-026), which ``IngestService`` itself raises
+— including ``UploadTooLarge`` (FR-019), which ``IngestService`` itself raises
 before doing any conversion or write. ``UnsupportedDocument`` is the one
 exception ``upload`` maps by hand: it is raised by the converter registry, a
 plain-Python layer below the domain, so it is not a ``CofferError``.
@@ -25,7 +37,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, Header, Query, Response, UploadFile, status
 
 from coffer.application.knowledge.ingest import IngestService
-from coffer.application.knowledge.search import SearchService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
@@ -33,30 +44,24 @@ from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
+from coffer.surfaces.http.knowledge.curation_state import get_curation_runner, vault_write_lock
 from coffer.surfaces.http.knowledge.dependencies import (
     get_ingest_service,
     get_knowledge_service,
-    get_search_service,
 )
 from coffer.surfaces.http.knowledge.schemas import (
     CollectionCreate,
     CollectionListOut,
     CollectionOut,
+    CurationOut,
+    CurationRequest,
     DirectoryOut,
     FileOut,
     FileSummaryOut,
     FileWrite,
-    GrepMatchOut,
-    GrepOut,
     IngestedDocumentOut,
-    SearchHitOut,
-    SearchLineOut,
-    SearchOut,
-    SearchRequest,
-    TidyOut,
     TreeOut,
 )
-from coffer.surfaces.http.knowledge.tidy_state import get_tidy_runner, vault_write_lock
 
 router = APIRouter(
     prefix="/api/v1/knowledge",
@@ -103,6 +108,9 @@ async def create_collection(
 
 @router.get("/tree", response_model=TreeOut)
 async def read_tree(
+    # The lane is part of the path — ``shopee/sources`` or ``shopee/topics``.
+    # The page asks twice, once per tree (FR-040), rather than this route
+    # inventing a lane parameter the path already carries.
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> TreeOut:
@@ -121,6 +129,9 @@ async def read_file(
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> FileOut:
+    # Reading is lane-agnostic on purpose: the page previews a topic document
+    # exactly as it previews a source, and refuses to *edit* it instead
+    # (FR-040). The response carries both absolute paths (FR-041).
     return _file_out(await svc.read(path))
 
 
@@ -130,16 +141,23 @@ async def write_file(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> FileOut:
-    if (body.path is None) == (body.directory is None):
+    if (body.path is None) == (body.collection is None):
         raise UnsafeKnowledgePath(
-            body.path or body.directory or "",
-            "a write names exactly one of 'path' or 'directory'",
+            body.path or body.collection or "",
+            "a write names exactly one of 'path' or 'collection'",
         )
-    written = await svc.write(
+    # ``write_source`` adds the ``sources/`` segment itself and, for a replace,
+    # asserts the target is in that lane — a ``path`` under ``topics/`` raises
+    # ``UnsafeKnowledgePath`` there and reaches the client as 400
+    # ``KNOWLEDGE_PATH_UNSAFE``. That is the only guard this route needs: the
+    # rule belongs to path construction, which is the one place it cannot be
+    # forgotten (FR-006, FR-013).
+    written = await svc.write_source(
         title=body.title,
         description=body.description,
         body=body.body,
-        directory=body.directory,
+        collection=body.collection,
+        folder=body.folder,
         relpath=body.path,
         actor_kind=actor,
         actor=actor,
@@ -153,82 +171,62 @@ async def delete_file(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> Response:
-    await svc.delete(path, actor=actor)
+    # A source only (FR-020). A topic document is derived and is deleted by
+    # being retired in a pass, never from here — so this refuses a ``topics/``
+    # path rather than offering a delete the next pass would undo.
+    await svc.delete_source(path, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/grep", response_model=GrepOut)
-async def grep(
-    pattern: str = Query(min_length=1),
-    collection: str | None = Query(default=None),
-    max_matches: int = Query(default=200, ge=1, le=500),
-    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
-) -> GrepOut:
-    outcome = await svc.grep(pattern, collection=collection, max_matches=max_matches)
-    return GrepOut(
-        matches=[GrepMatchOut.model_validate(m, from_attributes=True) for m in outcome.matches],
-        truncated=outcome.truncated,
-    )
-
-
-@router.post("/collections/{name}/tidy", response_model=TidyOut)
-async def tidy(
+@router.post("/collections/{name}/curate", response_model=CurationOut)
+async def curate(
     name: str,
+    body: CurationRequest | None = None,
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
-) -> TidyOut:
+) -> CurationOut:
     # Two different guards, in this order on purpose.
     #
     # The registry claim is first, and it is about THIS collection: a pass
-    # takes minutes and rewrites the collection's files, so a second request
-    # while one is in flight is refused (409 ``UPKEEP_ALREADY_RUNNING``)
-    # rather than queued behind it — the caller asked to start a pass, and no
-    # pass is going to start. Claiming before the lock is what makes that
-    # refusal immediate instead of a request that blocks until the first pass
-    # finishes and then runs anyway.
+    # takes minutes and rewrites the collection's topic documents, so a second
+    # request while one is in flight is refused (409 ``UPKEEP_ALREADY_RUNNING``)
+    # rather than queued behind it (FR-030) — the caller asked to start a pass,
+    # and no pass is going to start. Claiming before the lock is what makes
+    # that refusal immediate instead of a request that blocks until the first
+    # pass finishes and then runs anyway.
     #
     # The vault-write lock is second, and it is about the whole vault: a pass
     # and a converge round both rewrite vault content, and an export caught
     # half-way through a rewrite is a torn snapshot git reads as a deliberate
-    # change (spec vault-sync "## Unattended rewriters").
+    # change (FR-031, spec vault-sync "## Unattended rewriters").
     with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, name):
         async with vault_write_lock():
-            result = await get_tidy_runner()(svc, name, actor=actor)
-    return TidyOut(**{"collection": name, **result})
-
-
-@router.post("/search", response_model=SearchOut)
-async def search(
-    body: SearchRequest,
-    svc: SearchService = Depends(get_search_service),  # noqa: B008
-) -> SearchOut:
-    outcome = await svc.search(body.query, collection=body.collection)
-    return SearchOut(
-        results=[
-            SearchHitOut(
-                path=hit.path,
-                title=hit.title,
-                description=hit.description,
-                lines=[
-                    SearchLineOut(line_number=number, line=line) for number, line in hit.excerpt
-                ],
+            result = await get_curation_runner()(
+                svc,
+                name,
+                # Omitted, the pass picks the oldest pending source itself
+                # (FR-022). One source per pass either way: a trigger is never
+                # a corpus-wide rewrite (FR-025).
+                source_relpath=body.source if body is not None else None,
+                actor=actor,
             )
-            for hit in outcome.hits
-        ],
-    )
+    return CurationOut(**{"collection": name, **result})
 
 
 @router.post("/upload", response_model=IngestedDocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload(
     file: UploadFile = File(...),  # noqa: B008
     collection: str = Form(...),
-    directory: str | None = Form(default=None),
+    #: A subdirectory inside the collection's ``sources/``, never the lane
+    #: itself: an upload is a source like any other and cannot be aimed at
+    #: ``topics/`` (FR-013, FR-016).
+    folder: str | None = Form(default=None),
     svc: IngestService = Depends(get_ingest_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> Any:
     data = await file.read()
     try:
-        # A size ceiling and a refusal naming it (FR-026) both come from
+        # A size ceiling and a refusal naming it (FR-019) both come from
         # ``IngestService.ingest`` itself — it raises ``UploadTooLarge``
         # (a ``CofferError``) before any conversion or write, so the
         # app-wide handler maps it without help from this route.
@@ -236,7 +234,7 @@ async def upload(
             collection=collection,
             filename=file.filename or "upload",
             data=data,
-            directory=directory,
+            folder=folder,
             actor=actor,
         )
     except UnsupportedDocument as exc:

@@ -1,7 +1,9 @@
 // frontend/src/components/knowledge/KnowledgeUploadButton.tsx
 //
-// Upload one file into the collection (and folder, when the caller names one)
-// currently in view (spec knowledge FR-034/FR-035). A hidden
+// Upload one document into the collection currently in view — always into its
+// `sources/` lane, and into a folder inside that lane when the caller names one
+// (spec knowledge FR-023/FR-061). An upload is a source like any other, so
+// there is no lane to choose and no way to aim one at `topics/`. A hidden
 // `<input type="file">` behind a visible button, mirroring
 // SyncMasterKeyCard's key import: the browser reads the bytes directly, so
 // there is no native dialog to drive. On success the tree refreshes itself —
@@ -20,11 +22,11 @@ import { useUploadKnowledgeFile } from "@/lib/hooks/useKnowledge";
 
 interface Props {
   collection: string;
-  /** Folder relative to the collection root the caller is currently viewing, if any. */
-  directory?: string | null;
+  /** Folder inside the collection's `sources/` the caller is viewing, if any. */
+  folder?: string | null;
 }
 
-export function KnowledgeUploadButton({ collection, directory }: Props) {
+export function KnowledgeUploadButton({ collection, folder }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -33,7 +35,7 @@ export function KnowledgeUploadButton({ collection, directory }: Props) {
   const onFileChosen = (file: File | undefined) => {
     if (!file) return;
     upload.mutate(
-      { collection, directory, file },
+      { collection, folder, file },
       { onSuccess: (doc) => toast.success(t("knowledge.upload.success", { title: doc.title })) },
     );
   };

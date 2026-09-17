@@ -1,6 +1,6 @@
 // src/lib/hooks/useUpkeep.test.ts
 //
-// The hook that makes the organise / tidy buttons survive a navigation: the
+// The hook that makes the organise / curate buttons survive a navigation: the
 // running state comes from the daemon's own list, not from a mutation object
 // that dies with the component.
 import { describe, expect, test, vi, beforeEach } from "vitest";

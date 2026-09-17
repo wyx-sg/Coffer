@@ -46,8 +46,7 @@ export interface paths {
         /**
          * Change one unattended pass's switch or timer
          * @description Coffer runs three passes on its own behalf — `aggregate` (spec memory
-         *     FR-007), `organise` (spec memory FR-030) and `tidy` (spec knowledge
-         *     FR-051) — each with a switch and an interval.
+         *     FR-007), `organise` (spec memory FR-030) and `curate` (spec knowledge FR-021) — each with a switch and an interval.
          *
          *     ONE pass per request, and each half left alone when it is not sent: a
          *     settings page toggles one row at a time, and a body carrying all three
@@ -76,7 +75,7 @@ export interface components {
             model?: string | null;
             /** Format: date-time */
             updated_at?: string | null;
-            /** @description Keyed by pass name (`aggregate`, `organise`, `tidy`). */
+            /** @description Keyed by pass name (`aggregate`, `organise`, `curate`). */
             upkeep?: {
                 [key: string]: components["schemas"]["UpkeepSettingOut"];
             };
@@ -92,7 +91,7 @@ export interface components {
         /** @description Change one pass. An omitted field leaves that half of the pass alone. */
         UpkeepUpdate: {
             /** @enum {string} */
-            pass: "aggregate" | "organise" | "tidy";
+            pass: "aggregate" | "organise" | "curate";
             enabled?: boolean | null;
             /** @description Seconds between runs of this pass. The minimum is the floor below which a pass would busy-loop a model over the user's files. */
             interval_s?: number | null;

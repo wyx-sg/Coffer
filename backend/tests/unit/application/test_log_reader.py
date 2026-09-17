@@ -41,11 +41,11 @@ def test_the_stdlib_formatter_line_gives_up_its_level_and_logger() -> None:
     """`%(levelname)-5.5s [%(name)s] %(message)s` — the daemon's root format
     once a migration has run. The level arrives truncated to five characters."""
     record = parse_log_line(
-        "WARNI [coffer.application.knowledge.skill_seed] knowledge.skill_seed.missing_asset"
+        "WARNI [coffer.application.knowledge.skill_delivery] knowledge.skill_delivery.failed"
     )
     assert record["level"] == "warning"
-    assert record["logger"] == "coffer.application.knowledge.skill_seed"
-    assert record["event"] == "knowledge.skill_seed.missing_asset"
+    assert record["logger"] == "coffer.application.knowledge.skill_delivery"
+    assert record["event"] == "knowledge.skill_delivery.failed"
     # It carries no time of its own — that formatter prints none. Saying so is
     # the point: the row must not claim a timestamp it never had.
     assert "timestamp" not in record

@@ -299,7 +299,6 @@
       "credential_set": "已存储凭据",
       "internal_engine_model_set": "设置了内部引擎使用的模型",
       "knowledge_deleted": "从 {{resource}} 删除了一篇笔记",
-      "knowledge_tidied": "整理了 {{resource}} 集合",
       "knowledge_written": "向 {{resource}} 写入了一篇笔记",
       "master_key_exported": "导出了主密钥",
       "master_key_imported": "导入了一把主密钥",
@@ -333,7 +332,8 @@
       "sync_rejected": "拒绝了一轮被暂停的收敛",
       "sync_rolled_back": "回滚了一轮收敛",
       "sync_run": "执行了一轮收敛",
-      "token_rotated": "已轮换访问令牌"
+      "token_rotated": "已轮换访问令牌",
+      "knowledge_curated": "从 {{resource}} 的原料归纳出了主题文档"
     },
     "capType": {
       "tool": "工具",
@@ -574,10 +574,10 @@
           "name": "整理记忆",
           "writes": "模型重写派生出来的摘要——合并重复、标记被推翻的事实。删掉这棵树再跑一遍就能复现。"
         },
-        "tidy": {
-          "name": "整理知识",
-          "writes": "模型重写的是你自己写的知识文件。",
-          "caution": "它改的是唯一的一份。历史版本会留着，但不会事先问你。"
+        "curate": {
+          "name": "从源材料提炼文档",
+          "writes": "Coffer 的模型读你写的源材料，提炼出 Agent 会去读的文档。它不会改动任何一份源材料。",
+          "caution": "关掉它就不会再提炼任何东西：你的源材料原样留着，而 Agent 能读的文档会一直是空的。"
         }
       }
     }
@@ -689,7 +689,9 @@
     "UNMANAGED_SKILL_INVALID": "该技能目录不是有效的技能",
     "UNMANAGED_SKILL_NOT_FOUND": "未找到该未纳管技能",
     "UPSTREAM_TIMEOUT": "上游服务器响应超时——请重试，或调大它的请求超时",
-    "UPSTREAM_UNAVAILABLE": "上游服务器不可达——请检查它的命令或 URL，再点「测试连接」"
+    "UPSTREAM_UNAVAILABLE": "上游服务器不可达——请检查它的命令或 URL，再点「测试连接」",
+    "KNOWLEDGE_CURATION_BOUND": "一轮归纳最多只改写少量文档，其余的留给下一轮。",
+    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "归纳出的文档不能引用另一个知识文件的文件名——集合重整时文件名会变。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -986,7 +988,7 @@
   },
   "knowledge": {
     "title": "知识",
-    "subtitle": "你和 Agent 共同编辑的 Markdown 文件——一个集合一个文件夹。Agent 通过 Coffer 的工具来读；只有你允许的 Agent 才看得到某个集合。",
+    "subtitle": "每个集合两个文件夹：你和 Agent 写下的源材料，以及 Coffer 从中提炼出的主题文档。Agent 用自己的工具读主题文档；只有你允许的 Agent 才知道某个集合的存在。",
     "add": "新建集合",
     "loadFailed": "加载集合失败",
     "searchPlaceholder": "搜索集合…",
@@ -994,35 +996,57 @@
     "cols": {
       "name": "名称",
       "description": "描述",
-      "files": "文件"
+      "sources": "源材料",
+      "topics": "主题文档"
     },
     "detail": {
       "noMatches": "没有匹配。",
       "filterPlaceholder": "按名称筛选…",
-      "tidy": "整理",
-      "tidyHint": "根据磁盘上的 Markdown 重建每个集合的目录文件。",
-      "tidyDone": "整理已完成。",
       "emptyFolder": "这里还没有内容",
       "selectAFile": "选择一个文件来阅读",
       "deleteFile": "删除文件",
-      "deleteFileTitle": "删除这个文件？",
-      "deleteFileConfirm": "从磁盘上删除「{{path}}」？这个文件是唯一的副本——此操作不可撤销。",
-      "treeLabel": "本集合中的文件"
+      "deleteFileTitle": "删除这份源材料？",
+      "deleteFileConfirm": "从磁盘上删除「{{path}}」？这份源材料是唯一的副本——此操作不可撤销。",
+      "curate": "提炼",
+      "curateHint": "把下一份待处理的源材料并入本集合的主题文档。",
+      "curateRunning": "已经有一次提炼在跑了",
+      "curateStatus": {
+        "ok": "提炼已完成。",
+        "no_model": "没有配置内部模型，这次什么都没提炼。",
+        "up_to_date": "每一份源材料都已经在主题文档里了。",
+        "too_large": "这份源材料太大，一次提炼放不下。",
+        "failed": "这次提炼没有跑完，没有任何源材料被标记为已提炼。"
+      },
+      "curatedAt": "自 {{when}} 起已进入主题文档",
+      "notCuratedYet": "还没进入主题文档",
+      "lanes": {
+        "sources": {
+          "tab": "源材料",
+          "treeLabel": "本集合的源材料",
+          "empty": "还没有源材料——上传一份文档，或者把 Markdown 文件直接放进这个文件夹。"
+        },
+        "topics": {
+          "tab": "主题文档",
+          "treeLabel": "本集合的主题文档",
+          "empty": "还没有主题文档。它们由 Coffer 从你写的源材料里提炼出来。",
+          "writtenByCuration": "这些文档由 Coffer 的提炼过程根据你的源材料写成。你在这里改的内容会被下一次提炼覆盖——要更正，请以新的源材料写进去。"
+        }
+      }
     },
     "welcome": {
       "title": "把 Agent 知道的一切放在一处",
-      "body": "一个集合就是一个 Markdown 文件夹——Agent 写下的笔记和你放进去的文件并排放着。建一个，然后让 Agent 来读。",
+      "body": "一个集合就是两个文件夹：你和 Agent 写下的源材料，以及 Coffer 从中提炼出的主题文档。建一个，然后让 Agent 来读。",
       "featureEntries": {
-        "title": "Agent 写下的",
-        "body": "Agent 通过 Coffer 的 MCP 工具存下笔记，下次会话再读回来。"
+        "title": "你写下的",
+        "body": "你和 Agent 一起添加源材料——通过 Coffer 工具写下的笔记、上传的文档、你自己放进去的 Markdown。"
       },
       "featureDocuments": {
-        "title": "你放进去的",
-        "body": "把 Markdown 文件放进集合，Coffer 原样提供给 Agent。"
+        "title": "Coffer 提炼的",
+        "body": "Coffer 自己的模型把这些源材料并成主题文档，Agent 读的就是它们。"
       },
       "featureLocal": {
         "title": "本地优先",
-        "body": "一切都是你机器上的纯 Markdown——搜索就是字面匹配，不建索引。"
+        "body": "一切都是你机器上的纯 Markdown。不建任何索引，Agent 也不经由 Coffer 的工具来读。"
       }
     },
     "create": {

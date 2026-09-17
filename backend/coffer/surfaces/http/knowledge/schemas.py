@@ -4,6 +4,13 @@ Every model here mirrors a value object from ``domain.knowledge.entry``. The
 mirroring is deliberate rather than redundant: the domain types describe what
 is on disk, and these describe what a client is promised — so removing a field
 from the wire never means hiding one from the layer itself.
+
+What is *absent* is the point of the current shape. There is no search request,
+no search hit and no grep match, because this surface exposes no retrieval at
+all (spec knowledge "No retrieval tool", FR-033): an agent reads the files with
+its own tools at the paths its delivered skill carries, and the human reads
+them through ``tree``/``file``. A model here would be a second retrieval
+surface no one asked for.
 """
 
 from __future__ import annotations
@@ -13,8 +20,14 @@ from pydantic import BaseModel, Field
 
 class CollectionOut(BaseModel):
     name: str
+    #: First paragraph of the collection's ``README.md`` (FR-011).
     description: str
-    file_count: int
+    #: The two lanes are counted apart because they answer different questions:
+    #: how much a person has contributed, and how much of it an agent can read
+    #: today (FR-001). A collection with sources and no topics is one curation
+    #: has not reached yet — a single total would hide exactly that.
+    source_count: int = 0
+    topic_count: int = 0
 
 
 class CollectionListOut(BaseModel):
@@ -54,64 +67,61 @@ class FileOut(BaseModel):
     created_at: str
     updated_at: str
     body: str
-    #: Absolute on-disk paths, so the UI can offer open / reveal (FR-036).
+    #: Absolute on-disk paths, so the UI can offer open / reveal (FR-041).
     file_path: str
     folder_path: str
+    #: When curation last consumed this source; empty for a topic document and
+    #: for a source no pass has reached yet (FR-028). It is what the page shows
+    #: to answer "is this note in the topics yet?".
+    ingested_at: str = ""
 
 
 class FileWrite(BaseModel):
     title: str = Field(min_length=1)
-    #: Required: the catalogue is the retrieval surface, and a file that fails
-    #: to describe itself is unfindable (FR-003).
+    #: Required: the skill's catalogue is how a document is ever found, and a
+    #: file that fails to describe itself is unfindable (FR-003).
     description: str = Field(min_length=1)
     body: str = ""
-    #: Exactly one of these. ``directory`` creates a new file there;
-    #: ``path`` replaces the file at that path.
-    directory: str | None = None
+    #: Exactly one of ``collection`` or ``path``. ``collection`` (plus an
+    #: optional ``folder`` inside it) creates a new source; ``path`` replaces
+    #: the source already at that path. Neither names the ``sources/`` segment
+    #: — the service adds it, so no caller can aim a write at ``topics/`` by
+    #: spelling a path (FR-013, FR-021).
+    collection: str | None = None
+    folder: str | None = None
     path: str | None = None
 
 
-class GrepMatchOut(BaseModel):
-    path: str
-    line_number: int
-    line: str
+class CurationRequest(BaseModel):
+    #: One source to fold in, knowledge-root-relative. Omitted, the pass takes
+    #: the oldest source whose ``coffer_ingested_at`` is behind its own
+    #: modification time (FR-022) — which is what the page's "curate now"
+    #: button wants, while a per-file trigger wants this.
+    source: str | None = None
 
 
-class GrepOut(BaseModel):
-    matches: list[GrepMatchOut]
-    truncated: bool
-
-
-class TidyOut(BaseModel):
+class CurationOut(BaseModel):
+    #: ``ok`` | ``no_model`` | ``up_to_date`` | ``too_large`` | ``failed``.
+    #: Every one of them is a 200: a collection with no model configured, or
+    #: with nothing pending, is an ordinary state of the feature and not a
+    #: fault of the request (FR-029).
     status: str
     collection: str
-    merged: int = 0
-    rewritten: int = 0
-
-
-class SearchRequest(BaseModel):
-    query: str = Field(min_length=1)
-    #: Restrict to one collection; omitted, every collection the caller may
-    #: see is searched.
-    collection: str | None = None
-
-
-class SearchLineOut(BaseModel):
-    line_number: int
-    line: str
-
-
-class SearchHitOut(BaseModel):
-    path: str
-    title: str
-    description: str
-    lines: list[SearchLineOut]
-
-
-class SearchOut(BaseModel):
-    #: One entry per matching file. There is no retrieval mode a caller picks
-    #: and none the answer reports: search is literal, always (FR-016).
-    results: list[SearchHitOut]
+    #: The source the pass took, when it took one.
+    source: str = ""
+    #: The internal model that ran it, so a surprising rewrite is traceable to
+    #: a model rather than to Coffer.
+    model: str = ""
+    written: int = 0
+    retired: int = 0
+    #: Writes the pass refused — a topic naming another file (FR-027), or the
+    #: eight-write bound (FR-025). Reported rather than swallowed, because a
+    #: pass that hit its bound has more to absorb than it managed.
+    refused: int = 0
+    topics_before: int = 0
+    topics_after: int = 0
+    #: The source-size ceiling, present only with ``status`` ``too_large``.
+    limit: int = 0
 
 
 class IngestedDocumentOut(BaseModel):
@@ -121,5 +131,8 @@ class IngestedDocumentOut(BaseModel):
     description: str
     #: Which converter produced this file.
     converter: str
-    #: Path of the kept original under the collection's hidden ``.raw/`` (FR-024).
-    raw_path: str
+    #: Path of the original the upload sent, relative to the knowledge root
+    #: like ``path``: it is now an ordinary visible file in ``sources/`` beside
+    #: the Markdown extracted from it (FR-016), so the surface that browses the
+    #: lane can name it, which a hidden absolute location could not.
+    original_path: str

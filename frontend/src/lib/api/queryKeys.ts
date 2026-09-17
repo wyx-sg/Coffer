@@ -177,7 +177,7 @@ export const memoryDeliveryKey = ["memory", "delivery"] as const;
 export const memoryAgentDeliveryKey = (agent: string) => ["memory", "delivery", agent] as const;
 
 // ---------------------------------------------------------------------------
-// upkeep — the long rewrites (memory organise, knowledge tidy) in flight
+// upkeep — the long rewrites (memory organise, knowledge curation) in flight
 // ---------------------------------------------------------------------------
 
 /** Deliberately NOT under `memoryKey` or `knowledgeKey`: one read answers for

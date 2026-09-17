@@ -1,6 +1,6 @@
 // frontend/src/components/knowledge/KnowledgeUploadButton.test.tsx
 //
-// Upload into the collection (and folder) in view (spec knowledge FR-035).
+// Upload into the collection (and folder) in view (spec knowledge FR-040).
 // `useUploadKnowledgeFile` runs as a REAL react-query mutation against the
 // mocked wire layer (`@/lib/api/knowledge`), so a successful call really
 // does invalidate `["knowledge"]` — the mechanism a mounted tree query relies
@@ -41,7 +41,7 @@ function renderButton(onFetch: () => void = () => {}) {
     <QueryClientProvider client={qc}>
       <ToastProvider>
         <TreeSentinel onFetch={onFetch} />
-        <KnowledgeUploadButton collection="shopee" directory={null} />
+        <KnowledgeUploadButton collection="shopee" folder={null} />
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -60,7 +60,7 @@ describe("KnowledgeUploadButton", () => {
       title: "Notes",
       description: "converted notes",
       converter: "markitdown",
-      raw_path: "/Users/dev/.coffer/knowledge/shopee/.raw/notes.pdf",
+      original_path: "shopee/sources/notes.pdf",
     });
     const onFetch = vi.fn();
     renderButton(onFetch);
@@ -72,7 +72,7 @@ describe("KnowledgeUploadButton", () => {
 
     await waitFor(() =>
       expect(uploadFileMock).toHaveBeenCalledWith(
-        expect.objectContaining({ collection: "shopee", directory: null }),
+        expect.objectContaining({ collection: "shopee", folder: null }),
       ),
     );
     // Success invalidates ["knowledge"], so the sentinel refetches — the

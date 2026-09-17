@@ -1,9 +1,7 @@
-{"request": "What do you remember about my deployment preferences?", "expected_tool": "search"}
-{"request": "Find passages in my notes that explain Kafka ISR and the high watermark.", "expected_tool": "search"}
-{"request": "Please save that I prefer dark mode in all my tools.", "expected_tool": "write"}
-{"request": "Search my knowledge for the exact string TODO(security).", "expected_tool": "grep"}
-{"request": "Which knowledge scopes do I have?", "expected_tool": "list"}
-{"request": "Open the entry with id 01J8ZK and show me its contents.", "expected_tool": "read"}
-{"request": "Remove the document with id 01J9QT from my knowledge.", "expected_tool": "delete"}
-{"request": "Which skills can I use right now?", "expected_tool": "list_skills"}
-{"request": "Load the pql-generator skill so you can write a query.", "expected_tool": "load_skill"}
+{"request": "Please save that account.session is the service that owns login state.", "expected_tool": "write"}
+{"request": "Remember that I prefer dark mode in all my tools.", "expected_tool": "write"}
+{"request": "What do you already know about my deployment preferences?", "expected_tool": "recall"}
+{"request": "Have I written anything down about the phrase TODO(security)?", "expected_tool": "recall"}
+{"request": "Coffer's daemon is behaving strangely — show me its logs and audit trail.", "expected_tool": "diagnose"}
+{"request": "Is there a tool anywhere that can file a ticket for me?", "expected_tool": "search_tools"}
+{"request": "I need something that talks to a calendar; find me one.", "expected_tool": "search_tools"}

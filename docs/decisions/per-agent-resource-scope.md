@@ -174,9 +174,9 @@ resource's **reach**, and reach is machine-local.
    authorization is the reason it is a Resource at all: the kind declares
    `supports_scope`, and an agent lists, greps, reads and writes only the
    collections activated for it ([Knowledge Is Plain Files](knowledge-is-plain-files.md),
-   spec knowledge FR-007…FR-011). Enforcement sits at the MCP tool surface
+   spec knowledge FR-008…FR-012). Enforcement sits at the MCP tool surface
    only, so it prevents mistaken retrieval, not deliberate filesystem access by
-   an agent that also holds shell tools (spec knowledge FR-011).
+   an agent that also holds shell tools (spec knowledge FR-012).
    Chat history, audit logs, runtime state and machine-local settings stay
    machine-local (restated as a boundary, not a new decision).
 

@@ -626,28 +626,24 @@ async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
             transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
         ) as c,
     ):
-        # Out of the box: the two derived-file passes run, the one that
-        # rewrites the user's own writing does not, and none has a chosen
-        # interval — so each reports the default it actually runs at.
+        # Out of the box every pass runs — each writes only derived files, so
+        # none of them is the exception the tidy pass used to be — and none has
+        # a chosen interval, so each reports the default it actually runs at.
         upkeep = (await c.get("/api/v1/internal-engine-config")).json()["upkeep"]
-        assert [upkeep[k]["enabled"] for k in ("aggregate", "organise", "tidy")] == [
+        assert [upkeep[k]["enabled"] for k in ("aggregate", "organise", "curate")] == [
             True,
             True,
-            False,
+            True,
         ]
         assert all(upkeep[k]["interval_s"] is None for k in upkeep)
         assert upkeep["aggregate"]["default_interval_s"] == 3600
 
         # One pass at a time, and each half independent of the other.
         r = await c.put(
-            "/api/v1/internal-engine-config/upkeep", json={"pass": "tidy", "enabled": True}
+            "/api/v1/internal-engine-config/upkeep", json={"pass": "curate", "enabled": False}
         )
         assert r.status_code == 200, r.text
-        assert r.json()["upkeep"]["tidy"] == {
-            "enabled": True,
-            "interval_s": None,
-            "default_interval_s": 21600,
-        }
+        assert r.json()["upkeep"]["curate"]["enabled"] is False
 
         r = await c.put(
             "/api/v1/internal-engine-config/upkeep",
@@ -655,7 +651,7 @@ async def test_upkeep_switches_and_intervals_round_trip(tmp_path, monkeypatch):
         )
         assert r.json()["upkeep"]["aggregate"]["interval_s"] == 900
         # ...and the pass it did not name is exactly as it was left.
-        assert r.json()["upkeep"]["tidy"]["enabled"] is True
+        assert r.json()["upkeep"]["curate"]["enabled"] is False
 
         # Back to the pass's own interval — which a null cannot say.
         r = await c.put(

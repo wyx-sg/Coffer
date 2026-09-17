@@ -436,20 +436,13 @@ Per `.agents/sdd.md`, every scenario in this section is referenced by at least o
 - **When** the daemon starts,
 - **Then** the error is logged and the daemon still comes up — a boot heal that can crash the daemon would be worse than the drift it exists to fix.
 
-### Scenario: an agent lists the skill library as a tool
 
-- **Given** Coffer has registered several skills, at least one of them disabled and at least one scoped away from the calling agent,
-- **When** the agent calls the built-in tool `coffer__list_skills` with no arguments,
-- **Then** it receives one entry per registered skill — name and description, the description an empty string where the skill has none — including the disabled and out-of-scope ones, because the catalogue is global,
-- **And** no skill's file contents, on-disk path or delivery state is returned, and nothing on disk or in the database changes.
 
-### Scenario: an agent loads one skill's SKILL.md as a tool
+### Scenario: Coffer exposes no skill tools over MCP
 
-- **Given** a skill `my-skill` whose master folder at `~/.coffer/skills/my-skill/` holds a `SKILL.md` and other files,
-- **When** the agent calls the built-in tool `coffer__load_skill` with `name: my-skill`,
-- **Then** it receives that skill's name and the verbatim text of that folder's `SKILL.md`, and no other file in the folder and no file outside it is reachable through the tool,
-- **And** nothing is delivered, bound or reconciled by the read,
-- **And** a missing `name`, an unknown skill name, and a master folder with no `SKILL.md` each come back as a caller-readable error rather than a crash.
+- **Given** a client has completed the MCP handshake against Coffer's gateway,
+- **When** it calls `tools/list`,
+- **Then** no skill tool is among the results — `coffer__list_skills` and `coffer__load_skill` are absent — and the `initialize` instructions name no skill tool either, because every supported agent already reads its delivered skills from disk.
 
 ## Requirements
 
@@ -509,12 +502,12 @@ Per `.agents/sdd.md`, every scenario in this section is referenced by at least o
 
 **Agent-facing MCP tools**
 
-- **FR-026**: System MUST expose the skill library to a connected agent as the built-in MCP tool `coffer__list_skills`. It takes no arguments and returns one entry per registered `skill` resource, each carrying that skill's `name` and its `description` (an empty string where the resource has none). The catalogue is **global**: every registered skill is listed to every session, whatever the skill's `enabled` flag or scope says, because this tool applies no per-agent gate. It is a read — it MUST NOT create, move, write or delete anything, and MUST NOT return a skill's file contents or any on-disk path; a caller that wants content calls FR-027. Like every built-in tool it is listed and dispatched under the reserved `coffer__` prefix (spec mcp-gateway), and each call is recorded in the MCP invocation log rather than the audit log, because it changes nothing.
-- **FR-027**: System MUST expose one skill's content to a connected agent as the built-in MCP tool `coffer__load_skill`, which takes a required `name` — the skill's resource name — and returns that name together with the verbatim UTF-8 text of `SKILL.md` in that skill's master folder (FR-003). It MUST read only that one file inside that one master folder: the `name` argument is resolved through the resource registry and never joined into a path, so no argument can reach a file outside `~/.coffer/skills/<name>/`, and no other file inside the folder is readable through this tool. Like FR-026 the read is global — a skill that is disabled, or scoped away from the calling agent, is still loadable by name. It MUST NOT write, create, move or delete anything, MUST NOT follow a symlink out of the master folder, and MUST NOT deliver, bind or reconcile anything: loading a skill in order to read it is not delivering it (FR-008). A missing `name`, an unknown skill, and a master folder with no `SKILL.md` are each answered with a caller-readable error rather than a crash. Each call is recorded in the MCP invocation log.
+
+
+- **FR-026**: System MUST record an audit entry for every import, delivery, reclaim, remove, and drift remediation event.
+- **FR-027**: Coffer MUST expose no skill tool over MCP. Delivery is the whole delivery mechanism: Coffer supports exactly two agent types, `claude_code` and `codex`, and both read skills natively from `<config_dir>/skills/` — which is precisely where FR-009 puts them. A `list_skills` / `load_skill` pair exists only for an agent with no native skill mechanism, and that set is empty. Serving skill content over MCP is also a second, unscoped delivery path: it reads the master store of FR-003 directly, with no per-agent scope, so it hands an agent skills the FR-012a predicate does not grant it — including the rendered skill that tells an agent which knowledge collections it may reach. The gateway's builtin roster and the `initialize` instructions MUST therefore name no skill tool.
 
 **Observability**
-
-- **FR-028**: System MUST record an audit entry for every import, delivery, reclaim, remove, and drift remediation event.
 
 ### Key Entities
 
@@ -563,7 +556,7 @@ Per `.agents/sdd.md`, every scenario in this section is referenced by at least o
   and the same module name appears in the *forbidden* list of every other kind's contract — a zero-exception fence with the module on the skill side of it. The URL shape follows FR-020's rule rather than contradicting it: the agent is an **argument** to an unmanaged-skill operation, not its subject, which is also why the CLI spells these `coffer skill unmanaged|adopt|rm-unmanaged` and not `coffer agent …`. An audit that finds an `/api/v1/agents` route in this spec's contract should stop here rather than reopen it.
 - **Open-in-external-editor and reveal-in-file-manager are the shell's affordances, not this spec's mechanism.** The skill file viewer (FR-024) carries them at both file and containing-folder granularity, and they do the real OS action through the loopback daemon's filesystem-action endpoints (spec daemon, [ADR daemon-proxies-os-file-actions](../../docs/decisions/daemon-proxies-os-file-actions.md)) rather than degrading to a copy-path fallback. Which application opens is the user's global preferred external editor, which spec web-ui FR-039 owns and defaults to the OS default application. This spec assumes both are in place; it neither defines the endpoints nor re-specifies the preference. They sit alongside in-app editing (FR-025): small edits are saved in Coffer, anything larger goes to the user's own editor.
 - **The Add-skill dialog's folder picker is the shared one.** The import dialog offers the same folder picker the agent `config_dir` chooser uses — the host's native directory dialog opened through the daemon, degrading to the daemon-backed folder browser where the host has no native dialog tool (spec agent-registry for the picker component and its degradation rule, spec daemon for the two routes behind it). The picked absolute path feeds the import operation of FR-006 unchanged, and typing a path by hand stays supported. This spec assumes the component; it specifies nothing about how the path is chosen.
-- **Known defect — the agent-facing tools apply no reach gate.** FR-026 and FR-027 describe what ships: `coffer__list_skills` returns every registered skill row and `coffer__load_skill` reads any skill's `SKILL.md`, both with no per-agent filter, so an agent Coffer delivers no skills to can still read the name, description and full SKILL.md of a skill that is disabled or scoped away from it. FR-012 says the `enabled` flag and the scope are the WHOLE delivery rule and that nothing else decides which agents a skill is FOR — and reading a skill's text is not far from being given it. The two statements are recorded rather than reconciled here, because closing the gap changes behaviour: a separate change decides whether the tools honour reach, honour `enabled` only, or stay global by design, and amends FR-026/FR-027 when it does.
+
 - **Known defect — the agent-facing tools report failure as success.** Both handlers return `{"error": "…"}` as a normal payload, so the gateway records `status="ok"` in the MCP invocation log and hands the model a result with `isError` false: "skill not found" reads as a successful invocation on both surfaces. Every other built-in tool signals failure by raising, which the dispatcher turns into an `isError` result and a `status="error"` log row. FR-027 requires only that these cases come back caller-readable, which today they are; making them raise is a behaviour change and belongs to a separate fix.
 - The kind-agnostic Resource framework, audit log, and `<kind>:<name>` identity scheme defined by spec resource-framework are in place.
 - The application shell from spec web-ui — sidebar IA, layout, routing skeleton, and design system — is in place; the Skills page is a feature surface that renders within that shell and fills the `/skills` nav slot.

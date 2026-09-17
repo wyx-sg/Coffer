@@ -1,16 +1,20 @@
 // e2e/web/specs/shell_knowledge.spec.ts
 //
 // The one /knowledge surface end-to-end: create a collection through the UI
-// dialog, put a file in it over the REST API, then walk the catalogue and read
-// the file in the real DOM.
+// dialog, put sources in it over the REST API, then walk both lanes in the
+// real DOM.
 //
-// Nothing auto-provisions a collection any more (spec knowledge FR-007), so a
+// Nothing auto-provisions a collection any more (spec knowledge FR-008), so a
 // walk starts by making one. State is provisioned through the daemon's REST API
 // so the tests stay robust against UI churn; the page render is exercised
 // against the real DOM.
+//
+// No acceptance marker: the spec's viewer scenario is pinned by the component
+// test, which can assert the absence of a delete affordance far more precisely
+// than a browser walk can. What this adds is that the two lanes, the tab
+// switch and the REST write agree with each other against a live daemon.
 
-import { expect, type Page } from "@playwright/test";
-import { acceptance } from "./_acceptance";
+import { expect, test, type Page } from "@playwright/test";
 import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
 
 beforeEachInjectToken();
@@ -35,35 +39,43 @@ async function createCollection(page: Page, name: string, description: string) {
   });
 }
 
-async function writeFile(
+/** Write a SOURCE. The `sources/` segment is the layer's, never a caller's. */
+async function writeSource(
   page: Page,
-  directory: string,
+  collection: string,
   title: string,
   description: string,
   body: string,
+  folder?: string,
 ) {
   const { base, headers } = api();
   await page.request.put(`${base}/knowledge/file`, {
     headers,
-    data: { directory, title, description, body },
+    data: { collection, folder, title, description, body },
   });
 }
 
-acceptance("knowledge", "the catalogue lists one level of a collection", async ({ page }) => {
-  const name = `e2e-catalogue-${Date.now()}`;
+test("both lanes render, and topics is empty until curation runs", async ({ page }) => {
+  const name = `e2e-lanes-${Date.now()}`;
   await page.goto("/knowledge");
   await createCollection(page, name, "An end-to-end collection");
-  await writeFile(page, name, "Top level note", "at the collection root", "body");
-  await writeFile(page, `${name}/nested`, "Nested note", "one level down", "deeper body");
+  await writeSource(page, name, "Top level note", "at the lane root", "body");
+  await writeSource(page, name, "Nested note", "one level down", "deeper body", "nested");
 
   await page.reload();
   await expect(page.getByText(name)).toBeVisible();
   await expect(page.getByText("An end-to-end collection")).toBeVisible();
 
   await page.getByText(name).first().click();
-  // The collection's own level: the root file and the folder, not the file
-  // inside the folder — the catalogue descends a level per request (FR-013).
+
+  // Sources is the lane a person writes, and it opens on it. The lane's own
+  // level: the root file and the folder, not the file inside the folder.
   await expect(page.getByText("Top level note")).toBeVisible();
   await expect(page.getByText("nested")).toBeVisible();
   await expect(page.getByText("Nested note")).toHaveCount(0);
+
+  // Topics holds what curation derives, and a fresh collection has none — the
+  // page must say so rather than look broken (spec knowledge FR-040).
+  await page.getByRole("tab", { name: /topics/i }).click();
+  await expect(page.getByText("Top level note")).toHaveCount(0);
 });

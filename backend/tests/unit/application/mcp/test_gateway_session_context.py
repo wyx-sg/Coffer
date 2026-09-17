@@ -1,4 +1,4 @@
-"""Unit tests for the MCP gateway's session-cwd propagation (spec knowledge FR-004).
+"""Unit tests for the MCP gateway's session-cwd propagation (spec knowledge FR-009).
 
 The shim reports its launch cwd at the ``initialize`` handshake
 (``params._meta["coffer/cwd"]``); the gateway captures it and threads it into

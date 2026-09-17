@@ -2,8 +2,13 @@
 // The collections list, rendered via the shared DataTable. A collection is a
 // top-level folder under the knowledge root and one `knowledge` Resource, so a
 // row carries what a folder has — its name, what its README says it is for, and
-// how many markdown files are under it — plus the reach control every Resource
+// the size of each of its two lanes — plus the reach control every Resource
 // gets, exactly as the mcp-servers, skills and memory lists render it per row.
+//
+// The lanes are counted APART because they answer different questions: how much
+// the person has contributed, and how much of it an agent can read today. A
+// collection with sources and no topics is one curation has not reached yet,
+// which a single total would hide (spec knowledge FR-001).
 //
 // `enabled`/`scope` are generic Resource fields and are NOT on
 // /knowledge/collections (which reads the folders off disk), so they are merged
@@ -64,11 +69,17 @@ export function KnowledgeTable({
     },
     {
       // A CJK header in an unsized column wraps one character per line. The
-      // count is short, so the column never needs to wrap at all.
-      key: "files",
-      header: t("knowledge.cols.files"),
+      // counts are short, so neither column ever needs to wrap at all.
+      key: "sources",
+      header: t("knowledge.cols.sources"),
       className: "whitespace-nowrap text-right",
-      cell: (r) => <span className="tabular-nums">{r.file_count}</span>,
+      cell: (r) => <span className="tabular-nums">{r.source_count}</span>,
+    },
+    {
+      key: "topics",
+      header: t("knowledge.cols.topics"),
+      className: "whitespace-nowrap text-right",
+      cell: (r) => <span className="tabular-nums">{r.topic_count}</span>,
     },
     {
       // The flexible column: it takes the remaining width, which is what stops

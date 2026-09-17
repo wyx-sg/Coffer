@@ -42,11 +42,14 @@ class KnowledgeFileNotFound(KnowledgeError):  # noqa: N818
 
 
 class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
-    """A path that escapes the knowledge root, or names a hidden entry.
+    """A path that escapes the knowledge root, names a hidden entry, or sits
+    outside a lane.
 
-    Hidden entries are refused rather than merely skipped: ``.history/`` holds
-    revisions the tidy pass superseded, and handing one back through ``read``
-    would answer with content the live file has already replaced.
+    All three are refused rather than silently corrected. The lane check is
+    here rather than in each caller because "a knowledge file lives under
+    ``sources/`` or ``topics/``" is a property of path construction: it is what
+    keeps an agent write out of the curated lane and the curation pass out of
+    the sources lane (spec knowledge FR-013, FR-021).
     """
 
     code = "KNOWLEDGE_PATH_UNSAFE"
@@ -58,7 +61,7 @@ class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
 
 
 class UploadTooLarge(KnowledgeError):  # noqa: N818
-    """An ingest upload past the size ceiling (FR-026).
+    """An ingest upload past the size ceiling (FR-019).
 
     Refused before any conversion or write is attempted, naming the limit so
     the caller knows exactly what to shrink below.
@@ -69,4 +72,38 @@ class UploadTooLarge(KnowledgeError):  # noqa: N818
     def __init__(self, size: int, limit: int) -> None:
         super().__init__(f"upload of {size} bytes exceeds the {limit} byte limit")
         self.size = size
+        self.limit = limit
+
+
+class TopicReferencesFile(KnowledgeError):  # noqa: N818
+    """A curated topic document naming another knowledge file (FR-027).
+
+    Refused at the write rather than asked for in the prompt. Topic paths are
+    chosen by curation and move as the corpus is reorganised, so a file name
+    written into prose is a link that rots — 343 of the corpus's 398 internal
+    references were already dead when this rule was introduced. A document
+    names its subject; the catalogue resolves subjects to paths.
+    """
+
+    code = "KNOWLEDGE_TOPIC_REFERENCES_FILE"
+
+    def __init__(self, path: str, reference: str) -> None:
+        super().__init__(
+            f"topic {path!r} references the file {reference!r}; name the subject, not the file"
+        )
+        self.path = path
+        self.reference = reference
+
+
+class CurationBoundExceeded(KnowledgeError):  # noqa: N818
+    """A curation pass tried to write more files than one pass may (FR-025).
+
+    The bound is what makes a pass *incremental*: one source must never be able
+    to trigger a corpus-wide rewrite, however confident the model is.
+    """
+
+    code = "KNOWLEDGE_CURATION_BOUND"
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"a curation pass may write at most {limit} files")
         self.limit = limit

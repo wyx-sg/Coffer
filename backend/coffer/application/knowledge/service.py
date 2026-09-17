@@ -1,14 +1,19 @@
 """The knowledge layer's one service.
 
 Every operation resolves to a filesystem operation over
-``~/.coffer/knowledge/``. What this layer adds on top of the directory is
-exactly one thing: **which collections the caller may see** (spec knowledge FR-009). A collection is
-a Resource, so the framework's per-agent scope
-decides, and this service is the enforcement point for it.
+``~/.coffer/knowledge/``. What this layer adds on top of the directory is two
+things: **which collections the caller may see** (spec knowledge FR-010), and
+**which lane a caller may write** (FR-013, FR-021).
 
-That enforcement is a convention, not a security boundary (FR-011): an agent
-holding shell tools can read the directory itself. It prevents mistaken
-retrieval, not deliberate access.
+The first is enforced here and, for agents, at delivery: a collection an agent
+is not activated for never appears in the skill Coffer renders for it, so the
+agent is never told the path. That is non-disclosure, not access control
+(FR-012): an agent holding shell tools can read the directory itself. It
+prevents mistaken retrieval, not deliberate access — which was equally true of
+the tool-surface enforcement it replaces.
+
+The second is why every write here names its lane. Nothing in this module can
+write ``topics/``; that belongs to ``application.knowledge.curate``.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from coffer.domain.knowledge.entry import (
     ACTOR_AGENT,
     CatalogueLevel,
     CollectionEntry,
+    FileEntry,
     GrepOutcome,
     KnowledgeFile,
 )
@@ -32,7 +38,7 @@ from coffer.domain.knowledge.errors import (
 )
 from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import is_active
-from coffer.infrastructure.knowledge import fs, paths
+from coffer.infrastructure.knowledge import catalogue, fs, paths
 from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES, RipgrepSearch
 
 KIND_KNOWLEDGE = "knowledge"
@@ -53,13 +59,7 @@ class KnowledgeService:
     # ----- collections -------------------------------------------------
 
     async def visible_collections(self, agent: str | None) -> list[str]:
-        """The collections ``agent`` may read, in name order.
-
-        An agent's calls span every collection activated for it — there is no
-        rule that leaves one out of a default (FR-009), because a collection an
-        agent is authorized for but never searches is the death the named
-        collections of the previous design died.
-        """
+        """The collections ``agent`` may be told about, in name order."""
         registered = await self._resources.list(kind=KIND_KNOWLEDGE, enabled=True)
         return sorted(r.name for r in registered if is_active(r.scope, agent))
 
@@ -77,15 +77,12 @@ class KnowledgeService:
         actor: str,
         description: str | None = None,
     ) -> CollectionEntry:
-        """Register a collection and create its directory.
+        """Register a collection, create its directory and both lanes.
 
-        Deliberate creation is the whole point (FR-007): nothing here is
+        Deliberate creation is the whole point (FR-008): nothing here is
         reachable from a read or a write, so a typo cannot conjure a collection.
         """
-        try:
-            directory = paths.collection_dir(name)
-        except UnsafeKnowledgePath:
-            raise
+        directory = paths.collection_dir(name)
         if directory.exists():
             raise CollectionExists(name)
         await self._resources.register(
@@ -93,68 +90,86 @@ class KnowledgeService:
             name=name,
             config={},
             actor=actor,
-            description=description,
+            # Deliberately not the description (FR-011): for this kind it lives
+            # in the collection's own README, where the person browsing the
+            # folder can see and change it. A copy in the row would be written
+            # once, read by nothing, and wrong the moment they edited the file.
             allow_lifecycle_kind=True,
         )
         fs.create_collection_dir(name)
         if description:
             paths.readme_path(name).write_text(f"# {name}\n\n{description}\n", encoding="utf-8")
-        return CollectionEntry(
-            name=name,
-            description=fs.readme_description(name),
-            file_count=0,
-        )
+        return CollectionEntry(name=name, description=catalogue.readme_description(name))
 
     async def list_collections(self, agent: str | None = None) -> list[CollectionEntry]:
         visible = set(await self.visible_collections(agent))
-        return [c for c in fs.list_collections() if c.name in visible]
+        return [c for c in catalogue.list_collections() if c.name in visible]
 
-    # ----- catalogue and retrieval -------------------------------------
+    # ----- reading, for the human surfaces -----------------------------
 
     async def list_level(self, relpath: str, agent: str | None = None) -> CatalogueLevel:
-        """One level of the catalogue, generated by walking the directory."""
+        """One level of one lane, generated by walking the directory.
+
+        This serves the web page and the CLI. It is **not** an agent's
+        retrieval path — an agent reads the files themselves at the absolute
+        paths its delivered skill carries (FR-033, FR-037).
+        """
         await self.require_visible(relpath, agent)
-        return fs.list_level(relpath)
+        return catalogue.list_level(relpath)
 
     async def read(self, relpath: str, agent: str | None = None) -> KnowledgeFile:
         await self.require_visible(relpath, agent)
         return fs.read_file(relpath)
 
-    async def grep(
-        self,
-        pattern: str,
-        *,
-        agent: str | None = None,
-        collection: str | None = None,
-        max_matches: int = DEFAULT_MAX_MATCHES,
-    ) -> GrepOutcome:
-        visible = await self.visible_collections(agent)
-        if collection is not None:
-            if collection not in visible:
-                raise CollectionNotFound(collection)
-            visible = [collection]
-        roots: list[pathlib.Path] = [paths.collection_dir(name) for name in visible]
-        return await self._search.grep(roots, pattern, max_matches=max_matches)
+    async def catalogue(
+        self, agent: str | None = None
+    ) -> list[tuple[CollectionEntry, tuple[FileEntry, ...]]]:
+        """Every visible collection with its whole ``topics/`` lane.
 
-    # ----- writing -----------------------------------------------------
+        The one place the corpus is read all at once. It exists for skill
+        rendering (FR-037), where handing the agent the entire catalogue is the
+        point — the alternative, a level at a time through a tool, is what 448
+        sessions demonstrated an agent never reaches for.
+        """
+        visible = set(await self.visible_collections(agent))
+        return [
+            (entry, catalogue.walk_files(paths.topics_dir(entry.name)))
+            for entry in catalogue.list_collections()
+            if entry.name in visible
+        ]
 
-    async def write(
+    # ----- writing the sources lane ------------------------------------
+
+    async def write_source(
         self,
         *,
         title: str,
         description: str,
         body: str,
-        directory: str | None = None,
+        collection: str | None = None,
+        folder: str | None = None,
         relpath: str | None = None,
         actor_kind: str = ACTOR_AGENT,
         actor: str,
         agent: str | None = None,
     ) -> KnowledgeFile:
-        """Create a file, or replace the one at ``relpath``."""
-        target = relpath or directory
-        if not target:
+        """Create a source in a collection, or replace the one at ``relpath``.
+
+        ``collection`` plus an optional ``folder`` is what a caller names; the
+        ``sources/`` segment is this layer's, not theirs, so no surface has to
+        spell it and no caller can aim at the other lane by spelling it wrong.
+        """
+        if relpath is not None:
+            target_collection = await self.require_visible(relpath, agent)
+            paths.require_lane(relpath, expected=paths.SOURCES_DIR_NAME)
+            directory = None
+        elif collection:
+            target_collection = await self.require_visible(collection, agent)
+            directory = paths.lane_relpath(
+                target_collection, paths.SOURCES_DIR_NAME, *(folder or "").strip("/").split("/")
+            )
+        else:
             raise UnsafeKnowledgePath("", "a write needs a collection or a path")
-        collection = await self.require_visible(target, agent)
         written = fs.write_file(
             directory=directory or "",
             title=title,
@@ -165,25 +180,42 @@ class KnowledgeService:
         )
         await self._audit.record(
             AuditEventType.KNOWLEDGE_WRITTEN.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, collection),
+            ref=ResourceRef(KIND_KNOWLEDGE, target_collection),
             actor=actor,
             details={"path": written.path},
         )
         return written
 
-    async def delete(self, relpath: str, *, actor: str, agent: str | None = None) -> None:
+    async def delete_source(self, relpath: str, *, actor: str, agent: str | None = None) -> None:
+        """Remove a source. A person's action — no agent-facing tool deletes."""
         collection = await self.require_visible(relpath, agent)
+        paths.require_lane(relpath, expected=paths.SOURCES_DIR_NAME)
         fs.delete_file(relpath)
-        # A converted file's original is kept only to stand behind the
-        # Markdown that came from it (FR-024); once that file is gone the
-        # original has nothing left to justify it.
-        fs.remove_raw_original(relpath)
         await self._audit.record(
             AuditEventType.KNOWLEDGE_DELETED.value,
             ref=ResourceRef(KIND_KNOWLEDGE, collection),
             actor=actor,
             details={"path": relpath},
         )
+
+    # ----- candidate selection, for curation ---------------------------
+
+    async def match_topics(
+        self,
+        pattern: str,
+        *,
+        collection: str,
+        max_matches: int = DEFAULT_MAX_MATCHES,
+    ) -> GrepOutcome:
+        """Literal matches inside one collection's ``topics/`` lane.
+
+        Ripgrep survives the removal of ``coffer__grep`` as an *internal*
+        mechanism: it is how a curation pass finds which existing documents a
+        new source might belong to (FR-023). It is not reachable by any caller
+        outside this process.
+        """
+        roots: list[pathlib.Path] = [paths.topics_dir(collection)]
+        return await self._search.grep(roots, pattern, max_matches=max_matches)
 
     # ----- lifecycle ---------------------------------------------------
 

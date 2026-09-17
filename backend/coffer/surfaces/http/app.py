@@ -67,6 +67,7 @@ from coffer.surfaces.http.credential_composition import (
     make_credential_resolver,
     run_legacy_keychain_migration,
 )
+from coffer.surfaces.http.curation_wiring import stop_curation_worker, wire_curation
 from coffer.surfaces.http.daemon_identity import publish_daemon_identity
 from coffer.surfaces.http.dependencies import (
     set_audit_service,
@@ -87,7 +88,6 @@ from coffer.surfaces.http.removed_agent_notice import report_removed_agent_lefto
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_wiring import stop_converge_worker
-from coffer.surfaces.http.tidy_wiring import stop_tidy_worker, wire_tidy
 from coffer.surfaces.http.transcript_warm_wiring import stop_transcript_warm_worker
 
 
@@ -143,7 +143,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     credentials = await init_credential_store(engine, db_path)
     credential_store = credentials.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
-    # ingest, the tidy pass, the memory organise pass, the sync conflict
+    # ingest, the curation pass, the memory organise pass, the sync conflict
     # resolver) shares one resolver rather than each re-wrapping the store.
     credential_resolver = make_credential_resolver(credential_store)
 
@@ -219,10 +219,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
-    # Another internal-LLM knowledge consumer: the tidy pass over a collection.
-    # Same model selector the knowledge kind built for ingest; the worker in
-    # `start_background_workers` decides whether it ever fires by itself.
-    tidy_pass = wire_tidy(kinds.knowledge.models, credential_resolver)
+    # Another internal-LLM knowledge consumer: the curation pass that derives
+    # a collection's `topics/` lane from the sources people write. It carries
+    # the skill delivery too, because a document nothing has re-rendered a
+    # catalogue for is a document no agent has a path to (spec knowledge).
+    curation_pass = wire_curation(
+        kinds.knowledge.models, credential_resolver, kinds.knowledge.skill_delivery
+    )
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat platform's handles, and `/save` through the
@@ -239,6 +242,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(kinds.provider.boot_heal)
     await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
+    # Each agent's knowledge skill, rendered from whatever the corpus holds
+    # right now. Done every boot rather than only on change: it is cheap, it
+    # heals a copy someone edited or deleted, and it is what replaces a
+    # shared-master symlink on a vault upgraded from the previous delivery.
+    await kinds.knowledge.skill_delivery.deliver_all()
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -252,7 +260,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     workers = start_background_workers(
         retention_svc=retention_svc,
         knowledge_service=kinds.knowledge.service,
-        tidy_pass=tidy_pass,
+        curation_pass=curation_pass,
+        skill_delivery=kinds.knowledge.skill_delivery,
         organise=kinds.memory.organise,
         memory_service=kinds.memory.service,
         transcript_reader=kinds.agent_skill.transcript_reader,
@@ -296,7 +305,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         daemon_routes.set_daemon_phase("draining")
         workers.retention_worker.stop()
         await stop_converge_worker(workers.converge_worker)
-        await stop_tidy_worker(workers.tidy_task)
+        await stop_curation_worker(workers.curation_task)
         await stop_organise_worker(workers.organise_task)
         await stop_aggregate_worker(workers.aggregate_task)
         await stop_transcript_warm_worker(workers.warm_worker, workers.warm_task)

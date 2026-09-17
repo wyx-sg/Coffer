@@ -6,7 +6,7 @@ WHICH MODEL Coffer thinks with, and WHAT IT DOES unattended. The model comes
 from here while the endpoint and key come from the ``internal_default``
 connection (spec provider-switching amendment 2026-06-22b); the unattended work
 is the three passes Coffer runs on a timer — aggregation (spec memory FR-007),
-organise (spec memory FR-017) and tidy (spec knowledge FR-031) — each with a
+organise (spec memory FR-017) and curate (spec knowledge FR-021) — each with a
 switch and an interval the operator can see and change.
 
 That last part is why the surface exists at all: two of the three had no switch
@@ -26,8 +26,8 @@ from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
 from coffer.domain.errors import ConfigValidationError
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
+    CURATE,
     ORGANISE,
-    TIDY,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -35,7 +35,7 @@ from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_internal_engine_config_service
 
 #: The passes a client may name, in the order they run.
-_PASSES = (AGGREGATE, ORGANISE, TIDY)
+_PASSES = (AGGREGATE, ORGANISE, CURATE)
 
 
 # The request/response models live here rather than in ``schemas.py``, which is

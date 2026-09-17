@@ -174,7 +174,7 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
 
 @pytest.mark.asyncio
 async def test_put_scope_on_knowledge_kind_narrows_the_collection(tmp_path):
-    """A collection IS a Resource so that it can be authorized (spec knowledge FR-009): per-agent
+    """A collection IS a Resource so that it can be authorized (spec knowledge FR-010): per-agent
     scope is the only reason the kind is in the framework."""
     c, engine, svc = await _client(tmp_path)
     async with c:

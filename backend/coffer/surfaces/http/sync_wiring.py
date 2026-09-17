@@ -75,7 +75,7 @@ from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.identity import coffer_dir, machine_name, resolve_identity
 from coffer.infrastructure.sync.paths import knowledge_root, skills_root
-from coffer.surfaces.http.knowledge.tidy_state import set_vault_write_lock
+from coffer.surfaces.http.knowledge.curation_state import set_vault_write_lock
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_routes import set_machine_registry, set_sync_service
 

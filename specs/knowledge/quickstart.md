@@ -1,11 +1,12 @@
 # Quickstart — Knowledge Layer
 
 Knowledge is a directory of Markdown files under
-`~/.coffer/knowledge/<collection>/`. An agent finds what it needs by reading a
-generated catalogue and grepping, the way it navigates a codebase — or by
-searching a distinctive phrase and getting back the files that hold it; you find
-it by opening a folder. There is no index, so what one of you writes the other
-sees immediately. See [`spec.md`](./spec.md) and
+`~/.coffer/knowledge/<collection>/`, in two lanes. You and your agents write
+**source material** into `sources/`; Coffer's own model folds it into **topic
+documents** under `topics/`, and `topics/` is what an agent reads — with its own
+`Read` and `Grep`, at an absolute path, through no tool of Coffer's. There is no
+index, so what one of you writes the other sees as soon as the next pass lands
+it. See [`spec.md`](./spec.md) and
 [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
 
 ## Make a collection first
@@ -19,10 +20,16 @@ coffer knowledge create shopee -d "Internal systems — services, data plane, th
 coffer knowledge collections
 ```
 
-`create` writes the directory, registers the Resource, and puts the
-`--description` into the collection's `README.md`. The catalogue's one-line
-description of a collection is always that README's first paragraph, so you can
+`create` writes the directory *and both lanes*, registers the Resource, and puts
+the `--description` into the collection's `README.md`. That README's first
+paragraph is the collection's one-line description everywhere one appears, so you
 change it later by editing the file.
+
+Write the description as though an agent will read it, because one will: it is
+what the delivered skill says this collection is *about*, and it is the only part
+of this layer that sits in a model's context whether or not knowledge is ever
+touched. A collection that describes itself as "notes" is a collection nothing
+recognises.
 
 Only the agents a collection is scoped to can see it:
 
@@ -32,6 +39,11 @@ coffer scope show knowledge:shopee
 coffer scope clear knowledge:shopee          # back to every agent
 ```
 
+The scope now decides what an agent is **told**, not what a tool returns: the
+skill Coffer writes into an unauthorized agent's directory does not mention the
+collection, its subjects, its catalogue or its path. That is non-disclosure, not
+access control — an agent holding a shell can still read the directory.
+
 Deleting a collection goes through the Resource framework, not a knowledge
 route — same lifecycle, audit and cascade as any other resource:
 
@@ -39,104 +51,90 @@ route — same lifecycle, audit and cascade as any other resource:
 coffer resource delete knowledge:shopee
 ```
 
-## Through an MCP client (the primary surface)
+## Through an MCP client
 
-Six built-in tools. No scope argument, no mode, no `top_k`: a call spans every
-collection the agent is authorized for. Upload is deliberately not one of them —
-a document enters through a human surface.
-
-- `coffer__list(path?)` — the catalogue, **one level at a time**. With no
-  argument it names every collection you may read, each with its description
-  and file count. With a path it returns that directory's immediate
-  subdirectories and files, each file with its `title` and `description`.
-- `coffer__grep(pattern, collection?, max_matches?)` — ripgrep over the files,
-  literal or regex, returning file, line number and matching line. No
-  tokenizer, so CJK matches like anything else.
-- `coffer__read(path)` — one file in full, plus its absolute path.
-- `coffer__write(title, description, body, directory | path)` — create a file
-  in `directory` (the name is slugified from `title`), or replace the file at
-  `path`. Exactly one of the two.
-- `coffer__delete(path)` — remove a file from disk.
-- `coffer__search(query)` — the same literal matcher `grep` uses, reported a
-  **file** at a time rather than a line at a time: each hit is a path, its
-  `title` and `description`, and the lines that matched. Matching is literal,
-  so give it a distinctive word or an exact phrase, not a question in your own
-  words (FR-016).
-
-The motion is catalogue-then-grep — descend to choose *which file*, grep to find
-*which line*:
+**One tool: `coffer__write`.** There is no `list`, `grep`, `read`, `search` or
+`delete`. Across 448 sessions after the corpus was built, no agent ever called
+one of them and the skill describing them was never loaded once — a tool an agent
+does not remember to call is not retrieval. Reading is now the agent's own
+`Read` and `Grep`, at the absolute paths the delivered skill carries.
 
 ```text
-coffer__list()                              # → every collection, with its
-                                            #   description and file count
-coffer__list(path="shopee")                 # → account/, gateway-routing.md, …
-coffer__list(path="shopee/account")         # → titles + descriptions
-coffer__read(path="shopee/account/session-ownership.md")
-
-coffer__grep(pattern="account.session")     # when you know the literal string
-coffer__grep(pattern="部署流程", collection="shopee")
-
-coffer__search(query="account.session")     # skip the descent: which FILES
-                                            #   contain it, with their titles
-
-coffer__write(title="Release process",
+coffer__write(collection="coffer",
+              title="Release process",
               description="How this repo cuts a release, and what not to do.",
               body="Deploys via `make release`, never `git push --tags`.",
-              directory="coffer")
+              folder="ops")          # optional, inside sources/
 ```
 
-Agents learn the layer exists from the `coffer-knowledge` skill Coffer delivers
-through its normal skill channel — no hook, no session injection, nothing
-written into an agent's own memory files.
+It takes no lane and no path: a write lands in that collection's `sources/`, and
+which lane a file belongs in is not something a caller chooses. Write the fact
+plainly — the next curation pass decides where it belongs and merges it with what
+is already there, so you do not have to check whether it repeats something.
+`folder` is optional filing inside `sources/`, nothing more.
+
+An agent finds the corpus through the generated `coffer-knowledge` skill in its
+own skills directory: its description names the subjects your collections cover,
+and its body is the whole catalogue — every topic document's path, title and
+description, plus the absolute root. Reading is then just:
+
+```text
+Read  ~/.coffer/knowledge/shopee/topics/account/login-sessions.md
+Grep  "account.session"  ~/.coffer/knowledge/shopee/topics/
+```
+
+No hook, no session injection, nothing written into an agent's own memory files.
 
 ## CLI
 
-Ten commands, all thin HTTP shells over the daemon. Paths are relative to the
-knowledge root.
+Eight commands, all thin HTTP shells over the daemon. Paths are relative to the
+knowledge root and carry the lane, because the lane is part of where a file is:
+`ls shopee` shows you the two lanes, and every path below one of them names it.
 
 ```bash
-# Browse.
-coffer knowledge collections                       # every collection
-coffer knowledge ls shopee                         # one level: folders + files
-coffer knowledge ls shopee/account --json
-coffer knowledge read shopee/account/session-ownership.md
+# Browse. `collections` shows both lane counts — sources with no topics means
+# the collection has not been curated yet.
+coffer knowledge collections
+coffer knowledge ls shopee/sources                 # one level: folders + files
+coffer knowledge ls shopee/topics/account --json
+coffer knowledge read shopee/topics/account/login-sessions.md
 
-# Search the files themselves. There is no index; this is the search.
-# `grep` reports a line at a time, `search` a file at a time.
-coffer knowledge grep "account.session"
-coffer knowledge grep "部署流程" --in shopee        # great for CJK — no tokenizer
-coffer knowledge grep "make release" --json
-coffer knowledge search "account.session"          # the files, with their
-                                                   #   title and description
-
-# Write. Exactly one of --in (create here) or --path (replace this).
+# Write a source. The `sources/` segment is added for you.
 coffer knowledge write -t "Release process" \
   -d "How this repo cuts a release, and what not to do." \
   -b "Deploys via \`make release\`, never \`git push --tags\`." \
-  --in coffer
-coffer knowledge write -t "Release process" -d "…" -b "…" --path coffer/release-process.md
+  --in coffer --folder ops
 
-# Delete one file.
-coffer knowledge delete coffer/release-process.md
+# Delete one source. A topic document is refused: it is derived, and the next
+# pass would put it back.
+coffer knowledge delete coffer/sources/release-process.md
 
-# Upload a document; it lands as Markdown with its original kept aside.
+# Upload a document; it lands in sources/ with its original beside it.
 coffer knowledge upload ./q3-review.pdf --collection shopee
 
-# Tidy one collection (see below).
-coffer knowledge tidy shopee
+# Curate one collection by hand (see below).
+coffer knowledge curate shopee
+coffer knowledge curate shopee --source shopee/sources/q3-review.md
 ```
 
-`--json` works on `collections`, `ls`, `read`, `grep` and `search`.
+`--json` works on `collections`, `ls` and `read`; `curate` always prints its
+result as JSON, because the status is the answer.
 
-## Curate in your own tools
+**There is no `grep` and no `search` command.** The corpus is plain Markdown at a
+path the group's own help names, so your own `grep` is already better than
+anything this group could wrap — and unlike an agent, you are standing in a
+shell.
 
-The filesystem is always an entrance. Drop a Markdown file into a collection
-from Finder, fix a wrong line in your editor, delete one that went stale —
-every change is live for the next call with no import, no reindex and nothing
-to reconcile, because the file **is** the knowledge.
+## Write in your own tools
+
+The filesystem is always an entrance to `sources/`. Drop a Markdown file in from
+Finder, fix a wrong line in your editor, delete one that went stale — the sweep
+notices within the minute by comparing the file's modification time with the
+`coffer_ingested_at` stamp in its own frontmatter, and folds the change into the
+topics. There is no import, no registration and no reindex.
 
 A file you add by hand should carry the same frontmatter Coffer writes, or it
-will show up in the catalogue with an empty title and description:
+will curate with an empty title and description:
 
 ```markdown
 ---
@@ -150,21 +148,25 @@ updated_at: '2026-09-12T04:18:33Z'
 Login state is owned by `account.session`.
 ```
 
+**Do not edit `topics/`.** Those files are generated and the next pass will
+overwrite them. A correction goes into `sources/` as a note saying what is
+actually true; curation carries it through, and where a source contradicts a
+topic document the source wins.
+
 ## Get a document in from wherever you are
 
-The filesystem is only an entrance while you are sitting at the machine, so
-there is a second one for everything else. Upload a document and Coffer converts
-it to Markdown, names the file from its title, fills in a description, and keeps
-the bytes you sent under the collection's hidden `.raw/` in case the conversion
-needs redoing:
+The filesystem is only an entrance while you are sitting at the machine, so there
+is a second one for everything else. Upload a document and Coffer converts it to
+Markdown, names the file from its title, fills in a description, and keeps the
+bytes you sent as an ordinary visible file beside it in `sources/`:
 
 ```bash
 coffer knowledge upload ./q3-review.pdf --collection shopee
-coffer knowledge upload ./notes.docx --collection shopee --directory account
+coffer knowledge upload ./notes.docx --collection shopee --folder account
 ```
 
 `POST /api/v1/knowledge/upload` is the same path (multipart: the file, plus
-`collection` and an optional `directory`), and so is the **Upload** button on a
+`collection` and an optional `folder`), and so is the **Upload** button on a
 collection's page.
 
 From your phone: forward the document to your Coffer channel and say which
@@ -174,57 +176,73 @@ anything, and stores nothing from anyone but the paired owner.
 Supported inputs are whatever `markitdown` handles — PDF, .docx, .pptx, .xlsx,
 HTML, EPUB — plus plain text, Markdown and CSV. Legacy `.doc`/`.ppt`, `.rtf` and
 `.odt` are deliberately not among them: save as `.docx`/`.pptx` first. Anything
-else is refused with its type named, and nothing half-converted is left behind:
-one file per call, a size ceiling, and a refusal that says what the limit is.
+else is refused with its type named, and nothing half-converted is left behind —
+including an image-only PDF, which converts without error into no text at all and
+is refused for saying so.
 
-Afterwards it is an ordinary file in a collection, indistinguishable from one you
-wrote by hand.
+Afterwards both files are ordinary sources, indistinguishable from what you put
+there by hand.
 
-## Tidy
+## Curation
 
-A bounded agentic pass over one collection: it merges duplicates and rewrites
-them into coherent documents, copying every prior revision into the hidden
-`.history/` first. With no internal model configured (Settings → LLM
-connections) it is a clean no-op.
+A bounded agentic pass over one collection: it reads `sources/` and writes
+`topics/`, merging each new or changed source into whichever document owns that
+subject and deduplicating against what is there. It cannot touch `sources/` at
+all — that is what makes it safe to run unattended, and why there is no archive
+of what it replaced. The material every topic is derived from is still on disk,
+untouched, so deleting `topics/` entirely and re-running curation gives you back
+a corpus carrying the same facts.
+
+With no internal model configured (Settings → LLM connections) a pass is a clean
+no-op reporting `no_model`, and it leaves the watermark unset — so the material
+is curated the day you configure a connection rather than being silently skipped
+forever.
 
 ```bash
-coffer knowledge tidy shopee
+coffer knowledge curate shopee
 ```
 
-The web-UI equivalent is the **Tidy** button. A background worker can also run
-the pass on an interval, but it is **off by default** and installation-wide —
-turn it on deliberately in Settings, because it rewrites files you and
-your agents manage together with no diff to approve. Each pass is recorded in
-Coffer's audit log.
+The web-UI equivalent is the **Curate** button. A background sweep also runs the
+pass on an interval, and unlike the tidy pass it replaces it is **on by default**,
+because it is the only path from a source to something an agent can read: an
+installation where it never runs has an empty `topics/` lane forever. Each pass
+is recorded in Coffer's audit log.
 
-Once your vault converges with a sync remote, that switch also names a machine,
-and the timer runs on **that one only**. Two machines tidying one corpus is the
-failure this prevents: each merges the same pair of notes into a topic document,
-but into a *different* one, git merges both cleanly, and you end up holding the
-same knowledge twice with nothing reported as a conflict. With no owner chosen
-the switch means "here", which is the right answer for a single machine. Passes
-also stand aside for sync: one never overlaps a converge round, and never starts
-while a conflict or a pending confirmation is outstanding. Only one pass per
-collection runs at a time — click **Tidy** during one and it is refused rather
-than queued.
+One pass sees one source in full, at most five candidate documents in full, and
+the collection's whole catalogue of titles — and may make at most eight writes,
+so a note can never trigger a corpus-wide rewrite. A write whose body names
+another knowledge file is refused outright: topic paths move as the corpus is
+reorganised, so a file name in prose is a link that rots. Documents name
+subjects; the catalogue resolves subjects to paths, and the catalogue is
+generated.
+
+The switch is installation-wide and also names a machine, and the timer runs on
+**that one only**. Two machines curating one corpus is the failure this prevents:
+each merges the same material into a topic document, but into a *different* one,
+git merges both cleanly, and you hold the same knowledge twice with nothing
+reported as a conflict. With no owner chosen the switch means "here", which is
+the right answer for a single machine. Passes also stand aside for sync: one
+never overlaps a converge round, and never starts while a conflict or a pending
+confirmation is outstanding. Only one pass per collection runs at a time — ask
+for a second during one and it is refused rather than queued.
 
 ## Web UI
 
-1. Sidebar → **Knowledge**. One tree, no tabs: the collections, then whatever
-   you nested inside them.
-2. Click a file to see it rendered **read-only**. The UI has no editor; the
-   file and its containing folder each offer **open in external editor** and
+1. Sidebar → **Knowledge**. A collection opens as **two trees**: `sources/`,
+   which is yours, and `topics/`, which is curation's.
+2. Click a file in either to see it rendered **read-only**. The UI has no editor;
+   the file and its containing folder each offer **open in external editor** and
    **reveal in file manager** (real OS actions performed by the local daemon;
-   which editor opens is the global preferred-editor preference, spec
-   web-ui). Your edit takes effect immediately — there is nothing to
-   reconcile.
+   which editor opens is the global preferred-editor preference, spec ui-shell).
+   A source also offers **delete**, naming the exact path first. A topic document
+   offers neither — it is labelled as written by curation, and deleting one by
+   hand would only last until the next pass.
 3. **Upload** files a document into the collection in view, through the same
-   conversion path the CLI and the channel use.
+   conversion path the CLI and the channel use. **Curate** runs a pass now, and
+   says so plainly if one is already in flight.
 
-The page carries no search box of its own. The one input beside the tree narrows
-the names already on screen, client-side; reading the files themselves is what
-`search` and `grep` are for, and their callers are the agents' tools and the
-CLI.
+The page carries no search box of its own. The one input beside a tree narrows
+the names already on screen, client-side.
 
 ## Where files live
 
@@ -234,27 +252,33 @@ CLI.
 └── knowledge/
     ├── shopee/
     │   ├── README.md               # first paragraph = the collection's description
-    │   ├── account/
-    │   │   └── session-ownership.md
-    │   ├── gateway-routing.md
-    │   ├── .history/               # revisions the tidy pass replaced (hidden)
-    │   └── .raw/                   # originals of uploaded documents (hidden)
+    │   ├── sources/                # yours: hand-written notes, coffer__write, uploads
+    │   │   ├── account/
+    │   │   │   └── session-ownership.md
+    │   │   ├── q3-review.pdf       # the bytes you sent, visible…
+    │   │   └── q3-review.md        # …and the Markdown extracted from them
+    │   └── topics/                 # curation's, and all an agent reads
+    │       ├── account/
+    │       │   └── login-sessions.md
+    │       └── gateway-routing.md
     └── coffer/
         ├── README.md
-        └── release-process.md
+        ├── sources/
+        └── topics/
 ```
 
-Both hidden directories are dot-prefixed on purpose: the catalogue, `grep` and
-`search` all skip hidden entries, so an archived revision never comes back
-beside the live file and a PDF never comes back beside the Markdown made from
-it.
+Coffer writes no hidden directory of its own any more. `.history/` is gone
+because a topic document is no longer the only copy of what it says, and `.raw/`
+is gone because the only thing hiding an uploaded original bought was keeping it
+out of an index that no longer exists.
 
 ## Limits
 
-- `grep` matches: 1–500, default 200. The response flags `truncated`.
+- One pass: one source in full, at most five candidate documents, at most eight
+  writes. A pass reports which bound stopped it.
 - File names: a slug of the title, up to 80 characters, CJK kept as-is; a
   collision appends `-2`, `-3`, ….
-- Catalogue size: no hard limit, but the design assumes a catalogue that fits
-  in an agent's context — comfortable into the hundreds of files.
+- Catalogue size: no hard limit, but the design assumes a catalogue that fits in
+  a skill body — measured at ~5.2K tokens for 58 documents.
 - Upload: one file per call, with a size ceiling; a refusal names the limit, and
-  a failed conversion leaves neither a Markdown file nor a `.raw/` original.
+  a failed conversion leaves neither the Markdown nor the original behind.

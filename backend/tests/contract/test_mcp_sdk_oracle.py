@@ -14,6 +14,7 @@ the test fails — so the SDK's own validation is the oracle.
 
 from __future__ import annotations
 
+import os
 import re
 import socket
 import sys
@@ -35,30 +36,34 @@ _FAKE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
 _TOKEN = "test-oracle-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
 
-#: spec knowledge FR-027: the gateway exposes EXACTLY six built-in knowledge tools. Upload is
+#: FR-050: the gateway exposes EXACTLY ONE built-in knowledge tool. Upload is
 #: not among them — a document enters through a human surface, not an agent's
-#: tool call.
-_KNOWLEDGE_TOOLS = frozenset(
+#: tool call — and neither is any way to READ: an agent reads the files with
+#: its own tools at the paths its delivered skill carries.
+_KNOWLEDGE_TOOLS = frozenset({"coffer__write"})
+
+#: The five that went with the retrieval surface. Asserted absent by name, so a
+#: revival reds this with the name in the message rather than as an anonymous
+#: set difference — and so the claim survives someone adding a sixth built-in
+#: to an unrelated slice.
+_RETIRED_KNOWLEDGE_TOOLS = frozenset(
     {
         "coffer__list",
         "coffer__grep",
         "coffer__read",
         "coffer__search",
-        "coffer__write",
         "coffer__delete",
     }
 )
 
 #: The rest of the built-in roster, which this test asserts nothing about
 #: beyond "it is not knowledge's". Named so the wire assertion below can be an
-#: exact one without swallowing a seventh knowledge tool into a vague
+#: exact one without swallowing a second knowledge tool into a vague
 #: superset. `scripts/check_architecture_doc.py` is the gate that owns the full
 #: roster and reds when a slice registers a tool the architecture doc never
 #: names; here the split is what scopes the claim to one kind.
 _NON_KNOWLEDGE_BUILTIN_TOOLS = frozenset(
     {
-        "coffer__list_skills",
-        "coffer__load_skill",
         "coffer__recall",
         "coffer__diagnose",
         "coffer__search_tools",
@@ -73,8 +78,8 @@ _TOOL_DECL = re.compile(r'BuiltinTool\(\s*name="([a-z_]+)"')
 def _tools_declared_under(package: Path) -> set[str]:
     """The `coffer__` tool names declared by the sources under `package`.
 
-    Read off disk rather than trusted from the wire, so "exactly six" is
-    pinned at the source too: a seventh knowledge tool added in
+    Read off disk rather than trusted from the wire, so "exactly one" is
+    pinned at the source too: a second knowledge tool added in
     `application/knowledge/` reds this even before anyone checks whether the
     gateway advertises it.
     """
@@ -87,14 +92,20 @@ def _tools_declared_under(package: Path) -> set[str]:
 
 @pytest.fixture
 async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Boot an in-process daemon on a random port; yield (port, token).
+    """Boot an in-process daemon on a random port; yield (port, token, root).
 
     We use an async fixture so we can await httpx health-checks and the
-    REST registration call from within the fixture body.
+    REST registration call from within the fixture body. ``root`` is the
+    knowledge tree this daemon writes into — it comes back because the layer
+    has no read tool any more, so confirming a write means looking at the
+    directory. It is read out of the environment rather than guessed from
+    ``HOME``: the suite-wide ``_isolated_knowledge_root`` fixture pins it, and
+    that is the value the daemon in this process resolves.
     """
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
+    knowledge_root = Path(os.environ["COFFER_KNOWLEDGE_ROOT"])
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     # Port range must not clash with other parallel test processes
     monkeypatch.setenv("COFFER_PORT_RANGE_START", "59600")
@@ -178,7 +189,7 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         )
         assert r.status_code == 201, f"resource registration failed: {r.status_code} {r.text}"
 
-    yield port, _TOKEN
+    yield port, _TOKEN, knowledge_root
 
     server.should_exit = True
     thread.join(timeout=10)
@@ -187,16 +198,20 @@ async def running_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="register a stdio MCP server")
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="the six built-in knowledge tools appear in the client tool list",
+    scenario="exactly one built-in knowledge tool appears in the client tool list",
 )
-async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="Coffer exposes no skill tools over MCP",
+)
+async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
     """Drive the /mcp endpoint via the mcp SDK; SDK validation is the oracle.
 
     If ClientSession.initialize(), list_tools(), or call_tool() succeed without
     raising, the wire format is spec-compliant (the SDK validates every field
     through its Pydantic models on parse).
     """
-    port, token = running_daemon
+    port, token, knowledge_root = running_daemon
 
     async def _create_collection(name: str) -> None:
         async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{port}") as http:
@@ -239,28 +254,47 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the knowledge tools specifically. knowledge FR-027 says EXACTLY six, so
+        # And the knowledge tools specifically. FR-050 says EXACTLY ONE, so
         # this is an equality and not the `issubset` it used to be: a subset
-        # check let a seventh knowledge tool — an agent-callable `upload`, say,
-        # which knowledge FR-027 rules out by name — ship without anything going red.
+        # check let a second knowledge tool — an agent-callable `upload`, say,
+        # which FR-050 rules out by name — ship without anything going red.
         #
         # The knowledge-owned half of the roster is isolated by subtracting the
-        # five built-ins other slices own, so this asserts about one kind
+        # built-ins other slices own, so this asserts about one kind
         # rather than about every built-in Coffer happens to have.
         coffer_tools = {n for n in tool_names if n.startswith("coffer__")}
+        # skill-manager FR-031: no skill tool rides the wire. Both supported
+        # agent types read skills natively from `<config_dir>/skills/`, where
+        # delivery already puts them, and serving the master store over MCP
+        # would be a second delivery path with no per-agent scope on it.
+        assert not {"coffer__list_skills", "coffer__load_skill"} & coffer_tools, (
+            f"skill tools are exposed over MCP: {sorted(coffer_tools)}"
+        )
+        instructions = init.instructions or ""
+        assert not {"list_skills", "load_skill"} & set(instructions.split()), (
+            f"the initialize instructions still name a skill tool: {instructions!r}"
+        )
         knowledge_on_the_wire = coffer_tools - _NON_KNOWLEDGE_BUILTIN_TOOLS
         assert knowledge_on_the_wire == set(_KNOWLEDGE_TOOLS), (
-            f"the knowledge tools in tools/list are not exactly the six FR-027 "
-            f"names; unexpected={sorted(knowledge_on_the_wire - _KNOWLEDGE_TOOLS)}; "
+            f"the knowledge tools in tools/list are not exactly the one FR-050 "
+            f"name; unexpected={sorted(knowledge_on_the_wire - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - knowledge_on_the_wire)}"
         )
-        # Pinned at the source as well as on the wire: a seventh tool declared
+        # The five retired names, asserted absent individually. The equality
+        # above already implies it; this says which five, so a revival reds
+        # with the name rather than with a set difference a reader has to
+        # decode.
+        assert not (tool_names & _RETIRED_KNOWLEDGE_TOOLS), (
+            f"a retired retrieval tool is back on the wire: "
+            f"{sorted(tool_names & _RETIRED_KNOWLEDGE_TOOLS)}"
+        )
+        # Pinned at the source as well as on the wire: a second tool declared
         # in the knowledge slice but not yet registered with the gateway is
-        # still a seventh tool, and a reviewer should see it here.
+        # still a second tool, and a reviewer should see it here.
         declared = _tools_declared_under(_APPLICATION_ROOT / "knowledge")
         assert declared == set(_KNOWLEDGE_TOOLS), (
             f"backend/coffer/application/knowledge declares "
-            f"{len(declared)} built-in tool(s), not the six FR-027 allows; "
+            f"{len(declared)} built-in tool(s), not the one FR-050 allows; "
             f"unexpected={sorted(declared - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - declared)}"
         )
@@ -273,10 +307,15 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
         # Reaching here means the SDK parsed the response without errors.
         assert call_result.content is not None, "expected non-empty content"
 
-        # 4. tools/call of a coffer__ BUILT-IN end-to-end through the daemon:
-        # write files a note, grep finds it (review gap: builtins were only
-        # ever listed, never called over the wire). The collection has to exist
-        # first — nothing auto-provisions one (spec knowledge FR-007).
+        # 4. tools/call of the one coffer__ BUILT-IN end-to-end through the
+        # daemon (review gap: builtins were only ever listed, never called over
+        # the wire). The collection has to exist first — nothing
+        # auto-provisions one (spec knowledge FR-008).
+        #
+        # There is no read tool left to confirm the write with, which is the
+        # point of the redesign, so the confirmation is the file itself: the
+        # daemon runs in this process over an isolated HOME, so the lane can be
+        # read off disk exactly as the agent's own `Read` would.
         await _create_collection("oracle")
         write_result = await session.call_tool(
             "coffer__write",
@@ -284,14 +323,17 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str]) -> None:
                 "title": "Axolotls",
                 "description": "an oracle smoke fact",
                 "body": "oracle smoke fact about axolotls",
-                "directory": "oracle",
+                "collection": "oracle",
             },
         )
         assert not write_result.is_error, write_result.content
-        grep_result = await session.call_tool(
-            "coffer__grep",
-            arguments={"pattern": "axolotls"},
+
+        landed = knowledge_root / "oracle" / "sources" / "axolotls.md"
+        assert landed.is_file(), (
+            "coffer__write did not land a file in the collection's sources lane: "
+            f"{sorted(p.name for p in landed.parent.iterdir()) if landed.parent.is_dir() else []}"
         )
-        assert not grep_result.is_error, grep_result.content
-        grep_text = "".join(getattr(item, "text", "") for item in grep_result.content or [])
-        assert "axolotls" in grep_text, f"grep did not return the note: {grep_text!r}"
+        assert "oracle smoke fact about axolotls" in landed.read_text(encoding="utf-8")
+        # And nothing reached the lane curation owns (FR-020).
+        topics = knowledge_root / "oracle" / "topics"
+        assert list(topics.iterdir()) == []

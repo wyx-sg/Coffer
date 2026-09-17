@@ -1,9 +1,9 @@
 """Waiting for the next unattended pass, in a way a settings change can reach.
 
-Coffer runs three passes on its own behalf — aggregation, organise, tidy — and
+Coffer runs three passes on its own behalf — aggregation, organise, curation — and
 each one used to wait with a single ``asyncio.sleep(interval)`` over a constant
 compiled into the worker. Both halves of that are now the operator's to choose
-(spec memory FR-007, spec knowledge FR-031), and a long sleep is exactly how a
+(spec memory FR-007, spec knowledge FR-022), and a long sleep is exactly how a
 choice goes unnoticed: a worker that went to sleep for six hours does not learn
 that the interval is now fifteen minutes until the six hours are up, so the
 setting appears not to work at all for most of a day.
@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from coffer.domain.internal_engine_config import AGGREGATE, ORGANISE, TIDY
+from coffer.domain.internal_engine_config import AGGREGATE, CURATE, ORGANISE
 
 #: How often the wait looks up again. Short enough that changing an interval in
 #: Settings visibly takes effect, long enough to be free.
@@ -45,7 +45,10 @@ DEFAULT_INTERVALS: dict[str, float] = {
     # Both model passes are slower and rewrite more, so they sweep four times a
     # day rather than hourly.
     ORGANISE: 6 * 60 * 60.0,
-    TIDY: 6 * 60 * 60.0,
+    # Short, because a source a person just wrote should be readable by an
+    # agent in the same sitting; a sweep that finds nothing pending costs a
+    # directory walk (spec knowledge FR-022).
+    CURATE: 60.0,
 }
 
 

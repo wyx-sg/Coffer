@@ -1,8 +1,13 @@
 // frontend/src/pages/KnowledgeDetailPage.test.tsx
 //
-// The collection viewer. Data hooks are mocked so the test asserts the page's
-// own rendering: one tree (no lane tabs), the file's body, and the fact that
-// the only way to change it leaves the app.
+// The collection viewer, which is TWO trees. Data hooks are mocked so the test
+// asserts the page's own rendering: a lane per tab, the file's body in the pane
+// beside it, and — the thing this page exists to get right — that what may be
+// DONE to a file follows the lane it is in.
+//
+// Radix tabs activate on **mousedown**, not click. A test that switches them
+// with `fireEvent.click` silently stays on the first tab and then passes its
+// assertions for the wrong reason, so every tab switch below is a `mouseDown`.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -13,16 +18,16 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { KnowledgeDetailPage } from "./KnowledgeDetailPage";
 import { acceptance } from "@/test/acceptance";
 
-// The page asks the DAEMON whether a tidy pass is running (that is the whole
-// point — a component's own pending flag dies on navigation), so the hook is
-// mocked here the way every other data hook is.
+// The page asks the DAEMON whether a curation pass is running (that is the
+// whole point — a component's own pending flag dies on navigation), so the hook
+// is mocked here the way every other data hook is.
 vi.mock("@/lib/hooks/useUpkeep", () => ({ useUpkeepRunning: vi.fn(() => false) }));
 vi.mock("@/lib/hooks/useKnowledge", () => ({
   useKnowledgeTree: vi.fn(),
   useKnowledgeFile: vi.fn(),
-  useTidyCollection: vi.fn(),
+  useCurateCollection: vi.fn(),
   // Mounted transitively via KnowledgeUploadButton;
-  // this suite only exercises the tree + preview, so both get an inert default.
+  // this suite only exercises the trees + preview, so both get an inert default.
   useUploadKnowledgeFile: vi.fn(),
   useDeleteKnowledgeFile: vi.fn(),
 }));
@@ -30,7 +35,7 @@ vi.mock("@/lib/hooks/useKnowledge", () => ({
 const {
   useKnowledgeTree,
   useKnowledgeFile,
-  useTidyCollection,
+  useCurateCollection,
   useUploadKnowledgeFile,
   useDeleteKnowledgeFile,
 } = await import("@/lib/hooks/useKnowledge");
@@ -38,9 +43,35 @@ const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
 const runningMock = vi.mocked(useUpkeepRunning);
 const treeMock = vi.mocked(useKnowledgeTree);
 const fileMock = vi.mocked(useKnowledgeFile);
-const tidyMock = vi.mocked(useTidyCollection);
+const curateMock = vi.mocked(useCurateCollection);
 const uploadMock = vi.mocked(useUploadKnowledgeFile);
 const deleteMock = vi.mocked(useDeleteKnowledgeFile);
+
+const SOURCE = {
+  path: "shopee/sources/gateway.md",
+  title: "Account Gateway",
+  description: "where account decisions are made",
+  actor: "user" as const,
+  created_at: "2026-09-12T00:00:00Z",
+  updated_at: "2026-09-12T00:00:00Z",
+  ingested_at: "2026-09-13T00:00:00Z",
+  body: "The orchestration layer.",
+  file_path: "/Users/dev/.coffer/knowledge/shopee/sources/gateway.md",
+  folder_path: "/Users/dev/.coffer/knowledge/shopee/sources",
+};
+
+const TOPIC = {
+  path: "shopee/topics/session-ownership.md",
+  title: "Session ownership",
+  description: "who owns a login session",
+  actor: "agent" as const,
+  created_at: "2026-09-12T00:00:00Z",
+  updated_at: "2026-09-12T00:00:00Z",
+  ingested_at: "",
+  body: "Login state is owned by account.session.",
+  file_path: "/Users/dev/.coffer/knowledge/shopee/topics/session-ownership.md",
+  folder_path: "/Users/dev/.coffer/knowledge/shopee/topics",
+};
 
 /** The delete mutation, stubbed. `mutate` reports nothing unless a test hands
  *  it an implementation — the default is a click that never succeeds, which is
@@ -58,19 +89,43 @@ function stubDelete(
   return mutate;
 }
 
-beforeEach(() => stubDelete());
+/** The curate mutation, stubbed. `error` is how a 409 reaches the button. */
+function stubCurate(overrides: { mutate?: ReturnType<typeof vi.fn>; error?: unknown } = {}) {
+  const mutate = overrides.mutate ?? vi.fn();
+  curateMock.mockReturnValue({
+    mutate,
+    isPending: false,
+    error: overrides.error ?? null,
+  } as unknown as ReturnType<typeof useCurateCollection>);
+  return mutate;
+}
 
-function stubEmptyTree() {
-  treeMock.mockReturnValue({
-    data: { path: "shopee", directories: [], files: [] },
-    isPending: false,
-    error: null,
-  } as unknown as ReturnType<typeof useKnowledgeTree>);
-  fileMock.mockReturnValue({
-    data: undefined,
-    isPending: false,
-    error: null,
-  } as unknown as ReturnType<typeof useKnowledgeFile>);
+/** Each lane answers for its own path, the way the real hook does — a tree stub
+ *  that ignored the path would show the same files under both tabs, which is
+ *  exactly the bug this page could have. */
+function stubLanes({ sources = [SOURCE], topics = [TOPIC] } = {}) {
+  treeMock.mockImplementation(
+    (path: string) =>
+      ({
+        data: {
+          path,
+          directories: [],
+          files: path.endsWith("/topics") ? topics : sources,
+        },
+        isPending: false,
+        error: null,
+      }) as unknown as ReturnType<typeof useKnowledgeTree>,
+  );
+  // The file query is enabled only while one is selected (`enabled:
+  // Boolean(path)`), and answers for whichever lane's file was asked for.
+  fileMock.mockImplementation(
+    (path: string | null) =>
+      ({
+        data: path === TOPIC.path ? TOPIC : path ? SOURCE : undefined,
+        isPending: false,
+        error: null,
+      }) as unknown as ReturnType<typeof useKnowledgeFile>,
+  );
 }
 
 function stubInertDefaults() {
@@ -81,11 +136,18 @@ function stubInertDefaults() {
   } as unknown as ReturnType<typeof useUploadKnowledgeFile>);
 }
 
+beforeEach(() => {
+  stubDelete();
+  stubCurate();
+  stubInertDefaults();
+  stubLanes();
+});
+
 function renderPage() {
-  // The header's reach control reads the collection's Resource, so the page now
+  // The header's reach control reads the collection's Resource, so the page
   // needs a real query client — the fetch never resolves here, and the control
   // renders from its own defaults.
-  // The header's Tidy button carries a tooltip, which Layout's provider
+  // The header's Curate button carries a tooltip, which Layout's provider
   // normally hosts; the page is rendered bare here, so mount one.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -101,168 +163,113 @@ function renderPage() {
   );
 }
 
-const FILE = {
-  path: "shopee/gateway.md",
-  title: "Account Gateway",
-  description: "where account decisions are made",
-  actor: "user" as const,
-  created_at: "2026-09-12T00:00:00Z",
-  updated_at: "2026-09-12T00:00:00Z",
-  body: "The orchestration layer.",
-  file_path: "/Users/dev/.coffer/knowledge/shopee/gateway.md",
-  folder_path: "/Users/dev/.coffer/knowledge/shopee",
-};
+/** Switch lanes. Radix activates a tab on mousedown; `click` would not. */
+function openTopics() {
+  fireEvent.mouseDown(screen.getByRole("tab", { name: /topics/i }));
+}
 
 describe("KnowledgeDetailPage", () => {
-  acceptance("knowledge", "the viewer renders content read-only and offers open and reveal", () => {
-    treeMock.mockReturnValue({
-      data: { path: "shopee", directories: [], files: [FILE] },
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof useKnowledgeTree>);
-    fileMock.mockReturnValue({
-      data: FILE,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof useKnowledgeFile>);
-    tidyMock.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    } as unknown as ReturnType<typeof useTidyCollection>);
-    stubInertDefaults();
-
+  acceptance("knowledge", "the viewer edits sources and renders topics read-only", () => {
     renderPage();
-    // The viewer only opens once a file is chosen, so choose one — the tree
-    // row is a button carrying the file's title.
-    fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
 
-    // The body renders…
+    // --- the sources lane: open, reveal, delete -----------------------------
+    fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
     expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
-    // …and the actions that change it hand the file to the user's own tools
-    // (spec knowledge FR-013/FR-035) — there is no in-app editor, because the
-    // files are the only copy and an edit made elsewhere is live on the next
-    // read with nothing to reconcile.
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /delete file/i })).toBeInTheDocument();
+
+    // --- the topics lane: open and reveal only -----------------------------
+    openTopics();
+    expect(screen.getByRole("tab", { name: /topics/i })).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByRole("button", { name: /Session ownership/ }));
+
+    expect(screen.getByText(/Login state is owned by account\.session\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    // No delete, no editor — curation is the only writer of this lane…
+    expect(screen.queryByRole("button", { name: /delete file/i })).toBeNull();
     expect(screen.queryByRole("textbox", { name: /body|content/i })).toBeNull();
-    // One tree, not a Documents/Notes tab pair.
-    expect(screen.queryByRole("tab")).toBeNull();
+    // …and the page says so, rather than leaving the reader to discover it.
+    expect(screen.getByText(/overwritten by the next pass/i)).toBeInTheDocument();
+  });
+
+  test("switching lanes leaves the pane on no file, not on the other lane's", () => {
+    // A path belongs to one lane. Previewing a source beside the topics tree
+    // would offer a source's delete under the Topics tab.
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
+    expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
+
+    openTopics();
+
+    expect(screen.queryByText("The orchestration layer.")).toBeNull();
+    expect(screen.getByText(/select a file/i)).toBeInTheDocument();
   });
 
   test("prompts for a selection before a file is chosen", () => {
-    treeMock.mockReturnValue({
-      data: { path: "shopee", directories: [], files: [] },
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof useKnowledgeTree>);
-    fileMock.mockReturnValue({
-      data: undefined,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof useKnowledgeFile>);
-    tidyMock.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    } as unknown as ReturnType<typeof useTidyCollection>);
-    stubInertDefaults();
-
+    stubLanes({ sources: [], topics: [] });
     renderPage();
     expect(screen.getByText(/select a file/i)).toBeInTheDocument();
   });
 
-  test("spins the Tidy button while a pass this page did not start is running", () => {
-    // The bug: the spinner used to come from the mutation's own `isPending`,
-    // which a remount resets — so leaving the page mid-pass and coming back
-    // showed an idle button and invited a second concurrent rewrite. The
-    // running state is the daemon's answer now, so `isPending: false` and a
-    // running pass must still read as running.
-    stubEmptyTree();
-    tidyMock.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    } as unknown as ReturnType<typeof useTidyCollection>);
-    stubInertDefaults();
-    runningMock.mockReturnValue(true);
-
+  test("the one input beside a tree is a filter, not a retrieval box", () => {
+    // The layer exposes no search and no grep (FR-050/FR-061). The only textbox
+    // on the page narrows the names already on screen.
     renderPage();
 
-    const button = screen.getByRole("button", { name: /tidy/i });
-    expect(button).toBeDisabled();
-    expect(button.querySelector(".animate-spin")).not.toBeNull();
+    const boxes = screen.getAllByRole("textbox");
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]).toHaveAttribute("aria-label", "Filter by name…");
   });
 
-  test("the Tidy button is idle when nothing is running", () => {
-    stubEmptyTree();
-    const mutate = vi.fn();
-    tidyMock.mockReturnValue({
-      mutate,
-      isPending: false,
-    } as unknown as ReturnType<typeof useTidyCollection>);
-    stubInertDefaults();
-
+  test("the Curate button is idle when nothing is running", () => {
+    const mutate = stubCurate();
     renderPage();
 
-    const button = screen.getByRole("button", { name: /tidy/i });
+    const button = screen.getByRole("button", { name: /^curate$/i });
     expect(button).not.toBeDisabled();
     expect(button.querySelector(".animate-spin")).toBeNull();
     fireEvent.click(button);
     expect(mutate).toHaveBeenCalled();
   });
 
+  test("spins the Curate button while a pass this page did not start is running", () => {
+    // The bug: the spinner used to come from the mutation's own `isPending`,
+    // which a remount resets — so leaving the page mid-pass and coming back
+    // showed an idle button and invited a second concurrent rewrite. The
+    // running state is the daemon's answer now.
+    runningMock.mockReturnValue(true);
+    renderPage();
+
+    const button = screen.getByRole("button", { name: /already running/i });
+    expect(button).toBeDisabled();
+    expect(button.querySelector(".animate-spin")).not.toBeNull();
+  });
+
+  test("a refused pass says one is already running, rather than going dead", () => {
+    // The daemon refuses a second pass with 409 rather than queueing it. A
+    // button that merely greyed out would say nothing about why.
+    stubCurate({ error: new ApiError("UPKEEP_ALREADY_RUNNING", "a pass is running") });
+    renderPage();
+
+    const button = screen.getByRole("button", { name: /already running/i });
+    expect(button).toBeDisabled();
+  });
+
   test("offers the way back to the collection list", () => {
     // A collection is reached by clicking a row, so leaving it must not depend
     // on the browser's own back button — every other detail page carries this.
-    treeMock.mockReturnValue({
-      data: { path: "shopee", directories: [], files: [] },
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof useKnowledgeTree>);
-    fileMock.mockReturnValue({
-      data: undefined,
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof useKnowledgeFile>);
-    tidyMock.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    } as unknown as ReturnType<typeof useTidyCollection>);
-    stubInertDefaults();
-
     renderPage();
     expect(screen.getByRole("link", { name: /back to knowledge/i })).toBeInTheDocument();
   });
 });
 
-// Deleting ONE file used to be possible only from an agent's `coffer__delete`
-// or the CLI: the page offered no way to remove a single note, only the whole
-// collection from the list page. The previewed file is the anchor — it is the
-// file the user is looking at, and the only one the page can name for certain.
-describe("KnowledgeDetailPage — deleting the previewed file", () => {
-  /** The tree holds FILE; the file query answers only while one is selected,
-   *  the way the real hook does (`enabled: Boolean(path)`). */
-  function stubSelectableFile() {
-    treeMock.mockReturnValue({
-      data: { path: "shopee", directories: [], files: [FILE] },
-      isPending: false,
-      error: null,
-    } as unknown as ReturnType<typeof useKnowledgeTree>);
-    fileMock.mockImplementation(
-      (path: string | null) =>
-        ({
-          data: path ? FILE : undefined,
-          isPending: false,
-          error: null,
-        }) as unknown as ReturnType<typeof useKnowledgeFile>,
-    );
-    tidyMock.mockReturnValue({
-      mutate: vi.fn(),
-      isPending: false,
-    } as unknown as ReturnType<typeof useTidyCollection>);
-    stubInertDefaults();
-  }
-
-  /** Open the collection and click the tree row, so a file is being previewed. */
-  function openFile() {
+// Deleting ONE source: the previewed file is the anchor — it is the file the
+// user is looking at, and the only one the page can name for certain.
+describe("KnowledgeDetailPage — deleting the previewed source", () => {
+  /** Open the collection and click the tree row, so a source is being previewed. */
+  function openSource() {
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
   }
@@ -270,30 +277,27 @@ describe("KnowledgeDetailPage — deleting the previewed file", () => {
   test("offers nothing to delete until a file is being previewed", () => {
     // The page can only name the file it has open; with none open, a delete
     // button could only mean the collection, which is the list page's action.
-    stubSelectableFile();
     renderPage();
     expect(screen.queryByRole("button", { name: /delete file/i })).toBeNull();
   });
 
   test("the confirmation names the exact file path", () => {
-    stubSelectableFile();
-    openFile();
+    openSource();
 
     fireEvent.click(screen.getByRole("button", { name: /delete file/i }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("shopee/gateway.md");
+    expect(screen.getByRole("dialog")).toHaveTextContent("shopee/sources/gateway.md");
   });
 
   test("a refused delete keeps the dialog open with the reason", () => {
     const mutate = stubDelete({
       error: new ApiError("KNOWLEDGE_UNSAFE_PATH", "that path is outside the knowledge root"),
     });
-    stubSelectableFile();
-    openFile();
+    openSource();
 
     fireEvent.click(screen.getByRole("button", { name: /delete file/i }));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
-    expect(mutate).toHaveBeenCalledWith("shopee/gateway.md", expect.anything());
+    expect(mutate).toHaveBeenCalledWith("shopee/sources/gateway.md", expect.anything());
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/outside the knowledge root/i);
   });
@@ -302,14 +306,13 @@ describe("KnowledgeDetailPage — deleting the previewed file", () => {
     const mutate = stubDelete({
       mutate: vi.fn((_path: string, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.()),
     });
-    stubSelectableFile();
-    openFile();
+    openSource();
     expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /delete file/i }));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
-    expect(mutate).toHaveBeenCalledWith("shopee/gateway.md", expect.anything());
+    expect(mutate).toHaveBeenCalledWith("shopee/sources/gateway.md", expect.anything());
     expect(screen.queryByRole("dialog")).toBeNull();
     // Back to the empty pane: the file is gone, so re-reading it would 404.
     expect(screen.getByText(/select a file/i)).toBeInTheDocument();

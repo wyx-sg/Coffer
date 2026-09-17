@@ -151,8 +151,15 @@ def test_engine_upkeep_list_and_set(engine_cli_daemon):
     r = _runner.invoke(cli_app, ["engine", "upkeep", "list", "--json"])
     assert r.exit_code == 0, r.output
     upkeep = json.loads(r.output)
-    assert set(upkeep) == {"aggregate", "organise", "tidy"}
-    assert [upkeep[k]["enabled"] for k in ("aggregate", "organise", "tidy")] == [True, True, False]
+    assert set(upkeep) == {"aggregate", "organise", "curate"}
+    # All three ship ON: `curate` derives the documents agents read from
+    # sources it never rewrites (spec internal-engine), so the "one of them
+    # is off" split the tidy pass justified is gone.
+    assert [upkeep[k]["enabled"] for k in ("aggregate", "organise", "curate")] == [
+        True,
+        True,
+        True,
+    ]
     assert all(upkeep[k]["interval_s"] is None for k in upkeep)
     assert upkeep["aggregate"]["default_interval_s"] == 3600
 
@@ -163,21 +170,21 @@ def test_engine_upkeep_list_and_set(engine_cli_daemon):
     assert "aggregate" in r.output and "default" in r.output
 
     # One pass per invocation, each half on its own.
-    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "tidy", "--on"])
+    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "curate", "--on"])
     assert r.exit_code == 0, r.output
     r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "organise", "--interval", "900"])
     assert r.exit_code == 0, r.output
 
     after = http.get("/internal-engine-config").json()["upkeep"]
-    assert after["tidy"]["enabled"] is True
+    assert after["curate"]["enabled"] is True
     assert after["organise"]["interval_s"] == 900
     # The passes neither command named are exactly as they stood.
     assert after["aggregate"] == {"enabled": True, "interval_s": None, "default_interval_s": 3600}
-    assert after["tidy"]["interval_s"] is None
+    assert after["curate"]["interval_s"] is None
 
-    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "tidy", "--off"])
+    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "curate", "--off"])
     assert r.exit_code == 0, r.output
-    assert http.get("/internal-engine-config").json()["upkeep"]["tidy"]["enabled"] is False
+    assert http.get("/internal-engine-config").json()["upkeep"]["curate"]["enabled"] is False
 
     # Back to the pass's own default — which a null interval cannot express.
     r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "organise", "--default-interval"])
@@ -197,14 +204,14 @@ def test_engine_upkeep_set_refuses_what_the_route_refuses(engine_cli_daemon):
 
 def test_engine_upkeep_set_needs_something_to_change(engine_cli_daemon):
     """Contradictory or empty flags are caught before a request is made."""
-    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "tidy"])
+    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "curate"])
     assert r.exit_code == 2, r.output
 
-    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "tidy", "--on", "--off"])
+    r = _runner.invoke(cli_app, ["engine", "upkeep", "set", "curate", "--on", "--off"])
     assert r.exit_code == 2, r.output
 
     r = _runner.invoke(
         cli_app,
-        ["engine", "upkeep", "set", "tidy", "--interval", "900", "--default-interval"],
+        ["engine", "upkeep", "set", "curate", "--interval", "900", "--default-interval"],
     )
     assert r.exit_code == 2, r.output

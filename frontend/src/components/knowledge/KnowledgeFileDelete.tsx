@@ -11,7 +11,7 @@
 // A knowledge file is the only copy — no index behind it, no soft delete — so
 // the confirmation spells the path out rather than describing it, and the
 // dialog closes only on success so a refusal is read where it happened
-// (.agents/frontend.md §5).
+// (agents/frontend.md §5).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";

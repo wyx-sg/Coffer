@@ -8,11 +8,11 @@ edit needs no import step to be findable.
 Ripgrep is preferred, not required. A machine without ``rg`` on its PATH gets
 the same search from ``grep_fallback`` — the same files, the same regex
 semantics, the same bounds — walked in Python and therefore slower. The
-switch is logged once so a slow search has a visible cause (FR-014).
+switch is logged once so a slow search has a visible cause (FR-015).
 
 ``--no-hidden`` is passed explicitly even though it is ripgrep's default,
 because a user's ``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on
-underneath us and start answering with the revisions in ``.history/`` (FR-032).
+underneath us and start answering with the revisions in ``.history/`` (FR-035).
 """
 
 from __future__ import annotations

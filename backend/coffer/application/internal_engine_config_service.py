@@ -1,6 +1,6 @@
 """Global internal-engine model service (spec provider-switching amendment 2026-06-22b).
 
-Coffer's internal LLM engine (organizer / reorg / merge)
+Coffer's internal LLM engine (aggregation / organise / knowledge curation)
 takes its endpoint + key from the ``internal_default`` connection but its MODEL
 from this singleton — the connection no longer owns a model. The wiring overlays
 ``get().model`` onto the resolved connection before building the chat model."""
@@ -25,7 +25,7 @@ class InternalEngineConfigRepo(Protocol):
         self,
         *,
         model: str | None,
-        tidy_owner_machine_id: str | None = None,
+        curate_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig: ...
 
@@ -54,14 +54,14 @@ class InternalEngineConfigService:
         operator may also be changing on another machine (they converge through
         vault sync).
 
-        Tidy is one of these passes: its switch is the ``auto_tidy_enabled``
-        column, which the repo writes from this map like any other pass's, so
-        there is one path to it.
+        Curation is one of these passes: its switch is the
+        ``auto_curate_enabled`` column, which the repo writes from this map
+        like any other pass's, so there is one path to it.
         """
         current = await self.get()
         return await self.update(
             model=current.model,
-            tidy_owner_machine_id=None,
+            curate_owner_machine_id=None,
             upkeep={pass_name: setting},
             actor=actor,
         )
@@ -70,14 +70,14 @@ class InternalEngineConfigService:
         self,
         *,
         model: str | None,
-        tidy_owner_machine_id: str | None = None,
+        curate_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
         actor: str = "api",
     ) -> GlobalInternalEngineConfig:
         cleaned = model.strip() if model and model.strip() else None
         saved = await self._repo.set(
             model=cleaned,
-            tidy_owner_machine_id=tidy_owner_machine_id,
+            curate_owner_machine_id=curate_owner_machine_id,
             upkeep=upkeep,
         )
         await self._audit.record(
@@ -85,13 +85,13 @@ class InternalEngineConfigService:
             actor=actor,
             details={
                 "model": cleaned,
-                "auto_tidy_enabled": saved.auto_tidy_enabled,
-                "tidy_owner_machine_id": saved.tidy_owner_machine_id,
+                "auto_curate_enabled": saved.auto_curate_enabled,
+                "curate_owner_machine_id": saved.curate_owner_machine_id,
                 "auto_aggregate_enabled": saved.auto_aggregate_enabled,
                 "aggregate_interval_s": saved.aggregate_interval_s,
                 "auto_organise_enabled": saved.auto_organise_enabled,
                 "organise_interval_s": saved.organise_interval_s,
-                "tidy_interval_s": saved.tidy_interval_s,
+                "curate_interval_s": saved.curate_interval_s,
             },
         )
         return saved

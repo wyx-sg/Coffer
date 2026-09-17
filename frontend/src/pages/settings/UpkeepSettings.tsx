@@ -4,17 +4,20 @@
 //
 // Three passes run on a timer — aggregation reads the agents' own memory into
 // the derived tree (spec memory FR-007), organise lets the model rewrite that
-// derived digest (spec memory FR-017), and tidy lets it rewrite the user's own
-// knowledge files (spec knowledge FR-031). Until now none of them was visible:
-// two had no switch at all, the third's switch could only be changed by editing
-// a synced settings document, and all three intervals were constants compiled
-// into the workers. Something that rewrites your files on a timer should be something
-// you can see and stop, which is the whole reason this card exists.
+// derived digest (FR-030), and curation reads the knowledge sources the user
+// writes and derives the topic documents agents read (spec knowledge FR-021).
+// Until now none of them was visible: two had no switch at all, the third's
+// switch could only be changed by editing a synced settings document, and all
+// three intervals were constants compiled into the workers. Something that
+// writes your files on a timer should be something you can see and stop, which
+// is the whole reason this card exists.
 //
 // Each row says what its pass actually WRITES, because that is the difference
-// that matters between them: two rewrite derived files that deleting and
-// re-running reproduces, and one rewrites the only copy. That last one is the
-// only one that ships off, and the only one whose row carries a warning.
+// that matters between them. All three write derived files that deleting and
+// re-running reproduces — curation in particular may not touch a source at all
+// — so all three ship ON. Curation's row carries the note it does because
+// switching it off is what leaves the lane an agent reads empty forever: it is
+// the only path from a source to something an agent can read.
 //
 // Edits auto-save, like every other settings surface here (no Save button):
 // the switch persists on toggle, the interval on selection.
@@ -40,8 +43,8 @@ import type { UpkeepPass, UpkeepSetting } from "@/lib/api/internalEngine";
 const INTERVAL_CHOICES = [15 * 60, 30 * 60, 60 * 60, 3 * 60 * 60, 6 * 60 * 60, 12 * 60 * 60, 86400];
 
 /** The passes, in the order they actually run: memory is aggregated, then
- *  organised; knowledge is tidied on its own schedule. */
-const PASSES: UpkeepPass[] = ["aggregate", "organise", "tidy"];
+ *  organised; knowledge is curated on its own schedule. */
+const PASSES: UpkeepPass[] = ["aggregate", "organise", "curate"];
 
 /** `null` is "this pass's own default" — the server tells us what that is, so
  *  the option can say so rather than showing a blank. */
@@ -77,8 +80,8 @@ function PassRow({
         <p className="text-xs text-muted-foreground">
           {t(`settings.upkeep.passes.${pass}.writes`)}
         </p>
-        {pass === "tidy" ? (
-          <p className="text-xs text-status-warn">{t("settings.upkeep.passes.tidy.caution")}</p>
+        {pass === "curate" ? (
+          <p className="text-xs text-status-warn">{t("settings.upkeep.passes.curate.caution")}</p>
         ) : null}
       </div>
 

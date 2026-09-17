@@ -415,7 +415,7 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
             allow_lifecycle_kind=True,
         )
         stored = await svc.get(ResourceRef(KIND_KNOWLEDGE, "shopee"))
-        # A collection carries no config at all (spec knowledge FR-038).
+        # A collection carries no config at all (spec knowledge FR-046).
         assert stored.config == {}
     finally:
         await engine.dispose()

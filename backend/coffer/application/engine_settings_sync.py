@@ -28,8 +28,8 @@ from typing import Protocol
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
+    CURATE,
     ORGANISE,
-    TIDY,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -49,11 +49,11 @@ class _SingletonRow(Protocol):
 #: The unattended passes, and the value each one has before anyone decides.
 #: Listed rather than derived so "the defaults" is a fact this module states
 #: once — it is what decides whether a machine publishes a document at all.
-_PASSES = (AGGREGATE, ORGANISE, TIDY)
+_PASSES = (AGGREGATE, ORGANISE, CURATE)
 _PASS_DEFAULTS = {
     AGGREGATE: UpkeepSetting(enabled=True),
     ORGANISE: UpkeepSetting(enabled=True),
-    TIDY: UpkeepSetting(enabled=False),
+    CURATE: UpkeepSetting(enabled=True),
 }
 
 
@@ -61,7 +61,7 @@ def _is_default(config: GlobalInternalEngineConfig) -> bool:
     """Whether the selection is what a machine has before anyone decides."""
     return (
         config.model is None
-        and config.tidy_owner_machine_id is None
+        and config.curate_owner_machine_id is None
         and all(config.upkeep(name) == _PASS_DEFAULTS[name] for name in _PASSES)
     )
 
@@ -74,8 +74,9 @@ def _upkeep_from_doc(
     A document written before upkeep travelled carries none of it, and must
     leave this machine's settings exactly as they are rather than resetting
     them to the defaults — an older machine in the fleet is not a decision.
-    ``auto_tidy_enabled`` is still read from the top level for the same reason:
-    that is where every document written so far put it.
+    ``auto_curate_enabled`` is read from the top level for the same reason:
+    that is where a document without an ``upkeep`` block puts the pass's
+    switch, and it is where this area publishes it too.
     """
     raw = doc.get("upkeep")
     block = raw if isinstance(raw, dict) else {}
@@ -85,21 +86,21 @@ def _upkeep_from_doc(
         entry = block.get(name)
         if not isinstance(entry, dict):
             # The document says nothing about this pass. A document written
-            # before 0082 gave every pass an ``upkeep`` block carries tidy's
-            # switch at the top level instead, so that one is read from there;
-            # everything else stays as this machine has it.
+            # before 0082 gave every pass an ``upkeep`` block carries the
+            # curation switch at the top level instead, so that one is read
+            # from there; everything else stays as this machine has it.
             #
-            # This is a FLEET-UPGRADE WINDOW, not a permanent shim, and unlike
-            # a DB shim it cannot be closed by a migration: the document lives
-            # in the shared remote and is written by whatever version the OTHER
-            # machine runs. It stays readable until every machine in the vault
-            # has run 0082 — which the machine registry can answer, since each
-            # machine publishes its ``coffer_version``. **Boundary: drop this
-            # branch (and stop publishing the top-level ``auto_tidy_enabled``
-            # below) once the minimum ``coffer_version`` in the registry is
-            # past the release carrying 0082.** Until then, two places can
-            # disagree about tidy's switch, and the ``upkeep`` block wins.
-            enabled = doc.get("auto_tidy_enabled") if name == TIDY else None
+            # Only under its CURRENT spelling. 0085 renamed the key along with
+            # the column, and reading the old ``auto_curate_enabled`` here would
+            # be exactly the load-time shim a migration exists to make
+            # unnecessary: the row is rewritten on upgrade, and a machine still
+            # publishing the old key is a machine that has not upgraded yet —
+            # its document leaves this machine's switch alone, and it
+            # republishes under the new key the moment it does.
+            #
+            # Two places can still name the switch, and the ``upkeep`` block
+            # wins whenever it is present.
+            enabled = doc.get("auto_curate_enabled") if name == CURATE else None
             out[name] = UpkeepSetting(
                 enabled=held.enabled if enabled is None else bool(enabled),
                 interval_s=held.interval_s,
@@ -145,8 +146,8 @@ class EngineSettingsSyncState:
             return []
         doc: dict[str, object] = {
             "model": internal.model,
-            "auto_tidy_enabled": internal.auto_tidy_enabled,
-            "tidy_owner_machine_id": internal.tidy_owner_machine_id,
+            "auto_curate_enabled": internal.auto_curate_enabled,
+            "curate_owner_machine_id": internal.curate_owner_machine_id,
             "upkeep": {
                 name: {
                     "enabled": internal.upkeep(name).enabled,
@@ -166,18 +167,18 @@ class EngineSettingsSyncState:
                 current = await self._internal.get()
                 raw = doc.get("model")
                 model = str(raw) if raw else None
-                owner = doc.get("tidy_owner_machine_id", current.tidy_owner_machine_id)
+                owner = doc.get("curate_owner_machine_id", current.curate_owner_machine_id)
                 owner = str(owner) if isinstance(owner, str) and owner else None
                 upkeep = _upkeep_from_doc(doc, current)
                 if (
                     model == current.model
-                    and owner == current.tidy_owner_machine_id
+                    and owner == current.curate_owner_machine_id
                     and all(upkeep[name] == current.upkeep(name) for name in _PASSES)
                 ):
                     continue
                 await self._internal.update(
                     model=model,
-                    tidy_owner_machine_id=owner or "",
+                    curate_owner_machine_id=owner or "",
                     upkeep=upkeep,
                     actor="sync",
                 )
@@ -201,7 +202,7 @@ class EngineSettingsSyncState:
         logger.info("sync: internal-engine settings reset to defaults (deleted on another machine)")
         await self._internal.update(
             model=None,
-            tidy_owner_machine_id="",
+            curate_owner_machine_id="",
             upkeep=dict(_PASS_DEFAULTS),
             actor="sync",
         )
