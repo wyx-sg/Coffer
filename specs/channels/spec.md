@@ -455,16 +455,20 @@ success sends no completion summary while a failed turn does.
   seam ([Channel Media](../../docs/decisions/channel-media.md)); a future
   audio-native agent's adapter forwards the audio instead of transcribing.
 
-  Transcription runs **remotely**, on the connection the user designated as
-  Coffer's `internal_default` (spec `provider-switching`). Voice therefore adds no
-  new concept and no second place to configure. The endpoint is OpenAI-shaped
+  Transcription runs **remotely**, on the connection the user designated
+  `transcribe_default` (spec `provider-switching` FR-035) and the speech-to-text
+  model chosen beside it (spec `internal-engine` FR-025). That is a different
+  connection from the one Coffer's own engine runs on, and there is no fallback
+  between them: a gateway that serves chat completions commonly serves no
+  transcription endpoint at all. The endpoint is OpenAI-shaped
   (`POST <base_url>/audio/transcriptions`); a connection whose protocol has none
   is not used for it.
 
   **This is the one place in Coffer where user content may leave the machine, and
-  it is off by default.** With no internal connection designated, an unsupported
-  protocol, or a credential that will not resolve, nothing is uploaded: the voice
-  is handed to the agent as an audio file rather than lost. A failed or slow
+  it is off by default.** With no connection designated for transcription, no
+  model chosen for it, an unsupported protocol, or a credential that will not
+  resolve, nothing is uploaded: the voice is handed to the agent as an audio file
+  rather than lost. A failed or slow
   request degrades the same way — a transcription problem must never fail a turn.
   The constitution permits this: Principle I admits cloud services as **LLM and
   tool providers**, and a transcription endpoint is a tool provider; the audio is

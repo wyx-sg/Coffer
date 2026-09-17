@@ -270,6 +270,14 @@ class InternalEngineConfigModel(Base):
     auto_distil_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     distil_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     curate_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: How long one call to Coffer's own model may take. NULL means the
+    #: built-in default, for the same reason an interval's NULL does (spec
+    #: internal-engine FR-022).
+    model_timeout_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The speech-to-text model, run on the connection marked
+    #: ``transcribe_default`` rather than on the engine's own (spec
+    #: internal-engine FR-025). NULL means Coffer transcribes nothing.
+    transcribe_model: Mapped[str | None] = mapped_column(String, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
     __table_args__ = (CheckConstraint("id = 1", name="ck_internal_engine_config_singleton"),)

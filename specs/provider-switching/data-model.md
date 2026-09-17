@@ -23,6 +23,7 @@ model is chosen at the point of use.
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `is_active` | `bool` | At most one `True` per AGENT TYPE at any time, enforced by the switch op. It records that this connection is the one currently written INTO the agents it reaches — a claim about a file Coffer does not own, which is why the boot self-check exists. Always `False` for `ollama`, which projects into nothing. |
 | `internal_default` | `bool` | At most one `True` globally: the connection Coffer's own engine runs on. Its MODEL is a separate singleton, not stored here. Backed by a partial unique index, so a second flagged row is unrepresentable whatever writes it. |
+| `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton too, and neither half falls back to the engine's — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Upheld by `set_transcribe_default`'s clear-then-set; no partial unique index backs it yet (spec FR-035). |
 
 Reach — which agents the connection projects into — is deliberately NOT a field
 here. It is the resource row's framework-level per-agent `scope`
@@ -162,6 +163,16 @@ new connection does not curate — is spec
 [internal-engine](../internal-engine/spec.md). Nothing about that row is stored,
 read or migrated by this kind.
 
+### The speech-to-text default flag (`application/provider/transcribe_default_ops.py`)
+
+`set_transcribe_default(name)` is the twin of the operation above — clear
+everywhere else, set the target, emit `provider_transcribe_default_set`, notify
+the engine — kept in a module beside it rather than folded into it, because the
+two flags are not the same flag and nothing here falls back to the other one.
+`transcribe_connection(model)` answers WHICH connection carries this flag and
+mints the `ResolvedConnection`; whether there is a model to pair at all is the
+engine's question, asked in `application/engine/resolve.py`.
+
 ## Reuse anchors
 
 All implementation MUST reuse these existing components; do not re-implement.
@@ -219,8 +230,8 @@ so switches never interleave. There is no `ProviderRepo` and no
 
 | Component | Path | Used for |
 |---|---|---|
-| `AuditEventType` | `backend/coffer/domain/audit.py` | `PROVIDER_SWITCHED`, `PROVIDER_INTERNAL_DEFAULT_SET`, `PROVIDER_PROJECTION_REFUSED` |
-| `AuditService.record` | `backend/coffer/application/audit_service.py` | emit them from the switch / internal-default / projection paths |
+| `AuditEventType` | `backend/coffer/domain/audit.py` | `PROVIDER_SWITCHED`, `PROVIDER_INTERNAL_DEFAULT_SET`, `PROVIDER_TRANSCRIBE_DEFAULT_SET`, `PROVIDER_PROJECTION_REFUSED` |
+| `AuditService.record` | `backend/coffer/application/audit_service.py` | emit them from the switch / internal-default / transcribe-default / projection paths |
 
 ## SQLite schema
 
@@ -251,6 +262,7 @@ curated set, `0063` took it back off, and `0061` forced the agent binding's
 |---|---|
 | `provider_switched` | a successful `POST /providers/{name}/activate` or `POST /providers/use-builtin/{wire}`; details `{from, to, protocol, agents}` |
 | `provider_internal_default_set` | a successful `POST /providers/{name}/internal-default`; details `{from, to}` |
+| `provider_transcribe_default_set` | a successful `PUT /providers/{name}/transcribe-default`; details `{from, to}` |
 | `provider_projection_refused` | a native-config write refused because the file changed under Coffer |
 
 `resource_created` / `resource_updated` / `resource_deleted` / `resource_renamed`
@@ -275,6 +287,7 @@ kind declares no redactor because its config holds no secret).
 | `resolve_active_key_for_agent(agent_type) -> str` | The key of the connection active for that agent (what Codex's env var is filled from). |
 | `resolve_active_key(wire) -> str` | The legacy wire-keyed form, resolving through the wire's agent. |
 | `set_internal_default(name) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
+| `set_transcribe_default(name) -> Resource` | The global speech-to-text flag, the same three steps against its own field and its own event. Independent of the one above. |
 
 Decrypted values are returned to the caller and never logged.
 
@@ -332,5 +345,7 @@ copies, and the Codex model catalogue.
 - Key resolution MUST NOT log the decrypted value.
 - The per-agent-type single-active invariant is enforced by sequential
   `ResourceService.update_config` calls serialised by the single-process daemon;
-  the single global internal default is additionally enforced by the database.
+  the single global internal default is additionally enforced by the database,
+  while the single global speech-to-text default rests on the operation alone
+  (spec FR-035).
 - All HTTP routes are loopback-only, gated by `X-Coffer-Token`.

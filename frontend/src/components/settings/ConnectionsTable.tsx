@@ -13,12 +13,20 @@
 // and that flag is a fact about the engine. It is set (and shown) where it
 // belongs — the internal-engine settings panel, and the connection's own detail
 // header.
+//
+// Transcription is the one exception, and for a reason that does not generalise:
+// it has NO fallback. Exactly one connection carries speech-to-text, every voice
+// message goes to that endpoint, and no connection carrying it means Coffer
+// transcribes nothing at all — so "which one?" is a question the library itself
+// must answer. The pill is read-only; it is still set in Settings → Engine,
+// beside the engine's own connection.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { ActiveProviderBadge } from "@/components/settings/ActiveProviderBadge";
+import { TranscribeProviderBadge } from "@/components/settings/TranscribeProviderBadge";
 import {
   ConnectionRowActions,
   ConnectionStatusCell,
@@ -62,6 +70,7 @@ export function ConnectionsTable({
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{p.name}</span>
           {p.is_active ? <ActiveProviderBadge /> : null}
+          {p.transcribe_default ? <TranscribeProviderBadge /> : null}
         </div>
       ),
     },

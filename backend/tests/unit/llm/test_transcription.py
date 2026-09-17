@@ -17,12 +17,16 @@ from coffer.infrastructure.llm.transcription import (
 )
 
 
-def _conn(protocol: Protocol = Protocol.OPENAI, ref: str | None = "provider/x/key"):
+def _conn(
+    protocol: Protocol = Protocol.OPENAI,
+    ref: str | None = "provider/x/key",
+    model: str = "gpt-4o-mini",
+):
     return ResolvedConnection(
         config=ProviderConfig(
             protocol=protocol, base_url="https://api.example/v1", credential_ref=ref
         ),
-        model="gpt-4o-mini",
+        model=model,
     )
 
 
@@ -64,11 +68,24 @@ def test_openai_with_a_key_builds_a_transcriber() -> None:
     assert isinstance(remote_transcriber(_conn(), _resolver()), RemoteTranscriber)
 
 
-def test_model_is_overridable_without_a_release(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("COFFER_TRANSCRIBE_MODEL", "gateway-stt-v2")
-    t = remote_transcriber(_conn(), _resolver())
+def test_the_model_comes_from_the_connection_not_the_environment() -> None:
+    """It used to be ``COFFER_TRANSCRIBE_MODEL``, read inside the daemon.
+
+    The daemon is spawned detached by whichever surface first needs one and
+    inherits THAT caller's environment, so a value exported in a shell profile
+    never reached it: in a packaged install the model could not be changed at
+    all. It travels on the resolved connection now, exactly as the engine's
+    model does, and is chosen on the same settings page.
+    """
+    t = remote_transcriber(_conn(model="gateway-stt-v2"), _resolver())
     assert t is not None
     assert t._model == "gateway-stt-v2"
+
+
+def test_the_operators_bound_reaches_the_upload() -> None:
+    t = remote_transcriber(_conn(), _resolver(), 145.0)
+    assert t is not None
+    assert t._timeout == 145.0
 
 
 @pytest.mark.asyncio

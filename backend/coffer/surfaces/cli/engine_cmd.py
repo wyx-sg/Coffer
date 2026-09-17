@@ -1,10 +1,11 @@
 """``coffer engine …`` — Coffer's own operating settings, from a terminal.
 
-Two halves of one question, the same two the Settings → Engine page shows:
-WHICH MODEL Coffer thinks with (``engine model``), and WHAT IT DOES while
-nobody is looking (``engine upkeep``). Both are thin shells over
-``/api/v1/internal-engine-config``, so the terminal and the page write the same
-row through the same service and record the same audit entry.
+The same settings the Settings → Engine page shows: WHICH MODEL Coffer thinks
+with (``engine model``), WHAT IT DOES while nobody is looking (``engine
+upkeep``), HOW LONG one call to that model may take (``engine timeout``) and
+WHICH MODEL hears speech (``engine transcribe-model``). All four are thin
+shells over ``/api/v1/internal-engine-config``, so the terminal and the page
+write the same row through the same service and record the same audit entry.
 
 The upkeep half is why this group must exist rather than being a page-only
 surface (spec internal-engine FR-020/FR-021, ``.agents/sdd.md``): one of the
@@ -29,14 +30,19 @@ from coffer.surfaces.cli import _client as _cli_client
 app = typer.Typer(help="Coffer's own engine: the model it thinks with, and its unattended work")
 model_app = typer.Typer(help="The model Coffer's own passes run on")
 upkeep_app = typer.Typer(help="The passes Coffer runs when nobody asked")
+timeout_app = typer.Typer(help="How long one call to Coffer's own model may take")
+transcribe_app = typer.Typer(help="The model Coffer transcribes speech with")
 app.add_typer(model_app, name="model")
 app.add_typer(upkeep_app, name="upkeep")
+app.add_typer(timeout_app, name="timeout")
+app.add_typer(transcribe_app, name="transcribe-model")
 
 _console = Console()
 
-#: The engine's settings singleton. The model and the upkeep rows are read off
-#: the same document, which is what makes "what does Coffer do on its own" one
-#: answer rather than two that can disagree.
+#: The engine's settings singleton. The model, the upkeep rows, the call bound
+#: and the transcription model are read off the same document, which is what
+#: makes "what does Coffer do on its own" one answer rather than four that can
+#: disagree.
 _CONFIG = "/internal-engine-config"
 
 
@@ -173,3 +179,97 @@ def upkeep_set(
         f"{pass_name}: {'on' if setting['enabled'] else 'off'}, every {chosen} "
         f"(default {setting['default_interval_s']}s)"
     )
+
+
+@timeout_app.command("show")
+def timeout_show(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Print how long one call to Coffer's own model may take.
+
+    Names the built-in default alongside the chosen bound, the way ``upkeep
+    list`` names a pass's default interval: an unchosen bound is reported as
+    unchosen, never as a blank the reader has to interpret.
+    """
+    data = _get_config(ctx)
+    if output_json:
+        typer.echo(
+            _json.dumps(
+                {
+                    "model_timeout_s": data["model_timeout_s"],
+                    "default_model_timeout_s": data["default_model_timeout_s"],
+                },
+                indent=2,
+            )
+        )
+        return
+    if data["model_timeout_s"] is None:
+        typer.echo(f"default ({data['default_model_timeout_s']}s)")
+        return
+    typer.echo(f"{data['model_timeout_s']}s (default {data['default_model_timeout_s']}s)")
+
+
+@timeout_app.command("set")
+def timeout_set(
+    ctx: typer.Context,
+    seconds: int = typer.Argument(..., help="Seconds one model call may take"),
+) -> None:
+    """Bound every call Coffer's own engine makes.
+
+    The right number is a property of the operator's endpoint: measured against
+    a gateway whose typical answer takes half a minute, the built-in bound
+    leaves barely a factor of two and the passes then defer their work while
+    reporting success. A number outside the allowed range is refused by the
+    same route the page writes through (exit 6), not quietly rounded.
+    """
+    data = _put(ctx, f"{_CONFIG}/timeout", {"seconds": seconds})
+    typer.echo(f"model timeout: {data['model_timeout_s']}s")
+
+
+@timeout_app.command("default")
+def timeout_default(ctx: typer.Context) -> None:
+    """Return to the built-in bound, which a chosen number cannot express."""
+    data = _put(ctx, f"{_CONFIG}/timeout", {"seconds": None})
+    typer.echo(f"model timeout back to the default ({data['default_model_timeout_s']}s)")
+
+
+@transcribe_app.command("show")
+def transcribe_model_show(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Print the model Coffer transcribes speech with."""
+    data = _get_config(ctx)
+    if output_json:
+        typer.echo(_json.dumps({"transcribe_model": data["transcribe_model"]}, indent=2))
+        return
+    if data["transcribe_model"] is None:
+        typer.echo("no transcription model chosen — voice reaches the agent as a file")
+        return
+    typer.echo(data["transcribe_model"])
+
+
+@transcribe_app.command("set")
+def transcribe_model_set(
+    ctx: typer.Context,
+    model: str = typer.Argument(..., help="Model id that turns speech into text"),
+) -> None:
+    """Choose the model Coffer transcribes speech with.
+
+    The ENDPOINT and key come from the connection flagged transcribe-default
+    (``coffer provider transcribe-default``) — not from the internal-engine
+    one, because a chat gateway commonly serves no transcription endpoint at
+    all. Both halves are needed: with either missing, Coffer transcribes
+    nothing.
+    """
+    data = _put(ctx, f"{_CONFIG}/transcribe-model", {"model": model})
+    typer.echo(f"transcription model: {data['transcribe_model']}")
+
+
+@transcribe_app.command("clear")
+def transcribe_model_clear(ctx: typer.Context) -> None:
+    """Stop transcribing: voice reaches the agent as a file and the recording
+    never leaves this machine."""
+    _put(ctx, f"{_CONFIG}/transcribe-model", {"model": None})
+    typer.echo("transcription model cleared — voice reaches the agent as a file")

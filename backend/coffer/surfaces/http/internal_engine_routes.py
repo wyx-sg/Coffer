@@ -12,7 +12,16 @@ switch and an interval the operator can see and change.
 That last part is why the surface exists at all: two of the three had no switch
 anywhere, the third's could only be changed by hand-editing a synced settings
 document, and all three intervals were constants compiled into the workers. A
-timer that rewrites your files is not something to discover."""
+timer that rewrites your files is not something to discover.
+
+Two more settings joined them for the same reason, and both are properties of
+the operator's endpoint rather than of Coffer: how long ONE call to Coffer's
+own model may take (spec internal-engine FR-022), which used to be a constant
+per call site and left a slow gateway's passes failing silently at a fraction
+of their rate, and WHICH MODEL transcribes speech (FR-025), which used to be an
+environment variable the daemon could not read at all once it was spawned
+detached from a shell. Each writes on its own route, for the reason
+``UpkeepUpdate`` records below."""
 
 from __future__ import annotations
 
@@ -21,6 +30,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
 from coffer.domain.errors import ConfigValidationError
@@ -64,10 +74,44 @@ class InternalEngineConfigOut(BaseModel):
     updated_at: datetime | None = None
     #: Keyed by pass name (``aggregate`` / ``distil`` / ``tidy``).
     upkeep: dict[str, UpkeepSettingOut] = Field(default_factory=dict)
+    #: The bound on one call to Coffer's own model, ``null`` while the operator
+    #: has chosen none — and ``default_model_timeout_s`` is what runs then, sent
+    #: for the same reason ``default_interval_s`` is: a settings page can name
+    #: the default instead of showing a blank where a number belongs.
+    model_timeout_s: int | None = None
+    default_model_timeout_s: int
+    #: The speech-to-text model. ``null`` means Coffer transcribes nothing and
+    #: hands the agent the audio file untouched — a real answer, not an unset
+    #: one, and the same answer as no connection marked ``transcribe_default``.
+    transcribe_model: str | None = None
 
 
 class InternalEngineConfigUpdate(BaseModel):
     """Set the internal-engine model; ``null``/empty clears it."""
+
+    model: str | None = None
+
+
+class ModelTimeoutUpdate(BaseModel):
+    """Bound one call to Coffer's own model; ``null`` restores the default.
+
+    The range is checked by the service rather than declared here, so the
+    terminal, this route and a synced document are all refused by one rule that
+    says which numbers are allowed and why — and the operator reads the reason
+    instead of a generated constraint message.
+    """
+
+    seconds: int | None = None
+
+
+class TranscribeModelUpdate(BaseModel):
+    """Choose the speech-to-text model; ``null``/empty stops transcription.
+
+    Deliberately NOT defaulted to the engine's own model: a gateway that serves
+    chat completions commonly serves no transcription endpoint, so borrowing
+    the engine's choice would aim every voice message at a 404 instead of at
+    the behaviour an unconfigured vault already has.
+    """
 
     model: str | None = None
 
@@ -113,6 +157,9 @@ def _to_out(cfg: GlobalInternalEngineConfig) -> InternalEngineConfigOut:
             )
             for name in _PASSES
         },
+        model_timeout_s=cfg.model_timeout_s,
+        default_model_timeout_s=int(DEFAULT_MODEL_TIMEOUT_S),
+        transcribe_model=cfg.transcribe_model,
     )
 
 
@@ -158,3 +205,33 @@ async def update_upkeep(
         interval_s=interval,
     )
     return _to_out(await svc.set_upkeep(body.pass_name, setting, actor=actor))
+
+
+@router.put("/timeout", response_model=InternalEngineConfigOut)
+async def update_model_timeout(
+    body: ModelTimeoutUpdate,
+    svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> InternalEngineConfigOut:
+    """Bound one call to Coffer's own model, or return it to the default.
+
+    ``null`` is the way back to the default and the only way: it keeps the
+    default in one place, so raising it later reaches every vault that never
+    chose one rather than none of them.
+    """
+    return _to_out(await svc.set_model_timeout(body.seconds, actor=actor))
+
+
+@router.put("/transcribe-model", response_model=InternalEngineConfigOut)
+async def update_transcribe_model(
+    body: TranscribeModelUpdate,
+    svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> InternalEngineConfigOut:
+    """Choose the model Coffer transcribes speech with, or stop transcribing.
+
+    Clearing it is an operating decision an operator may want — with no model
+    the recording never leaves the machine — which is why it is expressed here
+    rather than by deleting the connection that carries the endpoint.
+    """
+    return _to_out(await svc.set_transcribe_model(body.model, actor=actor))

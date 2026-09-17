@@ -177,6 +177,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/providers/{name}/transcribe-default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Connection name to transcribe speech on. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the connection Coffer transcribes speech on
+         * @description The twin of `internal-default`, and a SECOND flag rather than a reuse of
+         *     it: the two are different models, and a gateway that serves chat
+         *     completions commonly serves no `/audio/transcriptions` at all, so
+         *     borrowing the engine's connection would aim every voice message at a
+         *     404. Nothing falls back between them — with no connection marked here,
+         *     Coffer transcribes nothing and hands the agent the audio file
+         *     untouched.
+         *
+         *     At most one connection globally carries the flag; setting one clears the
+         *     previous one (sequential clear-then-set, serialised by the
+         *     single-process daemon).
+         *
+         *     Emits a `PROVIDER_TRANSCRIBE_DEFAULT_SET` audit event with details
+         *     `{from, to}` and returns the updated `ProviderOut`. It also notifies the
+         *     engine, which applies its own rule about the model it was paired with;
+         *     the model itself lives under `/api/v1/internal-engine-config` and is not
+         *     this document's.
+         */
+        post: operations["setTranscribeDefaultProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/providers/active-key/{wire}": {
         parameters: {
             query?: never;
@@ -410,6 +449,8 @@ export interface components {
             is_active: boolean;
             /** @description Whether this connection is Coffer's internal-engine default. At most one connection globally has internal_default=true. */
             internal_default: boolean;
+            /** @description Whether Coffer transcribes speech on this connection. At most one connection globally has transcribe_default=true. Separate from internal_default and with no fallback between them: the endpoint that serves chat completions commonly serves no transcription endpoint at all. */
+            transcribe_default: boolean;
             /** @description The user's switch on the resource itself. A disabled connection projects into nothing and resolves no key, while still reporting the reach it is configured for (see `compatible_agents`). Changed through the shared resource enable/disable surface, not here. */
             enabled: boolean;
             /** @description The connection's own description, as stored on the resource row. */
@@ -754,6 +795,32 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Connection name to set as the internal-engine default. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    setTranscribeDefaultProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Connection name to transcribe speech on. */
                 name: string;
             };
             cookie?: never;

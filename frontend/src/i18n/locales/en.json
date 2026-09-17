@@ -309,6 +309,7 @@
       "memory_delivery_removed": "Removed memory delivery from {{resource}}",
       "memory_distilled": "Distilled memory partition {{resource}}",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
+      "provider_transcribe_default_set": "Made {{resource}} the provider Coffer transcribes speech on",
       "provider_projection_refused": "Refused to project {{resource}} into an agent",
       "provider_switched": "Switched to provider {{resource}}",
       "resource_created": "Registered {{resource}}",
@@ -481,6 +482,8 @@
       "empty": "No model providers yet.",
       "active": "Active",
       "activeHint": "This provider powers Coffer's own model (Settings → Coffer's model).",
+      "transcribe": "Speech to text",
+      "transcribeHint": "Coffer transcribes voice messages on this provider (Settings → Speech to text). Only one provider carries it, and nothing falls back to another.",
       "reachHint": "Which agents this provider reaches is set with the reach control — on the provider's row in the list, or on its own page.",
       "protocols": {
         "anthropic": "Anthropic",
@@ -556,7 +559,25 @@
       "connection": "Model provider",
       "connectionPlaceholder": "Select a model provider",
       "model": "Model",
-      "modelPlaceholder": "Select a model"
+      "modelPlaceholder": "Select a model",
+      "timeout": "Time limit per call",
+      "timeoutHint": "How long Coffer waits for one answer from its own model — a memory pass, a knowledge description, one turn of curation, a transcription. A call that runs out of time defers its work and reports success, so set this above what your provider really takes.",
+      "defaultTimeout": "Default ({{timeout}})",
+      "seconds": "{{count}}s",
+      "minutes": "{{count}} min"
+    },
+    "transcribe": {
+      "title": "Speech to text",
+      "subtitle": "The provider and model Coffer transcribes voice messages with, before an agent ever sees them.",
+      "connection": "Transcription provider",
+      "connectionPlaceholder": "Select a model provider",
+      "model": "Transcription model",
+      "modelPlaceholder": "Select a model",
+      "modelOff": "Off — do not transcribe",
+      "onTitle": "Transcription is on.",
+      "onBody": "Voice messages are transcribed on this provider and the agent is handed the text.",
+      "offTitle": "Transcription is off.",
+      "offBody": "Until both a provider and a model are chosen, Coffer transcribes nothing: an agent is handed the audio file as it is, and the recording never leaves this machine. This is a separate provider on purpose — one that serves chat completions often serves no transcription endpoint at all."
     },
     "upkeep": {
       "title": "Automatic upkeep",

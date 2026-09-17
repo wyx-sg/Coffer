@@ -26,6 +26,8 @@ from coffer.domain.provider.config import Protocol, ResolvedConnection
 def build_chat_model(
     resolved: ResolvedConnection,
     credential_resolver: Callable[[str], str],
+    *,
+    timeout: float | None = None,
 ) -> Any:  # returns langchain_core.language_models.chat_models.BaseChatModel
     """Construct a LangChain ``BaseChatModel`` for *resolved*.
 
@@ -37,6 +39,11 @@ def build_chat_model(
             returns the resolved secret (e.g. the raw API key). The composition
             root injects this so this module stays infrastructure-pure (no
             keyring import here).
+        timeout: Seconds one request to this model may take. Set on the CLIENT
+            rather than around the call, which is the only place that reaches
+            an agentic loop's individual turns — the loop is one ``await`` from
+            the outside, so wrapping it would bound the whole conversation or
+            nothing. ``None`` leaves each integration's own default in place.
 
     Returns:
         A LangChain ``BaseChatModel`` instance ready for use.
@@ -50,11 +57,11 @@ def build_chat_model(
     protocol = resolved.config.protocol
 
     if protocol is Protocol.ANTHROPIC:
-        return _build_anthropic(resolved, credential_resolver)
+        return _build_anthropic(resolved, credential_resolver, timeout)
     if protocol is Protocol.OPENAI:
-        return _build_openai(resolved, credential_resolver)
+        return _build_openai(resolved, credential_resolver, timeout)
     if protocol is Protocol.OLLAMA:
-        return _build_ollama(resolved)
+        return _build_ollama(resolved, timeout)
 
     raise ValueError(f"Unsupported protocol: {protocol!r}")  # pragma: no cover
 
@@ -67,6 +74,7 @@ def build_chat_model(
 def _build_anthropic(
     resolved: ResolvedConnection,
     credential_resolver: Callable[[str], str],
+    timeout: float | None = None,
 ) -> Any:
     try:
         from langchain_anthropic import ChatAnthropic
@@ -87,12 +95,14 @@ def _build_anthropic(
         model=resolved.model,
         api_key=api_key,  # type: ignore[arg-type]
         base_url=config.base_url,
+        timeout=timeout,
     )
 
 
 def _build_openai(
     resolved: ResolvedConnection,
     credential_resolver: Callable[[str], str],
+    timeout: float | None = None,
 ) -> Any:
     try:
         from langchain_openai import ChatOpenAI
@@ -114,10 +124,11 @@ def _build_openai(
         model=resolved.model,
         api_key=api_key,  # type: ignore[arg-type]
         base_url=config.base_url or None,
+        timeout=timeout,
     )
 
 
-def _build_ollama(resolved: ResolvedConnection) -> Any:
+def _build_ollama(resolved: ResolvedConnection, timeout: float | None = None) -> Any:
     try:
         from langchain_ollama import ChatOllama
     except ImportError as exc:
@@ -126,4 +137,12 @@ def _build_ollama(resolved: ResolvedConnection) -> Any:
             "Install it with: pip install langchain-ollama"
         ) from exc
 
-    return ChatOllama(model=resolved.model, base_url=resolved.config.base_url)
+    # ``ChatOllama`` takes no ``timeout`` of its own; the bound goes to the
+    # underlying httpx client it builds, which is the same place the other two
+    # integrations put theirs. ``None`` leaves the client's own default.
+    client_kwargs = {"timeout": timeout} if timeout is not None else {}
+    return ChatOllama(
+        model=resolved.model,
+        base_url=resolved.config.base_url,
+        client_kwargs=client_kwargs,
+    )

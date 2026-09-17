@@ -27,12 +27,21 @@ from typing import Protocol
 
 
 class InternalEngineModelStore(Protocol):
-    """The internal-engine model singleton, narrowed to the two things this
-    needs of it: read it, and forget it."""
+    """The engine's model singleton, narrowed to what this needs of it: read a
+    model, and forget it.
+
+    Two models live on that row — the one Coffer thinks with and the one it
+    transcribes speech with — because they are chosen the same way and moved
+    for the same reason, on two different connections.
+    """
 
     async def get_model(self) -> str | None: ...
 
     async def clear_model(self, *, actor: str) -> None: ...
+
+    async def get_transcribe_model(self) -> str | None: ...
+
+    async def clear_transcribe_model(self, *, actor: str) -> None: ...
 
 
 class InternalDefaultModelGuard:
@@ -55,6 +64,23 @@ class InternalDefaultModelGuard:
         if model in curated_ids:
             return
         await self._models.clear_model(actor=actor)
+
+    async def drop_transcribe_model_unless_curated(
+        self, curated_ids: Collection[str], *, actor: str
+    ) -> None:
+        """The same rule for the speech-to-text model when ITS connection moves.
+
+        Same reasoning, different row: a transcription model is even less
+        portable between endpoints than a chat model — most gateways serve no
+        transcription endpoint at all — so a model left standing across a move
+        is a 404 on the next voice message rather than a clean no-op.
+        """
+        model = await self._models.get_transcribe_model()
+        if not model:
+            return
+        if model in curated_ids:
+            return
+        await self._models.clear_transcribe_model(actor=actor)
 
 
 __all__ = ["InternalDefaultModelGuard", "InternalEngineModelStore"]

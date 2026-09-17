@@ -58,6 +58,7 @@ def _provider_out(resource: Resource) -> ProviderOut:
         models=[ProviderModel(id=m.id, modality=m.modality) for m in cfg.models],
         is_active=cfg.is_active,
         internal_default=cfg.internal_default,
+        transcribe_default=cfg.transcribe_default,
         enabled=resource.enabled,
         description=resource.description,
         created_at=resource.created_at,
@@ -223,3 +224,20 @@ async def set_internal_default_provider(
     moves it off the previous one. 404 if the connection is absent.
     """
     return _provider_out(await svc.set_internal_default(name, actor=actor))
+
+
+@router.post("/{name}/transcribe-default", response_model=ProviderOut)
+async def set_transcribe_default_provider(
+    name: str,
+    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> ProviderOut:
+    """Make this connection the one Coffer transcribes speech on (≤1 globally).
+
+    The twin of the route above, and deliberately a SECOND flag rather than a
+    reuse of it: the two are different models, and a chat gateway commonly
+    serves no ``/audio/transcriptions`` at all. Nothing falls back between
+    them — with no connection marked here, Coffer transcribes nothing and hands
+    the agent the audio file untouched. 404 if the connection is absent.
+    """
+    return _provider_out(await svc.set_transcribe_default(name, actor=actor))

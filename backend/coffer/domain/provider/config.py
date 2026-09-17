@@ -149,6 +149,15 @@ class ProviderConfig(BaseModel):
     # At most one connection globally is Coffer's internal-engine default
     # (enforced by ``ProviderService.set_internal_default``).
     internal_default: bool = False
+    # At most one connection globally serves Coffer's speech-to-text
+    # (enforced by ``ProviderService.set_transcribe_default``). Separate from
+    # ``internal_default`` because they are different models: a gateway that
+    # serves chat completions commonly serves no transcription endpoint at
+    # all, so borrowing the engine's connection would aim voice at an endpoint
+    # that answers 404. There is deliberately NO fallback between the two —
+    # nothing marked here means Coffer transcribes nothing and hands the agent
+    # the audio file untouched.
+    transcribe_default: bool = False
 
     @field_validator("base_url")
     @classmethod

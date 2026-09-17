@@ -309,6 +309,7 @@
       "memory_delivery_removed": "已移除 {{resource}} 的记忆投递",
       "memory_distilled": "提炼了记忆分区 {{resource}}",
       "provider_internal_default_set": "把 {{resource}} 设为内部引擎的默认模型提供商",
+      "provider_transcribe_default_set": "把 {{resource}} 设为 Coffer 转写语音所用的模型提供商",
       "provider_projection_refused": "拒绝把 {{resource}} 投射到 Agent",
       "provider_switched": "切换到了模型提供商 {{resource}}",
       "resource_created": "注册了 {{resource}}",
@@ -481,6 +482,8 @@
       "empty": "暂无模型提供商。",
       "active": "使用中",
       "activeHint": "该提供商驱动 Coffer 自用模型（设置 → Coffer 自用模型）。",
+      "transcribe": "语音转文字",
+      "transcribeHint": "Coffer 在该提供商上把语音消息转成文字（设置 → 语音转文字）。全局只有一个提供商承担这件事，也不会回退到别的提供商。",
       "reachHint": "此提供商对哪些 Agent 生效，由「生效范围」控件设置——在列表中该提供商所在行，或在它自己的详情页。",
       "protocols": {
         "anthropic": "Anthropic",
@@ -556,7 +559,25 @@
       "connection": "使用的模型提供商",
       "connectionPlaceholder": "选择模型提供商",
       "model": "模型",
-      "modelPlaceholder": "选择模型"
+      "modelPlaceholder": "选择模型",
+      "timeout": "单次调用的时间上限",
+      "timeoutHint": "Coffer 等自用模型给出一次回答的最长时间——提炼记忆、给知识写摘要、跑一轮知识整理、转写一段语音都算。超时的调用会把这次的活儿留到下次，并且对外报成功，所以这个值要设得比你的提供商实际耗时更宽。",
+      "defaultTimeout": "默认（{{timeout}}）",
+      "seconds": "{{count}} 秒",
+      "minutes": "{{count}} 分钟"
+    },
+    "transcribe": {
+      "title": "语音转文字",
+      "subtitle": "在 Agent 看到语音之前，Coffer 用来把它转成文字的模型提供商与模型。",
+      "connection": "转写用的模型提供商",
+      "connectionPlaceholder": "选择模型提供商",
+      "model": "转写模型",
+      "modelPlaceholder": "选择模型",
+      "modelOff": "关闭——不做转写",
+      "onTitle": "转写已开启。",
+      "onBody": "语音消息会在该提供商上转成文字，Agent 拿到的是文字。",
+      "offTitle": "转写已关闭。",
+      "offBody": "在同时选好提供商和模型之前，Coffer 不做任何转写：Agent 拿到的就是原始音频文件，录音不会离开这台机器。这里之所以要单独选一个提供商，是因为能跑对话补全的提供商往往根本没有转写接口。"
     },
     "upkeep": {
       "title": "自动整理",

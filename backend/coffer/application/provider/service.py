@@ -20,6 +20,9 @@ from uuid import uuid4
 
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.internal_default_ops import (
+    internal_default_connection as _internal_default_connection_op,
+)
+from coffer.application.provider.internal_default_ops import (
     set_internal_default as _set_internal_default_op,
 )
 from coffer.application.provider.ports import EngineNotifyPort
@@ -28,6 +31,12 @@ from coffer.application.provider.projector import ProjectionConfigStore, Provide
 from coffer.application.provider.rename_ops import rename as _rename_op
 from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.application.provider.targets import projection_targets
+from coffer.application.provider.transcribe_default_ops import (
+    set_transcribe_default as _set_transcribe_default_op,
+)
+from coffer.application.provider.transcribe_default_ops import (
+    transcribe_connection as _transcribe_connection_op,
+)
 from coffer.application.provider.update_ops import update as _update_op
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
@@ -359,28 +368,30 @@ class ProviderService:
     async def internal_default_connection(self, model: str) -> ResolvedConnection | None:
         """The connection marked ``internal_default``, paired with ``model``.
 
-        Satisfies ``application.engine.resolve.InternalDefaultConnectionPort``
-        structurally. This kind answers only WHICH connection carries the flag
-        and mints the pairing — ``ResolvedConnection`` is its own value object.
-        Whether there is a model to pair at all, and what a missing half means,
-        are the internal engine's rule and live in ``application.engine``.
+        Satisfies ``application.engine.resolve.InternalDefaultConnectionPort``.
         """
-        for r in await self.list():
-            rc = self._cfg(r)
-            if rc.internal_default:
-                return ResolvedConnection(config=rc, model=model)
-        return None
+        return await _internal_default_connection_op(self, model)
+
+    async def set_transcribe_default(self, name: str, *, actor: str = "api") -> Resource:
+        """Make ``name`` the global speech-to-text connection.
+
+        The twin of :meth:`set_internal_default`, delegating for the same
+        reason: the single-global invariant and the fate of the transcription
+        model when the connection moves belong to both callers, the HTTP route
+        and ``coffer provider transcribe-default``.
+        """
+        return await _set_transcribe_default_op(self, name, actor=actor)
+
+    async def transcribe_connection(self, model: str) -> ResolvedConnection | None:
+        """The connection marked ``transcribe_default``, paired with ``model``.
+
+        Satisfies ``application.engine.resolve.TranscribeConnectionPort``.
+        """
+        return await _transcribe_connection_op(self, model)
 
     # --- internals -----------------------------------------------------------
 
     async def _set_active(self, resource: Resource, *, active: bool, actor: str) -> None:
         config = dict(resource.config)
         config["is_active"] = active
-        await self._resources.update_config(self._ref(resource.name), config, actor)
-
-    async def _set_internal_default_flag(
-        self, resource: Resource, *, value: bool, actor: str
-    ) -> None:
-        config = dict(resource.config)
-        config["internal_default"] = value
         await self._resources.update_config(self._ref(resource.name), config, actor)

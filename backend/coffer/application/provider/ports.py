@@ -76,9 +76,18 @@ class ProviderIntrospectionPort(Protocol):
 
 
 class EngineNotifyPort(Protocol):
-    """What this kind tells Coffer's internal engine when the connection the
-    engine runs on moves (spec internal-engine FR-005)."""
+    """What this kind tells Coffer's internal engine when a connection the
+    engine runs on moves (spec internal-engine FR-005/FR-026).
+
+    Two connections, two methods: the one Coffer thinks with and the one it
+    transcribes speech with. They are told apart rather than folded together
+    because a move of one must not forget the other's model.
+    """
 
     async def drop_model_unless_curated(
+        self, curated_ids: Collection[str], *, actor: str
+    ) -> None: ...
+
+    async def drop_transcribe_model_unless_curated(
         self, curated_ids: Collection[str], *, actor: str
     ) -> None: ...

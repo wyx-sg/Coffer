@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.engine_ports import LlmCompletionPort
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.domain.memory.note import NOTE_TYPES
 from coffer.infrastructure.memory.raw_store import StoredRawEntry
 
@@ -79,7 +80,10 @@ DEFAULT_MAX_ENTRIES_PER_CHUNK = 20
 #: costs a routing decision some tail context rather than costing a note any.
 MAX_ROUTING_TEXT_CHARS = 2000
 
-_TIMEOUT_SECONDS = 60.0
+#: Replaced by the operator's own bound (spec internal-engine FR-023). Kept as
+#: the signature's default so a caller with no settings to consult — a unit
+#: test, a pass built before the singleton exists — behaves as it always did.
+_TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
 
 ROUTING_SYSTEM = (
     "You maintain one partition of a developer's shared AI memory. The "
@@ -311,8 +315,16 @@ async def route_chunk(
     model: Any,
     completion: LlmCompletionPort,
     credential_resolver: Callable[[str], str],
+    timeout: float = _TIMEOUT_SECONDS,
 ) -> tuple[RouteAction, ...]:
-    """Route one batch of entries. Returns ``()`` for any failure at all."""
+    """Route one batch of entries. Returns ``()`` for any failure at all.
+
+    A timeout here is not a data loss: the entries in this batch simply stay
+    undistilled and the next pass sees them again. That is also why the bound
+    is the operator's to raise — the failure is invisible from the outside, so
+    a bound too tight for their endpoint shows up only as a layer that
+    converges far more slowly than it reports.
+    """
     try:
         text = await asyncio.wait_for(
             completion.complete(
@@ -322,8 +334,9 @@ async def route_chunk(
                 ),
                 model=model,
                 credential_resolver=credential_resolver,
+                timeout=timeout,
             ),
-            timeout=_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
     except asyncio.CancelledError:
         raise

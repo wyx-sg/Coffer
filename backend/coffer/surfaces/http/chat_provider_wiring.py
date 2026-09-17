@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.chat.registry import AgentProviderRegistry
-from coffer.application.engine.resolve import resolve_internal_connection
+from coffer.application.engine.resolve import resolve_transcribe_connection
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
@@ -22,7 +22,10 @@ from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
 from coffer.surfaces.http.agent_dependencies import get_agent_model_catalogue
-from coffer.surfaces.http.engine_config_composition import read_internal_engine_model
+from coffer.surfaces.http.engine_config_composition import (
+    read_internal_engine_timeout,
+    read_transcribe_model,
+)
 from coffer.surfaces.http.provider_dependencies import get_provider_service
 
 if TYPE_CHECKING:
@@ -37,10 +40,12 @@ def build_agent_provider_registry(
     """Construct and populate the agent-provider registry.
 
     ``credential_resolver`` is what lets voice be transcribed: with it, a turn
-    carrying audio reaches the user's ``internal_default`` connection — the same
-    one that runs the knowledge tidy pass. Without it (and without such a
-    connection) audio is handed to the agent untouched and nothing leaves the
-    machine. That is the default.
+    carrying audio reaches the connection the operator marked
+    ``transcribe_default``, on the model they chose for it. Without the
+    resolver, without such a connection, or without a model, audio is handed to
+    the agent untouched and nothing leaves the machine. That is the default,
+    and there is no fallback to the engine's own connection (spec
+    internal-engine FR-025).
 
     ``compose_memory_context`` is the memory kind's own third system-prompt
     append (spec memory FR-024) for a channel-driven turn — a plain callable
@@ -54,14 +59,16 @@ def build_agent_provider_registry(
     registry = AgentProviderRegistry()
 
     # Resolved per turn (lazily, through the provider kind's getter), so
-    # designating or clearing the internal default takes effect immediately.
-    # Returns None whenever transcription must not happen.
+    # designating or clearing the transcription connection takes effect
+    # immediately. Returns None whenever transcription must not happen — which
+    # is every turn until the operator marks a connection AND picks a model.
     transcriber_factory = (
         remote_transcriber_factory(
-            lambda: resolve_internal_connection(
-                read_model=read_internal_engine_model, connections=get_provider_service()
+            lambda: resolve_transcribe_connection(
+                read_model=read_transcribe_model, connections=get_provider_service()
             ),
             credential_resolver,
+            read_internal_engine_timeout,
         )
         if credential_resolver is not None
         else None

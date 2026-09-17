@@ -1,15 +1,17 @@
 // frontend/src/pages/settings/EngineSettings.test.tsx
 //
-// Settings → Engine holds Coffer's own two engine configs: the internal LLM
-// connection + model. It moved here off the
-// model-provider page, which is now purely the connection library agents draw
-// from — internal configuration is not a resource.
+// Settings → Engine holds Coffer's own engine configs: the internal LLM
+// connection + model, the bound on ONE call to that model, and — in its own
+// card — the connection and model speech is transcribed with. It moved here off
+// the model-provider page, which is now purely the connection library agents
+// draw from — internal configuration is not a resource.
 import { beforeEach, describe, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { acceptance } from "@/test/acceptance";
 import { EngineSettings } from "./EngineSettings";
+import type { InternalEngineConfig } from "@/lib/api/internalEngine";
 import type { Provider } from "@/lib/api/providers";
 
 vi.mock("@/lib/api/providers", async (orig) => {
@@ -23,15 +25,26 @@ vi.mock("@/lib/api/providers", async (orig) => {
       remove: vi.fn(),
       activate: vi.fn(),
       setInternalDefault: vi.fn(),
+      setTranscribeDefault: vi.fn(),
     },
   };
 });
 
 // The internal-engine section reads/writes its own singleton config, and the
 // model dropdown lists the chosen endpoint's models — both hit the network.
+const setBound = vi.fn();
+
+// The engine config is a singleton the whole page reads; each test sets the one
+// it needs before rendering. Nested behind arrows so the mock factory, which
+// runs at import time, never touches it before the declaration below.
+let engineConfig: Partial<InternalEngineConfig> = {};
+
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
-  useInternalEngineConfig: () => ({ data: { model: null, updated_at: null, upkeep: {} } }),
+  useInternalEngineConfig: () => ({ data: engineConfig }),
   useSetInternalEngineModel: () => ({ isPending: false, mutate: vi.fn() }),
+  useSetModelTimeout: () => ({ isPending: false, mutate: setBound }),
+  // The speech-to-text card sits on this page too; its own suite covers it.
+  useSetTranscribeModel: () => ({ isPending: false, mutate: vi.fn() }),
   // The upkeep card sits on this page too; its own suite covers its behaviour.
   useSetUpkeep: () => ({ isPending: false, mutate: vi.fn() }),
 }));
@@ -50,6 +63,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   compatible_agents: ["claude_code"],
   is_active: false,
   internal_default: false,
+  transcribe_default: false,
   models: [],
   enabled: true,
   description: null,
@@ -83,6 +97,13 @@ function renderPage() {
 describe("EngineSettings", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    engineConfig = {
+      model: null,
+      updated_at: null,
+      upkeep: {},
+      model_timeout_s: null,
+      default_model_timeout_s: 60,
+    };
   });
 
   acceptance("internal-engine", "Settings → Engine shows and changes both halves", async () => {
@@ -94,7 +115,72 @@ describe("EngineSettings", () => {
     expect(screen.queryByText("Embedding")).not.toBeInTheDocument();
     // The passes Coffer runs on its own belong beside the model they run on.
     expect(screen.getByText("Automatic upkeep")).toBeInTheDocument();
+    // Speech gets its own card: it runs on a second connection flag, and
+    // nothing falls back from it to the engine's.
+    expect(screen.getByText("Speech to text")).toBeInTheDocument();
   });
+
+  acceptance(
+    "internal-engine",
+    "bound how long one call to Coffer's own model may take",
+    async () => {
+      // A blank here would leave the reader unable to tell how long Coffer
+      // actually waits before giving up on its own model.
+      apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+      renderPage();
+
+      expect(await screen.findByText("Default (1 min)")).toBeInTheDocument();
+    },
+  );
+
+  acceptance("internal-engine", "bound how long one call to Coffer's own model may take", async () => {
+    engineConfig = { ...engineConfig, model_timeout_s: 300 };
+    apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+    renderPage();
+
+    expect(await screen.findByText("5 min")).toBeInTheDocument();
+  });
+
+  acceptance(
+    "internal-engine",
+    "bound how long one call to Coffer's own model may take",
+    async () => {
+      // The CLI writes any number in range; showing only our own choices would
+      // make a working setting read as one nobody made.
+      engineConfig = { ...engineConfig, model_timeout_s: 45 };
+      apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+      renderPage();
+
+      expect(await screen.findByText("45s")).toBeInTheDocument();
+    },
+  );
+
+  acceptance("internal-engine", "bound how long one call to Coffer's own model may take", async () => {
+    apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+    renderPage();
+    await screen.findByText("Coffer's model");
+
+    openSelect(/^time limit per call$/i);
+    fireEvent.click(screen.getByRole("option", { name: "5 min" }));
+
+    await waitFor(() => expect(setBound).toHaveBeenCalledWith(300));
+  });
+
+  acceptance(
+    "internal-engine",
+    "bound how long one call to Coffer's own model may take",
+    async () => {
+      engineConfig = { ...engineConfig, model_timeout_s: 300 };
+      apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
+      renderPage();
+      await screen.findByText("Coffer's model");
+
+      openSelect(/^time limit per call$/i);
+      fireEvent.click(screen.getByRole("option", { name: "Default (1 min)" }));
+
+      await waitFor(() => expect(setBound).toHaveBeenCalledWith(null));
+    },
+  );
 
   acceptance("provider-switching", "set a connection as the internal engine default", async () => {
     apiMock.list.mockResolvedValue({

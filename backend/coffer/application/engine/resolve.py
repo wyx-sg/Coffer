@@ -65,6 +65,38 @@ async def resolve_internal_connection(
     return await connections.internal_default_connection(model)
 
 
+class TranscribeConnectionPort(Protocol):
+    """The same question again, for the connection marked ``transcribe_default``.
+
+    A second port rather than an argument on the first, because the two answers
+    come from two different rows and a caller that could pass the wrong one is
+    a caller that eventually will.
+    """
+
+    async def transcribe_connection(self, model: str) -> ResolvedConnection | None: ...
+
+
+async def resolve_transcribe_connection(
+    *,
+    read_model: InternalModelReader,
+    connections: TranscribeConnectionPort,
+) -> ResolvedConnection | None:
+    """The connection + model Coffer transcribes speech with, or ``None``.
+
+    **There is deliberately no fallback to the internal-engine connection.**
+    They are different models: the endpoint that serves chat completions
+    commonly serves no ``/audio/transcriptions`` at all, so borrowing it would
+    replace "Coffer transcribes nothing, and hands the agent the audio" — a
+    state the chat surface already handles, and which keeps the recording on
+    this machine — with a 404 on every voice message. Silence beats a wrong
+    guess here, so an unmarked connection or an unchosen model is an answer.
+    """
+    model = await read_model()
+    if not model:
+        return None
+    return await connections.transcribe_connection(model)
+
+
 class InternalEngineConnection:
     """The resolution above, bound to its two sources at composition time.
 
@@ -101,5 +133,7 @@ __all__ = [
     "InternalDefaultConnectionPort",
     "InternalEngineConnection",
     "InternalModelReader",
+    "TranscribeConnectionPort",
     "resolve_internal_connection",
+    "resolve_transcribe_connection",
 ]

@@ -65,6 +65,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal-engine-config/timeout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Bound one call to Coffer's own model
+         * @description How long ONE call to the internal engine's model may take before the
+         *     caller gives up (internal-engine FR-022). The right number is a
+         *     property of the operator's endpoint, not of Coffer: against a gateway
+         *     whose typical answer takes 25-30 seconds the built-in 60 leaves barely
+         *     a factor of two, and a pass that times out defers its work and reports
+         *     success — so the layer converges at a fraction of its rate while
+         *     nothing looks broken.
+         *
+         *     `null` returns the bound to `default_model_timeout_s`, which is the
+         *     only way back and keeps the default in one place. A value outside the
+         *     allowed range is REFUSED here rather than clamped, because this is the
+         *     operator asking for a number; the background passes clamp instead, so
+         *     a row written by an older build cannot take a pass down.
+         *
+         *     A value outside the range is refused by this route and by the CLI with
+         *     the same error (FR-024). One setting per request, for the reason
+         *     `UpkeepUpdate` records (FR-027). Emits an `internal_engine_model_set`
+         *     audit entry naming the actor.
+         */
+        put: operations["updateModelTimeout"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal-engine-config/transcribe-model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the model Coffer transcribes speech with
+         * @description The speech-to-text model (internal-engine FR-025). Its ENDPOINT and key
+         *     come from the connection flagged `transcribe_default`, which spec
+         *     provider-switching serves under `/api/v1/providers` — NOT from the
+         *     `internal_default` one, and there is deliberately no fallback between
+         *     them: they are different models, and a chat gateway commonly serves no
+         *     `/audio/transcriptions` at all.
+         *
+         *     `null` or empty stops transcription, which is a real answer rather than
+         *     an unset one — with no model, or no connection marked, a turn carrying
+         *     audio hands the agent the file untouched and the recording never leaves
+         *     the machine. Emits an `internal_engine_model_set` audit entry.
+         */
+        put: operations["updateTranscribeModel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -79,6 +146,12 @@ export interface components {
             upkeep?: {
                 [key: string]: components["schemas"]["UpkeepSettingOut"];
             };
+            /** @description The chosen bound on one model call, or null while none has been chosen. */
+            model_timeout_s?: number | null;
+            /** @description What bounds a call while `model_timeout_s` is null — reported for the same reason `default_interval_s` is, so a settings surface can name the default rather than show a blank. */
+            default_model_timeout_s?: number;
+            /** @description The speech-to-text model, or null when Coffer transcribes nothing and hands the agent the audio file untouched. */
+            transcribe_model?: string | null;
         };
         /** @description One unattended pass's switch and timer. */
         UpkeepSettingOut: {
@@ -103,6 +176,15 @@ export interface components {
         };
         /** @description Set the internal-engine model; null/empty clears it. */
         InternalEngineConfigUpdate: {
+            model?: string | null;
+        };
+        /** @description Bound one call to Coffer's own model; null returns it to the default. */
+        ModelTimeoutUpdate: {
+            /** @description Seconds one model call may take. The floor is not politeness — below it the bound would expire before a healthy endpoint could answer — and the ceiling bounds the damage a typo does, since an unattended pass holding a wedged connection for an hour is the failure the bound exists to prevent. */
+            seconds?: number | null;
+        };
+        /** @description Set the speech-to-text model; null/empty stops transcription. */
+        TranscribeModelUpdate: {
             model?: string | null;
         };
         ErrorOut: {
@@ -130,6 +212,7 @@ export interface components {
          * @description Validation failure. The cases this surface has:
          *     - an unknown `pass` name
          *     - an `interval_s` below the floor
+         *     - a `seconds` outside the allowed bound range
          */
         UnprocessableEntity: {
             headers: {
@@ -228,6 +311,59 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateModelTimeout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelTimeoutUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEngineConfigOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateTranscribeModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TranscribeModelUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEngineConfigOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             500: components["responses"]["InternalError"];
         };
     };

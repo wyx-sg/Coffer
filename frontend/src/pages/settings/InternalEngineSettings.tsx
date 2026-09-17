@@ -5,10 +5,20 @@
 // agents: the connection is the global `internal_default`, the model is a
 // separate singleton. Replaces the per-card star toggle that used to set it.
 //
+// The third control is the bound on ONE call to that model (spec
+// internal-engine FR-022). It belongs beside the model rather than in the
+// upkeep card because it is a property of the ENDPOINT, not of any one pass:
+// the same number bounds the memory distil pass, a knowledge description, each
+// turn of curation and a transcription. It is here for a failure that does not
+// look like one — a pass that runs out of time defers its work and reports
+// success, so a bound set below what the endpoint really takes leaves the
+// layer converging at a fraction of its rate with nothing looking broken.
+//
 // It is Coffer's own configuration, not a resource served to agents, so it sits
 // under Settings → Engine and reads the connection list itself rather than
 // taking it from a resource page above.
-import { useEffect, useState } from "react";
+//
+// Edits auto-save, like every other settings surface here (no Save button).
 import { useTranslation } from "react-i18next";
 import { Cpu } from "lucide-react";
 
@@ -22,10 +32,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
-import { modelIds } from "@/lib/api/providers";
 import { useProviders, useSetInternalDefaultProvider } from "@/lib/hooks/useProviders";
-import { useInternalEngineConfig, useSetInternalEngineModel } from "@/lib/hooks/useInternalEngine";
-import { useListProviderModels } from "@/lib/hooks/useModelIntrospection";
+import {
+  useInternalEngineConfig,
+  useSetInternalEngineModel,
+  useSetModelTimeout,
+} from "@/lib/hooks/useInternalEngine";
+import { useConnectionModelOptions } from "@/lib/hooks/useConnectionModelOptions";
+
+/** The bounds offered, in seconds. Every one is inside the range the server
+ *  accepts (5–600), so the dropdown cannot compose a refusal; the short end is
+ *  for a local model that either answers at once or is wedged, the long end for
+ *  a gateway that thinks for minutes. */
+const TIMEOUT_CHOICES = [15, 30, 60, 120, 300, 600];
+
+/** `null` is "the built-in bound" — the server tells us what that is, so the
+ *  option can name it rather than showing a blank (as the upkeep card's
+ *  interval does). */
+const DEFAULT_VALUE = "default";
+
+type Translate = ReturnType<typeof useTranslation>["t"];
+
+function timeoutLabel(t: Translate, seconds: number): string {
+  if (seconds >= 60 && seconds % 60 === 0)
+    return t("settings.internalEngine.minutes", { count: seconds / 60 });
+  return t("settings.internalEngine.seconds", { count: seconds });
+}
 
 export function InternalEngineSettings() {
   const { t } = useTranslation();
@@ -34,50 +66,22 @@ export function InternalEngineSettings() {
   const setInternalDefault = useSetInternalDefaultProvider();
   const { data: config } = useInternalEngineConfig();
   const setModel = useSetInternalEngineModel();
-  const listModels = useListProviderModels();
-  const [fetched, setFetched] = useState<string[]>([]);
+  const setBound = useSetModelTimeout();
 
-  // The internal engine runs a CHAT model, so both sources are narrowed to
-  // modality `text` (spec provider-switching FR-030): a connection's curated set
-  // when it has one — that IS its catalogue, and an embedding or image entry is
-  // no more a chat model here than in an agent's picker — and otherwise the
-  // endpoint's own list, probed below.
-  const curated = selected?.models ?? [];
-  const restricted = curated.length > 0;
-
-  // Fetch the chosen connection's models so the model dropdown is populated.
-  // A curated connection needs no probe. `stale` guards against a slower earlier
-  // request landing after a newer one when the connection is switched rapidly.
-  useEffect(() => {
-    if (!selected || restricted) {
-      setFetched([]);
-      return;
-    }
-    let stale = false;
-    listModels.mutate(
-      {
-        provider: selected.protocol,
-        base_url: selected.base_url,
-        credential_ref: selected.credential_ref,
-      },
-      {
-        onSuccess: (r) => {
-          if (!stale) setFetched(modelIds(r.models, "text"));
-        },
-      },
-    );
-    return () => {
-      stale = true;
-    };
-    // listModels identity is stable across renders; re-fetch only on connection.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.name, selected?.base_url, selected?.credential_ref, restricted]);
-
+  // The internal engine runs a CHAT model, so the list is narrowed to modality
+  // `text`; the saved model stays at its head even when the endpoint cannot
+  // list it.
   const currentModel = config?.model ?? "";
-  const models = restricted ? modelIds(curated, "text") : fetched;
-  // Show the saved model even when the endpoint can't list it.
-  const options =
-    currentModel && !models.includes(currentModel) ? [currentModel, ...models] : models;
+  const options = useConnectionModelOptions(selected, "text", currentModel);
+
+  const timeout = config?.model_timeout_s ?? null;
+  const defaultTimeout = config?.default_model_timeout_s;
+  // A bound written by the CLI need not be one of ours; show it rather than
+  // silently reading as something the user did not choose.
+  const timeoutChoices =
+    timeout !== null && !TIMEOUT_CHOICES.includes(timeout)
+      ? [timeout, ...TIMEOUT_CHOICES].sort((a, b) => a - b)
+      : TIMEOUT_CHOICES;
 
   if (isPending) {
     return (
@@ -145,6 +149,42 @@ export function InternalEngineSettings() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* The timeout renders only once the server has told us its default:
+            offering "Default" without the number it stands for is the blank
+            this control exists to avoid. */}
+        {defaultTimeout === undefined ? null : (
+          <div className="grid gap-1.5 sm:col-span-2">
+            <Label>{t("settings.internalEngine.timeout")}</Label>
+            <Select
+              value={timeout === null ? DEFAULT_VALUE : String(timeout)}
+              onValueChange={(v) => setBound.mutate(v === DEFAULT_VALUE ? null : Number(v))}
+              disabled={setBound.isPending}
+            >
+              <SelectTrigger
+                className="w-full sm:w-56"
+                aria-label={t("settings.internalEngine.timeout")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={DEFAULT_VALUE}>
+                  {t("settings.internalEngine.defaultTimeout", {
+                    timeout: timeoutLabel(t, defaultTimeout),
+                  })}
+                </SelectItem>
+                {timeoutChoices.map((s) => (
+                  <SelectItem key={s} value={String(s)}>
+                    {timeoutLabel(t, s)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {t("settings.internalEngine.timeoutHint")}
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

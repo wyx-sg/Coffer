@@ -338,3 +338,34 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../
   notification. For a setting whose effect never shows up in the response that
   acknowledges it, a number is the only acceptance test. An agent that reports no
   efforts sends no field and shows no control — the path is inert, not defaulted.
+
+## Amendment 2026-09-17 — speech-to-text gets a flag of its own
+
+Authoritative design: [spec provider-switching](../../specs/provider-switching/spec.md)
+FR-035 and [spec internal-engine](../../specs/internal-engine/spec.md) FR-025 –
+FR-027.
+
+- **D18 — A second global flag, `transcribe_default`, not a second use of the
+  first.** D said one connection, two uses: active for an agent AND the internal
+  engine, one key. Voice transcription was folded in on that reasoning — it is
+  something Coffer does on its own behalf, so it borrowed `internal_default` and
+  introduced no new place to configure. It introduced a worse one. The two are
+  not one endpoint wearing two hats: the gateway a user points Coffer's engine at
+  serves chat completions and commonly serves no `/audio/transcriptions` at all,
+  so the borrowed connection answered 404 on every voice message — replacing a
+  safe, already-handled state (nothing marked ⇒ hand the agent the audio file,
+  the recording never leaves the machine) with a failure. Speech-to-text
+  therefore carries its own flag, of the same shape — at most one globally,
+  clear-then-set, `provider_transcribe_default_set` audited, the engine notified
+  so it can drop a model the new endpoint does not curate — and **nothing falls
+  back to the other flag in either direction**. One connection may carry both,
+  when one endpoint really does serve both.
+- **D19 — And its own model, on the engine's settings row, because an
+  environment variable could not be reached.** The speech-to-text model was
+  `COFFER_TRANSCRIBE_MODEL`, read inside the daemon. The daemon is spawned
+  detached by whichever surface first needs one and inherits that caller's
+  environment, so a value exported in a shell profile never reached it: in a
+  packaged install the model was unchangeable. It is a setting now, beside the
+  engine's own model, and it follows the same both-halves-or-neither rule —
+  unset means Coffer transcribes nothing, which is an answer rather than a
+  failure.

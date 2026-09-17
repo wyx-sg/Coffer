@@ -20,6 +20,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
 import { ActiveProviderBadge } from "@/components/settings/ActiveProviderBadge";
+import { TranscribeProviderBadge } from "@/components/settings/TranscribeProviderBadge";
 import { PROTOCOL_LABEL_KEY } from "@/components/settings/connectionPresets";
 import { ProviderForm } from "@/components/settings/ProviderForm";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +81,7 @@ export function ProviderDetailHeader({
           <>
             <Badge variant="secondary">{t(PROTOCOL_LABEL_KEY[provider.protocol])}</Badge>
             {provider.is_active ? <ActiveProviderBadge /> : null}
+            {provider.transcribe_default ? <TranscribeProviderBadge /> : null}
           </>
         }
         actions={

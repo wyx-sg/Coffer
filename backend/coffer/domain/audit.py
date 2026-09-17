@@ -73,6 +73,7 @@ class AuditEventType(StrEnum):
     # spec provider-switching
     PROVIDER_SWITCHED = "provider_switched"
     PROVIDER_INTERNAL_DEFAULT_SET = "provider_internal_default_set"
+    PROVIDER_TRANSCRIBE_DEFAULT_SET = "provider_transcribe_default_set"
     # A projection write refused because the agent's native config file changed
     # on disk between Coffer's read and its write (optimistic concurrency).
     PROVIDER_PROJECTION_REFUSED = "provider_projection_refused"

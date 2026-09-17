@@ -122,6 +122,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "switch",
         "use-builtin",
         "internal-default",
+        # The transcription flag is its OWN command for the reason it is its
+        # own flag: a chat gateway commonly serves no transcription endpoint,
+        # so there is no fallback from `internal-default` to fold it into.
+        "transcribe-default",
     },
     "sync": {
         "adopt",
@@ -145,9 +149,16 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # it runs unattended. Listed here because `.agents/sdd.md` requires every
     # management operation to be reachable from a terminal, and one of these
     # passes rewrites the user's own knowledge files on a timer.
-    "engine": {"model", "upkeep"},
+    "engine": {"model", "upkeep", "timeout", "transcribe-model"},
     "engine model": {"show", "set", "clear"},
     "engine upkeep": {"list", "set"},
+    # The other two settings on the same singleton (spec internal-engine
+    # FR-027). `timeout default` and `transcribe-model clear` are named
+    # verbs rather than a null argument because a terminal has no way to spell
+    # a JSON null, and the way back to the default is the half of each setting
+    # an operator most needs.
+    "engine timeout": {"show", "set", "default"},
+    "engine transcribe-model": {"show", "set", "clear"},
 }
 
 #: The groups whose surface is options rather than subcommands. Each is

@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from coffer.application.engine_ports import LlmCompletionPort
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.application.memory import distil_routing as routing
 from coffer.domain.memory.note import NOTE_TYPES, TYPE_PROJECT, Note
 from coffer.domain.memory.retired import RetiredNote
@@ -241,6 +242,7 @@ async def build_plan(
     model: Any,
     completion: LlmCompletionPort,
     credential_resolver: Callable[[str], str],
+    timeout: float = DEFAULT_MODEL_TIMEOUT_S,
     chunk_size: int,
 ) -> Plan:
     """Stage one over every chunk, folded into one plan for the whole pass."""
@@ -262,6 +264,7 @@ async def build_plan(
             model=model,
             completion=completion,
             credential_resolver=credential_resolver,
+            timeout=timeout,
         )
         # Two rounds over the chunk: a merge naming a sibling entry can only be
         # resolved once that sibling has a note to join, and the model answers

@@ -55,21 +55,20 @@ again. This keeps the organise pass's discipline, which was good, and it is
 why a pass against a degraded model is merely useless rather than destructive.
 
 **Which entries are new.** An entry is undistilled when its ``entry_id``
-appears neither in any note's ``origins`` nor as a slug in ``RETIRED.md``.
-Both halves matter. Without the first, every pass re-routes the whole
-partition. Without the second, an entry the pass deliberately kept nothing
-from would be re-offered forever, since a dropped entry stays in ``.raw/``
-(FR-026 forbids deleting it). So a drop is recorded as a retirement record
-keyed by the **entry id** — the identity of what is being excluded — and that
-record's title joins the retired subjects the next routing prompt must not
-re-open.
+appears neither in any note's ``origins`` nor in any ``RETIRED.md`` record's
+``entry_ids``. Both halves matter. Without the first, every pass re-routes the
+whole partition. Without the second, an entry the pass deliberately kept
+nothing from would be re-offered forever, since a dropped entry stays in
+``.raw/`` (FR-026 forbids deleting it). So a drop is recorded as a retirement
+record naming the **entry ids** it excludes — the identity of what is being
+left out — and that record's title joins the retired subjects the next routing
+prompt must not re-open.
 
-A retired *note*'s own origins are a deliberate exception: they become
-undistilled again on the next pass, are offered to routing with that
-retirement's title in front of them, and are dropped — which records them by
-entry id and ends it. The pass converges one round later rather than
-immediately, which is cheaper than storing a note's origin keys inside a
-record whose other job is to be read by a human.
+A retired *note*'s own origins go on its record the same way. Nothing else
+accounts for them once the note file is gone, so leaving them off would send
+them back through routing a round later only to be dropped — charged to the
+model twice to reach the answer this pass already had. Both cases therefore
+converge in one pass.
 """
 
 from __future__ import annotations
@@ -79,6 +78,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
+from coffer.application.engine_timeout import TimeoutReader, resolve_timeout
 from coffer.application.memory import distil_apply as applying
 from coffer.application.memory import distil_plan as planning
 from coffer.application.memory import distil_routing as routing
@@ -206,6 +206,7 @@ async def distil_partition(
     repository_path: str = "",
     credential_resolver: Callable[[str], str] | None = None,
     max_entries_per_chunk: int = routing.DEFAULT_MAX_ENTRIES_PER_CHUNK,
+    read_timeout: TimeoutReader | None = None,
 ) -> DistilResult:
     """Distil one partition's new raw entries into its notes, then index it.
 
@@ -219,6 +220,11 @@ async def distil_partition(
     one into the completion adapter it passes instead; when neither happens
     the ref travels unresolved, the completion fails, and the pass degrades to
     having written nothing but the index.
+
+    ``read_timeout`` is read once per pass, not once per request: a pass is
+    minutes long and every call in it should be judged by the same bound, so a
+    settings change mid-pass takes effect from the next one. ``None`` is the
+    built-in default (spec internal-engine FR-022).
     """
     notes = store.list_notes(partition)
     retired = store.read_retired(partition)
@@ -241,6 +247,7 @@ async def distil_partition(
         )
 
     resolver = credential_resolver if credential_resolver is not None else _unbound_credential
+    timeout = await resolve_timeout(read_timeout)
     plan = await planning.build_plan(
         partition,
         entries,
@@ -249,6 +256,7 @@ async def distil_partition(
         model=model,
         completion=completion,
         credential_resolver=resolver,
+        timeout=timeout,
         chunk_size=max_entries_per_chunk,
     )
     counts = await applying.carry_out(
@@ -258,6 +266,7 @@ async def distil_partition(
         model=model,
         completion=completion,
         credential_resolver=resolver,
+        timeout=timeout,
     )
     _write_index(partition, repository_path)
     logger.info(

@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.application.knowledge.curate import CURATION_SYSTEM, run_curation
 from coffer.application.knowledge.curate_tools import (
     MAX_WRITES_PER_PASS,
@@ -76,11 +77,24 @@ class _Loop:
     def __init__(self, calls: list[tuple[str, dict[str, Any]]]) -> None:
         self._calls = calls
         self.prompt = ""
+        self.timeout: float | None = None
         self.results: list[dict[str, Any]] = []
 
     async def run(
-        self, *, model, tools, system_prompt, user_prompt, credential_resolver, recursion_limit
+        self,
+        *,
+        model,
+        tools,
+        system_prompt,
+        user_prompt,
+        credential_resolver,
+        recursion_limit,
+        timeout=None,
     ):  # type: ignore[no-untyped-def]
+        # Recorded, not merely accepted: curation's turns were the one model
+        # call in Coffer with no bound at all, so "the bound arrives here" is
+        # the thing worth asserting.
+        self.timeout = timeout
         # The rules are the system turn and the brief is the human turn; the
         # assertions below read the brief, so that is what `prompt` holds.
         self.system = system_prompt
@@ -352,3 +366,34 @@ def test_retire_is_bounded_like_a_write(knowledge_root) -> None:  # type: ignore
     }
     assert counters.writes == MAX_WRITES_PER_PASS
     assert "retire_topic" in tools
+
+
+async def test_every_turn_of_the_loop_carries_the_operators_bound() -> None:
+    """Curation's turns were the one model call in Coffer with no bound at all.
+
+    A wedged endpoint therefore held the pass until the daemon restarted, and
+    nothing on any surface said so. The bound travels to the CLIENT rather than
+    around the call because the loop is one ``await`` from out here — wrapping
+    it could bound the whole conversation or nothing, and neither is "each turn
+    gets a fair chance and then gives up".
+    """
+    _source()
+    loop = _Loop([])
+
+    async def chosen() -> int | None:
+        return 150
+
+    await _run(loop, read_timeout=chosen)
+
+    assert loop.timeout == 150.0
+
+
+async def test_a_pass_with_no_settings_to_consult_still_has_a_bound() -> None:
+    # The unit-test construction, and any pass built before the singleton
+    # exists. Making the bound configurable must not make it optional.
+    _source()
+    loop = _Loop([])
+
+    await _run(loop)
+
+    assert loop.timeout == DEFAULT_MODEL_TIMEOUT_S

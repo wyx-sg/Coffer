@@ -34,6 +34,7 @@ const existing = (overrides?: Partial<Provider>): Provider => ({
   compatible_agents: ["codex"],
   is_active: false,
   internal_default: false,
+  transcribe_default: false,
   models: [],
   enabled: true,
   description: null,

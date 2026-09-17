@@ -34,6 +34,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any, Protocol
 
 from coffer.application.engine_ports import ModelSelectorPort
+from coffer.application.engine_timeout import TimeoutReader, resolve_timeout
 from coffer.application.knowledge import candidates
 from coffer.application.knowledge.curate_tools import (
     MAX_WRITES_PER_PASS,
@@ -102,6 +103,7 @@ class AgenticCurationPort(Protocol):
         user_prompt: str,
         credential_resolver: Callable[[str], str],
         recursion_limit: int,
+        timeout: float | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -148,6 +150,7 @@ async def run_curation(
     models: ModelSelectorPort,
     credential_resolver: Callable[[str], str],
     recursion_limit: int = DEFAULT_CURATION_RECURSION_LIMIT,
+    read_timeout: TimeoutReader | None = None,
 ) -> dict[str, Any]:
     """Fold one pending source into ``collection``'s topic documents.
 
@@ -198,6 +201,12 @@ async def run_curation(
             user_prompt=_brief(collection, source, candidate_bodies, every_topic),
             credential_resolver=credential_resolver,
             recursion_limit=recursion_limit,
+            # Per TURN, not per pass. A curation pass is a conversation of up
+            # to ``recursion_limit`` turns and is one ``await`` from here, so a
+            # bound wrapped around this call could only stop the whole pass or
+            # nothing — and before this it stopped neither, which left a wedged
+            # endpoint holding the pass until the daemon restarted.
+            timeout=await resolve_timeout(read_timeout),
         )
     except asyncio.CancelledError:
         raise
@@ -256,7 +265,9 @@ class CurationPass:
         credential_resolver: Callable[[str], str],
         recursion_limit: int = DEFAULT_CURATION_RECURSION_LIMIT,
         on_corpus_changed: Callable[[], Awaitable[None]] | None = None,
+        read_timeout: TimeoutReader | None = None,
     ) -> None:
+        self._read_timeout = read_timeout
         self._agent = agent
         self._models = models
         self._credential_resolver = credential_resolver
@@ -284,6 +295,7 @@ class CurationPass:
             models=self._models,
             credential_resolver=self._credential_resolver,
             recursion_limit=self._recursion_limit,
+            read_timeout=self._read_timeout,
         )
         if self._on_corpus_changed is not None and outcome.get("status") == "ok":
             with contextlib.suppress(Exception):

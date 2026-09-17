@@ -24,10 +24,36 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
+from coffer.domain.provider.config import ResolvedConnection
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
     from coffer.application.provider.service import ProviderService
+
+
+async def internal_default_connection(
+    service: ProviderService, model: str
+) -> ResolvedConnection | None:
+    """The connection carrying the flag, paired with ``model``.
+
+    This kind answers only WHICH connection carries it and mints the pairing —
+    ``ResolvedConnection`` is its own value object. Whether there is a model to
+    pair at all, and what a missing half means, are the internal engine's rule
+    and live in ``application.engine``.
+    """
+    for r in await service.list():
+        rc = service._cfg(r)
+        if rc.internal_default:
+            return ResolvedConnection(config=rc, model=model)
+    return None
+
+
+async def _set_flag(
+    service: ProviderService, resource: Resource, *, value: bool, actor: str
+) -> None:
+    config = dict(resource.config)
+    config["internal_default"] = value
+    await service._resources.update_config(service._ref(resource.name), config, actor)
 
 
 async def set_internal_default(service: ProviderService, name: str, *, actor: str) -> Resource:
@@ -38,12 +64,12 @@ async def set_internal_default(service: ProviderService, name: str, *, actor: st
         if r.name == name:
             continue
         if service._cfg(r).internal_default:
-            await service._set_internal_default_flag(r, value=False, actor=actor)
+            await _set_flag(service, r, value=False, actor=actor)
             previous = r.name
     if not service._cfg(resource).internal_default:
         # Only a real move rewrites the model; re-setting the connection that is
         # already the internal default changes nothing.
-        await service._set_internal_default_flag(resource, value=True, actor=actor)
+        await _set_flag(service, resource, value=True, actor=actor)
         if service._engine is not None:
             # The connection now in force publishes its own catalogue; the
             # engine decides from it whether the model it holds still stands.

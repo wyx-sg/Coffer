@@ -54,7 +54,11 @@ CONFIG = {
         {"id": "text-embedding-3-large", "modality": "embedding"},
     ],
     "is_active": True,
+    # Both role flags travel, and both travel false here: which connection the
+    # engine runs on and which one speech is transcribed on are decisions the
+    # receiving vault makes for itself, on the machines it actually has.
     "internal_default": False,
+    "transcribe_default": False,
 }
 
 
