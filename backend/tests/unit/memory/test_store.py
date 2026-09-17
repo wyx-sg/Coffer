@@ -1,209 +1,257 @@
-"""Fact files are read and written by filesystem calls only (unit tier, real
-``tmp_path``, no database) — the round-trip requirement is the whole point of
-this module, so these tests build every kind of ``Fact`` the domain allows and
-check it comes back identical.
+"""A partition's four files, and the one-writer-per-directory split (FR-026).
 
 ``COFFER_MEMORY_ROOT`` is pinned to ``tmp_path`` by the suite-wide
-``_isolated_memory_root`` fixture (``backend/tests/conftest.py``); nothing
-here can reach a developer's real memory tree.
+``_isolated_memory_root`` fixture (``backend/tests/conftest.py``), so every
+test here writes real files under a throwaway directory — never a developer's
+real ``~/.coffer/memory``.
+
+This file covers the three ``store.py`` owns — ``notes/``, ``RETIRED.md`` and
+``MEMORY.md``. ``.raw/`` is a module of its own (``raw_store.py``) and is
+tested in ``test_raw_store.py``, which is the split that makes FR-026
+checkable by reading an import list: the one directory only aggregation may
+write is the one module only aggregation imports.
+
+What this file is really about is that **``RETIRED.md`` round-trips
+losslessly** (FR-025). It is the next pass's exclusion list, so a record that
+comes back short is a note re-opened on every pass thereafter — including when
+a reason contains a horizontal rule, which PyYAML writes as an indented
+continuation.
 """
 
 from __future__ import annotations
 
-import pathlib
-
 import pytest
 
-from coffer.domain.memory.fact import (
-    STATUS_ACTIVE,
-    STATUS_SUPERSEDED,
-    TYPE_FEEDBACK,
-    TYPE_PROJECT,
-    Fact,
-    Origin,
-)
+from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, Note, Origin
+from coffer.domain.memory.reader import RawEntry
+from coffer.domain.memory.retired import RetiredNote
 from coffer.infrastructure.memory import paths, store
+from coffer.infrastructure.memory.raw_store import StoredRawEntry, write_raw_entry
+from coffer.infrastructure.memory.store import NoteNotFound
+
+_PARTITION = "coffer"
 
 
-def _fact(**overrides: object) -> Fact:
-    defaults: dict[str, object] = {
-        "slug": "worktree-development",
-        "title": "Develop in a worktree",
-        "description": "Always develop in a git worktree for this repo",
-        "type": TYPE_FEEDBACK,
-        "body": "Always develop in a git worktree — multiple parallel sessions share the repo.",
-        "partition": "coffer",
-        "origins": (
-            Origin(
-                agent="claude_code",
-                native_path="/home/dev/.claude/projects/coffer/memory/feedback-worktree.md",
-                anchor="",
-                captured_at="2026-09-12T00:00:00+00:00",
-                source_written_at="2026-09-01T00:00:00+00:00",
+def _note(slug: str, *, title: str = "A note", type: str = TYPE_PROJECT, **kw: object) -> Note:
+    return Note(
+        slug=slug,
+        title=title,
+        description=kw.pop("description", "one line that answers it"),  # type: ignore[arg-type]
+        type=type,
+        body=kw.pop("body", "Coffer's own prose.\n"),  # type: ignore[arg-type]
+        partition=_PARTITION,
+        origins=kw.pop("origins", (Origin(agent="codex", native_path="/n.md", anchor="a"),)),  # type: ignore[arg-type]
+        created_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-02T00:00:00+00:00",
+        search_terms=kw.pop("search_terms", ()),  # type: ignore[arg-type]
+    )
+
+
+# --- notes -------------------------------------------------------------------
+
+
+def test_a_note_round_trips_with_its_provenance_and_search_terms() -> None:
+    origins = (
+        Origin(agent="claude-code", native_path="/a.md", anchor="x", captured_at="2026-01-01"),
+        Origin(agent="codex", native_path="/b.md", anchor="y", source_written_at="2025-12-01"),
+    )
+    written = _note("worktree-development", origins=origins, search_terms=("worktree", "venv"))
+
+    relative = store.write_note(written)
+
+    assert relative == "coffer/notes/worktree-development.md"
+    back = store.read_note(_PARTITION, "worktree-development")
+    assert back == written
+
+
+def test_a_notes_provenance_names_every_contributing_agent() -> None:
+    store.write_note(
+        _note(
+            "shared",
+            origins=(
+                Origin(agent="claude-code", native_path="/a.md", anchor="x"),
+                Origin(agent="codex", native_path="/b.md", anchor="y"),
             ),
-        ),
-    }
-    defaults.update(overrides)
-    return Fact(**defaults)  # type: ignore[arg-type]
-
-
-def test_write_fact_returns_the_relative_path() -> None:
-    fact = _fact()
-    relpath = store.write_fact(fact)
-    assert relpath == str(pathlib.Path("coffer") / "facts" / "worktree-development.md")
-
-
-def test_round_trip_is_exact_for_a_plain_fact() -> None:
-    fact = _fact()
-    store.write_fact(fact)
-    assert store.read_fact(fact.partition, fact.slug) == fact
-
-
-def test_round_trip_is_exact_with_two_origins() -> None:
-    fact = _fact(
-        origins=(
-            Origin(agent="claude_code", native_path="/a/memory/x.md", anchor=""),
-            Origin(agent="codex", native_path="/b/MEMORY.md", anchor="group-3"),
         )
     )
-    store.write_fact(fact)
-    assert store.read_fact(fact.partition, fact.slug) == fact
+    assert store.read_note(_PARTITION, "shared").agents == ("claude-code", "codex")
 
 
-def test_round_trip_is_exact_when_superseded() -> None:
-    fact = _fact(
-        status=STATUS_SUPERSEDED,
-        superseded_by="abc123def456",
-        conflicts_with=("111111111111",),
+def test_reading_a_note_that_is_not_there_names_the_partition_and_slug() -> None:
+    with pytest.raises(NoteNotFound) as caught:
+        store.read_note(_PARTITION, "never-written")
+    assert caught.value.partition == _PARTITION
+    assert caught.value.slug == "never-written"
+    assert caught.value.code == "MEMORY_NOTE_NOT_FOUND"
+
+
+def test_notes_are_listed_by_slug_not_by_timestamp() -> None:
+    """One definition of "newest" lives in the index renderer (FR-029); a
+    second ordering here is how the file and the delivery drifted apart."""
+    store.write_note(_note("zebra"))
+    store.write_note(_note("alpha"))
+    assert [n.slug for n in store.list_notes(_PARTITION)] == ["alpha", "zebra"]
+
+
+def test_listing_notes_of_a_partition_with_none_is_empty() -> None:
+    assert store.list_notes("never-created") == ()
+
+
+def test_deleting_a_note_reports_whether_there_was_one() -> None:
+    store.write_note(_note("doomed"))
+    assert store.delete_note(_PARTITION, "doomed") is True
+    assert store.delete_note(_PARTITION, "doomed") is False
+    assert store.list_notes(_PARTITION) == ()
+
+
+def test_a_note_keeps_its_identity_when_it_gains_an_origin() -> None:
+    """A note's key is the smallest of its origin keys, so a merge does not
+    silently move a reference off the note it was written about."""
+    first = Origin(agent="codex", native_path="/b.md", anchor="y")
+    second = Origin(agent="claude-code", native_path="/a.md", anchor="x")
+    one = _note("n", origins=(first,))
+    two = _note("n", origins=(first, second))
+    assert two.key == min(first.key, second.key)
+    assert one.key in {first.key}
+
+
+# --- the retirement record ---------------------------------------------------
+
+
+def test_the_retirement_record_round_trips_every_field() -> None:
+    record = RetiredNote(
+        slug="old-note",
+        title="The mechanism shipped",
+        reason="It was removed in the September rewrite.",
+        replaced_by="new-note",
+        retired_at="2026-09-01T00:00:00+00:00",
+        entry_ids=("aaaa1111bbbb2222", "cccc3333dddd4444"),
     )
-    store.write_fact(fact)
-    assert store.read_fact(fact.partition, fact.slug) == fact
+    store.write_retired(_PARTITION, [record])
+    assert store.read_retired(_PARTITION) == (record,)
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        "",
-        "no trailing newline",
-        "trailing newline\n",
-        "blank line at the end\n\n",
-        "multiple\nlines\nin\nthe\nbody",
-        "  leading and trailing whitespace  ",
-    ],
-)
-def test_round_trip_preserves_the_body_byte_for_byte(body: str) -> None:
-    fact = _fact(body=body)
-    store.write_fact(fact)
-    assert store.read_fact(fact.partition, fact.slug).body == body
+def test_a_reason_containing_a_horizontal_rule_round_trips() -> None:
+    """The exclusion list's own trap (FR-025).
+
+    PyYAML writes this reason as an indented continuation, so the ``---``
+    inside it sits at column 4. A reader that ended the frontmatter at the
+    first stripped ``---`` would return **no** records — and a partition whose
+    exclusion list reads empty re-opens every note it retired, on every pass,
+    forever.
+    """
+    reason = "Shipped, then removed.\n\n---\n\nSee the ADR for why.\n"
+    record = RetiredNote(slug="old", title="Old", reason=reason, retired_at="2026-09-01")
+
+    store.write_retired(_PARTITION, [record])
+
+    back = store.read_retired(_PARTITION)
+    assert len(back) == 1
+    assert back[0].reason == reason
+    assert back[0].slug == "old"
 
 
-def test_round_trip_is_exact_in_the_global_partition() -> None:
-    fact = _fact(
-        partition="global",
-        type=TYPE_FEEDBACK,
-        slug="reply-in-chinese",
+def test_the_record_is_written_twice_once_for_each_reader() -> None:
+    """Above the fence for the next pass, below it for a human — and the prose
+    half is regenerated from the same list, so the two cannot disagree."""
+    store.write_retired(
+        _PARTITION,
+        [RetiredNote(slug="old", title="Old note", reason="no longer true", replaced_by="new")],
     )
-    store.write_fact(fact)
-    assert store.read_fact("global", "reply-in-chinese") == fact
+    text = paths.retired_path(_PARTITION).read_text(encoding="utf-8")
+    assert "## Old note" in text
+    assert "was `notes/old.md`" in text
+    assert "replaced by `notes/new.md`" in text
 
 
-def test_write_fact_is_atomic_and_leaves_no_tmp_file() -> None:
-    fact = _fact()
-    store.write_fact(fact)
-    directory = paths.facts_dir(fact.partition)
-    names = {p.name for p in directory.iterdir()}
-    assert names == {"worktree-development.md"}
+def test_a_dropped_entrys_record_names_no_file_that_never_existed() -> None:
+    store.write_retired(
+        _PARTITION,
+        [RetiredNote(slug="", title="Transient", reason="nothing to carry", entry_ids=("abc",))],
+    )
+    text = paths.retired_path(_PARTITION).read_text(encoding="utf-8")
+    assert "never became a note" in text
+    assert "notes/.md" not in text
+    assert store.read_retired(_PARTITION)[0].entry_ids == ("abc",)
 
 
-def test_read_fact_raises_when_absent() -> None:
-    with pytest.raises(store.FactNotFound):
-        store.read_fact("coffer", "does-not-exist")
+def test_writing_an_empty_record_removes_the_file() -> None:
+    store.write_retired(_PARTITION, [RetiredNote(slug="old", title="Old", reason="r")])
+    assert paths.retired_path(_PARTITION).is_file()
+
+    store.write_retired(_PARTITION, [])
+
+    assert not paths.retired_path(_PARTITION).exists()
+    assert store.read_retired(_PARTITION) == ()
 
 
-def test_list_facts_is_empty_for_an_unknown_partition() -> None:
-    assert store.list_facts("nothing-here") == ()
+def test_reading_a_partition_with_no_retirement_record_is_empty() -> None:
+    assert store.read_retired("never-created") == ()
 
 
-def test_list_facts_returns_every_fact_sorted_by_slug() -> None:
-    store.write_fact(_fact(slug="zzz-last"))
-    store.write_fact(_fact(slug="aaa-first"))
-    facts = store.list_facts("coffer")
-    assert [f.slug for f in facts] == ["aaa-first", "zzz-last"]
+def test_the_record_keeps_the_order_it_was_written_in() -> None:
+    records = [
+        RetiredNote(slug="second", title="B", reason="r", retired_at="2026-02-01"),
+        RetiredNote(slug="first", title="A", reason="r", retired_at="2026-01-01"),
+    ]
+    store.write_retired(_PARTITION, records)
+    assert [r.slug for r in store.read_retired(_PARTITION)] == ["second", "first"]
 
 
-def test_list_partitions_is_empty_before_anything_is_written() -> None:
-    assert store.list_partitions() == ()
+# --- the index, and the partition itself -------------------------------------
 
 
-def test_list_partitions_lists_every_partition_directory() -> None:
-    store.write_fact(_fact(partition="coffer"))
-    store.write_fact(_fact(partition="global", slug="a-preference"))
+def test_the_index_is_written_and_read_as_opaque_text() -> None:
+    store.write_index(_PARTITION, "# coffer — Coffer memory\n")
+    assert store.read_index(_PARTITION) == "# coffer — Coffer memory\n"
+
+
+def test_reading_the_index_of_a_partition_without_one_is_empty() -> None:
+    assert store.read_index("never-created") == ""
+
+
+def test_partitions_are_the_directories_on_disk_minus_the_layers_own_state() -> None:
+    store.write_note(_note("a"))
+    store.write_index("global", "index")
+    (paths.memory_root() / ".hidden-state").mkdir(parents=True, exist_ok=True)
+
     assert store.list_partitions() == ("coffer", "global")
 
 
-def test_delete_partition_removes_everything_under_it() -> None:
-    store.write_fact(_fact())
-    store.write_readme("coffer", "/home/dev/coffer")
-    store.delete_partition("coffer")
-    assert not paths.partition_dir("coffer").exists()
+def test_listing_partitions_before_anything_is_written_is_empty() -> None:
     assert store.list_partitions() == ()
 
 
-def test_delete_partition_is_a_no_op_when_absent() -> None:
-    store.delete_partition("never-existed")  # does not raise
+def test_deleting_a_partition_removes_its_notes_index_and_raw_entries() -> None:
+    store.write_note(_note("a", type=TYPE_FEEDBACK))
+    store.write_index(_PARTITION, "index")
+    write_raw_entry(_raw_entry())
+    store.write_retired(_PARTITION, [RetiredNote(slug="x", title="X", reason="r")])
+
+    store.delete_partition(_PARTITION)
+
+    assert not paths.partition_dir(_PARTITION).exists()
+    assert store.list_partitions() == ()
 
 
-def test_clear_facts_removes_facts_but_keeps_the_readme() -> None:
-    store.write_fact(_fact())
-    store.write_readme("coffer", "/home/dev/coffer")
-    store.clear_facts("coffer")
-    assert store.list_facts("coffer") == ()
-    assert paths.readme_path("coffer").is_file()
+def test_deleting_a_partition_that_is_not_there_is_a_no_op() -> None:
+    store.delete_partition("never-created")  # does not raise
 
 
-def test_clear_facts_is_a_no_op_when_the_partition_does_not_exist() -> None:
-    store.clear_facts("never-existed")  # does not raise
-
-
-def test_write_readme_names_the_project_root_for_a_project_partition() -> None:
-    store.write_readme("coffer", "/home/dev/coffer")
-    content = paths.readme_path("coffer").read_text(encoding="utf-8")
-    assert "/home/dev/coffer" in content
-
-
-def test_write_readme_describes_the_global_partition_without_a_project_root() -> None:
-    store.write_readme("global", "/home/dev/coffer")
-    content = paths.readme_path("global").read_text(encoding="utf-8")
-    assert "person" in content
-    assert "/home/dev/coffer" not in content
-
-
-def test_a_hand_edited_file_with_malformed_yaml_degrades_to_empty_frontmatter() -> None:
-    path = paths.fact_path("coffer", "broken")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("---\ntitle: [unterminated\n---\nthe body survives\n", encoding="utf-8")
-    fact = store.read_fact("coffer", "broken")
-    assert fact.title == ""
-    assert fact.body == "the body survives\n"
-    assert fact.status == STATUS_ACTIVE
-
-
-def test_a_file_with_no_frontmatter_reads_as_a_bare_body() -> None:
-    path = paths.fact_path("coffer", "no-frontmatter")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("just some text, no fence at all", encoding="utf-8")
-    fact = store.read_fact("coffer", "no-frontmatter")
-    assert fact.title == ""
-    assert fact.body == "just some text, no fence at all"
-
-
-def test_write_fact_overwrites_an_existing_file_in_place() -> None:
-    store.write_fact(_fact(title="first version"))
-    store.write_fact(_fact(title="second version"))
-    assert store.read_fact("coffer", "worktree-development").title == "second version"
-
-
-def test_type_project_round_trips() -> None:
-    fact = _fact(type=TYPE_PROJECT, partition="coffer")
-    store.write_fact(fact)
-    assert store.read_fact(fact.partition, fact.slug).type == TYPE_PROJECT
+def _raw_entry() -> StoredRawEntry:
+    """One entry under ``.raw/``, only so the partition-delete test can prove
+    it takes the hidden directory with it."""
+    return StoredRawEntry(
+        partition=_PARTITION,
+        agent="claude-code",
+        native_path="/home/dev/.claude/projects/x/memory/f.md",
+        captured_at="2026-01-01T00:00:00+00:00",
+        entry=RawEntry(
+            title="Use a worktree",
+            description="Always develop in a worktree",
+            type=TYPE_PROJECT,
+            body="the agent's own words",
+            anchor="a",
+            project_root="/home/dev/coffer",
+        ),
+    )

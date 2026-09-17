@@ -81,7 +81,7 @@ from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_organise_worker
+from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_distil_worker
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
@@ -143,7 +143,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     credentials = await init_credential_store(engine, db_path)
     credential_store = credentials.store
     # Computed once, up front, so every internal-LLM consumer below (knowledge
-    # ingest, the curation pass, the memory organise pass, the sync conflict
+    # ingest, the curation pass, the memory distil pass, the sync conflict
     # resolver) shares one resolver rather than each re-wrapping the store.
     credential_resolver = make_credential_resolver(credential_store)
 
@@ -262,7 +262,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         knowledge_service=kinds.knowledge.service,
         curation_pass=curation_pass,
         skill_delivery=kinds.knowledge.skill_delivery,
-        organise=kinds.memory.organise,
+        distil=kinds.memory.distil,
         memory_service=kinds.memory.service,
         transcript_reader=kinds.agent_skill.transcript_reader,
         resource_svc=resource_svc,
@@ -306,7 +306,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         workers.retention_worker.stop()
         await stop_converge_worker(workers.converge_worker)
         await stop_curation_worker(workers.curation_task)
-        await stop_organise_worker(workers.organise_task)
+        await stop_distil_worker(workers.distil_task)
         await stop_aggregate_worker(workers.aggregate_task)
         await stop_transcript_warm_worker(workers.warm_worker, workers.warm_task)
         # Stop channel adapters first so no new turns start mid-teardown.

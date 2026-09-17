@@ -3,20 +3,24 @@
 // Right pane of the partition file browser: markdown (.md) renders through the
 // shared <FindableMarkdown>, anything else shows raw in <CodeView>.
 //
-// It only reads. Aggregation owns every byte under `~/.coffer/memory/` and
-// rewrites these files on its own schedule, so an in-app edit would be a change
-// with a countdown on it — silently reverted by the next sync, with no way for
-// the reader to tell that had happened. The <FileActions> bar is still here:
+// It only reads. Coffer's own passes own every byte under `~/.coffer/memory/`
+// — aggregation writes `.raw/`, the distil pass writes `MEMORY.md`, `notes/`
+// and `RETIRED.md` — and both rewrite on their own schedule, so an in-app edit
+// would be a change with a countdown on it: silently reverted by the next pass,
+// with no way for the reader to tell that had happened. The <FileActions> bar is still here:
 // opening the file in a real editor is the honest way to change something the
 // daemon owns, because the reader then sees the file itself and owns the
 // consequence. Hence no draft, no fingerprint, no save.
 import { useTranslation } from "react-i18next";
+import { FileInput } from "lucide-react";
 
 import { FileActions } from "@/components/FileActions";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { translateApiError } from "@/lib/api/errors";
 import { usePartitionFileContent } from "@/lib/hooks/useMemory";
+import { isDerivedInput } from "@/lib/memory/derived";
 
 function isMarkdown(path: string): boolean {
   return /\.mdx?$/i.test(path);
@@ -41,8 +45,20 @@ export function MemoryFileViewer({ name, path }: { name: string; path: string })
 
   // Path on the first row, the open/reveal actions on a second row below —
   // mirrors the skill file viewer so the two file previews read the same.
+  //
+  // Above both, for a file out of `.raw/`: what this file IS. Everything else
+  // in the partition is Coffer's own writing; this one is the agent's, kept so
+  // a note can be checked against its source. Said in full here rather than
+  // left to the badge in the tree, because the preview is where someone would
+  // otherwise read it as Coffer's answer.
   const header = (
     <div className="space-y-2">
+      {isDerivedInput(path) ? (
+        <Alert variant="warning" data-testid="memory-derived-notice">
+          <FileInput className="size-4" aria-hidden />
+          <AlertDescription>{t("memory.files.derivedHint")}</AlertDescription>
+        </Alert>
+      ) : null}
       <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
       {absPath ? <FileActions filePath={absPath} /> : null}
     </div>

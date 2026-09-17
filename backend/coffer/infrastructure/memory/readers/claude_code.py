@@ -1,6 +1,6 @@
-"""Reads Claude Code's per-project memory: one Markdown file per fact.
+"""Reads Claude Code's per-project memory: one Markdown file per entry.
 
-Each fact lives at `<config_dir>/projects/<slug>/memory/<name>.md`, frontmatter
+Each entry lives at `<config_dir>/projects/<slug>/memory/<name>.md`, frontmatter
 first:
 
     ---
@@ -14,9 +14,9 @@ first:
 
     <body>
 
-`name` and `description` are the fact's own title and description (FR-013 —
-no derivation needed, unlike Codex's bullets). `metadata.type` picks the
-`Fact` type; `metadata.type: reference` is skipped rather than mapped, because
+`name` and `description` are the source's own title and description — no
+derivation needed, unlike Codex's untitled bullets. `metadata.type` picks the
+entry's type; `metadata.type: reference` is skipped rather than mapped, because
 Claude Code's own `reference` memories are knowledge the user or the agent
 wrote down about the world, not something the agent learned while working —
 exactly the boundary spec memory's "Memory is not knowledge" section draws.
@@ -24,7 +24,23 @@ exactly the boundary spec memory's "Memory is not knowledge" section draws.
 is ignored for the same reason knowledge ignores `README.md`: Coffer
 regenerates that role itself (FR-004).
 
-A fact's `project_root` is recovered the same way the agent page's
+What comes back is a `RawEntry`, and a raw entry is **the input layer, not
+the product** (FR-008): it is written verbatim under the partition's `.raw/`,
+and the distil pass is what turns entries into Coffer's own notes (FR-020).
+So this reader is not trying to produce anything a person will read, even
+though Claude Code hands it a perfectly good title — it carries the source's
+words across intact and leaves the writing to the pass. The verbatim rule
+that used to govern what Coffer *stored* now governs only this layer, which
+is what keeps a note's claim checkable back against the agent's own file.
+
+Claude Code states no search terms anywhere in this format — it relies on its
+own always-loaded index instead — so `RawEntry.search_terms` stays empty
+here. FR-004 asks a reader to carry terms **where the source states them**;
+synthesising them from the body would be precisely the guess that requirement
+exists to replace. Codex is the source that states them, and
+`readers.codex` is where they are carried.
+
+An entry's `project_root` is recovered the same way the agent page's
 native-memory listing recovers it (`infrastructure.agent.native_memory_store`):
 preferring a sibling session transcript's own recorded `cwd`
 (`infrastructure.agent_files.claude_code_transcripts.cwd_from_transcripts`) —
@@ -45,16 +61,16 @@ import yaml
 
 from coffer.domain.agent.native_memory import resolve_project_slug
 from coffer.domain.memory.errors import UnreadableMemory
-from coffer.domain.memory.fact import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
-from coffer.domain.memory.reader import RawFact, SourceFile
+from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
+from coffer.domain.memory.reader import RawEntry, SourceFile
 from coffer.infrastructure.agent_files.claude_code_transcripts import cwd_from_transcripts
 
 _INDEX_NAME = "MEMORY.md"
 _FENCE = "---"
 
-# Claude Code's own `metadata.type` values, mapped onto FACT_TYPES. Anything
+# Claude Code's own `metadata.type` values, mapped onto NOTE_TYPES. Anything
 # else recognised as *not* `reference` (an empty type, or a future value this
-# reader has not seen) falls to TYPE_PROJECT: fact.py describes TYPE_PROJECT
+# reader has not seen) falls to TYPE_PROJECT: note.py describes TYPE_PROJECT
 # as "a decision, a trap, a piece of history" for one project, which is the
 # closest general bucket for a note this reader cannot otherwise place —
 # TYPE_USER/TYPE_FEEDBACK are narrower claims (about the person specifically)
@@ -68,7 +84,7 @@ _SKIP_TYPE = "reference"
 
 
 class ClaudeCodeMemoryReader:
-    """`MemoryReader` for Claude Code's per-fact Markdown files."""
+    """`MemoryReader` for Claude Code's per-entry Markdown files."""
 
     agent_type = "claude_code"
 
@@ -94,7 +110,7 @@ class ClaudeCodeMemoryReader:
                 out.append(SourceFile(path=str(file), digest=digest))
         return tuple(out)
 
-    def read(self, source: SourceFile) -> tuple[RawFact, ...]:
+    def read(self, source: SourceFile) -> tuple[RawEntry, ...]:
         path = pathlib.Path(source.path)
         try:
             text = path.read_text(encoding="utf-8")
@@ -117,16 +133,16 @@ class ClaudeCodeMemoryReader:
         if not isinstance(description, str):
             description = str(description)
 
-        fact_type = _TYPE_MAP.get(raw_type, TYPE_PROJECT)
+        entry_type = _TYPE_MAP.get(raw_type, TYPE_PROJECT)
         project_dir = path.parent.parent
         project_root = cwd_from_transcripts(project_dir)
         if project_root is None:
             _, project_root = resolve_project_slug(project_dir.name, _list_dirs)
         return (
-            RawFact(
+            RawEntry(
                 title=name,
                 description=description,
-                type=fact_type,
+                type=entry_type,
                 body=body.strip("\n"),
                 anchor=name,
                 project_root=project_root or "",
@@ -157,7 +173,7 @@ def _split_frontmatter(text: str, path: str) -> tuple[dict[str, Any], str]:
     """Split the leading `---`-fenced YAML block from the body, or raise.
 
     Unlike `infrastructure.knowledge.frontmatter.split_frontmatter` — which
-    tolerates a malformed fence by degrading to `({}, text)` — a memory fact
+    tolerates a malformed fence by degrading to `({}, text)` — a memory file
     with no readable frontmatter has lost its type, its title and half its
     identity, so FR-005 wants this loud rather than silently empty.
     """

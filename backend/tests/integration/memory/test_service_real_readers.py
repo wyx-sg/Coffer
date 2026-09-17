@@ -1,267 +1,303 @@
-"""``MemoryService.aggregate`` over the two REAL readers (spec memory User
-Story 1: what one agent learns, the others know).
+"""One pass over the two REAL readers, a real repository and the real store.
 
-Integration rather than unit because this exercises the real
-``ClaudeCodeMemoryReader``/``CodexMemoryReader`` parsing a realistic fixture
-tree, end to end through ``MemoryService`` and the real file-backed store —
-the readers themselves are unit-tested in ``tests/unit/memory``, and
-``MemoryService``'s own algorithm (skip/fail/merge/scope) against fakes in
-``tests/unit/memory/test_aggregate.py``. This is the seam between them: real
-parsers, real partition files, one pass.
+This is the seam the unit tier does not cover: the readers are the actual
+``ClaudeCodeMemoryReader`` and ``CodexMemoryReader`` parsing realistic fixture
+trees, the repository is a real ``git init``, and what comes out is real files
+under ``COFFER_MEMORY_ROOT``.
 
-``ResourceService``/``AuditService`` stay fake (same shape as
-``tests/unit/knowledge/test_grep_and_scope.py``'s) — nothing here needs a real
-database, and the fixture agent directories live entirely under ``tmp_path``.
+The test that matters most here is the read-only one. **Coffer never writes an
+agent's native memory** (FR-002) — that is the prohibition
+[Aggregate Agent Memory](../../../../docs/decisions/aggregate-agent-memory-never-write-it.md)
+records and the load-bearing constraint of the whole design, so a full pass is
+bracketed by a snapshot of every file's **bytes and modification time** under
+both config directories.
 """
 
 from __future__ import annotations
 
 import pathlib
-from datetime import UTC, datetime
 
 import pytest
 
-from coffer.application.memory.aggregate import AgentSource
+from coffer.application.memory.index import index_line
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
-from coffer.domain.errors import ResourceNotFound
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER, Note, Origin
+from coffer.domain.resource import ResourceRef
+from coffer.infrastructure.memory import store
+from coffer.infrastructure.memory.raw_store import list_raw_entries
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
+from tests.integration.memory.conftest import (
+    FakeAudit,
+    FakeResources,
+    agent_source_resolver,
+    claude_code_config,
+    codex_config,
+    init_repository,
+)
 
-# --------------------------------------------------------------------------- #
-# Fake ResourceService/AuditService — no real database needed (see module
-# docstring); mirrors tests/unit/knowledge/test_grep_and_scope.py.
-# --------------------------------------------------------------------------- #
-
-
-class _FakeResources:
-    def __init__(self) -> None:
-        self._rows: dict[tuple[str, str], Resource] = {}
-        self._next_id = 1
-
-    async def list(self, kind: str | None = None, enabled: bool | None = None) -> list[Resource]:
-        return [
-            r
-            for r in self._rows.values()
-            if (kind is None or r.kind == kind) and (enabled is None or r.enabled == enabled)
-        ]
-
-    async def get(self, ref: ResourceRef) -> Resource:
-        row = self._rows.get((ref.kind, ref.name))
-        if row is None:
-            raise ResourceNotFound(ref.kind, ref.name)
-        return row
-
-    async def register(
-        self, *, kind, name, config, actor, description=None, allow_lifecycle_kind=False
-    ):
-        now = datetime.now(tz=UTC)
-        row = Resource(
-            id=self._next_id,
-            kind=kind,
-            name=name,
-            description=description,
-            config=config,
-            enabled=True,
-            created_at=now,
-            updated_at=now,
-            scope=None,
-        )
-        self._next_id += 1
-        self._rows[(kind, name)] = row
-        return row
-
-    async def update_scope(self, ref: ResourceRef, scope, *, actor: str) -> Resource:
-        row = await self.get(ref)
-        row.scope = scope
-        return row
-
-    async def delete(self, ref: ResourceRef, actor: str) -> None:
-        from coffer.infrastructure.memory import store
-
-        await self.get(ref)
-        del self._rows[(ref.kind, ref.name)]
-        if ref.kind == KIND_MEMORY:
-            store.delete_partition(ref.name)
-
-    def add_agent(self, name: str, agent_type: str, config_dir: str) -> None:
-        now = datetime.now(tz=UTC)
-        self._rows[("agent", name)] = Resource(
-            id=self._next_id,
-            kind="agent",
-            name=name,
-            description=None,
-            config={"type": agent_type, "config_dir": config_dir},
-            enabled=True,
-            created_at=now,
-            updated_at=now,
-            scope=None,
-        )
-        self._next_id += 1
-
-
-class _FakeAudit:
-    def __init__(self) -> None:
-        self.events: list[str] = []
-
-    async def record(self, event_type, *, ref=None, actor="system", details=None):
-        self.events.append(event_type)
-
-
-def _resolver(resource: Resource) -> AgentSource:
-    return AgentSource(
-        agent=resource.name,
-        agent_type=resource.config["type"],
-        config_dir=resource.config["config_dir"],
-    )
-
-
-# --------------------------------------------------------------------------- #
-# Fixture tree: a real Claude Code project directory + a real Codex config.  #
-# --------------------------------------------------------------------------- #
-
-
-def _encode(name: str) -> str:
-    return "".join(ch if ch.isalnum() and ch.isascii() else "-" for ch in name)
-
-
-def _cc_slug(project_root: pathlib.Path) -> str:
-    encode = _encode
-    parts = [p for p in project_root.parts if p != "/"]
-    return "-" + "-".join(encode(p) for p in parts)
-
-
-_CC_PREFERENCE_FACT = """---
-name: worktree-development
+_CC_PREFERENCE = """---
+name: feedback-worktree-development
 description: Always develop in a git worktree
 metadata:
+  node_type: memory
   type: feedback
 ---
 
 Multiple parallel sessions share the repo — always work in a worktree.
 """
 
-_CC_PROJECT_FACT = """---
+_CC_PROJECT = """---
 name: python-lockfile
 description: Dependencies are locked with uv
 metadata:
+  node_type: memory
   type: project
 ---
 
 Run `uv sync --frozen` in this project; a plain `pip install` drifts.
 """
 
-_CODEX_MEMORY_MD = """# Task Group: coffer work
+_CODEX_MEMORY = """# Task Group: coffer daemon restart and port drift
 
-applies_to: cwd={project_root}
+applies_to: cwd={project_root}; reuse_rule=recheck
+
+## Task 1: restart, success
+
+### rollout_summary_files
+
+- rollout-2026-09-01.md
 
 ## Reusable knowledge
 
 - the coffer daemon restarts with `coffer daemon stop/start`. [Task 1]
+
+## Failures and how to do differently
+
+- Symptom: shim could not connect. Fix: kill the stale shim. [Task 1]
 """
 
-_CODEX_SUMMARY_MD = """## User Profile
+_CODEX_SUMMARY = """v1
 
-Works primarily on the Coffer project, prefers concise answers.
+## User Profile
+
+Works primarily on the Coffer project and prefers concise replies.
+
+## User preferences
+
+- Always ask before merging a pull request. [ad-hoc]
+
+## What's in Memory
+
+### {project_root}
+
+- coffer daemon restart port drift: `coffer daemon`, `port drift`
+  - desc: restarting the daemon
+  - learnings: the shim pins the old port
+
+## General Tips
+
+- this roll-up is never read as entries.
 """
+
+
+def _snapshot(root: pathlib.Path) -> dict[str, tuple[bytes, float]]:
+    return {
+        str(p): (p.read_bytes(), p.stat().st_mtime) for p in sorted(root.rglob("*")) if p.is_file()
+    }
 
 
 @pytest.fixture
-def fixture(tmp_path: pathlib.Path):
-    project_root = tmp_path / "home" / "dev" / "coffer"
-    project_root.mkdir(parents=True)
+def vault(tmp_path: pathlib.Path):  # type: ignore[no-untyped-def]
+    project_root = init_repository(
+        tmp_path / "home" / "dev" / "coffer", remote="git@github.com:owner/coffer.git"
+    )
+    claude_dir = claude_code_config(
+        tmp_path / "claude",
+        project_root,
+        {
+            "feedback-worktree-development.md": _CC_PREFERENCE,
+            "python-lockfile.md": _CC_PROJECT,
+            "MEMORY.md": "# Memory\n\n- a roll-up Claude Code regenerates\n",
+        },
+    )
+    codex_dir = codex_config(
+        tmp_path / "codex",
+        _CODEX_MEMORY.format(project_root=project_root),
+        _CODEX_SUMMARY.format(project_root=project_root),
+    )
 
-    cc_config_dir = tmp_path / "claude"
-    cc_memory_dir = cc_config_dir / "projects" / _cc_slug(project_root) / "memory"
-    cc_memory_dir.mkdir(parents=True)
-    cc_pref_path = cc_memory_dir / "worktree-development.md"
-    cc_pref_path.write_text(_CC_PREFERENCE_FACT, encoding="utf-8")
-    cc_project_path = cc_memory_dir / "python-lockfile.md"
-    cc_project_path.write_text(_CC_PROJECT_FACT, encoding="utf-8")
-    cc_original_bytes = {
-        cc_pref_path: cc_pref_path.read_bytes(),
-        cc_project_path: cc_project_path.read_bytes(),
-    }
-
-    codex_config_dir = tmp_path / "codex"
-    memories_dir = codex_config_dir / "memories"
-    memories_dir.mkdir(parents=True)
-    memory_md_path = memories_dir / "MEMORY.md"
-    memory_md_path.write_text(_CODEX_MEMORY_MD.format(project_root=project_root), encoding="utf-8")
-    summary_path = memories_dir / "memory_summary.md"
-    summary_path.write_text(_CODEX_SUMMARY_MD, encoding="utf-8")
-    codex_original_bytes = {
-        memory_md_path: memory_md_path.read_bytes(),
-        summary_path: summary_path.read_bytes(),
-    }
-
-    resources = _FakeResources()
-    resources.add_agent("claude-code", "claude_code", str(cc_config_dir))
-    resources.add_agent("codex", "codex", str(codex_config_dir))
-
+    resources = FakeResources()
+    resources.add_agent("claude-code", "claude_code", str(claude_dir))
+    resources.add_agent("codex", "codex", str(codex_dir))
     service = MemoryService(
-        resources=resources,
-        audit=_FakeAudit(),
-        agent_source_resolver=_resolver,
+        resources=resources,  # type: ignore[arg-type]
+        audit=FakeAudit(),  # type: ignore[arg-type]
+        agent_source_resolver=agent_source_resolver,
         readers={"claude_code": ClaudeCodeMemoryReader(), "codex": CodexMemoryReader()},
     )
     return {
         "service": service,
         "resources": resources,
         "project_root": project_root,
-        "cc_original_bytes": cc_original_bytes,
-        "codex_original_bytes": codex_original_bytes,
+        "claude_dir": claude_dir,
+        "codex_dir": codex_dir,
     }
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="a fact keeps the agent, path and time it came from"
-)
-async def test_both_agents_native_memory_land_in_the_same_project_partition(fixture) -> None:
-    from coffer.infrastructure.memory import store
-
-    result = await fixture["service"].aggregate()
-
-    assert "coffer" in result.partitions
-    facts = store.list_facts("coffer")
-    titles = {f.title for f in facts}
-    assert "worktree-development" not in titles  # it is a `feedback` type — personal, → global
-    assert "python-lockfile" in titles
-    assert any("coffer daemon restarts" in f.body for f in facts)
-    origins_agents = {o.agent for f in facts for o in f.origins}
-    assert origins_agents == {"claude-code", "codex"}
-
-
-@pytest.mark.asyncio
-async def test_feedback_and_profile_facts_land_in_global(fixture) -> None:
-    from coffer.infrastructure.memory import store
-
-    await fixture["service"].aggregate()
-
-    global_titles = {f.title for f in store.list_facts("global")}
-    assert "worktree-development" in global_titles
-    assert "User Profile" in global_titles
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="memory", scenario="aggregation never modifies an agent's native memory files"
 )
-async def test_native_memory_files_are_byte_identical_after_aggregation(fixture) -> None:
-    await fixture["service"].aggregate()
+async def test_a_full_pass_leaves_both_agents_files_byte_identical_and_untouched(vault) -> None:  # type: ignore[no-untyped-def]
+    before_claude = _snapshot(vault["claude_dir"])
+    before_codex = _snapshot(vault["codex_dir"])
+    assert before_claude and before_codex  # the snapshot actually saw the fixtures
 
-    for path, original in fixture["cc_original_bytes"].items():
-        assert path.read_bytes() == original
-    for path, original in fixture["codex_original_bytes"].items():
-        assert path.read_bytes() == original
+    result = await vault["service"].aggregate()
+
+    assert result.entries_written > 0  # both agents really were read
+    assert _snapshot(vault["claude_dir"]) == before_claude
+    assert _snapshot(vault["codex_dir"]) == before_codex
+    # Nothing created, nothing moved, nothing deleted either.
+    assert sorted(p.name for p in (vault["codex_dir"] / "memories").iterdir()) == [
+        "MEMORY.md",
+        "memory_summary.md",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_the_project_partition_is_scoped_to_both_agents(fixture) -> None:
-    await fixture["service"].aggregate()
+async def test_both_agents_material_lands_in_the_repositorys_partition(vault) -> None:  # type: ignore[no-untyped-def]
+    result = await vault["service"].aggregate()
 
-    row = await fixture["resources"].get(ResourceRef(KIND_MEMORY, "coffer"))
-    # The scope names both sources the partition was aggregated from.
+    assert sorted(result.partitions) == ["coffer", "global"]
+    entries = list_raw_entries("coffer")
+    assert {e.agent for e in entries} == {"claude-code", "codex"}
+    assert any("uv sync --frozen" in e.entry.body for e in entries)
+    assert any("coffer daemon stop/start" in e.entry.body for e in entries)
+
+
+@pytest.mark.asyncio
+async def test_what_is_about_the_person_lands_in_global_whichever_agent_said_it(vault) -> None:  # type: ignore[no-untyped-def]
+    await vault["service"].aggregate()
+
+    titles = {e.entry.title for e in list_raw_entries("global")}
+    assert "feedback-worktree-development" in titles  # Claude Code's `feedback`
+    assert "User Profile" in titles  # Codex's profile
+    assert "Always ask before merging a pull request" in titles
+
+
+@pytest.mark.asyncio
+async def test_neither_agents_own_roll_up_is_read_as_material(vault) -> None:  # type: ignore[no-untyped-def]
+    await vault["service"].aggregate()
+
+    bodies = "\n".join(e.entry.body for p in ("coffer", "global") for e in list_raw_entries(p))
+    assert "a roll-up Claude Code regenerates" not in bodies
+    assert "this roll-up is never read as entries" not in bodies
+    assert "rollout-2026-09-01.md" not in bodies
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a Codex task group becomes raw entries carrying its own search terms",
+)
+async def test_codexs_search_terms_reach_the_entry_and_the_index_line(vault) -> None:  # type: ignore[no-untyped-def]
+    """FR-004 carries the source's own terms; FR-029 has the index line state
+    them, so the next agent does not have to guess a word."""
+    await vault["service"].aggregate()
+
+    entries = [e for e in list_raw_entries("coffer") if e.agent == "codex"]
+    assert entries
+    assert all(e.entry.search_terms == ("coffer daemon", "port drift") for e in entries)
+
+    note = Note(
+        slug="daemon-restart",
+        title="Daemon restart",
+        description="restart with coffer daemon stop/start",
+        type=TYPE_PROJECT,
+        body="b",
+        partition="coffer",
+        origins=(entries[0].origin,),
+        search_terms=entries[0].entry.search_terms,
+    )
+    assert index_line(note).endswith(" · look up: coffer daemon, port drift")
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a partition is registered as a resource scoped to the agents it came from",
+)
+async def test_the_partition_is_scoped_to_both_agents_it_was_aggregated_from(vault) -> None:  # type: ignore[no-untyped-def]
+    await vault["service"].aggregate()
+
+    row = await vault["resources"].get(ResourceRef(KIND_MEMORY, "coffer"))
     assert row.scope is not None
     assert set(row.scope.agents or []) == {"claude-code", "codex"}
-    assert row.config["project_root"] == str(fixture["project_root"])
+    assert row.config["repository_path"] == str(vault["project_root"].resolve())
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="memory", scenario="an agent whose native memory shape is unreadable degrades loudly"
+)
+async def test_a_malformed_file_in_one_agent_leaves_the_others_material_and_the_notes_standing(
+    vault,  # type: ignore[no-untyped-def]
+) -> None:
+    """SC-006, with a real reader hitting a real broken file.
+
+    A previously distilled note must be left standing: a reader broken by an
+    agent's format change may not empty that agent's contribution, and must
+    not touch anyone else's.
+    """
+    broken = (
+        vault["claude_dir"]
+        / "projects"
+        / next((vault["claude_dir"] / "projects").iterdir()).name
+        / "memory"
+        / "broken.md"
+    )
+    broken.write_text("no frontmatter fence at all\n", encoding="utf-8")
+    store.write_note(
+        Note(
+            slug="standing",
+            title="Standing",
+            description="written by an earlier pass",
+            type=TYPE_USER,
+            body="body",
+            partition="global",
+            origins=(Origin(agent="codex", native_path="/old.md", anchor="x"),),
+        )
+    )
+
+    result = await vault["service"].aggregate()
+
+    assert len(result.failures) == 1
+    failure = result.failures[0]
+    assert failure.agent == "claude-code"
+    assert failure.path == str(broken)
+    assert "frontmatter" in failure.reason
+
+    # Everything else completed: the other agent, and the rest of this one's.
+    assert {e.agent for e in list_raw_entries("coffer")} == {"claude-code", "codex"}
+    assert [n.slug for n in store.list_notes("global")] == ["standing"]
+
+
+@pytest.mark.asyncio
+async def test_a_second_pass_over_untouched_agents_reads_nothing_and_changes_nothing(
+    vault,  # type: ignore[no-untyped-def]
+) -> None:
+    await vault["service"].aggregate()
+    before = {
+        p: {e.entry_id: e.entry.body for e in list_raw_entries(p)} for p in store.list_partitions()
+    }
+
+    second = await vault["service"].aggregate()
+
+    assert second.sources_read == 0
+    # Two Claude Code entry files (its own MEMORY.md is never a source) and
+    # both of Codex's two.
+    assert second.sources_skipped == 4
+    assert {
+        p: {e.entry_id: e.entry.body for e in list_raw_entries(p)} for p in store.list_partitions()
+    } == before

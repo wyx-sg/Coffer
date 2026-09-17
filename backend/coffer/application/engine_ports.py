@@ -2,7 +2,7 @@
 
 Three consumers need the same two things: the connection Coffer's internal
 engine runs on, and a one-shot completion. Knowledge's tidy and ingestion and
-memory's organise pass all reach for them, so they live above every kind rather
+memory's distil pass all reach for them, so they live above every kind rather
 than inside one — filing them under `knowledge` was only ever true while
 knowledge was the sole consumer, and it made `application.memory` import
 `application.knowledge` to get at them.

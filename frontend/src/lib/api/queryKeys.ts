@@ -168,7 +168,7 @@ export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as
 export const memoryKey = ["memory"] as const;
 export const memoryPartitionsKey = ["memory", "partitions"] as const;
 /** A partition's own directory, and one file in it — the tree the detail page
- *  browses (spec memory FR-029). */
+ *  browses (spec memory FR-037). */
 export const memoryPartitionFilesKey = (partition: string) =>
   ["memory", "partitions", partition, "files"] as const;
 export const memoryPartitionFileKey = (partition: string, path: string) =>

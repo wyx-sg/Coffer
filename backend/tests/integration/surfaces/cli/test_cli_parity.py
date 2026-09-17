@@ -102,15 +102,13 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "delivery",
         "delivery-install",
         "delivery-remove",
-        "fact",
-        "facts",
+        "distil",
         "ls",
-        # `organise`, matching the route and the spec. The spelling is the
-        # one thing that was inconsistent: the route has always said
-        # `/organise` and this command alone said `organize`.
-        "organise",
+        "note",
+        "notes",
         "partitions",
         "read",
+        "retired",
         "sync",
     },
     "provider": {

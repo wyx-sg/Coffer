@@ -18,7 +18,7 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
     CURATE,
-    ORGANISE,
+    DISTIL,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -26,7 +26,7 @@ from coffer.domain.internal_engine_config import (
 #: What a document carries for a fleet that has changed nothing about upkeep.
 _DEFAULT_UPKEEP = {
     AGGREGATE: {"enabled": True, "interval_s": None},
-    ORGANISE: {"enabled": True, "interval_s": None},
+    DISTIL: {"enabled": True, "interval_s": None},
     CURATE: {"enabled": True, "interval_s": None},
 }
 
@@ -55,17 +55,17 @@ class _Repo:
         fields = {
             "auto_aggregate_enabled": current.auto_aggregate_enabled,
             "aggregate_interval_s": current.aggregate_interval_s,
-            "auto_organise_enabled": current.auto_organise_enabled,
-            "organise_interval_s": current.organise_interval_s,
+            "auto_distil_enabled": current.auto_distil_enabled,
+            "distil_interval_s": current.distil_interval_s,
             "curate_interval_s": current.curate_interval_s,
         }
         for name, setting in (upkeep or {}).items():
             if name == AGGREGATE:
                 fields["auto_aggregate_enabled"] = setting.enabled
                 fields["aggregate_interval_s"] = setting.interval_s
-            elif name == ORGANISE:
-                fields["auto_organise_enabled"] = setting.enabled
-                fields["organise_interval_s"] = setting.interval_s
+            elif name == DISTIL:
+                fields["auto_distil_enabled"] = setting.enabled
+                fields["distil_interval_s"] = setting.interval_s
             else:
                 auto_tidy = setting.enabled
                 fields["curate_interval_s"] = setting.interval_s
@@ -191,7 +191,7 @@ async def test_a_switched_off_rewriter_travels_to_the_other_machines() -> None:
         # Switched off explicitly: curation ships ON, so leaving it at its
         # default would make this test assert nothing about travelling.
         auto_curate_enabled=False,
-        organise_interval_s=900,
+        distil_interval_s=900,
     )
     state, _repo, _audit = _state(row)
 
@@ -199,7 +199,7 @@ async def test_a_switched_off_rewriter_travels_to_the_other_machines() -> None:
 
     assert docs[0][1]["upkeep"] == {
         AGGREGATE: {"enabled": False, "interval_s": None},
-        ORGANISE: {"enabled": True, "interval_s": 900},
+        DISTIL: {"enabled": True, "interval_s": 900},
         CURATE: {"enabled": False, "interval_s": None},
     }
 
@@ -244,10 +244,10 @@ async def test_an_imported_document_applies_its_upkeep() -> None:
     state, repo, _audit = _state(GlobalInternalEngineConfig(model=None, updated_at=_now()))
 
     errors = await state.import_docs(
-        [(DOC, {"model": None, "upkeep": {ORGANISE: {"enabled": False, "interval_s": 1800}}})]
+        [(DOC, {"model": None, "upkeep": {DISTIL: {"enabled": False, "interval_s": 1800}}})]
     )
 
     assert errors == []
     assert repo.row is not None
-    assert repo.row.auto_organise_enabled is False
-    assert repo.row.organise_interval_s == 1800
+    assert repo.row.auto_distil_enabled is False
+    assert repo.row.distil_interval_s == 1800

@@ -1,26 +1,25 @@
 // frontend/src/pages/MemoryDetailPage.test.tsx
 //
 // Wiring smoke test for one partition's detail page: the way back, the header
-// (name + project root), the reach control, and the file browser standing where
-// the fact list used to. Data hooks are mocked, mirroring
-// KnowledgeDetailPage.test.tsx.
+// (name + the repository it is keyed on, and whether that repository is still
+// there), the reach control, and the file browser standing where the fact list
+// used to. Data hooks are mocked, mirroring KnowledgeDetailPage.test.tsx.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { MemoryDetailPage } from "@/pages/MemoryDetailPage";
 
-// The page asks the DAEMON whether an organise pass is running (that is the
+// The page asks the DAEMON whether a distil pass is running (that is the
 // whole point — a component's own pending flag dies on navigation), so the
 // hook is mocked here the way every other data hook is.
 vi.mock("@/lib/hooks/useUpkeep", () => ({ useUpkeepRunning: vi.fn(() => false) }));
 vi.mock("@/lib/hooks/useMemory", () => ({
-  useMemoryPartitions: vi.fn(() => ({
-    data: [{ name: "coffer", project_root: "/Users/dev/coffer", fact_count: 1 }],
-  })),
-  useOrganisePartition: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useMemoryPartitions: vi.fn(),
+  useDistilPartition: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   // Mounted transitively via MemoryFileTree; this suite only exercises the
   // page's own wiring, so both file hooks get inert defaults.
   usePartitionFiles: vi.fn(() => ({
@@ -63,7 +62,7 @@ vi.mock("@/lib/hooks/useResourceMutations", () => {
 
 function renderPage() {
   // ScopeControl reads the agent registry to build its pick-list, so the page
-  // needs a query client; the organise button's Tooltip needs the provider the
+  // needs a query client; the Distil button's Tooltip needs the provider the
   // app shell normally hosts, and the page is rendered bare here.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -79,13 +78,32 @@ function renderPage() {
   );
 }
 
+const { useMemoryPartitions } = await import("@/lib/hooks/useMemory");
 const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
+const partitionsMock = vi.mocked(useMemoryPartitions);
 const runningMock = vi.mocked(useUpkeepRunning);
 
-describe("MemoryDetailPage", () => {
-  beforeEach(() => runningMock.mockReturnValue(false));
+const COFFER: PartitionOut = {
+  name: "coffer",
+  repository_path: "/Users/dev/coffer",
+  repository_key: "remote:github.com/wyx-sg/coffer",
+  note_count: 1,
+  unresolvable: false,
+};
 
-  test("renders the partition's project root, reach control and its files", () => {
+function stubPartitions(partitions: PartitionOut[]) {
+  partitionsMock.mockReturnValue({
+    data: partitions,
+  } as unknown as ReturnType<typeof useMemoryPartitions>);
+}
+
+describe("MemoryDetailPage", () => {
+  beforeEach(() => {
+    runningMock.mockReturnValue(false);
+    stubPartitions([COFFER]);
+  });
+
+  test("renders the repository it is keyed on, the reach control and its files", () => {
     renderPage();
 
     expect(screen.getByRole("heading", { name: "coffer" })).toBeInTheDocument();
@@ -94,7 +112,24 @@ describe("MemoryDetailPage", () => {
     expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
   });
 
-  test("spins the Organise button while a pass this page did not start is running", () => {
+  test("a partition whose repository is gone says so in its header", () => {
+    // FR-016: nothing is delivered from it, and whether it should still exist
+    // is the developer's call — which they can only make if the page says so.
+    stubPartitions([{ ...COFFER, unresolvable: true }]);
+
+    renderPage();
+
+    expect(screen.getByTestId("partition-unresolvable-badge")).toHaveTextContent(
+      /repository missing/i,
+    );
+  });
+
+  test("a resolvable partition carries no such mark", () => {
+    renderPage();
+    expect(screen.queryByTestId("partition-unresolvable-badge")).toBeNull();
+  });
+
+  test("spins the Distil button while a pass this page did not start is running", () => {
     // The bug: the spinner used to come from the mutation's own `isPending`,
     // which a remount resets — so leaving the page mid-pass and coming back
     // showed an idle button and invited a second concurrent rewrite. The
@@ -104,15 +139,15 @@ describe("MemoryDetailPage", () => {
 
     renderPage();
 
-    const button = screen.getByRole("button", { name: /organise/i });
+    const button = screen.getByRole("button", { name: /distil/i });
     expect(button).toBeDisabled();
     expect(button.querySelector(".animate-spin")).not.toBeNull();
   });
 
-  test("the Organise button is idle when nothing is running", () => {
+  test("the Distil button is idle when nothing is running", () => {
     renderPage();
 
-    const button = screen.getByRole("button", { name: /organise/i });
+    const button = screen.getByRole("button", { name: /distil/i });
     expect(button).not.toBeDisabled();
     expect(button.querySelector(".animate-spin")).toBeNull();
   });

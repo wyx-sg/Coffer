@@ -1,4 +1,4 @@
-"""Claude Code's per-fact Markdown files, read into `RawFact`s.
+"""Claude Code's per-entry Markdown files, read into `RawEntry`s (FR-004).
 
 Builds a `<config_dir>/projects/<slug>/memory/` tree under `tmp_path` for
 each test; nothing here touches the real `~/.claude`. `tmp_path` is a real
@@ -15,7 +15,7 @@ import pathlib
 import pytest
 
 from coffer.domain.memory.errors import UnreadableMemory
-from coffer.domain.memory.fact import TYPE_FEEDBACK
+from coffer.domain.memory.note import TYPE_FEEDBACK
 from coffer.infrastructure.memory.readers.claude_code import ClaudeCodeMemoryReader
 
 
@@ -37,7 +37,7 @@ def _memory_dir(
     return memory_dir
 
 
-_FACT = """---
+_ENTRY = """---
 name: feedback-worktree-development
 description: Always develop in a git worktree
 metadata:
@@ -52,36 +52,39 @@ Body prose.
 """
 
 
-@pytest.mark.acceptance(
-    spec="memory", scenario="a Claude Code memory file becomes a normalised fact"
-)
-def test_a_fact_file_becomes_one_raw_fact(tmp_path: pathlib.Path) -> None:
+@pytest.mark.acceptance(spec="memory", scenario="a Claude Code memory file becomes a raw entry")
+def test_a_memory_file_becomes_one_raw_entry(tmp_path: pathlib.Path) -> None:
     project_root = tmp_path / "Users" / "dev" / "my-project"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)
-    (memory_dir / "feedback-worktree-development.md").write_text(_FACT, encoding="utf-8")
+    (memory_dir / "feedback-worktree-development.md").write_text(_ENTRY, encoding="utf-8")
 
     reader = ClaudeCodeMemoryReader()
     sources = reader.sources(str(tmp_path / "claude"))
     assert len(sources) == 1
 
-    facts = reader.read(sources[0])
-    assert len(facts) == 1
-    fact = facts[0]
-    assert fact.title == "feedback-worktree-development"
-    assert fact.description == "Always develop in a git worktree"
-    assert fact.type == TYPE_FEEDBACK
-    assert "Body prose." in fact.body
-    assert "---" not in fact.body
-    assert fact.anchor == "feedback-worktree-development"
-    assert fact.project_root == str(project_root)
+    entries = reader.read(sources[0])
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.title == "feedback-worktree-development"
+    assert entry.description == "Always develop in a git worktree"
+    assert entry.type == TYPE_FEEDBACK
+    assert "Body prose." in entry.body
+    assert "---" not in entry.body
+    assert entry.anchor == "feedback-worktree-development"
+    assert entry.project_root == str(project_root)
+    # Claude Code states no search terms anywhere in this format; FR-004 asks a
+    # reader to carry them *where the source states them*, and synthesising
+    # them here would be exactly the guess that requirement replaces.
+    assert entry.search_terms == ()
 
 
-def test_memory_index_file_is_ignored(tmp_path: pathlib.Path) -> None:
+@pytest.mark.acceptance(spec="memory", scenario="a Claude Code memory file becomes a raw entry")
+def test_the_agents_own_roll_up_file_is_not_among_the_sources(tmp_path: pathlib.Path) -> None:
     project_root = tmp_path / "Users" / "dev" / "indexed-project"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)
-    (memory_dir / "feedback-worktree-development.md").write_text(_FACT, encoding="utf-8")
+    (memory_dir / "feedback-worktree-development.md").write_text(_ENTRY, encoding="utf-8")
     (memory_dir / "MEMORY.md").write_text(
         "# Memory\n\n- a roll-up Claude Code regenerates", "utf-8"
     )
@@ -95,7 +98,7 @@ def test_a_reference_typed_file_is_skipped(tmp_path: pathlib.Path) -> None:
     project_root = tmp_path / "Users" / "dev" / "ref-project"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)
-    text = _FACT.replace("type: feedback", "type: reference")
+    text = _ENTRY.replace("type: feedback", "type: reference")
     (memory_dir / "some-reference.md").write_text(text, encoding="utf-8")
 
     reader = ClaudeCodeMemoryReader()
@@ -133,7 +136,7 @@ def test_sources_skips_a_dangling_file_rather_than_dying(tmp_path: pathlib.Path)
     project_root = tmp_path / "Users" / "dev" / "dangling-project"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)
-    (memory_dir / "good.md").write_text(_FACT, encoding="utf-8")
+    (memory_dir / "good.md").write_text(_ENTRY, encoding="utf-8")
     (memory_dir / "dangling.md").symlink_to(memory_dir / "does-not-exist.md")
 
     reader = ClaudeCodeMemoryReader()
@@ -141,7 +144,7 @@ def test_sources_skips_a_dangling_file_rather_than_dying(tmp_path: pathlib.Path)
     assert [pathlib.Path(s.path).name for s in sources] == ["good.md"]
 
 
-def test_a_deleted_project_still_yields_a_fact_with_a_best_effort_root(
+def test_a_deleted_project_still_yields_an_entry_with_a_best_effort_root(
     tmp_path: pathlib.Path,
 ) -> None:
     # The project directory named by the slug is never created — as if it
@@ -151,37 +154,37 @@ def test_a_deleted_project_still_yields_a_fact_with_a_best_effort_root(
     config_dir = tmp_path / "claude"
     memory_dir = config_dir / "projects" / "-Users-dev-gone-project" / "memory"
     memory_dir.mkdir(parents=True)
-    (memory_dir / "feedback-worktree-development.md").write_text(_FACT, encoding="utf-8")
+    (memory_dir / "feedback-worktree-development.md").write_text(_ENTRY, encoding="utf-8")
 
     reader = ClaudeCodeMemoryReader()
     sources = reader.sources(str(config_dir))
-    fact = reader.read(sources[0])[0]
-    assert fact.project_root  # non-empty best-effort reconstruction, never a crash
+    entry = reader.read(sources[0])[0]
+    assert entry.project_root  # non-empty best-effort reconstruction, never a crash
 
 
-def test_an_empty_metadata_block_is_a_project_fact_not_a_crash(tmp_path: pathlib.Path) -> None:
+def test_an_empty_metadata_block_is_a_project_entry_not_a_crash(tmp_path: pathlib.Path) -> None:
     """``metadata:`` with nothing under it loads as ``None``; the reader must
     treat it as "no type given" rather than die on ``None.get`` (FR-005)."""
     project_root = tmp_path / "Users" / "dev" / "empty-meta"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)
-    (memory_dir / "fact.md").write_text(
+    (memory_dir / "an-entry.md").write_text(
         "---\nname: a-fact\ndescription: d\nmetadata:\n---\n\nbody\n", encoding="utf-8"
     )
 
     reader = ClaudeCodeMemoryReader()
-    facts = reader.read(reader.sources(str(tmp_path / "claude"))[0])
+    entries = reader.read(reader.sources(str(tmp_path / "claude"))[0])
 
-    assert len(facts) == 1
-    assert facts[0].title == "a-fact"
-    assert facts[0].type == "project"
+    assert len(entries) == 1
+    assert entries[0].title == "a-fact"
+    assert entries[0].type == "project"
 
 
 def test_a_scalar_metadata_block_is_unreadable_not_a_crash(tmp_path: pathlib.Path) -> None:
     project_root = tmp_path / "Users" / "dev" / "scalar-meta"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)
-    bad = memory_dir / "fact.md"
+    bad = memory_dir / "an-entry.md"
     bad.write_text("---\nname: a-fact\nmetadata: just-a-string\n---\n\nbody\n", encoding="utf-8")
 
     reader = ClaudeCodeMemoryReader()

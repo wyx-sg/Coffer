@@ -309,7 +309,7 @@ providers — the sync slice never imports kind modules. Current areas:
 - `settings/internal-engine.yaml` — the internal-engine singleton: `model`,
   `tidy_owner_machine_id`, and an `upkeep` block carrying an `enabled` flag and
   an `interval_s` for each of the three unattended passes (`aggregate`,
-  `organise`, `tidy`). `auto_tidy_enabled` is also written at the top level,
+  `distil`, `tidy`). `auto_tidy_enabled` is also written at the top level,
   because that is where every document written so far put tidy's switch, and a
   document that carries no `upkeep` block is still read for it.
 
@@ -319,7 +319,7 @@ providers — the sync slice never imports kind modules. Current areas:
   tidy_owner_machine_id: a3f21c9e4b7d2610
   upkeep:
     aggregate: { enabled: true, interval_s: null }
-    organise: { enabled: true, interval_s: null }
+    distil: { enabled: true, interval_s: null }
     tidy: { enabled: false, interval_s: null }
   ```
 
@@ -340,7 +340,7 @@ providers — the sync slice never imports kind modules. Current areas:
 
   The area publishes a **decision, not a row** — the general rule every state
   area follows (FR-058). Nothing is written while the
-  singleton holds the defaults — no model, no tidy owner, aggregate and organise
+  singleton holds the defaults — no model, no tidy owner, aggregate and distil
   on, tidy off — and a machine that has persisted no singleton at all writes
   nothing either. So the tree holds this document exactly while some machine
   holds a non-default choice, a deletion of it means "back to the defaults",

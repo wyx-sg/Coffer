@@ -1,8 +1,38 @@
-"""Memory infrastructure: the memory files on disk, read and written.
+"""Memory infrastructure: the agents' files read, and Coffer's own files written.
 
-The readers are read-only: they list and parse what Claude Code and Codex
-already keep in their own memory files (spec memory FR-001/FR-002) and never
-write there. Alongside them sits the vault's own fact store — ``store.py`` and
-``source_state.py`` write the derived tree under `~/.coffer/memory/`, which the
-aggregation pass in `coffer.application` drives.
+Two halves, and the boundary between them is the layer's whole prohibition
+(spec memory FR-001, FR-002). The **readers** only read: they list and parse
+what Claude Code and Codex already keep in their own memory directories and
+write nothing there, ever. Everything else here writes only Coffer's own
+derived tree under ``~/.coffer/memory/``, which may be deleted and rebuilt at
+any time (FR-019).
+
+The modules, and which pass owns which:
+
+``paths``
+    The sole owner of path construction, and the traversal guard (FR-044).
+``repository``
+    Which repository a directory belongs to — walking up to ``.git``, following
+    a worktree's pointer to the main checkout, reading ``origin`` out of the
+    config. This is what collapses a worktree, a second clone and the main
+    checkout into one partition (FR-014), and what answers ``None`` for a
+    directory that is in no repository at all (FR-015).
+``frontmatter``
+    The YAML fence and the atomic write every file here goes through.
+``store``
+    A partition's ``MEMORY.md``, ``notes/``, ``RETIRED.md`` and ``.raw/``, with
+    one writer each — aggregation writes ``.raw/`` and nothing else touches it
+    (FR-026).
+``source_state``
+    The per-source digest cache that lets an unchanged source be skipped
+    without re-parsing (FR-006).
+``files``
+    The read-only file tree behind the partition's own browse-and-preview
+    surface (FR-037).
+``readers``
+    The two native-memory adapters, satisfying ``domain.memory.reader``.
+``delivery``
+    Per-agent session-start hook installation — which event, which settings
+    file, which marker (FR-032). An agent's *settings* are not its memory, and
+    that distinction is the only reason writing there is allowed at all.
 """

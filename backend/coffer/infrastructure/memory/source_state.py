@@ -1,16 +1,25 @@
 """Remembers each source file's digest across aggregation passes (FR-006).
 
 A source whose content hash matches what was recorded last time is not worth
-re-parsing: its facts are already sitting on disk, unchanged. That decision
-needs exactly one fact per source — its last-seen digest — so this is a flat
-``{native_path: digest}`` mapping, serialised as one JSON file under
+re-parsing: the raw entries it produced are already sitting under the
+partition's ``.raw/``, unchanged. That decision needs exactly one thing per
+source — its last-seen digest — so this is a flat ``{native_path: digest}``
+mapping, serialised as one JSON file under
 :func:`coffer.infrastructure.memory.paths.memory_root`.
 
-Dot-prefixed and derived, like everything else this layer keeps outside the
-partition tree proper: deleting it is safe (the next pass just re-parses
-everything and gets the same facts back, per FR-016) and it is never addressed
-through the partition path helpers in ``paths.py``, so it does not need their
-traversal guard.
+The layout change from ``facts/`` to ``notes/`` plus ``.raw/`` leaves this
+module's job untouched, because it was never about the output: it answers "has
+this *source* changed", and the sources are the agents' own files.
+
+**A digest match is not on its own a reason to skip.** It says the source has
+not changed; it does not say the entries it produced are still on disk, and
+FR-019 requires that deleting the memory tree and re-syncing rebuilds the
+partition *with this cache deliberately left behind*. So a caller combines the
+match with the presence of what it produced, and the cost of this file being
+lost or stale is only a pass of unnecessary re-parsing, never a partition that
+silently stays empty. Dot-prefixed and derived like everything else the layer
+keeps outside the partition tree, and never addressed through the partition
+path helpers in ``paths.py``, so it does not need their traversal guard.
 """
 
 from __future__ import annotations
@@ -31,7 +40,9 @@ def load() -> dict[str, str]:
     """The digest recorded for each native path last pass, or ``{}``.
 
     Tolerant of a missing or corrupt file — losing this state only costs a
-    pass of unnecessary re-parsing, never correctness (FR-016's whole point).
+    pass of unnecessary re-parsing, never correctness (FR-019's whole point).
+    A source absent from the mapping has simply never been seen, which is the
+    same instruction as "read it".
     """
     path = _state_path()
     if not path.is_file():

@@ -19,8 +19,8 @@ whatever writes it (FR-001).
 | `model` | `str \| None` | The model Coffer's own passes run on. `None` until chosen, and while it is `None` `resolve_internal_connection()` answers `None` and every pass is a clean no-op (FR-004/FR-005). An empty or blank value on write is normalised to `None`. |
 | `auto_aggregate_enabled` | `bool` | The `aggregate` pass's switch. Ships **ON**: it writes only the derived tree (FR-014). |
 | `aggregate_interval_s` | `int \| None` | `None` = the pass's own default interval (FR-011). |
-| `auto_organise_enabled` | `bool` | The `organise` pass's switch. Ships **ON** — it rewrites a derived digest that deleting and re-running reproduces. |
-| `organise_interval_s` | `int \| None` | As above. |
+| `auto_distil_enabled` | `bool` | The `distil` pass's switch. Ships **ON** — it rewrites a derived digest that deleting and re-running reproduces. |
+| `distil_interval_s` | `int \| None` | As above. |
 | `auto_tidy_enabled` | `bool` | The `tidy` pass's switch. Ships **OFF**: it rewrites the only copy of the user's own writing (FR-014). |
 | `tidy_interval_s` | `int \| None` | As above. |
 | `updated_at` | `datetime` | Last write, reported so a surface can say when the settings last moved. |
@@ -45,7 +45,7 @@ every vault that never chose one (FR-011).
 
 ### Pass names
 
-`AGGREGATE = "aggregate"`, `ORGANISE = "organise"`, `TIDY = "tidy"` — named in
+`AGGREGATE = "aggregate"`, `ORGANISE = "distil"`, `TIDY = "tidy"` — named in
 the domain rather than in the workers, so a surface can offer exactly these
 three without importing three application modules. These are the words every
 surface uses: the route enum, the CLI's `<pass>` argument, the synced document's
@@ -150,8 +150,8 @@ since. No other table is this spec's.
 | `model` | nullable |
 | `auto_tidy_enabled` | not null, default false |
 | `auto_aggregate_enabled` | not null, default true |
-| `auto_organise_enabled` | not null, default true |
-| `aggregate_interval_s` / `organise_interval_s` / `tidy_interval_s` | nullable |
+| `auto_distil_enabled` | not null, default true |
+| `aggregate_interval_s` / `distil_interval_s` / `tidy_interval_s` | nullable |
 | `tidy_owner_machine_id` | nullable — see the known defect above |
 | `updated_at` | not null |
 

@@ -45,7 +45,7 @@ async def test_a_pass_runs_on_start_without_anyone_asking() -> None:
 
 
 async def test_the_actor_distinguishes_a_scheduled_pass_from_a_requested_one() -> None:
-    # FR-032: every pass is audited, and the log has to be able to say which
+    # FR-024: every pass is audited, and the log has to be able to say which
     # ones nobody asked for.
     calls: list[str] = []
 

@@ -1,7 +1,7 @@
 // frontend/src/lib/api/memory.ts
 //
 // Request helpers for the `memory` kind's REST family (`/api/v1/memory/*`,
-// spec memory FR-028). Partition lifecycle (delete) is deliberately absent: a
+// spec memory FR-036). Partition lifecycle (delete) is deliberately absent: a
 // partition is one `memory` Resource, so it goes through the kind-agnostic
 // `DELETE /api/v1/resources/memory/{name}`, exactly like knowledge's
 // collections.
@@ -14,9 +14,9 @@ import type {
   AggregationResultOut,
   DeliveryStatusListOut,
   DeliveryStatusOut,
+  DistilResultOut,
   MemoryFileContentOut,
   MemoryFileTreeOut,
-  OrganiseResultOut,
   PartitionListOut,
 } from "./memoryTypes";
 
@@ -31,18 +31,21 @@ export function listPartitions(): Promise<PartitionListOut> {
   return call<PartitionListOut>(`${ROOT}/partitions`);
 }
 
-// --- aggregation + organise --------------------------------------------------
+// --- aggregation + distil ----------------------------------------------------
 
 /** Run aggregation now — the manual trigger for the background worker that
- * otherwise reads every registered agent's native memory on an interval. */
+ * otherwise reads every registered agent's native memory on an interval. It
+ * writes verbatim entries under each partition's `.raw/` and nothing else;
+ * turning them into notes is the distil pass's job. */
 export function sync(): Promise<AggregationResultOut> {
   return call<AggregationResultOut>(`${ROOT}/sync`, { method: "POST" });
 }
 
-/** Run the organise pass over one partition: merge duplicates, propose
- * supersessions and conflicts, rewrite the digest. */
-export function organise(partition: string): Promise<OrganiseResultOut> {
-  return call<OrganiseResultOut>(`${ROOT}/partitions/${enc(partition)}/organise`, {
+/** Run the distil pass over one partition: route this round's raw entries onto
+ * Coffer's own notes — merging into a note, opening a new one, retiring one
+ * into `RETIRED.md`, or keeping nothing — and rewrite `MEMORY.md`. */
+export function distil(partition: string): Promise<DistilResultOut> {
+  return call<DistilResultOut>(`${ROOT}/partitions/${enc(partition)}/distil`, {
     method: "POST",
   });
 }
@@ -63,7 +66,7 @@ export function readPartitionFile(
     `${ROOT}/partitions/${enc(partition)}/files/content?path=${enc(path)}`,
   );
 }
-// --- delivery (FR-025/FR-026) ------------------------------------------------
+// --- delivery (FR-021/FR-022) ------------------------------------------------
 
 /** Every agent delivery can be installed for, and whether it is. Omit
  * `agent` to list all of them. */

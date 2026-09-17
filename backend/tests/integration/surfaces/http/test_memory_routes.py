@@ -1,58 +1,75 @@
-"""Integration tests for ``/api/v1/memory/*`` (spec memory FR-027..FR-032).
+"""Integration tests for ``/api/v1/memory/*`` (spec memory FR-036..FR-038).
 
 Boots the full FastAPI app (via ``create_app``) so every route is wired
 exactly as production wires it — real SQLite, a real Claude Code fixture tree
-under a temp HOME, no internal connection configured (organise/recall both
-degrade rather than error, per FR-019/FR-023). ``COFFER_MEMORY_ROOT``,
-``COFFER_KNOWLEDGE_ROOT`` are all pinned into
-``tmp_path`` so nothing here ever touches a real ``~/.coffer``.
+under a temp HOME, and **a real git repository**, because a partition is keyed
+on a repository now and a plain directory deliberately makes none (FR-014,
+FR-015). No internal connection is configured, so the distil pass takes its
+mechanical path (FR-024) — which is what makes "sync, distil, then read" a
+deterministic three lines here rather than a model call.
+
+What this tier is for, as opposed to the unit and ``tests/integration/memory``
+tiers that already cover the layer's behaviour: the **wire**. Field names and
+error codes, the status codes a client branches on, and the two payload
+promises FR-028/FR-030 make that a client can only check by reading the
+response — that ``POST /context`` carries a line for *every* note plus the
+absolute ``notes/`` path, and that under a binding ceiling it is ``global``
+that loses lines while the repository the session is open in keeps its own.
+
+``COFFER_MEMORY_ROOT``, ``COFFER_KNOWLEDGE_ROOT`` and ``HOME`` are all pinned
+into ``tmp_path``, so nothing here ever reaches a real ``~/.coffer`` or a real
+``~/.claude``.
 """
 
 from __future__ import annotations
 
 import pathlib
+import shutil
 
 import pytest
 from starlette.testclient import TestClient
 
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.application.upkeep_runs import UPKEEP_RUNS
+from coffer.domain.memory.budget import estimate_tokens
+from coffer.domain.memory.retired import RetiredNote
+from coffer.infrastructure.memory import paths as memory_paths
+from coffer.infrastructure.memory import store as memory_store
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.integration.memory.conftest import claude_code_config, init_repository
 
 _TOKEN = "test-token-memory-routes"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
 
-# ----- fixture native-memory content (mirrors tests/integration/memory's) -- #
-
-_CC_PROJECT_FACT = """---
-name: python-lockfile
-description: Dependencies are locked with uv
-metadata:
-  type: project
----
-
-Run `uv sync --frozen` in this project; a plain `pip install` drifts.
-"""
-
-_CC_PREFERENCE_FACT = """---
-name: worktree-development
-description: Always develop in a git worktree
-metadata:
-  type: feedback
----
-
-Multiple parallel sessions share the repo — always work in a worktree.
-"""
+# ----- fixture native-memory content --------------------------------------- #
+#
+# One project entry and one personal entry, which is the split the layer files
+# on: an entry about the repository lands in that repository's partition, and
+# one about the developer lands in ``global`` whichever repository it was
+# learned in (FR-011). Every test below that needs two partitions gets them
+# from this pair rather than from a second fixture repository.
 
 
-def _encode(name: str) -> str:
-    return "".join(ch if ch.isalnum() and ch.isascii() else "-" for ch in name)
+def _cc_memory_file(name: str, description: str, type_: str, body: str) -> str:
+    return (
+        f"---\nname: {name}\ndescription: {description}\n"
+        f"metadata:\n  type: {type_}\n---\n\n{body}\n"
+    )
 
 
-def _cc_slug(project_root: pathlib.Path) -> str:
-    parts = [p for p in project_root.parts if p != "/"]
-    return "-" + "-".join(_encode(p) for p in parts)
+_CC_PROJECT_MEMORY = _cc_memory_file(
+    "python-lockfile",
+    "Dependencies are locked with uv",
+    "project",
+    "Run `uv sync --frozen` in this project; a plain `pip install` drifts.",
+)
+_CC_PERSONAL_MEMORY = _cc_memory_file(
+    "worktree-development",
+    "Always develop in a git worktree",
+    "feedback",
+    "Multiple parallel sessions share the repo — always work in a worktree.",
+)
 
 
 @pytest.fixture
@@ -77,11 +94,22 @@ def _register_agent(c: TestClient, name: str, agent_type: str = "claude_code") -
     assert r.status_code == 201, r.text
 
 
-def _write_cc_facts(tmp_path: pathlib.Path, project_root: pathlib.Path) -> None:
-    memory_dir = tmp_path / ".claude" / "projects" / _cc_slug(project_root) / "memory"
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    (memory_dir / "python-lockfile.md").write_text(_CC_PROJECT_FACT, encoding="utf-8")
-    (memory_dir / "worktree-development.md").write_text(_CC_PREFERENCE_FACT, encoding="utf-8")
+def _repository(tmp_path: pathlib.Path, name: str = "coffer") -> pathlib.Path:
+    """A real ``git init`` — the only thing that earns a partition (FR-014)."""
+    return init_repository(tmp_path / name)
+
+
+def _seed(tmp_path: pathlib.Path, repository: pathlib.Path, files: dict[str, str]) -> None:
+    """Put Claude Code memory files in the project directory that decodes to
+    ``repository``, with the sibling transcript production reads the cwd from."""
+    claude_code_config(tmp_path / ".claude", repository, files)
+
+
+def _default_files() -> dict[str, str]:
+    return {
+        "python-lockfile.md": _CC_PROJECT_MEMORY,
+        "worktree-development.md": _CC_PERSONAL_MEMORY,
+    }
 
 
 def _sync(c: TestClient) -> dict:
@@ -90,117 +118,256 @@ def _sync(c: TestClient) -> dict:
     return r.json()
 
 
-# ----- partitions / facts --------------------------------------------------
+def _partitions(c: TestClient) -> dict[str, dict]:
+    r = c.get("/api/v1/memory/partitions")
+    assert r.status_code == 200, r.text
+    return {p["name"]: p for p in r.json()["partitions"]}
 
 
-def test_sync_then_list_partitions_and_facts(client, tmp_path) -> None:
+def _distil(c: TestClient, partition: str) -> dict:
+    r = c.post(f"/api/v1/memory/partitions/{partition}/distil")
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _distilled(c: TestClient, tmp_path: pathlib.Path, files: dict[str, str] | None = None) -> str:
+    """Register an agent, seed a repository, sync and distil both partitions.
+
+    Returns the repository partition's name. Most tests below want a partition
+    with real notes in it, and notes only exist after a distil pass: aggregation
+    writes ``.raw/`` and nothing else (FR-008).
+    """
+    _register_agent(c, "cc")
+    repository = _repository(tmp_path)
+    _seed(tmp_path, repository, files if files is not None else _default_files())
+    _sync(c)
+    name = next(n for n in _partitions(c) if n != "global")
+    _distil(c, name)
+    _distil(c, "global")
+    return name
+
+
+def _lines(text: str) -> list[str]:
+    return [line for line in text.split("\n") if line.startswith("- **")]
+
+
+def _binding_ceiling(text: str, *, room_for: int) -> int:
+    """A ceiling that fits ``text``'s scaffolding and ``room_for`` index lines.
+
+    Measured off an untrimmed payload rather than hard-coded, because the
+    scaffolding's own size moves with the absolute notes path — a long
+    ``tmp_path`` here, a short ``~/.coffer/...`` in production — and both trim
+    notices are reserved up front, so a literal would pin this to one machine's
+    directory names.
+    """
+    lines = _lines(text)
+    scaffolding = estimate_tokens(text) - sum(estimate_tokens(line) for line in lines)
+    for partition in ("global", "coffer"):
+        scaffolding += estimate_tokens(
+            f"(99 older line(s) not shown — those notes are files in "
+            f"{memory_paths.notes_dir(partition)})"
+        )
+    return scaffolding + max(estimate_tokens(line) for line in lines) * room_for
+
+
+# ----- partitions and notes -------------------------------------------------
+
+
+def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> None:
     _register_agent(client, "cc")
-    project_root = tmp_path / "home" / "dev" / "coffer"
-    project_root.mkdir(parents=True)
-    _write_cc_facts(tmp_path, project_root)
+    repository = _repository(tmp_path)
+    _seed(tmp_path, repository, _default_files())
 
     result = _sync(client)
-    assert result["facts_written"] == 2
-    assert "global" in result["partitions"]
+    assert result["entries_written"] == 2
+    assert result["failures"] == []
+    assert sorted(result["partitions"]) == ["coffer", "global"]
 
-    partitions = client.get("/api/v1/memory/partitions").json()["partitions"]
-    names = {p["name"] for p in partitions}
-    assert "global" in names
-    project_partition = next(p for p in partitions if p["name"] != "global")
-    assert project_partition["project_root"] == str(project_root)
-    assert project_partition["fact_count"] == 1
+    # Aggregation writes `.raw/` only — a partition has no note until a distil
+    # pass has run (FR-008).
+    listed = _partitions(client)
+    assert listed["coffer"]["note_count"] == 0
+    assert listed["coffer"]["repository_path"] == str(repository.resolve())
+    assert listed["coffer"]["repository_key"] == f"path:{repository.resolve()}"
+    assert listed["coffer"]["unresolvable"] is False
+    # `global` is no repository, and is resolvable from everywhere regardless.
+    assert listed["global"]["repository_path"] == ""
+    assert listed["global"]["unresolvable"] is False
 
-    facts = client.get(f"/api/v1/memory/partitions/{project_partition['name']}/facts").json()
-    assert facts["facts"][0]["title"] == "python-lockfile"
+    distilled = _distil(client, "coffer")
+    assert distilled == {
+        "partition": "coffer",
+        "merged": 0,
+        "opened": 1,
+        "retired": 0,
+        "dropped": 0,
+        "model_used": False,
+    }
+    _distil(client, "global")
+    assert _partitions(client)["coffer"]["note_count"] == 1
 
-    detail = client.get(
-        f"/api/v1/memory/partitions/{project_partition['name']}/facts/{facts['facts'][0]['slug']}"
-    ).json()
-    assert detail["body"].strip().startswith("Run `uv sync --frozen`")
+    notes = client.get("/api/v1/memory/partitions/coffer/notes").json()["notes"]
+    assert len(notes) == 1
+    summary = notes[0]
+    assert summary["title"] == "python-lockfile"
+    assert summary["slug"] == "python-lockfile"
+    assert summary["partition"] == "coffer"
+    assert summary["type"] == "project"
+    assert summary["description"] == "Dependencies are locked with uv"
+    assert summary["search_terms"] == []  # Claude Code states none (FR-004)
+    assert summary["created_at"] and summary["updated_at"]
+    # Retirement is a file leaving `notes/` plus a line in `RETIRED.md`, never a
+    # flag a client has to filter on (FR-025).
+    assert "status" not in summary
+    assert "superseded_by" not in summary
+
+    detail = client.get("/api/v1/memory/partitions/coffer/notes/python-lockfile").json()
+    assert "uv sync --frozen" in detail["body"]
     assert detail["origins"][0]["agent"] == "cc"
+    assert detail["origins"][0]["native_path"].endswith("/memory/python-lockfile.md")
+    assert detail["origins"][0]["anchor"] == "python-lockfile"
+
+    # The personal entry went to `global` whichever repository it was learned
+    # in — and that is what the session is given first (FR-011).
+    global_notes = client.get("/api/v1/memory/partitions/global/notes").json()["notes"]
+    assert [n["title"] for n in global_notes] == ["worktree-development"]
+    assert global_notes[0]["type"] == "feedback"
 
 
-def test_unknown_partition_facts_is_not_found(client) -> None:
-    r = client.get("/api/v1/memory/partitions/does-not-exist/facts")
+def test_unknown_partition_notes_is_not_found(client) -> None:
+    r = client.get("/api/v1/memory/partitions/does-not-exist/notes")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
-def test_unknown_fact_slug_is_not_found(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    project_root = tmp_path / "proj"
-    project_root.mkdir(parents=True)
-    _write_cc_facts(tmp_path, project_root)
-    _sync(client)
-    partition = next(
-        p["name"]
-        for p in client.get("/api/v1/memory/partitions").json()["partitions"]
-        if p["name"] != "global"
-    )
-    r = client.get(f"/api/v1/memory/partitions/{partition}/facts/does-not-exist")
+def test_unknown_note_slug_is_not_found(client, tmp_path) -> None:
+    partition = _distilled(client, tmp_path)
+    r = client.get(f"/api/v1/memory/partitions/{partition}/notes/does-not-exist")
     assert r.status_code == 404
-    assert r.json()["error"]["code"] == "MEMORY_FACT_NOT_FOUND"
+    assert r.json()["error"]["code"] == "MEMORY_NOTE_NOT_FOUND"
 
 
-# ----- organise -------------------------------------------------------------
+@pytest.mark.acceptance(
+    spec="memory", scenario="a directory that is not a repository gets no partition"
+)
+def test_a_partition_whose_repository_is_gone_is_listed_as_unresolvable(client, tmp_path) -> None:
+    """FR-016: an orphan says so on this surface rather than sitting there
+    undeliverable and unmentioned. It stays listed — and therefore deletable
+    through the Resource route — because only the developer can decide that
+    repository is not coming back."""
+    partition = _distilled(client, tmp_path)
+    assert _partitions(client)[partition]["unresolvable"] is False
+
+    shutil.rmtree(tmp_path / "coffer")
+
+    listed = _partitions(client)
+    assert listed[partition]["unresolvable"] is True
+    assert listed[partition]["repository_path"] == str((tmp_path / "coffer").resolve())
+    assert listed[partition]["note_count"] == 1  # its notes are still readable
 
 
-def test_organise_with_no_internal_connection_still_writes_a_digest(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    project_root = tmp_path / "proj"
-    project_root.mkdir(parents=True)
-    _write_cc_facts(tmp_path, project_root)
-    _sync(client)
-    partition = next(
-        p["name"]
-        for p in client.get("/api/v1/memory/partitions").json()["partitions"]
-        if p["name"] != "global"
+# ----- retirements ----------------------------------------------------------
+
+
+def test_retired_answers_from_the_partitions_retirement_record(client, tmp_path) -> None:
+    """``GET /retired`` reads ``RETIRED.md`` (FR-025), newest first — the file
+    is appended to, so the wire order is the file's reversed."""
+    partition = _distilled(client, tmp_path)
+    assert client.get(f"/api/v1/memory/partitions/{partition}/retired").json()["retired"] == []
+
+    memory_store.write_retired(
+        partition,
+        [
+            RetiredNote(
+                slug="hook-injection",
+                title="Context injection ships",
+                reason="The mechanism was removed in 2026-09.",
+                replaced_by="pull-only-delivery",
+                retired_at="2026-09-10T00:00:00+00:00",
+                entry_ids=("cc:one",),
+            ),
+            RetiredNote(
+                slug="",
+                title="A scratch observation",
+                reason="Nothing was kept from it.",
+                retired_at="2026-09-12T00:00:00+00:00",
+                entry_ids=("cc:two",),
+            ),
+        ],
     )
 
-    r = client.post(f"/api/v1/memory/partitions/{partition}/organise")
-    assert r.status_code == 200, r.text
-    body = r.json()
+    retired = client.get(f"/api/v1/memory/partitions/{partition}/retired").json()["retired"]
+    assert [r["title"] for r in retired] == ["A scratch observation", "Context injection ships"]
+    assert retired[1] == {
+        "slug": "hook-injection",
+        "title": "Context injection ships",
+        "reason": "The mechanism was removed in 2026-09.",
+        "replaced_by": "pull-only-delivery",
+        "retired_at": "2026-09-10T00:00:00+00:00",
+    }
+    # `entry_ids` is the next pass's exclusion list, not the reader's business.
+    assert "entry_ids" not in retired[0]
+    # A record for entries a pass kept nothing from carries no slug.
+    assert retired[0]["slug"] == ""
+
+
+def test_retired_of_an_unknown_partition_is_not_found(client) -> None:
+    r = client.get("/api/v1/memory/partitions/does-not-exist/retired")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
+# ----- distil ---------------------------------------------------------------
+
+
+def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_path) -> None:
+    """FR-024: thinner, not absent. Each raw entry becomes a note of its own and
+    ``MEMORY.md`` is still written, so this installation still has a delivery."""
+    _register_agent(client, "cc")
+    repository = _repository(tmp_path)
+    _seed(tmp_path, repository, _default_files())
+    _sync(client)
+
+    body = _distil(client, "coffer")
     assert body["model_used"] is False
-    assert body["partition"] == partition
-    assert (tmp_path / "memory" / partition / "summary.md").is_file()
+    assert body["opened"] == 1
 
-    audit = client.get("/api/v1/audit").json()
-    assert any(e["event_type"] == "memory_organised" for e in audit["entries"])
+    index = client.get(
+        "/api/v1/memory/partitions/coffer/files/content", params={"path": "MEMORY.md"}
+    ).json()
+    assert "python-lockfile" in index["content"]
+    assert str(repository.resolve()) in index["content"]
+
+    audit = client.get("/api/v1/audit").json()["entries"]
+    assert any(e["event_type"] == "memory_distilled" for e in audit)
+    assert any(e["event_type"] == "memory_aggregated" for e in audit)
 
 
-def test_organise_unknown_partition_is_not_found(client) -> None:
-    r = client.post("/api/v1/memory/partitions/does-not-exist/organise")
+def test_distil_unknown_partition_is_not_found(client) -> None:
+    r = client.post("/api/v1/memory/partitions/does-not-exist/distil")
     assert r.status_code == 404
+    assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 @pytest.mark.acceptance(
     spec="memory",
-    scenario="a second organise pass over the same partition is refused while the first is running",
+    scenario="a second distil pass over the same partition is refused while the first is running",
 )
-def test_a_second_organise_over_the_same_partition_is_refused(client, tmp_path) -> None:
+def test_a_second_distil_over_the_same_partition_is_refused(client, tmp_path) -> None:
     """The bug this is here for: the button's spinner used to live in a browser
     component, so navigating away mid-pass and back showed an idle button and
-    the next click started a SECOND pass over the same files (FR-033). The
+    the next click started a SECOND pass over the same files (FR-041). The
     daemon now holds that fact, and refuses.
 
     The in-flight pass is simulated by claiming the partition's key directly —
     the route is synchronous, so a real second request could only be made from
     another thread, and what is under test is the refusal, not the threading.
     """
-    _register_agent(client, "cc")
-    project_root = tmp_path / "proj"
-    project_root.mkdir(parents=True)
-    _write_cc_facts(tmp_path, project_root)
-    _sync(client)
-    partition = next(
-        p["name"]
-        for p in client.get("/api/v1/memory/partitions").json()["partitions"]
-        if p["name"] != "global"
-    )
+    partition = _distilled(client, tmp_path)
 
     assert UPKEEP_RUNS.claim(KIND_MEMORY, partition) is True
     try:
-        r = client.post(f"/api/v1/memory/partitions/{partition}/organise")
+        r = client.post(f"/api/v1/memory/partitions/{partition}/distil")
         assert r.status_code == 409, r.text
         assert r.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
 
@@ -213,77 +380,157 @@ def test_a_second_organise_over_the_same_partition_is_refused(client, tmp_path) 
         UPKEEP_RUNS.release(KIND_MEMORY, partition)
 
     # The key is free again, so the real pass runs.
-    assert client.post(f"/api/v1/memory/partitions/{partition}/organise").status_code == 200
+    assert client.post(f"/api/v1/memory/partitions/{partition}/distil").status_code == 200
     assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
 
 
-# ----- context + delivery: FR-026's whole point -----------------------------
-
-
-def test_context_composes_and_stays_bounded(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    project_root = tmp_path / "proj"
-    project_root.mkdir(parents=True)
-    _write_cc_facts(tmp_path, project_root)
-    _sync(client)
-
-    r = client.post("/api/v1/memory/context", json={"cwd": str(project_root)})
-    assert r.status_code == 200, r.text
-    data = r.json()
-    assert "## Coffer memory" in data["text"]
-    assert data["facts_omitted"] == 0
-    assert "L0" in data["layers"]
+# ----- context: the payload the whole redesign is about ---------------------
 
 
 @pytest.mark.acceptance(
-    spec="memory", scenario="the composed context stays within its token budget"
+    spec="memory",
+    scenario="the composed context carries the whole index and the path to the bodies",
 )
-def test_context_respects_a_tiny_budget_and_names_what_was_left_out(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    project_root = tmp_path / "proj"
-    project_root.mkdir(parents=True)
-    _write_cc_facts(tmp_path, project_root)
-    _sync(client)
+def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path) -> None:
+    """The measured failure this route exists to fix: the old surface shipped
+    8 of 189 lines and pointed at ``coffer__recall``, which was called five
+    times in its life. The payload now carries a line per note and the absolute
+    directory the bodies are in, and names no tool at all (FR-028)."""
+    files = {
+        f"project-{i}.md": _cc_memory_file(f"project-{i}", f"Project fact {i}", "project", "body")
+        for i in range(4)
+    }
+    files.update(
+        {
+            f"about-{i}.md": _cc_memory_file(f"about-{i}", f"Personal fact {i}", "feedback", "body")
+            for i in range(3)
+        }
+    )
+    partition = _distilled(client, tmp_path, files)
+    repository = tmp_path / "coffer"
 
-    r = client.post("/api/v1/memory/context", json={"cwd": str(project_root), "budget_tokens": 40})
+    r = client.post(
+        "/api/v1/memory/context", json={"agent": "cc", "cwd": str(repository / "backend")}
+    )
     assert r.status_code == 200, r.text
     data = r.json()
-    assert len(data["text"]) < 2000
-    assert data["facts_omitted"] >= 0  # bound respected; exact count is context.py's concern
+
+    assert data["partition"] == partition
+    assert data["notes_included"] == 7
+    assert data["notes_omitted"] == 0
+    # A cwd deep inside the repository resolves to the repository's partition.
+    for slug in [f"project-{i}" for i in range(4)] + [f"about-{i}" for i in range(3)]:
+        assert data["text"].count(f"`{slug}.md`") == 1
+    assert len(_lines(data["text"])) == 7
+
+    # The path is the current repository partition's, absolute, and the payload
+    # says a body is read as a file rather than naming a tool for it (FR-028).
+    notes_dir = str(memory_paths.notes_dir(partition))
+    assert notes_dir.startswith("/")
+    assert notes_dir in data["text"]
+    assert "read one as a file" in data["text"]
+    for tool in ("coffer__recall", "coffer__read", "coffer__search", "MCP"):
+        assert tool not in data["text"]
+    # There is no `layers` field any more: delivery is not a two-tier digest.
+    assert "layers" not in data
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="an index too large for the ceiling is trimmed and says so"
+)
+def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
+    client, tmp_path
+) -> None:
+    """FR-030, and the reverse of what this layer did before. The previous
+    design spent its budget on ``global`` first and delivered, on a live vault
+    of 189 entries, 8 lines of which none were about the project the session
+    was open in — so what is pinned here is *which* partition loses lines."""
+    files = {
+        f"project-{i}.md": _cc_memory_file(f"project-{i}", f"Project fact {i}", "project", "b")
+        for i in range(3)
+    }
+    files.update(
+        {
+            f"about-{i}.md": _cc_memory_file(f"about-{i}", f"Personal fact {i}", "feedback", "b")
+            for i in range(12)
+        }
+    )
+    partition = _distilled(client, tmp_path, files)
+    repository = tmp_path / "coffer"
+
+    full = client.post(
+        "/api/v1/memory/context", json={"agent": "cc", "cwd": str(repository)}
+    ).json()
+    assert full["notes_omitted"] == 0, "the untrimmed payload is the baseline"
+
+    ceiling = _binding_ceiling(full["text"], room_for=6)
+
+    r = client.post(
+        "/api/v1/memory/context",
+        json={"agent": "cc", "cwd": str(repository), "ceiling_tokens": ceiling},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+
+    assert data["notes_omitted"] > 0
+    assert estimate_tokens(data["text"]) <= ceiling
+    # The repository the session is open in keeps every line it has …
+    for i in range(3):
+        assert f"`project-{i}.md`" in data["text"]
+    # … and `global` is what gives way — some of it, not all: the ceiling was
+    # sized for six lines and the repository's three were spent first.
+    kept = [i for i in range(12) if f"`about-{i}.md`" in data["text"]]
+    assert kept, "the ceiling left room for global lines too"
+    assert len(kept) < 12
+    # The trim says how many were dropped AND where those notes are, which is
+    # what makes it a small loss: every line that did not fit is still a file.
+    assert f"({data['notes_omitted']} older line(s) not shown" in data["text"]
+    assert str(memory_paths.notes_dir("global")) in data["text"]
+    assert data["notes_included"] + data["notes_omitted"] == 15
+    assert data["partition"] == partition
 
 
 def test_context_scope_enforcement_does_not_leak_an_out_of_scope_partition(
     client, tmp_path
 ) -> None:
     """The one route a real agent's own session reaches must be scope-checked
-    (spec memory FR-012): an agent outside a project partition's scope must
-    never see its facts, even when its own cwd resolves to that partition."""
-    _register_agent(client, "cc")
+    (FR-013): an agent outside a partition's scope must never be served its
+    notes, even when its own cwd resolves to that partition."""
+    partition = _distilled(client, tmp_path)
     _register_agent(client, "outsider", agent_type="codex")
-    project_root = tmp_path / "proj"
-    project_root.mkdir(parents=True)
-    _write_cc_facts(tmp_path, project_root)
-    _sync(client)
-    partition = next(
-        p["name"]
-        for p in client.get("/api/v1/memory/partitions").json()["partitions"]
-        if p["name"] != "global"
-    )
-    # Default scope from aggregation is {"cc"} (FR-012) — confirm "outsider"
+    repository = tmp_path / "coffer"
+
+    # Default scope from aggregation is {"cc"} (FR-013) — confirm "outsider"
     # is excluded, then compose context for it against the SAME cwd.
     scope = client.get(f"/api/v1/resources/memory/{partition}/scope").json()
     assert scope["scope"] == {"agents": ["cc"]}
 
-    r = client.post("/api/v1/memory/context", json={"agent": "outsider", "cwd": str(project_root)})
-    assert r.status_code == 200, r.text
-    data = r.json()
-    # `partition` says which partition this cwd maps to, not what is visible
-    # — the leak this test guards against is in the TEXT and LAYERS, which
-    # must never surface a fact from a partition "outsider" is out of scope for.
+    data = client.post(
+        "/api/v1/memory/context", json={"agent": "outsider", "cwd": str(repository)}
+    ).json()
+
+    # `partition` says which partition this cwd maps to, not what is visible —
+    # the leak this guards against is in the TEXT.
     assert data["partition"] == partition
     assert "python-lockfile" not in data["text"]
-    assert data["layers"] == ["L0"]
-    assert data["facts_included"] == 0
+    assert data["notes_included"] == 0
+    assert data["text"] == ""
+
+
+def test_context_for_a_directory_in_no_repository_is_global(client, tmp_path) -> None:
+    _distilled(client, tmp_path)
+
+    data = client.post(
+        "/api/v1/memory/context",
+        json={"agent": "cc", "cwd": str(tmp_path / "Documents" / "2026-09-17")},
+    ).json()
+
+    assert data["partition"] == "global"
+    assert "`worktree-development.md`" in data["text"]
+    assert "in no repository Coffer has aggregated yet" in data["text"]
+
+
+# ----- delivery -------------------------------------------------------------
 
 
 def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
@@ -291,6 +538,8 @@ def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
 
     status = client.get("/api/v1/memory/delivery", params={"agent": "cc"}).json()
     assert status["delivery"][0]["installed"] is False
+    # A fire is an event, never a field on the status (FR-033, FR-039).
+    assert "last_fired_at" not in status["delivery"][0]
 
     installed = client.post("/api/v1/memory/delivery/cc/install").json()
     assert installed["installed"] is True
@@ -307,6 +556,10 @@ def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
 
     audit2 = client.get("/api/v1/audit").json()
     assert any(e["event_type"] == "memory_delivery_fired" for e in audit2["entries"])
+    # Installation is unchanged by a fire.
+    assert client.get("/api/v1/memory/delivery", params={"agent": "cc"}).json()["delivery"][0][
+        "installed"
+    ]
 
     removed = client.delete("/api/v1/memory/delivery/cc").json()
     assert removed["installed"] is False
@@ -325,64 +578,67 @@ def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
 # ----- the partition's own files -------------------------------------------
 
 
-def _synced_partition(client: TestClient, tmp_path: pathlib.Path) -> str:
-    """Sync one project's facts; return the partition they landed in."""
-    project_root = tmp_path / "proj"
-    if not project_root.is_dir():
-        project_root.mkdir(parents=True)
-        _write_cc_facts(tmp_path, project_root)
-    _sync(client)
-    return next(
-        p["name"]
-        for p in client.get("/api/v1/memory/partitions").json()["partitions"]
-        if p["name"] != "global"
-    )
-
-
 @pytest.mark.acceptance(
     spec="memory", scenario="a partition's own directory is browsable as a file tree"
 )
 def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    partition = _synced_partition(client, tmp_path)
+    partition = _distilled(client, tmp_path)
+    memory_store.write_retired(
+        partition,
+        [RetiredNote(slug="gone", title="Gone", reason="No longer true.", entry_ids=("cc:x",))],
+    )
 
     tree = client.get(f"/api/v1/memory/partitions/{partition}/files").json()["root"]
     assert tree["path"] == ""
     assert tree["abs_path"] == str(tmp_path / "memory" / partition)
     names = {child["name"]: child for child in tree["children"]}
-    # A partition is a README naming its project root plus a facts/ folder;
-    # the digest only exists once organise has run, so it is not asserted here.
-    assert "README.md" in names
-    assert names["facts"]["type"] == "dir"
-    fact_files = {child["path"] for child in names["facts"]["children"]}
-    assert "facts/python-lockfile.md" in fact_files
+    # Four things, one writer each — and nothing left of the shape this
+    # replaced: no README.md, no summary.md, no facts/.
+    assert set(names) == {"MEMORY.md", "notes", "RETIRED.md", ".raw"}
+    assert names["notes"]["type"] == "dir"
+    assert names["notes"]["derived"] is False
+    assert "notes/python-lockfile.md" in {c["path"] for c in names["notes"]["children"]}
+    # `.raw/` is reachable through the same tree, and marked as the verbatim
+    # input rather than Coffer's own writing (FR-008, FR-037).
+    assert names[".raw"]["type"] == "dir"
+    assert names[".raw"]["derived"] is True
+    raw_children = names[".raw"]["children"]
+    assert len(raw_children) == 1
 
     content = client.get(
         f"/api/v1/memory/partitions/{partition}/files/content",
-        params={"path": "facts/python-lockfile.md"},
+        params={"path": "notes/python-lockfile.md"},
     ).json()
     assert content["binary"] is False
     assert content["truncated"] is False
     assert "uv sync --frozen" in content["content"]
-    assert content["abs_path"].endswith("/facts/python-lockfile.md")
+    assert content["abs_path"].endswith("/notes/python-lockfile.md")
+    assert content["folder_abs_path"] == str(memory_paths.notes_dir(partition))
+
+    # The hidden half reads too, verbatim: it is the distil pass's input, and
+    # it is what makes a note's paraphrase checkable back against the source.
+    raw = client.get(
+        f"/api/v1/memory/partitions/{partition}/files/content",
+        params={"path": raw_children[0]["path"]},
+    ).json()
+    assert "uv sync --frozen" in raw["content"]
+    assert "agent: cc" in raw["content"]
 
 
 def test_partition_files_are_read_only(client, tmp_path) -> None:
-    """No write reaches this family. The tree is derived (FR-016), so an edit
+    """No write reaches this family. The tree is derived (FR-019), so an edit
     would survive only until the next aggregation pass."""
-    _register_agent(client, "cc")
-    partition = _synced_partition(client, tmp_path)
+    partition = _distilled(client, tmp_path)
 
     r = client.put(
         f"/api/v1/memory/partitions/{partition}/files/content",
-        json={"path": "facts/python-lockfile.md", "content": "rewritten"},
+        json={"path": "notes/python-lockfile.md", "content": "rewritten"},
     )
     assert r.status_code == 405
 
 
 def test_partition_files_refuse_a_path_that_escapes_the_partition(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    partition = _synced_partition(client, tmp_path)
+    partition = _distilled(client, tmp_path)
 
     r = client.get(
         f"/api/v1/memory/partitions/{partition}/files/content",
@@ -393,12 +649,11 @@ def test_partition_files_refuse_a_path_that_escapes_the_partition(client, tmp_pa
 
 
 def test_partition_file_that_is_not_there_is_not_found(client, tmp_path) -> None:
-    _register_agent(client, "cc")
-    partition = _synced_partition(client, tmp_path)
+    partition = _distilled(client, tmp_path)
 
     r = client.get(
         f"/api/v1/memory/partitions/{partition}/files/content",
-        params={"path": "facts/no-such-fact.md"},
+        params={"path": "notes/no-such-note.md"},
     )
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "MEMORY_FILE_NOT_FOUND"

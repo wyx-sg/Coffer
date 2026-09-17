@@ -1,42 +1,61 @@
-"""The pure heart of aggregation: merging and naming, with no I/O.
+"""The aggregation pass: the agents' own words, filed by repository (FR-008..FR-015).
 
-``MemoryService`` (``service.py``) does the orchestration — listing agent
-Resources, calling readers, reading and writing the store. Everything in
-*this* module is a plain function over ``Fact``/``RawFact`` values, which is
-what lets the tricky part — deciding which facts are certainly the same fact,
-and what file name each one gets — be exercised in the unit tier with no
-filesystem and no database at all.
+This is the **input** half of the layer. It reads each registered, enabled
+agent's native memory through that agent's reader, decides which partition
+each entry belongs to, and writes the entry **verbatim** under that
+partition's hidden ``.raw/``. It writes nothing else — no note, no index, no
+retirement record — because those three belong to the distil pass, and the
+one-writer-per-directory split is what makes FR-026 checkable by reading call
+sites rather than by trusting a comment.
 
-Two decisions live here and are documented where they are made, not just in
-this docstring:
+``MemoryService`` (``service.py``) keeps the parts that need a database: which
+agents are registered, which partitions already have a Resource row, and the
+audit event. Everything here takes plain values and touches only the derived
+tree, so the tricky parts — which repository a directory resolves to, and what
+a second read of a changed source does to what the first wrote — are exercised
+with a temp directory and no database at all.
 
-- :func:`merge_duplicates` implements FR-015's "only on an exact signal" rule.
-  Two facts merge into one (union of origins) only when they are identical in
-  a way that cannot be a coincidence: the same normalised body text, or the
-  same ``(type, partition, normalised title)``. Nothing softer — a fuzzy
-  match belongs to the organise pass's model (spec memory FR-017), which can
-  weigh a judgement call; a deterministic guess here would silently drop a
-  fact no one asked it to drop.
-- :func:`assign_slugs` gives every fact a stable, readable file name, on the
-  same discipline ``infrastructure/knowledge/naming.py`` uses (a slug from the
-  title, a short numeric suffix only on a real collision). It is a small
-  local copy rather than an import: this package may not reach into
-  ``infrastructure.knowledge`` (Contract 5d — the knowledge kind is fenced off
-  from every other kind), and the whole function is ~10 lines of pure string
-  handling, cheaper to duplicate than to route around.
+Three decisions live here, and each one is a named past failure:
+
+- **A partition is keyed on a repository, never on a working directory**
+  (:class:`_Placer`). A worktree, a second clone and the main checkout are one
+  repository and therefore one partition (FR-014).
+- **A directory inside no repository files into ``global``'s ``.raw/``**
+  (FR-015). It creates no partition of its own, and the distil pass judges the
+  entry on its merits — keeping it in ``global`` or keeping nothing. Six of
+  sixteen partitions on the maintainer's live vault were dated scratch folders
+  that the previous design turned into permanent partitions, holding material
+  that could never reach the repository it was actually about.
+- **Nothing here merges two agents' entries.** ``merge_duplicates`` used to
+  live in this module and matched two facts on an identical normalised body or
+  an identical ``(type, partition, title)``. Measured on 378 real facts from
+  two agents it produced **zero** merges, because two agents never phrase
+  anything the same way — so the merge moved to the distil pass, where it is a
+  judgement about *meaning* made by a model (FR-018). There is deliberately no
+  literal comparison left here to be tempted to widen. There are no slugs
+  either: a file name belongs to a note, and a note is written one layer up. A
+  raw entry's file name is the origin key ``StoredRawEntry`` derives from the
+  triple that identifies it, so a second pass over an unchanged source
+  overwrites one file rather than accumulating a near-duplicate (FR-009).
 """
 
 from __future__ import annotations
 
-import re
-import unicodedata
+import os
+import pathlib
 from collections import defaultdict
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
-from coffer.domain.memory.fact import Fact, Origin
-from coffer.domain.memory.reader import RawFact
+from coffer.domain.memory.errors import UnreadableMemory
+from coffer.domain.memory.note import PERSONAL_TYPES
+from coffer.domain.memory.partition import GLOBAL_PARTITION, disambiguate, partition_slug
+from coffer.domain.memory.reader import MemoryReader, RawEntry
 from coffer.domain.resource import Resource
+from coffer.infrastructure.memory import raw_store, source_state, store
+from coffer.infrastructure.memory.raw_store import StoredRawEntry
+from coffer.infrastructure.memory.repository import Repository, resolve_repository
 
 # ----- results (returned to callers of MemoryService.aggregate) -----------
 
@@ -52,8 +71,15 @@ class SourceFailure:
 
 @dataclass(frozen=True)
 class AggregationResult:
+    """What one pass did, in the shape ``AggregationResultOut`` publishes.
+
+    ``entries_written`` counts raw entries, not notes: aggregation writes no
+    note at all (FR-008). A pass over an idle machine writes zero and skips
+    every source, which is the steady state rather than a sign of trouble.
+    """
+
     partitions: tuple[str, ...]
-    facts_written: int
+    entries_written: int
     sources_read: int
     sources_skipped: int
     failures: tuple[SourceFailure, ...]
@@ -69,10 +95,9 @@ class AgentSource:
     to it, and the directory to hand that reader.
 
     Built by a resolver the composition root injects (mirroring
-    ``SkillService``'s ``AgentSkillDirResolver``) so this package never
-    imports ``coffer.domain.agent`` directly — memory is its own kind, and a
-    direct import would be exactly the cross-kind coupling Contracts
-    5/5b/5c/5d already fence the other kinds off from.
+    ``SkillService``'s ``AgentSkillDirResolver``) so this package never reaches
+    into the agent kind's own service — the cross-kind coupling Contracts
+    5/5b/5c/5d fence every other kind off from.
     """
 
     agent: str
@@ -84,162 +109,279 @@ class AgentSource:
 AgentSourceResolver = Callable[[Resource], AgentSource]
 
 
-# ----- turning one RawFact into a candidate Fact ---------------------------
+# ----- partitions ------------------------------------------------------------
 
 
-def build_fact(
-    raw: RawFact,
+@dataclass(frozen=True)
+class Placement:
+    """One partition, by the only three things that identify it (FR-014).
+
+    The same value serves as input and as output: the caller seeds a pass with
+    the partitions that already have a Resource row, and the pass hands back
+    the ones it filed into — including the repository it resolved, which the
+    caller records on the row so a later session's ``cwd`` can be matched
+    against it without re-walking a disk. ``global`` is the one placement with
+    neither a key nor a path: it is not a repository, and nothing resolves *to*
+    it by matching a directory.
+    """
+
+    name: str
+    repository_key: str = ""
+    repository_path: str = ""
+
+
+GLOBAL_PLACEMENT = Placement(name=GLOBAL_PARTITION)
+
+
+@dataclass(frozen=True)
+class PartitionTouch:
+    """A partition this pass wrote into, and the agents whose memory it came
+    from — which is the partition's default per-agent scope on creation, so
+    memory flows back to its own sources with no setup step (FR-013)."""
+
+    placement: Placement
+    agents: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class AggregationOutcome:
+    """The pass's own result plus what the caller must persist for it.
+
+    Split in two because registering a Resource is a database write and this
+    module has none: the pass reports which partitions it filed into and what
+    repository each resolved to, and ``MemoryService`` turns that into
+    registrations and config updates.
+    """
+
+    result: AggregationResult
+    touched: tuple[PartitionTouch, ...]
+
+
+def _utc_now() -> str:
+    return datetime.now(tz=UTC).isoformat()
+
+
+def _home_dir() -> str:
+    """The developer's home directory, by the same rule ``paths.py`` uses.
+
+    An entry whose project root IS this directory is about the person, not a
+    project, and files into ``global`` whatever its type says (FR-011).
+    """
+    return str(pathlib.Path(os.environ.get("HOME", "~")).expanduser()).rstrip("/")
+
+
+def _source_failure(agent: str, path: str, exc: Exception) -> SourceFailure:
+    """One source's failure, whatever shape it took.
+
+    A reader is meant to raise ``UnreadableMemory`` for a file it cannot
+    parse, but a reader has bugs like any code, and FR-005's isolation is
+    only worth anything if it holds for the failure nobody anticipated: one
+    file that trips a reader must cost that file, not the whole pass.
+    """
+    if isinstance(exc, UnreadableMemory):
+        return SourceFailure(agent=agent, path=exc.path, reason=exc.reason)
+    return SourceFailure(agent=agent, path=path, reason=f"{type(exc).__name__}: {exc}")
+
+
+class _Placer:
+    """Decides which partition one raw entry files into, and names a new one.
+
+    Held across a whole pass rather than recomputed per entry for two reasons.
+    The cheap one: resolving a repository walks a directory tree and reads a
+    ``.git/config``, and one agent's memory names the same handful of working
+    directories hundreds of times. The load-bearing one: a name minted for a
+    repository this pass has not seen before must not be minted twice, so the
+    set of claimed names has to outlive a single entry.
+    """
+
+    def __init__(self, known: Sequence[Placement]) -> None:
+        self._by_key = {p.repository_key: p for p in known if p.repository_key}
+        self._claimed = {p.name for p in known} | {GLOBAL_PARTITION}
+        self._by_directory: dict[str, Placement] = {}
+        self._home = _home_dir()
+
+    def place(self, entry: RawEntry) -> Placement:
+        """Where ``entry`` belongs (FR-011, FR-015).
+
+        Three routes to ``global``, and they are different rules that happen to
+        agree: an entry **about the person** goes there whichever repository it
+        was learned in; an entry with no working directory has nothing else to
+        say; and an entry learned in a directory inside no repository goes there
+        too — into ``global``'s ``.raw/``, creating no partition, for the distil
+        pass to keep or discard on its merits.
+        """
+        if entry.type in PERSONAL_TYPES:
+            return GLOBAL_PLACEMENT
+        directory = (entry.project_root or "").rstrip("/")
+        if not directory or directory == self._home:
+            return GLOBAL_PLACEMENT
+        cached = self._by_directory.get(directory)
+        if cached is None:
+            cached = self._resolve(directory)
+            self._by_directory[directory] = cached
+        return cached
+
+    def _resolve(self, directory: str) -> Placement:
+        repository = resolve_repository(directory)
+        if repository is None or not repository.key:
+            return GLOBAL_PLACEMENT
+        known = self._by_key.get(repository.key)
+        if known is not None:
+            return known
+        placement = self._mint(repository)
+        self._by_key[repository.key] = placement
+        self._claimed.add(placement.name)
+        return placement
+
+    def _mint(self, repository: Repository) -> Placement:
+        """A placement for a repository no partition answers for yet.
+
+        The name is the repository's own, readably — never an id, which is the
+        failure that got the previous per-project store removed: nobody could
+        tell which project a ``project-<ULID>`` store belonged to. Two
+        repositories that share a directory name are told apart by prefixing a
+        parent segment (``work-api`` vs ``personal-api``), not by a number.
+
+        Preferring the *remote's* last segment over the local directory's is
+        what keeps two clones under different local names from racing to create
+        two partitions that ``repository_key`` would then insist are one.
+        """
+        base = partition_slug(repository.name or repository.root)
+        name = (
+            disambiguate(repository.root, frozenset(self._claimed))
+            if base in self._claimed
+            else base
+        )
+        return Placement(name=name, repository_key=repository.key, repository_path=repository.root)
+
+
+def _entries_by_source() -> dict[str, tuple[StoredRawEntry, ...]]:
+    """Every raw entry already on disk, grouped by the native file it came from.
+
+    Two questions are answered from this one read, and they are the two halves
+    of the layer's only real trap (FR-019, SC-002): *may this source be
+    skipped* — only if its digest matches **and** the entries it produced are
+    still here — and *what did a re-read of it stop producing*, which is
+    whatever is here and is not written again: a bullet the agent deleted from
+    its own memory, or an entry that now resolves to a different partition.
+
+    Reading every entry back parses every file under every ``.raw/``: the
+    honest cost of keeping the answer on disk rather than in a table this layer
+    is forbidden to add (FR-042), over files that are small and local.
+    """
+    found: dict[str, list[StoredRawEntry]] = defaultdict(list)
+    for partition in store.list_partitions():
+        for stored in raw_store.list_raw_entries(partition):
+            found[stored.native_path].append(stored)
+    return {path: tuple(entries) for path, entries in found.items()}
+
+
+def run_aggregation(
     *,
-    partition: str,
-    agent: str,
-    native_path: str,
-    captured_at: str,
-) -> Fact:
-    """One freshly-parsed ``RawFact``, wrapped as a ``Fact`` with a single
-    origin. ``slug`` is left blank — :func:`assign_slugs` fills it in once
-    every fact bound for a partition is known, so a collision can be resolved
-    against the whole set rather than one at a time.
+    agents: Sequence[AgentSource],
+    readers: Mapping[str, MemoryReader],
+    known: Sequence[Placement],
+    now: Callable[[], str] = _utc_now,
+) -> AggregationOutcome:
+    """One pass over every agent handed in, writing only ``.raw/``.
+
+    **The skip is never taken on a digest alone.** ``source_state`` records
+    what each native file hashed to last pass, and a match says the *source*
+    has not changed — it does not say the entries that source produced are
+    still on disk. FR-019 requires that deleting the memory tree and re-syncing
+    rebuilds it *with that cache deliberately left behind*, so the match is
+    combined with the presence of the entries themselves; a source whose
+    entries are gone is read again however familiar its hash looks. A source
+    that legitimately yields no entries is therefore re-read every pass, which
+    costs one parse of a file that says nothing.
+
+    **A source that will not parse leaves everything it produced standing**
+    (FR-005). Its digest is deliberately not recorded either, so the next pass
+    tries again rather than treating the broken format as the new normal, and
+    nothing it wrote is pruned — a reader that breaks on an agent's format
+    change must not empty that agent's contribution.
+
+    **No partition is ever deleted here.** One whose repository is gone is
+    surfaced as unresolvable for the developer to decide about (FR-016), and
+    one whose sources fell silent still holds notes the distil pass wrote:
+    deleting a partition on the strength of one quiet pass is how a
+    de-registered agent would take a repository's whole memory with it.
     """
-    origin = Origin(
-        agent=agent,
-        native_path=native_path,
-        anchor=raw.anchor,
-        captured_at=captured_at,
-        source_written_at=raw.source_written_at,
+    placer = _Placer(known)
+    standing_by_source = _entries_by_source()
+    old_state = source_state.load()
+    new_state: dict[str, str] = {}
+    failures: list[SourceFailure] = []
+    touched: dict[str, set[str]] = defaultdict(set)
+    placements: dict[str, Placement] = {}
+    sources_read = 0
+    sources_skipped = 0
+    entries_written = 0
+
+    for agent_source in agents:
+        reader = readers.get(agent_source.agent_type)
+        if reader is None:
+            continue  # no reader for this agent type (FR-001, FR-045): silent
+        for source in reader.sources(agent_source.config_dir):
+            standing = standing_by_source.get(source.path, ())
+            if old_state.get(source.path) == source.digest and standing:
+                sources_skipped += 1
+                new_state[source.path] = source.digest
+                continue
+
+            try:
+                entries = reader.read(source)
+            except Exception as exc:
+                failures.append(_source_failure(agent_source.agent, source.path, exc))
+                continue
+
+            sources_read += 1
+            new_state[source.path] = source.digest
+            captured_at = now()
+            written: set[tuple[str, str]] = set()
+            for entry in entries:
+                placement = placer.place(entry)
+                stored = StoredRawEntry(
+                    partition=placement.name,
+                    agent=agent_source.agent,
+                    native_path=source.path,
+                    captured_at=captured_at,
+                    entry=entry,
+                )
+                raw_store.write_raw_entry(stored)
+                entries_written += 1
+                written.add((stored.partition, stored.entry_id))
+                placements[placement.name] = placement
+                touched[placement.name].add(agent_source.agent)
+
+            for stale in standing:
+                if (stale.partition, stale.entry_id) not in written:
+                    raw_store.delete_raw_entry(stale.partition, stale.entry_id)
+
+    source_state.save(new_state)
+    return AggregationOutcome(
+        result=AggregationResult(
+            partitions=tuple(sorted(touched)),
+            entries_written=entries_written,
+            sources_read=sources_read,
+            sources_skipped=sources_skipped,
+            failures=tuple(failures),
+        ),
+        touched=tuple(
+            PartitionTouch(placement=placements[name], agents=tuple(sorted(touched[name])))
+            for name in sorted(touched)
+        ),
     )
-    return Fact(
-        slug="",
-        title=raw.title,
-        description=raw.description,
-        type=raw.type,
-        body=raw.body,
-        partition=partition,
-        origins=(origin,),
-    )
 
 
-# ----- FR-015: merge only what is certain -----------------------------------
-
-
-def _normalize(text: str) -> str:
-    return " ".join(text.strip().lower().split())
-
-
-def merge_duplicates(facts: Sequence[Fact]) -> tuple[Fact, ...]:
-    """Merge facts that are certainly the same thing; leave everything else
-    apart. See the module docstring for the exact-signal rule (FR-015).
-
-    Uses union-find over the two signals so the merge is transitive: if A and
-    B share a body and B and C share a title, all three land in one fact
-    rather than two — the alternative (a fresh dict per signal, last write
-    wins) can silently split a group depending on iteration order, which is
-    the opposite of the determinism this whole module exists for.
-    """
-    n = len(facts)
-    parent = list(range(n))
-
-    def find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def union(i: int, j: int) -> None:
-        ri, rj = find(i), find(j)
-        if ri != rj:
-            parent[ri] = rj
-
-    body_index: dict[tuple[str, str], int] = {}
-    title_index: dict[tuple[str, str, str], int] = {}
-    for i, fact in enumerate(facts):
-        body_key = (fact.partition, _normalize(fact.body))
-        title_key = (fact.type, fact.partition, _normalize(fact.title))
-        if body_key in body_index:
-            union(i, body_index[body_key])
-        else:
-            body_index[body_key] = i
-        if title_key in title_index:
-            union(i, title_index[title_key])
-        else:
-            title_index[title_key] = i
-
-    groups: dict[int, list[Fact]] = defaultdict(list)
-    order: list[int] = []
-    for i, fact in enumerate(facts):
-        root = find(i)
-        if root not in groups:
-            order.append(root)
-        groups[root].append(fact)
-
-    return tuple(_merge_group(groups[root]) for root in order)
-
-
-def _merge_group(group: list[Fact]) -> Fact:
-    if len(group) == 1:
-        return group[0]
-    # Deterministic choice of which fact's own title/description/body/slug
-    # the merged fact carries forward: the fact whose smallest origin key
-    # sorts first. Origin keys are content hashes (fact.py), so this has no
-    # relation to recency — it only needs to be the same choice every time
-    # the same origins are merged, which it is.
-    ordered = sorted(group, key=lambda f: min((o.key for o in f.origins), default=""))
-    base = ordered[0]
-    origins: list[Origin] = []
-    seen: set[str] = set()
-    for fact in ordered:
-        for origin in fact.origins:
-            if origin.key not in seen:
-                seen.add(origin.key)
-                origins.append(origin)
-    return replace(base, origins=tuple(origins))
-
-
-# ----- file names ------------------------------------------------------------
-
-_SEPARATORS = re.compile(r"[\s_/\\]+")
-_DROP = re.compile(r"[^A-Za-z0-9\-一-鿿ぁ-ヿ]")
-_DASHES = re.compile(r"-{2,}")
-_MAX_SLUG_CHARS = 80
-
-
-def _slugify(title: str) -> str:
-    normalized = unicodedata.normalize("NFKC", title or "").strip().lower()
-    stem = _DASHES.sub("-", _DROP.sub("", _SEPARATORS.sub("-", normalized))).strip("-")
-    return (stem or "fact")[:_MAX_SLUG_CHARS].strip("-") or "fact"
-
-
-def assign_slugs(facts: Sequence[Fact]) -> tuple[Fact, ...]:
-    """Give every fact in one partition a file slug, preferring the slug it
-    already has (read back from the store) so a fact's file name does not
-    churn from one pass to the next just because it was re-merged.
-
-    Only a fact with no slug yet — freshly merged from RawFacts this pass —
-    gets a fresh one, derived from its title; a collision against anything
-    already claimed (an existing slug, or another fresh one) gets a short
-    numeric suffix, exactly the discipline ``infrastructure/knowledge/naming.py``
-    uses for the same problem in the knowledge layer.
-    """
-    used: set[str] = set()
-    kept: list[Fact] = list(facts)
-    needs_slug: list[int] = []
-    for i, fact in enumerate(facts):
-        if fact.slug and fact.slug not in used:
-            used.add(fact.slug)
-        else:
-            needs_slug.append(i)
-
-    # Assign fresh slugs in a stable order (by identity, not list position) so
-    # two facts sharing a title get the same suffix pairing every pass.
-    pending = sorted(needs_slug, key=lambda i: facts[i].key)
-    for i in pending:
-        fact = facts[i]
-        base = _slugify(fact.title)
-        slug = base
-        n = 2
-        while slug in used:
-            slug = f"{base}-{n}"
-            n += 1
-        used.add(slug)
-        kept[i] = replace(fact, slug=slug)
-
-    return tuple(kept)
+__all__ = [
+    "GLOBAL_PLACEMENT",
+    "AgentSource",
+    "AgentSourceResolver",
+    "AggregationOutcome",
+    "AggregationResult",
+    "PartitionTouch",
+    "Placement",
+    "SourceFailure",
+    "run_aggregation",
+]

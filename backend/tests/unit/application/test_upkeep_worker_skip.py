@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from coffer.application.knowledge.curate_worker import CurationWorker
-from coffer.application.memory.organise_worker import OrganiseWorker
+from coffer.application.memory.distil_worker import DistilWorker
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.infrastructure.knowledge import fs
 
@@ -40,37 +40,37 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     return tmp_path / "knowledge"
 
 
-async def test_organise_worker_skips_a_partition_already_being_organised() -> None:
+async def test_distil_worker_skips_a_partition_already_being_distilled() -> None:
     runs = UpkeepRunRegistry()
     runs.claim("memory", "busy")
-    organised: list[str] = []
+    distilled: list[str] = []
 
-    async def _organise(partition: str) -> object:
-        organised.append(partition)
+    async def _distil(partition: str) -> object:
+        distilled.append(partition)
         return object()
 
     async def _partitions() -> list[str]:
         return ["busy", "free"]
 
-    worker = OrganiseWorker(organise=_organise, list_partitions=_partitions, runs=runs)
+    worker = DistilWorker(distil=_distil, list_partitions=_partitions, runs=runs)
     await worker.run_once()
 
     # Skipped, not queued — and the rest of the sweep still happened.
-    assert organised == ["free"]
+    assert distilled == ["free"]
 
 
-async def test_organise_worker_gives_each_partition_s_key_back() -> None:
+async def test_distil_worker_gives_each_partition_s_key_back() -> None:
     """A sweep that held its claims would lock the button out afterwards."""
     runs = UpkeepRunRegistry()
 
-    async def _organise(partition: str) -> object:
+    async def _distil(partition: str) -> object:
         assert runs.running("memory", partition) is not None
         return object()
 
     async def _partitions() -> list[str]:
         return ["coffer"]
 
-    await OrganiseWorker(organise=_organise, list_partitions=_partitions, runs=runs).run_once()
+    await DistilWorker(distil=_distil, list_partitions=_partitions, runs=runs).run_once()
 
     assert runs.list_running() == []
 

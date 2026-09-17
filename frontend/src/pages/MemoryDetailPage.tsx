@@ -2,27 +2,33 @@
 //
 // Detail surface for ONE partition: the folder it is on disk, plus the two
 // acts that belong to the partition as a whole — where it reaches
-// (ScopeControl) and the organise pass.
+// (ScopeControl) and the distil pass.
 //
-// Everything a reader could once do to an individual fact — hide, pin, settle
-// a conflict, mark one superseded — is gone, along with the overrides that
-// backed it. Those decisions only ever described Coffer's own derived copy,
-// which aggregation rewrites from the agents' native memory on its own
-// schedule; a verdict recorded against something regenerated behind your back
-// is a promise the surface could not keep. What is left is the truth it can
-// keep: here are the files, this is what they say, open one if you want to
-// change it.
+// Nothing here acts on an individual note, and that is the rule rather than an
+// omission (FR-037). A partition is a folder of derived Markdown: `MEMORY.md`,
+// `notes/`, `RETIRED.md`, and the `.raw/` those were distilled from. Coffer's
+// own passes rewrite all of it on their own schedule, so a verdict recorded
+// against one note — hide it, pin it, mark it dead — would be a promise the
+// surface could not keep. What is left is the truth it can keep: here are the
+// files, this is what they say, open one if you want to change it.
+//
+// The header names the REPOSITORY the partition is keyed on, not a working
+// directory: a worktree and a second clone are one partition (FR-014). When
+// that repository is gone from disk the header says so, because such a
+// partition is delivered to nobody and only the developer can decide whether
+// it should still exist (FR-016).
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
+import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useResource } from "@/lib/hooks/useResources";
 import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
-import { useMemoryPartitions, useOrganisePartition } from "@/lib/hooks/useMemory";
+import { useDistilPartition, useMemoryPartitions } from "@/lib/hooks/useMemory";
 import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 
 export function MemoryDetailPage() {
@@ -31,12 +37,13 @@ export function MemoryDetailPage() {
 
   // `enabled` is a generic Resource field (not on the dedicated partitions
   // endpoint), so ScopeControl's required prop comes from the single-resource
-  // read; `project_root` DOES live on the dedicated endpoint, so that is read
-  // from there rather than reaching into the resource's untyped `config`.
+  // read; the repository path and whether it still resolves DO live on the
+  // dedicated endpoint, so those are read from there rather than reaching into
+  // the resource's untyped `config`.
   const resource = useResource("memory", partition);
   const partitions = useMemoryPartitions();
-  const projectRoot = partitions.data?.find((p) => p.name === partition)?.project_root;
-  const organise = useOrganisePartition(partition);
+  const row = partitions.data?.find((p) => p.name === partition);
+  const distil = useDistilPartition(partition);
   // Whether a pass is running is the DAEMON's answer, not this component's:
   // the mutation's own `isPending` dies with the component, so leaving the
   // page mid-pass and coming back used to show an idle button and invite a
@@ -44,14 +51,19 @@ export function MemoryDetailPage() {
   // still OR-ed in, because it covers the moment between the click and the
   // first poll.
   const passRunning = useUpkeepRunning("memory", partition);
-  const organising = organise.isPending || passRunning;
+  const distilling = distil.isPending || passRunning;
 
   return (
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/memory", label: t("common.backTo", { label: t("nav.memory") }) }}
         title={partition}
-        subtitle={projectRoot ? <span className="font-mono text-xs">{projectRoot}</span> : null}
+        badges={row?.unresolvable ? <UnresolvableBadge /> : null}
+        subtitle={
+          row?.repository_path ? (
+            <span className="font-mono text-xs">{row.repository_path}</span>
+          ) : null
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ScopeControl kind="memory" name={partition} enabled={resource.data?.enabled ?? true} />
@@ -61,16 +73,16 @@ export function MemoryDetailPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => organise.mutate()}
-                  disabled={organising}
+                  onClick={() => distil.mutate()}
+                  disabled={distilling}
                 >
                   <RefreshCw
-                    className={organising ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"}
+                    className={distilling ? "mr-1.5 size-3.5 animate-spin" : "mr-1.5 size-3.5"}
                   />
-                  {t("memory.detail.organise")}
+                  {t("memory.detail.distil")}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{t("memory.detail.organiseHint")}</TooltipContent>
+              <TooltipContent className="max-w-xs">{t("memory.detail.distilHint")}</TooltipContent>
             </Tooltip>
           </div>
         }

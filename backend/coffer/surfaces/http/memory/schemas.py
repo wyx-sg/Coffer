@@ -1,9 +1,18 @@
 """Wire models for ``/api/v1/memory/*``.
 
-Mirrors ``surfaces/http/knowledge/schemas.py``: every model here describes
-what a client is promised, kept deliberately separate from the domain values
-(``domain.memory.fact.Fact``, ``infrastructure.memory.files``) they mirror so
-trimming a domain field never silently changes the wire contract.
+Mirrors ``surfaces/http/knowledge/schemas.py``: every model here describes what
+a client is promised, kept deliberately separate from the domain values
+(``domain.memory.note.Note``, ``domain.memory.retired.RetiredNote``,
+``infrastructure.memory.files``) they mirror so trimming a domain field never
+silently changes the wire contract.
+
+That separation earned its keep in this redesign. ``Fact`` carried ``status``
+and ``superseded_by``, and the wire carried them too; when retirement stopped
+being a flag on a live record and became a file leaving ``notes/`` plus a line
+in ``RETIRED.md`` (FR-025), the two fields had to go from both sides — and the
+contract test comparing this module against
+``specs/memory/contracts/api.openapi.yaml`` field name by field name is what
+makes "both sides" checkable rather than remembered.
 """
 
 from __future__ import annotations
@@ -12,9 +21,25 @@ from pydantic import BaseModel, Field
 
 
 class PartitionOut(BaseModel):
+    """One partition, as the management surface lists it.
+
+    Two repository fields rather than one ``project_root``, because a partition
+    is keyed on a **repository** and a repository is two things: an identity two
+    clones agree on (``repository_key``) and a place on this disk
+    (``repository_path``). Both are empty for ``global``, which is no
+    repository. The single working-directory root they replace is what split a
+    worktree from its own checkout and turned six dated scratch folders into six
+    permanent partitions (FR-014, FR-015).
+    """
+
     name: str
-    project_root: str
-    fact_count: int
+    repository_key: str
+    repository_path: str
+    note_count: int
+    #: True when ``repository_path`` is no longer a directory on this disk, so
+    #: nothing can ever resolve to this partition again (FR-016). Surfaced
+    #: rather than hidden: only the developer can decide it is not coming back.
+    unresolvable: bool
 
 
 class PartitionListOut(BaseModel):
@@ -22,6 +47,8 @@ class PartitionListOut(BaseModel):
 
 
 class OriginOut(BaseModel):
+    """One raw entry a note was built from, and where it was read out of."""
+
     agent: str
     native_path: str
     anchor: str
@@ -29,62 +56,134 @@ class OriginOut(BaseModel):
     source_written_at: str
 
 
-class FactSummaryOut(BaseModel):
+class NoteSummaryOut(BaseModel):
+    """One note without its body — which is what an index line needs.
+
+    There is no ``status`` and no ``superseded_by``. A retired note is not
+    listed as dead: it has left ``notes/`` and is recorded in ``RETIRED.md``
+    (``RetiredNoteOut`` below), so nothing on this shape has to be filtered by a
+    client. The previous design left that filtering to the reader and 11 dead
+    facts were served as current for weeks.
+    """
+
     key: str
     slug: str
     partition: str
     title: str
     description: str
+    #: ``user`` | ``feedback`` | ``project``. A plain ``str`` on purpose: the
+    #: vocabulary lives in ``domain.memory.note``, and restating it as an enum
+    #: here would be a second place to update.
     type: str
-    status: str
-    superseded_by: str
-    #: Keys of facts organise flagged this one as disagreeing with (FR-020).
-    #: Nothing settles a conflict any more, so this is the model's finding and
-    #: only ever that.
-    conflicts_with: list[str]
+    #: What the source itself said to look this material up by, carried up from
+    #: the entries that supplied it — Codex states them per task group, Claude
+    #: Code states none (FR-004).
+    search_terms: list[str]
+    created_at: str
+    updated_at: str
 
 
-class FactListOut(BaseModel):
-    facts: list[FactSummaryOut]
+class NoteListOut(BaseModel):
+    notes: list[NoteSummaryOut]
 
 
-class FactOut(FactSummaryOut):
+class NoteOut(NoteSummaryOut):
+    """One note, whole: Coffer's own text and the entries behind it.
+
+    ``body`` is Coffer's writing, not a quote of any source (FR-020) — the
+    sources are named in ``origins`` and kept verbatim under the partition's
+    ``.raw/``, which is what keeps a paraphrase traceable.
+    """
+
     body: str
     origins: list[OriginOut]
 
 
+class RetiredNoteOut(BaseModel):
+    """One line of ``RETIRED.md``.
+
+    ``entry_ids`` is deliberately not on the wire. It is the mechanism the next
+    distil pass matches on, not something a reader of the record needs, and
+    putting it here would invite a client to treat the retirement record as an
+    index of raw entries rather than as the human-readable account it is.
+    """
+
+    #: The file name the note had under ``notes/``. Empty when the record
+    #: accounts for entries a pass kept nothing from rather than for a note.
+    slug: str
+    title: str
+    reason: str
+    #: The slug of the note that replaced it, or empty when the subject was
+    #: dropped rather than superseded.
+    replaced_by: str
+    retired_at: str
+
+
+class RetiredListOut(BaseModel):
+    retired: list[RetiredNoteOut]
+
+
 class AggregationResultOut(BaseModel):
+    """What one aggregation pass did.
+
+    ``entries_written`` counts raw entries put under the partitions' ``.raw/``,
+    and never notes: aggregation may not write one, and only aggregation may
+    write ``.raw/`` (FR-008, FR-026). A pass that found nothing new reports
+    zero, which is the ordinary state of a machine whose agents have not
+    written since the last pass.
+    """
+
     partitions: list[str]
-    facts_written: int
+    entries_written: int
     sources_read: int
     sources_skipped: int
-    #: Paths of native sources that failed to parse (FR-005) — left standing
-    #: so a future sync keeps retrying them.
+    #: Paths of native sources that would not parse (FR-005) — left standing
+    #: rather than deleted, so a later sync keeps retrying them.
     failures: list[str]
 
 
-class OrganiseResultOut(BaseModel):
+class DistilResultOut(BaseModel):
+    """What one distil pass found, by FR-023's four actions.
+
+    ``dropped`` is a first-class outcome, not a failure: it is how a scratch
+    directory's incidental material and an agent's transient observations stay
+    out of the store. ``model_used`` is false when no internal connection is
+    configured — each entry became a note of its own and the index was still
+    written, from their frontmatter (FR-024).
+    """
+
     partition: str
     merged: int
-    superseded: int
-    conflicts: int
+    opened: int
+    retired: int
+    dropped: int
     model_used: bool
 
 
 class ComposedContextOut(BaseModel):
+    """The session-start payload, and enough accounting to audit the ceiling.
+
+    There is no ``layers`` field any more. Delivery is not a two-tier digest: it
+    is the whole index of the current repository's partition plus what is known
+    about the developer, so naming a layer would name a structure the payload no
+    longer has (FR-028).
+    """
+
     text: str
     partition: str
-    facts_included: int
-    facts_omitted: int
-    layers: list[str]
+    notes_included: int
+    #: How many index lines the ceiling left out. The text names the count and
+    #: the directory holding them, which is what makes a trim a small loss:
+    #: every line that did not fit is still a file (FR-030).
+    notes_omitted: int
 
 
 class FileNodeOut(BaseModel):
-    """One entry in a partition's own directory (FR-029).
+    """One entry in a partition's own directory (FR-037).
 
-    Same shape as the skill kind's file tree so the two surfaces render
-    through one component on the frontend. ``path`` is POSIX and relative to
-    the partition directory (``""`` for the root); ``abs_path`` and
+    Same shape as the skill kind's file tree so the two surfaces render through
+    one component on the frontend. ``path`` is POSIX and relative to the
+    partition directory (``""`` for the root); ``abs_path`` and
     ``folder_abs_path`` are what the viewer's open-in-editor and
     reveal-in-file-manager actions need, since a browser cannot resolve a path
     on the user's own disk but the loopback daemon can.
@@ -95,6 +194,11 @@ class FileNodeOut(BaseModel):
     abs_path: str
     folder_abs_path: str
     type: str
+    #: True for ``.raw/`` and everything under it: the verbatim entries
+    #: aggregation read out of the agents. Flagged rather than hidden so the
+    #: surface can show it as the distil pass's input rather than as Coffer's
+    #: own writing (FR-008, FR-037).
+    derived: bool
     size: int | None = None
     #: True on a directory whose descendants were clipped at the walk bound.
     truncated: bool = False
@@ -108,11 +212,10 @@ class FileTreeOut(BaseModel):
 class FileContentOut(BaseModel):
     """One file's content, read-only.
 
-    No fingerprint, unlike the skill kind's equivalent: a fingerprint exists
-    to make a later write conditional, and this family has no write. The tree
-    under ``~/.coffer/memory/`` is derived (FR-016) — an edit here would be
-    overwritten by the next aggregation pass, so the surface does not offer
-    one.
+    No fingerprint, unlike the skill kind's equivalent: a fingerprint exists to
+    make a later write conditional, and this family has no write. The tree under
+    ``~/.coffer/memory/`` is derived (FR-019) — an edit here would be overwritten
+    by the next aggregation pass, so the surface does not offer one.
     """
 
     path: str
@@ -126,6 +229,14 @@ class FileContentOut(BaseModel):
 
 
 class DeliveryStatusOut(BaseModel):
+    """Installed or not, and nothing else.
+
+    There is deliberately no last-fired field. A fire is an **event**, written
+    to the audit log as ``memory_delivery_fired``; a hook installed a minute ago
+    has legitimately never fired, so a status field flagging that would be
+    crying wolf on its own normal state (FR-033, FR-039).
+    """
+
     agent: str
     installed: bool
     command: str
@@ -137,19 +248,20 @@ class DeliveryStatusListOut(BaseModel):
 
 
 class ContextQuery(BaseModel):
-    """Body for composing a session-start context (FR-021, FR-022).
+    """Body for composing a session-start context (FR-028).
 
-    A GET-with-body would be unusual for this surface's own conventions
-    (knowledge's ``search`` is a POST for the same reason: the query is
-    structured, not a couple of scalar filters), so ``compose_context`` is a
-    POST despite being a read — nothing here has a side effect on the memory
-    tree itself.
+    A ``POST`` despite being a read, because the query is structured rather than
+    a couple of scalar filters (knowledge's ``search`` is a ``POST`` for the same
+    reason) — nothing here has a side effect on the memory tree itself.
     """
 
     cwd: str = Field(default="")
+    #: The calling agent's registered name, which is what the per-agent scope is
+    #: evaluated against (FR-013).
     agent: str | None = None
-    budget_tokens: int | None = None
-    #: Whether serving this payload counts as a real delivery (FR-026).
-    #: The installed hook always sets this; a management-surface preview
-    #: should not, so it never records a fire that did not happen.
+    #: Omitted or null uses the server's default ceiling.
+    ceiling_tokens: int | None = None
+    #: Whether serving this payload counts as a real delivery (FR-033). The
+    #: installed hook always sets this; a management-surface preview must not,
+    #: so it never records a fire that did not happen.
     record_fired: bool = False

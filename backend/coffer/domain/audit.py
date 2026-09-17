@@ -58,7 +58,7 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_FIRED = "memory_delivery_fired"
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
-    MEMORY_ORGANISED = "memory_organised"
+    MEMORY_DISTILLED = "memory_distilled"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"

@@ -202,7 +202,7 @@ export interface paths {
         };
         /**
          * What this daemon is rewriting right now
-         * @description Every *upkeep pass* in flight: memory's `organise` over a partition,
+         * @description Every *upkeep pass* in flight: memory's `distil` over a partition,
          *     knowledge's `tidy` over a collection. Both take minutes, both rewrite
          *     files with a model in the loop, and both can be started from a button,
          *     the CLI or a timer — so whether one is running is a fact about the
@@ -220,7 +220,7 @@ export interface paths {
          *     list comes back empty. That is the truth, not a lost record.
          *
          *     Starting a pass is the kind's own route
-         *     (`POST /memory/partitions/{name}/organise`,
+         *     (`POST /memory/partitions/{name}/distil`,
          *     `POST /knowledge/collections/{name}/tidy`); each refuses a second
          *     concurrent pass over the same target with `UPKEEP_ALREADY_RUNNING`.
          *     Whether a pass runs on a timer at all is spec internal-engine's.

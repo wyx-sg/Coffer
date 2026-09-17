@@ -135,7 +135,7 @@ resource's **reach**, and reach is machine-local.
    | `mcp_server` | The gateway filters the server's tools by the session's agent, so a server scoped away from that agent presents no tools to it. |
    | `skill` | Delivery filters by the skill's own `enabled` flag intersected with scope; out-of-scope or disabled delivered copies are reconciled away. |
    | `knowledge` | The built-in knowledge tools filter the collections a session may list, grep, read and write. |
-   | `memory` | Recall filters the partitions a session may read, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-012). |
+   | `memory` | Recall filters the partitions a session may read, so an aggregated partition reaches only the agents it is scoped to (spec memory FR-013). |
    | `channel` | **Inverted.** A channel is consumed by no agent, so its scope names the agents the channel may **drive**: `/agent` lists, offers and accepts only those, and a channel that may drive nothing does not start its adapter at all. |
    | `provider` | The projection seam: the switch, the per-agent key lookup, the post-import reconcile and the boot self-heal read scope (∩ `enabled`) to decide which agents a connection is written into. |
    | `agent` | None. It IS the agent, so there is nothing for a scope to narrow. A non-null scope is rejected at validation. |

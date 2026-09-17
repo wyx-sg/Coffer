@@ -16,7 +16,7 @@ from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
     CURATE,
-    ORGANISE,
+    DISTIL,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -298,7 +298,7 @@ class SqlAlchemyAuditRepo:
 #: One table rather than a branch per pass, so adding a pass is one entry.
 _UPKEEP_COLUMNS = {
     AGGREGATE: ("auto_aggregate_enabled", "aggregate_interval_s"),
-    ORGANISE: ("auto_organise_enabled", "organise_interval_s"),
+    DISTIL: ("auto_distil_enabled", "distil_interval_s"),
     CURATE: ("auto_curate_enabled", "curate_interval_s"),
 }
 
@@ -356,7 +356,7 @@ class SqlAlchemyInternalEngineConfigRepo:
             curate_owner_machine_id=row.curate_owner_machine_id,
             auto_aggregate_enabled=bool(row.auto_aggregate_enabled),
             aggregate_interval_s=row.aggregate_interval_s,
-            auto_organise_enabled=bool(row.auto_organise_enabled),
-            organise_interval_s=row.organise_interval_s,
+            auto_distil_enabled=bool(row.auto_distil_enabled),
+            distil_interval_s=row.distil_interval_s,
             curate_interval_s=row.curate_interval_s,
         )

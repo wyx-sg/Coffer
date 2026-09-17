@@ -1,21 +1,30 @@
 // frontend/src/components/memory/MemoryPartitionsTable.tsx
 //
-// The partitions list: one row per project partition plus `global`, each one
-// a `memory` Resource (spec memory FR-008). A row carries what a partition
-// has — its name, the project root it was named from, how many facts it
-// holds — plus the reach control every scoped Resource gets (ScopeControl),
-// exactly as the mcp-servers and skills lists render it per row, and a bulk
-// bar applying that same reach choice to the whole selection.
+// The partitions list: one row per repository partition plus `global`, each one
+// a `memory` Resource (spec memory FR-010). A row carries what a partition
+// has — its name, the repository it is keyed on, how many notes it holds —
+// plus the reach control every scoped Resource gets (ScopeControl), exactly as
+// the mcp-servers and skills lists render it per row, and a bulk bar applying
+// that same reach choice to the whole selection.
+//
+// A partition is keyed on a REPOSITORY, not on a working directory: a worktree
+// and a second clone resolve to one partition (FR-014), so the column names the
+// repository rather than the folder some session happened to run in. When that
+// repository is no longer on disk the row says so instead of hiding: such a
+// partition is delivered to nobody, and deleting it is the developer's call and
+// nobody else's (FR-016).
 //
 // `enabled`/`scope` do not live on the dedicated partitions endpoint (it only
-// carries what is read off disk: name, project_root, fact_count) — they are
-// generic Resource fields, so the caller merges in `GET /resources?kind=memory`
-// before rendering, mirroring how the mcp-servers table already carries
-// `scope` on its own row payload rather than paying one GET per row.
+// carries what is read off disk: name, repository path and key, note count,
+// whether it still resolves) — they are generic Resource fields, so the caller
+// merges in `GET /resources?kind=memory` before rendering, mirroring how the
+// mcp-servers table already carries `scope` on its own row payload rather than
+// paying one GET per row.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import { DataTable, type Column } from "@/components/DataTable";
+import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
 import { memoryKey } from "@/lib/api/queryKeys";
@@ -46,20 +55,26 @@ export function MemoryPartitionsTable({
       cell: (r) => <span className="font-medium">{r.name}</span>,
     },
     {
-      key: "project",
-      header: t("memory.cols.project"),
+      key: "repository",
+      header: t("memory.cols.repository"),
       className: "w-full min-w-[16rem]",
       cell: (r) => (
-        <span className="line-clamp-1 text-sm text-muted-foreground">
-          {r.project_root || t("memory.cols.global")}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="line-clamp-1 text-sm text-muted-foreground">
+            {r.repository_path || t("memory.cols.global")}
+          </span>
+          {/* Stated on the row, not filtered out of it: the partition is
+              delivered to nobody, and only the developer can decide whether
+              that is a repository to re-clone or a partition to delete. */}
+          {r.unresolvable ? <UnresolvableBadge /> : null}
         </span>
       ),
     },
     {
-      key: "facts",
-      header: t("memory.cols.facts"),
+      key: "notes",
+      header: t("memory.cols.notes"),
       className: "whitespace-nowrap text-right",
-      cell: (r) => <span className="tabular-nums">{r.fact_count}</span>,
+      cell: (r) => <span className="tabular-nums">{r.note_count}</span>,
     },
     {
       key: "reach",
@@ -81,7 +96,7 @@ export function MemoryPartitionsTable({
       rowKey={(r) => r.name}
       onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.name)}`)}
       search={{
-        accessor: (r) => `${r.name} ${r.project_root}`,
+        accessor: (r) => `${r.name} ${r.repository_path}`,
         placeholder: t("memory.searchPlaceholder"),
       }}
       filters={[reachFilter(t, (r: MemoryPartitionRow) => r)]}

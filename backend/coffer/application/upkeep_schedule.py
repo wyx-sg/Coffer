@@ -1,6 +1,6 @@
 """Waiting for the next unattended pass, in a way a settings change can reach.
 
-Coffer runs three passes on its own behalf — aggregation, organise, curation — and
+Coffer runs three passes on its own behalf — aggregation, distil, curation — and
 each one used to wait with a single ``asyncio.sleep(interval)`` over a constant
 compiled into the worker. Both halves of that are now the operator's to choose
 (spec memory FR-007, spec knowledge FR-022), and a long sleep is exactly how a
@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 
-from coffer.domain.internal_engine_config import AGGREGATE, CURATE, ORGANISE
+from coffer.domain.internal_engine_config import AGGREGATE, CURATE, DISTIL
 
 #: How often the wait looks up again. Short enough that changing an interval in
 #: Settings visibly takes effect, long enough to be free.
@@ -44,7 +44,7 @@ DEFAULT_INTERVALS: dict[str, float] = {
     AGGREGATE: 60 * 60.0,
     # Both model passes are slower and rewrite more, so they sweep four times a
     # day rather than hourly.
-    ORGANISE: 6 * 60 * 60.0,
+    DISTIL: 6 * 60 * 60.0,
     # Short, because a source a person just wrote should be readable by an
     # agent in the same sitting; a sweep that finds nothing pending costs a
     # directory walk (spec knowledge FR-022).

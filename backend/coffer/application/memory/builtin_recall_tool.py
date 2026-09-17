@@ -1,14 +1,24 @@
-"""The recall tool — memory's L2 layer, registered apart like search's own
-(spec memory FR-023, FR-027).
+"""The recall tool — memory's one built-in, registered apart like search's own
+(spec memory FR-035, FR-034).
 
 Mirrors ``coffer.application.knowledge.builtin_search_tool`` deliberately:
-``coffer__recall`` is the same shape of thing ``coffer__search`` is — a
-single optional tool wired against its own service rather than the five (six,
-with search) file operations knowledge's ``builtin_tools`` module groups —
-and FR-027 asks for exactly one new tool here, so there is no sibling module
-to fold it into. A composition root that has not wired the memory layer
-simply never advertises it; one that has needs nothing else configured,
-because recall is a literal scan over facts already on disk (FR-023).
+``coffer__recall`` is the same shape of thing ``coffer__search`` is — a single
+optional tool wired against its own service rather than the file operations
+knowledge's ``builtin_tools`` module groups — and FR-034 asks for exactly one
+tool here, so there is no sibling module to fold it into. A composition root
+that has not wired the memory layer simply never advertises it; one that has
+needs nothing else configured, because recall is a literal scan over notes
+already on disk (FR-035).
+
+The description below is doing real work, so it is worth saying what it must
+convey and why. It **locates**: the answer is paths, and the caller reads the
+file itself, which is the whole shape of this layer (FR-022). It says where
+to reach for it: the session already opened with the full index of the
+partition it is in, so this is for a partition it is *not* in. And it says
+matching is **literal**, because the previous design's opening line asked for
+"a natural-language query" against a tool that has only ever done substring
+matching — an agent that obeyed sent a whole question, matched nothing, and
+read the empty answer as an empty memory.
 """
 
 from __future__ import annotations
@@ -19,12 +29,14 @@ from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.memory.recall import RecallService
 
 _DESCRIPTION = (
-    "Look up facts in Coffer's memory layer by a word or phrase, and get "
-    "each one whole with where it came from — reaching past the "
-    "few-hundred-token digest a session opens with. Reach for it when you "
-    "need something the opening context did not include. Matching is "
-    "literal and case-insensitive, over each fact's summary and body, so "
-    "give it a distinctive word or phrase rather than a whole question."
+    "Locate notes in Coffer's memory — the notes distilled from what this "
+    "developer's agents have learned. It answers with each note's absolute "
+    "file path, title and one-line description; read the file yourself when "
+    "you want the body. Your session already opened with the whole index of "
+    "this project's memory, so reach for this when you need a note from "
+    "another project. Matching is literal and case-insensitive, over each "
+    "note's summary, body and search terms, so give it a distinctive word or "
+    "phrase rather than a question."
 )
 
 
@@ -43,20 +55,15 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
             agent=agent.strip() if isinstance(agent, str) and agent.strip() else None,
         )
         return {
-            "facts": [
+            "notes": [
                 {
-                    "path": fact.path,
-                    "title": fact.title,
-                    "description": fact.description,
-                    "body": fact.body,
-                    "type": fact.type,
-                    "partition": fact.partition,
-                    "origins": [
-                        {"agent": agent_name, "native_path": native_path}
-                        for agent_name, native_path in fact.origins
-                    ],
+                    "path": note.path,
+                    "title": note.title,
+                    "description": note.description,
+                    "type": note.type,
+                    "partition": note.partition,
                 }
-                for fact in outcome.facts
+                for note in outcome.notes
             ],
         }
 

@@ -1,113 +1,78 @@
-"""Reads and writes one partition's fact files.
+"""Reads and writes one partition's four files, with one writer each.
 
-Every fact is one Markdown file: a YAML frontmatter block carrying everything
-structured about it, then the source's own words underneath (FR-013, FR-014).
-The whole tree this module writes is derived and can be deleted and rebuilt
-from the agents' native memory at any time (FR-016) — which only holds if a
-fact that goes through this module comes back exactly as it went in. That is
-why the frontmatter split/render here does not trim or reflow the body the
-way ``infrastructure/knowledge/frontmatter.py`` does: knowledge's files only
-have to look right to a human editing them by hand, but a fact file has to
-satisfy ``read_fact(write_fact(f)) == f`` on the nose, including whatever
-whitespace the body happened to end with. Writes are atomic (temp file +
-replace), mirroring the knowledge layer's own helper.
+A partition holds ``MEMORY.md``, ``notes/``, ``RETIRED.md`` and ``.raw/``, and
+keeping those apart is not tidiness — it is what makes FR-026 checkable. Every
+function here writes into exactly one of the four, so "does the distil pass
+write ``.raw/``?" is answered by reading which functions the pass calls rather
+than by trusting it, and there is deliberately no helper that writes a note and
+its raw entry in one go however convenient that would be.
 
-``clear_facts`` exists because a rebuild starts from nothing (spec memory
-"Deleting the memory tree and re-syncing reproduces the facts"): aggregation
-calls it before writing the pass's facts back out, rather than trying to diff
-the old tree against the new one.
+Notes and raw entries are one Markdown file each — frontmatter, then a body that
+comes back byte for byte (:mod:`coffer.infrastructure.memory.frontmatter` argues
+why that exactness is load-bearing for ``.raw/``, and writes atomically too).
+
+``.raw/`` is not here: it is :mod:`coffer.infrastructure.memory.raw_store`,
+so that the one directory only aggregation may write is the one module only
+aggregation imports. That is the same argument one level up.
+
+``MEMORY.md`` is written and read as **opaque text**. FR-029 requires one
+function to render both that file and the delivered line, and it lives in
+``application/memory/index.py``; a second renderer hiding in the storage layer
+is how those two surfaces became two definitions of "newest" and drifted last
+time. ``RETIRED.md``'s format is argued at :func:`write_retired`.
 """
 
 from __future__ import annotations
 
-import pathlib
 import shutil
+from collections.abc import Sequence
 from typing import Any
 
-import yaml
-
 from coffer.domain.error_base import CofferError
-from coffer.domain.memory.fact import STATUS_ACTIVE, Fact, Origin
-from coffer.domain.memory.partition import GLOBAL_PARTITION
+from coffer.domain.memory.note import Note, Origin
+from coffer.domain.memory.retired import RetiredNote
 from coffer.infrastructure.memory import paths
+from coffer.infrastructure.memory.frontmatter import (
+    atomic_write,
+    read_text,
+    render_frontmatter,
+    split_frontmatter,
+    text_list,
+)
 
-_FENCE = "---"
+_RETIRED_HEADER = (
+    "# Retired\n\n"
+    "Notes Coffer removed from this partition, and why — also the next distil "
+    "pass's exclusion list, so a subject recorded here is not re-opened from the "
+    "same unchanged raw entry (spec memory FR-025). The record above the fence "
+    "is read back; the prose below it is rendered from it, to be read not parsed.\n"
+)
 
 
-class FactNotFound(CofferError):  # noqa: N818
-    code = "MEMORY_FACT_NOT_FOUND"
+class NoteNotFound(CofferError):  # noqa: N818
+    code = "MEMORY_NOTE_NOT_FOUND"
 
     def __init__(self, partition: str, slug: str) -> None:
-        super().__init__(f"no fact {slug!r} in partition {partition!r}")
+        super().__init__(f"no note {slug!r} in partition {partition!r}")
         self.partition = partition
         self.slug = slug
 
 
-def _render(frontmatter: dict[str, Any], body: str) -> str:
-    """Fence + YAML + fence, then the body untouched.
-
-    Deliberately not the knowledge module's ``render_frontmatter``: that one
-    strips the body's surrounding newlines before re-adding exactly one
-    trailing newline, which is fine for a file a human reads but loses
-    whatever whitespace the original body had — and a fact's body must come
-    back byte-for-byte (see module docstring).
-    """
-    block = yaml.safe_dump(
-        frontmatter, sort_keys=False, allow_unicode=True, default_flow_style=False
-    ).rstrip("\n")
-    return f"{_FENCE}\n{block}\n{_FENCE}\n{body}"
+def _origins_frontmatter(origins: Sequence[Origin]) -> list[dict[str, str]]:
+    return [
+        {
+            "agent": o.agent,
+            "native_path": o.native_path,
+            "anchor": o.anchor,
+            "captured_at": o.captured_at,
+            "source_written_at": o.source_written_at,
+        }
+        for o in origins
+    ]
 
 
-def _split(text: str) -> tuple[dict[str, Any], str]:
-    """The inverse of ``_render``: exact body recovery, malformed YAML degrades
-    to an empty frontmatter dict rather than raising (mirrors the knowledge
-    module's own tolerance for a hand-edited file with a stray colon)."""
-    if not text.startswith(_FENCE):
-        return {}, text
-    lines = text.split("\n")
-    for i in range(1, len(lines)):
-        if lines[i].strip() == _FENCE:
-            raw = "\n".join(lines[1:i])
-            body = "\n".join(lines[i + 1 :])
-            try:
-                loaded = yaml.safe_load(raw) if raw.strip() else {}
-            except yaml.YAMLError:
-                loaded = {}
-            return (loaded if isinstance(loaded, dict) else {}), body
-    return {}, text
-
-
-def _atomic_write(path: pathlib.Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
-
-
-def _fact_to_frontmatter(fact: Fact) -> dict[str, Any]:
-    return {
-        "title": fact.title,
-        "description": fact.description,
-        "type": fact.type,
-        "status": fact.status,
-        "superseded_by": fact.superseded_by,
-        "conflicts_with": list(fact.conflicts_with),
-        "origins": [
-            {
-                "agent": o.agent,
-                "native_path": o.native_path,
-                "anchor": o.anchor,
-                "captured_at": o.captured_at,
-                "source_written_at": o.source_written_at,
-            }
-            for o in fact.origins
-        ],
-    }
-
-
-def _frontmatter_to_fact(partition: str, slug: str, fm: dict[str, Any], body: str) -> Fact:
-    raw_origins = fm.get("origins") or []
-    origins = tuple(
+def _origins_from_frontmatter(raw: Any) -> tuple[Origin, ...]:
+    return tuple(
         Origin(
             agent=str(o.get("agent", "")),
             native_path=str(o.get("native_path", "")),
@@ -115,97 +80,213 @@ def _frontmatter_to_fact(partition: str, slug: str, fm: dict[str, Any], body: st
             captured_at=str(o.get("captured_at", "")),
             source_written_at=str(o.get("source_written_at", "")),
         )
-        for o in raw_origins
+        for o in (raw or [])
         if isinstance(o, dict)
     )
-    raw_conflicts = fm.get("conflicts_with") or []
-    return Fact(
+
+
+# --- notes: written by the distil pass, and by nothing else ------------------
+
+
+def write_note(note: Note) -> str:
+    """Write one note file, atomically. Returns the memory-root-relative path."""
+    frontmatter: dict[str, Any] = {
+        "title": note.title,
+        "description": note.description,
+        "type": note.type,
+        "origins": _origins_frontmatter(note.origins),
+        "created_at": note.created_at,
+        "updated_at": note.updated_at,
+        "search_terms": list(note.search_terms),
+    }
+    path = paths.note_path(note.partition, note.slug)
+    atomic_write(path, render_frontmatter(frontmatter, note.body))
+    return paths.relative_of(path)
+
+
+def read_note(partition: str, slug: str) -> Note:
+    """Read one note back. Raises :class:`NoteNotFound` when the file is absent."""
+    path = paths.note_path(partition, slug)
+    if not path.is_file():
+        raise NoteNotFound(partition, slug)
+    fm, body = split_frontmatter(read_text(path))
+    return Note(
         slug=slug,
         title=str(fm.get("title", "")),
         description=str(fm.get("description", "")),
         type=str(fm.get("type", "")),
         body=body,
         partition=partition,
-        origins=origins,
-        status=str(fm.get("status") or STATUS_ACTIVE),
-        superseded_by=str(fm.get("superseded_by", "")),
-        conflicts_with=tuple(str(c) for c in raw_conflicts),
+        origins=_origins_from_frontmatter(fm.get("origins")),
+        created_at=str(fm.get("created_at", "")),
+        updated_at=str(fm.get("updated_at", "")),
+        search_terms=text_list(fm.get("search_terms")),
     )
 
 
-def write_fact(fact: Fact) -> str:
-    """Write one fact file, atomically. Returns the memory-root-relative path."""
-    path = paths.fact_path(fact.partition, fact.slug)
-    text = _render(_fact_to_frontmatter(fact), fact.body)
-    _atomic_write(path, text)
-    return paths.relative_of(path)
+def list_notes(partition: str) -> tuple[Note, ...]:
+    """Every note in ``partition``, by slug — not by ``updated_at``.
 
-
-def read_fact(partition: str, slug: str) -> Fact:
-    """Read one fact back. Raises ``FactNotFound`` when the file is absent."""
-    path = paths.fact_path(partition, slug)
-    if not path.is_file():
-        raise FactNotFound(partition, slug)
-    text = path.read_text(encoding="utf-8")
-    fm, body = _split(text)
-    return _frontmatter_to_fact(partition, slug, fm, body)
-
-
-def list_facts(partition: str) -> tuple[Fact, ...]:
-    """Every fact in ``partition``, ordered by slug for a stable listing."""
-    directory = paths.facts_dir(partition)
+    FR-029 requires *one* definition of "newest" behind the index and the
+    delivered lines, and it is the index renderer's; a second ordering here is
+    how those two surfaces drifted apart before.
+    """
+    directory = paths.notes_dir(partition)
     if not directory.is_dir():
         return ()
     slugs = sorted(p.stem for p in directory.glob("*.md"))
-    return tuple(read_fact(partition, slug) for slug in slugs)
+    return tuple(read_note(partition, slug) for slug in slugs)
 
 
-def list_partitions() -> tuple[str, ...]:
-    """Every partition directory present on disk, ``global`` included when it
-    exists — this module creates none of them itself (FR-011: aggregation
-    creates partitions, not this substrate)."""
-    root = paths.memory_root()
-    if not root.is_dir():
+def delete_note(partition: str, slug: str) -> bool:
+    """Remove one note's file; ``True`` when there was one to remove.
+
+    Only the file half of a retirement: :func:`write_retired` is the half that
+    makes it stick, and deleting without recording writes a deletion the next
+    aggregation undoes (FR-025).
+    """
+    path = paths.note_path(partition, slug)
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
+
+
+# --- the retirement record ---------------------------------------------------
+
+
+def write_retired(partition: str, retired: Sequence[RetiredNote]) -> str:
+    """Rewrite ``RETIRED.md`` from ``retired``. Returns the relative path.
+
+    **Why this file has two halves.** Two readers, whose needs conflict. The
+    developer opens the partition as a folder and wants prose — what Coffer
+    decided was no longer true, and on what grounds. The next distil pass takes
+    the same file as its exclusion list, and a record it mis-parses is a note
+    re-opened from an unchanged raw entry: the precise failure FR-025 exists to
+    prevent, repeating every pass thereafter.
+
+    One format cannot serve both, because ``reason`` is free prose Coffer
+    writes: any heading, bullet or delimiter chosen to separate records is a
+    string a reason may legitimately contain, and every fix for that —
+    escaping, indenting, forbidding — makes the prose worse for the parser's
+    sake. So the records go down **once as YAML frontmatter**, which quotes
+    anything, and **once as rendered prose** below the fence.
+    :func:`read_retired` reads only the fence, and the prose is regenerated
+    from the same list on every write, so the two cannot disagree.
+
+    An empty ``retired`` **removes** the file rather than writing an empty one:
+    FR-037 shows it in the tree when something has been retired, and a "nothing
+    yet" file in every partition is noise in the surface meant to make a
+    retirement visible.
+    """
+    path = paths.retired_path(partition)
+    if not retired:
+        if path.is_file():
+            path.unlink()
+        return paths.relative_of(path)
+    frontmatter: dict[str, Any] = {
+        "retired": [
+            {
+                "slug": r.slug,
+                "title": r.title,
+                "reason": r.reason,
+                "replaced_by": r.replaced_by,
+                "retired_at": r.retired_at,
+                "entry_ids": list(r.entry_ids),
+            }
+            for r in retired
+        ]
+    }
+    atomic_write(path, render_frontmatter(frontmatter, _render_retired_prose(retired)))
+    return paths.relative_of(path)
+
+
+def _render_retired_prose(retired: Sequence[RetiredNote]) -> str:
+    """The half of ``RETIRED.md`` a human reads. Never parsed back."""
+    chunks = [_RETIRED_HEADER]
+    for r in retired:
+        details = []
+        if r.slug:
+            details.append(f"was `notes/{r.slug}.md`")
+        else:
+            # No slug means this record accounts for entries a pass kept
+            # nothing from: there was never a note and never a file, so
+            # naming one would print a path that has never existed.
+            count = len(r.entry_ids) or 1
+            details.append(f"never became a note ({count} entry(s) read and not carried)")
+        if r.replaced_by:
+            details.append(f"replaced by `notes/{r.replaced_by}.md`")
+        if r.retired_at:
+            details.append(f"retired {r.retired_at}")
+        heading = r.title or r.slug or "Untitled"
+        chunks.append(f"\n## {heading}\n\n{' · '.join(details)}\n\n{r.reason}\n")
+    return "".join(chunks)
+
+
+def read_retired(partition: str) -> tuple[RetiredNote, ...]:
+    """What has been retired from ``partition``, in the order it was written.
+
+    Not sorted: a caller appending a retirement rewrites the whole list, so
+    re-sorting here would silently reorder a file a human reads.
+    """
+    path = paths.retired_path(partition)
+    if not path.is_file():
         return ()
+    fm, _ = split_frontmatter(read_text(path))
     return tuple(
-        sorted(d.name for d in root.iterdir() if d.is_dir() and not d.name.startswith("."))
+        RetiredNote(
+            slug=str(r.get("slug", "")),
+            title=str(r.get("title", "")),
+            reason=str(r.get("reason", "")),
+            replaced_by=str(r.get("replaced_by", "")),
+            retired_at=str(r.get("retired_at", "")),
+            entry_ids=text_list(r.get("entry_ids")),
+        )
+        for r in (fm.get("retired") or [])
+        if isinstance(r, dict)
     )
 
 
+# --- the index, as opaque bytes ----------------------------------------------
+
+
+def write_index(partition: str, text: str) -> str:
+    """Put ``text`` at the partition's ``MEMORY.md``. Returns the relative path."""
+    path = paths.index_path(partition)
+    atomic_write(path, text)
+    return paths.relative_of(path)
+
+
+def read_index(partition: str) -> str:
+    """The partition's ``MEMORY.md`` as text, or ``""`` when it has none yet."""
+    path = paths.index_path(partition)
+    if not path.is_file():
+        return ""
+    return read_text(path)
+
+
+# --- partitions --------------------------------------------------------------
+
+
+def list_partitions() -> tuple[str, ...]:
+    """Every partition directory present on disk, ``global`` included.
+
+    This module creates none of them — FR-012 gives that to aggregation, so an
+    agent's working directory cannot bring a partition into existence merely by
+    being read. Dot-prefixed directories are the layer's own state.
+    """
+    root = paths.memory_root()
+    if not root.is_dir():
+        return ()
+    return tuple(sorted(d.name for d in root.iterdir() if d.is_dir() and d.name[0] != "."))
+
+
 def delete_partition(name: str) -> None:
-    """Remove a partition entirely, README/summary/facts included."""
+    """Remove a partition entirely — index, notes, retirements and ``.raw/``.
+
+    Safe by construction, which is what FR-019 means by derived: the agents
+    still hold everything it was built from.
+    """
     directory = paths.partition_dir(name)
     if directory.is_dir():
         shutil.rmtree(directory)
-
-
-def clear_facts(partition: str) -> None:
-    """Remove every fact file so a rebuild starts from nothing.
-
-    Leaves ``README.md`` and ``summary.md`` alone — a partition and its
-    self-description outlive the facts inside it being recomputed.
-    """
-    directory = paths.facts_dir(partition)
-    if not directory.is_dir():
-        return
-    for file in directory.glob("*.md"):
-        file.unlink()
-
-
-def write_readme(partition: str, project_root: str) -> None:
-    """Say what this partition is, restating its project root (FR-009).
-
-    ``global`` is not a project, so it gets a fixed description of what it
-    holds instead of a root to name — ``project_root`` is accepted for every
-    partition so callers never need to branch on which one they are writing.
-    """
-    if partition == GLOBAL_PARTITION:
-        body = (
-            "# global\n\n"
-            "Facts about the person, not any one project: preferences and "
-            "standing instructions an agent learned, delivered wherever the "
-            "developer is working.\n"
-        )
-    else:
-        body = f"# {partition}\n\nFacts learned while working in `{project_root}`.\n"
-    _atomic_write(paths.readme_path(partition), body)

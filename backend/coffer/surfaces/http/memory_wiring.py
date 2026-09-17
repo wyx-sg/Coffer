@@ -1,25 +1,36 @@
-"""Wiring for the one ``memory`` kind (spec memory FR-027..FR-032).
+"""Wiring for the one ``memory`` kind (spec memory FR-027..FR-024).
 
 Mirrors ``knowledge_wiring.py`` + ``tidy_wiring.py`` combined: one service for
-the derived tree itself (``MemoryService``), the one table it adds
-the L2 pull tool (``RecallService`` /
-``coffer__recall``), and the explicit-install delivery half
-(``DeliveryService``). The organise pass rides the same internal connection
-every other internal-LLM consumer in this layer uses — handed in as a
-``ModelSelectorPort`` rather than re-derived here, now that resolving it is
-Coffer's own engine's job (``application.engine.resolve``) and not something
-each kind's wiring works out from the provider service for itself.
+the derived tree and its two passes (``MemoryService``), the MCP locator
+(``RecallService`` / ``coffer__recall``), and the explicit-install delivery half
+(``DeliveryService``).
+
+**The three internal-engine arguments on ``MemoryService`` are the point of
+this module.** The distil pass reaches a model through the same injected ports
+every other internal-LLM consumer here uses — a completion port, a
+``ModelSelectorPort`` over Coffer's own engine, and a **credential resolver**.
+All three default to ``None`` on the service, and that default is FR-024's
+mechanical pass: each raw entry becomes a note of its own and the index is
+still written. Which means a resolver forgotten here does not fail loudly; it
+degrades every pass to "wrote the index only" and says nothing, the model call
+having failed for want of a key it was never given. ``tidy_wiring.wire_tidy``
+takes the resolver as a required parameter for the same reason, and this module
+follows it exactly: ``wire_memory_kind`` cannot be called without one.
+
+The selector is **handed in** rather than derived here, now that resolving the
+internal connection is Coffer's own engine's job
+(``application.engine.resolve``) and not something each kind's wiring works out
+from the provider service for itself.
 
 The kind is wired before the MCP kind so the gateway advertises
-``coffer__recall``; the organise sweep it starts is on by default, because
-unlike knowledge's tidy it only ever rewrites a tree that can be rebuilt from
-the agents' own memories (see ``organise_worker.py``).
+``coffer__recall``; the distil sweep it starts is on by default, because unlike
+knowledge's tidy it only ever rewrites a tree that can be rebuilt from the
+agents' own memories (see ``distil_worker.py``).
 
 Nothing here can fail to build: with no internal connection configured the
-model factory just resolves to ``None`` per call, and ``RecallService``/
-``MemoryService``/``DeliveryService`` need no internal
-connection at all — recall is a literal scan over facts on disk (FR-019,
-FR-023).
+selector just resolves to ``None`` per call, and ``RecallService`` /
+``MemoryService`` / ``DeliveryService`` need no internal connection at all —
+recall is a literal scan over notes on disk (FR-024).
 """
 
 from __future__ import annotations
@@ -38,20 +49,20 @@ from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.builtin_recall_tool import register_recall_tool
 from coffer.application.memory.delivery import DeliveryService
+from coffer.application.memory.distil import DistilResult
+from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.kind import make_memory_kind
-from coffer.application.memory.organise import OrganiseResult, organise_partition
-from coffer.application.memory.organise_worker import OrganiseWorker
 from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.internal_engine_config import AGGREGATE, ORGANISE
+from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
     set_memory_service,
 )
-from coffer.surfaces.http.memory.organise_state import OrganiseRunner, set_organise_runner
+from coffer.surfaces.http.memory.distil_state import DistilRunner, set_distil_runner
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -77,12 +88,12 @@ def _agent_source(resource: Resource) -> AgentSource:
 
 @dataclass(frozen=True)
 class MemoryWiring:
-    """What the memory kind hands back: its three services and the organise
-    runner the background worker sweeps with."""
+    """What the memory kind hands back: its two services and the distil runner
+    the background worker sweeps with."""
 
     service: MemoryService
     delivery_service: DeliveryService
-    organise: OrganiseRunner
+    distil: DistilRunner
 
 
 def wire_memory_kind(
@@ -99,6 +110,14 @@ def wire_memory_kind(
         resources=resource_svc,
         audit=audit,
         agent_source_resolver=_agent_source,
+        # The distil pass's model half. All three travel together or not at
+        # all: a completion port with no credential resolver behind it reaches
+        # the provider and is refused the key, which FR-024 then reads as "no
+        # internal connection" and answers with the mechanical pass. See the
+        # module docstring — this is the silent degradation the trio prevents.
+        completion=LangchainLlmCompletion(),
+        model_selector=models,
+        credential_resolver=credential_resolver,
     )
     set_memory_service(service)
 
@@ -114,20 +133,16 @@ def wire_memory_kind(
     )
     set_memory_delivery_service(delivery_service)
 
-    completion = LangchainLlmCompletion()
-
-    async def _organise(partition: str) -> OrganiseResult:
-        return await organise_partition(
-            partition, models=models, completion=completion, credential_resolver=credential_resolver
-        )
-
-    set_organise_runner(_organise)
+    # The route and the worker start the same bound method, so both get the
+    # Resource row's repository path and the one ``memory_distilled`` audit
+    # record the service writes — with whichever actor asked.
+    set_distil_runner(service.distil)
 
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
     return MemoryWiring(
         service=service,
         delivery_service=delivery_service,
-        organise=_organise,
+        distil=service.distil,
     )
 
 
@@ -188,13 +203,13 @@ async def stop_aggregate_worker(task: asyncio.Task[None]) -> None:
         logger.debug("memory.aggregate_worker.stopped")
 
 
-def start_organise_worker(
-    organise: OrganiseRunner,
+def start_distil_worker(
+    distil: DistilRunner,
     resource_svc: ResourceService,
     engine_config: InternalEngineConfigService,
 ) -> asyncio.Task[None]:
-    """Start the organise sweep — on by default, because the tree it rewrites is
-    disposable (FR-016: delete it and re-running reproduces it), unlike
+    """Start the distil sweep — on by default, because the tree it rewrites is
+    disposable (FR-015: delete it and re-running reproduces it), unlike
     knowledge's tidy. On by default is not the same as unstoppable, though: the
     operator can switch it off and re-time it like any other pass.
     Returns the task; the lifespan cancels it at shutdown."""
@@ -202,20 +217,27 @@ def start_organise_worker(
     async def _list_partitions() -> list[str]:
         return [r.name for r in await resource_svc.list(kind=KIND_MEMORY, enabled=True)]
 
-    worker = OrganiseWorker(
-        organise=organise,
+    async def _scheduled(partition: str) -> DistilResult:
+        """The sweep's own actor, fixed here rather than defaulted in the
+        service: ``memory_distilled`` rows written by this timer must be
+        readable as the timer's, or the audit log cannot answer whether a
+        partition was last rewritten because somebody asked (FR-038)."""
+        return await distil(partition, actor=WORKER_ACTOR)
+
+    worker = DistilWorker(
+        distil=_scheduled,
         list_partitions=_list_partitions,
-        is_enabled=_upkeep_enabled(engine_config, ORGANISE),
-        read_interval=_upkeep_interval(engine_config, ORGANISE),
+        is_enabled=_upkeep_enabled(engine_config, DISTIL),
+        read_interval=_upkeep_interval(engine_config, DISTIL),
     )
     return asyncio.create_task(worker.run_forever())
 
 
-async def stop_organise_worker(task: asyncio.Task[None]) -> None:
+async def stop_distil_worker(task: asyncio.Task[None]) -> None:
     """Cancel the sweep and wait for it to acknowledge; a pending pass is
     dropped, not fired (the next boot sweeps everything)."""
     task.cancel()
     try:
         await task
     except asyncio.CancelledError:
-        logger.debug("memory.organise_worker.stopped")
+        logger.debug("memory.distil_worker.stopped")

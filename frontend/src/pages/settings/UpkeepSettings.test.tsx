@@ -31,7 +31,7 @@ const CONFIG: InternalEngineConfig = {
   updated_at: "2026-09-16T00:00:00Z",
   upkeep: {
     aggregate: { enabled: true, interval_s: null, default_interval_s: 3600 },
-    organise: { enabled: true, interval_s: 900, default_interval_s: 21600 },
+    distil: { enabled: true, interval_s: 900, default_interval_s: 21600 },
     // On, unlike the pass it replaced: curation is the only path from a source
     // to something an agent can read, so a vault where it never runs has an
     // empty topics lane forever.
@@ -59,7 +59,7 @@ describe("UpkeepSettings", () => {
     render(<UpkeepSettings />);
 
     expect(screen.getByText(/reads your agents' own memory files/i)).toBeInTheDocument();
-    expect(screen.getByText(/rewrites the derived digest/i)).toBeInTheDocument();
+    expect(screen.getByText(/turns the entries read from your agents into/i)).toBeInTheDocument();
     expect(screen.getByText(/derives the documents your agents read/i)).toBeInTheDocument();
     expect(screen.getByText(/never changes a source/i)).toBeInTheDocument();
   });

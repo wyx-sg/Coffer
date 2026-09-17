@@ -4,6 +4,11 @@ The whole design's load-bearing constraint is that Coffer never writes an
 agent's native memory. Every other test here exercises what a reader
 extracts; this one exercises the one thing it must never do while extracting
 it, across a full `sources()` + `read()` pass over both agents' fixtures.
+
+The same guarantee over a whole `MemoryService.aggregate()` — the path a user
+actually triggers — is asserted in
+`tests/integration/memory/test_service_real_readers.py`, which snapshots bytes
+and modification times for every file under both config directories.
 """
 
 from __future__ import annotations
@@ -15,8 +20,8 @@ import pytest
 from coffer.infrastructure.memory.readers.claude_code import ClaudeCodeMemoryReader
 from coffer.infrastructure.memory.readers.codex import CodexMemoryReader
 
-_CLAUDE_FACT = """---
-name: some-fact
+_CLAUDE_ENTRY = """---
+name: some-entry
 description: a description
 metadata:
   node_type: memory
@@ -51,7 +56,7 @@ def _build_fixtures(tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]
     claude_dir = tmp_path / "claude"
     claude_memory = claude_dir / "projects" / "-Users-dev-untouched" / "memory"
     claude_memory.mkdir(parents=True)
-    (claude_memory / "some-fact.md").write_text(_CLAUDE_FACT, encoding="utf-8")
+    (claude_memory / "some-entry.md").write_text(_CLAUDE_ENTRY, encoding="utf-8")
     (claude_memory / "MEMORY.md").write_text("# Memory\n\n- roll-up", encoding="utf-8")
 
     codex_dir = tmp_path / "codex"
@@ -79,16 +84,16 @@ def test_a_full_read_leaves_every_fixture_file_untouched(tmp_path: pathlib.Path)
     assert before  # sanity: the snapshot actually saw the fixture files
 
     claude_reader = ClaudeCodeMemoryReader()
-    claude_facts_seen = 0
+    claude_entries_seen = 0
     for source in claude_reader.sources(str(claude_dir)):
-        claude_facts_seen += len(claude_reader.read(source))
-    assert claude_facts_seen == 1
+        claude_entries_seen += len(claude_reader.read(source))
+    assert claude_entries_seen == 1
 
     codex_reader = CodexMemoryReader()
-    codex_facts_seen = 0
+    codex_entries_seen = 0
     for source in codex_reader.sources(str(codex_dir)):
-        codex_facts_seen += len(codex_reader.read(source))
-    assert codex_facts_seen == 3  # 1 group preference + profile + 1 global preference
+        codex_entries_seen += len(codex_reader.read(source))
+    assert codex_entries_seen == 3  # 1 group preference + profile + 1 global preference
 
     after = _snapshot(tmp_path)
     assert after == before

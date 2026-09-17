@@ -1,9 +1,9 @@
-// frontend/src/pages/MemoryPage.tsx — the Memory surface (spec memory FR-029).
+// frontend/src/pages/MemoryPage.tsx — the Memory surface (spec memory FR-037).
 //
-// Lists partitions: `global` plus one per project, aggregated read-only from
-// the agents' own native memories (ADR aggregate-agent-memory-never-write-it)
-// — nothing here is user-created, so "Read from agents" (not "Add") is the
-// header action. It is not called Sync: that name belongs to the vault-sync
+// Lists partitions: `global` plus one per repository, distilled from the
+// agents' own native memories, which Coffer only ever reads (ADR
+// aggregate-agent-memory-never-write-it) — nothing here is user-created, so
+// "Read from agents" (not "Add") is the header action. It is not called Sync: that name belongs to the vault-sync
 // page, and this action reads the agents' native memory rather than converging
 // anything with a remote.
 //

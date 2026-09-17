@@ -307,7 +307,7 @@
       "memory_delivery_fired": "Memory delivery hook fired for {{resource}}",
       "memory_delivery_installed": "Installed memory delivery into {{resource}}",
       "memory_delivery_removed": "Removed memory delivery from {{resource}}",
-      "memory_organised": "Organised memory partition {{resource}}",
+      "memory_distilled": "Distilled memory partition {{resource}}",
       "provider_internal_default_set": "Made {{resource}} the internal engine's default",
       "provider_projection_refused": "Refused to project {{resource}} into an agent",
       "provider_switched": "Switched to provider {{resource}}",
@@ -570,9 +570,9 @@
           "name": "Read from agents",
           "writes": "Reads your agents' own memory files and writes only Coffer's derived tree. No model involved."
         },
-        "organise": {
-          "name": "Organise memory",
-          "writes": "The model rewrites the derived digest — merges duplicates, marks superseded facts. Deleting the tree and re-running reproduces it."
+        "distil": {
+          "name": "Distil memory",
+          "writes": "The model turns the entries read from your agents into Coffer's own notes and rewrites the index. Deleting the tree and re-running reproduces an equivalent set."
         },
         "curate": {
           "name": "Derive documents from sources",
@@ -650,7 +650,8 @@
     "MCP_INSTALL_UNSUPPORTED": "This agent does not support installing Coffer's MCP entry",
     "MEMORY_DELIVERY_CONFIG_INVALID": "That agent's settings file isn't something Coffer can edit",
     "MEMORY_DELIVERY_UNSUPPORTED": "This agent type has no memory-delivery hook",
-    "MEMORY_FACT_NOT_FOUND": "That memory fact wasn't found",
+    "MEMORY_NOTE_NOT_FOUND": "That memory note wasn't found",
+    "MEMORY_RAW_ENTRY_NOT_FOUND": "That raw memory entry wasn't found",
     "MEMORY_FILE_NOT_FOUND": "That file isn't in this partition",
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
@@ -1068,19 +1069,21 @@
   },
   "memory": {
     "title": "Memory",
-    "subtitle": "What your agents already learned, read from their own memory — Claude Code's per-project notes and Codex's task groups — normalised into facts by project, plus one global partition for what is about you rather than any project. Coffer never writes back into an agent's own memory. It re-reads them on its own; the button just does it now.",
+    "subtitle": "What your agents already learned, read out of their own memory — Claude Code's per-project notes and Codex's task groups — and distilled into notes of Coffer's own, one topic per file, filed by repository, plus one global partition for what is about you rather than any one project. Coffer never writes back into an agent's own memory. It re-reads them on its own; the button just does it now.",
     "readFromAgents": "Read from agents",
     "reading": "Reading…",
-    "syncDone": "Read {{count}} facts across {{partitions}} partitions.",
+    "syncDone": "Read {{count}} entries across {{partitions}} partitions.",
     "syncFailures": "{{count}} source(s) failed to parse — see the Activity page.",
     "loadFailed": "Failed to load partitions",
     "empty": "No partitions yet. Read from agents to import what they already know.",
     "searchPlaceholder": "Search partitions…",
     "cols": {
       "name": "Partition",
-      "project": "Project",
+      "repository": "Repository",
       "global": "Global — about you, not one project",
-      "facts": "Facts"
+      "notes": "Notes",
+      "unresolvable": "Repository missing",
+      "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide."
     },
     "delivery": {
       "title": "Delivery",
@@ -1088,7 +1091,7 @@
       "installed": "Installed",
       "notInstalled": "Not installed",
       "installedHint": "Coffer's {{event}} hook is written into this agent's settings. Every time it fires is recorded on the Activity page.",
-      "notInstalledHint": "Install Coffer's hook to deliver a budgeted digest at session start.",
+      "notInstalledHint": "Install Coffer's hook to hand this agent the memory index at session start.",
       "install": "Install",
       "remove": "Remove",
       "removeConfirmTitle": "Remove delivery for {{agent}}?",
@@ -1101,12 +1104,14 @@
       "tree": "Files",
       "selectFile": "Select a file to view.",
       "binary": "Binary file ({{size}} bytes)",
-      "truncated": "Content truncated — showing the start of the file."
+      "truncated": "Content truncated — showing the start of the file.",
+      "derivedBadge": "Derived input",
+      "derivedHint": "Derived input, not Coffer's own writing: the agents' own words exactly as Coffer read them, kept so a note can be checked against the source it came from. Coffer's own notes are in notes/, indexed by MEMORY.md."
     },
     "detail": {
-      "organise": "Organise",
-      "organiseHint": "Merges duplicate facts, proposes supersessions and conflicts, and rewrites this partition's digest.",
-      "organiseDone": "Organise pass finished."
+      "distil": "Distil",
+      "distilHint": "Turns this partition's new raw entries into Coffer's own notes — merging into a note, opening a new one, or retiring one into RETIRED.md — and rewrites the index.",
+      "distilDone": "Distil pass finished."
     }
   },
   "chat": {

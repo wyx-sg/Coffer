@@ -1,7 +1,7 @@
 """Start the daemon's background workers, in one place.
 
 Four timers that outlive a request: retention pruning, the vault converge
-round, the knowledge curation pass, and the memory organise pass. They are gathered
+round, the knowledge curation pass, and the memory distil pass. They are gathered
 here rather than inlined in the lifespan because each needs a different slice
 of the graph, and reading which worker gets what is the only reason to look at
 this code at all.
@@ -38,8 +38,8 @@ from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentia
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.logging.files import prune_log_dir
 from coffer.surfaces.http.curation_wiring import start_curation_worker
-from coffer.surfaces.http.memory.organise_state import OrganiseRunner
-from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_organise_worker
+from coffer.surfaces.http.memory.distil_state import DistilRunner
+from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_distil_worker
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_wiring import SyncWiring, start_converge_worker, start_sync
 from coffer.surfaces.http.transcript_warm_wiring import start_transcript_warm_worker
@@ -55,7 +55,7 @@ class BackgroundWorkers:
     sync: SyncWiring
     converge_worker: ConvergeWorker
     curation_task: asyncio.Task[None]
-    organise_task: asyncio.Task[None]
+    distil_task: asyncio.Task[None]
     aggregate_task: asyncio.Task[None]
     warm_worker: TranscriptWarmWorker
     warm_task: asyncio.Task[None]
@@ -67,7 +67,7 @@ def start_background_workers(
     knowledge_service: KnowledgeService,
     curation_pass: CurationPass,
     skill_delivery: KnowledgeSkillDelivery,
-    organise: OrganiseRunner,
+    distil: DistilRunner,
     memory_service: MemoryService,
     transcript_reader: FileTranscriptReader,
     resource_svc: ResourceService,
@@ -109,7 +109,7 @@ def start_background_workers(
     curation_task = start_curation_worker(
         knowledge_service, curation_pass, skill_delivery, resource_svc, engine_config, sync
     )
-    organise_task = start_organise_worker(organise, resource_svc, engine_config)
+    distil_task = start_distil_worker(distil, resource_svc, engine_config)
     # Aggregation (spec memory FR-007): a catch-up pass now, then hourly. It
     # only reads the agents' own memory and only writes the derived tree, so
     # nothing here has to wait on the vault rewriters above.
@@ -124,7 +124,7 @@ def start_background_workers(
         sync=sync,
         converge_worker=converge_worker,
         curation_task=curation_task,
-        organise_task=organise_task,
+        distil_task=distil_task,
         aggregate_task=aggregate_task,
         warm_worker=warm_worker,
         warm_task=warm_task,

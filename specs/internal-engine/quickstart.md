@@ -59,7 +59,7 @@ Three passes run on a timer:
 | Pass | What it writes | Ships |
 |---|---|---|
 | `aggregate` | the derived memory tree, read from the agents' own memory | ON |
-| `organise` | a rewrite of that derived digest | ON |
+| `distil` | a rewrite of that derived digest | ON |
 | `tidy` | **your own knowledge files** | OFF |
 
 ```bash
@@ -74,7 +74,7 @@ pass, so it is reported rather than copied into your vault.
 
 ```bash
 coffer engine upkeep set tidy --on --interval 21600   # every six hours
-coffer engine upkeep set organise --off
+coffer engine upkeep set distil --off
 coffer engine upkeep set aggregate --default-interval
 ```
 

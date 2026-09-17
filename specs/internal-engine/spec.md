@@ -52,7 +52,7 @@ it travels between machines. Why each decision went the way it did is in
 
 - **B1 — The same row carries the work.** Three passes run on a timer:
   `aggregate` reads the agents' own memory into the derived tree (spec
-  [memory](../memory/spec.md) FR-007), `organise` lets the model rewrite that
+  [memory](../memory/spec.md) FR-007), `distil` lets the model rewrite that
   derived digest (spec memory FR-030), and `curate` derives the knowledge
   documents agents read from the sources a person writes
   knowledge files (spec [knowledge](../knowledge/spec.md) FR-034). Each has a
@@ -69,7 +69,7 @@ it travels between machines. Why each decision went the way it did is in
   refused.
 - **B5 — A change reaches a running worker** without a restart, because the wait
   is taken in slices and the interval re-read each slice.
-- **B6 — The defaults follow what a pass WRITES.** `aggregate` and `organise`
+- **B6 — The defaults follow what a pass WRITES.** `aggregate` and `distil`
   write only derived files that deleting and re-running reproduces, so they ship
   ON — including `curate`, which derives `topics/` from sources it may not
   touch and is the only path from a source to something an agent can read, so a
@@ -116,7 +116,7 @@ it travels between machines. Why each decision went the way it did is in
 
 - **The connection itself** — creating, editing, activating or flagging one is
   spec provider-switching. This spec reads the flagged one.
-- **What each pass DOES** — aggregate, organise and curate are specified by spec
+- **What each pass DOES** — aggregate, distil and curate are specified by spec
   memory and spec knowledge. This spec owns only whether and how often they run.
 - **`GET /api/v1/upkeep/runs`** — what is in flight right now is a cross-kind
   read beside `/resources`, `/audit` and `/retention`, not this spec's schedule.
@@ -151,7 +151,7 @@ coffer engine upkeep list [--json]
 coffer engine upkeep set <pass> [--on | --off] [--interval <seconds> | --default-interval]
 ```
 
-`<pass>` is one of `aggregate`, `organise`, `curate`. `upkeep list` prints each
+`<pass>` is one of `aggregate`, `distil`, `curate`. `upkeep list` prints each
 pass's switch, its chosen interval and — when none is chosen — the default that
 runs instead, so the terminal shows what the page shows.
 
@@ -207,7 +207,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 
 ### Scenario: switch off and re-time the passes Coffer runs unattended
 
-- **Given** a fresh vault, where aggregation and organise run on their own
+- **Given** a fresh vault, where aggregation and distil run on their own
   timers,
 - **When** the operator switches one pass on or off, or gives it an interval, or
   returns it to its own default (`PUT /api/v1/internal-engine-config/upkeep`,
@@ -241,7 +241,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 - **Given** the daemon is running,
 - **When** the operator runs `coffer engine upkeep list --json`, then
   `coffer engine upkeep set curate --off`, then
-  `coffer engine upkeep set organise --interval 900`,
+  `coffer engine upkeep set distil --interval 900`,
 - **Then** the listing is machine-readable and names each pass's switch, its
   chosen interval and the default that runs while none is chosen; each `set`
   changes one pass only; and an interval below the floor or an unknown pass name
@@ -299,7 +299,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 **What Coffer does unattended**
 
 - **FR-009**: The same row MUST carry a switch and an interval for each of the
-  three passes Coffer runs on its own behalf — `aggregate`, `organise` and
+  three passes Coffer runs on its own behalf — `aggregate`, `distil` and
   `curate`.
 - **FR-010**: `PUT /api/v1/internal-engine-config/upkeep` MUST change exactly one
   named pass. An omitted half MUST leave that half alone, and every other pass
@@ -311,7 +311,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
   name Coffer does not run.
 - **FR-013**: A running worker MUST pick a switch or interval change up without
   a daemon restart.
-- **FR-014**: The passes that write only derived files (`aggregate`, `organise`)
+- **FR-014**: The passes that write only derived files (`aggregate`, `distil`)
   MUST ship ON, `curate` included: it derives the knowledge documents agents
   read from sources it never rewrites, and a vault where it never runs cannot ship
   OFF.
@@ -378,7 +378,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 - Spec vault-sync's state-area mechanism is available, including the rule that
   each area's provider defines what a document's deletion means.
 - The four consumers — spec vault-sync's conflict resolver, spec knowledge's
-  curate, spec memory's organise and spec chat's voice transcription — supply
+  curate, spec memory's distil and spec chat's voice transcription — supply
   their own prompts and own their own results. This spec supplies the
   connection, the model and the timer, and absorbs none of their requirements.
 - `GET /api/v1/upkeep/runs` (what is rewriting right now) is a cross-kind

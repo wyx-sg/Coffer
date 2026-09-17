@@ -1,6 +1,6 @@
 """Parser for Codex's global native-memory file (``~/.codex/memories/MEMORY.md``).
 
-Unlike Claude Code's per-project ``memory/*.md`` fact files, Codex keeps a single
+Unlike Claude Code's per-project ``memory/*.md`` entry files, Codex keeps a single
 *global* memory document organised as ``# Task Group:`` blocks. Each group carries
 exactly one ``applies_to: cwd=<paths>; reuse_rule=...`` line whose ``cwd`` value
 routes the group to one or more project working directories (the value may list
@@ -9,14 +9,17 @@ several paths joined by prose like `` and ``/`` plus ``/`` from ``, and may cont
 :class:`CodexMemoryEntry` per group (:func:`parse_codex_memory`), plus the
 ``## <heading>`` / ``- `` bullet-list shape both a group's body and the sibling
 ``memory_summary.md`` profile document use (:func:`section_text`,
-:func:`section_bullets`). Two callers compose these: the agent page's
-native-memory listing (``infrastructure.agent.codex_memory_store``) groups
-entries by cwd into one read-only store row per project; memory aggregation's
-reader (``infrastructure.memory.readers.codex``) turns each group's and the
-profile's own bullets into normalised facts. Which sections count as facts,
-how a bullet gets a title, and how a fact's identity anchor is built are that
-reader's own policy (spec memory FR-013/021/022), not this module's — this
-module only knows Codex's file *format*.
+:func:`section_bullets`), plus that summary's ``## What's in Memory`` topic
+list, where Codex writes the **search terms** it would look each task group
+up by (:func:`parse_codex_summary_topics`). Two callers compose these: the
+agent page's native-memory listing (``infrastructure.agent.codex_memory_store``)
+groups entries by cwd into one read-only store row per project; memory
+aggregation's reader (``infrastructure.memory.readers.codex``) turns each
+group's and the profile's own bullets into raw entries and carries the
+summary's search terms onto them (spec memory FR-004). Which sections become
+entries, how a bullet gets a title, how an entry's identity anchor is built,
+and **which summary topic describes which task group** are all that reader's
+own policy, not this module's — this module only knows Codex's file *format*.
 """
 
 from __future__ import annotations
@@ -32,6 +35,18 @@ _APPLIES_RE = re.compile(r"^applies_to:[ \t]*cwd=(.*)$", re.MULTILINE)
 # whitespace / ``;`` / ``,`` so prose words ("plus", "from") and the trailing
 # ``; reuse_rule=...`` are never captured. Handles ``*`` wildcards inside a token.
 _PATH_RE = re.compile(r"[~/][^\s;,]*")
+
+# The summary section listing one bullet per remembered task group.
+_TOPICS_HEADING = "What's in Memory"
+# What separates a topic's title from the backticked search-term list that
+# follows it: a colon, a space, then the first term's opening backtick. Matched
+# at its *first* occurrence — a title may contain a colon, but not one followed
+# immediately by a backticked token, which is the list's own signature.
+_TOPIC_TERMS_SEP = ": `"
+# One backticked term. Codex backticks every term it states; anything unquoted
+# on that line is prose, and a caller is better served by no terms than by an
+# invented one (spec memory FR-004).
+_TERM_RE = re.compile(r"`([^`]+)`")
 
 
 @dataclass(frozen=True)
@@ -73,6 +88,68 @@ def parse_codex_memory(text: str) -> list[CodexMemoryEntry]:
     return entries
 
 
+@dataclass(frozen=True)
+class CodexSummaryTopic:
+    """One bullet of ``memory_summary.md``'s ``## What's in Memory`` list.
+
+    Codex's summary is the only place in either supported agent's memory where
+    the source states, in its own voice, *what it would look this material up
+    by*. The bullet reads::
+
+        - <title>: `term`, `term`, `term`
+          - desc: ...
+          - learnings: ...
+
+    ``title`` is everything before that backticked list; ``search_terms`` are
+    the backticked tokens themselves, in the order written. The indented
+    ``desc:`` / ``learnings:`` sub-bullets are deliberately not carried: they
+    are Codex's second-order prose *about* a group whose own bullets the
+    reader already reads out of ``MEMORY.md``, and this dataclass exists to
+    rescue the terms, which have no other home.
+    """
+
+    title: str
+    search_terms: tuple[str, ...]
+
+
+def parse_codex_summary_topics(text: str) -> list[CodexSummaryTopic]:
+    """The topic bullets of a summary document's ``## What's in Memory``.
+
+    Returns ``[]`` for a document with no such section (a ``MEMORY.md``, say,
+    which must not be fed here). Only *unindented* ``- `` lines are topics —
+    the two-space-indented ``desc:`` / ``learnings:`` lines hang off a topic
+    and are skipped — and the section is scanned under ``###``/``####``
+    sub-headings without reading them, because those sub-headings are not
+    dependable: they are usually the cwd and the date, but Codex also writes
+    an ``### Older Memory Topics`` block whose ``####`` lines are cwds
+    instead, and at least one heading on the maintainer's machine names a
+    directory the topic's own ``desc:`` contradicts. Titles and terms are
+    what this parse promises; routing is left to the caller, which has the
+    task groups themselves to match against.
+
+    A topic bullet stating no backticked term yields an empty
+    ``search_terms`` rather than being dropped, so a caller can tell "Codex
+    listed this group and named no terms" from "Codex never listed it".
+    """
+    topics: list[CodexSummaryTopic] = []
+    for line in section_text(text, _TOPICS_HEADING).splitlines():
+        if not line.startswith("- "):
+            continue
+        bullet = line[2:]
+        split_at = bullet.find(_TOPIC_TERMS_SEP)
+        if split_at < 0:
+            topics.append(CodexSummaryTopic(title=bullet.strip(), search_terms=()))
+            continue
+        terms = tuple(term.strip() for term in _TERM_RE.findall(bullet[split_at:]))
+        topics.append(
+            CodexSummaryTopic(
+                title=bullet[:split_at].strip(),
+                search_terms=tuple(term for term in terms if term),
+            )
+        )
+    return topics
+
+
 def section_text(block: str, heading: str) -> str:
     """The raw text under a ``## <heading>`` line in ``block``, up to the next
     ``#`` or ``##`` heading (or the end of ``block``).
@@ -100,4 +177,11 @@ def section_bullets(block: str, heading: str) -> list[str]:
     return bullets
 
 
-__all__ = ["CodexMemoryEntry", "parse_codex_memory", "section_bullets", "section_text"]
+__all__ = [
+    "CodexMemoryEntry",
+    "CodexSummaryTopic",
+    "parse_codex_memory",
+    "parse_codex_summary_topics",
+    "section_bullets",
+    "section_text",
+]

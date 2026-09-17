@@ -29,7 +29,7 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
     CURATE,
-    ORGANISE,
+    DISTIL,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -49,10 +49,10 @@ class _SingletonRow(Protocol):
 #: The unattended passes, and the value each one has before anyone decides.
 #: Listed rather than derived so "the defaults" is a fact this module states
 #: once — it is what decides whether a machine publishes a document at all.
-_PASSES = (AGGREGATE, ORGANISE, CURATE)
+_PASSES = (AGGREGATE, DISTIL, CURATE)
 _PASS_DEFAULTS = {
     AGGREGATE: UpkeepSetting(enabled=True),
-    ORGANISE: UpkeepSetting(enabled=True),
+    DISTIL: UpkeepSetting(enabled=True),
     CURATE: UpkeepSetting(enabled=True),
 }
 
