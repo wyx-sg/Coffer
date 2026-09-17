@@ -2,8 +2,10 @@
 //
 // The collections list. It had drifted from the other tables in three ways the
 // user could see: no reach control in the status column, a delete that was a
-// bare icon with no label, and a "Files" header narrow enough to wrap one
-// character per line. All three are asserted here.
+// bare icon with no label, and a count header narrow enough to wrap one
+// character per line. All three are asserted here — and the count is now two
+// counts, because a collection is two lanes and one total would hide a
+// collection curation has not reached yet.
 //
 // `enabled`/`scope` are not on /knowledge/collections, so the table merges them
 // in from `GET /resources?kind=knowledge` — one request for the table, never one
@@ -63,8 +65,8 @@ function wrap(ui: React.ReactNode) {
 }
 
 const ITEMS: CollectionOut[] = [
-  { name: "shopee", description: "internal notes", file_count: 23 },
-  { name: "personal", description: null, file_count: 4 },
+  { name: "shopee", description: "internal notes", source_count: 23, topic_count: 9 },
+  { name: "personal", description: null, source_count: 4, topic_count: 0 },
 ];
 
 const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
@@ -78,10 +80,11 @@ const reachIn = (name: string) =>
 describe("KnowledgeTable", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("a row shows the collection, its file count and its description", () => {
+  test("a row shows the collection, its lane counts and its description", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
     expect(screen.getByText("shopee")).toBeInTheDocument();
     expect(screen.getByText("23")).toBeInTheDocument();
+    expect(screen.getByText("9")).toBeInTheDocument();
     expect(screen.getByText("internal notes")).toBeInTheDocument();
   });
 
@@ -95,10 +98,21 @@ describe("KnowledgeTable", () => {
     expect(reachIn("personal")).toHaveTextContent(/^1 agent$/i);
   });
 
-  test("the Files header cannot wrap — it was breaking one character per line", () => {
+  test("each lane is counted in its own column", () => {
+    // Two counts, not one total: a collection with sources and no topics is one
+    // curation has not reached yet, and a single number would hide exactly that.
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
-    const header = screen.getByRole("columnheader", { name: /files/i });
-    expect(header.className).toContain("whitespace-nowrap");
+
+    expect(within(rowFor("shopee")).getByText("23")).toBeInTheDocument();
+    expect(within(rowFor("shopee")).getByText("9")).toBeInTheDocument();
+    expect(within(rowFor("personal")).getByText("0")).toBeInTheDocument();
+  });
+
+  test("the count headers cannot wrap — they were breaking one character per line", () => {
+    render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
+    for (const name of [/^sources$/i, /^topics$/i]) {
+      expect(screen.getByRole("columnheader", { name }).className).toContain("whitespace-nowrap");
+    }
     // The description column is the flexible one, which is what stops the
     // fixed-width columns being squeezed narrow enough to wrap at all.
     expect(screen.getByRole("columnheader", { name: /description/i }).className).toContain(

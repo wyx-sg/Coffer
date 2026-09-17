@@ -1,14 +1,15 @@
 """FastAPI dependency providers for the one ``knowledge`` kind.
 
 Same ``set_*`` / ``get_*`` singleton shape as ``surfaces.http.dependencies``,
-typed concretely. One directory service, plus literal search and document
-ingestion over it.
+typed concretely. Two services only: the directory itself, and document
+ingestion over it. There is no search service to provide — the layer keeps no
+index and offers no retrieval, on this surface or any other (spec knowledge
+FR-033), so the module that used to be wired here no longer exists.
 """
 
 from __future__ import annotations
 
 from coffer.application.knowledge.ingest import IngestService
-from coffer.application.knowledge.search import SearchService
 from coffer.application.knowledge.service import KnowledgeService
 
 _knowledge_service: KnowledgeService | None = None
@@ -25,22 +26,6 @@ def get_knowledge_service() -> KnowledgeService:
     if _knowledge_service is None:
         raise RuntimeError("knowledge service not initialised")
     return _knowledge_service
-
-
-_search_service: SearchService | None = None
-
-
-def set_search_service(svc: SearchService) -> None:
-    """Called by the composition root once on startup."""
-    global _search_service
-    _search_service = svc
-
-
-def get_search_service() -> SearchService:
-    """FastAPI Depends() target."""
-    if _search_service is None:
-        raise RuntimeError("search service not initialised")
-    return _search_service
 
 
 _ingest_service: IngestService | None = None

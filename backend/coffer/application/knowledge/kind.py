@@ -4,8 +4,14 @@ A collection carries no config and no lifecycle beyond existing, so the kind is
 almost all default. The two fields that are not:
 
 - ``supports_scope`` is True, because per-agent authorization is the reason a
-  collection is a Resource at all (spec knowledge FR-009). Without it a
-  directory would not need the framework.
+  collection is a Resource at all (spec knowledge FR-010). Without it a
+  directory would not need the framework. The scope no longer gates a
+  retrieval tool — there is none — so it bites in two other places: at
+  **delivery**, where the skill rendered for an agent names only that agent's
+  collections and so never discloses another's name, path or catalogue; and at
+  ``coffer__write``, which refuses a write into a collection the calling agent
+  is not activated for. Both are non-disclosure rather than access control
+  (FR-012): an agent told no path can still read one with its own shell.
 - ``generic_create_allowed`` is False, because a collection is a directory as
   much as a row: the generic ``POST /resources`` path would create the row with
   no folder behind it. ``KnowledgeService.create_collection`` opts in

@@ -65,11 +65,14 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         )
         assert r.status_code == 201, r.text
 
-        # list skills — only Coffer's own seeded knowledge skill, which is
-        # there before the user imports anything (spec knowledge FR-029).
+        # list skills — empty, because every skill here is one the user
+        # imported. Coffer no longer seeds one of its own: the knowledge skill
+        # is rendered per agent and written straight into that agent's skill
+        # directory (spec knowledge FR-034), never registered as a Resource
+        # this route could list.
         r = c.get("/api/v1/skills")
         assert r.status_code == 200
-        assert [i["name"] for i in r.json()["items"]] == ["coffer-knowledge"]
+        assert r.json()["items"] == []
 
         # import
         r = c.post("/api/v1/skills/import", json={"path": str(src)})

@@ -83,8 +83,7 @@ paths:
       summary: Change one unattended pass's switch or timer
       description: |
         Coffer runs three passes on its own behalf — `aggregate` (spec memory
-        FR-007), `organise` (spec memory FR-030) and `tidy` (spec knowledge
-        FR-051) — each with a switch and an interval.
+        FR-007), `organise` (spec memory FR-030) and `curate` (spec knowledge FR-021) — each with a switch and an interval.
 
         ONE pass per request, and each half left alone when it is not sent: a
         settings page toggles one row at a time, and a body carrying all three
@@ -135,7 +134,7 @@ components:
         upkeep:
           type: object
           description: >-
-            Keyed by pass name (`aggregate`, `organise`, `tidy`).
+            Keyed by pass name (`aggregate`, `organise`, `curate`).
           additionalProperties: { $ref: "#/components/schemas/UpkeepSettingOut" }
 
     UpkeepSettingOut:
@@ -163,7 +162,7 @@ components:
       properties:
         pass:
           type: string
-          enum: [aggregate, organise, tidy]
+          enum: [aggregate, organise, curate]
         enabled:
           type: boolean
           nullable: true

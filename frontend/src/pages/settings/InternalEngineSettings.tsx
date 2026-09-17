@@ -1,5 +1,5 @@
 // pages/settings/InternalEngineSettings.tsx — the internal-engine selection
-// (spec provider-switching amendment 2026-06-22b). Coffer's own LLM engine — the notes tidy
+// (spec provider-switching amendment 2026-06-22b). Coffer's own LLM engine — the knowledge curation
 // pass, and whatever else Coffer runs itself — uses whichever connection is picked here
 // (endpoint + key) with the model chosen here. Both live apart from the chat
 // agents: the connection is the global `internal_default`, the model is a
@@ -38,7 +38,7 @@ export function InternalEngineSettings() {
   const [fetched, setFetched] = useState<string[]>([]);
 
   // The internal engine runs a CHAT model, so both sources are narrowed to
-  // modality `text` (spec provider-switching FR-032): a connection's curated set
+  // modality `text` (spec provider-switching FR-030): a connection's curated set
   // when it has one — that IS its catalogue, and an embedding or image entry is
   // no more a chat model here than in an agent's picker — and otherwise the
   // endpoint's own list, probed below.

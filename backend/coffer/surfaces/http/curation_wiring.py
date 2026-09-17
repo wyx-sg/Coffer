@@ -1,14 +1,17 @@
-"""Startup wiring for the tidy pass and its background worker.
+"""Startup wiring for the curation pass and its background worker.
 
-Two things only a composition root can supply meet here: the langgraph loop
+Three things only a composition root can supply meet here: the langgraph loop
 adapter (import contract 9a keeps langgraph inside ``infrastructure.llm``, so
-``application.knowledge`` reaches it only through the injected port) and the
-installation-wide switch that decides whether the worker runs at all.
+``application.knowledge`` reaches it only through the injected port), the
+installation-wide switch that decides whether the worker runs, and the skill
+delivery the pass re-runs after every corpus change — a new topic document is
+unreachable until the catalogue in each agent's skill names it (spec knowledge
+FR-035).
 
 Kept out of ``app.py`` / ``chat_wiring.py``, both at the 400-LOC ceiling,
 mirroring the sibling ``*_wiring.py`` modules. Teardown never fires a pending
-pass: the tidy is idempotent and the next boot sweeps everything, so making
-shutdown wait on an LLM loop would buy nothing.
+pass: the watermark makes a sweep idempotent and the next boot picks up
+whatever was left, so making shutdown wait on an LLM loop would buy nothing.
 """
 
 from __future__ import annotations
@@ -19,45 +22,60 @@ from collections.abc import Callable
 
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
+from coffer.application.knowledge.curate import CurationPass
+from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.knowledge.tidy import TidyPass
-from coffer.application.knowledge.tidy_worker import TidyWorker
+from coffer.application.knowledge.skill_delivery import KnowledgeSkillDelivery
 from coffer.application.resource_service import ResourceService
-from coffer.domain.internal_engine_config import TIDY
+from coffer.domain.internal_engine_config import CURATE
 from coffer.infrastructure.llm.agentic_reorg import LangchainAgenticReorg
-from coffer.surfaces.http.knowledge.tidy_state import set_tidy_runner
+from coffer.surfaces.http.knowledge.curation_state import set_curation_runner
 from coffer.surfaces.http.sync_wiring import SyncWiring
 
 _log = logging.getLogger(__name__)
 
 
-def wire_tidy(
+def wire_curation(
     models: ModelSelectorPort,
     credential_resolver: Callable[[str], str],
-) -> TidyPass:
+    skill_delivery: KnowledgeSkillDelivery,
+) -> CurationPass:
     """Build the pass and register it for the route, the CLI and the worker."""
-    tidy = TidyPass(
+
+    async def _redeliver() -> None:
+        # Every agent's copy, not one: the catalogue each carries differs by
+        # what that agent is activated for, which is where this layer's
+        # authorization is enforced (FR-010).
+        await skill_delivery.deliver_all()
+
+    curation = CurationPass(
         agent=LangchainAgenticReorg(),
         models=models,
         credential_resolver=credential_resolver,
+        on_corpus_changed=_redeliver,
     )
-    set_tidy_runner(tidy)
-    return tidy
+    set_curation_runner(curation)
+    return curation
 
 
-def start_tidy_worker(
+def start_curation_worker(
     knowledge_service: KnowledgeService,
-    tidy: TidyPass,
+    curation: CurationPass,
+    skill_delivery: KnowledgeSkillDelivery,
     resources: ResourceService,
     engine_config: InternalEngineConfigService,
     sync: SyncWiring,
 ) -> asyncio.Task[None]:
-    """Start the interval sweep. It no-ops on every tick until switched on.
+    """Start the interval sweep.
+
+    Unlike the tidy worker this replaces, it is **on by default** (FR-032):
+    curation is the only path from a source to something an agent can read, so
+    an installation where it never runs is one whose ``topics/`` lane stays
+    empty forever. Returns the task; the lifespan cancels it at shutdown.
 
     Takes the sync graph explicitly: the worker consults this machine's
     identity, the pending-round state and the vault-write lock, all of which
     ``start_sync`` builds — so sync is wired first (see ``background_workers``).
-    Returns the task; the lifespan cancels it at shutdown.
     """
 
     async def list_collections() -> list[str]:
@@ -70,17 +88,17 @@ def start_tidy_worker(
 
         Once a vault spans machines an unattended rewriter must run on exactly
         one of them (spec vault-sync ``## Unattended rewriters``): two machines
-        merging the same notes produce two *different* topic documents, git
+        folding the same source produce two *different* topic documents, git
         merges both additions cleanly, and the vault silently holds the
         knowledge twice. No owner set means a single-machine vault, where
         "here" is the only answer there is.
         """
-        if not (await engine_config.get()).tidy_runs_on(sync.registry.machine_id):
+        if not (await engine_config.get()).curate_runs_on(sync.registry.machine_id):
             return False
         # And not while a round is waiting on the user (spec vault-sync
         # "## Unattended rewriters"). A confirmation is answered on the promise
         # that re-deriving the round yields the diff the user was shown, and a
-        # rewriter that moves notes underneath them breaks exactly that
+        # rewriter that moves documents underneath them breaks exactly that
         # promise.
         return await sync.state.pending() is None
 
@@ -88,11 +106,12 @@ def start_tidy_worker(
         """The operator's interval for this pass, re-read while the wait runs
         (spec provider-switching E3a) — a value captured at boot would be stale
         the moment another machine's setting converged in."""
-        return (await engine_config.get()).upkeep(TIDY).interval_s
+        return (await engine_config.get()).upkeep(CURATE).interval_s
 
-    worker = TidyWorker(
+    worker = CurationWorker(
         service=knowledge_service,
-        tidy=tidy,
+        curate=curation,
+        deliver=skill_delivery.deliver_all,
         is_enabled=is_enabled,
         read_interval=read_interval,
         list_collections=list_collections,
@@ -104,11 +123,11 @@ def start_tidy_worker(
     return asyncio.create_task(worker.run_forever())
 
 
-async def stop_tidy_worker(task: asyncio.Task[None]) -> None:
+async def stop_curation_worker(task: asyncio.Task[None]) -> None:
     """Cancel the sweep and wait for it to acknowledge (a pending pass is
     dropped, never fired — see the module docstring)."""
     task.cancel()
     try:
         await task
     except asyncio.CancelledError:
-        _log.debug("knowledge.tidy_worker.stopped")
+        _log.debug("knowledge.curate_worker.stopped")

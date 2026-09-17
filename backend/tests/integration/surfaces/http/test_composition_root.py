@@ -30,12 +30,15 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         r = c.get("/api/v1/daemon/status")
         assert r.status_code == 200
 
-        # /resources (token required; only Coffer's own seeded skill)
+        # /resources (token required; a fresh vault has none)
         r = c.get("/api/v1/resources", headers=headers)
         assert r.status_code == 200
-        # Coffer seeds its own knowledge skill at boot (spec knowledge FR-029),
-        # so an install is never resource-empty; nothing the user made is here.
-        assert [x["name"] for x in r.json()["resources"]] == ["coffer-knowledge"]
+        # Empty is the right answer, not a broken route: Coffer no longer seeds
+        # a skill Resource of its own. The knowledge skill is rendered per agent
+        # and written straight into that agent's own skill directory (spec
+        # knowledge FR-035), so it is not a Resource anyone can list — and a
+        # fresh install has made nothing else.
+        assert r.json()["resources"] == []
 
         # /audit (token required)
         r = c.get("/api/v1/audit", headers=headers)

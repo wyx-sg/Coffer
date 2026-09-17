@@ -16,7 +16,7 @@ from starlette.testclient import TestClient
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
-_TOKEN = "test-token-knowledge-search-ingest"
+_TOKEN = "test-token-knowledge-routes"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
 
 
@@ -39,13 +39,26 @@ def _create_collection(client: TestClient, name: str) -> None:
     assert resp.status_code == 201, resp.text
 
 
-def _write_file(
-    client: TestClient, *, directory: str, title: str, description: str, body: str
+def _write_source(
+    client: TestClient,
+    *,
+    collection: str,
+    title: str,
+    description: str,
+    body: str,
+    folder: str | None = None,
 ) -> str:
-    resp = client.put(
-        "/api/v1/knowledge/file",
-        json={"title": title, "description": description, "body": body, "directory": directory},
-    )
+    """Write one source through the route. The caller never spells ``sources/``
+    — the service adds the lane segment (spec knowledge FR-013)."""
+    payload: dict[str, object] = {
+        "title": title,
+        "description": description,
+        "body": body,
+        "collection": collection,
+    }
+    if folder:
+        payload["folder"] = folder
+    resp = client.put("/api/v1/knowledge/file", json=payload)
     assert resp.status_code == 200, resp.text
     path: str = resp.json()["path"]
     return path

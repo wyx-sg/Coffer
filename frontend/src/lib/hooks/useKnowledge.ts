@@ -1,10 +1,10 @@
 // frontend/src/lib/hooks/useKnowledge.ts
 //
-// ALL queries + mutations for the `knowledge` kind, so the page, the tree and
-// the viewer stay thin views (.agents/frontend.md §3). The keys are
+// ALL queries + mutations for the `knowledge` kind, so the page, the trees and
+// the viewer stay thin views (agents/frontend.md §3). The keys are
 // hierarchical under one `["knowledge"]` root, so a write can invalidate the
-// whole subtree with a prefix — the tree is fetched one directory per key and
-// a tidy pass may touch any of them.
+// whole subtree with a prefix — each lane is fetched one directory per key and
+// a curation pass may rewrite any level of `topics/`.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -12,11 +12,11 @@ import { useToast } from "@/components/ui/toast";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import {
   createCollection,
+  curateCollection,
   deleteFile,
   getFile,
   getTree,
   listCollections,
-  tidyCollection,
   uploadFile,
 } from "@/lib/api/knowledge";
 import {
@@ -49,7 +49,7 @@ export function useCreateCollection() {
   });
 }
 
-/** One level of the catalogue. Each expanded directory mounts its own query. */
+/** One level of ONE lane. Each expanded directory mounts its own query. */
 export function useKnowledgeTree(path: string, enabled = true) {
   return useQuery({
     queryKey: knowledgeTreeKey(path),
@@ -67,25 +67,30 @@ export function useKnowledgeFile(path: string | null) {
 }
 
 /**
- * Run the tidy pass over one collection. It merges and rewrites files in
- * place (archiving each prior revision into `.history/` first), so every
- * cached level and body under `["knowledge"]` is invalidated afterwards.
+ * Run ONE curation pass over one collection. It rewrites `topics/` — writing
+ * new documents, retiring ones whose content moved — and stamps the source it
+ * consumed, so every cached level and body under `["knowledge"]` is
+ * invalidated afterwards.
+ *
+ * Every status the pass reports is a 200, so the toast says which one it was
+ * rather than treating `no_model` or `up_to_date` as a success that did
+ * something (FR-038).
  *
  * The pass is long and the daemon refuses a second one over the same
  * collection, so this keeps the shared run list honest at both ends — same
- * treatment as memory's organise. A 409 is not a failure worth a toast: it
- * means a pass is already running, which is what the button should already
- * have been showing, so refreshing the run list is the whole response.
+ * treatment as memory's organise. A 409 gets NO toast on purpose: the button
+ * reads it off `mutation.error` and says a pass is already running in place,
+ * where the click was, instead of the page saying it twice.
  */
-export function useTidyCollection(collection: string) {
+export function useCurateCollection(collection: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: () => tidyCollection(collection),
-    onSuccess: () => {
+    mutationFn: (source?: string | null) => curateCollection(collection, source),
+    onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
-      toast.success(t("knowledge.detail.tidyDone"));
+      toast.success(t(`knowledge.detail.curateStatus.${result.status}`));
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
@@ -96,15 +101,16 @@ export function useTidyCollection(collection: string) {
 }
 
 /**
- * Delete ONE file from a collection.
+ * Delete ONE source from a collection. The daemon refuses a `topics/` path,
+ * and the page only ever offers the button on a source (FR-027).
  *
  * The deleted file's own cache entry is REMOVED rather than invalidated: a
  * viewer still mounted on it would otherwise refetch a path that is now a 404
- * and replace the page with an error. Its ancestors' file counts all change
- * with it, so the rest of the `["knowledge"]` subtree is invalidated — the
- * same breadth as an upload, and for the same reason.
+ * and replace the page with an error. Its ancestors' counts all change with
+ * it, so the rest of the `["knowledge"]` subtree is invalidated — the same
+ * breadth as an upload, and for the same reason.
  *
- * No `onError` toast, against the default (.agents/frontend.md §5): the only
+ * No `onError` toast, against the default (agents/frontend.md §5): the only
  * caller is a ConfirmDialog, which renders the failure in place and stays open
  * so it can be read. A toast would say the same thing twice.
  */
@@ -120,17 +126,18 @@ export function useDeleteKnowledgeFile() {
 }
 
 /**
- * Convert one uploaded document into a knowledge file. The new file can land
- * at any level under the collection, and its ancestors' file counts all
- * change with it, so success invalidates the whole `["knowledge"]` subtree —
- * same breadth as tidy — rather than guessing which single level to refresh.
+ * Convert one uploaded document into a source. TWO files land — the original
+ * and the Markdown extracted from it — at any level under the collection's
+ * `sources/`, and its ancestors' counts all change with them, so success
+ * invalidates the whole `["knowledge"]` subtree rather than guessing which
+ * single level to refresh.
  */
 export function useUploadKnowledgeFile() {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (vars: { collection: string; directory?: string | null; file: File }) =>
+    mutationFn: (vars: { collection: string; folder?: string | null; file: File }) =>
       uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
     onError: (error) => toast.error(translateApiError(t, error)),

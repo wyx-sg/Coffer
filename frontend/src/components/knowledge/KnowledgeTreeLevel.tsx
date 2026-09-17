@@ -1,6 +1,6 @@
 // frontend/src/components/knowledge/KnowledgeTreeLevel.tsx
 //
-// ONE level of the knowledge catalogue, and the recursion that walks it. The
+// ONE level of ONE lane of a collection, and the recursion that walks it. The
 // rows are deliberately the same rows the skill Files tab draws
 // (`SkillFileTree`): chevron, folder / open-folder or file icon, one truncated
 // line, a depth-proportional indent instead of a rail, and the selected file
@@ -8,8 +8,8 @@
 // the same, so a reader who has opened one has already learned the other.
 //
 // What is NOT copied is the fetch. A skill's whole folder arrives in a single
-// response, so that tree can afford to open its first two levels on mount. The
-// catalogue descends a level per request (FR-013), so each expanded directory
+// response, so that tree can afford to open its first two levels on mount. A
+// lane descends a level per request, so each expanded directory
 // mounts another level and fetches its own listing — and directories therefore
 // start CLOSED: pre-opening them would fire one request per child folder for a
 // subtree nobody has asked to see.
@@ -22,12 +22,14 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { matchesFilter } from "@/lib/knowledge/filter";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
 
 interface Props {
-  /** Directory to list, relative to the knowledge root (`shopee/account`). */
+  /** Directory to list, relative to the knowledge root and lane-qualified
+   *  (`shopee/sources`, `shopee/topics/account`). */
   path: string;
   /** Nesting depth; drives the indent only (0 = the collection root). */
   depth: number;
@@ -36,6 +38,10 @@ interface Props {
   /** Client-side filename filter, applied to this level's files. */
   filter: string;
   onSelect: (path: string) => void;
+  /** What an EMPTY lane root says. Each lane is empty for its own reason — no
+   *  source has been added, or no pass has derived a topic yet — so the copy
+   *  comes from the caller rather than being one sentence for both. */
+  emptyLabel?: string;
 }
 
 /** Row indent, matching `SkillFileTree`'s: 0.75rem a level, 0.25rem of gutter. */
@@ -43,7 +49,14 @@ function indentOf(depth: number): { paddingLeft: string } {
   return { paddingLeft: `${depth * 0.75 + 0.25}rem` };
 }
 
-export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect }: Props) {
+export function KnowledgeTreeLevel({
+  path,
+  depth,
+  selectedPath,
+  filter,
+  onSelect,
+  emptyLabel,
+}: Props) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<string[]>([]);
   const { data, isPending, error } = useKnowledgeTree(path);
@@ -56,10 +69,14 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect
     );
   }
   if (isPending) {
+    // Skeleton rows rather than the word "Loading": the column keeps the shape
+    // it is about to have, so the pane beside it does not jump (§6).
     return (
-      <p style={indentOf(depth)} className="py-1.5 text-sm text-muted-foreground">
-        {t("common.loading")}
-      </p>
+      <div style={indentOf(depth)} className="space-y-2 py-1.5" aria-busy>
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
     );
   }
 
@@ -67,7 +84,9 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, filter, onSelect
   if (data.directories.length === 0 && files.length === 0) {
     return (
       <p style={indentOf(depth)} className="py-1.5 text-sm text-muted-foreground">
-        {filter.trim() ? t("knowledge.detail.noMatches") : t("knowledge.detail.emptyFolder")}
+        {filter.trim()
+          ? t("knowledge.detail.noMatches")
+          : (emptyLabel ?? t("knowledge.detail.emptyFolder"))}
       </p>
     );
   }

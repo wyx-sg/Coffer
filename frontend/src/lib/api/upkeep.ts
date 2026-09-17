@@ -4,7 +4,7 @@
 // runs`, contract `specs/resource-framework`).
 //
 // An *upkeep pass* is one of the long, model-driven rewrites the vault does to
-// itself: memory's organise over a partition, knowledge's tidy over a
+// itself: memory's organise over a partition, knowledge's curation over a
 // collection. Both run for minutes and both can be started from a button, the
 // CLI or a timer — so a button that remembers "I am running" only in its own
 // component state forgets on the next navigation, and the second click starts

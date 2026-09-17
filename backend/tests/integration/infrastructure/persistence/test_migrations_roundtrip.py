@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0084"
+HEAD_REVISION = "0085"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -137,7 +137,7 @@ HEAD_REVISION = "0084"
 # dropped by its own downgrade — and ADDs ``sync_remotes.last_started_at`` /
 # ``last_join`` / ``last_run_json``, the columns a converge round records that a
 # backup run did not. 0074 ADDs
-# ``internal_engine_config.tidy_owner_machine_id`` (the one machine allowed to
+# ``internal_engine_config.curate_owner_machine_id`` (the one machine allowed to
 # run the unattended tidy pass) — column-only, table set unchanged; its
 # downgrade drops the column. 0075 CREATEs ``sync_runs`` — every converge round
 # rather than only the last, which the remote's ``last_*`` columns keep
@@ -947,7 +947,10 @@ def test_0073_adds_convergence_state_and_blanks_the_backup_run(tmp_path, monkeyp
 
 
 def test_0074_adds_the_tidy_owner_machine_column(tmp_path, monkeypatch):
-    """0074 names the one machine allowed to run the unattended tidy pass
+    """At 0074 the column is `tidy_owner_machine_id`: 0085 renames it, and a
+    migration test asserts the shape of ITS OWN revision, not today's.
+
+    0074 names the one machine allowed to run the unattended tidy pass
     (spec vault-sync "## Unattended rewriters"). Every existing row gets
     ``NULL`` — enabling tidy before there was a fleet cannot retroactively
     become a choice the user never made — and the downgrade drops the column."""
@@ -1014,7 +1017,7 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
         with sqlite3.connect(db_path) as conn:
             return {r[1] for r in conn.execute("PRAGMA table_info(sync_remotes)")}
 
-    # 0074 adds internal_engine_config.tidy_owner_machine_id and 0073 adds the
+    # 0074 adds internal_engine_config.curate_owner_machine_id and 0073 adds the
     # two machine-local convergence tables plus the round-shaped sync_remotes
     # columns — present at head, all removed by their own downgrades on the way
     # back to 0069. ``memory_overrides`` is the odd one: 0070 creates it and
@@ -1023,14 +1026,14 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     convergence_tables = {"sync_convergence_state", "sync_held_paths"}
     assert "memory_overrides" not in _user_tables(db_path)
     assert convergence_tables <= _user_tables(db_path)
-    assert "tidy_owner_machine_id" in _internal_engine_config_columns()
+    assert "curate_owner_machine_id" in _internal_engine_config_columns()
     assert {"last_started_at", "last_join", "last_run_json"} <= _sync_remotes_columns()
     command.downgrade(cfg, "0071")
     assert "memory_overrides" in _user_tables(db_path)
     command.downgrade(cfg, "0069")
     assert "memory_overrides" not in _user_tables(db_path)
     assert not (convergence_tables & _user_tables(db_path))
-    assert "tidy_owner_machine_id" not in _internal_engine_config_columns()
+    assert "curate_owner_machine_id" not in _internal_engine_config_columns()
     assert not ({"last_started_at", "last_join", "last_run_json"} & _sync_remotes_columns())
 
     # 0062 adds sync_remotes (the one backup remote) — present at head, and

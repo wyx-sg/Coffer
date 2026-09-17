@@ -1,4 +1,4 @@
-"""Default file→Markdown engine via MarkItDown (spec knowledge FR-022/FR-037).
+"""Default file→Markdown engine via MarkItDown (spec knowledge FR-024/FR-045).
 
 One of exactly two importers of ``markitdown`` in this codebase — the other is
 ``infrastructure.chat.document_extract`` for inbound channel attachments — and

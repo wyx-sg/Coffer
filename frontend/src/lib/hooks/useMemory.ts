@@ -69,7 +69,7 @@ export function usePartitionFileContent(partition: string, path: string | null) 
 
 /** Read the agents' native memory now. Partitions, fact counts and every
  * partition's files can all change, so the invalidation is the full
- * `["memory"]` prefix — same breadth as knowledge's tidy. */
+ * `["memory"]` prefix — same breadth as knowledge's curation. */
 export function useSyncMemory() {
   const qc = useQueryClient();
   const { t } = useTranslation();

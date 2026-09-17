@@ -135,7 +135,7 @@ def upkeep_list(
 @upkeep_app.command("set")
 def upkeep_set(
     ctx: typer.Context,
-    pass_name: str = typer.Argument(..., metavar="PASS", help="aggregate | organise | tidy"),
+    pass_name: str = typer.Argument(..., metavar="PASS", help="aggregate | organise | curate"),
     on: bool = typer.Option(False, "--on", help="Let this pass run"),
     off: bool = typer.Option(False, "--off", help="Stop this pass running"),
     interval: int | None = typer.Option(None, "--interval", help="Seconds between passes"),

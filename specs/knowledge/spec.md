@@ -3,144 +3,116 @@
 **Status**: Accepted
 **Folder name**: this spec lives at `specs/knowledge/`, the spec id every inbound link and `scripts/audit_acceptance.py` keys on. It keeps that name although the layer merged with what used to be a separate Knowledge Base: the name is an identifier other documents and the acceptance audit resolve, not a description. The layer's revision history lives in the roadmap's revision log.
 
-**Input**: Coffer holds **knowledge about the user's working environment**: their repositories, services, projects, the people they work with, the decisions and traps worth surviving a session. It is what the human uploads and what the human and an agent write together, filed into **collections**. It is a **directory of Markdown files** — the files are the sole truth, and a human finds what they need by opening a folder. An agent finds it by reading a catalogue, grepping a line, or asking which files a phrase appears in. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
+**Input**: Coffer holds **knowledge about the user's working environment**: their repositories, services, projects, the people they work with, the decisions and traps worth surviving a session. It is a **directory of Markdown files** in two lanes. The human and the agents write **source material** into `sources/`; Coffer's internal model curates that material into **topic documents** under `topics/`, and `topics/` is what an agent reads — with its own `Read`, at an absolute path, through no tool of Coffer's. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
 
-**Knowledge is not memory.** Knowledge is about the world — a platform's API contract, a service's ownership, a document someone published — and it arrives because a person put it there. Memory is about the user and their projects, and it accrues on its own as agents work. They differ in every dimension that matters — who authors them, how they are partitioned, how they are delivered, and whether an entry can be *superseded* — so they are two layers: this one, filed by collection and **pulled** when needed, and spec [memory](../memory/spec.md), partitioned by project and **pushed** at session start.
+**Knowledge is not memory.** Knowledge is about the world — a platform's API contract, a service's ownership, a document someone published — and it arrives because a person, or an agent working with them, put it there. Memory is about the user and their projects, and it accrues on its own as agents work. They differ in every dimension that matters — who authors them, how they are partitioned, how they are delivered — so they are two layers: this one, filed by collection and **pulled** through a skill, and spec [memory](../memory/spec.md), partitioned by project and **pushed** at session start through a hook.
 
 ## The principle this layer answers to
 
-**Knowledge is managed by the human and the agent together.** Every decision below follows from it: metadata lives in the file rather than a database row because only the file is visible to both; the catalogue is generated rather than stored because a stored one would drift away from what the human sees in their file manager; the human's editor and the agent's `write` reach the same bytes with nothing in between.
+**What a person writes is source material; what an agent reads is curated.** Every decision below follows from it. The two lanes are directories rather than a property, because "who may write here" is the one thing only a directory can say. A topic document is derived, so it may be rewritten freely and rebuilt from scratch. A source is not derived, so nothing but a person ever changes it. Metadata lives in the file rather than a database row because only the file is visible to both parties.
+
+## The four invariants
+
+1. **Sources are truth; topics are derived.** Every topic document MUST be reconstructible from the sources behind it. A topic that is not is a defect.
+2. **Write is split.** `sources/` is written only by a person, an upload, or `coffer__write`. `topics/` is written only by the curation pass. There is no third writer of either.
+3. **A topic MUST NOT reference another file by name.** Topic paths are chosen by curation and change as the corpus is reorganised; a name written into prose is a link that rots. Name the subject, not the file.
+4. **Retrieval is the agent's own.** Coffer exposes no tool for reading, listing, grepping or searching knowledge. It delivers a skill carrying a catalogue and an absolute path; the agent reads the files with the tools it already has.
 
 ## What this layer is not
 
-Everything below is a **standing constraint**, not a phase that has passed. Each
-one names a mechanism this layer refuses to hold and why the refusal is
-load-bearing; the ADR
-[Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)
-carries the audit of the live installation that produced them.
+Everything below is a **standing constraint**, not a phase that has passed.
 
-**No derived index of any kind.** No vectors, no sidecar, no FTS5, no chunking,
-no fusion, no reindex — lazy or explicit — and no per-scope retrieval
-configuration. `search` is a literal match read off disk at call time, promoted
-from fallback to the answer: at hundreds of files an agent that reads a catalogue
-and greps a phrase is already finding what it came for, and a ranking layer buys
-it very little against a second thing to keep level with the disk, a dependency
-on a connection some installations do not have, and file text leaving the machine
-on a read. What the refusal buys is that **nothing derived stands between a query
-and a file**: nothing to rebuild, nothing to be stale, nothing to reconcile,
-nothing to exclude from a backup. Embeddings may earn their way back at a corpus
-size that needs them (see Assumptions); that would be a later decision, not a
-deferred piece of this one.
+**No derived index of any kind.** No vectors, no sidecar, no FTS5, no chunking, no reindex. Both lanes are files and nothing stands between a query and them. This survives the redesign unchanged and is the one place the constitution's Persistence constraint binds this layer directly.
 
-**No second retrieval surface on the web page.** A collection *is* a folder, so
-its page browses it and nothing else: one tree on the left, one read-only
-preview on the right, the same two panes a skill's Files tab is (FR-035). A
-search box sitting where the tree should be would be a second way to reach a
-file, with its own rules, stacked on top of the folder it was querying. The
-`search` route itself keeps the callers it was built for — `coffer__search` for
-agents, `coffer knowledge search` for the CLI.
+**No retrieval tool.** Coffer used to expose `list`, `grep`, `read` and `search`. It exposes none of them. An audit of 448 Claude Code sessions after the corpus was built found the delivered skill had never once been loaded and no knowledge tool had ever been called from that agent: the failure was never that literal matching missed, it was that nothing carried a hook the model could recognise. A tool an agent does not remember to call is not retrieval. What the agent already has — `Read`, `Grep` — needs no remembering, so the layer's job narrows to putting the right paths in front of it.
 
-**No structure that carries meaning.** Properties are not directories: there are
-no `notes/` ÷ `docs/` lanes, no `global` ÷ `project-<ULID>` ÷ collection axis, no
-cwd-derived scope, no auto-provisioning and no scope display labels. A collection
-is a folder the human made on purpose, and the nesting inside it is theirs.
+**No second retrieval surface on the web page.** A collection *is* two folders, so its page browses them and nothing else. The page is where a person reads and edits `sources/`; `topics/` is read-only there because it is read-only everywhere outside curation.
 
-**No source tracking around an ingested document.** The original is kept under
-`.raw/` so a bad conversion can be redone (FR-024) and that is all: no
-`source_mode`, no re-conversion lock, no external-source table, no re-conversion
-on a schedule.
+**No structure that carries meaning beyond write ownership.** `sources/` ÷ `topics/` is the only division the system assigns meaning to, and it means exactly "who may write here". There is no `global` ÷ `project-<ULID>` axis, no cwd-derived scope, no auto-provisioning and no scope display labels. Inside `sources/` the nesting is the person's; inside `topics/` it is curation's.
 
-**Ingestion is an additional entrance, never a required one.** Putting a Markdown
-file in the directory stays a complete way to add knowledge (FR-021). Upload
-exists because the filesystem is only reachable while the user is sitting at the
-machine, and their live entrance is a phone: a channel already accepts
-attachments (spec [channels](../channels/spec.md)) and the turn platform
-already extracts them for a turn (spec [chat](../chat/spec.md) FR-046), so sending a
-document to Coffer from that chat and having it land in a collection is the
-entrance this layer would otherwise lack — and it makes the Web upload the same
-path's other end.
+**No source tracking beyond the lane itself.** A source is a file in `sources/`; that is the whole of its provenance. There is no `source_mode`, no external-source table, no re-conversion on a schedule, and no hidden `.raw/` — an uploaded original is an ordinary, visible file in `sources/` beside the text extracted from it.
+
+**Ingestion is an additional entrance, never a required one.** Putting a Markdown file in `sources/` stays a complete way to add knowledge. Upload exists because the filesystem is only reachable while the user is at the machine, and their live entrance is a phone.
 
 ## User Scenarios & Testing
 
 ### User Story 1 — One knowledge store, every agent (Priority: P1)
 
-The developer works with Claude Code in the morning and Codex in the afternoon. In the morning an agent records that a service's login state is owned by `account.session`. In the afternoon a different agent finds it, because both read the same directory. No copy diverges, because there is only one copy.
+The developer works with Claude Code in the morning and Codex in the afternoon. In the morning an agent records that a service's login state is owned by `account.session`. By the afternoon that fact is in a topic document, and the second agent reads it, because both read the same directory. No copy diverges, because there is only one.
 
-**Independent Test**: from one MCP client write a fact; from a second client with a different agent identity, list the catalogue and read the file back.
+**Independent Test**: write a source through one MCP client; run a curation pass; confirm a topic document holding the fact, and read it back from a second client with a different agent identity.
 
 ### User Story 2 — Collections are the human's filing, and the unit of authorization (Priority: P1)
 
-Some knowledge is a company's internal detail and must not reach every agent the developer runs; some is about a side project and may reach any of them. The developer creates a collection deliberately, puts the sensitive material in it, and authorizes only the agents that may see it. Inside a collection they nest folders however they like; Coffer neither knows nor cares.
+Some knowledge is a company's internal detail and must not reach every agent the developer runs; some is about a side project and may reach any of them. The developer creates a collection deliberately, puts the sensitive material in it, and authorizes only the agents that may see it. Authorization now bites at **delivery**: the skill Coffer writes into an unauthorized agent's directory does not mention that collection, its catalogue or its path.
 
-**Independent Test**: create two collections, authorize one for a single agent, and confirm the other agent's catalogue and reads do not include it. Create a nested folder by hand and confirm the catalogue walks into it.
+**Independent Test**: create two collections, authorize one for a single agent, and confirm the other agent's delivered skill names neither the collection nor any path inside it.
 
-### User Story 3 — Find the right file without an index (Priority: P1)
+### User Story 3 — Find the right file without an index and without a tool (Priority: P1)
 
-An agent needs a fact it has no exact words for. It lists the collections, reads the one-line description of each, descends into the likely one, reads the titles and descriptions there, and either reads a file outright or greps for a literal string it now knows to look for.
+An agent needs a fact it has no exact words for. The skill's description, already in its context, names the domains the corpus covers; the agent recognises one, loads the skill, and gets the whole catalogue — every topic document's path, title and description — plus the absolute root. It then reads the file with its own `Read`.
 
-**Independent Test**: with a populated collection, call the catalogue at each level and confirm titles and descriptions come back; grep a CJK string and confirm the matching file and line.
+**Independent Test**: with a populated collection, confirm the delivered skill body carries every topic document's path/title/description and the absolute knowledge root, and that a path named in it resolves to a readable file.
 
-### User Story 4 — The human curates in their own tools (Priority: P2)
+### User Story 4 — The human curates the sources, not the topics (Priority: P2)
 
-The developer drops a Markdown file into a collection from Finder, corrects a wrong line in their editor, and deletes one that went stale. Every change is live for the next agent call with no import step, because the file *is* the knowledge.
+The developer drops a Markdown file into `sources/` from Finder, corrects a wrong line in a source in their editor, and deletes one that went stale. Each change is picked up and folded into the topics within the minute. They do not edit `topics/` — a correction goes into a source, and curation carries it through.
 
-**Independent Test**: add a file out-of-band and confirm it appears in the catalogue and in grep; edit one and confirm the new bytes are what `read` returns.
+**Independent Test**: add a source out-of-band, confirm the scan picks it up and a topic document reflects it; confirm `topics/` is never presented as editable on any surface.
 
-### User Story 5 — The agent knows the layer exists (Priority: P1)
+### User Story 5 — The agent knows what is in the corpus, not merely that it exists (Priority: P1)
 
-A skill Coffer delivers tells the agent this layer is here and how to work it. It arrives through the same channel that already delivers Coffer's other skills, so every managed agent gets it without a hook and without anything being written into the agent's own memory.
+A skill Coffer delivers names the domains the corpus covers in its description — the part that is always in the agent's context — and carries the full catalogue in its body. It arrives through the same channel that already delivers Coffer's other skills, so every managed agent gets it without a hook and without anything being written into the agent's own memory.
 
-**Independent Test**: with a managed agent bound, confirm the knowledge skill is present in its skill directory and names the catalogue-then-grep motion.
+**Independent Test**: with two collections and a managed agent bound, confirm the skill in that agent's directory is a real file (not a shared link), that its description names the collections' subjects, and that its body lists each topic document.
 
-### User Story 6 — Tidy, when the human asks for it (Priority: P3)
+### User Story 6 — Knowledge arrives through a conversation (Priority: P1)
 
-Notes accumulate and duplicate. The developer triggers a tidy pass that merges and rewrites them, having first archived every prior revision. They may also let it run on a timer, but only after switching it on — and, once the vault is synced, only on the one machine named as the tidy owner.
+The developer and an agent work something out together — why a build fails, who owns a service, what a flag actually does. The agent writes it down with `coffer__write`. It lands in `sources/` as raw material, and the next curation pass merges it into whichever topic document owns that subject, deduplicating against what is already there.
 
-**Independent Test**: run a tidy pass over a collection holding duplicates; confirm `.history/` holds the prior revisions and that the archived copies never appear in grep results.
+**Independent Test**: write two sources stating overlapping facts; run curation; confirm one topic document holds both facts and neither source was modified.
 
 ### User Story 7 — A document gets into the vault from wherever the user is (Priority: P1)
 
-The developer is handed a PDF in a chat. They forward it to their Coffer channel, say which collection it belongs in, and it lands there as Markdown with its title and description filled in, the original kept aside. At the desk they do the same thing by dropping the file on the Knowledge page. Either way it is a file in a collection afterwards, indistinguishable from one they wrote by hand. The chat side of that — the command, the confirmation, the refusal for anyone but the owner — is spec [channels](../channels/spec.md)'s; what this layer owes is one conversion path that a caller other than the Web page can reach.
+The developer is handed a PDF in a chat. They forward it to their Coffer channel, say which collection it belongs in, and both the original and the text extracted from it land in `sources/`. At the desk they do the same by dropping the file on the Knowledge page.
 
-**Independent Test**: upload a non-Markdown document through the REST surface and confirm a Markdown file appears in the collection with frontmatter, the original under `.raw/`, and the converted text readable by `read`.
+**Independent Test**: upload a non-Markdown document through the REST surface and confirm both the original and a Markdown file appear in `sources/`, and that a following curation pass produces a topic document from it.
 
-### User Story 8 — Get the file, not the line (Priority: P1)
+### User Story 8 — A correction is a fact with a date on it (Priority: P2)
 
-An agent knows a distinctive word or phrase and wants the *files* it appears in — and it cannot afford to page through a catalogue first. It searches for that phrase and gets back the handful of files that contain it, each with its title, description and the lines that matched, so it can tell what it found before reading any of them. Matching is literal, so a question phrased in the agent's own words finds nothing; the tool's description and the delivered skill both say so.
+A source says a service counts daily actives with a plain Set; the topic document says HyperLogLog, because an older source said so. Curation resolves it in favour of the newer source and leaves the correction visible in the prose, so a reader learns both what is true and that it changed.
 
-**Independent Test**: write a file containing a distinctive phrase, search for it, and confirm the file comes back with its title, description and the matching line; search for wording that appears nowhere and confirm an empty result rather than an error.
+**Independent Test**: curate a source contradicting an existing topic document; confirm the new fact is what the document asserts and that the superseded one is still legible as a correction.
 
 ## Acceptance Scenarios
 
-### Scenario: a written note lands as a markdown file with a readable name
+### Scenario: a written note lands in the sources lane
 
-- **Given** a `shopee` collection created through
-  `coffer knowledge create`
-- **When** `coffer knowledge write --in shopee` runs
-  against the daemon with the title `Account Gateway`, a description and
-  a body
-- **Then** the command exits 0 and the note is on disk at
-  `~/.coffer/knowledge/shopee/account-gateway.md` — the file name is the
-  title's own slug, and no id appears in it anywhere
+- **Given** a `shopee` collection created through `coffer knowledge create`
+- **When** `coffer__write` is called against the daemon with the title
+  `Account Gateway`, a description and a body
+- **Then** the note is on disk at
+  `~/.coffer/knowledge/shopee/sources/account-gateway.md` — inside `sources/`,
+  the file name is the title's own slug, and no id appears in it anywhere
+- **And** nothing is written under `topics/` by that call
 
 ### Scenario: frontmatter carries title, description and actor
 
 - **Given** an empty `shopee` collection
-- **When** a file is written into it with a title, a description and `actor`
+- **When** a source is written into it with a title, a description and `actor`
   `user`
-- **Then** the file's YAML frontmatter holds exactly `title`, `description`,
-  `actor`, `created_at` and `updated_at` and nothing besides, carries the
-  title and the actor it was given, and the body follows the fence unchanged
+- **Then** the file's YAML frontmatter holds `title`, `description`, `actor`,
+  `created_at` and `updated_at`, carries the title and the actor it was given,
+  and the body follows the fence unchanged
 
-### Scenario: a file added out-of-band is visible to the next call
+### Scenario: a source added out-of-band is curated by the next sweep
 
-- **Given** a Markdown file carrying `title` and `description` frontmatter
-  placed straight into the `shopee` collection as `dropped-by-hand.md`, by a
-  file manager rather than by Coffer
-- **When** the catalogue of `shopee` is listed, with no import, registration
-  or reindex step in between
-- **Then** the file's title is among that level's files and a `read` of
-  `shopee/dropped-by-hand.md` returns its body
+- **Given** a Markdown file placed straight into `shopee/sources/` as
+  `dropped-by-hand.md`, by a file manager rather than by Coffer
+- **When** the curation sweep runs, with no import or registration step in
+  between
+- **Then** a topic document under `shopee/topics/` carries the fact the file
+  stated, and the source file's frontmatter has gained `coffer_ingested_at`
 
 ### Scenario: the catalogue lists collections with their README description
 
@@ -151,70 +123,6 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
   edited, not the string the creation call supplied — the description is read
   off disk on every listing, never out of a row
 
-### Scenario: the catalogue lists one level of a collection
-
-- **Given** a collection holding one file at its root and a second file inside
-  a subdirectory of it
-- **When** the catalogue is listed for the collection itself — through
-  `list_level`, and through the `/knowledge` page in a real browser
-- **Then** the root file's title and the subdirectory's name come back, the
-  subdirectory reporting its file count of 1, and the nested file's own title
-  is absent from the level and from the page
-
-### Scenario: the catalogue walks into a nested directory
-
-- **Given** a file written into `shopee/account/core`, two directories below
-  the collection root
-- **When** the catalogue is listed at `shopee/account/core`
-- **Then** the level reports that exact path and the one file in it, so
-  nesting the human made is walkable rather than merely tolerated
-
-### Scenario: grep matches a literal string across a collection
-
-- **Given** two collections — `shopee` activated for `claude-code` alone and
-  `personal` activated for every agent — each holding a file whose body
-  contains 登录态
-- **When** `grep` is run for that string as `claude-code`, then again as
-  `codex`
-- **Then** the first call matches files in both collections and the second
-  only in `personal`: one grep spans every collection the calling agent is
-  authorized for, and no others
-
-### Scenario: grep matches CJK content
-
-- **Given** a note written through the CLI whose body reads
-  `account.session 负责登录态 token`
-- **When** `coffer knowledge grep 登录态 --json` runs
-- **Then** the command exits 0 and the matches name `shopee/session.md` — no
-  tokenizer, and nothing built between the write and the search
-
-### Scenario: grep skips hidden directories
-
-- **Given** a file whose body says `登录态 old revision`, archived into
-  its collection's `.history/` and then deleted from the collection itself
-- **When** `grep` is run for `old revision`
-- **Then** no match comes back at all: the archived revision is still on disk,
-  and `.history/` is never searched
-
-### Scenario: read returns a file by path
-
-- **Given** a note in `shopee` whose body is the one line
-  `account.session owns login state`
-- **When** `coffer knowledge read shopee/session.md` runs
-- **Then** the command exits 0 and that whole body is in its output — a path
-  is the only handle a read takes, and there is no chunk or passage in the
-  answer
-
-### Scenario: creating a collection registers a knowledge resource
-
-- **Given** a running daemon over an empty knowledge root
-- **When** `coffer knowledge create shopee` runs with the
-  description "Internal systems"
-- **Then** `coffer knowledge collections --json` lists exactly
-  `shopee` — the listing intersects the directory with the enabled `knowledge`
-  Resource rows, so appearing there is the registration — and its description
-  is the one given, now written into the collection's `README.md`
-
 ### Scenario: an unknown collection is an error, never auto-created
 
 - **Given** a knowledge root with no `typo` collection in it
@@ -222,111 +130,48 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 - **Then** the command exits non-zero and no `typo` directory exists
   afterwards: a read never provisions a collection
 
-### Scenario: a collection outside an agent's scope is absent from its catalogue
+### Scenario: a collection outside an agent's scope is absent from its skill
 
 - **Given** `shopee` activated for `claude-code` alone and `personal`
-  activated for every agent
-- **When** the collection list is asked for as `claude-code`, then as `codex`
-- **Then** the first answer names both collections and the second names only
-  `personal` — the restricted one is simply not in the other agent's catalogue
+  activated for every agent, both holding topic documents
+- **When** the skill is rendered for each agent and delivered
+- **Then** `claude-code`'s copy names both collections and lists both
+  catalogues, and `codex`'s copy names only `personal` — neither `shopee`,
+  its catalogue, nor any path inside it appears in the second file
 
-### Scenario: a collection outside an agent's scope cannot be read
+### Scenario: the two agents' skill files are independent copies
 
-- **Given** the same two collections, and a file inside `shopee`
-- **When** `codex` reads that file by its exact path, and lists the `shopee`
-  level
-- **Then** both raise `CollectionNotFound` — not a forbidden error, because
-  naming a collection the caller may not have is itself the disclosure — while
-  the same read as `claude-code` returns the file
+- **Given** both agents registered, a symlink left at one agent's
+  `skills/coffer-knowledge` by the previous shared-master delivery, and the
+  knowledge skill delivered to each
+- **When** each agent's `<config_dir>/skills/coffer-knowledge/SKILL.md` is read
+- **Then** neither is a symlink, the stale link has been replaced rather than
+  written through, and editing one does not change the other — per-agent
+  content is what makes delivery the authorization point
 
-### Scenario: write creates a file and replaces an existing one
+### Scenario: the skill body carries the catalogue and the absolute root
 
-- **Given** a file created by a first write into `shopee`
-- **When** a second write targets that file's own path with a new description
-  and a new body
-- **Then** the path is unchanged, the body is the new one, `created_at` still
-  says when the file was first written rather than now, and the collection
-  still holds exactly one file
+- **Given** a collection holding three topic documents
+- **When** the skill is rendered for an agent authorized for it
+- **Then** its body carries each document's collection-relative path, title and
+  description, and the absolute path of the knowledge root, and it instructs
+  the agent to read those files with its own tools
+- **And** the frontmatter `description` names the collection's subject, taken
+  from the collection's own `README.md`, so a model matching on it has
+  something to match
 
-### Scenario: delete removes the file from disk
-
-- **Given** a note on disk at `~/.coffer/knowledge/shopee/stale.md`
-- **When** `coffer knowledge delete shopee/stale.md` runs
-- **Then** the command exits 0 and the file no longer exists on disk
-
-### Scenario: a path escaping the knowledge root is rejected
-
-- **Given** the single path-construction module every surface resolves through
-- **When** it is asked to resolve `../etc/passwd`, `shopee/../../outside`, or
-  any path naming a hidden entry — `.history/old.md`,
-  `shopee/.raw/original.pdf`
-- **Then** each one raises `UnsafeKnowledgePath` rather than returning a
-  location outside the root or inside a directory the system keeps for itself
-
-### Scenario: the six built-in knowledge tools appear in the client tool list
-
-- **Given** a real daemon with an upstream MCP server registered, driven over
-  its `/mcp` endpoint by the MCP SDK so the SDK's own models validate every
-  frame
-- **When** the client initializes and calls `tools/list`
-- **Then** `coffer__list`, `coffer__grep`, `coffer__read`, `coffer__search`,
-  `coffer__write` and `coffer__delete` are all in the listing, beside the
-  upstream server's own tools
-- **And** `coffer__write` followed by `coffer__grep` over that same session
-  lands a note in a collection and finds it back, so the built-ins are
-  callable over the wire rather than merely advertised
-
-### Scenario: search returns the files a phrase appears in, with the lines that matched
-
-- **Given** a collection holding a file titled `Session Ownership`,
-  described as which service owns a login session, whose body is the one line
-  `account.session owns login state`
-- **When** `POST /api/v1/knowledge/search` is given that whole phrase,
-  and `coffer knowledge search` is given part of it
-- **Then** both answer with that file's own path among `results` — 200 for the
-  route, exit 0 for the CLI — and the route's hit carries the file's `title`,
-  its `description` and a non-empty list of the lines that matched, a file at
-  a time with no score or rank on it
-
-### Scenario: search spans only the collections the caller may see
-
-- **Given** two collections whose files both contain `login state`, the
-  second narrowed to the agent `only-agent` through the Resource framework's
-  own scope route
-- **When** the built-in `coffer__search` tool is called with the `agent`
-  argument the gateway writes in set to an unrelated agent
-- **Then** the results carry paths from the open collection and not one from
-  the narrowed one
-
-### Scenario: an uploaded document lands as markdown with frontmatter
+### Scenario: an upload lands both the original and its text in sources
 
 - **Given** a collection and a document sent into it — `notes.md` through the
   ingest service, `Runbook.txt` through `POST /api/v1/knowledge/upload`
 - **When** the upload is accepted (201 from the route)
-- **Then** it lands at a slug path inside the collection, its frontmatter
-  carries `actor: user` with the title taken from the document and a
-  description filled in, and a following `read` returns the converted text —
-  indistinguishable afterwards from a hand-written file
-- **And** the collection's file count is 1: the converted file is the only
-  thing the catalogue sees
-
-### Scenario: an uploaded original is kept under .raw/ and stays out of retrieval
-
-- **Given** a document uploaded into `shopee` carrying a marker word the
-  converter drops, and a phrase that survives into both the original and the
-  conversion
-- **When** the collection's catalogue, its `tree` route and a grep for each of
-  the two are read afterwards
-- **Then** the original sits at the collection's own `.raw/` root under the
-  converted file's name, byte-identical to what was sent and with its absolute
-  path reported as `raw_path`
-- **And** the marker that exists only in the original matches **nothing at
-  all**, while the phrase that exists in both is reported **only from the
-  converted file** — the second is what proves the first is exclusion rather
-  than a grep that has stopped working
-- **And** the `tree` response lists the converted file and **no directories**,
-  and the collection's file count counts only it, so `.raw/` is not offered as
-  somewhere to walk into either
+- **Then** the original sits in `sources/` under its own name and extension,
+  byte-identical to what was sent, and the extracted Markdown beside it with
+  frontmatter carrying `actor: user`
+- **And** an upload whose extraction *is* the upload — a `.md` file — lands as
+  exactly one file, reported as its own original, rather than as two copies the
+  curation pass would read as two sources
+- **And** no hidden `.raw/` directory exists anywhere in the collection
 
 ### Scenario: an upload of an unsupported type is refused with its reason
 
@@ -335,8 +180,7 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
 - **When** it is uploaded
 - **Then** the service raises `UnsupportedDocument` and the route answers 400
   `INGEST_REJECTED` whose details name `reason` `unsupported_type` and
-  `doc_type` `exe`, and the collection is left with no file and no `.raw/`
-  directory at all
+  `doc_type` `exe`, and the collection's `sources/` is left with no file at all
 
 ### Scenario: a document is never stored half-converted
 
@@ -344,183 +188,213 @@ An agent knows a distinctive word or phrase and wants the *files* it appears in 
   image-only PDF does
 - **When** it is uploaded
 - **Then** the upload is refused with the reason naming the document type, and
-  neither the converted file nor the original is written
+  neither the extracted Markdown nor the original is written
 
-### Scenario: tidy archives the prior revision before rewriting
+### Scenario: a document forwarded to a channel lands in a collection
 
-- **Given** a collection holding one file whose body is
-  `the original body`, an internal connection configured, and a pass
-  whose agent overwrites the first file it is shown
-- **When** the pass runs
-- **Then** it reports `ok`, the collection's `.history/` holds exactly one
-  archived file and that copy still contains the original body, and the live
-  file at the same path now holds the rewritten one
+- **Given** a paired channel whose owner has just sent `note.txt` as an
+  attachment, and one existing collection named `research`
+- **When** the owner follows it with the plain text `/save research`
+- **Then** the ingest service is called exactly once — that collection, that
+  file name, those bytes, `actor` `user` and the channel's own default agent —
+  and the channel replies with a confirmation naming both the file and the
+  collection
 
-### Scenario: tidy is a no-op when no internal model is configured
+### Scenario: curation writes topics and never touches sources
 
-- **Given** a collection with a file in it and no internal model connection at
-  all
-- **When** a tidy pass is run over it
-- **Then** it reports `no_model` and no `.history/` directory is created — the
-  pass did nothing, rather than failing part way through
+- **Given** a collection holding two sources stating overlapping facts and an
+  internal connection configured
+- **When** a curation pass runs over it
+- **Then** `topics/` holds a document carrying both facts, and both source
+  files are byte-identical to what they were except for the
+  `coffer_ingested_at` key added to their frontmatter
 
-### Scenario: the tidy worker stays off unless enabled
+### Scenario: curation is a no-op when no internal model is configured
 
-- **Given** the interval worker over one collection, with its enabled check
-  answering false
-- **When** a sweep runs
-- **Then** no collection is tidied at all; and with the same check switched to
-  true and the sweep repeated, that collection is tidied — the switch is read
-  per sweep rather than captured when the worker was built
+- **Given** a collection with a source in it and no internal model connection
+  at all
+- **When** a curation pass is run over it
+- **Then** it reports `no_model`, no topic document is written, and the
+  source's `coffer_ingested_at` is **not** set — so the material is curated
+  once a model is configured rather than silently skipped forever
 
-### Scenario: a second tidy pass over the same collection is refused while the first is running
+### Scenario: a pass is bounded to a handful of writes
+
+- **Given** a collection holding twenty topic documents and one new source
+- **When** a curation pass runs and its agent attempts eleven writes
+- **Then** the pass stops at the eighth and reports the bound, and the writes
+  that did land are complete files rather than truncated ones
+
+### Scenario: a pass sees candidates and the catalogue, never the sources lane
+
+- **Given** a collection whose `sources/` holds the triggering source and nine
+  others
+- **When** the pass is assembled
+- **Then** the model is given the triggering source, at most five candidate
+  topic documents in full, and every topic document's title and description —
+  and the pass's tool surface offers no way to read, list or write anything
+  under `sources/`
+
+### Scenario: the pass is instructed that a contradicting source wins
+
+- **Given** the instructions a curation pass hands its model
+- **When** they are read
+- **Then** they state that where a source contradicts a topic document the
+  source wins, and that the superseded statement must stay legible with the
+  date it changed — the rule lives in the instructions because no code can
+  adjudicate a contradiction, so the instructions are what this scenario pins
+
+### Scenario: a curated topic carries no file-name reference
+
+- **Given** a pass whose model writes a document whose body names another
+  document's file name
+- **When** the write is applied
+- **Then** it is refused and reported, because invariant 3 is enforced at the
+  write rather than asked for in a prompt
+
+### Scenario: a source is curated once, not on every sweep
+
+- **Given** a source already carrying `coffer_ingested_at` later than its own
+  modification time
+- **When** the sweep runs
+- **Then** no pass is started for it; and with the file touched afterwards, the
+  next sweep does start one
+
+### Scenario: a second curation pass over the same collection is refused while the first is running
 
 - **Given** two collections, and a pass already in flight over `shopee` held
   in the daemon's in-flight registry
-- **When** a tidy is requested for `shopee` over the route that starts one
+- **When** a pass is requested for `shopee` over the route that starts one
 - **Then** it is refused 409 `UPKEEP_ALREADY_RUNNING` rather than queued,
-  while the same request for the other collection answers 200 — the bound is
-  per collection, not vault-wide
+  while the same request for the other collection answers 200
 - **And** once the in-flight record is released the previously refused request
   answers 200
 
-### Scenario: the knowledge skill is delivered to a managed agent
+### Scenario: exactly one built-in knowledge tool appears in the client tool list
 
-- **Given** a fresh installation whose daemon has completed one startup, so the
-  skill is in Coffer's master store under `~/.coffer/skills/` and no agent is
-  registered yet
-- **When** an agent is registered with its own config directory, and that
-  agent's `<config_dir>/skills/` is read afterwards
-- **Then** Coffer records a binding naming that agent, and the skill's
-  `SKILL.md` is readable **through the agent's own directory** — not merely
-  present in master, and not a dangling link
-- **And** that file declares the skill's name in its frontmatter and names
-  `coffer__list`, `coffer__read`, `coffer__grep` and `coffer__write` in its
-  body, so catalogue-then-grep is what an agent reads rather than a bare list
-  of tools
+- **Given** a real daemon with an upstream MCP server registered, driven over
+  its `/mcp` endpoint by the MCP SDK so the SDK's own models validate every
+  frame
+- **When** the client initializes and calls `tools/list`
+- **Then** `coffer__write` is in the listing beside the upstream server's own
+  tools, and `coffer__list`, `coffer__grep`, `coffer__read`, `coffer__search`
+  and `coffer__delete` are **absent**
+- **And** a `coffer__write` call over that same session lands a file in the
+  collection's `sources/`
 
-### Scenario: the viewer renders content read-only and offers open and reveal
+### Scenario: a path escaping the knowledge root is rejected
 
-- **Given** a collection page whose tree holds one file
-- **When** that file's row in the tree is clicked
-- **Then** its body renders in the pane beside the tree, together with an
-  open-in-editor button and a reveal button, and the page carries no textbox
-  for the body or the content and no tab at all — one tree rather than a lane
-  pair, and every edit leaves the app
+- **Given** the single path-construction module every surface resolves through
+- **When** it is asked to resolve `../etc/passwd`, `shopee/../../outside`, or
+  any path naming a hidden entry
+- **Then** each one raises `UnsafeKnowledgePath` rather than returning a
+  location outside the root
 
-### Scenario: migration rewrites ULID documents into named files in collections
+### Scenario: the viewer edits sources and renders topics read-only
 
-- **Given** a pre-0066 vault — ULID-named files under `global/docs` and
-  `project-01ABC/notes`, a `.raw/` duplicate beside them, and a `documents`
-  row whose title, a Chinese gloss of the service, exists nowhere but that row
-- **When** the database is upgraded to `0066`
-- **Then** the document is a named file under a `shopee` collection whose file
-  name carries the title's words and no ULID, and whose frontmatter holds that
-  title with `actor: user` and neither `source_filename` nor `converter`
-- **And** the hand-written note is under a `coffer` collection keeping its own
-  title and `actor: agent`; `global/`, `project-01ABC/` and every `.raw/`
-  directory are gone; `documents`, `chunks`, `documents_fts` and
-  `embedding_config` no longer exist; and the `knowledge` Resource rows are
-  exactly `shopee` and `coffer`
+- **Given** a collection page whose two trees hold one file each
+- **When** each file's row is clicked
+- **Then** the source offers open-in-editor, reveal and delete, and the topic
+  document offers open and reveal only — no delete, no editor, and a note
+  saying it is written by curation
+
+### Scenario: migration moves the corpus into sources and clears topics
+
+- **Given** a pre-migration vault — named Markdown files at a collection's
+  root, a `.raw/` directory beside them and a `.history/` directory
+- **When** the database is upgraded
+- **Then** every Markdown file that was content is under that collection's
+  `sources/`, every `.raw/` original is under `sources/` too as a visible file,
+  `topics/` exists and is empty, and `.raw/` and `.history/` are gone
+- **And** the collection's `README.md` stays at the collection root, outside
+  both lanes
 
 ## Requirements
 
 ### Storage
 
-- **FR-001**: Knowledge MUST be stored as Markdown files under `~/.coffer/knowledge/<collection>/`. The files are the **sole source of truth**, and nothing derived may stand between a query and them: the system MUST NOT keep a retrieval index of any kind — no vectors, no sidecar, no cache — so every answer is read off disk at call time.
-- **FR-002**: A file's **path is its identity**. There MUST be no separate id field in frontmatter and no id-to-path mapping anywhere. File names MUST be human-readable slugs derived from the title; a collision appends a short suffix.
-- **FR-003**: Every file MUST carry YAML frontmatter with `title`, `description`, `actor` (`agent` | `user`), `created_at` and `updated_at`, and nothing else. `description` is **required**, not optional: search matches literally, so the catalogue is the retrieval surface for anything the caller cannot quote, and a file that fails to describe itself is unfindable.
-- **FR-004**: A collection MAY contain arbitrarily nested subdirectories. The system MUST NOT assign them meaning, MUST NOT require them, and MUST NOT create them.
-- **FR-005**: Hidden entries (dot-prefixed) MUST be excluded from the catalogue and from grep. `.history/` is the only one the system itself writes.
+- **FR-001**: Knowledge MUST be stored as files under `~/.coffer/knowledge/<collection>/` in exactly two lanes: `sources/`, holding the material a person or an agent contributed, and `topics/`, holding the documents curation derives from it. The files are the only copy; the system MUST NOT keep a retrieval index of any kind — no vectors, no sidecar, no cache — so every answer is read off disk at call time.
+- **FR-002**: A file's **path is its identity** in both lanes. There MUST be no separate id field in frontmatter and no id-to-path mapping anywhere. File names MUST be human-readable slugs derived from the title; a collision appends a short suffix.
+- **FR-003**: Every Markdown file in either lane MUST carry YAML frontmatter with `title`, `description`, `actor` (`agent` | `user`), `created_at` and `updated_at`. A file in `sources/` MAY additionally carry `coffer_ingested_at`, which Coffer writes and nothing else reads; no other key is permitted in either lane. A non-Markdown file in `sources/` carries no frontmatter, and the Markdown extracted from it carries the lane's.
+- **FR-004**: `sources/` MAY contain arbitrarily nested subdirectories, and the system MUST NOT assign them meaning, require them, or create them. The nesting under `topics/` is **chosen by curation**, which MAY create and remove directories there.
+- **FR-005**: Hidden entries (dot-prefixed) MUST be excluded from every listing. The system itself MUST write none: `.history/` and `.raw/` are removed, their jobs taken by `sources/` being the recoverable truth and being visible.
 - **FR-006**: Every name that becomes a path segment MUST pass a traversal guard, and path construction MUST live in exactly one module.
+- **FR-007**: A collection's `README.md` MUST sit at the collection root, outside both lanes, and MUST NOT be curated, listed as content, or counted.
 
 ### Collections
 
-- **FR-007**: A **collection** is a top-level subdirectory of the knowledge root and is one `knowledge` Resource. It MUST be created deliberately — through the REST/CLI/UI surface — and MUST NOT be provisioned by a read, a write, or an agent's working directory.
-- **FR-008**: The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `global` scope, no `project-<ULID>` naming, no git-root resolution and no scope-to-project-root mapping table.
-- **FR-009**: A collection MUST support the Resource framework's **per-agent scope**: an agent sees, greps, reads and writes only the collections activated for it. An agent's calls MUST span **every** collection it is authorized for — there MUST be no rule that leaves an authorized collection out of a default. The identity a call is authorized as MUST be the session's handshake identity (spec [mcp-gateway](../mcp-gateway/spec.md)), written into the call by the gateway as an `agent` argument that no tool advertises in its input schema; a value a client supplies under that name MUST be discarded, never honoured.
-- **FR-010**: A collection's one-line description MUST be the first paragraph of a `README.md` in its directory, absent when there is none. It MUST NOT be stored in the database.
-- **FR-011**: Per-agent authorization is enforced at the MCP tool surface only, and the system MUST describe it as such: it prevents mistaken retrieval, not deliberate filesystem access.
+- **FR-008**: A **collection** is a top-level subdirectory of the knowledge root and is one `knowledge` Resource. It MUST be created deliberately — through the REST/CLI/UI surface — and MUST NOT be provisioned by a read, a write, or an agent's working directory. Creating one MUST create both lanes.
+- **FR-009**: The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `global` scope, no `project-<ULID>` naming, no git-root resolution and no scope-to-project-root mapping table.
+- **FR-010**: A collection MUST support the Resource framework's **per-agent scope**, and that scope MUST be enforced **at delivery**: the skill rendered for an agent MUST name only the collections activated for it, and MUST NOT disclose an unauthorized collection's name, catalogue, description or path. `coffer__write` MUST additionally refuse a write into a collection the calling agent is not activated for, using the session's handshake identity (spec [mcp-gateway](../mcp-gateway/spec.md) FR-013) written in as an `agent` argument no tool advertises and no caller can set.
+- **FR-011**: A collection's one-line description MUST be the first paragraph of its `README.md`, absent when there is none, and MUST be read off disk on every listing. It MUST NOT be stored in the database — not even in the `resources` row's own generic `description` column, which for this kind stays empty: a copy written once and read by nothing is wrong from the first time the person edits the file. It is also what the delivered skill's own description draws on (FR-036), so a collection that fails to describe itself is a collection an agent never recognises.
+- **FR-012**: Per-agent authorization is **non-disclosure, not access control**, and the system MUST describe it as such: an agent that is not told a path can still read it with the shell tools it has. It prevents mistaken retrieval, not deliberate access.
 
-### Retrieval
+### The sources lane
 
-- **FR-012**: The catalogue MUST be **generated at call time** by walking the directory and reading frontmatter. The system MUST NOT materialize it to a file or a table.
-- **FR-013**: `list` MUST walk **one level at a time**: with no path it returns every collection the caller may see, each with its README description and its file count; with a path it returns that directory's immediate subdirectories and files, each file with its `title` and `description`.
-- **FR-014**: `grep` MUST run ripgrep over the files of the collections the caller may see, matching literally or by regex, recursively, and returning file, line number and matching line. Matches MUST be bounded and the response MUST flag truncation. Ripgrep is preferred, not required: on a machine with no `rg` on the `PATH` the same search MUST run in a built-in Python walk over the same files with the same semantics — hidden entries skipped, regex per line, the same bounds and the same truncation flag — so a caller sees no difference beyond speed, and the daemon MUST log the fallback once.
-- **FR-015**: `read` MUST return a file's full text by path. There MUST be no chunking, no passage granularity and no `top_k`.
-- **FR-016**: `search` MUST answer a text query with the **files** the query appears in, each with its path, `title`, `description` and the lines that matched, bounded to a handful of files and a few matched lines each. It MUST use the same matcher `grep` uses — a regular expression, case-sensitive — over the same files; the two tools differ only in what they report, `grep` a line at a time and `search` a file at a time. There MUST be no score, no ranking, no heading, no retrieval *mode* on any surface and no second way an answer can be reached. Because matching is literal, `search` MUST say so where a caller reads it: the tool's own description MUST tell the agent to give it a distinctive word or exact phrase rather than a question in its own words.
-- **FR-017**: A file MUST be searchable the instant it lands, with no reindex step — not because a freshness rule keeps an index level with the disk, but because there is no index to keep level. `search` reads the files themselves at call time, so a file written by an editor, a channel, `write` or `git` is found by the next call.
-- **FR-018**: `search` MUST be confined to the files under the collections the caller may see and MUST skip hidden directories (`.history/`, `.raw/`). It MUST NOT send a file's content anywhere: search runs entirely on this machine and needs no connection of any kind.
+- **FR-013**: `sources/` MUST be writable by exactly three entrances — a person using their own tools, an upload, and `coffer__write` — and by nothing else. Curation MUST NOT write, move or delete anything in it.
+- **FR-014**: `coffer__write` MUST create a file in a named collection's `sources/` from `title`, `description` and body text, or replace one at an existing source path. A write MUST be a plain file write — no LLM, no conversion, no indexing step — and MUST record one `mcp_invocations` row and one audit event naming the calling agent. A write naming a collection the caller may not write MUST be refused with the collections it **may** write: that discloses exactly what this agent's own delivered skill already lists, and it turns a dead end into a correction for a model that reached for the tool without opening the skill.
+- **FR-015**: Placing a file in `sources/` MUST remain a complete way to add knowledge — no import, no registration, no conversion step. Ingestion below is an additional entrance, never a required one.
+- **FR-016**: The system MUST accept a document upload into a named collection and convert it to Markdown. Supported inputs MUST be exactly what `markitdown` handles plus plain text and CSV; an unsupported type MUST be refused with the type named, never stored half-converted. Both the **original** and the extracted Markdown MUST land in `sources/`, the original under its own name and extension and byte-identical to what was sent — **except** when the extraction is the upload itself, as it is for a Markdown or plain-text file, where the file that landed *is* the original and a second copy would be one document in the lane twice and two curation passes over the same facts.
+- **FR-017**: The extracted Markdown MUST carry FR-003's frontmatter — `title` from the document (falling back to its file name) and `description` filled in, by the internal connection when one is configured and from the document's opening prose when not.
+- **FR-018**: A document sent to a Coffer channel MUST be ingestible into a collection through the same path, so the phone and the Knowledge page are two ends of one entrance (spec [channels](../channels/spec.md)). The channel MUST confirm the collection with the owner before storing, and MUST NOT store anything from a non-owner.
+- **FR-019**: Upload MUST be bounded: one file per call, a size ceiling, and a refusal that names the limit. A conversion failure MUST leave neither file behind.
+- **FR-020**: Deleting a source MUST be a person's action, offered on the REST, CLI and web surfaces. No agent-facing tool may delete anything in either lane.
 
-### Writing and ingestion
+### Curation
 
-- **FR-019**: `write` MUST create a file from `title`, `description` and body text, or replace one when given an existing path. A write MUST be a plain file write — no LLM, no conversion, no indexing step.
-- **FR-020**: `delete` MUST remove a file from disk.
-- **FR-021**: Placing a Markdown file in the directory MUST remain a complete way to add knowledge — no import, no registration, no conversion step. Ingestion below is an additional entrance for the cases where the filesystem is out of reach, never a required one.
-- **FR-022**: The system MUST accept a document upload into a named collection and convert it to Markdown. Supported inputs MUST be exactly what `markitdown` handles plus plain text and CSV; an unsupported type MUST be refused with the type named, never stored half-converted.
-- **FR-023**: A converted document MUST land as an ordinary Markdown file, indistinguishable afterwards from one written by hand: a readable slug for a name, and FR-003's frontmatter — `title` from the document (falling back to its file name) and `description` filled in, by the internal connection when one is configured and from the document's opening prose when not.
-- **FR-024**: The uploaded original MUST be kept under a single hidden `.raw/` directory at the **collection's root**, at the converted file's path relative to that root, so a bad conversion can be redone from the bytes the user sent. `.raw/` MUST be excluded from the catalogue, from grep and from search, and MUST be removed when its converted file is deleted. Coffer MUST NOT re-convert it on a schedule or track it as an external source; both mechanisms existed once and neither was ever used.
-- **FR-025**: The ingest path MUST be reachable by a caller that is **not the Web page** — `coffer knowledge upload`, and any in-process caller that reaches it through a port rather than an import — and MUST apply exactly the conversion, naming, frontmatter, `.raw/` and refusal rules of FR-022, FR-023, FR-024 and FR-026 whichever caller invoked it. There MUST be exactly **one** conversion path and no caller-specific ingest variant, so the phone and the Knowledge page stay two ends of one entrance. What a chat caller does *before* reaching it — recognising the command, confirming the collection with the owner, refusing a non-owner — is that surface's own requirement (spec [channels](../channels/spec.md)), not this layer's.
-- **FR-026**: Upload MUST be bounded: one file per call, a size ceiling, and a refusal that names the limit. A conversion failure MUST leave neither a Markdown file nor a `.raw/` original behind.
+- **FR-021**: Curation MUST be the **only** writer of `topics/`. It is a bounded agentic pass driven by the internal model connection, whose tool surface is exactly `list_topics`, `read_topic`, `write_topic` and `retire_topic`. Nothing in that surface may reach `sources/`.
+- **FR-022**: A pass MUST be triggered when material changes: immediately for the entrances Coffer serves itself (`coffer__write`, upload, channel ingest), and by a **sweep on an interval** that finds files changed out-of-band by comparing each source's modification time with its `coffer_ingested_at`. The interval MUST be read per sweep rather than captured at boot.
+- **FR-023**: A pass MUST be assembled from a **bounded** context: the triggering source in full, at most **five** candidate topic documents in full, and the collection's full catalogue of titles and descriptions. Candidates MUST be selected by literal matching of distinctive strings drawn from the source against `topics/`; the catalogue is present so the model can conclude that none of the candidates is the right home and open a new document instead.
+- **FR-024**: A pass MUST preserve every fact it is shown. Merging MUST integrate rather than regenerate, and `retire_topic` MUST be permitted only for a document whose content the same pass has written elsewhere.
+- **FR-025**: A pass MUST be bounded to at most **eight** writes and to a recursion limit, and MUST report reaching either. A single source MUST NOT be able to trigger a corpus-wide rewrite.
+- **FR-026**: Where a source contradicts a topic document, the **source wins**, and the resulting document MUST keep the superseded statement legible as a correction with the date it changed. A contradiction is knowledge about the world changing, and when it changed is itself worth keeping.
+- **FR-027**: A topic document MUST NOT contain a reference to another knowledge file by file name or path. This MUST be enforced at `write_topic` — a write that carries one is refused and reported — rather than requested in a prompt.
+- **FR-028**: After a pass completes, every source it consumed MUST have `coffer_ingested_at` written into its frontmatter, and nothing else about the file may change. A pass that does not complete MUST leave the watermark unset, so the material is curated later rather than lost.
+- **FR-029**: With no internal model connection configured, a pass MUST be a clean no-op reporting `no_model`: no topic written, no watermark set, no directory created.
+- **FR-030**: Only **one pass per collection** may run at a time, whoever started it. A manual trigger arriving while a pass is in flight MUST be refused (`UPKEEP_ALREADY_RUNNING`, 409) rather than queued, and the sweep MUST skip a collection already being curated. Which collections are being curated right now MUST be readable. The record is per-daemon and does not outlive it.
+- **FR-031**: A pass and a vault-sync converge round MUST NOT overlap — both write the vault — so they MUST take the same lock, and a pass MUST be skipped while a conflict or pending confirmation is outstanding (spec [vault-sync](../vault-sync/spec.md)).
+- **FR-032**: Because a pass rewrites synced content unattended, it MUST run on one machine only: the `internal_engine_config` pair `auto_curate_enabled` and `curate_owner_machine_id` MUST both be read on every sweep, so the switch reads as *on, here* rather than merely *on*. Unlike the pass it replaces, `auto_curate_enabled` defaults **on**, because curation is now the only path from a source to something an agent can read.
 
 ### Tools and delivery
 
-- **FR-027**: Coffer's MCP gateway MUST expose exactly **six** built-in knowledge tools under the `coffer__` prefix: `list`, `grep`, `read`, `search`, `write`, `delete`. Upload is not among them — a document enters through a human surface (the Knowledge page or a channel), not through an agent's tool call.
-- **FR-028**: Built-in invocations MUST continue to record one `mcp_invocations` row (tool, actor, duration, outcome — no arguments, no content). A write or delete MUST additionally record an audit event with the agent as actor.
-- **FR-029**: Coffer MUST deliver a **knowledge skill** through the existing skill-delivery channel (spec [skill-manager](../skill-manager/spec.md)), teaching the catalogue-then-grep motion and when to reach for `search` instead. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
-
-### Tidy
-
-- **FR-030**: The system MUST provide a bounded agentic **tidy** pass over a collection, driven by the internal model connection, whose tool surface is the four file operations — `list`, `read`, `write`, `delete`. It MUST copy a file's prior revision into `.history/` before any overwrite or merge. With no internal connection configured it MUST be a clean no-op.
-- **FR-031**: Tidy MUST be triggerable by hand from the UI and from `coffer knowledge tidy` — the CLI spells the pass the way this spec spells it, so a reader who knows one knows the other. A background worker MAY run it on an interval, governed by one **installation-wide setting that is off by default**, and that setting MUST **name a machine**. It is a pair on the singleton `internal_engine_config` row: `auto_tidy_enabled`, the switch, and `tidy_owner_machine_id`, a `machine_id` from the sync machine registry (spec [vault-sync](../vault-sync/spec.md)) that is null until an owner is chosen. The worker MUST read both on every tick, so the switch reads as *on, here* rather than merely *on*. Both the switch and the interval MUST be settable by the operator and MUST be read per pass rather than at boot, so a change takes effect without a daemon restart (spec [internal-engine](../internal-engine/spec.md)). What that named machine then means once the vault is synced — that the setting travels with the vault, that a pass and a converge round never overlap, and that an edit made elsewhere beats the owner's deletion — is spec [vault-sync](../vault-sync/spec.md)'s, which owns that rule across every tree it syncs rather than for this one alone.
-- **FR-032**: `.history/` MUST be dot-prefixed and therefore excluded from the catalogue and from grep.
-- **FR-033**: Only **one tidy pass per collection** may run at a time, whoever started it. The pass runs for minutes and rewrites the collection's files, so a second pass over the same collection is not a faster tidy but two writers over one directory. A manual trigger that arrives while a pass is in flight MUST be **refused** rather than queued (`UPKEEP_ALREADY_RUNNING`, 409) — the caller asked to start a pass, and no pass is going to start — and the interval worker MUST **skip** a collection that is already being tidied rather than wait behind it, since its next sweep comes round again anyway. Which collections are being rewritten right now MUST be readable, so a surface that opens mid-pass shows the pass instead of an idle button that invites the second click. The record is per-daemon and does not outlive it: a pass lives in the process that was asked for it, so a restart ends it and the reading comes back empty, which is the truth rather than a lost record.
+- **FR-033**: Coffer's MCP gateway MUST expose exactly **one** built-in knowledge tool: `coffer__write`. There MUST be no `list`, `grep`, `read`, `search` or `delete`. An agent reads knowledge with its own file tools at the paths the skill gives it.
+- **FR-034**: Coffer MUST write a generated **knowledge skill** into each registered agent's own skill directory — the same `<config_dir>/skills/` spec [skill-manager](../skill-manager/spec.md) delivers into, but as a file this layer owns and regenerates rather than a registered skill Resource, because its content differs per agent and a shared master cannot express that. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
+- **FR-035**: The skill MUST be **generated per agent**, not shared: its content depends on which collections that agent may see (FR-010), so each agent's copy MUST be real bytes rather than a link into one master folder, and a delivery MUST replace a link left by an earlier design rather than write through it. It MUST be re-rendered whenever the catalogue changes — after a curation pass, a collection's creation or deletion, or a scope change — and delivery MUST never raise: a failure leaves the corpus readable at paths a person can still give an agent.
+- **FR-036**: The skill's **frontmatter description** MUST name the subjects the agent's authorized collections cover, drawn from their READMEs. It is the only part of this layer that is always in a model's context, so it MUST carry matchable specifics rather than a description of the layer.
+- **FR-037**: The skill's **body** MUST carry the absolute path of the knowledge root, and, for each authorized collection, every topic document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools and to reach for `coffer__write` when it learns something durable.
+- **FR-038**: The MCP gateway's own instructions text MUST describe this layer as it now is — a directory read with the agent's own tools, with the catalogue in the skill — and MUST NOT name a retrieval tool.
 
 ### Surfaces
 
-- **FR-034**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list the catalogue at a path, read a file, search, upload a document, write a file, delete one, and trigger tidy. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source, embedding-configuration or per-scope settings endpoint.
-- **FR-035**: The web UI MUST present a collection as a **two-pane file browser**, the same one a skill's folder gets (spec [skill-manager](../skill-manager/spec.md)): a **single tree** on the left — no lane tabs, opened a directory at a time as FR-013 lists it — and the file chosen from it on the right, rendered **read-only** through the unified file preview with open-in-external-editor and reveal-in-file-manager on it and its folder. There MUST be no in-app editor. It MUST offer upload into the collection in view, and MUST offer **deleting the file being previewed** — the one write the page carries, since until it existed the UI could delete a whole collection and not one file out of it. That delete MUST name the exact path before it runs, MUST report a refusal in place rather than closing on it, and MUST leave the preview on no file rather than on a path that is gone. The page MUST NOT carry a retrieval box of its own: the one input beside the tree narrows the names already on screen, client-side, and reading the files themselves is `search` and `grep`, whose callers are the agents' tools and the CLI. There is nothing to report about index freshness and no rebuild to offer.
-- **FR-036**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
+- **FR-039**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list a lane at a path, read a file, write a source, upload a document, delete a source, and trigger curation. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source, embedding-configuration or per-scope settings endpoint. These surfaces serve the human and the UI; they are not an agent's retrieval path.
+- **FR-040**: The web UI MUST present a collection as **two trees** — `sources/` and `topics/` — with the file chosen from either rendered read-only in the pane beside them, through the unified file preview with open-in-external-editor and reveal-in-file-manager. A source MUST additionally offer delete, naming the exact path before it runs, reporting a refusal in place, and leaving the preview on no file afterwards. A topic document MUST offer no delete and no editor, and MUST be labelled as written by curation. The page MUST offer upload into the collection in view and a manual curation trigger that reports a pass already in flight. It MUST NOT carry a retrieval box: the one input beside a tree narrows the names already on screen, client-side.
+- **FR-041**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
+
+### Migration
+
+- **FR-042**: One migration MUST rewrite the on-disk corpus: every content file at a collection's root moves into that collection's `sources/`, every `.raw/` original moves into `sources/` as a visible file beside it, `topics/` is created empty, and `.raw/` and `.history/` are removed. `README.md` stays at the collection root. It MUST also retire the previous delivery: the shared `coffer-knowledge` skill Resource, its master folder and every link to it go, so no agent is left holding a stale shared copy beside its generated one. The migration MUST be one-way, with **no compatibility shim left behind**.
+- **FR-043**: The migration MUST back the knowledge root up before it writes, and MUST report where. The corpus is the user's own writing and this migration empties the lane an agent reads until the first curation pass runs.
+- **FR-044**: `auto_curate_enabled` MUST be seeded on, and `curate_owner_machine_id` MUST default to the machine the migration runs on, so a vault that has just been migrated curates itself rather than staying dark until the setting is found.
 
 ### Constraints
 
-- **FR-037**: This layer MUST carry **no vector-store or embedding-model dependency**: `sqlite-vec`, `fastembed`, mem0, chroma and LlamaIndex MUST NOT appear in the dependency set, and no vector may be computed, fetched or stored anywhere. Search is ripgrep where the machine has it and the built-in literal walk of FR-014 where it does not — neither is an index. `markitdown` is this layer's converter as well as the channel's; the importlinter contract MUST admit exactly those two consumers and no others.
-- **FR-038**: The knowledge layer MUST NOT add any table to `coffer.db`, and MUST NOT create a directory of its own outside the knowledge root. A collection is a row in the kind-agnostic `resources` table like every other Resource; everything else this layer holds is a file the human can open.
-
-## Migration history
-
-The move to plain files was one guarded migration, and it has run: it is not a
-standing obligation, so it is recorded here rather than as a requirement.
-
-That migration dropped every knowledge-specific table — `documents`, `chunks`,
-the six `documents_fts*` tables, `embedding_config`, `knowledge_scope_labels`,
-`knowledge_scope_project_roots` — guarded so a database missing any of them
-still upgraded. Before the tables went, a data migration rewrote the on-disk
-corpus: each document's `title`, which lived only in the database, became its
-file name and its frontmatter; files moved out of `notes/` and `docs/` into
-collections; `.raw/` was deleted. The scopes of the day landed as two
-collections, `shopee` for the documents about internal systems and `coffer` for
-the project's own. It is **one-way, with no compatibility shim left behind** —
-`downgrade` raises, because the id-shaped names and the `.raw/` copies cannot be
-reconstructed.
-
-The rewrite module is still shipped and still covered: the acceptance scenario
-"migration rewrites ULID documents into named files in collections" guards it,
-which is why the scenario outlives the requirements.
+- **FR-045**: This layer MUST carry **no vector-store or embedding-model dependency**: `sqlite-vec`, `fastembed`, mem0, chroma and LlamaIndex MUST NOT appear in the dependency set, and no vector may be computed, fetched or stored anywhere. `markitdown` is this layer's converter as well as the channel's; the importlinter contract MUST admit exactly those two consumers and no others.
+- **FR-046**: The knowledge layer MUST NOT add any table to `coffer.db`, and MUST NOT create a directory of its own outside the knowledge root. A collection is a row in the kind-agnostic `resources` table like every other Resource; everything else this layer holds is a file the human can open.
 
 ## Success Criteria
 
-- **SC-001**: A fact written by one agent is readable by a different agent through the catalogue, with no index step in between.
-- **SC-002**: A file the human adds or edits outside Coffer is returned by the next call with no import, reindex or reconciliation.
-- **SC-003**: An agent authorized for one collection cannot see another through any built-in tool.
-- **SC-004**: The layer holds no knowledge-specific table in `coffer.db` and keeps no derived copy of a file's content anywhere.
-- **SC-005**: A grep over the corpus returns matching file and line, including for CJK content, without a tokenizer.
-- **SC-006**: A file added out-of-band is returned by the next `search` with nothing rebuilt in between: the installation holds no index directory, no sidecar and no reindex command to find.
-- **SC-007**: A document handed to the ingest path by a caller other than the Web page is a Markdown file in the intended collection afterwards, with its original recoverable, and the agent reads it the same way as any other file.
-- **SC-008**: `search` works on a fresh installation with nothing configured at all — no connection, no index, no setting.
+- **SC-001**: A fact written by one agent is readable by a different agent as a curated topic document, with no index step in between.
+- **SC-002**: A source the human adds or edits outside Coffer is folded into the topics by the next sweep, with no import or reconciliation.
+- **SC-003**: An agent authorized for one collection is never told the name, path or contents of another.
+- **SC-004**: The layer holds no knowledge-specific table in `coffer.db` and keeps no derived copy of a file's content anywhere outside `topics/`, which is itself rebuildable from `sources/`.
+- **SC-005**: Deleting `topics/` entirely and re-running curation reproduces a corpus carrying the same facts.
+- **SC-006**: The gateway advertises exactly one knowledge tool, and an agent reaches every topic document without calling it.
+- **SC-007**: A document sent from a channel is a file in the intended collection's `sources/` afterwards, with its original beside it.
+- **SC-008**: Two agents with different authorizations hold two different `SKILL.md` files, neither of which is a link to a shared one.
 
 ## Assumptions
 
-- The corpus stays in the hundreds of files. The catalogue still fits an agent's context at that size and ripgrep over that many files is instant, so `search` is an addition to catalogue-then-grep rather than a replacement. Tens of thousands of files, or a corpus an agent genuinely cannot navigate by name, would be a different design and a different decision — and the place embeddings would be reconsidered.
-- Tidy rewrites files with no review step, so `.history/` is the whole safety net. It ships off by default for that reason.
-- The internal connection is the one place user content may leave the machine, exactly as spec [chat](../chat/spec.md) FR-045 already establishes for voice transcription. Search never uses it — it reads no further than the disk — so the only knowledge text that goes there is what a tidy pass (FR-030) or an ingested document's generated description (FR-023) sends.
+- The corpus stays in the hundreds of files. A catalogue of every topic document fits a skill body at that size — measured at ~5.2K tokens for 58 documents — so the agent never has to guess what exists. Tens of thousands of files would be a different design and the place embeddings would be reconsidered.
+- Curation rewrites `topics/` with no review step. `sources/` is the safety net, which is why nothing but a person may write there and why a pass that fails leaves its watermark unset.
+- The internal connection is the one place user content may leave the machine, exactly as spec [channels](../channels/spec.md) FR-019 already establishes for voice. Curation and an ingested document's generated description are the only things this layer sends there.
+- A source is small enough to be handed to a model whole. A person writing a note, or a document a person uploads, is bounded by what a person produces; a pass that meets one too large for its context reports rather than truncates.

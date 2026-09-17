@@ -48,7 +48,8 @@ describe("KnowledgeCreateDialog", () => {
     createCollectionMock.mockResolvedValue({
       name: "team-notes",
       description: "what we know",
-      file_count: 0,
+      source_count: 0,
+      topic_count: 0,
     });
     const onOpenChange = renderDialog();
 

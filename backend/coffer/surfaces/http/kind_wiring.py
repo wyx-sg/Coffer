@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.knowledge.skill_seed import seed_knowledge_skill
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
@@ -68,12 +67,6 @@ async def wire_resource_kinds(
     knowledge = wire_knowledge_kind(
         app, resource_svc, audit, builtin_tools, provider.internal_connection, credential_resolver
     )
-
-    # The layer's delivery half (spec knowledge FR-029): a skill that tells an
-    # agent this directory is here, shipped down the skill channel that already
-    # reaches every managed agent. Best-effort — a failed seed must not stop the
-    # daemon, and the tools work either way.
-    await seed_knowledge_skill(agent_skill.skill_service)
 
     # Before wire_mcp_kind below, so the gateway advertises `coffer__recall`.
     memory = wire_memory_kind(

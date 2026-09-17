@@ -13,7 +13,8 @@ pass with nothing configured is a clean no-op rather than an error.
 ## Why
 
 Coffer does work on its own behalf: it aggregates the agents' memory, lets a
-model rewrite that derived digest, lets a model tidy the user's own knowledge
+model rewrite that derived digest, lets a model derive the knowledge documents
+agents read from the sources a person writes
 files, resolves a sync conflict, and transcribes a voice message. All five need
 the same two things — an endpoint to call and a model to name — and none of them
 belongs to the agent the user is chatting with.
@@ -52,8 +53,9 @@ it travels between machines. Why each decision went the way it did is in
 - **B1 — The same row carries the work.** Three passes run on a timer:
   `aggregate` reads the agents' own memory into the derived tree (spec
   [memory](../memory/spec.md) FR-007), `organise` lets the model rewrite that
-  derived digest (spec memory FR-030), and `tidy` lets it rewrite the user's own
-  knowledge files (spec [knowledge](../knowledge/spec.md) FR-051). Each has a
+  derived digest (spec memory FR-030), and `curate` derives the knowledge
+  documents agents read from the sources a person writes
+  knowledge files (spec [knowledge](../knowledge/spec.md) FR-034). Each has a
   switch and an interval, because they share one question — what may Coffer's
   own model do while nobody is looking.
 - **B2 — One pass per write.** A settings page toggles one row at a time, and a
@@ -69,7 +71,9 @@ it travels between machines. Why each decision went the way it did is in
   is taken in slices and the interval re-read each slice.
 - **B6 — The defaults follow what a pass WRITES.** `aggregate` and `organise`
   write only derived files that deleting and re-running reproduces, so they ship
-  ON. `tidy` rewrites the only copy of the user's own writing, so it ships OFF.
+  ON — including `curate`, which derives `topics/` from sources it may not
+  touch and is the only path from a source to something an agent can read, so a
+  vault where it never runs has an empty lane forever.
 
 ### Convergence
 
@@ -112,7 +116,7 @@ it travels between machines. Why each decision went the way it did is in
 
 - **The connection itself** — creating, editing, activating or flagging one is
   spec provider-switching. This spec reads the flagged one.
-- **What each pass DOES** — aggregate, organise and tidy are specified by spec
+- **What each pass DOES** — aggregate, organise and curate are specified by spec
   memory and spec knowledge. This spec owns only whether and how often they run.
 - **`GET /api/v1/upkeep/runs`** — what is in flight right now is a cross-kind
   read beside `/resources`, `/audit` and `/retention`, not this spec's schedule.
@@ -147,7 +151,7 @@ coffer engine upkeep list [--json]
 coffer engine upkeep set <pass> [--on | --off] [--interval <seconds> | --default-interval]
 ```
 
-`<pass>` is one of `aggregate`, `organise`, `tidy`. `upkeep list` prints each
+`<pass>` is one of `aggregate`, `organise`, `curate`. `upkeep list` prints each
 pass's switch, its chosen interval and — when none is chosen — the default that
 runs instead, so the terminal shows what the page shows.
 
@@ -156,7 +160,7 @@ runs instead, so the terminal shows what the page shows.
 **Settings → Engine** is two cards. The model card picks the internal-default
 connection and, from that connection's curated `text` models or its probed
 catalogue, the engine model. The upkeep card is one row per pass: a switch, an
-interval select whose default option names the real number, and — for `tidy`
+interval select whose default option names the real number, and — for `curate`
 alone — a line saying it rewrites the user's own files. Edits auto-save, like
 every other settings surface: the switch on toggle, the interval on selection.
 
@@ -204,7 +208,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 ### Scenario: switch off and re-time the passes Coffer runs unattended
 
 - **Given** a fresh vault, where aggregation and organise run on their own
-  timers and tidy does not,
+  timers,
 - **When** the operator switches one pass on or off, or gives it an interval, or
   returns it to its own default (`PUT /api/v1/internal-engine-config/upkeep`,
   one pass per request),
@@ -215,7 +219,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 
 ### Scenario: the engine's settings converge and a deletion means the defaults
 
-- **Given** one machine has chosen an engine model and switched `tidy` on while
+- **Given** one machine has chosen an engine model and switched `curate` off while
   a second machine still holds the defaults,
 - **When** a converge round runs,
 - **Then** the second machine takes both decisions from
@@ -236,7 +240,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 
 - **Given** the daemon is running,
 - **When** the operator runs `coffer engine upkeep list --json`, then
-  `coffer engine upkeep set tidy --off`, then
+  `coffer engine upkeep set curate --off`, then
   `coffer engine upkeep set organise --interval 900`,
 - **Then** the listing is machine-readable and names each pass's switch, its
   chosen interval and the default that runs while none is chosen; each `set`
@@ -296,7 +300,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 
 - **FR-009**: The same row MUST carry a switch and an interval for each of the
   three passes Coffer runs on its own behalf — `aggregate`, `organise` and
-  `tidy`.
+  `curate`.
 - **FR-010**: `PUT /api/v1/internal-engine-config/upkeep` MUST change exactly one
   named pass. An omitted half MUST leave that half alone, and every other pass
   MUST be left exactly as it stands.
@@ -308,7 +312,8 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 - **FR-013**: A running worker MUST pick a switch or interval change up without
   a daemon restart.
 - **FR-014**: The passes that write only derived files (`aggregate`, `organise`)
-  MUST ship ON; `tidy`, which rewrites the user's own knowledge files, MUST ship
+  MUST ship ON, `curate` included: it derives the knowledge documents agents
+  read from sources it never rewrites, and a vault where it never runs cannot ship
   OFF.
 
 **Convergence**
@@ -373,7 +378,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
 - Spec vault-sync's state-area mechanism is available, including the rule that
   each area's provider defines what a document's deletion means.
 - The four consumers — spec vault-sync's conflict resolver, spec knowledge's
-  tidy, spec memory's organise and spec chat's voice transcription — supply
+  curate, spec memory's organise and spec chat's voice transcription — supply
   their own prompts and own their own results. This spec supplies the
   connection, the model and the timer, and absorbs none of their requirements.
 - `GET /api/v1/upkeep/runs` (what is rewriting right now) is a cross-kind

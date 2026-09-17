@@ -72,10 +72,14 @@ _STATUS: dict[str, int] = {
     "MCP_INSTALL_UNSUPPORTED": 422,
     "UNMANAGED_SKILL_INVALID": 422,
     "SKILL_OUT_OF_SCOPE": 422,  # activation scope (ADR per-agent-resource-scope)
-    # knowledge ingestion + search (spec knowledge). One code for "this upload
-    # is refused", with ``details.reason`` naming which refusal; the size
-    # ceiling gets its own code because 413 is the honest status for it.
+    # knowledge ingestion (spec knowledge). One code for "this upload is
+    # refused", with ``details.reason`` naming which refusal; the size ceiling
+    # gets its own code because 413 is the honest status for it.
     "INGEST_REJECTED": 400,
+    # ripgrep's two failures. No surface calls it any more — the layer offers
+    # no retrieval (FR-050) — but curation still matches literally to pick its
+    # candidates (FR-032), so a missing binary or a bad pattern can still
+    # surface through a pass.
     "ENGINE_UNAVAILABLE": 503,
     "GREP_PATTERN_INVALID": 400,
     # spec memory
@@ -125,12 +129,22 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_NOT_FOUND": 404,
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
+    # Also the answer for a write aimed at the wrong lane: ``sources/`` and
+    # ``topics/`` have different writers (spec knowledge FR-013, FR-021), and
+    # which lane a path names is a property of the path.
     "KNOWLEDGE_PATH_UNSAFE": 400,
-    # Ingestion (spec knowledge FR-022..FR-026): named the limit, refused
+    # Ingestion (spec knowledge FR-016..FR-019): named the limit, refused
     # before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
+    # Curation's two refusals (spec knowledge FR-027, FR-025). Both are the
+    # request being wrong rather than Coffer failing, so both are 400-class
+    # like KNOWLEDGE_PATH_UNSAFE above: a topic naming another knowledge file
+    # is a link that rots, and a pass past its write bound is one source trying
+    # to rewrite the corpus. Neither is retryable unchanged.
+    "KNOWLEDGE_TOPIC_REFERENCES_FILE": 400,
+    "KNOWLEDGE_CURATION_BOUND": 400,
     "KNOWLEDGE_ERROR": 400,
-    # Upkeep passes (memory organise, knowledge tidy). A second pass over a
+    # Upkeep passes (memory organise, knowledge curation). A second pass over a
     # target one is already rewriting is refused, not queued — the surface
     # that asked should already have been showing the running one
     # (``application.upkeep_runs``).

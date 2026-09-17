@@ -66,10 +66,12 @@ def test_a_registered_area_reaches_the_working_tree(
     with TestClient(app) as client:
         set_active_token(_TOKEN)
         # A non-default upkeep setting is a decision this machine publishes;
-        # the defaults deliberately publish no document at all.
+        # the defaults deliberately publish no document at all. Curation ships
+        # ON (spec knowledge FR-032), so switching it OFF is the non-default
+        # here — turning it on would say nothing and publish nothing.
         r = client.put(
             "/api/v1/internal-engine-config/upkeep",
-            json={"pass": "tidy", "enabled": True},
+            json={"pass": "curate", "enabled": False},
             headers=_HEADERS,
         )
         assert r.status_code == 200, r.text

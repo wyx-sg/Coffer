@@ -59,6 +59,11 @@ async def _card_channel(env: ChannelEnv, *, sender_id: str = "owner-1") -> FakeC
 @pytest.mark.acceptance(
     spec="channels", scenario="a document sent to a channel is saved into a collection"
 )
+# The same call proves the knowledge layer's half of that entrance: the phone
+# and the Knowledge page are two ends of one path into `sources/`.
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a document forwarded to a channel lands in a collection"
+)
 async def test_named_existing_collection_saves_directly(env: ChannelEnv, tmp_path: Any) -> None:
     _resource, adapter = await env.paired_channel(sender_id="owner-1")
     env.collections.names = ["research"]

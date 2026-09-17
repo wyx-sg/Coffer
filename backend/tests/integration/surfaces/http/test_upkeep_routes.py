@@ -1,5 +1,5 @@
-"""``POST /knowledge/collections/{name}/tidy`` refuses a concurrent pass, and
-``GET /api/v1/upkeep/runs`` says what is in flight (spec knowledge FR-033).
+"""``POST /knowledge/collections/{name}/curate`` refuses a concurrent pass, and
+``GET /api/v1/upkeep/runs`` says what is in flight (spec knowledge FR-030).
 
 The bug both exist for: the Tidy button's disabled state used to live in a
 browser component, so leaving the page mid-pass and coming back showed an idle
@@ -23,9 +23,11 @@ from .conftest import _create_collection
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="a second tidy pass over the same collection is refused while the first is running",
+    scenario=(
+        "a second curation pass over the same collection is refused while the first is running"
+    ),
 )
-def test_a_second_tidy_over_the_same_collection_is_refused(client) -> None:
+def test_a_second_curation_over_the_same_collection_is_refused(client) -> None:
     """The in-flight pass is simulated by claiming the collection's key
     directly: the route is synchronous, so a genuine second request could only
     come from another thread, and what is under test is the refusal itself."""
@@ -34,20 +36,20 @@ def test_a_second_tidy_over_the_same_collection_is_refused(client) -> None:
 
     assert UPKEEP_RUNS.claim(KIND_KNOWLEDGE, "shopee") is True
     try:
-        refused = client.post("/api/v1/knowledge/collections/shopee/tidy")
+        refused = client.post("/api/v1/knowledge/collections/shopee/curate")
         assert refused.status_code == 409, refused.text
         assert refused.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
 
         # Per collection, not vault-wide: a different collection is unaffected.
         # No internal connection is configured here, so the pass is the clean
-        # no-op spec knowledge FR-030 promises rather than a model call.
-        other = client.post("/api/v1/knowledge/collections/other/tidy")
+        # no-op spec knowledge FR-029 promises rather than a model call.
+        other = client.post("/api/v1/knowledge/collections/other/curate")
         assert other.status_code == 200, other.text
         assert other.json()["status"] == "no_model"
     finally:
         UPKEEP_RUNS.release(KIND_KNOWLEDGE, "shopee")
 
-    assert client.post("/api/v1/knowledge/collections/shopee/tidy").status_code == 200
+    assert client.post("/api/v1/knowledge/collections/shopee/curate").status_code == 200
 
 
 @pytest.mark.acceptance(

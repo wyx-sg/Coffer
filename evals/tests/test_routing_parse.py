@@ -5,23 +5,27 @@ from __future__ import annotations
 from evals.routing_eval import parse_tool_choice
 
 VALID = [
-    "search",
-    "grep",
-    "read",
-    "list",
     "write",
-    "delete",
-    "list_skills",
-    "load_skill",
+    "recall",
+    "diagnose",
+    "search_tools",
+    # Two synthetic names, present only so the prefix property below has an
+    # example. The parser routes over whatever catalogue it is handed —
+    # Coffer's own builtins today, an upstream server's tools tomorrow — so
+    # that property must not depend on Coffer's roster happening to contain a
+    # prefix pair. It did until 2026-09-17, when `list` and `list_skills` were
+    # both deleted, and the test went with them.
+    "fetch",
+    "fetch_all",
 ]
 
 
 def test_bare_name() -> None:
-    assert parse_tool_choice("search", VALID) == "search"
+    assert parse_tool_choice("write", VALID) == "write"
 
 
 def test_name_in_prose_and_backticks() -> None:
-    assert parse_tool_choice("I would use `search` here.", VALID) == "search"
+    assert parse_tool_choice("I would use `recall` here.", VALID) == "recall"
 
 
 def test_name_with_label_and_newline() -> None:
@@ -29,19 +33,19 @@ def test_name_with_label_and_newline() -> None:
 
 
 def test_case_insensitive() -> None:
-    assert parse_tool_choice("LIST_SKILLS", VALID) == "list_skills"
+    assert parse_tool_choice("SEARCH_TOOLS", VALID) == "search_tools"
 
 
 def test_earliest_mention_wins() -> None:
-    assert parse_tool_choice("first grep, maybe search", VALID) == "grep"
+    assert parse_tool_choice("first recall, maybe write", VALID) == "recall"
 
 
 def test_longer_name_not_shadowed_by_prefix() -> None:
-    # ``list`` is a strict prefix of ``list_skills`` since the knowledge tools
-    # collapsed to bare verbs, so the longest-match tie-break is what keeps a
-    # mention of ``list_skills`` from being read as ``list``.
-    assert parse_tool_choice("use list_skills", VALID) == "list_skills"
-    assert parse_tool_choice("use list", VALID) == "list"
+    # ``fetch`` is a strict prefix of ``fetch_all``, so the longest-match
+    # tie-break is what keeps a mention of ``fetch_all`` from being read as
+    # ``fetch``. Any aggregated catalogue can contain such a pair.
+    assert parse_tool_choice("use fetch_all", VALID) == "fetch_all"
+    assert parse_tool_choice("use fetch", VALID) == "fetch"
 
 
 def test_no_known_tool_returns_none() -> None:

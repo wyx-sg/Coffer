@@ -17,8 +17,8 @@ from coffer.application.engine_settings_sync import AREA, DOC, EngineSettingsSyn
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
+    CURATE,
     ORGANISE,
-    TIDY,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -27,7 +27,7 @@ from coffer.domain.internal_engine_config import (
 _DEFAULT_UPKEEP = {
     AGGREGATE: {"enabled": True, "interval_s": None},
     ORGANISE: {"enabled": True, "interval_s": None},
-    TIDY: {"enabled": True, "interval_s": None},
+    CURATE: {"enabled": True, "interval_s": None},
 }
 
 
@@ -44,20 +44,20 @@ class _Repo:
         self,
         *,
         model: str | None,
-        tidy_owner_machine_id: str | None = None,
+        curate_owner_machine_id: str | None = None,
         upkeep: dict[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig:
         current = self.row or GlobalInternalEngineConfig(model=None, updated_at=_now())
-        auto_tidy = current.auto_tidy_enabled
-        owner = current.tidy_owner_machine_id
-        if tidy_owner_machine_id is not None:
-            owner = tidy_owner_machine_id or None
+        auto_tidy = current.auto_curate_enabled
+        owner = current.curate_owner_machine_id
+        if curate_owner_machine_id is not None:
+            owner = curate_owner_machine_id or None
         fields = {
             "auto_aggregate_enabled": current.auto_aggregate_enabled,
             "aggregate_interval_s": current.aggregate_interval_s,
             "auto_organise_enabled": current.auto_organise_enabled,
             "organise_interval_s": current.organise_interval_s,
-            "tidy_interval_s": current.tidy_interval_s,
+            "curate_interval_s": current.curate_interval_s,
         }
         for name, setting in (upkeep or {}).items():
             if name == AGGREGATE:
@@ -68,12 +68,12 @@ class _Repo:
                 fields["organise_interval_s"] = setting.interval_s
             else:
                 auto_tidy = setting.enabled
-                fields["tidy_interval_s"] = setting.interval_s
+                fields["curate_interval_s"] = setting.interval_s
         self.row = GlobalInternalEngineConfig(
             model=model,
             updated_at=_now(),
-            auto_tidy_enabled=auto_tidy,
-            tidy_owner_machine_id=owner,
+            auto_curate_enabled=auto_tidy,
+            curate_owner_machine_id=owner,
             **fields,
         )
         return self.row
@@ -100,7 +100,7 @@ def _state(row: GlobalInternalEngineConfig | None) -> tuple[EngineSettingsSyncSt
 
 def _chosen() -> GlobalInternalEngineConfig:
     return GlobalInternalEngineConfig(
-        model="agnes-2.0", updated_at=_now(), auto_tidy_enabled=True, tidy_owner_machine_id="m1"
+        model="agnes-2.0", updated_at=_now(), auto_curate_enabled=True, curate_owner_machine_id="m1"
     )
 
 
@@ -117,8 +117,8 @@ async def test_a_non_default_choice_is_published_as_the_one_doc() -> None:
             DOC,
             {
                 "model": "agnes-2.0",
-                "auto_tidy_enabled": True,
-                "tidy_owner_machine_id": "m1",
+                "auto_curate_enabled": True,
+                "curate_owner_machine_id": "m1",
                 "upkeep": _DEFAULT_UPKEEP,
             },
         )
@@ -136,8 +136,11 @@ async def test_deleting_the_doc_resets_to_defaults_and_publishes_nothing_after()
 
     assert repo.row is not None
     assert repo.row.model is None
-    assert repo.row.auto_tidy_enabled is False
-    assert repo.row.tidy_owner_machine_id is None
+    # The defaults, which is what "reset" means — and curation's default is ON
+    # (spec internal-engine): it derives the documents agents read from sources
+    # it never rewrites, so a vault where it never runs has an empty lane.
+    assert repo.row.auto_curate_enabled is True
+    assert repo.row.curate_owner_machine_id is None
     assert audit.events == [("internal_engine_model_set", "sync")]
     # The reset is not re-published as a fresh document: that is what stops a
     # machine that never persisted a row from deleting it again next round.
@@ -172,7 +175,7 @@ async def test_an_unknown_rel_is_ignored() -> None:
 async def test_import_applies_only_the_singleton_doc(path: str) -> None:
     state, repo, _audit = _state(None)
     errors = await state.import_docs(
-        [(path, {"model": "agnes-1.5-flash", "auto_tidy_enabled": False})]
+        [(path, {"model": "agnes-1.5-flash", "auto_curate_enabled": False})]
     )
     assert errors == []
     assert (repo.row is not None) is (path == DOC)
@@ -185,6 +188,9 @@ async def test_a_switched_off_rewriter_travels_to_the_other_machines() -> None:
         model=None,
         updated_at=_now(),
         auto_aggregate_enabled=False,
+        # Switched off explicitly: curation ships ON, so leaving it at its
+        # default would make this test assert nothing about travelling.
+        auto_curate_enabled=False,
         organise_interval_s=900,
     )
     state, _repo, _audit = _state(row)
@@ -194,7 +200,7 @@ async def test_a_switched_off_rewriter_travels_to_the_other_machines() -> None:
     assert docs[0][1]["upkeep"] == {
         AGGREGATE: {"enabled": False, "interval_s": None},
         ORGANISE: {"enabled": True, "interval_s": 900},
-        TIDY: {"enabled": False, "interval_s": None},
+        CURATE: {"enabled": False, "interval_s": None},
     }
 
 
@@ -222,7 +228,7 @@ async def test_a_document_written_before_upkeep_travelled_changes_nothing() -> N
         model="agnes-2.0",
         updated_at=_now(),
         auto_aggregate_enabled=False,
-        tidy_interval_s=900,
+        curate_interval_s=900,
     )
     state, repo, _audit = _state(row)
 
@@ -231,7 +237,7 @@ async def test_a_document_written_before_upkeep_travelled_changes_nothing() -> N
     assert errors == []
     assert repo.row is not None
     assert repo.row.auto_aggregate_enabled is False
-    assert repo.row.tidy_interval_s == 900
+    assert repo.row.curate_interval_s == 900
 
 
 async def test_an_imported_document_applies_its_upkeep() -> None:

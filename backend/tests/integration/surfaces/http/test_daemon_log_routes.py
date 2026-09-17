@@ -189,7 +189,7 @@ async def test_every_format_in_the_file_fills_the_three_columns(monkeypatch, tmp
         tmp_path,
         [
             "2026-09-14T06:29:20Z INF precheck complete hard_fail=false",
-            "WARNI [coffer.application.knowledge.skill_seed] knowledge.skill_seed.missing_asset",
+            "WARNI [coffer.application.knowledge.skill_delivery] knowledge.skill_delivery.failed",
             "ERROR:    ASGI callable returned without completing response.",
             "WARNING - mcp_atlassian.utils.toolsets - TOOLSETS is not set",
         ],
@@ -201,7 +201,7 @@ async def test_every_format_in_the_file_fills_the_three_columns(monkeypatch, tmp
     assert [rec["record"].get("logger") for rec in records] == [
         "mcp_atlassian.utils.toolsets",
         None,
-        "coffer.application.knowledge.skill_seed",
+        "coffer.application.knowledge.skill_delivery",
         None,
     ]
     # Only the zerolog line stated a time; nothing invents one for the others.

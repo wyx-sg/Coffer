@@ -1,12 +1,21 @@
 """On-disk layout for the knowledge layer — the sole owner of path construction.
 
-One root, one rule: ``~/.coffer/knowledge/<collection>/…``. A collection is a
-top-level subdirectory; below it the human nests whatever they like and the
-system assigns none of it any meaning (spec knowledge FR-004). The only
-directories Coffer itself creates inside a collection are ``.history/``,
-holding the revisions the tidy pass superseded, and ``.raw/``, holding the
-original bytes behind an uploaded document — both dot-prefixed so ripgrep
-skips them and the catalogue walks past them (FR-005, FR-024, FR-032).
+One root, two lanes: ``~/.coffer/knowledge/<collection>/{sources,topics}/…``.
+A collection is a top-level subdirectory holding both (spec knowledge FR-001);
+its ``README.md`` sits between them at the collection root, belonging to
+neither (FR-007).
+
+The lanes are directories rather than a frontmatter property because what they
+carry is *who may write here* — the one thing a key inside a file cannot say.
+``sources/`` is written by a person, an upload and ``coffer__write``; ``topics/``
+is written by the curation pass and by nothing else (FR-013, FR-021). Below a
+lane the nesting is free: the person's own under ``sources/``, curation's under
+``topics/`` (FR-004).
+
+Coffer creates no hidden directory of its own. ``.history/`` and ``.raw/`` are
+gone: the first existed because a topic was the only copy, which sources now
+are, and the second existed to keep an uploaded original out of retrieval,
+which having no retrieval surface does for free (FR-005).
 
 ``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
 becomes a path component goes through the traversal guard here (FR-006).
@@ -17,13 +26,15 @@ from __future__ import annotations
 import os
 import pathlib
 import re
-from datetime import UTC, datetime
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 
-HISTORY_DIR_NAME = ".history"
-RAW_DIR_NAME = ".raw"
+SOURCES_DIR_NAME = "sources"
+TOPICS_DIR_NAME = "topics"
 README_NAME = "README.md"
+
+#: The two lanes, in the order every surface presents them.
+LANES = (SOURCES_DIR_NAME, TOPICS_DIR_NAME)
 
 _DOTS_ONLY = re.compile(r"^\.+$")
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
@@ -115,6 +126,38 @@ def collection_of(relpath: str) -> str:
     return segments[0]
 
 
+def lane_of(relpath: str) -> str | None:
+    """The lane a relative path belongs to, or ``None`` for a collection root.
+
+    ``None`` is a legitimate answer for the collection itself and for its
+    ``README.md``; it is not an answer for a content file, which is why
+    :func:`require_lane` exists beside this.
+    """
+    segments = split(relpath)
+    if len(segments) < 2:
+        return None
+    lane = segments[1]
+    return lane if lane in LANES else None
+
+
+def require_lane(relpath: str, *, expected: str | None = None) -> str:
+    """The lane ``relpath`` names, refusing anything outside one.
+
+    Every content read and write resolves through here, so "a file lives in a
+    lane" is a property of path construction rather than a rule each caller
+    remembers. ``expected`` additionally pins which lane, which is how the
+    curation pass is kept out of ``sources/`` (FR-021) and how an agent write
+    is kept out of ``topics/`` (FR-013).
+    """
+    lane = lane_of(relpath)
+    if lane is None:
+        lanes = " or ".join(f"{name}/" for name in LANES)
+        raise UnsafeKnowledgePath(relpath, f"a knowledge file lives under {lanes}")
+    if expected is not None and lane != expected:
+        raise UnsafeKnowledgePath(relpath, f"expected the {expected}/ lane, got {lane}/")
+    return lane
+
+
 def relative_of(path: pathlib.Path) -> str:
     """The knowledge-root-relative form of an absolute path."""
     root = knowledge_root()
@@ -125,54 +168,32 @@ def relative_of(path: pathlib.Path) -> str:
 
 
 def readme_path(collection: str) -> pathlib.Path:
+    """A collection's own description file, outside both lanes (FR-007)."""
     return collection_dir(collection) / README_NAME
 
 
-def history_dir(collection: str) -> pathlib.Path:
-    """Where a collection keeps the revisions tidy replaced."""
-    return collection_dir(collection) / HISTORY_DIR_NAME
+def lane_dir(collection: str, lane: str) -> pathlib.Path:
+    """One lane's directory inside a collection."""
+    if lane not in LANES:
+        raise UnsafeKnowledgePath(f"{collection}/{lane}", f"unknown lane {lane!r}")
+    return collection_dir(collection) / lane
 
 
-def history_path(relpath: str, *, now: datetime | None = None) -> pathlib.Path:
-    """Archive destination for the current contents of ``relpath``.
-
-    The file's position inside the collection is flattened into the archived
-    name, so two same-named files in different folders never collide and the
-    original location stays readable to whoever goes looking.
-    """
-    segments = split(relpath)
-    if len(segments) < 2:
-        raise UnsafeKnowledgePath(relpath, "not a file inside a collection")
-    collection, rest = segments[0], segments[1:]
-    stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%S%f")
-    flattened = "__".join(rest)
-    if flattened.endswith(".md"):
-        flattened = flattened[: -len(".md")]
-    return history_dir(collection) / f"{flattened}.{stamp}.md"
+def sources_dir(collection: str) -> pathlib.Path:
+    """Where a collection keeps the material people contributed."""
+    return lane_dir(collection, SOURCES_DIR_NAME)
 
 
-def raw_dir(collection: str) -> pathlib.Path:
-    """Where a collection keeps the untouched bytes behind its converted files."""
-    return collection_dir(collection) / RAW_DIR_NAME
+def topics_dir(collection: str) -> pathlib.Path:
+    """Where a collection keeps the documents curation derived."""
+    return lane_dir(collection, TOPICS_DIR_NAME)
 
 
-def raw_path(relpath: str, original_name: str) -> pathlib.Path:
-    """Where the original upload behind the converted file at ``relpath`` lives.
-
-    Unlike ``history_path``, which flattens a nested path into one archived
-    name (multiple old revisions of the same file must never collide), this
-    *mirrors* the converted file's own directory structure: there is exactly
-    one original per converted file, so nesting it the same way keeps the two
-    trees walkable side by side and needs no collision-avoiding flattening.
-    The converted file's own extension (``.md``) is replaced with the
-    original's own extension (FR-024) — the original is a ``.pdf`` or
-    ``.docx``, not a Markdown file.
-    """
-    segments = split(relpath)
-    if len(segments) < 2:
-        raise UnsafeKnowledgePath(relpath, "not a file inside a collection")
-    collection, rest = segments[0], segments[1:]
-    *dirs, name = rest
-    stem = pathlib.Path(name).stem
-    ext = pathlib.Path(original_name).suffix
-    return raw_dir(collection).joinpath(*dirs, f"{stem}{ext}")
+def lane_relpath(collection: str, lane: str, *rest: str) -> str:
+    """A knowledge-root-relative path inside one lane, guarded segment by segment."""
+    if lane not in LANES:
+        raise UnsafeKnowledgePath(f"{collection}/{lane}", f"unknown lane {lane!r}")
+    parts = [collection, lane, *[p for p in rest if p]]
+    joined = "/".join(parts)
+    split(joined)
+    return joined

@@ -1,12 +1,20 @@
-"""Agentic langgraph tidy loop over one collection's files (spec knowledge).
+"""The agentic langgraph loop the knowledge curation pass runs on.
 
-The create_react_agent loop driven by Coffer's internal model over the files a
-collection already holds, with 4 internal write-capable tools. Lives in
+A ``create_react_agent`` loop driven by Coffer's internal model over one
+collection's ``topics/`` lane, with four internal write-capable tools. Lives in
 ``infrastructure.llm`` (Contract 9a — the only place langchain/langgraph may be
-imported; ``infrastructure.chat``, where these adapters once lived, is now
+imported; ``infrastructure.chat``, where these adapters once lived, is now a
 forbidden one).
 
-The reorg tools are internal-only: NOT registered on the MCP gateway or
+The two prompts are kept apart on purpose. ``system_prompt`` carries the rules
+a pass must obey, which are the same on every call; ``user_prompt`` carries the
+brief — the source to absorb, the candidate documents and the catalogue — which
+is different every time and can run to tens of kilobytes. Folding the brief
+into the system prompt would work and would be wrong: it mixes what the model
+must always do with what it happens to be looking at, and it is the system
+prompt that a provider caches.
+
+These tools are internal-only: NOT registered on the MCP gateway or the
 BuiltinToolRegistry.
 """
 
@@ -30,6 +38,7 @@ async def run_agentic_reorg(
     lc_model: Any,
     tools: Sequence[Any],
     system_prompt: str,
+    user_prompt: str,
     recursion_limit: int = DEFAULT_REORG_RECURSION_LIMIT,
 ) -> dict[str, Any]:
     """Run the reorg loop; return a result dict.
@@ -75,7 +84,7 @@ async def run_agentic_reorg(
 
     try:
         state = await graph.ainvoke(
-            {"messages": [HumanMessage(content="Reorganize the files in this collection.")]},
+            {"messages": [HumanMessage(content=user_prompt)]},
             config={"recursion_limit": recursion_limit},
         )
     except GraphRecursionError:
@@ -89,7 +98,7 @@ async def run_agentic_reorg(
 
 
 class LangchainAgenticReorg:
-    """AgenticReorgPort implementation using the langgraph create_react_agent."""
+    """``AgenticCurationPort`` implementation over ``create_react_agent``."""
 
     async def run(
         self,
@@ -97,6 +106,7 @@ class LangchainAgenticReorg:
         model: Any,
         tools: Sequence[Any],
         system_prompt: str,
+        user_prompt: str,
         credential_resolver: Any,
         recursion_limit: int,
     ) -> dict[str, Any]:
@@ -105,6 +115,7 @@ class LangchainAgenticReorg:
             lc_model=lc_model,
             tools=tools,
             system_prompt=system_prompt,
+            user_prompt=user_prompt,
             recursion_limit=recursion_limit,
         )
 

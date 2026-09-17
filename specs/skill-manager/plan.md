@@ -69,7 +69,6 @@ backend/coffer/application/skill/
   unmanaged_ops.py     # list / adopt / delete unmanaged (FR-016..FR-018)
   content_ops.py       # the master-folder read, and the conditional write (FR-025)
   file_ops.py          # the file tree / file read behind the viewer (FR-024)
-  builtin_tools.py     # coffer__list_skills / coffer__load_skill (FR-026, FR-027)
   ports.py             # protocols the service depends on
   kind.py              # make_skill_kind(...) -> Kind, incl. on_enabled_changed
 

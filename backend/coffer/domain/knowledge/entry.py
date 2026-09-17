@@ -1,8 +1,8 @@
 """Value objects for the knowledge layer.
 
 Everything here describes what is on disk. Nothing is persisted: a catalogue
-level is produced by walking the directory at call time (spec knowledge FR-012), so these types are
-the shape of an answer, never the shape of a row.
+is produced by walking the directory at call time, so these types are the
+shape of an answer, never the shape of a row.
 """
 
 from __future__ import annotations
@@ -15,17 +15,23 @@ ACTOR_USER = "user"
 
 @dataclass(frozen=True)
 class CollectionEntry:
-    """One collection, as the top level of the catalogue shows it."""
+    """One collection, as the top level of the catalogue shows it.
+
+    The two lanes are counted apart because they answer different questions:
+    how much material a person has contributed, and how much of it an agent
+    can currently read (spec knowledge FR-001).
+    """
 
     name: str
     #: First paragraph of the collection's ``README.md``; empty when absent.
     description: str
-    file_count: int
+    source_count: int = 0
+    topic_count: int = 0
 
 
 @dataclass(frozen=True)
 class DirectoryEntry:
-    """A subdirectory inside a collection — the human's own filing."""
+    """A subdirectory inside a lane — the person's filing, or curation's."""
 
     #: Path relative to the knowledge root, e.g. ``shopee/account``.
     path: str
@@ -47,7 +53,7 @@ class FileEntry:
 
 @dataclass(frozen=True)
 class CatalogueLevel:
-    """One level of the catalogue — never the whole tree (FR-013)."""
+    """One level of one lane — what a human surface pages through."""
 
     path: str
     directories: tuple[DirectoryEntry, ...] = field(default_factory=tuple)
@@ -65,10 +71,12 @@ class KnowledgeFile:
     created_at: str
     updated_at: str
     body: str
-    #: Absolute path of the ``.md`` file (spec knowledge FR-036).
+    #: Absolute path of the ``.md`` file (spec knowledge FR-041).
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
+    #: When curation last consumed this source; empty for a topic (FR-028).
+    ingested_at: str = ""
 
 
 @dataclass(frozen=True)

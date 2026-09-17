@@ -3,7 +3,7 @@
 Coffer runs three passes on its own behalf: aggregation reads the agents' own
 memory into the derived tree (spec memory FR-007), organise lets the model
 rewrite that derived digest (spec memory FR-017), and tidy lets it rewrite the
-user's own knowledge files (spec knowledge FR-031). Only the third had a switch,
+user's own knowledge files (spec knowledge FR-022). Only the third had a switch,
 and it had no surface — it could be changed by editing the synced settings
 document and no other way. None of the three had a configurable interval: the
 timers were constants compiled into the workers, so a vault that wanted

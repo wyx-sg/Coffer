@@ -11,8 +11,15 @@ export type InternalEngineConfig = components["schemas"]["InternalEngineConfigOu
 export type UpkeepSetting = components["schemas"]["UpkeepSettingOut"];
 export type UpkeepUpdate = components["schemas"]["UpkeepUpdate"];
 
-/** The passes Coffer runs on its own behalf, in the order they run. */
-export type UpkeepPass = "aggregate" | "organise" | "tidy";
+/**
+ * The passes Coffer runs on its own behalf, in the order they run.
+ *
+ * `curate` was `tidy` until the knowledge layer became two lanes: the pass no
+ * longer rewrites the files the user wrote, it reads them and derives the
+ * documents agents read (spec knowledge FR-021). Read off the contract rather
+ * than spelled here, so the two cannot drift.
+ */
+export type UpkeepPass = UpkeepUpdate["pass"];
 
 const PATH = "/internal-engine-config";
 

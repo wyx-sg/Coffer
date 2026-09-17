@@ -1,11 +1,16 @@
-"""The knowledge layer's delivery half.
+"""The knowledge layer's delivery half, through the real composition root.
 
-An agent only reads this layer if it knows the layer is there. The audit behind
-the redesign found a tool's own description does not achieve that — every
-knowledge call in a month's history came from the session that built the corpus.
-A skill does: Coffer already delivers skills into each managed agent's own
-directory, and a skill's name and description sit in the agent's context
-(spec knowledge FR-029).
+An agent only reads this layer if it knows the layer is there — and with no
+retrieval tool left (spec knowledge FR-033), the delivered skill IS the
+interface. What the unit tests beside ``application/knowledge`` cannot show is
+that the daemon actually wires and runs delivery: the skill is written on every
+boot (``surfaces/http/app.py``), into the directory the *agent* Resource names,
+which is a bridge between two kinds only the composition root may cross.
+
+This module is deliberately not the old one. The knowledge skill used to be a
+skill-manager Resource seeded into ``~/.coffer/skills/`` and symlinked per
+agent; it is now rendered per agent and written as real bytes (FR-051, FR-052),
+so the seed-and-symlink assertions had nothing left to assert.
 """
 
 from __future__ import annotations
@@ -15,119 +20,116 @@ import pathlib
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.application.knowledge.skill_seed import SKILL_NAME
+from coffer.application.knowledge.skill_render import SKILL_NAME
 from coffer.surfaces.http.auth import set_active_token
 
 _TOKEN = "test-token-knowledge-skill-delivery"
+_HEADERS = {"X-Coffer-Token": _TOKEN}
 
 
-def _app(tmp_path, monkeypatch, *, port_start: int):  # type: ignore[no-untyped-def]
+@pytest.fixture
+def home(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    monkeypatch.setenv("COFFER_PORT_RANGE_START", str(port_start))
-    monkeypatch.setenv("COFFER_PORT_RANGE_END", str(port_start + 9))
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", "59660")
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", "59669")
+    return tmp_path
+
+
+def _client() -> TestClient:
     from coffer.surfaces.http.app import create_app
 
     app = create_app()
     set_active_token(_TOKEN)
-    return app
+    return TestClient(app, headers=_HEADERS)
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="the knowledge skill is delivered to a managed agent"
-)
-def test_the_knowledge_skill_is_delivered_to_a_managed_agent(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """spec knowledge FR-029 end to end: seeded into master, then DELIVERED to an agent.
+def _register_agent(client: TestClient, name: str, config_dir: pathlib.Path) -> None:
+    resp = client.post(
+        "/api/v1/agents",
+        json={"type": "claude_code", "name": name, "config_dir": str(config_dir)},
+    )
+    assert resp.status_code == 201, resp.text
 
-    This used to boot the app and assert only that the file existed under
-    ``~/.coffer/skills/`` — Coffer's master store. That is seeding. No agent
-    was registered, no binding existed, and no agent-side directory was looked
-    at, so the scenario's own promise ("present in **its** skill directory")
-    was never exercised and the delivery path could have been broken outright
-    without this going red.
 
-    So an agent is registered here and the assertion moved onto the agent's
-    own ``<config_dir>/skills/``, reached through the real path
-    (``apply_scope_for_agent`` runs on registration and delivers every enabled,
-    in-scope skill). The skill is read back THROUGH the agent's directory, not
-    from master, so the agent-side link being dangling is a failure too.
+def _seed_collection(client: TestClient, name: str, description: str) -> None:
+    resp = client.post(
+        "/api/v1/knowledge/collections", json={"name": name, "description": description}
+    )
+    assert resp.status_code == 201, resp.text
+
+
+def test_the_skill_is_written_into_the_agents_own_directory_on_boot(home) -> None:  # type: ignore[no-untyped-def]
+    """Real bytes at ``<config_dir>/skills/coffer-knowledge/SKILL.md``.
+
+    The delivery happens during startup, so the agent is registered against one
+    daemon and the assertion is made after a second one has booted over the
+    same HOME — which is also the path that heals a copy a person deleted.
     """
-    app = _app(tmp_path, monkeypatch, port_start=59660)
-    agent_config_dir = tmp_path / "agent-cfg"
-    agent_config_dir.mkdir()
+    config_dir = home / "agent-cfg"
+    config_dir.mkdir()
 
-    with TestClient(app, headers={"X-Coffer-Token": _TOKEN}) as client:
-        # Seeding happens during the daemon's own startup, before any agent
-        # exists — so master holds the skill and no agent does yet.
-        master = pathlib.Path(tmp_path) / ".coffer" / "skills" / SKILL_NAME / "SKILL.md"
-        assert master.is_file(), "the knowledge skill was not seeded into the master store"
-        assert not (agent_config_dir / "skills" / SKILL_NAME).exists()
+    with _client() as client:
+        _seed_collection(client, "shopee", "Shopee's account system and the platforms around it.")
+        _register_agent(client, "delivered-to", config_dir)
 
-        resp = client.post(
-            "/api/v1/agents",
-            json={
-                "type": "claude_code",
-                "name": "delivered-to",
-                "config_dir": str(agent_config_dir),
-            },
-        )
-        assert resp.status_code == 201, resp.text
+    with _client():
+        pass
 
-        # The binding Coffer recorded, and the agent-side copy it made.
-        skill = client.get(f"/api/v1/skills/{SKILL_NAME}")
-        assert skill.status_code == 200, skill.text
-        assert [b["agent_name"] for b in skill.json()["bindings"]] == ["delivered-to"]
-
-    delivered = agent_config_dir / "skills" / SKILL_NAME / "SKILL.md"
-    assert delivered.is_file(), (
-        f"the knowledge skill never reached the agent's own skill directory: "
-        f"{sorted(p.name for p in (agent_config_dir / 'skills').glob('*'))}"
+    skill = config_dir / "skills" / SKILL_NAME / "SKILL.md"
+    assert skill.is_file(), (
+        "the knowledge skill never reached the agent's own skill directory: "
+        f"{sorted(p.name for p in (config_dir / 'skills').glob('*'))}"
     )
+    # Real bytes, not a link into a shared master — that is what lets two
+    # agents hold different catalogues (FR-052).
+    assert not skill.is_symlink()
+    assert not skill.parent.is_symlink()
 
-    text = delivered.read_text(encoding="utf-8")
+    text = skill.read_text(encoding="utf-8")
     assert f"name: {SKILL_NAME}" in text
-    # The body has to teach catalogue-then-grep, not just announce the tools:
-    # descending one level at a time is what keeps a large corpus readable.
-    # `coffer__search` is in this list because knowledge FR-029 requires the skill to
-    # teach "when to reach for `search` instead" — it was the one tool the
-    # loop omitted, which is how the delivered skill could have stopped
-    # mentioning the file-at-a-time half without anything noticing.
-    for tool in (
-        "coffer__list",
-        "coffer__read",
-        "coffer__grep",
-        "coffer__search",
-        "coffer__write",
-    ):
-        assert tool in text, f"{tool} is not named in the skill body"
-    # FR-018 + User Story 8: the delivered skill is one of the two places the
-    # literal-matching caveat must be stated, because an agent that phrases a
-    # question in its own words gets nothing back and no error to explain why.
-    # Matched against whitespace-collapsed prose: the asset is hard-wrapped, so
-    # a phrase can straddle a newline and a raw `in` would be asserting the
-    # line breaks rather than the sentence.
-    prose = " ".join(text.split())
-    assert "never a question in your own words" in prose, (
-        "the skill does not tell the agent to give search a word or exact "
-        "phrase rather than a question in its own words"
-    )
-    assert "ranks by meaning" in prose, (
-        "the skill does not say that nothing in the layer ranks by meaning"
-    )
+    # The description carries the collection's own subject (FR-053) and the
+    # body carries the absolute root the agent reads at (FR-054).
+    assert "Shopee's account system" in text
+    assert str(home / "knowledge") in text
+    # And it names the one tool that is left, never a retrieval tool (FR-050).
+    assert "coffer__write" in text
+    for gone in ("coffer__read", "coffer__list", "coffer__grep", "coffer__search"):
+        assert gone not in text, gone
 
 
-def test_seeding_again_is_a_no_op(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """It re-imports on every boot, so an edited asset ships with the next
-    daemon start and a deleted skill comes back."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
-    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
-    from coffer.surfaces.http.app import create_app
+def test_the_knowledge_skill_is_not_a_managed_skill_resource(home) -> None:  # type: ignore[no-untyped-def]
+    """FR-051: it is a file this layer owns, not a Resource skill-manager
+    delivers. A vault that still registered it would deliver it twice — once
+    as the generated per-agent copy and once as a shared master symlink that
+    silently overwrote it."""
+    with _client() as client:
+        listed = client.get("/api/v1/skills")
+        assert listed.status_code == 200, listed.text
+        assert SKILL_NAME not in {s["name"] for s in listed.json()["items"]}
 
-    for _ in range(2):
-        with TestClient(create_app()):
-            pass
+    assert not (home / ".coffer" / "skills" / SKILL_NAME).exists()
 
-    installed = pathlib.Path(tmp_path) / ".coffer" / "skills" / SKILL_NAME / "SKILL.md"
-    assert installed.is_file()
+
+def test_a_second_boot_rewrites_rather_than_duplicates(home) -> None:  # type: ignore[no-untyped-def]
+    """Delivery is idempotent: it heals an edited copy instead of stacking
+    another one beside it."""
+    config_dir = home / "agent-cfg"
+    config_dir.mkdir()
+
+    with _client() as client:
+        _seed_collection(client, "shopee", "Internal systems.")
+        _register_agent(client, "delivered-to", config_dir)
+
+    skill = config_dir / "skills" / SKILL_NAME / "SKILL.md"
+    with _client():
+        pass
+    original = skill.read_text(encoding="utf-8")
+
+    skill.write_text("someone edited this\n", encoding="utf-8")
+    with _client():
+        pass
+
+    assert skill.read_text(encoding="utf-8") == original
+    assert sorted(p.name for p in (config_dir / "skills").iterdir()) == [SKILL_NAME]

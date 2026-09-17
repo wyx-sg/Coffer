@@ -1,0 +1,181 @@
+"""The background worker that curates sources into topic documents.
+
+Unlike the tidy worker it replaces, this one is **on by default** (spec
+knowledge FR-032). That inversion is the whole point of the redesign: tidy
+rewrote the only copy of a person's writing, so it should have been something
+they switched on; curation derives a second copy from sources it may not
+touch, and it is the only path from a source to something an agent can read.
+A vault where it never runs is a vault whose `topics/` lane stays empty.
+
+It is still bounded by an owner machine, because a pass rewrites synced
+content: two machines curating one corpus independently would each merge the
+same material into a *different* document, and git would merge both additions
+cleanly, leaving the vault holding the same knowledge twice with nothing
+reported as a conflict.
+
+Shaped like ``RetentionWorker``: one catch-up sweep shortly after boot, then on
+an interval; a failing pass is logged and never kills the loop; a pending pass
+never blocks shutdown, because the watermark makes a sweep idempotent and the
+next boot picks up whatever was left.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Awaitable, Callable
+
+from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
+from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
+from coffer.infrastructure.knowledge import fs
+
+logger = logging.getLogger(__name__)
+
+#: Long enough that a boot storm has settled before the first sweep.
+DEFAULT_START_DELAY_S = 60.0
+
+#: Short, because a source a person just wrote should be readable by an agent
+#: in the same sitting. One pass is one small model call, so a sweep that finds
+#: nothing pending costs a directory walk.
+DEFAULT_INTERVAL_S = 60.0
+
+#: Passes one sweep may run per collection. A freshly migrated vault has
+#: dozens of pending sources; draining them a few at a time keeps any single
+#: sweep short and lets a person watch the corpus fill in rather than waiting
+#: on one long batch.
+MAX_PASSES_PER_SWEEP = 5
+
+CurateCallable = Callable[..., Awaitable[dict[str, object]]]
+DeliverCallable = Callable[[], Awaitable[int]]
+EnabledCheck = Callable[[], Awaitable[bool]]
+CollectionLister = Callable[[], Awaitable[list[str]]]
+
+
+async def _unset_interval() -> int | None:
+    """No interval chosen — the constant above applies. The composition root
+    injects a reader of the operator's setting instead."""
+    return None
+
+
+class CurationWorker:
+    def __init__(
+        self,
+        *,
+        service: KnowledgeService,
+        curate: CurateCallable,
+        deliver: DeliverCallable | None,
+        is_enabled: EnabledCheck,
+        list_collections: CollectionLister,
+        start_delay_s: float = DEFAULT_START_DELAY_S,
+        interval_s: float = DEFAULT_INTERVAL_S,
+        read_interval: IntervalReader = _unset_interval,
+        lock: asyncio.Lock | None = None,
+        runs: UpkeepRunRegistry = UPKEEP_RUNS,
+        max_passes_per_sweep: int = MAX_PASSES_PER_SWEEP,
+    ) -> None:
+        self._service = service
+        self._curate = curate
+        self._deliver = deliver
+        self._is_enabled = is_enabled
+        self._list_collections = list_collections
+        self._start_delay_s = start_delay_s
+        self._interval_s = interval_s
+        self._read_interval = read_interval
+        # The vault-write lock a converge round also takes (spec vault-sync
+        # ``## Unattended rewriters``): a pass and a round both rewrite vault
+        # content, and an export taken half-way through a rewrite is a torn
+        # snapshot that git reads as a deliberate change. None on a vault with
+        # no sync wired, where there is nothing to interleave with.
+        self._lock = lock
+        # The same table the page's button claims against. The lock above is
+        # vault-wide; this one is per-collection, which is the collision this
+        # worker actually has with a person pressing Curate.
+        self._runs = runs
+        self._max_passes = max_passes_per_sweep
+
+    async def run_forever(self) -> None:
+        await asyncio.sleep(self._start_delay_s)
+        while True:
+            try:
+                await self.run_once()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # A failed sweep must never end the loop: the next one is a
+                # fresh attempt, and the watermark tells it what is still owed.
+                logger.warning("knowledge.curate_worker.sweep_failed", exc_info=True)
+            # The operator's interval is re-read as the wait runs, so a change
+            # in Settings lands within a slice rather than at the end of a wait
+            # this worker committed to hours ago.
+            await wait_for_next_pass(self._read_interval, default_s=self._interval_s)
+
+    async def run_once(self) -> None:
+        """Re-deliver the skills, then sweep — or not, when curation is off."""
+        # Delivery runs on every tick and OUTSIDE the enabled check, because it
+        # is not part of curating: a collection created, deleted or re-scoped
+        # changes what each agent must be told, and that is true on a machine
+        # where curation is switched off or which is not the owner (FR-035). It
+        # is cheap and skips a copy that already matches.
+        if self._deliver is not None:
+            try:
+                await self._deliver()
+            except Exception:
+                logger.warning("knowledge.curate_worker.delivery_failed", exc_info=True)
+        if not await self._is_enabled():
+            return
+        if self._lock is None:
+            await self._sweep()
+            return
+        async with self._lock:
+            await self._sweep()
+
+    async def _sweep(self) -> None:
+        for collection in await self._list_collections():
+            try:
+                await self._drain(collection)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # One collection failing must not skip the rest.
+                logger.warning(
+                    "knowledge.curate_worker.collection_failed",
+                    extra={"collection": collection},
+                    exc_info=True,
+                )
+
+    async def _drain(self, collection: str) -> None:
+        """Up to ``max_passes`` sources of one collection, one pass each."""
+        if not await asyncio.to_thread(fs.pending_sources, collection):
+            return
+        # Skip, never queue: a collection someone is already curating by hand
+        # does not need a second pass behind the first, and the next sweep
+        # comes round to it anyway. Busy is an ordinary state of a collection,
+        # so it is not logged as a failure.
+        async with self._runs.claimed(KIND_KNOWLEDGE, collection) as claimed:
+            if not claimed:
+                logger.debug(
+                    "knowledge.curate_worker.collection_busy",
+                    extra={"collection": collection},
+                )
+                return
+            # Re-read inside the claim. The cheap check above only decided
+            # whether the claim was worth taking; between it and here a manual
+            # pass may have absorbed some of those sources, and curating an
+            # already-stamped source is a wasted model call that rewrites
+            # documents for nothing.
+            pending = await asyncio.to_thread(fs.pending_sources, collection)
+            for relpath in pending[: self._max_passes]:
+                outcome = await self._curate(
+                    self._service, collection, source_relpath=relpath, actor="system"
+                )
+                status = str(outcome.get("status", ""))
+                if status in {"no_model", "failed"}:
+                    # No model is an installation-wide fact, and a failed loop
+                    # is likely to fail again on the next source in the same
+                    # sweep. Either way, stop here and let the next sweep try.
+                    logger.info(
+                        "knowledge.curate_worker.stopping_sweep",
+                        extra={"collection": collection, "status": status},
+                    )
+                    return

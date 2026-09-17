@@ -15,8 +15,8 @@ from coffer.domain.audit import AuditEntry
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
+    CURATE,
     ORGANISE,
-    TIDY,
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
@@ -299,7 +299,7 @@ class SqlAlchemyAuditRepo:
 _UPKEEP_COLUMNS = {
     AGGREGATE: ("auto_aggregate_enabled", "aggregate_interval_s"),
     ORGANISE: ("auto_organise_enabled", "organise_interval_s"),
-    TIDY: ("auto_tidy_enabled", "tidy_interval_s"),
+    CURATE: ("auto_curate_enabled", "curate_interval_s"),
 }
 
 
@@ -322,7 +322,7 @@ class SqlAlchemyInternalEngineConfigRepo:
         self,
         *,
         model: str | None,
-        tidy_owner_machine_id: str | None = None,
+        curate_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig:
         async with self._sm() as session:
@@ -333,9 +333,9 @@ class SqlAlchemyInternalEngineConfigRepo:
                 row = InternalEngineConfigModel(id=1, updated_at=now)
                 session.add(row)
             row.model = model
-            if tidy_owner_machine_id is not None:
+            if curate_owner_machine_id is not None:
                 # The empty string clears it back to "wherever this is read".
-                row.tidy_owner_machine_id = tidy_owner_machine_id or None
+                row.curate_owner_machine_id = curate_owner_machine_id or None
             for name, setting in (upkeep or {}).items():
                 enabled_col, interval_col = _UPKEEP_COLUMNS[name]
                 setattr(row, enabled_col, setting.enabled)
@@ -352,11 +352,11 @@ class SqlAlchemyInternalEngineConfigRepo:
         return GlobalInternalEngineConfig(
             model=row.model,
             updated_at=updated_at,
-            auto_tidy_enabled=bool(row.auto_tidy_enabled),
-            tidy_owner_machine_id=row.tidy_owner_machine_id,
+            auto_curate_enabled=bool(row.auto_curate_enabled),
+            curate_owner_machine_id=row.curate_owner_machine_id,
             auto_aggregate_enabled=bool(row.auto_aggregate_enabled),
             aggregate_interval_s=row.aggregate_interval_s,
             auto_organise_enabled=bool(row.auto_organise_enabled),
             organise_interval_s=row.organise_interval_s,
-            tidy_interval_s=row.tidy_interval_s,
+            curate_interval_s=row.curate_interval_s,
         )

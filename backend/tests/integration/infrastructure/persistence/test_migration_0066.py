@@ -13,7 +13,6 @@ from __future__ import annotations
 import pathlib
 import sqlite3
 
-import pytest
 from alembic import command
 
 from coffer.infrastructure.knowledge.frontmatter import split_frontmatter
@@ -74,10 +73,6 @@ def _seed_rows(db_path: pathlib.Path) -> None:
         conn.close()
 
 
-@pytest.mark.acceptance(
-    spec="knowledge",
-    scenario="migration rewrites ULID documents into named files in collections",
-)
 def test_0066_names_files_from_titles_then_drops_the_tables(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     db_path = tmp_path / "m.db"
     root = tmp_path / "knowledge"
@@ -132,7 +127,7 @@ def test_0066_registers_collections_that_are_already_on_disk(tmp_path, monkeypat
     migrated by an earlier run — or restored from a backup — reports no work
     done, so the scopes' rows were deleted and nothing registered in their
     place, leaving every file on disk invisible to every agent (the per-agent
-    scope reads the Resource rows, spec knowledge FR-009).
+    scope reads the Resource rows, spec knowledge FR-010).
     """
     db_path = tmp_path / "m.db"
     root = tmp_path / "knowledge"

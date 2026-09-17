@@ -1,43 +1,38 @@
-"""The knowledge layer's six built-in MCP tools.
+"""The knowledge layer's one built-in MCP tool.
 
-``list``, ``grep``, ``read``, ``search``, ``write``, ``delete`` — registered
-under the reserved ``coffer__`` prefix the gateway adds (spec knowledge FR-027).
+``coffer__write`` — and nothing else (spec knowledge FR-033). ``list``,
+``grep``, ``read``, ``search`` and ``delete`` are gone.
 
-The motion these tools are shaped around is **catalogue, then grep**, with
-``search`` for the case that motion cannot serve. ``list`` walks the directory
-one level at a time so an agent can choose *which file* from titles and
-descriptions; ``grep`` finds *which line* once it knows where to look;
-``search`` answers when the agent cannot afford the catalogue or has no exact
-words to grep for. The three are deliberately not modes of one tool — an agent
-picks by what it knows, not by a flag — and none of them takes a scope,
-because a call spans every collection the agent is authorized for (FR-009).
-That authorization is the only argument the layer resolves for itself:
-the gateway writes the session's handshake identity into every call as
-``agent``, an argument no tool advertises and no caller can set (spec mcp-gateway FR-013).
+**Why reading has no tool.** Across 448 Claude Code sessions after the corpus
+was built, the delivered skill was never loaded once and no knowledge tool was
+ever called. The question was never which retrieval mechanism to expose: a
+tool an agent does not remember to call is not retrieval. Every agent Coffer
+supports already has `Read` and `Grep`, which need no remembering, so the
+layer's job narrows to putting the right absolute paths in front of the model —
+which the per-agent skill does, catalogue and all (FR-037).
 
-``search`` never fails for want of an index: there is none, and no connection
-behind it either — it matches literally over the files at call time (spec
-knowledge FR-018), so an agent may always reach for it.
+**Why writing keeps one.** A write is the one operation where the agent
+genuinely needs Coffer rather than a filesystem: which collection it may write,
+which lane the file belongs in, what frontmatter it carries, and the audit
+entry naming who wrote it are all this layer's to decide. It is also the only
+remaining place an invocation is recorded.
+
+The tool's description is one of exactly two places this layer is always in a
+model's context (the other is the gateway's own instructions), so it says what
+writing here is *for* rather than describing an API.
 """
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
-from coffer.application.knowledge.builtin_search_tool import register_search_tool
-from coffer.application.knowledge.search import SearchService
 from coffer.application.knowledge.service import KnowledgeService
-from coffer.domain.knowledge.entry import CatalogueLevel, KnowledgeFile
-from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES
-
-_MAX_MATCHES = 500
+from coffer.domain.knowledge.entry import KnowledgeFile
+from coffer.domain.knowledge.errors import CollectionNotFound
 
 #: Audit actor for an agent-side write when the session reported no identity.
 _ANONYMOUS_ACTOR = "agent"
-
-Handler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 def _text(value: Any) -> str:
@@ -55,42 +50,19 @@ def _required(args: dict[str, Any], name: str) -> str:
 def _agent(args: dict[str, Any]) -> str | None:
     """The session's agent identity, or ``None`` when it reported none.
 
-    Set by the gateway, never by the caller: it is absent from every tool's
-    input schema and overwritten on every call. ``None`` means "unidentified
-    caller", which the service answers with the collections scoped to every
-    agent — not with all of them.
+    Set by the gateway, never by the caller: it is absent from the tool's input
+    schema and overwritten on every call (spec mcp-gateway FR-013). ``None``
+    means "unidentified caller", which the service answers with the collections
+    scoped to every agent — not with all of them.
     """
     return _text(args.get("agent")) or None
 
 
-def _level_payload(level: CatalogueLevel) -> dict[str, Any]:
-    return {
-        "path": level.path,
-        "directories": [
-            {"path": d.path, "name": d.name, "file_count": d.file_count} for d in level.directories
-        ],
-        "files": [
-            {
-                "path": f.path,
-                "title": f.title,
-                "description": f.description,
-                "actor": f.actor,
-                "updated_at": f.updated_at,
-            }
-            for f in level.files
-        ],
-    }
-
-
-def _file_payload(file: KnowledgeFile) -> dict[str, Any]:
+def _payload(file: KnowledgeFile) -> dict[str, Any]:
     return {
         "path": file.path,
         "title": file.title,
         "description": file.description,
-        "actor": file.actor,
-        "created_at": file.created_at,
-        "updated_at": file.updated_at,
-        "body": file.body,
         "file_path": file.file_path,
         "folder_path": file.folder_path,
     }
@@ -100,240 +72,97 @@ def register_knowledge_builtin_tools(
     registry: BuiltinToolRegistry,
     *,
     knowledge_service: KnowledgeService,
-    search_service: SearchService | None = None,
 ) -> None:
-    """Wire the knowledge tools into the gateway's registry.
-
-    ``search_service`` is optional so a composition root that has not wired
-    search still gets the five file tools; when it is absent the sixth is
-    simply not advertised, rather than advertised and broken.
-    """
+    """Wire the one knowledge tool into the gateway's registry."""
 
     svc = knowledge_service
 
-    if search_service is not None:
-        register_search_tool(registry, search_service=search_service)
-
-    async def list_knowledge(args: dict[str, Any]) -> dict[str, Any]:
+    async def write(args: dict[str, Any]) -> dict[str, Any]:
         agent = _agent(args)
-        path = _text(args.get("path"))
-        if not path:
-            collections = await svc.list_collections(agent)
-            return {
-                "collections": [
-                    {"name": c.name, "description": c.description, "file_count": c.file_count}
-                    for c in collections
-                ]
-            }
-        return _level_payload(await svc.list_level(path, agent))
-
-    async def grep(args: dict[str, Any]) -> dict[str, Any]:
-        pattern = _required(args, "pattern")
         try:
-            max_matches = int(args.get("max_matches", DEFAULT_MAX_MATCHES))
-        except (TypeError, ValueError) as exc:
-            raise ValueError("'max_matches' must be an integer") from exc
-        outcome = await svc.grep(
-            pattern,
-            agent=_agent(args),
-            collection=_text(args.get("collection")) or None,
-            max_matches=max(1, min(_MAX_MATCHES, max_matches)),
-        )
+            written = await svc.write_source(
+                title=_required(args, "title"),
+                description=_required(args, "description"),
+                # Optional, matching the REST surface and FR-014: a file whose
+                # whole content is its title and description is a legitimate
+                # thing to write, and rejecting it would be a rule only one of
+                # the two write surfaces had.
+                body=_text(args.get("body")),
+                collection=_required(args, "collection"),
+                folder=_text(args.get("folder")) or None,
+                actor=agent or _ANONYMOUS_ACTOR,
+                agent=agent,
+            )
+        except CollectionNotFound as exc:
+            # Name the collections this caller may write. It is not a second
+            # retrieval surface: it discloses exactly what this agent's own
+            # delivered skill already lists (FR-010), and it turns a dead end
+            # into a correction for a model that reached for the tool without
+            # having opened the skill.
+            visible = await svc.visible_collections(agent)
+            raise ValueError(
+                f"no collection named {exc.name!r} is available to you. "
+                + (f"You may write to: {', '.join(visible)}." if visible else "You have none.")
+            ) from exc
         return {
-            "matches": [
-                {"path": m.path, "line_number": m.line_number, "line": m.line}
-                for m in outcome.matches
-            ],
-            "truncated": outcome.truncated,
+            **_payload(written),
+            "status": "written",
+            "note": (
+                "Filed as source material. Coffer's curation pass folds it into this "
+                "collection's topic documents shortly; it will not stay at this path "
+                "verbatim."
+            ),
         }
 
-    async def read(args: dict[str, Any]) -> dict[str, Any]:
-        return _file_payload(await svc.read(_required(args, "path"), _agent(args)))
-
-    async def write(args: dict[str, Any]) -> dict[str, Any]:
-        directory = _text(args.get("directory"))
-        relpath = _text(args.get("path"))
-        if bool(directory) == bool(relpath):
-            raise ValueError(
-                "a write takes exactly one of 'directory' (create a new file "
-                "there) or 'path' (replace that file)"
-            )
-        agent = _agent(args)
-        written = await svc.write(
-            title=_required(args, "title"),
-            description=_required(args, "description"),
-            # Optional, matching the REST surface and FR-019: a file whose
-            # whole content is its title and description is a legitimate
-            # thing to write, and rejecting it would be a rule only one of
-            # the two write surfaces had.
-            body=_text(args.get("body")),
-            directory=directory or None,
-            relpath=relpath or None,
-            actor=agent or _ANONYMOUS_ACTOR,
-            agent=agent,
-        )
-        return {**_file_payload(written), "status": "replaced" if relpath else "created"}
-
-    async def delete(args: dict[str, Any]) -> dict[str, Any]:
-        path = _required(args, "path")
-        agent = _agent(args)
-        await svc.delete(path, actor=agent or _ANONYMOUS_ACTOR, agent=agent)
-        return {"deleted": True, "path": path}
-
-    registry.register(
-        BuiltinTool(
-            name="list",
-            description=(
-                "Browse Coffer's knowledge catalogue, one level at a time. With "
-                "no arguments it names every collection you may read, with the "
-                "collection's description and how many files it holds. Pass a "
-                "path to see that directory's immediate subdirectories and "
-                "files; each file comes back with a title and a one-line "
-                "description, which is what you choose from — read the "
-                "descriptions, pick the file that answers your question, then "
-                "coffer__read it. Walk down a level at a time rather than "
-                "guessing a deep path. The catalogue is generated from the "
-                "directory itself, so it always matches what is on disk."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": (
-                            "Directory to list, relative to the knowledge root "
-                            "(e.g. 'shopee' or 'shopee/account'). Omit for the "
-                            "list of collections."
-                        ),
-                    },
-                },
-            },
-            handler=list_knowledge,
-        )
-    )
-    registry.register(
-        BuiltinTool(
-            name="grep",
-            description=(
-                "Search the text of every knowledge file you may read, literally "
-                "or by regular expression, returning each matching line with its "
-                "file and line number. Use it to find which line mentions an "
-                "identifier, a path, or a CJK phrase — it matches bytes, so "
-                "nothing is stemmed or tokenized away. Matching is exact, not "
-                "conceptual: to find knowledge by topic, browse coffer__list "
-                "first and grep once you know where to look. Narrow with "
-                "'collection' when you already know which one holds it."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "pattern": {"type": "string", "description": "Literal text or regex."},
-                    "collection": {
-                        "type": "string",
-                        "description": (
-                            "Restrict to one collection. Omit to search every "
-                            "collection you may read."
-                        ),
-                    },
-                    "max_matches": {
-                        "type": "integer",
-                        "default": DEFAULT_MAX_MATCHES,
-                        "minimum": 1,
-                        "maximum": _MAX_MATCHES,
-                    },
-                },
-                "required": ["pattern"],
-            },
-            handler=grep,
-        )
-    )
-    registry.register(
-        BuiltinTool(
-            name="read",
-            description=(
-                "Read one knowledge file in full by its path — the whole "
-                "Markdown, not a snippet. Paths come from coffer__list and from "
-                "coffer__grep matches. The response also carries the file's "
-                "absolute path, so you can point the user at it."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": (
-                            "File path relative to the knowledge root, e.g. "
-                            "'shopee/account/gateway.md'."
-                        ),
-                    },
-                },
-                "required": ["path"],
-            },
-            handler=read,
-        )
-    )
     registry.register(
         BuiltinTool(
             name="write",
             description=(
-                "Write a knowledge file. Pass 'directory' to create a new file "
-                "in that collection or folder — the file name is derived from "
-                "the title — or 'path' to replace an existing file in place. "
-                "Exactly one of the two. Write down what would otherwise have "
-                "to be rediscovered; the user reads these files in their own "
-                "editor, so write for a human."
+                "Record something durable about this user's working environment "
+                "into Coffer's knowledge — a fact about a service, a convention "
+                "they follow, a decision and its reason, a trap and how to avoid "
+                "it. What you write is filed as source material: Coffer's own "
+                "model then merges it into the collection's topic documents, "
+                "deduplicating against what is already there, so write the fact "
+                "plainly and do not worry about where it belongs or whether it "
+                "repeats something. Not for what is already in the repository in "
+                "front of you, not for anything transient to this session, and "
+                "never for secrets. To READ this knowledge, use your own file "
+                "tools at the paths the coffer-knowledge skill lists — there is "
+                "no read tool here."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
+                    "collection": {
+                        "type": "string",
+                        "description": (
+                            "Which collection to file it under. The "
+                            "coffer-knowledge skill names the ones you may write."
+                        ),
+                    },
                     "title": {
                         "type": "string",
-                        "description": "Human-readable title; also the file name.",
+                        "description": "Human-readable title naming the subject.",
                     },
                     "description": {
                         "type": "string",
                         "description": (
-                            "One line saying what this file answers. Required: "
-                            "it is what the file shows in the catalogue, and "
-                            "therefore what makes it findable at all."
+                            "One line saying what this answers. Required: it is "
+                            "what curation reads first when deciding where the "
+                            "material belongs."
                         ),
                     },
                     "body": {"type": "string", "description": "The Markdown content."},
-                    "directory": {
+                    "folder": {
                         "type": "string",
                         "description": (
-                            "Collection or folder to create the file in, e.g. "
-                            "'shopee' or 'shopee/account'."
+                            "Optional folder inside the collection's sources to file it under."
                         ),
                     },
-                    "path": {
-                        "type": "string",
-                        "description": "Existing file to replace, instead of 'directory'.",
-                    },
                 },
-                "required": ["title", "description"],
+                "required": ["collection", "title", "description"],
             },
             handler=write,
-        )
-    )
-    registry.register(
-        BuiltinTool(
-            name="delete",
-            description=(
-                "Delete one knowledge file by its path. The file is removed from "
-                "disk; prefer replacing it with coffer__write when the knowledge "
-                "is merely out of date."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "File path relative to the knowledge root.",
-                    },
-                },
-                "required": ["path"],
-            },
-            handler=delete,
         )
     )

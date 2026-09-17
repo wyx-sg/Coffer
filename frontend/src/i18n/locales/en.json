@@ -299,7 +299,6 @@
       "credential_set": "Stored a credential",
       "internal_engine_model_set": "Set the internal engine's model",
       "knowledge_deleted": "Deleted a note from {{resource}}",
-      "knowledge_tidied": "Tidied the {{resource}} collection",
       "knowledge_written": "Wrote a note to {{resource}}",
       "master_key_exported": "Exported the master key",
       "master_key_imported": "Imported a master key",
@@ -333,7 +332,8 @@
       "sync_rejected": "Rejected a held converge round",
       "sync_rolled_back": "Rolled a converge round back",
       "sync_run": "Ran a converge round",
-      "token_rotated": "Access token rotated"
+      "token_rotated": "Access token rotated",
+      "knowledge_curated": "Derived the {{resource}} documents from its sources"
     },
     "capType": {
       "tool": "tool",
@@ -574,10 +574,10 @@
           "name": "Organise memory",
           "writes": "The model rewrites the derived digest — merges duplicates, marks superseded facts. Deleting the tree and re-running reproduces it."
         },
-        "tidy": {
-          "name": "Organise knowledge",
-          "writes": "The model rewrites the knowledge files you wrote.",
-          "caution": "This edits the only copy. Prior versions are kept, but nothing asks you first."
+        "curate": {
+          "name": "Derive documents from sources",
+          "writes": "Coffer's model reads the sources you write and derives the documents your agents read. It never changes a source.",
+          "caution": "Switch this off and nothing is ever derived: your sources stay as they are, and the documents agents read stay empty."
         }
       }
     }
@@ -689,7 +689,9 @@
     "UNMANAGED_SKILL_INVALID": "That skill folder isn't a valid skill",
     "UNMANAGED_SKILL_NOT_FOUND": "Unmanaged skill not found",
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time — retry, or raise its request timeout",
-    "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection"
+    "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection",
+    "KNOWLEDGE_CURATION_BOUND": "One curation pass may only rewrite a handful of documents. The rest continue on the next pass.",
+    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "A curated document may not name another knowledge file — file names change when the collection is reorganised."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -986,7 +988,7 @@
   },
   "knowledge": {
     "title": "Knowledge",
-    "subtitle": "Markdown files you and your agents both edit — one folder per collection. Agents read them through Coffer's tools; only the agents you allow can see a collection.",
+    "subtitle": "Two folders per collection: the sources you and your agents write, and the topic documents Coffer curates from them. Agents read the topics with their own tools; only the agents you allow are told a collection exists.",
     "add": "New collection",
     "loadFailed": "Failed to load collections",
     "searchPlaceholder": "Search collections…",
@@ -994,35 +996,57 @@
     "cols": {
       "name": "Name",
       "description": "Description",
-      "files": "Files"
+      "sources": "Sources",
+      "topics": "Topics"
     },
     "detail": {
       "noMatches": "No matches.",
       "filterPlaceholder": "Filter by name…",
-      "tidy": "Tidy",
-      "tidyHint": "Rebuilds each collection's index file from the Markdown on disk.",
-      "tidyDone": "Tidy pass finished.",
       "emptyFolder": "Nothing here yet",
       "selectAFile": "Select a file to read it",
       "deleteFile": "Delete file",
-      "deleteFileTitle": "Delete this file?",
-      "deleteFileConfirm": "Delete “{{path}}” from disk? The file is the only copy — this cannot be undone.",
-      "treeLabel": "Files in this collection"
+      "deleteFileTitle": "Delete this source?",
+      "deleteFileConfirm": "Delete “{{path}}” from disk? The source is the only copy — this cannot be undone.",
+      "curate": "Curate",
+      "curateHint": "Fold the next pending source into this collection's topic documents.",
+      "curateRunning": "A pass is already running",
+      "curateStatus": {
+        "ok": "Curation pass finished.",
+        "no_model": "No internal model is configured, so nothing was curated.",
+        "up_to_date": "Every source is already in the topics.",
+        "too_large": "That source is too large for one pass to take in.",
+        "failed": "The curation pass didn't finish. Nothing was marked as curated."
+      },
+      "curatedAt": "In the topics since {{when}}",
+      "notCuratedYet": "Not in the topics yet",
+      "lanes": {
+        "sources": {
+          "tab": "Sources",
+          "treeLabel": "Sources in this collection",
+          "empty": "No sources yet — upload a document, or drop a Markdown file into this folder."
+        },
+        "topics": {
+          "tab": "Topics",
+          "treeLabel": "Topics in this collection",
+          "empty": "No topics yet. Curation derives them from the sources you write.",
+          "writtenByCuration": "Coffer's curation writes these documents from your sources. Anything you change here is overwritten by the next pass — put a correction in as a new source instead."
+        }
+      }
     },
     "welcome": {
       "title": "One place for everything your agents know",
-      "body": "A collection is a folder of Markdown — the notes your agents write and the files you add, side by side. Make one, then let agents read it.",
+      "body": "A collection is two folders: the sources you and your agents write, and the topic documents Coffer curates from them. Make one, then let agents read it.",
       "featureEntries": {
-        "title": "What agents write",
-        "body": "Agents store notes through Coffer's MCP tools, and read them back in the next session."
+        "title": "What you write",
+        "body": "You and your agents add source material — notes through Coffer's tools, uploads, Markdown you drop in yourself."
       },
       "featureDocuments": {
-        "title": "What you add",
-        "body": "Drop Markdown files into a collection; Coffer serves them as they are."
+        "title": "What Coffer derives",
+        "body": "Coffer's own model folds those sources into topic documents, and those are what an agent reads."
       },
       "featureLocal": {
         "title": "Local-first",
-        "body": "Everything is plain Markdown on your machine — search is a literal grep, nothing is indexed."
+        "body": "Everything is plain Markdown on your machine. Nothing is indexed, and no agent reads through a tool of Coffer's."
       }
     },
     "create": {
