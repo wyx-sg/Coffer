@@ -42,15 +42,10 @@ a = Analysis(
     ["coffer/surfaces/cli/main.py"],
     pathex=["."],
     binaries=[],
-    datas=[
-        # The knowledge skill Coffer seeds at boot ships as a file, not a
-        # module, so the frozen binary has to carry it explicitly — the
-        # seeder resolves it relative to its own package directory.
-        (
-            "coffer/application/knowledge/skill_assets",
-            "coffer/application/knowledge/skill_assets",
-        ),
-    ],
+    # No data files: the knowledge skill this binary used to carry as an asset
+    # directory is rendered per agent in code now, so there is nothing here
+    # that is not an importable module.
+    datas=[],
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],
