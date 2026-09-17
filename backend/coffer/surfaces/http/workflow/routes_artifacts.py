@@ -13,7 +13,7 @@ run — a finished run is precisely the one worth promoting.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from coffer.application.workflow.catalogue import regenerate_catalogue
 from coffer.application.workflow.ports import ArtifactStorePort, KnowledgeInputPort
@@ -79,6 +79,41 @@ async def read_run_file(
         size=found.size,
         text=found.text,
         truncated=found.truncated,
+    )
+
+
+@router.get(
+    "/runs/{run_id}/files/raw",
+    response_class=Response,
+    responses={200: {"content": {"application/octet-stream": {}}}},
+)
+async def read_run_file_bytes(
+    run_id: str,
+    path: str = Query(min_length=1, description="Path relative to the run's own directory."),
+    runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
+    artifacts: ArtifactStorePort = Depends(get_workflow_artifact_store),  # noqa: B008
+) -> Response:
+    """One file's BYTES, so an image the run holds can be displayed (FR-069).
+
+    The sibling above answers "show this to a person" and returns text; this
+    answers "put this in an <img>". Same guard and the same cap — what differs
+    is that a screenshot pasted into a note has no text to preview and is still
+    the thing the note is about.
+
+    The media type is the store's answer, narrowed to a list it is willing to
+    hand a browser. Everything else is served opaque, because a run's directory
+    holds whatever its agent wrote.
+    """
+    await runs.get_run(run_id)  # 404 for a run that is not there
+    found = artifacts.read_bytes(run_id, path)
+    if found is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="file not found")
+    content, media_type = found
+    return Response(
+        content=content,
+        media_type=media_type,
+        # Nothing here is a document this app wants a browser to navigate to.
+        headers={"Content-Disposition": "inline", "X-Content-Type-Options": "nosniff"},
     )
 
 

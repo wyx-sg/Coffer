@@ -1754,24 +1754,28 @@
         "knowledge": "Knowledge",
         "file": "File",
         "link": "Link",
-        "repo": "Repository"
+        "repo": "Repository",
+        "note": "Note"
       },
       "refLabels": {
         "knowledge": "Collection",
         "file": "File",
         "link": "URL",
-        "repo": "Repository path"
+        "repo": "Repository path",
+        "note": "Title"
       },
       "refPlaceholders": {
         "knowledge": "team-docs",
         "link": "https://…",
-        "repo": "/Users/you/src/account-service"
+        "repo": "/Users/you/src/account-service",
+        "note": "What is this note about?"
       },
       "hints": {
         "knowledge": "A collection in this vault's knowledge. The tasks are told its name and read it themselves.",
         "file": "The file is stored under this run's own directory, so a task can open it from the working directory it runs in.",
         "link": "Just the address. Coffer does not fetch it — the task opens it if it can reach it.",
-        "repo": "A path to a local git repository. Coffer checks it out into this run's own directory on a branch of the run's own, so nothing here can write in your working copy."
+        "repo": "A path to a local git repository. Coffer checks it out into this run's own directory on a branch of the run's own, so nothing here can write in your working copy.",
+        "note": "Something you write yourself, in markdown. Every task is told it is your own words, and you can keep editing it while the run goes."
       },
       "chooseFile": "Choose a file…",
       "submit": "Add",
@@ -1799,7 +1803,8 @@
         "figma": "Figma",
         "notion": "Notion",
         "slack": "Slack"
-      }
+      },
+      "removeNoteConfirm": "Delete the note “{{ref}}”? Its file goes with it."
     },
     "artifacts": {
       "promote": "Save to knowledge",
@@ -1905,7 +1910,7 @@
         "enabled": "State"
       },
       "saving": "Saving…",
-      "flowHint": "The stages run top to bottom — the order is the flow. Click a stage or a task to open it.",
+      "flowHint": "The stages run top to bottom — the order is the flow, and a dashed line is work sent back. Click a stage to see the tasks inside it.",
       "editStage": "Edit stage {{name}}",
       "editStageTitle": "Edit stage",
       "addStageDescription": "A stage is a step of the delivery. It starts with one task, which you can rename and add to.",
@@ -1925,7 +1930,12 @@
       "stagePositionHint": "The order is the flow: this stage runs after the ones before it and before the ones after it.",
       "nodePosition": "Runs at",
       "nodePositionHint": "Where in this stage the task runs; the stage's tasks run in order.",
-      "removeNode": "Delete task {{name}}"
+      "removeNode": "Delete task {{name}}",
+      "openStage": "Open {{name}}",
+      "backToStages": "All stages",
+      "taskCount_one": "{{count}} task",
+      "taskCount_other": "{{count}} tasks",
+      "edgeTitle": "{{reason}} sends work back to {{stage}}"
     },
     "context": {
       "description": "What this run reads and what it has produced, in one place. Mount a collection, a file, a link or a repository at any point in the run's life — every task that opens afterwards is told it is there. Produced files appear as the tasks write them.",
@@ -1971,6 +1981,19 @@
     "brief": {
       "label": "Task brief",
       "queuedTitle": "What this task has been told"
+    },
+    "notes": {
+      "subtitle": "Your own words, part of this run's context. Every task is told so.",
+      "edit": "Edit",
+      "save": "Save note",
+      "editorLabel": "Note",
+      "placeholder": "Markdown. Whatever you want this delivery to know that nothing else told it.",
+      "pasteHint": "Paste a screenshot and it is stored with the run.",
+      "pasting": "Storing the image…",
+      "emptyTitle": "Nothing written yet",
+      "emptyBody": "This note is empty. Edit it to say what you want every task to know.",
+      "notFound": "This note is not part of this run",
+      "asFile": "Read as a file — inputs/{{ref}}"
     }
   }
 }

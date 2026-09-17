@@ -8,7 +8,7 @@
 //
 // A workflow TEMPLATE is a resource of kind `workflow` (FR-001) and is read
 // through the generic /resources API, so there is no template function here.
-import { call, enc } from "@/lib/api/call";
+import { call, callBlob, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/generated/workflow";
 
 type Schemas = components["schemas"];
@@ -32,6 +32,7 @@ export type NodeStatus = Node["status"];
 export type NodeAttempt = Schemas["NodeAttemptOut"];
 export type AdhocTask = Schemas["AdhocTaskIn"];
 export type Say = Schemas["SayIn"];
+export type RunNote = Schemas["RunNoteIn"];
 export type SendBack = Schemas["SendBackIn"];
 export type SendBackResult = Schemas["SendBackOut"];
 export type SendBackEdge = Schemas["SendBackEdgeOut"];
@@ -129,6 +130,20 @@ export const workflowApi = {
     });
   },
 
+  /**
+   * Write a note of the developer's own into the run's inputs (FR-069). It
+   * becomes a markdown file the run's tasks are told is the developer's words.
+   */
+  addNote: (runId: string, body: RunNote) =>
+    call<InputList>(`/workflow/runs/${enc(runId)}/inputs/notes`, { method: "POST", body }),
+
+  /** Replace a note's contents, keeping the name the tasks know it by. */
+  rewriteNote: (runId: string, ref: string, text: string) =>
+    call<InputList>(`/workflow/runs/${enc(runId)}/inputs/notes/${enc(ref)}`, {
+      method: "PUT",
+      body: { text },
+    }),
+
   /** Unmount one input by its `ref`. An uploaded file's bytes go with it. */
   removeInput: (runId: string, inputRef: string) =>
     call<InputList>(`/workflow/runs/${enc(runId)}/inputs/${enc(inputRef)}`, { method: "DELETE" }),
@@ -140,6 +155,11 @@ export const workflowApi = {
    *  directory; the daemon guards it and caps how much comes back. */
   readFile: (runId: string, path: string) =>
     call<RunFile>(`/workflow/runs/${enc(runId)}/files?path=${enc(path)}`),
+
+  /** One file's bytes — what an `<img>` in a note needs, since the daemon
+   *  authorises by header and an image element cannot send one. */
+  readFileBytes: (runId: string, path: string) =>
+    callBlob(`/workflow/runs/${enc(runId)}/files/raw?path=${enc(path)}`),
 
   promoteArtifacts: (runId: string, collection: string) =>
     call<Promotion>(`/workflow/runs/${enc(runId)}/promotion`, {

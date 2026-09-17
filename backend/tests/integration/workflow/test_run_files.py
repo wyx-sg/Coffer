@@ -92,3 +92,51 @@ def test_a_symlink_out_of_the_run_is_refused_rather_than_followed(
 
     with pytest.raises(paths.UnsafeWorkflowPath):
         files.read_file("run-1", "inputs/link.txt")
+
+
+# --- the bytes, for an image a note refers to (FR-069) ------------------------
+
+
+def test_an_image_comes_back_as_bytes_with_a_media_type() -> None:
+    """What `read_file` refuses to answer for: a screenshot pasted into a note
+    has no text and is still the thing the note is about."""
+    png = b"\x89PNG\r\n\x1a\n\xff\xfe"
+    inputs.write_input("run-1", "pasted.png", png)
+
+    found = files.read_bytes("run-1", "inputs/pasted.png")
+
+    assert found == (png, "image/png")
+
+
+def test_a_file_whose_type_is_not_recognised_is_served_opaque() -> None:
+    """A run's directory holds whatever its agent wrote, and a browser handed
+    `text/html` from it would run that file's script against this app."""
+    inputs.write_input("run-1", "page.html", b"<script>alert(1)</script>")
+
+    found = files.read_bytes("run-1", "inputs/page.html")
+
+    assert found is not None and found[1] == "application/octet-stream"
+
+
+def test_an_svg_is_downloaded_rather_than_rendered() -> None:
+    """An SVG is a document that can carry script; it is the one image type
+    that is not handed back as an image."""
+    inputs.write_input("run-1", "diagram.svg", b"<svg/>")
+
+    found = files.read_bytes("run-1", "inputs/diagram.svg")
+
+    assert found is not None and found[1] == "application/octet-stream"
+
+
+def test_the_bytes_are_capped_like_the_preview() -> None:
+    inputs.write_input("run-1", "huge.bin", b"x" * (files.MAX_PREVIEW_BYTES + 500))
+
+    found = files.read_bytes("run-1", "inputs/huge.bin")
+
+    assert found is not None and len(found[0]) == files.MAX_PREVIEW_BYTES
+
+
+def test_the_bytes_route_guards_the_same_paths() -> None:
+    assert files.read_bytes("run-1", "inputs/gone.png") is None
+    with pytest.raises(paths.UnsafeWorkflowPath):
+        files.read_bytes("run-1", "../../.ssh/id_rsa")

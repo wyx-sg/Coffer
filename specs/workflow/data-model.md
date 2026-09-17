@@ -81,7 +81,7 @@ timestamps are UTC.
 | `current_node_key` | TEXT nullable | projection |
 | `version` | INTEGER not null default 1 | optimistic lock (FR-015) |
 | `tokens_spent` | INTEGER not null default 0 | against the snapshot's `token_budget` (FR-018) |
-| `inputs` | JSON not null default `[]` | mounted inputs (FR-032) |
+| `inputs` | JSON not null default `[]` | mounted inputs — `knowledge`, `file`, `note`, `link`, `repo` (FR-032, FR-069) |
 | `created_at` / `updated_at` | TIMESTAMP | |
 
 Indexes: `idx_workflow_runs_status(status)`, `idx_workflow_runs_updated(updated_at)`.
@@ -194,7 +194,7 @@ which is correct: whether `create_issue` writes is not a fact about a machine.
 ~/.coffer/workflows/<run_id>/
 ├── CATALOG.md                      # generated; never hand-edited (FR-030)
 ├── workspace/                      # the run's working directory — Coffer's own (FR-053)
-├── inputs/                         # uploaded files (FR-051)
+├── inputs/                         # uploaded files, and notes the developer wrote (FR-051, FR-069)
 └── artifacts/
     └── <node_key>/
         └── <attempt>/

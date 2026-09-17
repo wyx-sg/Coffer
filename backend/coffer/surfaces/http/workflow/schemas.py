@@ -71,9 +71,13 @@ class RunInputIn(BaseModel):
     Narrower than :class:`RunInput` on purpose: ``size``, ``path`` and ``mount``
     are what the server made of the request, not things a caller gets to assert
     about its own upload.
+
+    The KIND is narrower too. A file and a note carry bytes and have routes of
+    their own; naming one here would mount a row pointing at a file nobody
+    wrote, which a node would meet as a broken run rather than a bad request.
     """
 
-    kind: RunInputKind
+    kind: Literal["knowledge", "link", "repo"]
     ref: str
     label: str | None = None
 
@@ -118,6 +122,21 @@ class AdhocTaskIn(BaseModel):
     #: Overrides the run's working directory — how a task that touches a second
     #: repository is expressed.
     workdir: str | None = None
+
+
+class RunNoteIn(BaseModel):
+    """A note the developer wrote themselves (FR-069)."""
+
+    #: Becomes the note's filename and its label. An unusable one is refused by
+    #: the path guard rather than repaired.
+    title: str = Field(min_length=1)
+    text: str = ""
+
+
+class RunNoteEditIn(BaseModel):
+    """A note's new contents. The ref it is written to is the path's."""
+
+    text: str
 
 
 class SayIn(BaseModel):

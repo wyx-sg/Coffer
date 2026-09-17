@@ -1,8 +1,9 @@
 // frontend/src/components/workflow/RunInputDialog.tsx
 // Add something for a run to read: a knowledge collection, a link, a local
-// repository or a file from this machine (FR-050, FR-051).
+// repository, a file from this machine, or a note the developer writes
+// themselves (FR-050, FR-051, FR-069).
 //
-// One dialog, four kinds, and the KIND decides what the second field is. That
+// One dialog, five kinds, and the KIND decides what the second field is. That
 // is the reason this is a dialog rather than the inline row it replaced: the
 // row had to show every field at once, so it could not change shape, so the
 // one kind whose field is not a text box — a file — could not be in the picker
@@ -46,10 +47,20 @@ import {
 } from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
-import { useAddWorkflowInput, useUploadWorkflowInput } from "@/lib/hooks/useWorkflowInputs";
+import {
+  useAddWorkflowInput,
+  useAddWorkflowNote,
+  useUploadWorkflowInput,
+} from "@/lib/hooks/useWorkflowInputs";
 import type { RunInputKind } from "@/lib/api/workflow";
 
-const KINDS = ["knowledge", "file", "link", "repo"] as const satisfies readonly RunInputKind[];
+const KINDS = [
+  "knowledge",
+  "file",
+  "note",
+  "link",
+  "repo",
+] as const satisfies readonly RunInputKind[];
 
 interface Props {
   runId: string;
@@ -61,6 +72,7 @@ export function RunInputDialog({ runId, open, onOpenChange }: Props) {
   const { t } = useTranslation();
   const add = useAddWorkflowInput(runId);
   const upload = useUploadWorkflowInput(runId);
+  const note = useAddWorkflowNote(runId);
   // Only fetched while the dialog is mounted, and only needed by one kind.
   const collections = useKnowledgeCollections();
   const [kind, setKind] = useState<RunInputKind>("knowledge");
@@ -68,8 +80,8 @@ export function RunInputDialog({ runId, open, onOpenChange }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState("");
 
-  const pending = add.isPending || upload.isPending;
-  const error = add.error ?? upload.error;
+  const pending = add.isPending || upload.isPending || note.isPending;
+  const error = add.error ?? upload.error ?? note.error;
   const incomplete = kind === "file" ? file === null : ref.trim().length === 0;
 
   const close = () => {
@@ -85,6 +97,13 @@ export function RunInputDialog({ runId, open, onOpenChange }: Props) {
     if (kind === "file") {
       if (file === null) return;
       upload.mutate({ file, label }, { onSuccess: close });
+      return;
+    }
+    if (kind === "note") {
+      // A title and nothing else. The note itself is written on its own page,
+      // where there is room for it, a preview, and somewhere to paste a
+      // screenshot — none of which belongs in the dialog that creates it.
+      note.mutate({ title: ref.trim(), text: "" }, { onSuccess: close });
       return;
     }
     add.mutate({ kind, ref: ref.trim(), label }, { onSuccess: close });
@@ -179,16 +198,20 @@ export function RunInputDialog({ runId, open, onOpenChange }: Props) {
             <p className="text-xs text-muted-foreground">{t(`workflow.inputs.hints.${kind}`)}</p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="input-description">{t("workflow.inputs.descriptionLabel")}</Label>
-            <Input
-              id="input-description"
-              value={description}
-              disabled={pending}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t("workflow.inputs.descriptionPlaceholder")}
-            />
-          </div>
+          {/* A note's title IS its label, so asking for both would be asking
+              the same question twice. */}
+          {kind === "note" ? null : (
+            <div className="space-y-2">
+              <Label htmlFor="input-description">{t("workflow.inputs.descriptionLabel")}</Label>
+              <Input
+                id="input-description"
+                value={description}
+                disabled={pending}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder={t("workflow.inputs.descriptionPlaceholder")}
+              />
+            </div>
+          )}
 
           {error ? (
             <p className="text-sm text-destructive" role="alert">

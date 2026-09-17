@@ -109,6 +109,12 @@ export const routes: RouteObject[] = [
         path: "runs/:runId/files",
         element: lazyPage(() => import("./pages/WorkflowFilePage"), "WorkflowFilePage"),
       },
+      // The developer's own note, which is also the one thing in a run's
+      // context they can rewrite (FR-069).
+      {
+        path: "runs/:runId/notes/:noteRef",
+        element: lazyPage(() => import("./pages/WorkflowNotePage"), "WorkflowNotePage"),
+      },
       {
         path: "runs/:runId/nodes/:nodeKey",
         element: lazyPage(() => import("./pages/WorkflowNodePage"), "WorkflowNodePage"),

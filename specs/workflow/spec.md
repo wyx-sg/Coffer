@@ -191,7 +191,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-029**: Every node MUST open with the same shared context: its own brief, its bound skill's instructions, the transcripts of the run's earlier tasks, the artifact catalogue, and the run's mounted inputs.
 - **FR-030**: A run MUST NOT have a conversation of its own. Every conversation in a run belongs to one task, the developer speaks to a task inside it, and what they say reaches the rest of the run by being part of the transcript the next task opens with.
 - **FR-031**: The artifact catalogue MUST be generated from what is on disk, never hand-maintained, and MUST name the node and attempt that produced each artifact.
-- **FR-032**: A run's mounted inputs MUST be able to include knowledge collections, uploaded files, external references and local repositories, and MUST be listed to every node rather than inlined wholesale.
+- **FR-032**: A run's mounted inputs MUST be able to include knowledge collections, uploaded files, notes the developer wrote, external references and local repositories, and MUST be listed to every node rather than inlined wholesale.
 - **FR-057**: Mounting a repository input MUST give the run its own checkout of it inside the run's working directory. When the path is a git repository the system MUST create a git worktree on a branch of the run's own; otherwise it MUST link the directory in and say that it did. A run MUST NOT be pointed at the developer's working checkout in a way that lets it write there, because a run advances unattended and the developer's uncommitted work is not its to touch.
 - **FR-058**: Unmounting a repository input MUST remove what the run was given and MUST leave the source repository, its branches and its working tree untouched.
 - **FR-047**: The system MUST keep a node's opening context within a stated token budget, and MUST say in the context itself what it summarised rather than silently dropping it.
@@ -231,10 +231,11 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-052**: The run's own page MUST offer no controls that advance or alter the run. Every such action belongs to the node's conversation page, where what is being decided is in front of the developer.
 - **FR-059**: Templates and runs MUST be separate surfaces in the web UI: a template is a resource and MUST be reached where the other resource kinds are, and a run is operational state and MUST NOT be. Neither may be reachable only through the other.
 - **FR-060**: The template editor MUST NOT ask the developer for a stage's or a task's key. A key is an identity the engine reads no meaning from (FR-003), so it MUST be derived from the name, made unique, and rewritten through the feedback edges that named it in the same edit.
-- **FR-061**: The template editor MUST show a template as its SHAPE — the stages in order and the tasks inside them — and MUST keep a stage's and a task's own fields behind opening that stage or task.
+- **FR-061**: The template editor MUST show a template as its SHAPE, read one depth at a time: the stages in the order they run with the edges that send work back drawn between them; a stage's tasks behind opening that stage; and a stage's and a task's own fields behind opening that stage or task.
 - **FR-062**: The template editor MUST write each edit as it is made and MUST NOT hold unsaved state. A stage's and a task's fields are saved from the dialog that holds them; adding, reordering and deleting save themselves.
 - **FR-066**: A disabled workflow MUST start no new runs, and the refusal MUST come from the daemon rather than from one client's list — a rule that lives only in the web UI is not a rule. Runs already created from it MUST be unaffected: they froze their own snapshot (FR-011), so switching a workflow off retires it from the menu and does not reach into work already under way.
 - **FR-065**: A mounted external reference MUST be reported with what it points at — Confluence, Jira, a Google doc — when that can be recognised from its address, and with nothing when it cannot. The node's context MUST carry it, so that "go and read this" resolves to one tool rather than a guess. It MUST be derived on read rather than stored, so a reference mounted before its provider was recognisable is recognised without a migration.
+- **FR-069**: The developer MUST be able to write a note of their own into a run's context, in markdown, and to keep editing it for as long as the run lives. A note MUST be stored as a file under the run's own directory and listed to every task as the developer's own words; an image pasted into one MUST be stored with the run and MUST be displayable, which the text preview cannot answer for.
 - **FR-064**: A file in a run's context MUST be readable from the app: an uploaded input and a produced artifact by their contents, a mounted collection by its own page, and an external reference by its address. Reading MUST be bounded — a path outside the run's own directory is refused, a long file is returned as its head and says so, and bytes that are not text are reported as such rather than rendered.
 - **FR-068**: The developer MUST be able to say something to any task at any point in its life, in ordinary words, in one place. Before the task starts, what they say MUST be queued onto the attempt it opens with and reach its brief; while it waits for review, it MUST carry that attempt on; once it has finished, it MUST open the task's next attempt within the ceiling. A task whose turn is in flight or whose approval is pending MUST say so rather than accept it silently.
 - **FR-063**: A task's page MUST offer no control that advances or alters the run. Retrying, redirecting and correcting are said in the task's conversation, where what is said also reaches every later task (FR-029). Deciding an approval is the one exception (FR-039), because a payload cannot honestly be approved by typing into a composer.
@@ -351,6 +352,18 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **Given** the web UI
 - **When** the developer looks for the shape of work as opposed to a delivery of it
 - **Then** the template is listed among the vault's resources and the run is not, and neither list is reachable only through the other (FR-059, FR-001)
+
+### Scenario: the editor shows the shape one depth at a time
+
+- **Given** a template of three stages, each with tasks, and an edge sending work back
+- **When** the editor is opened
+- **Then** it shows the stages and the edge between them and no task; opening a stage shows that stage's tasks and no other stage's; opening a task shows that task's fields (FR-061)
+
+### Scenario: a note the developer wrote is part of the run's context
+
+- **Given** a running run
+- **When** the developer writes a note into it and later changes their mind about what it says
+- **Then** the note is a markdown file under the run's own directory, it is listed to every task as the developer's own words, and the rewrite keeps the name the tasks already know it by (FR-069, FR-032)
 
 ### Scenario: a task can be told something before it starts
 

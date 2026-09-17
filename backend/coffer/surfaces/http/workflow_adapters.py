@@ -355,5 +355,8 @@ class FileArtifactStore:
     def read_file(self, run_id: str, rel_path: str) -> wf_files.RunFile | None:
         return wf_files.read_file(run_id, rel_path)
 
+    def read_bytes(self, run_id: str, rel_path: str) -> tuple[bytes, str] | None:
+        return wf_files.read_bytes(run_id, rel_path)
+
     def delete_run_dir(self, run_id: str) -> None:
         shutil.rmtree(wf_paths.run_dir(run_id), ignore_errors=True)

@@ -1,6 +1,6 @@
 """``/api/v1/workflow/runs/{run_id}/inputs`` — what a run reads (FR-032, FR-050).
 
-Four routes over one list, and the thing worth proving about them is that they
+Six routes over one list, and the thing worth proving about them is that they
 work on a run that is already going: an input is the developer's at any point in
 the run's life, not only at creation. The refusals matter for the same reason
 they do next door — a run another machine owns, and a run that has ended — and
@@ -186,3 +186,71 @@ def test_an_upload_to_an_unknown_run_is_404(surface: Surface) -> None:
     response = surface.client.post(f"{_RUNS}/nope/inputs/uploads", files={"file": ("x.txt", b"x")})
     assert response.status_code == 404
     assert code_of(response) == "RESOURCE_NOT_FOUND"
+
+
+# --- notes the developer wrote themselves (FR-069) ---------------------------
+
+
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a note the developer wrote is part of the run's context"
+)
+def test_a_note_is_written_into_the_run_and_can_be_rewritten(surface: Surface) -> None:
+    """FR-069: a note is a file, and a thought is not finished when it is first
+    written down."""
+    run = started_run(surface.client)
+
+    added = surface.client.post(
+        f"{_RUNS}/{run['id']}/inputs/notes",
+        json={"title": "what ops told me", "text": "# what ops told me\n\nthe cutover is Friday."},
+    )
+    assert added.status_code == 201, added.text
+    note = added.json()["items"][0]
+    assert note["kind"] == "note"
+    assert note["ref"] == "what ops told me.md"
+    assert note["label"] == "what ops told me"
+    assert surface.engine.uploads.files[(run["id"], note["ref"])].startswith(b"# what ops told me")
+
+    rewritten = surface.client.put(
+        f"{_RUNS}/{run['id']}/inputs/notes/{note['ref']}",
+        json={"text": "# what ops told me\n\nthe cutover moved to Monday."},
+    )
+    assert rewritten.status_code == 200, rewritten.text
+    items = rewritten.json()["items"]
+    # One note, not two: the rewrite kept the name the tasks already know.
+    assert [item["ref"] for item in items] == [note["ref"]]
+    assert b"Monday" in surface.engine.uploads.files[(run["id"], note["ref"])]
+
+
+def test_a_note_and_an_upload_cannot_take_the_same_name(surface: Surface) -> None:
+    """They share the run's `inputs/` directory, so removing one must never
+    take the other's bytes with it."""
+    run = started_run(surface.client)
+    surface.client.post(
+        f"{_RUNS}/{run['id']}/inputs/uploads", files={"file": ("brief.md", b"uploaded")}
+    )
+
+    added = surface.client.post(
+        f"{_RUNS}/{run['id']}/inputs/notes", json={"title": "brief", "text": "written"}
+    )
+
+    assert added.json()["items"][1]["ref"] == "brief-2.md"
+    assert surface.engine.uploads.files[(run["id"], "brief.md")] == b"uploaded"
+
+
+def test_rewriting_a_note_that_is_not_there_is_404(surface: Surface) -> None:
+    run = started_run(surface.client)
+    response = surface.client.put(f"{_RUNS}/{run['id']}/inputs/notes/nope.md", json={"text": "x"})
+    assert response.status_code == 404
+    assert code_of(response) == "WORKFLOW_INPUT_NOT_FOUND"
+
+
+def test_unmounting_a_note_takes_its_bytes(surface: Surface) -> None:
+    run = started_run(surface.client)
+    added = surface.client.post(
+        f"{_RUNS}/{run['id']}/inputs/notes", json={"title": "scratch", "text": "x"}
+    )
+    ref = added.json()["items"][0]["ref"]
+
+    surface.client.delete(f"{_RUNS}/{run['id']}/inputs/{ref}")
+
+    assert (run["id"], ref) not in surface.engine.uploads.files

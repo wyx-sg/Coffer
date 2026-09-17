@@ -1754,24 +1754,28 @@
         "knowledge": "知识",
         "file": "文件",
         "link": "链接",
-        "repo": "仓库"
+        "repo": "仓库",
+        "note": "笔记"
       },
       "refLabels": {
         "knowledge": "集合",
         "file": "文件",
         "link": "URL",
-        "repo": "仓库路径"
+        "repo": "仓库路径",
+        "note": "标题"
       },
       "refPlaceholders": {
         "knowledge": "team-docs",
         "link": "https://…",
-        "repo": "/Users/you/src/account-service"
+        "repo": "/Users/you/src/account-service",
+        "note": "这条笔记是关于什么的？"
       },
       "hints": {
         "knowledge": "本保险库知识里的一个集合。任务会被告知它的名字，自己去读。",
         "file": "文件会存到这次运行自己的目录下，任务可以直接从它运行的工作目录里打开。",
         "link": "只记地址。Coffer 不会去抓取它——能不能打开是任务自己的事。",
-        "repo": "一个本地 git 仓库的路径。Coffer 会在这次运行自己的目录里、用运行自己的分支检出一份，所以这里的任何动作都写不到你的工作副本上。"
+        "repo": "一个本地 git 仓库的路径。Coffer 会在这次运行自己的目录里、用运行自己的分支检出一份，所以这里的任何动作都写不到你的工作副本上。",
+        "note": "你自己随手写的东西，markdown 格式。每个任务都会被告知这是你亲自写的，运行期间你还可以继续改。"
       },
       "chooseFile": "选择文件…",
       "submit": "添加",
@@ -1799,7 +1803,8 @@
         "figma": "Figma",
         "notion": "Notion",
         "slack": "Slack"
-      }
+      },
+      "removeNoteConfirm": "删除笔记「{{ref}}」？它的文件会一起删掉。"
     },
     "artifacts": {
       "promote": "存入知识库",
@@ -1905,7 +1910,7 @@
         "enabled": "状态"
       },
       "saving": "保存中…",
-      "flowHint": "阶段自上而下依次执行——顺序就是流程。点任意一个阶段或任务即可打开它。",
+      "flowHint": "阶段自上而下依次执行——顺序就是流程，虚线是把工作退回。点开某个阶段，就能看到它里面的任务。",
       "editStage": "编辑阶段 {{name}}",
       "editStageTitle": "编辑阶段",
       "addStageDescription": "阶段是交付的一个步骤。它会带一个任务创建出来，之后可以改名、再添加。",
@@ -1925,7 +1930,12 @@
       "stagePositionHint": "顺序就是流程：这个阶段在它前面的阶段之后、后面的阶段之前执行。",
       "nodePosition": "执行位置",
       "nodePositionHint": "这个任务在本阶段里的执行位置；阶段内的任务按顺序执行。",
-      "removeNode": "删除任务 {{name}}"
+      "removeNode": "删除任务 {{name}}",
+      "openStage": "打开{{name}}",
+      "backToStages": "全部阶段",
+      "taskCount_one": "{{count}} 个任务",
+      "taskCount_other": "{{count}} 个任务",
+      "edgeTitle": "{{reason}} 会把工作退回到{{stage}}"
     },
     "context": {
       "description": "这次运行读什么、又产出了什么，都在这里。集合、文件、链接、仓库都可以在运行的任何阶段挂上来——之后开启的每个任务都会知道它的存在。产出的文件会随着任务写出而出现。",
@@ -1971,6 +1981,19 @@
     "brief": {
       "label": "任务任务书",
       "queuedTitle": "已经交代给这个任务的内容"
+    },
+    "notes": {
+      "subtitle": "你自己写的内容，属于这次运行的上下文。每个任务都会被告知这一点。",
+      "edit": "编辑",
+      "save": "保存笔记",
+      "editorLabel": "笔记",
+      "placeholder": "Markdown 格式。凡是你想让这次交付知道、而别处又没说的，都写在这里。",
+      "pasteHint": "直接粘贴截图，图片会随运行一起保存。",
+      "pasting": "正在保存图片……",
+      "emptyTitle": "还没写任何内容",
+      "emptyBody": "这条笔记是空的。点编辑，把你想让每个任务都知道的事写进去。",
+      "notFound": "这条笔记不属于这次运行",
+      "asFile": "以文件形式查看 —— inputs/{{ref}}"
     }
   }
 }

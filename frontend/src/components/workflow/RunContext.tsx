@@ -35,6 +35,7 @@ const REMOVE_CONFIRM = {
   knowledge: "workflow.inputs.removeConfirm",
   link: "workflow.inputs.removeConfirm",
   file: "workflow.inputs.removeFileConfirm",
+  note: "workflow.inputs.removeNoteConfirm",
   repo: "workflow.inputs.removeRepoConfirm",
 } as const;
 

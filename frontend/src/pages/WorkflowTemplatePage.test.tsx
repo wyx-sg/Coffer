@@ -122,6 +122,11 @@ function mount(config: TemplateConfig, { search = "" }: { search?: string } = {}
   );
 }
 
+/** Drill from the stage diagram into one stage's own diagram (FR-061). */
+async function openStage(key: string) {
+  fireEvent.click(await screen.findByTestId(`stage-${key}`));
+}
+
 /** Pick `option` in the Radix select the label points at. */
 async function choose(trigger: HTMLElement, option: string) {
   fireEvent.click(trigger);
@@ -142,17 +147,44 @@ function written(): TemplateConfig {
 }
 
 describe("WorkflowTemplatePage", () => {
-  test("shows the shape of the work and none of its fields", async () => {
+  acceptance("workflow", "the editor shows the shape one depth at a time", async () => {
     mount(threeStages());
     await screen.findByRole("heading", { name: "delivery" });
 
-    // The map: a box per stage, a box per task, and the feedback edge drawn.
+    // Every stage, and the reason that sends work back drawn beside them.
     expect(screen.getByText("Tech Design")).toBeInTheDocument();
-    expect(screen.getByTestId("task-draft_td")).toHaveTextContent("Draft the TD");
+    expect(screen.getByText("Coding")).toBeInTheDocument();
+    expect(screen.getByText("code_issue")).toBeInTheDocument();
 
+    // Not the tasks inside them — that is the next question, not this one.
+    expect(screen.queryByTestId("task-draft_td")).not.toBeInTheDocument();
     // And not one of the fields the old inline editor put on screen.
     expect(screen.queryByLabelText("Instructions")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Skill")).not.toBeInTheDocument();
+
+    // One depth in: this stage's tasks, and no other stage's.
+    await openStage("tech_design");
+    expect(await screen.findByTestId("task-draft_td")).toHaveTextContent("Draft the TD");
+    expect(screen.queryByTestId("task-implement")).not.toBeInTheDocument();
+
+    // One depth further: that task's fields.
+    fireEvent.click(screen.getByTestId("task-draft_td"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("Skill")).toBeInTheDocument();
+  });
+
+  test("a stage opens onto its own tasks, and the way back is named", async () => {
+    mount(threeStages());
+    await screen.findByRole("heading", { name: "delivery" });
+
+    await openStage("tech_design");
+    expect(await screen.findByTestId("task-draft_td")).toHaveTextContent("Draft the TD");
+    // One stage at a time: the other stages' tasks are not on screen either.
+    expect(screen.queryByTestId("task-implement")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "All stages" }));
+    expect(await screen.findByTestId("stage-coding")).toBeInTheDocument();
+    expect(screen.queryByTestId("task-draft_td")).not.toBeInTheDocument();
   });
 
   acceptance("workflow", "the editor never asks for an identifier it can derive", async () => {
@@ -162,7 +194,8 @@ describe("WorkflowTemplatePage", () => {
     // Not on the map…
     expect(screen.queryByLabelText("Key")).not.toBeInTheDocument();
     // …and not in either dialog.
-    fireEvent.click(screen.getByTestId("task-draft_td"));
+    await openStage("tech_design");
+    fireEvent.click(await screen.findByTestId("task-draft_td"));
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.queryByLabelText("Key")).not.toBeInTheDocument();
   });
@@ -181,7 +214,8 @@ describe("WorkflowTemplatePage", () => {
     await screen.findByRole("heading", { name: "delivery" });
 
     // Open the task, change what it runs, save in the dialog.
-    fireEvent.click(screen.getByTestId("task-draft_td"));
+    await openStage("tech_design");
+    fireEvent.click(await screen.findByTestId("task-draft_td"));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("Task"), {
       target: { value: "Draft the technical design" },
@@ -254,7 +288,8 @@ describe("WorkflowTemplatePage", () => {
 
     // Deleting is an act on the box, so it is on the box — and the dialog
     // holds a task's FIELDS and nothing else.
-    fireEvent.click(screen.getByTestId("task-draft_td"));
+    await openStage("tech_design");
+    fireEvent.click(await screen.findByTestId("task-draft_td"));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).queryByRole("button", { name: /Delete task/ })).toBeNull();
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -282,7 +317,8 @@ describe("WorkflowTemplatePage", () => {
         },
       });
 
-      fireEvent.click(screen.getByTestId("task-draft_td"));
+      await openStage("tech_design");
+      fireEvent.click(await screen.findByTestId("task-draft_td"));
       const dialog = await screen.findByRole("dialog");
       fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 

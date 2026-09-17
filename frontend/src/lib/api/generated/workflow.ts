@@ -222,6 +222,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/runs/{run_id}/inputs/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write a note of your own into the run's inputs.
+         * @description A note is the developer's own writing rather than a document they were
+         *     given (FR-069). It is stored as a markdown file under the run's own
+         *     inputs and listed to every node as their words. An image pasted into
+         *     one is an ordinary upload the note refers to by name.
+         */
+        post: operations["addWorkflowNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/runs/{run_id}/inputs/notes/{input_ref}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a note's contents, keeping its name.
+         * @description A thought is not finished when it is first written down (FR-069). The
+         *     ref survives the rewrite: a node that has already read the run's inputs
+         *     knows the note by that name.
+         */
+        put: operations["rewriteWorkflowNote"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/runs/{run_id}/inputs/{input_ref}": {
         parameters: {
             query?: never;
@@ -279,6 +324,30 @@ export interface paths {
          *     the developer something.
          */
         get: operations["readWorkflowRunFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workflow/runs/{run_id}/files/raw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file's bytes, so an image the run holds can be displayed.
+         * @description The sibling above answers "show this to a person" and returns text;
+         *     this answers "put this in an `<img>`" (FR-069). Same guard, same cap.
+         *     The media type is narrowed to a list the daemon is willing to hand a
+         *     browser and everything else is served opaque, because a run's directory
+         *     holds whatever its agent wrote.
+         */
+        get: operations["readWorkflowRunFileBytes"];
         put?: never;
         post?: never;
         delete?: never;
@@ -445,7 +514,7 @@ export interface components {
         };
         RunInput: {
             /** @enum {string} */
-            kind: "knowledge" | "file" | "link" | "repo";
+            kind: "knowledge" | "file" | "note" | "link" | "repo";
             /**
              * @description A collection name, a path relative to the run's input directory, a
              *     URL, or an absolute path to a local repository — whichever the
@@ -600,6 +669,17 @@ export interface components {
              */
             workdir?: string | null;
         };
+        RunNoteIn: {
+            /**
+             * @description Becomes the note's filename and its label. An unusable one is
+             *     refused by the path guard rather than repaired.
+             */
+            title: string;
+            text?: string;
+        };
+        RunNoteEditIn: {
+            text: string;
+        };
         SayIn: {
             /** @description What the developer wants this task to know. */
             text: string;
@@ -633,10 +713,14 @@ export interface components {
          * @description What a client may SAY when mounting an input. Deliberately narrower than
          *     `RunInput`: `size`, `path` and `mount` are what the server made of the
          *     request, not things a caller gets to assert about its own upload.
+         *
+         *     The kind is narrower too: a file and a note carry bytes and have routes
+         *     of their own, so naming one here would mount a row pointing at a file
+         *     nobody wrote.
          */
         RunInputIn: {
             /** @enum {string} */
-            kind: "knowledge" | "file" | "link" | "repo";
+            kind: "knowledge" | "link" | "repo";
             ref: string;
             label?: string | null;
         };
@@ -1156,6 +1240,68 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    addWorkflowNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id. */
+                run_id: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunNoteIn"];
+            };
+        };
+        responses: {
+            /** @description The inputs after the note was added. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputListOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rewriteWorkflowNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id. */
+                run_id: components["parameters"]["RunId"];
+                /** @description The note's ref, relative to the run's input directory. */
+                input_ref: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunNoteEditIn"];
+            };
+        };
+        responses: {
+            /** @description The inputs after the rewrite. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputListOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     removeWorkflowInput: {
         parameters: {
             query?: never;
@@ -1229,6 +1375,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunFileOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    readWorkflowRunFileBytes: {
+        parameters: {
+            query: {
+                /** @description Path relative to the run's own directory. */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description The run's id. */
+                run_id: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bytes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
                 };
             };
             400: components["responses"]["BadRequest"];

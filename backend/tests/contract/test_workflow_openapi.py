@@ -163,8 +163,8 @@ def test_no_workflow_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_nineteen_routes(spec_doc: dict[str, Any]) -> None:
-    """A run's whole management plane, counted. A twentieth arriving is a
+def test_the_management_plane_is_twenty_two_routes(spec_doc: dict[str, Any]) -> None:
+    """A run's whole management plane, counted. A twenty-third arriving is a
     decision, not an accident.
 
     It was thirteen while a run had a main thread of its own. Four inputs
@@ -177,9 +177,11 @@ def test_the_management_plane_is_nineteen_routes(spec_doc: dict[str, Any]) -> No
     could cross one, which made "send work back" a promise the product did not
     keep. The nineteenth is one sentence to one task (FR-068) — a run is driven
     by talking, and until it existed a task could only be talked to during the
-    hours its turn was in flight.
+    hours its turn was in flight. The last three are the developer's own notes
+    (FR-069) — writing one, rewriting it, and serving the bytes of an image
+    pasted into it, which the text preview cannot answer for by design.
     """
-    assert len(_declared_operations(spec_doc)) == 19
+    assert len(_declared_operations(spec_doc)) == 22
 
 
 def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]) -> None:
@@ -195,11 +197,18 @@ def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]
 def test_a_run_is_never_edited_in_place(spec_doc: dict[str, Any]) -> None:
     """A run is operational state driven by commands and rebuilt from its event
     log (FR-014) — there is no PUT or PATCH of a run's row anywhere here, and a
-    surface that offered one would be a second writer of the projection."""
+    surface that offered one would be a second writer of the projection.
+
+    A note's contents are exempt and nothing else is: a note is a FILE under
+    the run's directory (FR-069), and replacing a file's bytes is what PUT is
+    for. What the invariant protects is the projection, which no inputs route
+    touches — they write the `inputs` column, which is outside the version
+    cycle for exactly this reason.
+    """
     edits = {
         (method, path)
         for method, path in _declared_operations(spec_doc)
-        if method in {"PUT", "PATCH"}
+        if method in {"PUT", "PATCH"} and "/inputs/" not in path
     }
     assert not edits, f"the workflow surface gained an in-place edit: {sorted(edits)}"
 

@@ -209,6 +209,15 @@ class ArtifactStorePort(Protocol):
         this run may address — the guard is the store's, not the caller's."""
         ...
 
+    def read_bytes(self, run_id: str, rel_path: str) -> tuple[bytes, str] | None:
+        """One file's BYTES and its media type, or ``None`` when it is absent.
+
+        The sibling above answers "show this to a person"; this answers "put
+        this in an <img>". Same guard, same size cap, different question — a
+        pasted screenshot has no text to preview and is still the thing the
+        note is about (FR-069)."""
+        ...
+
     def delete_run_dir(self, run_id: str) -> None: ...
 
 

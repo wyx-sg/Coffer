@@ -405,6 +405,74 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /api/v1/workflow/runs/{run_id}/inputs/notes:
+    post:
+      tags: [workflow]
+      operationId: addWorkflowNote
+      summary: Write a note of your own into the run's inputs.
+      description: |
+        A note is the developer's own writing rather than a document they were
+        given (FR-069). It is stored as a markdown file under the run's own
+        inputs and listed to every node as their words. An image pasted into
+        one is an ordinary upload the note refers to by name.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunNoteIn"
+      responses:
+        "201":
+          description: The inputs after the note was added.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InputListOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/inputs/notes/{input_ref}:
+    put:
+      tags: [workflow]
+      operationId: rewriteWorkflowNote
+      summary: Replace a note's contents, keeping its name.
+      description: |
+        A thought is not finished when it is first written down (FR-069). The
+        ref survives the rewrite: a node that has already read the run's inputs
+        knows the note by that name.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: input_ref
+          in: path
+          required: true
+          schema: { type: string }
+          description: The note's ref, relative to the run's input directory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunNoteEditIn"
+      responses:
+        "200":
+          description: The inputs after the rewrite.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InputListOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /api/v1/workflow/runs/{run_id}/inputs/{input_ref}:
     delete:
       tags: [workflow]
@@ -478,6 +546,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RunFileOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflow/runs/{run_id}/files/raw:
+    get:
+      tags: [workflow]
+      operationId: readWorkflowRunFileBytes
+      summary: One file's bytes, so an image the run holds can be displayed.
+      description: |
+        The sibling above answers "show this to a person" and returns text;
+        this answers "put this in an `<img>`" (FR-069). Same guard, same cap.
+        The media type is narrowed to a list the daemon is willing to hand a
+        browser and everything else is served opaque, because a run's directory
+        holds whatever its agent wrote.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: Path relative to the run's own directory.
+      responses:
+        "200":
+          description: The bytes.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -787,7 +884,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [knowledge, file, link, repo]
+          enum: [knowledge, file, note, link, repo]
         ref:
           type: string
           description: |
@@ -1037,6 +1134,24 @@ components:
             Overrides the run's working directory — the way a task that touches
             a second repository is expressed.
 
+    RunNoteIn:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: |
+            Becomes the note's filename and its label. An unusable one is
+            refused by the path guard rather than repaired.
+        text: { type: string }
+
+    RunNoteEditIn:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+
     SayIn:
       type: object
       required: [text]
@@ -1091,10 +1206,14 @@ components:
         What a client may SAY when mounting an input. Deliberately narrower than
         `RunInput`: `size`, `path` and `mount` are what the server made of the
         request, not things a caller gets to assert about its own upload.
+
+        The kind is narrower too: a file and a note carry bytes and have routes
+        of their own, so naming one here would mount a row pointing at a file
+        nobody wrote.
       properties:
         kind:
           type: string
-          enum: [knowledge, file, link, repo]
+          enum: [knowledge, link, repo]
         ref:
           type: string
         label:

@@ -36,7 +36,7 @@ from coffer.application.workflow.ports import (
     MachineIdPort,
     RunRepoPort,
 )
-from coffer.domain.workflow.errors import WorkflowError
+from coffer.domain.workflow.errors import IllegalTransition, WorkflowError
 from coffer.domain.workflow.run import RunInput, RunInputKind
 
 __all__ = [
@@ -180,14 +180,24 @@ class WorkflowInputsService:
     ) -> tuple[RunInput, ...]:
         """Mount a collection, an external reference, or a local repository.
 
-        An uploaded FILE does not come through here — it carries a body rather
-        than a reference, and its ref is the store's to choose.
+        An uploaded FILE and a written NOTE do not come through here — they
+        carry a body rather than a reference, and their ref is the store's to
+        choose. Refused rather than documented as unsupported: a row pointing
+        at a file nobody wrote is a node told to read something that is not
+        there, which reads as a broken run.
 
         A REPO is checked out before the row moves, and a checkout that could
         not be made refuses the whole add (FR-057): an input pointing at a
         directory that is not there is a node told to work somewhere that does
         not exist, which reads as a broken run rather than a failed mount.
         """
+        if kind in _OWN_BYTES:
+            raise IllegalTransition(
+                f"an input of kind {kind.value!r}",
+                "carries bytes",
+                "mount by reference",
+                tuple(sorted(k.value for k in RunInputKind if k not in _OWN_BYTES)),
+            )
         run = await self._require_mutable(run_id, "input.add")
         current = parse_inputs(run.inputs)
         # Mounting the same thing twice is the developer saying it once; the
@@ -238,10 +248,61 @@ class WorkflowInputsService:
         run = await self._require_mutable(run_id, "input.upload")
         current = parse_inputs(run.inputs)
         self._artifacts.ensure_run_dirs(run_id)
-        taken = frozenset(item.ref for item in current if item.kind is RunInputKind.FILE)
-        ref, size, path = self._uploads.write_input(run_id, filename, content, taken=taken)
+        ref, size, path = self._uploads.write_input(
+            run_id, filename, content, taken=_names_taken(current)
+        )
         uploaded = RunInput(kind=RunInputKind.FILE, ref=ref, label=label, size=size, path=path)
         return await self._write(run_id, (*current, uploaded))
+
+    async def add_note(
+        self,
+        run_id: str,
+        *,
+        title: str,
+        text: str,
+    ) -> tuple[RunInput, ...]:
+        """Write a note of the developer's own and mount it (FR-069).
+
+        A note is stored exactly as an upload is — a file under the run's own
+        inputs — because that is what it is by the time a node reads it. What
+        the kind buys is the app's ability to offer an editor on the rows it
+        may edit, and the developer's ability to keep thinking after they
+        mounted it.
+        """
+        run = await self._require_mutable(run_id, "input.note")
+        current = parse_inputs(run.inputs)
+        self._artifacts.ensure_run_dirs(run_id)
+        # An unusable title is refused by the store's own path guard rather
+        # than repaired here: a filename this layer invented is not the one the
+        # developer typed, and they would never find out.
+        heading = title.strip()
+        ref, size, path = self._uploads.write_input(
+            run_id, f"{heading}.md", text.encode("utf-8"), taken=_names_taken(current)
+        )
+        note = RunInput(kind=RunInputKind.NOTE, ref=ref, label=heading, size=size, path=path)
+        return await self._write(run_id, (*current, note))
+
+    async def rewrite_note(self, run_id: str, ref: str, *, text: str) -> tuple[RunInput, ...]:
+        """Replace a mounted note's contents, keeping its ref (FR-069).
+
+        Keeping the ref is the point: a note is referred to by name in whatever
+        a node has already read, and a second thought that renamed the file
+        would break the reference to make room for itself.
+        """
+        run = await self._require_mutable(run_id, "input.note")
+        current = parse_inputs(run.inputs)
+        note = next(
+            (item for item in current if item.ref == ref and item.kind is RunInputKind.NOTE), None
+        )
+        if note is None:
+            raise InputNotFound(run_id, ref)
+        _ref, size, path = self._uploads.write_input(run_id, ref, text.encode("utf-8"))
+        rewritten = RunInput(
+            kind=RunInputKind.NOTE, ref=ref, label=note.label, size=size, path=path
+        )
+        return await self._write(
+            run_id, tuple(rewritten if item.ref == ref else item for item in current)
+        )
 
     async def remove_input(self, run_id: str, ref: str) -> tuple[RunInput, ...]:
         """Unmount ``ref``; an uploaded file's bytes go with it (FR-050)."""
@@ -265,7 +326,7 @@ class WorkflowInputsService:
         developer with an input they cannot remove.
         """
         try:
-            if item.kind is RunInputKind.FILE:
+            if item.kind in _OWN_BYTES:
                 self._uploads.delete_input(run_id, item.ref)
             elif item.kind is RunInputKind.REPO and item.path and item.mount:
                 # FR-058: this removes the run's checkout. The repository it
@@ -300,6 +361,22 @@ class WorkflowInputsService:
         if updated is None:  # pragma: no cover - guarded by require_run above
             return tuple(inputs)
         return parse_inputs(updated.inputs)
+
+
+#: The kinds whose bytes the RUN owns, and which it therefore deletes when the
+#: input is unmounted. A collection and a link were never the run's to delete;
+#: a repository has its own reclaim, which removes a checkout and not a repo.
+_OWN_BYTES = frozenset({RunInputKind.FILE, RunInputKind.NOTE})
+
+
+def _names_taken(current: Sequence[RunInput]) -> frozenset[str]:
+    """Every name already used in the run's ``inputs/`` directory.
+
+    Uploads and notes share that directory, so they have to share the set: a
+    note called ``prd.md`` beside an uploaded ``prd.md`` would otherwise be the
+    same file, and removing either would take the other's bytes with it.
+    """
+    return frozenset(item.ref for item in current if item.kind in _OWN_BYTES)
 
 
 def _checkout_name(item: RunInput) -> str:

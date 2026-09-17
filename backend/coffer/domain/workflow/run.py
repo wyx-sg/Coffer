@@ -152,6 +152,11 @@ class RunInputKind(StrEnum):
 
     KNOWLEDGE = "knowledge"
     FILE = "file"
+    #: Something the developer wrote themselves rather than uploaded — a
+    #: markdown file under the run's own inputs, editable for as long as the
+    #: run lives (FR-069). It is a file to every reader; the kind exists so the
+    #: app knows which rows it may open an editor on.
+    NOTE = "note"
     LINK = "link"
     #: An absolute path to a local repository. The run never works in the
     #: developer's own checkout — it is given its own inside the run's working

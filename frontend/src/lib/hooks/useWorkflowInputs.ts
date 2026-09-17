@@ -10,12 +10,16 @@
 //
 // Nothing here carries the run's `version`: an input is what the run reads,
 // not where the run is, so mounting one never races the engine's position.
+//
+// A NOTE is the one input the developer WROTE rather than pointed at (FR-069),
+// which is why it has a second mutation: a thought is not finished when it is
+// first written down, and the run goes on for hours after it.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import { workflowApi } from "@/lib/api/workflow";
-import type { InputList, RunInputIn } from "@/lib/api/workflow";
+import type { InputList, RunInputIn, RunNote } from "@/lib/api/workflow";
 import { workflowInputsKey } from "@/lib/api/queryKeys";
 import { useToast } from "@/components/ui/toast";
 
@@ -37,6 +41,18 @@ export function useAddWorkflowInput(runId: string) {
 export function useUploadWorkflowInput(runId: string) {
   return useInputMutation(runId, ({ file, label }: { file: File; label?: string | null }) =>
     workflowApi.uploadInput(runId, file, label),
+  );
+}
+
+/** Write a note of the developer's own into the run's inputs (FR-069). */
+export function useAddWorkflowNote(runId: string) {
+  return useInputMutation(runId, (note: RunNote) => workflowApi.addNote(runId, note));
+}
+
+/** Replace a note's contents, keeping the name the tasks know it by (FR-069). */
+export function useRewriteWorkflowNote(runId: string) {
+  return useInputMutation(runId, ({ ref, text }: { ref: string; text: string }) =>
+    workflowApi.rewriteNote(runId, ref, text),
   );
 }
 

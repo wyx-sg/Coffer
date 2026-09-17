@@ -311,6 +311,26 @@ async def test_mounted_inputs_are_listed_and_never_inlined() -> None:
     assert "coffer__search" in text
 
 
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a note the developer wrote is part of the run's context"
+)
+async def test_a_note_is_listed_as_the_developers_own_words() -> None:
+    """FR-069: an uploaded PRD is a document to work from; a note is the person
+    who owns this run telling you something, and the two should not read the
+    same to a node deciding what to believe."""
+    inputs = (
+        RunInput(kind=RunInputKind.NOTE, ref="what ops told me.md", label="what ops told me"),
+    )
+    composer, _store, _skills = make_composer()
+
+    text = await composer.compose(make_request(inputs=inputs))
+
+    assert (
+        "- note `/vault/workflows/run-1/inputs/what ops told me.md` — what ops told me "
+        "— written by the developer, in markdown" in text
+    )
+
+
 async def test_a_collection_deleted_since_it_was_mounted_is_still_listed() -> None:
     composer, _store, _skills = make_composer(collections={})
     inputs = (RunInput(kind=RunInputKind.KNOWLEDGE, ref="gone"),)

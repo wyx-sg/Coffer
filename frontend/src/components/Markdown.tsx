@@ -71,10 +71,34 @@ const components: Components = {
   img: (props) => <img className="my-3 max-w-full rounded-md" {...props} />,
 };
 
-export function Markdown({ children }: { children: string }) {
+interface Props {
+  children: string;
+  /**
+   * Where an image's `src` should really point. Used where the bytes are not
+   * publicly addressable — a run's own directory is behind the daemon's token
+   * (FR-069), so the page fetches each image and hands this map of object URLs
+   * in. Returning undefined leaves the `src` exactly as it was written.
+   */
+  resolveImage?: (src: string) => string | undefined;
+}
+
+export function Markdown({ children, resolveImage }: Props) {
+  const overrides: Components =
+    resolveImage === undefined
+      ? components
+      : {
+          ...components,
+          img: ({ src, ...props }) => (
+            <img
+              className="my-3 max-w-full rounded-md"
+              src={(typeof src === "string" ? resolveImage(src) : undefined) ?? src}
+              {...props}
+            />
+          ),
+        };
   return (
     <div className="text-sm text-foreground">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={overrides}>
         {children}
       </ReactMarkdown>
     </div>

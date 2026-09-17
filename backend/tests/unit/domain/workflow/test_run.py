@@ -84,7 +84,7 @@ def test_the_status_vocabularies_are_exactly_the_documented_ones():
         "missing_artifact",
         "attempt_ceiling",
     }
-    assert {k.value for k in RunInputKind} == {"knowledge", "file", "link", "repo"}
+    assert {k.value for k in RunInputKind} == {"knowledge", "file", "note", "link", "repo"}
 
 
 def test_waiting_is_a_property_of_a_node_never_of_a_run():

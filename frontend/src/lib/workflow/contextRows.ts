@@ -28,6 +28,8 @@ type ContextOrigin = "mounted" | "produced";
 type ContextOpen =
   /** Show the contents. `path` is relative to the run's own directory. */
   | { how: "preview"; path: string }
+  /** Open the developer's own note, where it can also be rewritten (FR-069). */
+  | { how: "note"; ref: string }
   /** Go to the knowledge collection's own page. */
   | { how: "collection"; name: string }
   /** Leave the app. */
@@ -72,6 +74,10 @@ function openFor(input: RunInput): ContextOpen | null {
       // The upload landed under the run's own `inputs/`, and its ref is the
       // name the store chose there.
       return { how: "preview", path: `inputs/${input.ref}` };
+    case "note":
+      // Not a preview: a note is the developer's own writing and stays theirs
+      // to change, so its row leads to the page that can also write it.
+      return { how: "note", ref: input.ref };
     case "repo":
       return input.path ? { how: "reveal", path: input.path } : null;
   }

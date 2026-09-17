@@ -296,6 +296,12 @@ class ContextComposer:
             path = f"{self._run_dir(request.run_id)}/{_INPUTS_DIR}/{item.ref}"
             size = f" ({item.size} bytes)" if item.size is not None else ""
             return f"- file `{path}`{size}{label}"
+        if item.kind is RunInputKind.NOTE:
+            # Said to be the developer's own words, because that changes how it
+            # should be read: an uploaded PRD is a document to work from, and a
+            # note is the person who owns this run telling you something.
+            path = f"{self._run_dir(request.run_id)}/{_INPUTS_DIR}/{item.ref}"
+            return f"- note `{path}`{label} — written by the developer, in markdown"
         if item.kind is RunInputKind.LINK:
             return link_line(item, label)
         if item.kind is not RunInputKind.KNOWLEDGE:

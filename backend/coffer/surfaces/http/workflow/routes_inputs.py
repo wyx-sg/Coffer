@@ -1,6 +1,6 @@
 """``/api/v1/workflow/runs/{run_id}/inputs`` — what a run reads (FR-032, FR-050).
 
-Four routes over one list, and none of them decides anything.
+Six routes over one list, and none of them decides anything.
 ``WorkflowInputsService`` owns all of it: which run may be changed, what a
 second ``prd.pdf`` is called, whether unmounting deletes bytes. This module
 turns a request into that call and a value object back onto the wire.
@@ -19,6 +19,12 @@ body with a base64 field in it. The file lands under the run's own directory and
 its ``ref`` is the path relative to that directory, which is what a node is told
 and what the agent opens from its working directory (FR-051).
 
+A NOTE is the developer's own writing rather than a document they were given
+(FR-069), so it too carries a body — and unlike an upload it can be rewritten,
+because a thought is not finished when it is first written down. It keeps its
+ref across a rewrite: a node that has already read the run's inputs knows the
+note by that name.
+
 None of these carries a ``version``. An input is not a move: mounting one does
 not advance the run, and two developers mounting two collections have not
 conflicted — they have mounted two collections. The two refusals that DO apply
@@ -31,10 +37,16 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 
 from coffer.application.workflow.inputs_service import WorkflowInputsService
+from coffer.domain.workflow.run import RunInputKind
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.workflow.converters import mounted_out
 from coffer.surfaces.http.workflow.dependencies import get_workflow_inputs_service
-from coffer.surfaces.http.workflow.schemas import InputListOut, RunInputIn
+from coffer.surfaces.http.workflow.schemas import (
+    InputListOut,
+    RunInputIn,
+    RunNoteEditIn,
+    RunNoteIn,
+)
 
 router = APIRouter(
     prefix="/api/v1/workflow",
@@ -70,7 +82,14 @@ async def add_input(
     — it has its own route, because it carries a body rather than a reference
     and its ``ref`` is the store's to choose.
     """
-    items = await inputs.add_input(run_id, kind=body.kind, ref=body.ref, label=body.label)
+    items = await inputs.add_input(
+        # The wire narrows the enum to the kinds that travel as a reference;
+        # the service's own guard narrows it again for every other caller.
+        run_id,
+        kind=RunInputKind(body.kind),
+        ref=body.ref,
+        label=body.label,
+    )
     return InputListOut(items=mounted_out(items))
 
 
@@ -98,6 +117,39 @@ async def upload_input(
         content=await file.read(),
         label=label,
     )
+    return InputListOut(items=mounted_out(items))
+
+
+@router.post(
+    "/runs/{run_id}/inputs/notes",
+    response_model=InputListOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_note(
+    run_id: str,
+    body: RunNoteIn,
+    inputs: WorkflowInputsService = Depends(get_workflow_inputs_service),  # noqa: B008
+) -> InputListOut:
+    """Write a note of your own into the run's inputs (FR-069).
+
+    It becomes a markdown file under the run's own directory, listed to every
+    node as the developer's own words. An image pasted into it is an ordinary
+    upload the note refers to by name, which is why there is no second story
+    here about where bytes go.
+    """
+    items = await inputs.add_note(run_id, title=body.title, text=body.text)
+    return InputListOut(items=mounted_out(items))
+
+
+@router.put("/runs/{run_id}/inputs/notes/{input_ref}", response_model=InputListOut)
+async def rewrite_note(
+    run_id: str,
+    input_ref: str,
+    body: RunNoteEditIn,
+    inputs: WorkflowInputsService = Depends(get_workflow_inputs_service),  # noqa: B008
+) -> InputListOut:
+    """Replace a note's contents, keeping its name (FR-069)."""
+    items = await inputs.rewrite_note(run_id, input_ref, text=body.text)
     return InputListOut(items=mounted_out(items))
 
 

@@ -16,6 +16,7 @@ import {
   FolderOpen,
   GitBranch,
   Link2,
+  NotebookPen,
   Package,
   X,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import type { ContextKind, ContextRow } from "@/lib/workflow/contextRows";
 const ICONS: Record<ContextKind, typeof BookOpen> = {
   knowledge: BookOpen,
   file: FileText,
+  note: NotebookPen,
   link: Link2,
   repo: GitBranch,
   artifact: Package,
@@ -85,6 +87,16 @@ export function useRunContextColumns({
           {row.name}
           <ExternalLink className="size-3 shrink-0 opacity-60" aria-hidden />
         </a>
+      );
+    }
+    if (open.how === "note") {
+      return (
+        <Link
+          className={NAME_CLASS}
+          to={`/runs/${encodeURIComponent(runId)}/notes/${encodeURIComponent(open.ref)}`}
+        >
+          {row.name}
+        </Link>
       );
     }
     if (open.how === "reveal") {
