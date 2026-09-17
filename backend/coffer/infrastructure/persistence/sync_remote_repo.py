@@ -262,6 +262,49 @@ class SqlAlchemySyncRemoteRepo:
             )
             await session.commit()
 
+    async def refresh_run(self, run: ConvergeRun) -> bool:
+        """Re-stamp the newest recorded round instead of appending a new one.
+
+        One outstanding confirmation is one situation, and the timer
+        re-deriving it every interval is not news (spec vault-sync FR-092). The
+        round is written over the row that first reported it — same
+        ``started_at``, so the moment the vault stopped is still readable, with
+        ``finished_at`` and the payload refreshed so the row also shows the
+        vault is still ticking — and the history grows no second row for it.
+
+        False when there is nothing to refresh, or when the newest row is not
+        the same outcome: the caller then records the round normally. The
+        status check is the invariant that keeps this from ever writing a held
+        round over an unrelated one — something else may have recorded a round
+        between two ticks.
+        """
+        async with self._sm() as session:
+            remote = await session.get(SyncRemoteModel, _ROW_ID)
+            if remote is None:
+                return False
+            stmt = (
+                select(SyncRunModel)
+                .order_by(SyncRunModel.finished_at.desc(), SyncRunModel.id.desc())
+                .limit(1)
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            if row is None or row.status != run.status.value:
+                return False
+            payload = _run_payload(run)
+            row.finished_at = run.finished_at
+            row.commit_sha = run.commit
+            row.error = run.error
+            row.payload_json = payload
+            remote.last_run_at = run.finished_at
+            remote.last_status = run.status.value
+            remote.last_error = run.error
+            if run.commit is not None:
+                remote.last_commit = run.commit
+            remote.last_run_json = payload
+            remote.updated_at = datetime.now(tz=UTC)
+            await session.commit()
+            return True
+
     async def last_run(self) -> ConvergeRun | None:
         async with self._sm() as session:
             stmt = select(SyncRemoteModel).where(SyncRemoteModel.id == _ROW_ID)

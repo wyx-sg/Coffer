@@ -8,6 +8,7 @@ SQLAlchemy.
 
 from __future__ import annotations
 
+import dataclasses
 import pathlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -306,3 +307,84 @@ async def test_a_round_recorded_with_no_remote_reaches_neither_store(
 
     assert await repo.last_run() is None
     assert await repo.list_runs() == []
+
+
+# --- one outstanding confirmation, one row (spec vault-sync FR-092) ---------
+
+
+def _held(at: datetime, *, paths: int = 9) -> ConvergeRun:
+    return ConvergeRun(
+        status=ConvergeStatus.AWAITING_CONFIRMATION,
+        started_at=at,
+        finished_at=at,
+        pending=PendingConfirmation(
+            direction=GuardDirection.PUBLISH,
+            commit="def5678",
+            remote_tip="0123456",
+            breaches=(("knowledge", paths, 10),),
+            paths=tuple(f"knowledge/notes/n{i}.md" for i in range(paths)),
+            raised_at=at,
+        ),
+    )
+
+
+async def test_refreshing_a_round_re_stamps_its_row_instead_of_adding_one(
+    sm: async_sessionmaker,
+) -> None:  # type: ignore[type-arg]
+    """The timer re-derives an unanswered confirmation every interval. The row
+    that first reported it keeps its ``started_at`` — the moment the vault
+    stopped — while its ``finished_at`` moves, which is how the same row says
+    both "held since then" and "still ticking"."""
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    raised = datetime(2026, 9, 12, 10, 0, tzinfo=UTC)
+    await repo.record_run(_held(raised))
+
+    later = datetime(2026, 9, 12, 11, 0, tzinfo=UTC)
+    refreshed = dataclasses.replace(_held(raised), started_at=later, finished_at=later)
+    assert await repo.refresh_run(refreshed) is True
+
+    records = await repo.list_runs()
+    assert len(records) == 1
+    assert records[0].run.started_at == raised
+    assert records[0].run.finished_at == later
+    assert records[0].run.pending is not None
+    assert records[0].run.pending.raised_at == raised
+    last = await repo.last_run()
+    assert last is not None and last.finished_at == later
+
+
+async def test_a_refresh_with_no_round_to_refresh_reports_so(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+
+    assert await repo.refresh_run(_held(datetime(2026, 9, 12, tzinfo=UTC))) is False
+    assert await repo.list_runs() == []
+
+
+async def test_a_refresh_never_writes_over_a_round_of_another_outcome(
+    sm: async_sessionmaker,
+) -> None:  # type: ignore[type-arg]
+    """The invariant at the write seam: if anything else recorded a round
+    between two ticks, the newest row is not the held one and must not be
+    overwritten. The caller records normally instead."""
+    repo = SqlAlchemySyncRemoteRepo(sm)
+    await repo.set(BackupRemote(url="https://example.invalid/vault.git"))
+    at = datetime(2026, 9, 12, 10, 0, tzinfo=UTC)
+    await repo.record_run(_held(at))
+    await repo.record_run(
+        ConvergeRun(
+            status=ConvergeStatus.OK,
+            started_at=datetime(2026, 9, 12, 10, 30, tzinfo=UTC),
+            finished_at=datetime(2026, 9, 12, 10, 30, tzinfo=UTC),
+            commit="abc1234",
+        )
+    )
+
+    assert await repo.refresh_run(_held(at)) is False
+
+    records = await repo.list_runs()
+    assert [r.run.status for r in records] == [
+        ConvergeStatus.OK,
+        ConvergeStatus.AWAITING_CONFIRMATION,
+    ]

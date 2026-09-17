@@ -461,7 +461,10 @@ async def test_diff_against_the_empty_tree_is_additions_only(
 
     changes = await mirror.diff_paths(GitMirror.EMPTY_TREE, head)
 
-    assert sorted(changes) == [("A", "knowledge/a.md"), ("A", "knowledge/b.md")]
+    assert sorted((status, path) for status, path, _ in changes) == [
+        ("A", "knowledge/a.md"),
+        ("A", "knowledge/b.md"),
+    ]
 
 
 @pytest.mark.asyncio
@@ -480,7 +483,56 @@ async def test_diff_paths_reports_a_deletion_and_a_modification(
 
     changes = await mirror.diff_paths(first, second)
 
-    assert sorted(changes) == [("D", "knowledge/a.md"), ("M", "knowledge/b.md")]
+    assert sorted((status, path) for status, path, _ in changes) == [
+        ("D", "knowledge/a.md"),
+        ("M", "knowledge/b.md"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_diff_paths_carries_a_content_id_that_pairs_a_move(
+    worktree: pathlib.Path, remote: pathlib.Path
+) -> None:
+    """The deletion guard tells a move from a loss by pairing content, so the
+    adapter owes it a content id that is an identity and not a prefix of one
+    (spec vault-sync FR-090, domain ``sync.diff.losses``)."""
+    mirror = await _seeded(worktree, remote, {"knowledge/a.md": "same bytes\n"})
+    first = await mirror.head()
+    assert first
+    (worktree / "knowledge" / "a.md").unlink()
+    (worktree / "knowledge" / "sources").mkdir()
+    (worktree / "knowledge" / "sources" / "a.md").write_text("same bytes\n", encoding="utf-8")
+    await mirror.stage_all()
+    await mirror.commit("relayout")
+    second = await mirror.head()
+    assert second
+
+    changes = {
+        path: (status, blob) for status, path, blob in await mirror.diff_paths(first, second)
+    }
+
+    gone, arrived = changes["knowledge/a.md"], changes["knowledge/sources/a.md"]
+    assert (gone[0], arrived[0]) == ("D", "A")
+    assert len(gone[1]) == 40, "an abbreviated id is a prefix, not an identity"
+    assert gone[1] == arrived[1], "identical bytes must report an identical content id"
+
+
+@pytest.mark.asyncio
+async def test_diff_paths_reports_no_content_id_for_the_side_a_change_lacks(
+    worktree: pathlib.Path, remote: pathlib.Path
+) -> None:
+    """git prints an all-zero object id for the side that does not exist. It is
+    not content and must never be compared as though it were — 56 additions
+    would otherwise all carry the same "content" as each other."""
+    mirror = await _seeded(worktree, remote, {"knowledge/a.md": "a\n"})
+    head = await mirror.head()
+    assert head
+
+    changes = await mirror.diff_paths(GitMirror.EMPTY_TREE, head)
+
+    assert [blob for _, _, blob in changes] == [
+        blob for _, _, blob in changes if blob and set(blob) != {"0"}
+    ]
 
 
 @pytest.mark.asyncio
@@ -501,7 +553,9 @@ async def test_a_non_ascii_path_is_never_c_quoted(
     second = await mirror.head()
     assert second
 
-    assert await mirror.diff_paths(first, second) == [("M", _CHINESE)]
+    assert [(status, path) for status, path, _ in await mirror.diff_paths(first, second)] == [
+        ("M", _CHINESE)
+    ]
     assert await mirror.merge("other", message="converge") == [_CHINESE]
     assert (worktree / _CHINESE).exists()
 

@@ -103,6 +103,14 @@ class ConvergeRun:
     #: Credential refs whose ciphertext will not decrypt on this machine.
     locked_refs: tuple[str, ...] = ()
     pending: PendingConfirmation | None = None
+    #: True when ``pending`` is a hold this vault was **already** carrying and
+    #: this round merely re-derived the same question. The timer looks at an
+    #: unanswered confirmation every interval, and ten identical rounds carry
+    #: no more information than one: the recording folds onto the round that
+    #: first reported it and the log says it once. Not stored — it describes
+    #: this round's relation to the history rather than anything about the
+    #: round, and a round read back out of the history *is* the one report.
+    hold_already_reported: bool = False
     error: str | None = None
 
     @property

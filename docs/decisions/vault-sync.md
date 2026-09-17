@@ -150,6 +150,54 @@ this machine is the damaged one: a vault that lost its files to a reinstall, a
 failed restore or a stray `rm -rf` would otherwise publish that loss as an
 ordinary deletion and take the other machines down with it.
 
+### The breaker counts losses, and a move is not a loss
+
+The first thing the breaker met in the field was not a loss at all. The
+knowledge two-lane rewrite moved every document from `knowledge/<c>/<doc>.md`
+to `knowledge/<c>/sources/<doc>.md`; the diff carried 56 deletions *and* 56
+additions of identical bytes, and a breaker that counted deletions saw 56 of 58
+documents disappear from one area. It held the vault for a day, re-asking every
+hour, over a round in which nothing was lost.
+
+The considered alternative was an escape hatch: a flag a relocation or a
+migration could set to skip the guard for one round. It was rejected. A guard
+with a way around it is worth what the least careful caller of that way leaves
+of it, and the thing needing to be waved through here is not special — it is
+simply not a deletion, and the breaker should be able to say so.
+
+So the breaker counts what a round **loses**: a deletion whose content
+reappears at another path in the same area of the same diff is a move. The
+pairing is on content, because git hands us a blob id per side of every change
+— identical bytes have the same id anywhere, different bytes do not — so "this
+is the same document" is a fact to read rather than a resemblance to guess at,
+and it costs one pass over the change list and no file reads. Name similarity
+was never a candidate: a guess that wrongly excuses a deletion loses data,
+while a guess that wrongly holds one costs a click. A relocation that also
+rewrites its documents is therefore held, and a deletion with nothing receiving
+its content — a wiped disk, a failed restore, a stray `rm -rf` — is held
+exactly as it was before.
+
+### A hold is a question about one diff, not a state the vault sits in
+
+The same incident exposed a second defect, in what a *held* vault does next. A
+round whose predecessor had been held returned immediately, before computing
+anything, and the caller recorded that as a round: ten `awaiting_confirmation`
+rows over a day, one an hour, each reporting no changes in either direction
+because none had been computed. The short-circuit was there to save the work,
+and what it actually saved was the vault from ever noticing that the question
+had stopped applying.
+
+A round now re-derives its diff even while a confirmation is outstanding, and
+releases the hold when the direction it was raised for no longer breaches —
+which is what lets a vault held by a defect since fixed converge again on its
+own rather than waiting for someone to notice a button. That costs a
+serialization and a merge per tick, which is what every unheld round costs
+anyway, and it buys the property that matters: the latch can only ever be as
+stale as one interval. A diff that still breaches stays held, keeps the moment
+the user was asked, and is written over the round that first reported it, so
+one outstanding confirmation is one row in the history, one line in the log and
+one audit event however long it stands.
+
 ### Joining a remote is two cases, and telling them apart is the decision
 
 A machine with no pointer is joining, and there are two kinds of joiner that

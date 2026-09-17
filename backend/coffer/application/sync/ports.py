@@ -307,6 +307,15 @@ class SyncRemoteRepoPort(Protocol):
 
     async def record_run(self, run: ConvergeRun) -> None: ...
 
+    async def refresh_run(self, run: ConvergeRun) -> bool:
+        """Re-stamp the newest recorded round in place, if it is this one again.
+
+        The one case: a confirmation the user has not answered, which the timer
+        re-derives every interval (spec vault-sync FR-092). Ten identical rows
+        carry no more information than one, so the round is written over the
+        row that first reported it rather than appended. Returns False when
+        there is no such row to refresh — the caller then records normally."""
+
     async def last_run(self) -> ConvergeRun | None: ...
 
     async def list_runs(self, limit: int = ...) -> list[RunRecord]: ...

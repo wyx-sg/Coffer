@@ -324,6 +324,13 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
     # --- recording ----------------------------------------------------------
 
     async def _record(self, run: ConvergeRun) -> None:
+        if run.hold_already_reported and await self._remotes.refresh_run(run):
+            # The same confirmation the user has not answered yet. It is one
+            # situation, and the timer re-deriving it every interval is not a
+            # new one: the row that first reported it is re-stamped, and no
+            # audit event is written either, so a vault waiting a week is a
+            # single entry everywhere a person might read it (FR-092).
+            return
         await self._remotes.record_run(run)
         if run.status is ConvergeStatus.DISABLED:
             return
