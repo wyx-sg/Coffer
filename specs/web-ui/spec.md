@@ -164,19 +164,27 @@ the page needs of the three, and does not itself provide, is recorded under
 `coffer audit` and `coffer mcp invocations` stay as they are — a script that
 read the log before this page existed still does.
 
-**The daemon log is not one format, and the Daemon tab's columns depend on
-reading all of them.** `daemon.log` collects Coffer's own structlog JSON, the
-stdlib formatter the root logger inherits once a migration runs, uvicorn's
-default, rich's output from an upstream MCP server, and the zerolog written by
-the cloudflared child the daemon respawns — some of it colour-escaped, because
-a child process writing to a pipe is not always convinced it is not a
-terminal. A reader that understood only structlog left level, logger and time
-empty on almost every row and dumped the whole line into the message column,
-which is the same as having no columns. So every writer's format is normalised
-onto the same fields before it reaches the page, escape sequences are stripped,
-and a traceback rides with the record that raised it instead of becoming a run
-of rows with nothing in them. A line no format fits is still kept whole rather
-than dropped — it is often the interesting one.
+**The daemon log has one writer whose format the page can rely on, and several
+it cannot.** What *Coffer* writes is one format — one JSON object per line
+carrying the time, the level, the logger and the message, for every record
+inside the daemon process, its own modules and the libraries' alike (spec
+daemon FR-022). That is what fills the Daemon tab's four columns. What the
+*other processes* sharing the file write is theirs to decide, because
+`daemon.log` is also where a detached daemon's output is redirected: uvicorn's
+default, rich's output from an upstream MCP server, the zerolog of the
+cloudflared child a tunnel respawns — some of it colour-escaped, because a
+child process writing to a pipe is not always convinced it is not a terminal.
+A tail written before the daemon's own format was fixed holds a fourth shape
+as well, so reading one still has to cope with it.
+
+So every writer's format is normalised onto the same fields before it reaches
+the page, escape sequences are stripped, and a traceback rides with the record
+that raised it instead of becoming a run of rows with nothing in them. A line
+no format fits is still kept whole rather than dropped — it is often the
+interesting one. What the page must *not* do is invent: a row shows a dash
+where its line stated no time, no level or no logger, rather than a plausible
+value, and each record is one row — a log line the daemon wrote twice would
+otherwise read as two things happening.
 
 Event types are rendered as plain-language activity lines again ("Enabled
 demo-fs"), so their translations return in both locales, guarded the way error
@@ -242,7 +250,7 @@ Remaining jargon is rewritten in plain language (e.g. "prune" is phrased as clea
 
 ### Scenario: the daemon tab reads every writer in the log
 
-- **Given** `daemon.log` holds lines from several writers at once — Coffer's structlog JSON, the stdlib formatter, uvicorn, rich, and the cloudflared child's zerolog — with a colour-escaped line among them and a traceback written under the record that raised it
+- **Given** `daemon.log` holds lines from several writers at once — Coffer's own JSON, the format the daemon itself wrote before FR-022 was met, uvicorn, rich, and the cloudflared child's zerolog — with a colour-escaped line among them and a traceback written under the record that raised it
 - **When** the user opens the Daemon tab
 - **Then** each row carries the time, level and logger its own line stated, and nothing carries a time or a level it never stated
 - **And** no message renders a terminal escape sequence as text
