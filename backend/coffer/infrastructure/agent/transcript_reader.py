@@ -144,9 +144,12 @@ class FileTranscriptReader:
         since been deleted (under this root) are pruned so the cache — and the
         sidecar it is written back to — cannot grow without bound.
 
-        The sidecar is rewritten only when this pass actually changed something.
-        A listing that parsed nothing new is the common case (every visit after
-        the first), and it must not cost a write.
+        The sidecar is rewritten when this pass changed something — or when it
+        is missing, which the cache module decides
+        (:func:`transcript_cache.save_if_needed`). A listing that parsed nothing
+        new is the common case (every visit after the first) and must not cost a
+        write; a listing that parsed nothing new because the in-memory cache is
+        warm, over a sidecar the user deleted, must.
         """
         self._ensure_loaded()
         root_prefix = str(sessions_dir(agent_type_value, Path(config_dir)))
@@ -173,8 +176,7 @@ class FileTranscriptReader:
         for stale in [k for k in self._cache if k.startswith(root_prefix) and k not in seen]:
             del self._cache[stale]
             changed = True
-        if changed:
-            transcript_cache.save(self._cache)
+        transcript_cache.save_if_needed(self._cache, changed=changed)
         return out
 
     def warm(self, *, agent_type_value: str, config_dir: str) -> int:
@@ -235,8 +237,7 @@ class FileTranscriptReader:
         session, derived = self._summary_for(
             agent_type_value, candidate, (stat.st_mtime, stat.st_size)
         )
-        if derived:
-            transcript_cache.save(self._cache)
+        transcript_cache.save_if_needed(self._cache, changed=derived)
         messages = self._read_messages(agent_type_value, candidate, limit=limit, offset=offset)
         return TranscriptSessionBody(session=session, messages=messages, offset=offset, limit=limit)
 

@@ -370,6 +370,30 @@ def test_second_pass_that_changed_nothing_does_not_rewrite_the_sidecar(tmp_path:
     assert sidecar.stat().st_mtime_ns == stamp - 10**9
 
 
+def test_a_hot_reader_writes_the_sidecar_back_after_it_is_deleted(tmp_path: Path) -> None:
+    """The in-memory cache outlives the file, so the file has to come back.
+
+    Same reader, nothing changed on disk, sidecar gone: this pass derives
+    nothing at all. Writing only on "derived something" would leave the deleted
+    sidecar deleted until some transcript happened to change — and a cache that
+    cannot rebuild itself makes the warm pass a promise it does not keep.
+    """
+    _make_codex_tree(tmp_path)
+    r = FileTranscriptReader()
+    r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+    sidecar = paths.transcript_summaries_path()
+    sidecar.unlink()
+
+    r.search_session_summaries(
+        agent_type_value="codex", config_dir=str(tmp_path), limit=100, offset=0
+    )
+
+    assert sidecar.is_file()
+    assert len(json.loads(sidecar.read_text(encoding="utf-8"))) == 3
+
+
 def test_missing_sidecar_still_lists_correctly(tmp_path: Path) -> None:
     _make_codex_tree(tmp_path)
     baseline = FileTranscriptReader().search_session_summaries(
