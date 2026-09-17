@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0087"
+HEAD_REVISION = "0088"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -153,7 +153,11 @@ HEAD_REVISION = "0087"
 # 0080 is DATA-only too: it rewrites a ``runs_on`` that cannot be a machine id
 # (the retired axis wrote ULIDs into the same key) to this machine, so a vault
 # carrying that fossil does not upgrade into a channel bound to nobody real —
-# no DDL, table/column set unchanged at head.
+# no DDL, table/column set unchanged at head. 0085 CREATEs the four workflow
+# execution tables — ``workflow_runs`` plus its cascading ``workflow_events``,
+# ``workflow_node_attempts`` and ``workflow_approvals`` (spec workflow); a
+# template needs no table of its own, so nothing else is added and the four are
+# dropped together by the same revision's downgrade.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -172,6 +176,10 @@ EXPECTED_TABLES = {
     "sync_convergence_state",
     "sync_held_paths",
     "sync_runs",
+    "workflow_runs",
+    "workflow_events",
+    "workflow_node_attempts",
+    "workflow_approvals",
 }
 
 # Below revision 0052 the two side tables still carry their pre-merge names
@@ -188,6 +196,11 @@ PRE_MERGE_TABLES = (
         "sync_convergence_state",
         "sync_held_paths",
         "sync_runs",
+        # 0085 created these; nothing below 0052 has ever seen them either.
+        "workflow_runs",
+        "workflow_events",
+        "workflow_node_attempts",
+        "workflow_approvals",
     }
 ) | {
     # 0066 drops these at head; every revision below it still has them, and

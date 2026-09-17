@@ -337,6 +337,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 
 # Managed coding agents and their on-disk config.
@@ -409,6 +415,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 
 # Skills: the master store and per-agent delivery.
@@ -481,6 +493,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 
 # Knowledge: ``domain.knowledge`` and ``infrastructure.knowledge`` are the
@@ -557,6 +575,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 
 # IM channels: adapters, pairing, the inbound processor, the runtime.
@@ -629,6 +653,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 ignore_imports = [
     "coffer.application.channel.* -> coffer.domain.chat.*",
@@ -707,6 +737,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 
 # LLM connections and their projection into each agent's config.
@@ -779,6 +815,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 ignore_imports = [
     "coffer.domain.provider.* -> coffer.domain.agent.*",
@@ -856,6 +898,12 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
 ]
 ignore_imports = [
     "coffer.application.memory.* -> coffer.domain.agent.*",
@@ -932,6 +980,112 @@ forbidden_modules = [
     "coffer.infrastructure.memory",
     "coffer.surfaces.http.memory",
     "coffer.surfaces.cli.memory_cmd",
+    # spec workflow
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
+]
+
+# Workflow: the delivery engine. It reaches the turn platform, the gateway,
+# the knowledge layer and the channels — all four through ports it declares
+# in ``application.workflow.ports`` and the composition root satisfies, so
+# none of them is imported here. The gate is the same story read backwards:
+# the MCP gateway does not import the workflow either; it asks a port the
+# composition root fills with the workflow gate.
+[[tool.importlinter.contracts]]
+name = "Cross-kind imports forbidden (workflow)"
+type = "forbidden"
+source_modules = [
+    "coffer.domain.workflow",
+    "coffer.application.workflow",
+    "coffer.infrastructure.workflow",
+    "coffer.surfaces.http.workflow",
+    "coffer.surfaces.cli.workflow_cmd",
+]
+forbidden_modules = [
+    # mcp
+    "coffer.domain.mcp",
+    "coffer.application.mcp",
+    "coffer.infrastructure.mcp",
+    "coffer.surfaces.http.mcp",
+    "coffer.surfaces.cli.mcp",
+    "coffer.surfaces.cli._mcp_caps",
+    # agent
+    "coffer.domain.agent",
+    "coffer.application.agent",
+    "coffer.infrastructure.agent",
+    "coffer.surfaces.http.agent_routes",
+    "coffer.surfaces.http.agent_config_routes",
+    "coffer.surfaces.http.agent_workspace_routes",
+    "coffer.surfaces.http.agent_native_memory_routes",
+    "coffer.surfaces.http.agent_transcript_routes",
+    "coffer.surfaces.http.agent_dependencies",
+    "coffer.surfaces.http.workspace_dependencies",
+    "coffer.surfaces.cli.agent_cmd",
+    "coffer.surfaces.cli.agent_native_memory_cmd",
+    "coffer.surfaces.cli.agent_transcript_cmd",
+    "coffer.surfaces.cli.agent_workspace_cmd",
+    # skill
+    "coffer.domain.skill",
+    "coffer.application.skill",
+    "coffer.infrastructure.skill",
+    "coffer.surfaces.http.skill_routes",
+    "coffer.surfaces.http.skill_file_routes",
+    "coffer.surfaces.http.agent_unmanaged_skill_routes",
+    "coffer.surfaces.http.skill_dependencies",
+    "coffer.surfaces.cli.skill_cmd",
+    # knowledge
+    "coffer.domain.knowledge",
+    "coffer.application.knowledge",
+    "coffer.infrastructure.knowledge",
+    "coffer.surfaces.http.knowledge",
+    "coffer.surfaces.cli.knowledge_cmd",
+    # channel
+    "coffer.domain.channel",
+    "coffer.application.channel",
+    "coffer.infrastructure.channel",
+    "coffer.surfaces.http.channel_routes",
+    "coffer.surfaces.cli.channel_cmd",
+    "coffer.surfaces.callback",
+    # chat
+    "coffer.domain.chat",
+    "coffer.application.chat",
+    "coffer.infrastructure.chat",
+    "coffer.surfaces.http.chat",
+    # provider
+    "coffer.domain.provider",
+    "coffer.application.provider",
+    "coffer.infrastructure.provider",
+    "coffer.surfaces.http.provider_routes",
+    "coffer.surfaces.http.provider_schemas",
+    "coffer.surfaces.http.model_routes",
+    "coffer.surfaces.http.provider_dependencies",
+    "coffer.surfaces.cli.provider_cmd",
+    # memory
+    "coffer.domain.memory",
+    "coffer.application.memory",
+    "coffer.infrastructure.memory",
+    "coffer.surfaces.http.memory",
+    "coffer.surfaces.cli.memory_cmd",
+    # sync
+    "coffer.domain.sync",
+    "coffer.application.sync",
+    "coffer.infrastructure.sync",
+    "coffer.infrastructure.persistence.sync_remote_repo",
+    "coffer.infrastructure.persistence.convergence_state_repo",
+    "coffer.surfaces.http.sync_routes",
+    "coffer.surfaces.http.sync_schemas",
+    "coffer.surfaces.cli.sync_cmd",
+    "coffer.surfaces.cli.sync_machine_cmd",
+]
+ignore_imports = [
+    # The node driver drains the turn platform's own event stream, so it needs
+    # those classes at runtime rather than only in annotations. This is the same
+    # deliberate exception ``channel`` carries for the same vocabulary: the chat
+    # kind's pure DOMAIN events, never its application or infrastructure.
+    "coffer.application.workflow.* -> coffer.domain.chat.*",
 ]
 
 # Contract 6: kind-agnostic core does not import kind-specific modules. The

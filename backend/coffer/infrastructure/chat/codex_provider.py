@@ -22,6 +22,7 @@ from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.infrastructure.chat.adapter_support import (
+    ConversationEnv,
     MemoryContextComposer,
     ModelLister,
     compose_system_context,
@@ -67,6 +68,7 @@ class CodexAppServerProvider:
         transcriber_factory: TranscriberFactory | None = None,
         list_models: ModelLister | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
+        conversation_env: ConversationEnv | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
@@ -86,6 +88,9 @@ class CodexAppServerProvider:
         # answering a phone had no idea it was on one.
         self._list_models = list_models
         self._compose_memory_context = compose_memory_context
+        # None ⇒ the agent process gets only what the key injection below adds,
+        # which is what every conversation a person is driving gets.
+        self._conversation_env = conversation_env
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -138,6 +143,14 @@ class CodexAppServerProvider:
             key = await self._resolve_key()
             if key:
                 env = {**os.environ, CODEX_ENV_KEY: key}
+        # Whatever this conversation's caller needs the agent process to know
+        # about itself — a workflow node's run identity, which the CLI hands to
+        # the shim it spawns. Layered ON TOP of the key injection rather than
+        # replacing it: a node's turn still needs COFFER_PROVIDER_KEY, and a
+        # bare overlay would strip the inherited environment with it.
+        extra_env = await self._extra_env(conversation_id)
+        if extra_env:
+            env = {**(env if env is not None else os.environ), **extra_env}
 
         system_context = await compose_system_context(
             agent_key=self.agent_key,
@@ -167,6 +180,13 @@ class CodexAppServerProvider:
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
         return
+
+    async def _extra_env(self, conversation_id: str) -> dict[str, str] | None:
+        """This conversation's extra environment, or None when nothing
+        supplies one."""
+        if self._conversation_env is None:
+            return None
+        return await self._conversation_env(conversation_id)
 
     async def _transcriber(self) -> Transcriber | None:
         if self._transcriber_factory is None:

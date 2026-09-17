@@ -68,6 +68,37 @@ def test_inject_meta_preserves_existing_meta_keys(monkeypatch):
     assert envelope["params"]["_meta"]["coffer/agent"] == "codex"
 
 
+def test_inject_meta_stamps_run_context_from_the_environment(monkeypatch):
+    """Spec workflow FR-035: a node's turn puts the run identity in the agent
+    process's environment, the CLI passes it down to the shim it spawns, and
+    the shim reports it at the handshake — the same route as the cwd."""
+    monkeypatch.setattr("os.getcwd", lambda: "/p")
+    monkeypatch.setenv("COFFER_RUN_CONTEXT", "run_01J/att_07")
+    envelope: dict[str, Any] = {"method": "initialize"}
+    _inject_meta(envelope, "claude_code")
+    assert envelope["params"]["_meta"]["coffer/run"] == "run_01J/att_07"
+
+
+def test_inject_meta_omits_run_key_without_the_env_var(monkeypatch):
+    """The overwhelmingly common case: an ordinary shim launch is not a
+    workflow node, and its handshake must look exactly as it did before."""
+    monkeypatch.setattr("os.getcwd", lambda: "/p")
+    monkeypatch.delenv("COFFER_RUN_CONTEXT", raising=False)
+    envelope: dict[str, Any] = {"method": "initialize"}
+    _inject_meta(envelope, "claude_code")
+    assert "coffer/run" not in envelope["params"]["_meta"]
+
+
+def test_inject_meta_omits_run_key_when_the_env_var_is_blank(monkeypatch):
+    """A variable exported empty (a shell that always sets it) is absence, not
+    an unnamed run."""
+    monkeypatch.setattr("os.getcwd", lambda: "/p")
+    monkeypatch.setenv("COFFER_RUN_CONTEXT", "   ")
+    envelope: dict[str, Any] = {"method": "initialize"}
+    _inject_meta(envelope, None)
+    assert "coffer/run" not in envelope["params"]["_meta"]
+
+
 # --------------------------------------------------------------------------- #
 # --agent CLI arg parsing (Task 9)                                             #
 # --------------------------------------------------------------------------- #

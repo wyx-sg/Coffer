@@ -1,0 +1,1116 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Workflow API
+  version: 0.4.0
+  description: |
+    REST surface for workflow runs (spec workflow, FR-044).
+
+    ## The template is not here
+
+    A workflow template is a Resource of kind `workflow` (FR-001), so it is
+    created, edited, enabled, disabled, scoped and deleted through the
+    kind-agnostic resource routes — `POST /api/v1/resources`,
+    `PATCH /api/v1/resources/workflow/{name}`,
+    `PUT /api/v1/resources/workflow/{name}/scope`,
+    `DELETE /api/v1/resources/workflow/{name}` — and validated by the kind's
+    own schema at that boundary (FR-006). This contract adds no template
+    routes, because a second way to write one would be a second contract for
+    the same data.
+
+    ## A run has no conversation of its own
+
+    Every conversation in a run belongs to one **task** (FR-030), so there is no
+    route here for writing to the run: the developer speaks to a task through
+    the ordinary chat API, on that task's `conversation_id`, and what they say
+    reaches the rest of the run by being part of the transcript the next task
+    opens with. A run-level message route existed briefly and is gone — it
+    described a main thread this layer no longer has.
+
+    ## Runs are operational state
+
+    A run is not a Resource (FR-011): it has no reach, it does not sync, and it
+    belongs to one machine (FR-012). The routes below are the whole management
+    plane for one.
+
+    ## Every mutating route carries a version
+
+    A run's `version` is an optimistic lock (FR-015). A command whose `version`
+    is not the run's current one is refused `409` with the run's current
+    version, status, stage and node — never applied. The client re-reads and
+    decides; the server never merges.
+
+    ## What a run refuses
+
+    A `completed` or `aborted` run refuses every mutating command (FR-013,
+    FR-016). A run owned by another machine refuses them too, and says which
+    machine owns it (FR-012). Both are `409`.
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: The local daemon (loopback only).
+
+security:
+  - CofferToken: []
+
+tags:
+  - name: workflow
+    description: Runs, nodes, artifacts and approvals.
+
+paths:
+  /api/v1/workflow/runs:
+    get:
+      tags: [workflow]
+      operationId: listWorkflowRuns
+      summary: Every run on this vault, newest first.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Narrow to one run status.
+          schema:
+            type: string
+            enum: [draft, running, paused, completed, aborted, failed]
+      responses:
+        "200":
+          description: The runs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunListOut"
+    post:
+      tags: [workflow]
+      operationId: createWorkflowRun
+      summary: Create a run from a template, freezing the template's snapshot.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunCreateIn"
+      responses:
+        "201":
+          description: The created run, in `draft`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}:
+    get:
+      tags: [workflow]
+      operationId: getWorkflowRun
+      summary: One run, with its stages, nodes and latest attempts.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunDetailOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [workflow]
+      operationId: deleteWorkflowRun
+      summary: Delete a run, its events, attempts, approvals and directory.
+      description: |
+        The node conversations are not deleted — they are ordinary
+        conversations and belong to the chat layer's retention.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "204":
+          description: Deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/signals:
+    post:
+      tags: [workflow]
+      operationId: signalWorkflowRun
+      summary: Start, pause, resume or abort a run.
+      description: |
+        Node lifecycle actions are not signals and are refused here — they have
+        their own route, because a signal is about the run and an action is
+        about one node (FR-016, FR-021).
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunSignalIn"
+      responses:
+        "200":
+          description: The run after the signal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/events:
+    get:
+      tags: [workflow]
+      operationId: listWorkflowRunEvents
+      summary: A run's event log, in sequence — its record of truth.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: after_sequence
+          in: query
+          required: false
+          description: Return only events after this sequence number.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflow/runs/{run_id}/nodes/{node_key}/actions:
+    post:
+      tags: [workflow]
+      operationId: actOnWorkflowNode
+      summary: Start, give feedback on, complete, retry, skip or restore a node.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/NodeKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeActionIn"
+      responses:
+        "200":
+          description: The node's latest attempt after the action.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeAttemptOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/tasks:
+    post:
+      tags: [workflow]
+      operationId: addWorkflowAdhocTask
+      summary: Add an unplanned task to a stage, with instructions of your own.
+      description: |
+        The task joins the run as a node keyed `adhoc:<slug>` and opens with the
+        same shared context as any template node (FR-028).
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdhocTaskIn"
+      responses:
+        "201":
+          description: The task's first attempt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeAttemptOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/inputs:
+    get:
+      tags: [workflow]
+      operationId: listWorkflowInputs
+      summary: What this run reads — collections, uploaded files and links.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: The mounted inputs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InputListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [workflow]
+      operationId: addWorkflowInput
+      summary: Mount a knowledge collection or a link on a running run.
+      description: |
+        Inputs are the developer's at any point in a run's life, not only at
+        creation (FR-050). An uploaded FILE does not come through this route —
+        it has its own, because it carries a body rather than a reference.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunInputIn"
+      responses:
+        "201":
+          description: The inputs after the addition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InputListOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/inputs/uploads:
+    post:
+      tags: [workflow]
+      operationId: uploadWorkflowInput
+      summary: Upload a file for this run to read.
+      description: |
+        The file is stored under the run's own directory and mounted as an
+        input of kind `file` (FR-051). Its `ref` is the path relative to the
+        run's input directory, which is what a node is told and what the agent
+        opens from its working directory.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                label:
+                  type: string
+      responses:
+        "201":
+          description: The inputs after the upload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InputListOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/inputs/{input_ref}:
+    delete:
+      tags: [workflow]
+      operationId: removeWorkflowInput
+      summary: Unmount an input.
+      description: |
+        An uploaded file's bytes go with it; a collection or a link is only
+        unmounted, because the run never owned it.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: input_ref
+          in: path
+          required: true
+          description: The input's `ref`, URL-encoded.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The inputs after the removal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InputListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/runs/{run_id}/artifacts:
+    get:
+      tags: [workflow]
+      operationId: listWorkflowArtifacts
+      summary: Every artifact the run has produced, attributed to node and attempt.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: The artifacts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflow/runs/{run_id}/files:
+    get:
+      tags: [workflow]
+      operationId: readWorkflowRunFile
+      summary: One file the run reads or wrote, so the UI can show it.
+      description: |
+        Read-only and bounded. The path is relative to the run's own directory
+        — `artifacts/<node>/<attempt>/<name>` for something a task wrote,
+        `inputs/<name>` for something the developer uploaded — and is guarded
+        segment by segment, so a traversal, a hidden entry or a symlink out of
+        the run is refused rather than read. A long file comes back as its head
+        with `truncated` set; bytes that are not UTF-8 come back with no `text`
+        at all, because rendering a PNG as mojibake would claim to have shown
+        the developer something.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: Path relative to the run's own directory.
+      responses:
+        "200":
+          description: The file.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunFileOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflow/runs/{run_id}/promotion:
+    post:
+      tags: [workflow]
+      operationId: promoteWorkflowArtifacts
+      summary: Copy a run's artifacts into a knowledge collection.
+      description: |
+        The run's own directory is left untouched (FR-043).
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromotionIn"
+      responses:
+        "201":
+          description: The collection the artifacts landed in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromotionOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow/approvals:
+    get:
+      tags: [workflow]
+      operationId: listWorkflowApprovals
+      summary: Approvals across every run, pending first.
+      parameters:
+        - name: run_id
+          in: query
+          required: false
+          description: Narrow to one run.
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected, expired, superseded]
+      responses:
+        "200":
+          description: The approvals.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalListOut"
+
+  /api/v1/workflow/approvals/{approval_id}/decision:
+    post:
+      tags: [workflow]
+      operationId: decideWorkflowApproval
+      summary: Approve or reject one approval.
+      description: |
+        Idempotent: a repeated decision returns the same terminal state and
+        executes nothing a second time (FR-038). A decision on an expired
+        approval returns `409` — the held call has already been failed.
+      parameters:
+        - name: approval_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalDecisionIn"
+      responses:
+        "200":
+          description: The approval in its terminal state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+components:
+  securitySchemes:
+    CofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  parameters:
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      description: The run's id.
+      schema:
+        type: string
+    NodeKey:
+      name: node_key
+      in: path
+      required: true
+      description: The node's key in the template, or `adhoc:<slug>`.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: The request was refused (e.g. `WORKFLOW_INVALID_ACTION`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: |
+        No such run, node, input, approval or template
+        (e.g. `WORKFLOW_INPUT_NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: |
+        A stale `version` (`WORKFLOW_VERSION_CONFLICT`), a terminal run
+        (`WORKFLOW_RUN_TERMINAL`), a run this machine does not own
+        (`WORKFLOW_NOT_THIS_MACHINE`), an illegal transition
+        (`WORKFLOW_ILLEGAL_TRANSITION`), a loop that has used its attempts
+        (`WORKFLOW_ATTEMPT_CEILING`), or a workflow that is switched off and
+        starts no new runs (`WORKFLOW_TEMPLATE_DISABLED`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+
+    WorkflowTemplate:
+      type: object
+      description: |
+        A template's `config`, as it is stored on the `workflow` resource.
+
+        It is declared here and served by NO route in this file on purpose: a
+        template is written through the kind-agnostic resource endpoint like
+        every other resource (FR-056), and a second write path would be a second
+        contract for the same data. What this schema is for is the editor —
+        it gives the web UI a generated type for the shape it is authoring
+        (FR-054) without inventing an endpoint to get it from.
+      required: [stages]
+      properties:
+        description:
+          type: string
+          nullable: true
+        attempt_ceiling:
+          type: integer
+          minimum: 1
+          description: How many attempts any one node may have across a run (FR-026).
+        token_budget:
+          type: integer
+          nullable: true
+          description: Reaching it pauses the run rather than starting the next node (FR-018).
+        stages:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TemplateStage"
+        edges:
+          type: array
+          description: Feedback edges only — the forward order is the array order (FR-005).
+          items:
+            $ref: "#/components/schemas/TemplateEdge"
+
+    TemplateStage:
+      type: object
+      required: [key, name, nodes]
+      properties:
+        key:
+          type: string
+          description: Unique within the template; a lowercase slug. Carries no meaning to the engine.
+        name: { type: string }
+        optional: { type: boolean }
+        nodes:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TemplateNode"
+
+    TemplateNode:
+      type: object
+      required: [key, name, type]
+      properties:
+        key:
+          type: string
+          description: Unique across the WHOLE template, not merely within its stage.
+        name: { type: string }
+        type:
+          type: string
+          enum: [ai, manual]
+          description: |
+            `manual` records a human step and opens no conversation; `ai`
+            opens one and dispatches a turn to an agent. There were four
+            values; `coding` and `notification` did exactly what `ai` did, so
+            they described what the work was about rather than who did it.
+        skill:
+          type: string
+          nullable: true
+          description: A registered skill's name — what the node runs by default.
+        instructions:
+          type: string
+          nullable: true
+          description: Added on top of the skill, for what is specific to this flow.
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TemplateArtifact"
+        approval:
+          type: string
+          enum: [never, always]
+        on_failure:
+          $ref: "#/components/schemas/TemplateOnFailure"
+        agent:
+          type: string
+          nullable: true
+          description: Null means the run's default; must be inside the template's scope (FR-007).
+
+    TemplateArtifact:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: A single safe path segment — the file the node owes.
+        required:
+          type: boolean
+          description: A required artifact that was never written blocks completion (FR-023).
+
+    TemplateOnFailure:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [stop, continue, retry]
+        times:
+          type: integer
+          minimum: 1
+          description: Required when `action` is `retry`.
+
+    TemplateEdge:
+      type: object
+      required: [from_stage, to_stage, reason]
+      properties:
+        from_stage: { type: string }
+        to_stage:
+          type: string
+          description: Strictly earlier than `from_stage` — a forward edge is the default order.
+        reason: { type: string }
+
+    RunCreateIn:
+      type: object
+      required: [template, title]
+      description: |
+        A template and a title, and nothing else (FR-011). The working
+        directory is Coffer's own, one per run (FR-053), and the inputs are
+        mounted through `/runs/{run_id}/inputs` at any point in the run's life
+        (FR-050) — neither is asked for here.
+      properties:
+        template:
+          type: string
+          description: The template resource's name.
+        title:
+          type: string
+        agent:
+          type: string
+          nullable: true
+          description: The run's default agent; a node may name another.
+
+    RunInput:
+      type: object
+      required: [kind, ref]
+      properties:
+        kind:
+          type: string
+          enum: [knowledge, file, link, repo]
+        ref:
+          type: string
+          description: |
+            A collection name, a path relative to the run's input directory, a
+            URL, or an absolute path to a local repository — whichever the
+            `kind` says. A mounted repository is checked out into the run's own
+            working directory rather than written in place (FR-057).
+        label:
+          type: string
+          nullable: true
+        size:
+          type: integer
+          nullable: true
+          description: Bytes, for an uploaded file; null for the other kinds.
+        path:
+          type: string
+          nullable: true
+          description: |
+            The absolute path the agent can open. Set for `file` and `repo`,
+            null for a collection or a link. Absolute rather than relative to
+            the working directory because an upload lands beside that directory
+            rather than inside it, and `..` is not something every agent will
+            follow.
+        provider:
+          type: string
+          nullable: true
+          description: |
+            What a `link` points at — `confluence`, `jira`, `google_docs`, … —
+            or null when nothing is known beyond the address. DERIVED on every
+            read rather than stored, so a link mounted before its provider was
+            recognisable is recognised now with no migration. A node is told
+            it so that "go and read this" resolves to one tool rather than a
+            guess; null is a real answer and means "fetch it".
+        mount:
+          type: string
+          nullable: true
+          enum: [worktree, link, null]
+          description: |
+            How a `repo` input was given to the run. `worktree` is its own
+            checkout on its own branch — what it writes is the run's alone.
+            `link` is the source directory itself, which happens when the path
+            is not a git repository: anything written there is written in the
+            original. A node is told which, because implying isolation it does
+            not have is the one thing this field must never do.
+
+    RunOut:
+      type: object
+      required:
+        [
+          id,
+          title,
+          template_ref,
+          status,
+          version,
+          workdir,
+          machine_id,
+          owned_here,
+          created_at,
+        ]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        template_ref: { type: string }
+        status:
+          type: string
+          enum: [draft, running, paused, completed, aborted, failed]
+        version: { type: integer }
+        workdir:
+          type: string
+          description: |
+            The run's own working directory, which Coffer makes and owns —
+            one per run (FR-053). Reported, never supplied.
+        machine_id: { type: string }
+        owned_here:
+          type: boolean
+          description: False when another machine advances this run (FR-012).
+        current_stage_key: { type: string, nullable: true }
+        current_node_key: { type: string, nullable: true }
+        tokens_spent: { type: integer }
+        token_budget: { type: integer, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time, nullable: true }
+
+    RunListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunOut"
+
+    RunDetailOut:
+      type: object
+      required: [run, stages]
+      properties:
+        run:
+          $ref: "#/components/schemas/RunOut"
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/StageOut"
+        inputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunInput"
+
+    StageOut:
+      type: object
+      required: [key, name, nodes]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        optional: { type: boolean }
+        nodes:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeOut"
+
+    NodeOut:
+      type: object
+      required: [key, name, type, status, attempt]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [ai, manual]
+        skill: { type: string, nullable: true }
+        approval:
+          type: string
+          enum: [never, always]
+        status:
+          type: string
+          enum:
+            [
+              pending,
+              running,
+              waiting_review,
+              waiting_approval,
+              completed,
+              skipped,
+              failed,
+            ]
+        attempt: { type: integer }
+        adhoc: { type: boolean }
+        allowed_actions:
+          type: array
+          items:
+            type: string
+            enum: [start, feedback, complete, retry, skip, restore]
+        conversation_id:
+          type: string
+          nullable: true
+          description: |
+            The latest attempt's conversation — what opening this task
+            navigates to (FR-030). Null until the node has been started.
+        latest:
+          $ref: "#/components/schemas/NodeAttemptOut"
+
+    NodeAttemptOut:
+      type: object
+      required: [id, node_key, stage_key, attempt, status]
+      properties:
+        id: { type: string }
+        node_key: { type: string }
+        stage_key: { type: string }
+        attempt: { type: integer }
+        status:
+          type: string
+          enum:
+            [
+              pending,
+              running,
+              waiting_review,
+              waiting_approval,
+              completed,
+              skipped,
+              failed,
+            ]
+        conversation_id: { type: string, nullable: true }
+        summary: { type: string, nullable: true }
+        failure_reason:
+          type: string
+          nullable: true
+          enum:
+            [interrupted, agent_error, missing_artifact, attempt_ceiling, null]
+        tokens: { type: integer }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+
+    RunSignalIn:
+      type: object
+      required: [version, signal]
+      properties:
+        version: { type: integer }
+        signal:
+          type: string
+          enum: [start, pause, resume, abort]
+        reason: { type: string, nullable: true }
+
+    NodeActionIn:
+      type: object
+      required: [version, action]
+      properties:
+        version: { type: integer }
+        action:
+          type: string
+          enum: [start, feedback, complete, retry, skip, restore]
+        feedback:
+          type: string
+          nullable: true
+          description: Required for `feedback`; ignored otherwise.
+        waive_artifacts:
+          type: boolean
+          default: false
+          description: |
+            Complete a node whose required artifact was never written (FR-023).
+
+    AdhocTaskIn:
+      type: object
+      required: [version, stage_key, name, instructions]
+      properties:
+        version: { type: integer }
+        stage_key: { type: string }
+        name: { type: string }
+        instructions: { type: string }
+        agent: { type: string, nullable: true }
+        workdir:
+          type: string
+          nullable: true
+          description: |
+            Overrides the run's working directory — the way a task that touches
+            a second repository is expressed.
+
+    RunInputIn:
+      type: object
+      required: [kind, ref]
+      description: |
+        What a client may SAY when mounting an input. Deliberately narrower than
+        `RunInput`: `size`, `path` and `mount` are what the server made of the
+        request, not things a caller gets to assert about its own upload.
+      properties:
+        kind:
+          type: string
+          enum: [knowledge, file, link, repo]
+        ref:
+          type: string
+        label:
+          type: string
+          nullable: true
+
+    InputListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunInput"
+
+    RunFileOut:
+      type: object
+      required: [path, name, size]
+      properties:
+        path:
+          type: string
+          description: Path relative to the run's own directory.
+        name: { type: string }
+        size:
+          type: integer
+          description: The file's real size, not the size of `text`.
+        text:
+          type: string
+          nullable: true
+          description: The file's contents, or null when the bytes are not UTF-8 text.
+        truncated:
+          type: boolean
+          default: false
+          description: True when `text` is the head of a longer file.
+
+    ArtifactListOut:
+      type: object
+      required: [items, catalogue]
+      properties:
+        catalogue:
+          type: string
+          description: The generated catalogue, as Markdown.
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactOut"
+
+    ArtifactOut:
+      type: object
+      required: [name, node_key, attempt, path, size, modified_at]
+      properties:
+        name: { type: string }
+        node_key: { type: string }
+        attempt: { type: integer }
+        path:
+          type: string
+          description: Path relative to the run's artifact root.
+        size: { type: integer }
+        modified_at: { type: string, format: date-time }
+
+    PromotionIn:
+      type: object
+      required: [collection]
+      properties:
+        collection:
+          type: string
+          description: The knowledge collection to create or add to.
+
+    PromotionOut:
+      type: object
+      required: [collection, copied]
+      properties:
+        collection: { type: string }
+        copied: { type: integer }
+
+    ApprovalOut:
+      type: object
+      required: [id, run_id, kind, status, payload, expires_at, created_at]
+      properties:
+        id: { type: string }
+        run_id: { type: string }
+        attempt_id: { type: string, nullable: true }
+        kind:
+          type: string
+          enum: [tool_call, node_action]
+        tool_name: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [pending, approved, rejected, expired, superseded]
+        payload:
+          type: object
+          additionalProperties: true
+          description: The exact arguments that will execute.
+        decided_by: { type: string, nullable: true }
+        decided_surface: { type: string, nullable: true }
+        comment: { type: string, nullable: true }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        decided_at: { type: string, format: date-time, nullable: true }
+
+    ApprovalListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApprovalOut"
+
+    ApprovalDecisionIn:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approved, rejected]
+        comment: { type: string, nullable: true }
+        remember_tool_class:
+          type: string
+          nullable: true
+          enum: [read, write, null]
+          description: |
+            Record this tool's write-class judgement on its server so the same
+            tool is not asked about twice (FR-036).
+
+    EventListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventOut"
+
+    EventOut:
+      type: object
+      required: [id, sequence, event_type, actor, created_at]
+      properties:
+        id: { type: string }
+        sequence: { type: integer }
+        event_type: { type: string }
+        actor:
+          type: object
+          required: [actor_kind, source_surface]
+          properties:
+            actor_kind:
+              type: string
+              enum: [user, workflow, agent, system]
+            actor_id: { type: string, nullable: true }
+            source_surface: { type: string }
+        stage_key: { type: string, nullable: true }
+        node_key: { type: string, nullable: true }
+        payload:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }

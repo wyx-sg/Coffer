@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { FolderPickerField } from "@/components/agents/FolderPickerField";
+import { FolderPickerField } from "@/components/FolderPickerField";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
