@@ -85,6 +85,20 @@ describe("WorkflowNotePage", () => {
     expect(image).toHaveAttribute("src", "blob:ops-image");
   });
 
+  test("an image whose bytes have not arrived is named, not drawn", async () => {
+    // Pointing an <img> at the written `src` would ask this app for a path it
+    // does not serve: the SPA answers with its own index.html, the browser
+    // cannot decode a document as an image, and every note flashes a broken
+    // one on every first paint.
+    readFileBytes.mockRejectedValue(new Error("gone"));
+    render(wrap());
+    await screen.findByRole("heading", { name: "what ops told me", level: 1 });
+
+    await waitFor(() => expect(readFileBytes).toHaveBeenCalled());
+    expect(screen.queryByRole("presentation")).not.toBeInTheDocument();
+    expect(screen.getByText("pasted.png")).toBeInTheDocument();
+  });
+
   test("editing and saving keeps the ref every task knows the note by", async () => {
     render(wrap());
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));

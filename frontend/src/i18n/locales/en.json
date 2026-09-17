@@ -1744,7 +1744,9 @@
       "threadEmpty": "Nothing said yet.",
       "readOnly": "This run is advanced by another machine, so this conversation is read-only here.",
       "notStartedTitle": "This task has not started",
-      "notStartedBody": "A task's conversation opens when the task does — there is nothing to read yet. Start it here, or let the run reach it, and its work appears in this thread."
+      "notStartedBody": "Nothing has run here yet, so there is no transcript. What you write below becomes its brief: the task reads it when the run reaches it.",
+      "byHandTitle": "This step is done by hand",
+      "byHandBody": "There is no conversation here: a person does this work, not an agent. What you write below joins its instructions."
     },
     "inputs": {
       "dialogTitle": "Add to this run's context",
@@ -1910,7 +1912,7 @@
         "enabled": "State"
       },
       "saving": "Saving…",
-      "flowHint": "The stages run top to bottom — the order is the flow, and a dashed line is work sent back. Click a stage to see the tasks inside it.",
+      "flowHint": "The stages run top to bottom — the order is the flow. Click a stage to see the tasks inside it; work sent back to an earlier stage is drawn beside them.",
       "editStage": "Edit stage {{name}}",
       "editStageTitle": "Edit stage",
       "addStageDescription": "A stage is a step of the delivery. It starts with one task, which you can rename and add to.",

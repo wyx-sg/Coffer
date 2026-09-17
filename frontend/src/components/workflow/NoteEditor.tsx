@@ -54,7 +54,10 @@ export function NoteEditor({ runId, value, onChange, disabled = false }: Props) 
       {
         onSuccess: (list) => {
           const added = list.items[list.items.length - 1];
-          insert(`\n![${added.ref}](${added.ref})\n`);
+          // Blank lines either side: pasted into the middle of a paragraph,
+          // an image that touches the text around it is part of that
+          // paragraph, and the heading under it stops being a heading.
+          insert(`\n\n![${added.ref}](${added.ref})\n\n`);
         },
         onSettled: () => setPasting(false),
       },

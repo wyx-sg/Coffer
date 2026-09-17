@@ -60,11 +60,28 @@ export function TemplateStageFlow({ config, refusal, editor, onOpenStage, onEdit
         {t("workflow.templates.flowHint")}
       </p>
 
-      <div className="grid" style={{ gridTemplateColumns: "7rem minmax(0, 1fr)" }}>
+      {/* On a phone the gutter is closed and the edges are read as sentences
+          below. 7rem of diagram plus a card leaves a stage's name three
+          characters wide, and a diagram that costs the thing it labels is not
+          worth its width. */}
+      {edges.length > 0 ? (
+        <ul className="space-y-1 text-xs text-muted-foreground sm:hidden">
+          {edges.map(({ edge }) => (
+            <li key={`${edge.from_stage}-${edge.reason}-${edge.to_stage}`}>
+              {t("workflow.templates.edgeTitle", {
+                reason: edge.reason,
+                stage: nameOf(edge.to_stage),
+              })}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="grid grid-cols-[0_minmax(0,1fr)] sm:grid-cols-[7rem_minmax(0,1fr)]">
         {edges.map(({ edge, from, to }, i) => (
           <div
             key={`${edge.from_stage}-${edge.reason}-${edge.to_stage}`}
-            className="relative col-start-1"
+            className="relative col-start-1 hidden sm:block"
             style={{ gridRowStart: rowOf(to), gridRowEnd: rowOf(from) + 1 }}
           >
             {/* An open bracket: up the gutter, with a stub into each card. */}
@@ -78,9 +95,13 @@ export function TemplateStageFlow({ config, refusal, editor, onOpenStage, onEdit
               className="absolute size-3 text-muted-foreground/60"
               style={{ top: "1.25rem", left: `${i * 0.4}rem` }}
             />
+            {/* Beside the arrowhead, not halfway down the line: an edge is
+                named by where it LANDS, and two edges landing on different
+                stages then label themselves at different heights instead of
+                stacking on top of each other. */}
             <span
-              className="absolute left-0 max-w-[6.5rem] truncate text-xs text-muted-foreground"
-              style={{ top: `calc(50% + ${i * 1.25}rem)` }}
+              className="absolute max-w-[5.5rem] truncate text-[11px] leading-none text-muted-foreground"
+              style={{ top: "1.4rem", left: `${i * 0.4 + 0.95}rem` }}
               title={t("workflow.templates.edgeTitle", {
                 reason: edge.reason,
                 stage: nameOf(edge.to_stage),

@@ -12,7 +12,7 @@ import pytest
 from coffer.domain.workflow.errors import AttemptCeilingReached, IllegalTransition
 from coffer.domain.workflow.run import NodeAction, NodeStatus
 
-from .conftest import Engine, build_engine, with_template
+from .conftest import TEMPLATE, Engine, build_engine, with_template
 
 
 @pytest.mark.acceptance(spec="workflow", scenario="a task can be told something before it starts")
@@ -118,3 +118,31 @@ async def test_nothing_said_is_refused_before_anything_is_written(engine: Engine
     with pytest.raises(IllegalTransition):
         await engine.nodes.say(run.id, "write_code", text="   ")
     assert await engine.attempts.latest_attempt(run.id, "write_code") is None
+
+
+async def test_a_manual_task_in_review_is_briefed_rather_than_told_an_agent() -> None:
+    """A manual task has no agent and no turn: dispatching a follow-up into a
+    conversation it never opened would fail on a null id, and the person doing
+    the work is who the sentence is for anyway."""
+    stages = [dict(stage) for stage in TEMPLATE["stages"]]
+    stages[0] = {
+        **stages[0],
+        "nodes": [{**stages[0]["nodes"][0], "type": "manual", "artifacts": []}],
+    }
+    engine = build_engine({"delivery": with_template(stages=stages)})
+    run = await engine.started()
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+    # The driver reports a manual node ready the moment it starts; the fake
+    # dispatcher records instead of reporting, so the report is made here.
+    await engine.nodes.record_output(run.id, "draft_td", summary="done by hand")
+    assert (await engine.attempts.latest_attempt(run.id, "draft_td")).status == (
+        NodeStatus.WAITING_REVIEW.value
+    )
+
+    await engine.nodes.say(run.id, "draft_td", text="check the staging config too")
+
+    row = await engine.attempts.latest_attempt(run.id, "draft_td")
+    assert row.attempt == 1
+    assert row.status == NodeStatus.WAITING_REVIEW.value, "a manual task was put back to running"
+    assert row.instructions == "check the staging config too"
+    assert engine.types(run.id)[-1] == "node.briefed"

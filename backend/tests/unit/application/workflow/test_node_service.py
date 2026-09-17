@@ -446,3 +446,38 @@ async def test_an_interrupted_attempt_can_be_retried_into_a_new_one(
     assert first[0].failure_reason == FailureReason.INTERRUPTED.value
     assert retried.attempt is not None
     assert retried.attempt.attempt == 2
+
+
+async def test_a_start_refused_by_the_lock_leaves_the_node_startable(engine: Engine) -> None:
+    """The advancer reads a run a moment before it acts on it, so any command
+    the developer issues in between refuses its start (FR-015).
+
+    What must not survive that refusal is a half-written node. Marking the
+    attempt running before the commit left one: nothing may act on a running
+    node, and the advancer never offers it again, so the run stopped on a node
+    no one could move.
+    """
+    run = await engine.started()
+    original = engine.run_repo.update_run_projection
+    refused = {"once": False}
+
+    async def refuse_once(*args: object, **kwargs: object):
+        if not refused["once"]:
+            refused["once"] = True
+            return None  # somebody else moved the run in between
+        return await original(*args, **kwargs)  # type: ignore[arg-type]
+
+    engine.run_repo.update_run_projection = refuse_once  # type: ignore[method-assign]
+
+    with pytest.raises(WorkflowVersionConflict):
+        await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+
+    engine.run_repo.update_run_projection = original  # type: ignore[method-assign]
+    row = await engine.attempts.latest_attempt(run.id, "draft_td")
+    assert row is None or row.status == NodeStatus.PENDING.value, "the node was wedged running"
+
+    # And the next tick simply starts it, with no developer involved.
+    current = await engine.run_repo.get_run(run.id)
+    started = await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=current.version)
+    assert started.attempt is not None
+    assert started.attempt.status == NodeStatus.RUNNING.value

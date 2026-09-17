@@ -393,3 +393,33 @@ def test_talking_to_a_task_carries_no_version_and_survives_the_run_moving(
     act(surface.client, run["id"], "draft_td", "start", run["version"])  # version moves
 
     assert _say(surface, run["id"], "write_code", "mind the fixtures").status_code == 200
+
+
+def test_a_brief_does_not_make_a_task_look_tried(surface: Surface) -> None:
+    """The attempt number counts TRIES. Briefing a task opens its row, and a
+    task with a brief sitting beside one without must not read as further
+    along for a reason the developer cannot see."""
+    run = started_run(surface.client)
+
+    _say(surface, run["id"], "write_code", "mind the fixtures")
+
+    node = node_of(detail(surface.client, run["id"]), "write_code")
+    assert node["status"] == "pending"
+    assert node["attempt"] == 0
+    # The brief is there; only the count of tries is not.
+    assert node["latest"]["instructions"] == "mind the fixtures"
+
+
+def test_a_retry_waiting_to_start_counts_the_try_that_happened(surface: Surface) -> None:
+    """The other side of the same rule: a node retried once has been tried
+    once, whatever number the row that is waiting carries."""
+    run = started_run(surface.client)
+    act(surface.client, run["id"], "draft_td", "start", run["version"])
+    _reviewable(surface, run["id"], "draft_td")
+
+    act(surface.client, run["id"], "draft_td", "retry", _version(surface, run["id"]))
+
+    node = node_of(detail(surface.client, run["id"]), "draft_td")
+    assert node["status"] == "pending"
+    assert node["attempt"] == 1
+    assert node["latest"]["attempt"] == 2

@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoteEditor } from "@/components/workflow/NoteEditor";
 import { translateApiError } from "@/lib/api/errors";
-import { useRunImages } from "@/lib/hooks/useRunImages";
+import { isExternal, useRunImages } from "@/lib/hooks/useRunImages";
 import { useRewriteWorkflowNote, useWorkflowInputs } from "@/lib/hooks/useWorkflowInputs";
 import { useWorkflowRunFile } from "@/lib/hooks/useWorkflowRun";
 
@@ -107,12 +107,7 @@ export function WorkflowNotePage() {
       />
 
       {editing ? (
-        <NoteEditor
-          runId={runId}
-          value={draft}
-          onChange={setDraft}
-          disabled={rewrite.isPending}
-        />
+        <NoteEditor runId={runId} value={draft} onChange={setDraft} disabled={rewrite.isPending} />
       ) : text.trim().length === 0 ? (
         <EmptyState
           icon={NotebookPen}
@@ -121,7 +116,7 @@ export function WorkflowNotePage() {
         />
       ) : (
         <div className="rounded-lg border border-border bg-card p-6">
-          <Markdown resolveImage={(src) => images[src]}>{text}</Markdown>
+          <Markdown resolveImage={(src) => (isExternal(src) ? src : images[src])}>{text}</Markdown>
         </div>
       )}
 

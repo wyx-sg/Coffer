@@ -606,6 +606,12 @@ export interface components {
             approval?: "never" | "always";
             /** @enum {string} */
             status: "pending" | "running" | "waiting_review" | "waiting_approval" | "completed" | "skipped" | "failed";
+            /**
+             * @description How many times this node has been TRIED. 0 until the first turn
+             *     starts: an attempt row exists before its turn does — a retry opens
+             *     the next one pending, and so does briefing a task that has not
+             *     started (FR-068) — and neither is a try.
+             */
             attempt: number;
             adhoc?: boolean;
             allowed_actions?: ("start" | "feedback" | "complete" | "retry" | "skip" | "restore")[];

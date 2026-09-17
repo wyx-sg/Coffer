@@ -15,6 +15,7 @@ that hides a missing guard.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -209,10 +210,14 @@ class NodeOps:
         payload: dict[str, Any],
         actor: EventActor,
     ) -> CommandResult:
-        """Put a node into a terminal status, and close the run if it was last."""
-        updated = await self.attempts.update_attempt(
-            attempt.id, status=status.value, finished_at=self.clock()
-        )
+        """Put a node into a terminal status, and close the run if it was last.
+
+        Committed before the row moves, as everywhere in this layer: the commit
+        is where the optimistic lock is checked (FR-015), and a row settled
+        behind a refused command is a node whose status no replay of the event
+        log can account for. ``closing_events`` does not need the row written
+        first — it tells the walk which node just settled.
+        """
         events = [
             PendingEvent(
                 event_type=event_type,
@@ -222,7 +227,11 @@ class NodeOps:
             )
         ]
         events.extend(await self.closing_events(run, template, node.key))
-        result = await self.cmd.commit(run, events, actor=actor, attempt=updated or attempt)
+        result = await self.cmd.commit(run, events, actor=actor, attempt=attempt)
+        updated = await self.attempts.update_attempt(
+            attempt.id, status=status.value, finished_at=self.clock()
+        )
+        result = replace(result, attempt=updated or attempt)
         await self.audit_finished(result)
         return result
 

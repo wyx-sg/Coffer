@@ -230,7 +230,7 @@ describe("WorkflowNodePage", () => {
   test("a task that has never started says so rather than showing an empty thread", async () => {
     render(wrap("/runs/run-1/nodes/review_td"));
     expect(await screen.findByText("This task has not started")).toBeInTheDocument();
-    expect(screen.getByText(/A task's conversation opens when the task does/)).toBeInTheDocument();
+    expect(screen.getByText(/What you write below becomes its brief/)).toBeInTheDocument();
     // No transcript — nobody has spoken. The brief panel is what is there.
     expect(screen.queryByRole("region", { name: "Task conversation" })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Task brief" })).toBeInTheDocument();

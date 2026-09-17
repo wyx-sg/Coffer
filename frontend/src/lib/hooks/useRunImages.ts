@@ -18,8 +18,9 @@ import { workflowApi } from "@/lib/api/workflow";
 /** `![alt](src)` and `<img src="...">`, which is what a paste can produce. */
 const IMAGE_SRC = /!\[[^\]]*\]\(([^)\s]+)\)|<img[^>]+src=["']([^"']+)["']/g;
 
-/** Left alone: already absolute, already a blob, or a data URI. */
-function isExternal(src: string): boolean {
+/** Left alone: already absolute, already a blob, or a data URI. These are
+ *  returned as themselves, so the renderer draws them where they point. */
+export function isExternal(src: string): boolean {
   return /^[a-z]+:/i.test(src) || src.startsWith("//");
 }
 

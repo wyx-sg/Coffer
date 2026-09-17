@@ -169,6 +169,7 @@ export function WorkflowNodePage() {
           // brief, written now rather than when the run reaches it (FR-068).
           <TaskBrief
             instructions={latest?.instructions}
+            started={node.status !== "pending"}
             ownedHere={run.owned_here}
             onSay={(text) => say.mutate({ nodeKey: node.key, text })}
             pending={say.isPending}

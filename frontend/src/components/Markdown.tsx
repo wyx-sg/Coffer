@@ -77,7 +77,13 @@ interface Props {
    * Where an image's `src` should really point. Used where the bytes are not
    * publicly addressable — a run's own directory is behind the daemon's token
    * (FR-069), so the page fetches each image and hands this map of object URLs
-   * in. Returning undefined leaves the `src` exactly as it was written.
+   * in.
+   *
+   * Returning undefined means DO NOT RENDER IT, and the name is shown instead.
+   * Falling back to the written `src` would point an `<img>` at a path this
+   * app does not serve: the SPA answers with its own index.html, so the
+   * browser fetches a document, fails to decode it as an image, and shows a
+   * broken one — for every image, on every first paint.
    */
   resolveImage?: (src: string) => string | undefined;
 }
@@ -88,13 +94,19 @@ export function Markdown({ children, resolveImage }: Props) {
       ? components
       : {
           ...components,
-          img: ({ src, ...props }) => (
-            <img
-              className="my-3 max-w-full rounded-md"
-              src={(typeof src === "string" ? resolveImage(src) : undefined) ?? src}
-              {...props}
-            />
-          ),
+          img: ({ src, alt, ...props }) => {
+            const resolved = typeof src === "string" ? resolveImage(src) : undefined;
+            if (resolved === undefined) {
+              return (
+                <span className="my-3 block text-sm text-muted-foreground">
+                  {alt || (typeof src === "string" ? src : "")}
+                </span>
+              );
+            }
+            return (
+              <img className="my-3 max-w-full rounded-md" src={resolved} alt={alt} {...props} />
+            );
+          },
         };
   return (
     <div className="text-sm text-foreground">

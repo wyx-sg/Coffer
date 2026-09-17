@@ -228,9 +228,11 @@ class NodeOut(BaseModel):
     skill: str | None = None
     approval: str = "never"
     status: str
-    #: 0 until the node has been tried — an attempt number is a count of tries,
-    #: and claiming 1 before the first one would make "never started" and
-    #: "running its first attempt" the same number.
+    #: How many times this node has been TRIED. 0 until the first turn starts:
+    #: an attempt ROW exists before its turn does — a retry opens the next one
+    #: pending, and so does briefing a task that has not started (FR-068) — and
+    #: neither is a try. Claiming 1 before the first one would make "never
+    #: started" and "running its first attempt" the same number.
     attempt: int
     adhoc: bool = False
     #: What this node accepts right now (FR-021), computed from

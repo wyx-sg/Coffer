@@ -9,7 +9,10 @@ task is, and this module is the one place that decides:
   "when you get to the migration, use the 0088 style" before the run reaches it.
 * **Waiting for review** — the turn has ended and the task is the developer's
   again, so the sentence reopens that same turn with more to do. Not a new
-  attempt: it is the same piece of work, carrying on (FR-021, FR-022).
+  attempt: it is the same piece of work, carrying on (FR-021, FR-022). A
+  MANUAL task has no turn to reopen and no agent to tell, so the sentence joins
+  its brief instead — which is the right place anyway, because the person doing
+  the work is who it is for.
 * **Finished** — completed, skipped or failed — the sentence opens the NEXT
   attempt with itself as the brief, bounded by the template's ceiling. A task
   the developer is still talking to is not finished, whatever its row says.
@@ -24,6 +27,8 @@ prevent (FR-039).
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from coffer.application.workflow.commands import CommandResult, PendingEvent, template_of
 from coffer.application.workflow.node_ops import NodeOps
 from coffer.application.workflow.ports import AttemptRow, RunRow
@@ -31,6 +36,7 @@ from coffer.domain.workflow.errors import IllegalTransition
 from coffer.domain.workflow.events import EventActor, EventType
 from coffer.domain.workflow.run import NodeAction, NodeStatus
 from coffer.domain.workflow.template import Node
+from coffer.domain.workflow.transitions import allowed_node_actions
 
 #: The statuses that refuse a sentence, and what owns the task instead.
 _OWNED_BY = {
@@ -82,7 +88,15 @@ async def say(
         )
         return await _briefed(ops, run, stage_key, node, briefed or attempt, words, actor)
     if status is NodeStatus.WAITING_REVIEW:
-        return await feedback(ops, run, node, stage_key, attempt, words, actor)
+        if NodeAction.FEEDBACK in allowed_node_actions(status, node.type):
+            return await feedback(ops, run, node, stage_key, attempt, words, actor)
+        # A manual task: no agent, no turn, and dispatching a follow-up into a
+        # conversation it never opened would fail on a null id. The sentence
+        # goes where a manual task's instructions already are.
+        briefed = await ops.attempts.update_attempt(
+            attempt.id, instructions=_joined(attempt.instructions, words)
+        )
+        return await _briefed(ops, run, stage_key, node, briefed or attempt, words, actor)
     # Completed, skipped or failed: the next attempt opens with what was said.
     return await ops.reopen(
         run,
@@ -111,7 +125,9 @@ async def feedback(
         raise IllegalTransition(
             f"node {node.key!r}", attempt.status, "feedback", (NodeAction.COMPLETE.value,)
         )
-    running = await ops.attempts.update_attempt(attempt.id, status=NodeStatus.RUNNING.value)
+    # Committed before the row moves, for the reason ``_start`` spells out: the
+    # commit is where the optimistic lock is checked, and a row marked running
+    # behind a refused command is a node nothing can act on ever again.
     result = await ops.cmd.commit(
         run,
         [
@@ -123,10 +139,11 @@ async def feedback(
             )
         ],
         actor=actor,
-        attempt=running or attempt,
+        attempt=attempt,
     )
+    running = await ops.attempts.update_attempt(attempt.id, status=NodeStatus.RUNNING.value)
     await ops.dispatch(result.run, stage_key, node, running or attempt, text)
-    return result
+    return replace(result, attempt=running or attempt)
 
 
 async def _briefed(

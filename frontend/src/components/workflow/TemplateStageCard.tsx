@@ -49,7 +49,7 @@ export function TemplateStageCard({
         onClick={onOpen}
         data-testid={`stage-${stage.key}`}
         aria-label={t("workflow.templates.openStage", { name: label })}
-        className="paper-card flex w-full items-center gap-3 rounded-lg border border-border bg-card p-4 pr-24 text-left transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="paper-card flex w-full items-center gap-3 rounded-lg border border-border bg-card p-4 pr-28 text-left transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="text-sm text-muted-foreground">{index + 1}</span>
         <span className="min-w-0 flex-1">
@@ -61,11 +61,12 @@ export function TemplateStageCard({
         {stage.optional ? (
           <Badge variant="secondary">{t("workflow.templates.optional")}</Badge>
         ) : null}
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </button>
 
-      {/* Siblings, not children: a button cannot nest inside a button. */}
-      <div className="absolute right-12 top-3 flex items-center gap-1">
+      {/* Siblings, not children: a button cannot nest inside a button. On the
+          card's own centre line, so the three things on the right — edit, bin,
+          and the chevron that says the card opens — read as one row. */}
+      <div className="absolute right-4 top-1/2 flex -translate-y-1/2 items-center gap-1">
         <Button
           type="button"
           variant="ghost"
@@ -97,6 +98,10 @@ export function TemplateStageCard({
               : t("workflow.templates.lastStage")}
           </TooltipContent>
         </Tooltip>
+        {/* Last, and outside the button it belongs to: it is the mark that
+            this card opens, and a mark that sat left of the edit and the bin
+            would read as pointing at them. */}
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       </div>
 
       <TemplateFieldError refusal={refusal} path={`${path}.nodes`} />

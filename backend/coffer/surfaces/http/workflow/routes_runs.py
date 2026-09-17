@@ -260,12 +260,27 @@ def _node_out(
         skill=node.skill,
         approval=node.approval.value,
         status=node_status.value,
-        attempt=0 if row is None else row.attempt,
+        attempt=_tries(row),
         adhoc=adhoc,
         allowed_actions=_allowed_actions(node, node_status, run=run, owned_here=owned_here),
         conversation_id=None if row is None else row.conversation_id,
         latest=None if row is None else attempt_out(row),
     )
+
+
+def _tries(row: AttemptRow | None) -> int:
+    """How many times this node has been TRIED — not which row is open.
+
+    An attempt row exists before its turn does: a retry opens the next one
+    pending, and so does briefing a task that has not started (FR-068). Neither
+    is a try, so neither is counted until the row is started. Without this, a
+    task the developer wrote a brief for would claim to be on its first attempt
+    while sitting beside an identical one claiming zero, for a reason the
+    reader cannot see.
+    """
+    if row is None:
+        return 0
+    return row.attempt if row.started_at is not None else row.attempt - 1
 
 
 def _allowed_actions(

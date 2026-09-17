@@ -20,6 +20,7 @@ past — one stalling the run and the other finishing it twice.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -186,9 +187,14 @@ class WorkflowNodeService:
         if attempt is None:
             attempt = await ops.open_attempt(run.id, stage_key, node.key, 1)
         apply_node_action(NodeStatus(attempt.status), NodeAction.START, node.type)
-        started = await ops.attempts.update_attempt(
-            attempt.id, status=NodeStatus.RUNNING.value, started_at=ops.clock()
-        )
+        # COMMIT FIRST, then mark the row running. The commit is where the
+        # optimistic lock is checked (FR-015), and the advancer reads a run a
+        # moment before it acts on it — so any command the developer issues in
+        # between refuses this one. Marking the row first left that node
+        # `running` with no `node.started` event behind it: nothing may act on
+        # a running node, and the advancer never offers it again, so the run
+        # stopped on a node no one could move. Now a refusal touches nothing
+        # and the next tick starts it.
         result = await ops.cmd.commit(
             run,
             [
@@ -200,8 +206,12 @@ class WorkflowNodeService:
                 )
             ],
             actor=actor,
-            attempt=started or attempt,
+            attempt=attempt,
         )
+        started = await ops.attempts.update_attempt(
+            attempt.id, status=NodeStatus.RUNNING.value, started_at=ops.clock()
+        )
+        result = replace(result, attempt=started or attempt)
         # A manual node is dispatched like any other: the driver is the one
         # place that knows a ``manual`` node opens no conversation, and routing
         # it around the driver would put that rule in two places. What keeps it

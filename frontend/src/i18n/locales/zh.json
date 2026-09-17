@@ -1744,7 +1744,9 @@
       "threadEmpty": "还没有任何内容。",
       "readOnly": "这次运行由另一台机器推进，这个对话在这里是只读的。",
       "notStartedTitle": "这个任务还没开始",
-      "notStartedBody": "任务开始时它的对话才会打开——现在还没有内容可读。在这里开始它，或者等运行推进到它，它做的事就会出现在这个对话里。"
+      "notStartedBody": "这里还没有跑过任何东西，所以没有记录。你在下面写的内容会成为它的任务书——运行推进到它时，它会读到。",
+      "byHandTitle": "这一步由人来做",
+      "byHandBody": "这里没有对话：这件事是人做的，不是 agent。你在下面写的内容会加进它的任务说明里。"
     },
     "inputs": {
       "dialogTitle": "为这次运行添加上下文",
@@ -1910,7 +1912,7 @@
         "enabled": "状态"
       },
       "saving": "保存中…",
-      "flowHint": "阶段自上而下依次执行——顺序就是流程，虚线是把工作退回。点开某个阶段，就能看到它里面的任务。",
+      "flowHint": "阶段自上而下依次执行——顺序就是流程。点开某个阶段，就能看到它里面的任务；退回到更早阶段的路径标在旁边。",
       "editStage": "编辑阶段 {{name}}",
       "editStageTitle": "编辑阶段",
       "addStageDescription": "阶段是交付的一个步骤。它会带一个任务创建出来，之后可以改名、再添加。",
@@ -1931,11 +1933,11 @@
       "nodePosition": "执行位置",
       "nodePositionHint": "这个任务在本阶段里的执行位置；阶段内的任务按顺序执行。",
       "removeNode": "删除任务 {{name}}",
-      "openStage": "打开{{name}}",
+      "openStage": "打开 {{name}}",
       "backToStages": "全部阶段",
       "taskCount_one": "{{count}} 个任务",
       "taskCount_other": "{{count}} 个任务",
-      "edgeTitle": "{{reason}} 会把工作退回到{{stage}}"
+      "edgeTitle": "{{reason}} 会把工作退回到 {{stage}}"
     },
     "context": {
       "description": "这次运行读什么、又产出了什么，都在这里。集合、文件、链接、仓库都可以在运行的任何阶段挂上来——之后开启的每个任务都会知道它的存在。产出的文件会随着任务写出而出现。",
@@ -1969,13 +1971,13 @@
     },
     "sendBack": {
       "action": "退回",
-      "title": "退回到{{stage}}",
+      "title": "退回到 {{stage}}",
       "description": "会在那个阶段新建一个任务，写上你发现的问题，并接着往下跑。已经跑完的节点不会被重开——它回答的是另一个问题，答案保留。",
       "reasonLabel": "原因",
-      "reasonOption": "{{reason}} —— 退回到{{stage}}",
+      "reasonOption": "{{reason}} —— 退回到 {{stage}}",
       "noteLabel": "问题是什么",
       "notePlaceholder": "你写的就是那个修复任务的任务书：你发现了什么，在哪里？",
-      "submit": "退回到{{stage}}",
+      "submit": "退回到 {{stage}}",
       "ceiling": "这条退回已经用满了工作流允许的次数，运行直接失败，而不是再绕一圈。"
     },
     "brief": {

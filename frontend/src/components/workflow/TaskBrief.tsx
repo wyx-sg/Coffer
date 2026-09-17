@@ -9,27 +9,37 @@
 // written now, while they are thinking about it rather than at 2am when the
 // run reaches it.
 //
+// Two tasks have no conversation and they are not the same. One has not
+// started. The other is MANUAL and has: a person is doing it, and there is no
+// agent to hold a conversation with, so what is written here joins its
+// instructions rather than reaching an agent.
+//
 // Whatever is written here is carried on the attempt the task opens with and
 // arrives in its brief (FR-029). It is shown back for the same reason it is
 // accepted: a queued instruction nobody can see is one the developer will
 // write twice.
 import { useTranslation } from "react-i18next";
-import { MessageSquareDashed } from "lucide-react";
 
 import { Composer } from "@/components/chat/Composer";
-import { EmptyState } from "@/components/EmptyState";
 
 interface Props {
   /** What the task has been told so far, or null when nothing has been. */
   instructions: string | null | undefined;
+  /**
+   * False only while the task has never run. A MANUAL task lands here too and
+   * is not the same thing: it HAS run — a person is doing it — and it will
+   * never have a conversation, because there is no agent to hold one.
+   */
+  started: boolean;
   /** False when another machine advances this run — read-only here (FR-012). */
   ownedHere: boolean;
   onSay: (text: string) => void;
   pending: boolean;
 }
 
-export function TaskBrief({ instructions, ownedHere, onSay, pending }: Props) {
+export function TaskBrief({ instructions, started, ownedHere, onSay, pending }: Props) {
   const { t } = useTranslation();
+  const key = started ? "byHand" : "notStarted";
 
   return (
     <section
@@ -43,11 +53,15 @@ export function TaskBrief({ instructions, ownedHere, onSay, pending }: Props) {
             <p className="whitespace-pre-wrap text-sm text-muted-foreground">{instructions}</p>
           </div>
         ) : (
-          <EmptyState
-            icon={MessageSquareDashed}
-            title={t("workflow.nodeConversation.notStartedTitle")}
-            description={t("workflow.nodeConversation.notStartedBody")}
-          />
+          // The same plain paragraph an empty thread uses, and for the same
+          // reason: this panel and that one are two states of one place, and a
+          // bordered empty-state card here would make them look like two.
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{t(`workflow.nodeConversation.${key}Title`)}</p>
+            <p className="text-sm text-muted-foreground">
+              {t(`workflow.nodeConversation.${key}Body`)}
+            </p>
+          </div>
         )}
       </div>
 
