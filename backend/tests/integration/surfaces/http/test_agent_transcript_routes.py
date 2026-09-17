@@ -235,10 +235,13 @@ def test_warm_pass_fills_the_sidecar_and_audits_nothing(
     included."""
     _register_codex_with_transcripts(client, tmp_path)
     sidecar = paths.transcript_summaries_path()
-    # The worker's loop is already running — it swept once at startup, when no
-    # agent existed, and sweeps again on its interval. Racing that schedule is
-    # not what this test is about, so it starts from a known-empty sidecar
-    # instead of asserting one: what is under test is the pass FILLING it.
+    # The worker's first sweep is a created task, not an awaited one, so it may
+    # reach its target list before the agent above was registered or after it:
+    # whether a sidecar is already on disk at this point is a matter of
+    # scheduling. Deleting it makes what follows an assertion about THIS pass's
+    # output rather than the startup one's. Whether the reader's in-memory cache
+    # is warm from that sweep is the same coin toss, and that the pass writes the
+    # file back regardless is pinned by the test below, deterministically.
     sidecar.unlink(missing_ok=True)
     before = len(client.get("/api/v1/audit").json()["entries"])
 
@@ -253,6 +256,32 @@ def test_warm_pass_fills_the_sidecar_and_audits_nothing(
     # The listing is served from what the warm pass parsed — same reader, one cache.
     body = client.get("/api/v1/agents/cx/transcripts").json()
     assert [s["session_id"] for s in body["sessions"]] == ["a", "c", "b"]
+
+
+def test_warm_pass_rebuilds_a_sidecar_deleted_under_a_hot_cache(
+    client: TestClient, tmp_path: pathlib.Path
+) -> None:
+    """The sidecar is disposable, so the pass has to be able to put it back.
+
+    The interesting state is the one the test above cannot pin down: the
+    reader's in-memory cache is already warm AND the file is gone. Nothing has
+    changed on disk, so a pass that only writes when it parsed something new
+    writes nothing — and the sidecar the user deleted never comes back, which
+    is exactly the case this worker exists for.
+    """
+    _register_codex_with_transcripts(client, tmp_path)
+    sidecar = paths.transcript_summaries_path()
+    worker = client.app.state.background_workers.warm_worker  # type: ignore[attr-defined]
+
+    # Warm first: after this the in-memory cache holds all three files' stamps.
+    client.portal.call(worker.run_once)  # type: ignore[union-attr]
+    assert len(json.loads(sidecar.read_text(encoding="utf-8"))) == 3
+
+    sidecar.unlink()
+    client.portal.call(worker.run_once)  # type: ignore[union-attr]
+
+    assert sidecar.is_file(), "a warm pass left the deleted sidecar deleted"
+    assert len(json.loads(sidecar.read_text(encoding="utf-8"))) == 3
 
 
 # ---------------------------------------------------------------------------

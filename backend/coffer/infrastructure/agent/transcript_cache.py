@@ -135,4 +135,22 @@ def save(entries: dict[str, CacheEntry]) -> None:
         log.warning("transcript_cache: failed to write sidecar at %s", path, exc_info=True)
 
 
-__all__ = ["CacheEntry", "load", "save"]
+def save_if_needed(entries: dict[str, CacheEntry], *, changed: bool) -> None:
+    """Write the sidecar when this pass derived something, or when it is gone.
+
+    Two questions hide behind one word here, and they only came apart once the
+    in-memory cache started outliving the file. ``changed`` answers "did this
+    pass derive anything new?", which is the reader's own business and stays
+    honest. "Is the sidecar worth writing?" is this module's, because this
+    module owns the file — and the answer is yes whenever the file is not
+    there, whatever the cache did. Without that second half a deleted sidecar
+    stayed deleted for as long as no transcript happened to change, which is
+    the one case the warm pass exists to cover.
+
+    Best-effort like :func:`save`: an unwritable root is logged, never raised.
+    """
+    if changed or not paths.transcript_summaries_path().is_file():
+        save(entries)
+
+
+__all__ = ["CacheEntry", "load", "save", "save_if_needed"]
