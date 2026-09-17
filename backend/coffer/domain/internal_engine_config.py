@@ -86,6 +86,19 @@ class GlobalInternalEngineConfig:
     distil_interval_s: int | None = None
     #: Curation's own timer. Its SWITCH is ``auto_curate_enabled`` above.
     curate_interval_s: int | None = None
+    #: How long one call to Coffer's own model may take before the caller gives
+    #: up, or ``None`` for the built-in default (spec internal-engine FR-022).
+    #: ``None`` means the same thing it means for an interval — the default
+    #: lives in one place and raising it later reaches every vault that never
+    #: chose — and for the same reason: the right number is a property of the
+    #: operator's endpoint, not of Coffer, and a gateway twice as slow as the
+    #: one this was written against turns a bounded pass into a useless one.
+    model_timeout_s: int | None = None
+    #: The speech-to-text model, on the connection marked ``transcribe_default``
+    #: (spec internal-engine FR-025). ``None`` until the operator picks one,
+    #: and while it is ``None`` Coffer transcribes nothing — the same "both
+    #: halves or neither" rule the engine model follows.
+    transcribe_model: str | None = None
 
     def upkeep(self, pass_name: str) -> UpkeepSetting:
         """One pass's switch and timer, by the names above.

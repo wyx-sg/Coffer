@@ -109,8 +109,11 @@ class LangchainAgenticReorg:
         user_prompt: str,
         credential_resolver: Any,
         recursion_limit: int,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
-        lc_model = build_chat_model(model, credential_resolver)
+        # The bound goes on the CLIENT, so it applies to each turn of the loop
+        # rather than to the loop as a whole — see ``build_chat_model``.
+        lc_model = build_chat_model(model, credential_resolver, timeout=timeout)
         return await run_agentic_reorg(
             lc_model=lc_model,
             tools=tools,

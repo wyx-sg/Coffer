@@ -267,7 +267,13 @@ async def test_a_routed_chunk_validates_against_the_index_it_was_given() -> None
             self.user = ""
 
         async def complete(
-            self, *, system: str, user: str, model: object, credential_resolver: object
+            self,
+            *,
+            system: str,
+            user: str,
+            model: object,
+            credential_resolver: object,
+            timeout: float | None = None,
         ) -> str:
             self.user = user
             return json.dumps(

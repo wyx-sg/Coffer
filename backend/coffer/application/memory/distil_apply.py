@@ -29,6 +29,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from coffer.application.engine_ports import LlmCompletionPort
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.application.memory import distil_write as writing
 from coffer.application.memory.distil_plan import Counts, Plan, Target, now
 from coffer.domain.memory.note import Note
@@ -85,6 +86,7 @@ async def _write_targets(
     model: Any,
     completion: LlmCompletionPort,
     credential_resolver: Callable[[str], str],
+    timeout: float = DEFAULT_MODEL_TIMEOUT_S,
 ) -> set[str]:
     """Stage two, once per touched note. Returns the slugs actually written."""
     written: set[str] = set()
@@ -97,6 +99,7 @@ async def _write_targets(
             model=model,
             completion=completion,
             credential_resolver=credential_resolver,
+            timeout=timeout,
         )
         if result is None:
             # Degrades to nothing (FR-027): the entries routed here are still
@@ -184,6 +187,7 @@ async def carry_out(
     model: Any,
     completion: LlmCompletionPort,
     credential_resolver: Callable[[str], str],
+    timeout: float = DEFAULT_MODEL_TIMEOUT_S,
 ) -> Counts:
     """Write the notes, then retire what they replaced, then record all of it."""
     counts = Counts()
@@ -194,6 +198,7 @@ async def carry_out(
         model=model,
         completion=completion,
         credential_resolver=credential_resolver,
+        timeout=timeout,
     )
     records = _retirement_records(partition, plan, counts, written)
     records.extend(_drop_records(partition, plan, counts))

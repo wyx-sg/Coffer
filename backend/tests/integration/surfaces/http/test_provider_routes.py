@@ -965,3 +965,207 @@ def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatc
 
         assert c.get("/api/v1/providers/active-key/anthropic").status_code == 404
         assert c.get("/api/v1/providers/acme").json()["compatible_agents"] == []
+
+
+async def _flags(name: str) -> tuple[bool, bool]:
+    """``(internal_default, transcribe_default)`` as the connection stores them.
+
+    Read off the service rather than the wire because ``ProviderOut`` reports
+    only the internal-engine flag: the transcription one has no page yet, and a
+    test that could not see it could not tell "the flag moved" from "the route
+    did nothing".
+    """
+    from coffer.domain.provider.config import ProviderConfig
+    from coffer.surfaces.http.provider_dependencies import get_provider_service
+
+    cfg = ProviderConfig.model_validate((await get_provider_service().get(name)).config)
+    return cfg.internal_default, cfg.transcribe_default
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="bound how long one call to Coffer's own model may take",
+)
+async def test_model_timeout_is_bounded_and_null_returns_the_default(tmp_path, monkeypatch):
+    """The bound on one call to Coffer's own model, chosen and given back.
+
+    Out of range is REFUSED rather than clamped: this is the operator asking
+    for a number, and a request silently turned into a different number is
+    worse than a rejection they can read. The background passes clamp instead,
+    so a row an older build wrote cannot take a pass down.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    app = _app(tmp_path, monkeypatch, 59950)
+    set_active_token(TOKEN)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(
+            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
+        ) as c,
+    ):
+        # Nothing chosen: the row says so, and says what runs meanwhile — so a
+        # surface can name the default instead of showing a blank.
+        body = (await c.get("/api/v1/internal-engine-config")).json()
+        assert body["model_timeout_s"] is None
+        assert body["default_model_timeout_s"] == 60
+
+        r = await c.put("/api/v1/internal-engine-config/timeout", json={"seconds": 120})
+        assert r.status_code == 200, r.text
+        assert r.json()["model_timeout_s"] == 120
+
+        for refused in (1, 6000):
+            r = await c.put("/api/v1/internal-engine-config/timeout", json={"seconds": refused})
+            assert r.status_code == 422, r.text
+        # ...and a refused write left the chosen bound exactly as it stood.
+        assert (await c.get("/api/v1/internal-engine-config")).json()["model_timeout_s"] == 120
+
+        # null is the way back to the default, and the only one: the default
+        # lives in one place so raising it later reaches every vault that never
+        # chose rather than none of them.
+        r = await c.put("/api/v1/internal-engine-config/timeout", json={"seconds": None})
+        assert r.status_code == 200, r.text
+        assert r.json()["model_timeout_s"] is None
+        assert r.json()["default_model_timeout_s"] == 60
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="speech-to-text runs on its own connection and its own model",
+)
+async def test_transcribe_model_is_chosen_and_cleared_by_an_empty_string(tmp_path, monkeypatch):
+    """Choosing the speech-to-text model, and stopping transcription.
+
+    Stopping is a real answer rather than a failure: with no model, a turn
+    carrying audio hands the agent the file untouched and the recording never
+    leaves this machine. An empty string means it as clearly as a null does,
+    because a form field a user emptied sends one.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    app = _app(tmp_path, monkeypatch, 59960)
+    set_active_token(TOKEN)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(
+            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
+        ) as c,
+    ):
+        assert (await c.get("/api/v1/internal-engine-config")).json()["transcribe_model"] is None
+
+        r = await c.put(
+            "/api/v1/internal-engine-config/transcribe-model", json={"model": "hears-things"}
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["transcribe_model"] == "hears-things"
+
+        r = await c.put("/api/v1/internal-engine-config/transcribe-model", json={"model": "   "})
+        assert r.status_code == 200, r.text
+        assert r.json()["transcribe_model"] is None
+
+        await c.put(
+            "/api/v1/internal-engine-config/transcribe-model", json={"model": "hears-things"}
+        )
+        r = await c.put("/api/v1/internal-engine-config/transcribe-model", json={"model": None})
+        assert r.json()["transcribe_model"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="speech-to-text runs on its own connection and its own model",
+)
+async def test_setting_a_new_transcribe_default_clears_the_previous_one(tmp_path, monkeypatch):
+    """At most one connection globally is the one speech is transcribed on."""
+    from httpx import ASGITransport, AsyncClient
+
+    app = _app(tmp_path, monkeypatch, 59970)
+    set_active_token(TOKEN)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(
+            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
+        ) as c,
+    ):
+        await c.post("/api/v1/providers", json=_anthropic_body(name="first"))
+        await c.post(
+            "/api/v1/providers",
+            json={
+                "name": "second",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "secret_value": "sk-2",
+            },
+        )
+
+        r = await c.post("/api/v1/providers/first/transcribe-default")
+        assert r.status_code == 200, r.text
+        assert await _flags("first") == (False, True)
+
+        r = await c.post("/api/v1/providers/second/transcribe-default")
+        assert r.status_code == 200, r.text
+        assert await _flags("second") == (False, True)
+        assert await _flags("first") == (False, False)
+
+        # The move is audited under its own event type, so "why is voice going
+        # somewhere else" has an answer that names both ends.
+        events = (
+            await c.get("/api/v1/audit", params={"event_type": "provider_transcribe_default_set"})
+        ).json()["entries"]
+        assert {"from": "first", "to": "second"} in [e["details"] for e in events]
+
+        # A connection this vault does not have is a 404, not a silent no-op.
+        assert (await c.post("/api/v1/providers/nope/transcribe-default")).status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="speech-to-text runs on its own connection and its own model",
+)
+async def test_the_two_default_flags_never_move_each_other(tmp_path, monkeypatch):
+    """Transcription and the internal engine are told apart, both ways.
+
+    They look like one setting and are not: the endpoints serve different
+    models, and a gateway that answers chat completions commonly serves no
+    ``/audio/transcriptions`` at all. A route that moved both would aim voice
+    at a 404 the moment an operator chose an engine.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    app = _app(tmp_path, monkeypatch, 59980)
+    set_active_token(TOKEN)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(
+            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": TOKEN}
+        ) as c,
+    ):
+        await c.post("/api/v1/providers", json=_anthropic_body(name="thinks"))
+        await c.post(
+            "/api/v1/providers",
+            json={
+                "name": "hears",
+                "protocol": "openai",
+                "base_url": "https://gw/v1",
+                "secret_value": "sk-2",
+            },
+        )
+
+        await c.post("/api/v1/providers/thinks/internal-default")
+        await c.post("/api/v1/providers/hears/transcribe-default")
+        assert await _flags("thinks") == (True, False)
+        assert await _flags("hears") == (False, True)
+
+        # Re-marking each flag on the connection that already carries the OTHER
+        # one leaves that other one alone: the flags are independent, so one
+        # connection may carry both without either route touching the twin.
+        await c.post("/api/v1/providers/thinks/transcribe-default")
+        assert await _flags("thinks") == (True, True)
+        assert await _flags("hears") == (False, False)
+
+        await c.post("/api/v1/providers/hears/internal-default")
+        assert await _flags("hears") == (True, False)
+        assert await _flags("thinks") == (False, True)

@@ -257,9 +257,18 @@ class ScriptedCompletion:
         self.calls: list[dict[str, Any]] = []
 
     async def complete(
-        self, *, system: str, user: str, model: Any, credential_resolver: Any
+        self,
+        *,
+        system: str,
+        user: str,
+        model: Any,
+        credential_resolver: Any,
+        timeout: float | None = None,
     ) -> str:
-        self.calls.append({"system": system, "user": user, "model": model})
+        # ``timeout`` is recorded, not just tolerated: a bound the operator set
+        # that never reaches the request is a setting that silently does
+        # nothing, which is the failure mode this whole seam exists to end.
+        self.calls.append({"system": system, "user": user, "model": model, "timeout": timeout})
         return self._responses.pop(0) if self._responses else "{}"
 
 
@@ -267,6 +276,12 @@ class ExplodingCompletion:
     """Raises if it is called at all — FR-024 asserted structurally."""
 
     async def complete(
-        self, *, system: str, user: str, model: Any, credential_resolver: Any
+        self,
+        *,
+        system: str,
+        user: str,
+        model: Any,
+        credential_resolver: Any,
+        timeout: float | None = None,
     ) -> str:
         raise AssertionError("no model may be called without an internal connection")

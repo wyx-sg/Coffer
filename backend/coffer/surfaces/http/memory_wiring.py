@@ -58,6 +58,7 @@ from coffer.domain.agent.config import AgentConfig
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
+from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
     set_memory_service,
@@ -118,6 +119,7 @@ def wire_memory_kind(
         completion=LangchainLlmCompletion(),
         model_selector=models,
         credential_resolver=credential_resolver,
+        read_timeout=read_internal_engine_timeout,
     )
     set_memory_service(service)
 

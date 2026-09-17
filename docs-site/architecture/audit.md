@@ -146,6 +146,7 @@ The `memory_*` prefix here belongs to today's `memory` kind. It is **not** the r
 | ------------------------------- | ----------------------------------------------------------- |
 | `provider_switched`             | When a connection is projected into an agent's native config |
 | `provider_internal_default_set` | When a connection becomes Coffer's internal engine           |
+| `provider_transcribe_default_set` | When a connection becomes the one Coffer transcribes speech on |
 | `provider_projection_refused`   | When a projection write refused because the agent's native config file changed on disk between Coffer's read and its write (optimistic concurrency) |
 
 **Sync** — the vault converges bidirectionally with a git remote the user owns, so both the rounds and the decisions about them are recorded:

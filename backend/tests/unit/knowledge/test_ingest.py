@@ -85,8 +85,9 @@ class _Completion:
         self._raises = raises
         self.calls: list[tuple[str, str]] = []
 
-    async def complete(self, *, system, user, model, credential_resolver):  # type: ignore[no-untyped-def]
+    async def complete(self, *, system, user, model, credential_resolver, timeout=None):  # type: ignore[no-untyped-def]
         self.calls.append((system, user))
+        self.timeout = timeout
         if self._raises:
             raise RuntimeError("the internal connection is unreachable")
         assert credential_resolver("provider/test") == "k"

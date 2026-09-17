@@ -1,7 +1,10 @@
 // frontend/src/lib/api/internalEngine.ts — Coffer's own operating settings
 // (spec provider-switching amendment 2026-06-22b, E3/E3a): the MODEL its
 // internal engine runs (its endpoint + key come from the `internal_default`
-// connection), and the switch and interval of every pass it runs unattended.
+// connection), the switch and interval of every pass it runs unattended, how
+// long ONE call to that model may take, and the model it transcribes speech
+// with (whose endpoint comes from the separate `transcribe_default`
+// connection — nothing falls back between the two).
 // Wire types from the provider-switching contract; transport via the shared
 // `call` (.agents/frontend.md §4).
 import { call } from "@/lib/api/call";
@@ -31,4 +34,13 @@ export const internalEngineApi = {
   // a switch cannot write back a stale copy of another pass's interval.
   setUpkeep: (body: UpkeepUpdate) =>
     call<InternalEngineConfig>(`${PATH}/upkeep`, { method: "PUT", body }),
+  /** Bound one call to Coffer's own model; `null` returns it to the built-in
+   *  default, which is the only way back — the server keeps the number. Out of
+   *  range is refused rather than clamped, so the caller hears about a typo. */
+  setModelTimeout: (seconds: number | null) =>
+    call<InternalEngineConfig>(`${PATH}/timeout`, { method: "PUT", body: { seconds } }),
+  /** The speech-to-text model; `null` stops transcription, which is a real
+   *  answer rather than an unset one. */
+  setTranscribeModel: (model: string | null) =>
+    call<InternalEngineConfig>(`${PATH}/transcribe-model`, { method: "PUT", body: { model } }),
 };

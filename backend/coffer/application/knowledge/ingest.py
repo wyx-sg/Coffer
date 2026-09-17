@@ -42,6 +42,11 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
+from coffer.application.engine_timeout import (
+    DEFAULT_MODEL_TIMEOUT_S,
+    TimeoutReader,
+    resolve_timeout,
+)
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.converter import Conversion, EmptyConversion
 from coffer.domain.knowledge.entry import ACTOR_USER
@@ -76,7 +81,11 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 #: A one-line description is a small job (spec knowledge FR-017), not an
 #: agentic loop; bounded generously so a slow provider cannot hang an upload,
 #: but nowhere near indefinite.
-_DESCRIPTION_TIMEOUT_SECONDS = 20.0
+#: Superseded by the operator's own bound (spec internal-engine FR-023). The
+#: twenty seconds this used to carry was the tightest bound anywhere in
+#: Coffer, and a description that times out costs the catalogue its one line
+#: about a document — the line every later search reads it by.
+_DESCRIPTION_TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
 
 _DESCRIPTION_SYSTEM = (
     "You write the one-line description for a knowledge-base catalogue entry. "
@@ -122,12 +131,14 @@ class IngestService:
         models: ModelSelectorPort | None = None,
         completion: LlmCompletionPort | None = None,
         credential_resolver: Callable[[str], str] | None = None,
+        read_timeout: TimeoutReader | None = None,
     ) -> None:
         self._knowledge = knowledge
         self._registry = registry
         self._models = models
         self._completion = completion
         self._credential_resolver = credential_resolver
+        self._read_timeout = read_timeout
 
     async def ingest(
         self,
@@ -219,14 +230,16 @@ class IngestService:
             model = await self._models.get_default()
             if model is not None and self._credential_resolver is not None:
                 with contextlib.suppress(Exception):
+                    timeout = await resolve_timeout(self._read_timeout)
                     described = await asyncio.wait_for(
                         self._completion.complete(
                             system=_DESCRIPTION_SYSTEM,
                             user=markdown[:_DESCRIPTION_SOURCE_CHARS],
                             model=model,
                             credential_resolver=self._credential_resolver,
+                            timeout=timeout,
                         ),
-                        timeout=_DESCRIPTION_TIMEOUT_SECONDS,
+                        timeout=timeout,
                     )
                     cleaned = " ".join(described.split())
                     if cleaned:

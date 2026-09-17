@@ -9,6 +9,7 @@ row that merely holds the defaults is as silent as no row at all.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -58,6 +59,10 @@ class _Repo:
             "auto_distil_enabled": current.auto_distil_enabled,
             "distil_interval_s": current.distil_interval_s,
             "curate_interval_s": current.curate_interval_s,
+            # Carried, never rewritten: these two have their own single-column
+            # writers precisely so a whole-config update cannot clobber them.
+            "model_timeout_s": current.model_timeout_s,
+            "transcribe_model": current.transcribe_model,
         }
         for name, setting in (upkeep or {}).items():
             if name == AGGREGATE:
@@ -76,6 +81,17 @@ class _Repo:
             curate_owner_machine_id=owner,
             **fields,
         )
+        return self.row
+
+    async def set_model_timeout(self, seconds: int | None) -> GlobalInternalEngineConfig:
+        return self._one("model_timeout_s", seconds)
+
+    async def set_transcribe_model(self, model: str | None) -> GlobalInternalEngineConfig:
+        return self._one("transcribe_model", model)
+
+    def _one(self, field: str, value: object) -> GlobalInternalEngineConfig:
+        current = self.row or GlobalInternalEngineConfig(model=None, updated_at=_now())
+        self.row = replace(current, **{field: value}, updated_at=_now())
         return self.row
 
 
@@ -119,6 +135,11 @@ async def test_a_non_default_choice_is_published_as_the_one_doc() -> None:
                 "model": "agnes-2.0",
                 "auto_curate_enabled": True,
                 "curate_owner_machine_id": "m1",
+                # Published even when unchosen, so a fleet member that DID
+                # choose can be told apart from one whose document predates
+                # these two travelling at all.
+                "model_timeout_s": None,
+                "transcribe_model": None,
                 "upkeep": _DEFAULT_UPKEEP,
             },
         )
@@ -141,7 +162,9 @@ async def test_deleting_the_doc_resets_to_defaults_and_publishes_nothing_after()
     # it never rewrites, so a vault where it never runs has an empty lane.
     assert repo.row.auto_curate_enabled is True
     assert repo.row.curate_owner_machine_id is None
-    assert audit.events == [("internal_engine_model_set", "sync")]
+    # Three writes, because each of the three settings has its own
+    # single-column path — which is the point: one cannot clobber another.
+    assert audit.events == [("internal_engine_model_set", "sync")] * 3
     # The reset is not re-published as a fresh document: that is what stops a
     # machine that never persisted a row from deleting it again next round.
     assert await state.export_docs() == []
@@ -251,3 +274,62 @@ async def test_an_imported_document_applies_its_upkeep() -> None:
     assert repo.row is not None
     assert repo.row.auto_distil_enabled is False
     assert repo.row.distil_interval_s == 1800
+
+
+async def test_a_document_without_the_two_newest_keys_leaves_them_alone() -> None:
+    """An older machine in the fleet is not a decision.
+
+    The area's standing rule, applied to the two settings that arrived last: a
+    machine still publishing a document from before they travelled would
+    otherwise reset this machine's bound and silence its transcription on every
+    round, and it would look exactly like the operator's own change.
+    """
+    state, repo, _ = _state(
+        replace(_chosen(), model_timeout_s=240, transcribe_model="whisper-large")
+    )
+
+    await state.import_docs(
+        [
+            (
+                DOC,
+                {
+                    "model": "agnes-2.0",
+                    "auto_curate_enabled": True,
+                    "curate_owner_machine_id": "m1",
+                    "upkeep": _DEFAULT_UPKEEP,
+                },
+            )
+        ]
+    )
+
+    assert repo.row is not None
+    assert repo.row.model_timeout_s == 240
+    assert repo.row.transcribe_model == "whisper-large"
+
+
+async def test_a_document_that_names_them_is_authoritative_including_null() -> None:
+    # The other half of the same rule: a key that IS present decides, so a
+    # fleet-wide "back to the default" reaches a machine that chose otherwise.
+    state, repo, _ = _state(
+        replace(_chosen(), model_timeout_s=240, transcribe_model="whisper-large")
+    )
+
+    await state.import_docs(
+        [
+            (
+                DOC,
+                {
+                    "model": "agnes-2.0",
+                    "auto_curate_enabled": True,
+                    "curate_owner_machine_id": "m1",
+                    "model_timeout_s": None,
+                    "transcribe_model": None,
+                    "upkeep": _DEFAULT_UPKEEP,
+                },
+            )
+        ]
+    )
+
+    assert repo.row is not None
+    assert repo.row.model_timeout_s is None
+    assert repo.row.transcribe_model is None

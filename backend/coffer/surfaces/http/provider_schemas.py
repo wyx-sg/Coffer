@@ -107,8 +107,11 @@ class ProviderOut(BaseModel):
     carrying its modality; EMPTY means no restriction — the endpoint's whole
     catalogue. A picker takes the entries of the modality it serves, so a chat
     dropdown never offers an embedding or image model. ``internal_default``
-    marks the connection Coffer's internal engine uses (at most one globally);
-    ``is_active`` marks the one currently projected — a connection may be both.
+    marks the connection Coffer's internal engine uses (at most one globally),
+    ``transcribe_default`` the one it transcribes speech on — a separate flag
+    because they are separate models and neither falls back to the other; and
+    ``is_active`` marks the one currently projected. A connection may carry any
+    combination.
     """
 
     name: str
@@ -119,6 +122,7 @@ class ProviderOut(BaseModel):
     models: list[ProviderModel]
     is_active: bool
     internal_default: bool
+    transcribe_default: bool
     enabled: bool
     description: str | None
     created_at: datetime

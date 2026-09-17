@@ -41,4 +41,5 @@ class LlmCompletionPort(Protocol):
         user: str,
         model: ResolvedConnection,
         credential_resolver: Callable[[str], str],
+        timeout: float | None = None,
     ) -> str: ...

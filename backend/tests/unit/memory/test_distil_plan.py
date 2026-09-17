@@ -362,3 +362,27 @@ async def test_a_chunk_the_model_could_not_answer_leaves_its_entries_undistilled
     assert plan.targets == {}
     assert plan.retirements == {}
     assert plan.drops == []
+
+
+async def test_the_operators_bound_reaches_the_request(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """A bound that stops at the pass boundary is a setting that does nothing.
+
+    This is the failure the whole seam exists to rule out, and it is invisible
+    from the outside: routing that times out defers its entries silently, so a
+    bound the operator raised but that never reached the request looks exactly
+    like a bound that did.
+    """
+    completion = ScriptedCompletion(['{"actions": []}'])
+    await planning.build_plan(
+        _PARTITION,
+        [_entry("a")],
+        notes=[],
+        retired=[],
+        model="a-model",
+        completion=completion,  # type: ignore[arg-type]
+        credential_resolver=lambda ref: ref,
+        timeout=222.0,
+        chunk_size=20,
+    )
+
+    assert completion.calls[0]["timeout"] == 222.0

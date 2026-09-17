@@ -390,8 +390,8 @@ automatically (spec [vault-sync](../vault-sync/spec.md)):
 `resource_deleted` / `resource_renamed` with kind-redacted config, and a change
 to the curated model set rides `resource_updated` — the provider kind declares
 no redactor, because its config holds no secret. This spec adds
-`provider_switched`, `provider_internal_default_set` and
-`provider_projection_refused`.
+`provider_switched`, `provider_internal_default_set`,
+`provider_transcribe_default_set` and `provider_projection_refused`.
 
 ## Scope
 
@@ -406,9 +406,13 @@ no redactor, because its config holds no secret. This spec adds
   unique index that makes a second flagged row unrepresentable, and the
   `provider_internal_default_set` event. What the flagged connection is USED for
   is spec [internal-engine](../internal-engine/spec.md).
+- The speech-to-text default flag: `set_transcribe_default(name)` and the
+  `provider_transcribe_default_set` event, on the same clear-then-set shape.
+  What THAT flagged connection is used for is also spec internal-engine.
 - The connection's curated `models` set, each entry carrying a modality, applied
   by every picker that offers that connection's models.
-- CLI: `coffer provider list|add|show|edit|rm|switch|use-builtin|key|internal-default`.
+- CLI: `coffer provider
+  list|add|show|edit|rm|switch|use-builtin|key|internal-default|transcribe-default`.
 - HTTP: the `/api/v1/providers` routes and `/api/v1/models/*` introspection.
 - Frontend: the Model providers library page, a connection detail page with
   Overview and Models tabs, and the per-agent switch on the Agent detail page.
@@ -441,7 +445,8 @@ no redactor, because its config holds no secret. This spec adds
 
 The resource `name` is the connection name, unique within the kind and validated
 by `validate_name`. Its config holds `{protocol, base_url, credential_ref,
-models, is_active, internal_default}` and never a secret or a chosen model; its
+models, is_active, internal_default, transcribe_default}` and never a secret or
+a chosen model; its
 reach is the resource row's `scope`, and its `enabled` switch is the framework's.
 The authoritative field list, with types and constraints, is
 [data-model.md](./data-model.md).
@@ -484,6 +489,27 @@ A connection may be BOTH active (projected into the agents it reaches) AND the
 internal default — one key, two uses. An `ollama` connection is only ever the
 second.
 
+## The speech-to-text default
+
+`transcribe_default` is the same shape again: at most one connection globally,
+`set_transcribe_default(name)` clearing the flag everywhere else before setting
+it on the target, `provider_transcribe_default_set` audited, and the engine
+notified so it can drop a model the new endpoint has not heard of.
+
+It is a SECOND flag rather than a second use of the first because the two name
+different models. The gateway a user points Coffer's engine at commonly serves
+chat completions and no `/audio/transcriptions` at all, so borrowing the engine's
+connection aimed every voice message at a 404 — where a connection deliberately
+left unmarked produces the behaviour spec chat already has for an unconfigured
+vault: hand the agent the audio file, upload nothing. Nothing here falls back to
+the other flag in either direction. One connection may of course carry both, if
+one endpoint really does serve both.
+
+What the flagged connection is USED for — the speech-to-text model paired with
+it, and what happens when the flag moves — is spec
+[internal-engine](../internal-engine/spec.md) FR-025/FR-026. This spec stops at
+the flag.
+
 ## HTTP API
 
 Hand-written OpenAPI, not contract-test-gated; keep it in sync manually. Full
@@ -515,6 +541,8 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
   wire to its built-in login; idempotent
 - `POST /api/v1/providers/{name}/internal-default` → set the internal-engine
   default; returns the updated `ProviderOut`
+- `POST /api/v1/providers/{name}/transcribe-default` → set the speech-to-text
+  default; returns the updated `ProviderOut`
 - `GET /api/v1/providers/{name}/key` → the named connection's key (what the
   projected `apiKeyHelper` calls)
 - `GET /api/v1/providers/active-key/{wire}` → the legacy wire-keyed form,
@@ -525,10 +553,11 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
 All three accept an inline `secret_value` so a connection can be tested before
 it is saved.
 
-The engine's OWN settings — which model Coffer's internal passes run on, and
-what it does unattended — are spec [internal-engine](../internal-engine/spec.md)
-and live under `/api/v1/internal-engine-config`. This spec's only internal-engine
-surface is the flag above.
+The engine's OWN settings — which model Coffer's internal passes run on, which
+model it transcribes speech with, how long one call may take, and what it does
+unattended — are spec [internal-engine](../internal-engine/spec.md) and live
+under `/api/v1/internal-engine-config`. This spec's only internal-engine
+surfaces are the two flags above.
 
 **Reach** is the framework's own surface:
 `GET` / `PUT /api/v1/resources/provider/{name}/scope`.
@@ -539,11 +568,13 @@ of `secret_value` (stored under `provider/<name>/key`, kept as a ref) or
 neither is rejected. An `ollama` connection must supply NEITHER.
 
 `ProviderOut` never includes the secret; it carries `credential_ref`,
-`compatible_agents`, `models`, `is_active`, `internal_default` and `enabled`.
+`compatible_agents`, `models`, `is_active`, `internal_default`,
+`transcribe_default` and `enabled`.
 
 ## CLI
 
-`coffer provider list|add|show|edit|rm|switch|use-builtin|key|internal-default`,
+`coffer provider
+list|add|show|edit|rm|switch|use-builtin|key|internal-default|transcribe-default`,
 with `--json` on `list`.
 
 - `add <name> --protocol <p> --base-url <url> [--secret <value> |
@@ -563,6 +594,9 @@ with `--json` on `list`.
   value goes to stdout only and is never logged.
 - `internal-default <name>` marks the connection Coffer's internal engine uses,
   clearing any previous one.
+- `transcribe-default <name>` marks the connection Coffer transcribes speech on,
+  clearing any previous one. A separate flag, with no fallback to or from the
+  one above.
 
 Re-targeting a connection is `coffer scope set provider:<name> --agents …`, and
 a rename is available over HTTP or from the connection's detail page.
@@ -990,12 +1024,12 @@ connection's existing curated selection is left exactly as it was.
   `provider`, identified by `provider:<name>`.
 - **FR-002**: System MUST validate a connection's config against a kind-specific
   schema over `{protocol, base_url, credential_ref, models, is_active,
-  internal_default}`, rejecting any other key. The config MUST NOT carry a model
-  the connection runs, nor the agents it reaches — reach is the resource row's
-  per-agent `scope`.
+  internal_default, transcribe_default}`, rejecting any other key. The config
+  MUST NOT carry a model the connection runs, nor the agents it reaches — reach
+  is the resource row's per-agent `scope`.
 - **FR-003**: `ProviderOut` MUST NEVER include the raw secret. `credential_ref`,
-  `compatible_agents` (the configured reach, read-only), `enabled`, `is_active`
-  and `internal_default` MUST be included.
+  `compatible_agents` (the configured reach, read-only), `enabled`, `is_active`,
+  `internal_default` and `transcribe_default` MUST be included.
 
 **Credential handling**
 
@@ -1084,10 +1118,11 @@ connection's existing curated selection is left exactly as it was.
 **Audit**
 
 - **FR-018**: `PROVIDER_SWITCHED` (`"provider_switched"`),
-  `PROVIDER_INTERNAL_DEFAULT_SET` (`"provider_internal_default_set"`) and
+  `PROVIDER_INTERNAL_DEFAULT_SET` (`"provider_internal_default_set"`),
+  `PROVIDER_TRANSCRIBE_DEFAULT_SET` (`"provider_transcribe_default_set"`) and
   `PROVIDER_PROJECTION_REFUSED` (`"provider_projection_refused"`) MUST be in
-  `AuditEventType` and emitted from the switch, the internal-default operation
-  and a refused projection. `resource_created` / `resource_updated` /
+  `AuditEventType` and emitted from the switch, the internal-default operation,
+  the speech-to-text-default operation and a refused projection. `resource_created` / `resource_updated` /
   `resource_deleted` / `resource_renamed` are emitted automatically by
   `ResourceService`.
 
@@ -1248,13 +1283,34 @@ connection's existing curated selection is left exactly as it was.
   a reasoning level MUST both be passed to the agent verbatim, with no
   validation against a list of Coffer's own.
 
+**The speech-to-text default flag**
+
+- **FR-035**: `transcribe_default` MUST be a config field of the same shape as
+  `internal_default`: at most one connection globally carries it, and
+  `set_transcribe_default` MUST clear it everywhere else before setting the
+  target, emit `provider_transcribe_default_set`, and notify the engine so it
+  can apply its own drop rule (spec
+  [internal-engine](../internal-engine/spec.md) FR-026). The two flags MUST move
+  independently — setting one MUST NOT read, write or clear the other, and
+  neither MUST fall back to the other at resolution time — and one connection
+  MAY carry both. `POST /api/v1/providers/{name}/transcribe-default` and
+  `coffer provider transcribe-default <name>` MUST be the surfaces, returning
+  and printing the updated `ProviderOut`.
+
+  Unlike FR-024, no partial unique index backs this flag yet. `transcribe_default`
+  is an ordinary config field, so a generic resource update, `coffer provider
+  edit` or an incoming document can still write a second one without passing
+  through the clear-then-set. The gap is recorded rather than claimed closed: it
+  is the same hole FR-024 was written to close after a live vault was found
+  holding two flagged connections, and it wants the same index.
+
 ### Key Entities
 
 - **Connection** (`provider` resource): protocol, base URL, optional credential
   ref (absent for ollama), the curated `models` set it offers downstream (empty =
-  unrestricted), `is_active` per agent type, and the global `internal_default`
-  flag. Never the raw secret, and never a chosen model. Its reach is the resource
-  row's per-agent `scope`.
+  unrestricted), `is_active` per agent type, and the two global flags
+  `internal_default` and `transcribe_default`. Never the raw secret, and never a
+  chosen model. Its reach is the resource row's per-agent `scope`.
 - **`CuratedModel` / `Modality`**: one curated entry, `{id, modality}`, and the
   `StrEnum` over `text` / `embedding` / `image` / `video` / `audio` it carries
   (FR-031). The modality is Coffer's own note about an opaque id — stored, never
@@ -1279,6 +1335,9 @@ connection's existing curated selection is left exactly as it was.
 - **`ProviderService.set_internal_default(name)`**: the global internal-engine
   flag — clear-then-set, the audit event, and the notification that lets the
   engine apply its own drop rule.
+- **`ProviderService.set_transcribe_default(name)`**: the global speech-to-text
+  flag, the same three steps against its own column and its own event, moving
+  independently of the one above.
 
 ## Success Criteria
 
@@ -1306,9 +1365,10 @@ connection's existing curated selection is left exactly as it was.
   (agent-registry FR-036) every projection write goes through.
 - The Fernet vault (`EncryptedCredentialStore`) is available — spec
   credentials.
-- Spec [internal-engine](../internal-engine/spec.md) owns what the connection
-  flagged `internal_default` is USED for: the engine's model, its unattended
-  passes, and the rule that drops a model when the flag moves.
+- Spec [internal-engine](../internal-engine/spec.md) owns what the connections
+  flagged `internal_default` and `transcribe_default` are USED for: the engine's
+  model and the speech-to-text model, the unattended passes, the bound on one
+  call, and the rule that drops a model when either flag moves.
 - `tomlkit` is already a backend dependency (added for the MCP TOML path).
 - Coffer runs as a single-user personal tool; no multi-user access control is
   needed beyond the existing `X-Coffer-Token` gate.

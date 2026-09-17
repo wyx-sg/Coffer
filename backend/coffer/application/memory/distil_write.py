@@ -39,13 +39,16 @@ from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.engine_ports import LlmCompletionPort
+from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.application.memory.distil_routing import parse_json_object
 from coffer.domain.memory.note import Note
 from coffer.infrastructure.memory.raw_store import StoredRawEntry
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT_SECONDS = 60.0
+#: The operator's bound applies here too (spec internal-engine FR-023); this
+#: is only the fallback for a caller with no settings to consult.
+_TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
 
 WRITE_SYSTEM = (
     "You write one note in a developer's shared AI memory. A note covers ONE "
@@ -164,6 +167,7 @@ async def rewrite_note(
     model: Any,
     completion: LlmCompletionPort,
     credential_resolver: Callable[[str], str],
+    timeout: float = _TIMEOUT_SECONDS,
 ) -> WrittenNote | None:
     """Rewrite one note from its current text plus the entries routed to it."""
     try:
@@ -173,8 +177,9 @@ async def rewrite_note(
                 user=write_payload(entries, existing=existing, partition=partition),
                 model=model,
                 credential_resolver=credential_resolver,
+                timeout=timeout,
             ),
-            timeout=_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
     except asyncio.CancelledError:
         raise

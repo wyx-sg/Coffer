@@ -305,8 +305,9 @@ Open `/model-providers` for the vendor endpoints Coffer holds keys for. A provid
 `{protocol, base_url, credential_ref}` — the endpoint and its key. The **model** is not
 stored here and not chosen here: an agent's model is picked on its own detail page, and
 Coffer's internal engine picks its own under **Settings → Engine**. Mark one provider
-**internal default** and it becomes the connection that runs the unattended passes and
-voice transcription.
+**internal default** and it becomes the connection that runs the unattended passes; mark
+one **speech-to-text default** and it becomes the connection voice messages are
+transcribed on. They are separate flags, with no fallback either way.
 
 This surface used to sit under Settings as "LLM connections". It moved because `provider`
 is a resource kind like any other, and it was renamed because the old name described the

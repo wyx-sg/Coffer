@@ -413,13 +413,15 @@ partial reply kept.
 - **FR-045**: An audio attachment MUST be turned into a **transcript** folded
   into the turn's prompt before the adapter builds its request, because the
   shipped agents cannot hear audio. The transcription engine is injected behind
-  a seam and consumes the internal engine (spec
-  [internal-engine](../internal-engine/spec.md) FR-0NN) — this is the one place
-  in Coffer where user content may leave the machine, and it is **off by
-  default**: with no internal engine designated, an unsupported protocol, or a
-  credential that will not resolve, nothing is uploaded and the audio is handed
-  to the agent as an ordinary file instead. Transcription that yields nothing
-  degrades the same way; it never wedges or fails the turn.
+  a seam and consumes the speech-to-text connection and model (spec
+  [internal-engine](../internal-engine/spec.md) FR-025) — its OWN connection,
+  flagged `transcribe_default`, never the one Coffer's engine runs on. This is
+  the one place in Coffer where user content may leave the machine, and it is
+  **off by default**: with no connection marked for transcription, no model
+  chosen for it, an unsupported protocol, or a credential that will not resolve,
+  nothing is uploaded and the audio is handed to the agent as an ordinary file
+  instead. Transcription that yields nothing degrades the same way; it never
+  wedges or fails the turn.
 - **FR-046**: A document attachment (PDF, office formats, epub, rtf) MUST be
   extracted to text and folded into the turn's prompt the same way, so a
   path-native agent sees its content instead of a note about a binary it cannot
@@ -755,10 +757,11 @@ partial reply kept.
 
 ### Scenario: an inbound voice message is transcribed for a text-only agent
 
-- **Given** a designated internal engine and an audio attachment on a turn,
+- **Given** a connection marked for transcription, a speech-to-text model, and
+  an audio attachment on a turn,
 - **When** the turn is built,
-- **Then** the audio is transcribed and folded into the prompt; with no engine
-  designated nothing is uploaded and the agent receives the file instead.
+- **Then** the audio is transcribed and folded into the prompt; with either half
+  unset nothing is uploaded and the agent receives the file instead.
 
 ### Scenario: a PDF reaches a path-native agent as extracted text
 

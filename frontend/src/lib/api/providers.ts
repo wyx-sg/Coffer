@@ -94,6 +94,12 @@ export interface Provider {
   is_active: boolean;
   /** ≤1 globally — the connection Coffer's internal engine uses. */
   internal_default: boolean;
+  /** ≤1 globally — the connection Coffer transcribes speech on. A SECOND flag
+   * rather than a reuse of `internal_default`, with no fallback between them:
+   * a gateway that serves chat completions commonly serves no
+   * `/audio/transcriptions` at all, so borrowing the engine's connection would
+   * aim every voice message at a 404. */
+  transcribe_default: boolean;
   /** The curated model set offered for this connection, each entry carrying its
    * modality. EMPTY = no restriction: every model the endpoint serves is
    * offered. Non-empty narrows every downstream picker to these entries OF THE
@@ -174,4 +180,10 @@ export const providersApi = {
    * all others). Returns the updated connection. */
   setInternalDefault: (name: string) =>
     call<Provider>(`/providers/${name}/internal-default`, { method: "POST" }),
+
+  /** Make this connection the one Coffer transcribes speech on (clears the flag
+   * on all others). The twin of `setInternalDefault`, never a substitute for
+   * it: nothing falls back between the two. */
+  setTranscribeDefault: (name: string) =>
+    call<Provider>(`/providers/${name}/transcribe-default`, { method: "POST" }),
 };

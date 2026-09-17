@@ -159,7 +159,13 @@ async def test_a_rewritten_note_comes_back_from_the_model_it_was_asked_of() -> N
             self.user = ""
 
         async def complete(
-            self, *, system: str, user: str, model: object, credential_resolver: object
+            self,
+            *,
+            system: str,
+            user: str,
+            model: object,
+            credential_resolver: object,
+            timeout: float | None = None,
         ) -> str:
             self.user = user
             return json.dumps({"title": "T", "description": "d", "body": "Coffer's own prose."})

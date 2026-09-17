@@ -62,6 +62,8 @@ def _is_default(config: GlobalInternalEngineConfig) -> bool:
     return (
         config.model is None
         and config.curate_owner_machine_id is None
+        and config.model_timeout_s is None
+        and config.transcribe_model is None
         and all(config.upkeep(name) == _PASS_DEFAULTS[name] for name in _PASSES)
     )
 
@@ -117,6 +119,16 @@ def _upkeep_from_doc(
     return out
 
 
+def _as_int(value: object) -> int | None:
+    """A document's number, or ``None`` for null and anything unreadable."""
+    return int(value) if isinstance(value, int | float) else None
+
+
+def _as_str(value: object) -> str | None:
+    """A document's non-empty string, or ``None``."""
+    return value if isinstance(value, str) and value else None
+
+
 class EngineSettingsSyncState:
     """Implements ``application.sync.ports.SyncedStatePort`` structurally."""
 
@@ -148,6 +160,8 @@ class EngineSettingsSyncState:
             "model": internal.model,
             "auto_curate_enabled": internal.auto_curate_enabled,
             "curate_owner_machine_id": internal.curate_owner_machine_id,
+            "model_timeout_s": internal.model_timeout_s,
+            "transcribe_model": internal.transcribe_model,
             "upkeep": {
                 name: {
                     "enabled": internal.upkeep(name).enabled,
@@ -170,6 +184,24 @@ class EngineSettingsSyncState:
                 owner = doc.get("curate_owner_machine_id", current.curate_owner_machine_id)
                 owner = str(owner) if isinstance(owner, str) and owner else None
                 upkeep = _upkeep_from_doc(doc, current)
+                # Absent keys leave this machine alone (C3): a document written
+                # before these two travelled is an older machine, not a
+                # decision to clear them. Present ones are authoritative,
+                # including an explicit ``null``.
+                timeout = (
+                    _as_int(doc["model_timeout_s"])
+                    if "model_timeout_s" in doc
+                    else current.model_timeout_s
+                )
+                transcribe = (
+                    _as_str(doc["transcribe_model"])
+                    if "transcribe_model" in doc
+                    else current.transcribe_model
+                )
+                if timeout != current.model_timeout_s:
+                    await self._internal.set_model_timeout(timeout, actor="sync")
+                if transcribe != current.transcribe_model:
+                    await self._internal.set_transcribe_model(transcribe, actor="sync")
                 if (
                     model == current.model
                     and owner == current.curate_owner_machine_id
@@ -200,6 +232,8 @@ class EngineSettingsSyncState:
         if _is_default(await self._internal.get()):
             return
         logger.info("sync: internal-engine settings reset to defaults (deleted on another machine)")
+        await self._internal.set_model_timeout(None, actor="sync")
+        await self._internal.set_transcribe_model(None, actor="sync")
         await self._internal.update(
             model=None,
             curate_owner_machine_id="",

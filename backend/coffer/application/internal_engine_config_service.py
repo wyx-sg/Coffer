@@ -12,7 +12,9 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from coffer.application.audit_service import AuditService
+from coffer.application.engine_timeout import MAX_MODEL_TIMEOUT_S, MIN_MODEL_TIMEOUT_S
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import ConfigValidationError
 from coffer.domain.internal_engine_config import (
     GlobalInternalEngineConfig,
     UpkeepSetting,
@@ -28,6 +30,8 @@ class InternalEngineConfigRepo(Protocol):
         curate_owner_machine_id: str | None = None,
         upkeep: Mapping[str, UpkeepSetting] | None = None,
     ) -> GlobalInternalEngineConfig: ...
+    async def set_model_timeout(self, seconds: int | None) -> GlobalInternalEngineConfig: ...
+    async def set_transcribe_model(self, model: str | None) -> GlobalInternalEngineConfig: ...
 
 
 class InternalEngineConfigService:
@@ -65,6 +69,49 @@ class InternalEngineConfigService:
             upkeep={pass_name: setting},
             actor=actor,
         )
+
+    async def set_model_timeout(
+        self, seconds: int | None, *, actor: str = "api"
+    ) -> GlobalInternalEngineConfig:
+        """Bound every call to Coffer's own model, or return to the default.
+
+        Out of range is refused here rather than clamped: this is the operator
+        asking for a number, and a request silently turned into a different
+        number is worse than a rejection they can read. The background passes
+        clamp instead — see ``engine_timeout.resolve_timeout`` for why the two
+        differ.
+        """
+        if seconds is not None and not (MIN_MODEL_TIMEOUT_S <= seconds <= MAX_MODEL_TIMEOUT_S):
+            raise ConfigValidationError(
+                f"model timeout must be between {MIN_MODEL_TIMEOUT_S} and "
+                f"{MAX_MODEL_TIMEOUT_S} seconds (got {seconds})"
+            )
+        saved = await self._repo.set_model_timeout(seconds)
+        await self._audit.record(
+            AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
+            actor=actor,
+            details={"model_timeout_s": saved.model_timeout_s},
+        )
+        return saved
+
+    async def set_transcribe_model(
+        self, model: str | None, *, actor: str = "api"
+    ) -> GlobalInternalEngineConfig:
+        """Choose the speech-to-text model; ``None``/empty stops transcription.
+
+        Stopping is a real answer, not a failure: with no model — or no
+        connection marked ``transcribe_default`` — a turn carrying audio hands
+        the agent the file untouched and the recording never leaves the
+        machine.
+        """
+        cleaned = model.strip() if model and model.strip() else None
+        saved = await self._repo.set_transcribe_model(cleaned)
+        await self._audit.record(
+            AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
+            actor=actor,
+            details={"transcribe_model": saved.transcribe_model},
+        )
+        return saved
 
     async def update(
         self,

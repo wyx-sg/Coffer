@@ -27,8 +27,9 @@ my phone started" are the same code path.
 ## Constitution Check
 
 - **Local-first**: everything above runs on the user's machine. The one
-  exception is FR-045's transcription, which is off unless the user designates
-  an internal engine — stated as an exception in the spec rather than hidden.
+  exception is FR-045's transcription, which is off unless the user marks a
+  connection for speech-to-text AND chooses a model for it — stated as an
+  exception in the spec rather than hidden.
 - **One data-access path**: all reads and writes go through
   `infrastructure/chat/persistence.py`; no route touches a session.
 - **Kind isolation**: enforced, not asserted — see Importlinter below.

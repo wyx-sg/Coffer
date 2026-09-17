@@ -129,3 +129,20 @@ export function useSetInternalDefaultProvider() {
     onError,
   });
 }
+
+/** Set which connection Coffer transcribes speech on (≤1 globally).
+ *
+ *  Its own mutation rather than a flag on the one above, because the two flags
+ *  are independent: transcription runs on a different endpoint from chat and
+ *  neither falls back to the other. */
+export function useSetTranscribeDefaultProvider() {
+  const qc = useQueryClient();
+  const onError = useProviderToastError();
+  return useMutation({
+    mutationFn: (name: string) => providersApi.setTranscribeDefault(name),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: providersKey });
+    },
+    onError,
+  });
+}

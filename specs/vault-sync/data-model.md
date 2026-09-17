@@ -306,21 +306,26 @@ providers — the sync slice never imports kind modules. Current areas:
   incoming pairing keeps whatever pointer this machine already held. The file
   name is a sanitised chat id and therefore only an address; the payload
   carries the true ids.
-- `settings/internal-engine.yaml` — the internal-engine singleton: `model`,
-  `tidy_owner_machine_id`, and an `upkeep` block carrying an `enabled` flag and
-  an `interval_s` for each of the three unattended passes (`aggregate`,
-  `distil`, `tidy`). `auto_tidy_enabled` is also written at the top level,
-  because that is where every document written so far put tidy's switch, and a
-  document that carries no `upkeep` block is still read for it.
+- `settings/internal-engine.yaml` — the internal-engine singleton: `model`, the
+  speech-to-text model, the bound on one model call, `curate_owner_machine_id`,
+  and an `upkeep` block carrying an `enabled` flag and an `interval_s` for each
+  of the three unattended passes (`aggregate`, `distil`, `curate`).
+  `auto_curate_enabled` is also written at the top level, because that is where
+  every document written so far put curation's switch, and a document that
+  carries no `upkeep` block is still read for it. A key the document does not
+  carry leaves this machine's value alone — an older machine is not a decision
+  (spec [internal-engine](../internal-engine/spec.md) FR-017).
 
   ```yaml
   model: <model id>
-  auto_tidy_enabled: false
-  tidy_owner_machine_id: a3f21c9e4b7d2610
+  model_timeout_s: 180
+  transcribe_model: <model id>
+  auto_curate_enabled: true
+  curate_owner_machine_id: a3f21c9e4b7d2610
   upkeep:
     aggregate: { enabled: true, interval_s: null }
     distil: { enabled: true, interval_s: null }
-    tidy: { enabled: false, interval_s: null }
+    curate: { enabled: true, interval_s: null }
   ```
 
   An `interval_s` of `null` means "the pass's own default", so the default
@@ -333,15 +338,16 @@ providers — the sync slice never imports kind modules. Current areas:
 
   What the passes are *allowed* to do travels with the model for one reason:
   switching a rewriter off is exactly the decision a second machine must not be
-  left out of. `tidy_owner_machine_id` is what makes an unattended rewriter
-  safe on several machines: a tidy pass is a no-op on every machine but the
+  left out of. `curate_owner_machine_id` is what makes an unattended rewriter
+  safe on several machines: a curation pass is a no-op on every machine but the
   owner, and `NULL` means "wherever this is read", which is correct for a
   single-machine vault.
 
   The area publishes a **decision, not a row** — the general rule every state
   area follows (FR-058). Nothing is written while the
-  singleton holds the defaults — no model, no tidy owner, aggregate and distil
-  on, tidy off — and a machine that has persisted no singleton at all writes
+  singleton holds the defaults — no model, no speech-to-text model, no chosen
+  call bound, no curation owner, all three passes on — and a machine that has
+  persisted no singleton at all writes
   nothing either. So the tree holds this document exactly while some machine
   holds a non-default choice, a deletion of it means "back to the defaults",
   and honouring that deletion leaves nothing to republish. Had a machine

@@ -31,6 +31,7 @@ vi.mock("@/lib/api/providers", async (orig) => {
       remove: vi.fn(),
       activate: vi.fn(),
       setInternalDefault: vi.fn(),
+      setTranscribeDefault: vi.fn(),
     },
   };
 });
@@ -70,6 +71,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   compatible_agents: ["claude_code"],
   is_active: false,
   internal_default: false,
+  transcribe_default: false,
   models: [],
   enabled: true,
   description: null,
@@ -185,6 +187,7 @@ describe("ModelProvidersPage", () => {
         protocol: "ollama",
         credential_ref: null,
         internal_default: false,
+        transcribe_default: false,
       }),
     );
 
@@ -412,5 +415,22 @@ describe("ModelProvidersPage", () => {
     await waitFor(() => expect(apiMock.remove).toHaveBeenCalledTimes(1));
     expect(apiMock.remove).toHaveBeenCalledWith("agnes");
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  test("the library says which connection speech is transcribed on", async () => {
+    // Transcription has no fallback: every voice message goes to the one
+    // connection carrying the flag, so the library has to answer "which one?"
+    // without a trip to Settings.
+    apiMock.list.mockResolvedValue({
+      providers: [
+        makeProvider({ name: "official" }),
+        makeProvider({ name: "agnes", transcribe_default: true }),
+      ],
+    });
+    renderPage();
+    await screen.findByText("official");
+
+    expect(within(rowFor("agnes")).getByText("Speech to text")).toBeInTheDocument();
+    expect(within(rowFor("official")).queryByText("Speech to text")).toBeNull();
   });
 });

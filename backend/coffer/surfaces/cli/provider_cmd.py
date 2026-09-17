@@ -244,6 +244,28 @@ def internal_default(name: str = typer.Argument(..., help="Connection to use int
     typer.echo(f"internal engine now uses {data['name']} [{data['protocol']}]")
 
 
+@app.command("transcribe-default")
+def transcribe_default(
+    name: str = typer.Argument(..., help="Connection Coffer transcribes speech on"),
+) -> None:
+    """Make this connection the one Coffer transcribes speech on (≤1 globally).
+
+    A separate flag from internal-default, not a fallback to it: a gateway that
+    serves chat completions commonly serves no transcription endpoint at all.
+    Pair it with `coffer engine transcribe-model set <model>` — with either
+    half missing, Coffer transcribes nothing and the agent gets the audio file.
+    """
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post(f"/providers/{name}/transcribe-default")
+        if r.status_code == 404:
+            typer.echo(f"provider {name!r} not found", err=True)
+            raise typer.Exit(4)
+        r.raise_for_status()
+    data = r.json()
+    typer.echo(f"speech is now transcribed on {data['name']} [{data['protocol']}]")
+
+
 @app.command("key")
 def key(
     connection: str | None = typer.Option(

@@ -55,6 +55,7 @@ function makeConn(over: Partial<Provider> = {}): Provider {
     credential_ref: "ref",
     is_active: true,
     internal_default: false,
+    transcribe_default: false,
     // No curated model set by default — the picker introspects the endpoint.
     models: [] as ProviderModel[],
     enabled: true,

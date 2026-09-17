@@ -138,9 +138,17 @@ coffer provider internal-default local-ollama
 internal engine now uses local-ollama [ollama]
 ```
 
-Setting it clears the flag from any previous holder and audits `provider_internal_default_set`. It is what the knowledge tidy pass, memory aggregation and organise, the machine-merge attempt on a [sync](/guide/sync) conflict, and voice transcription for channel audio all run on. With nothing marked, each of those is a clean no-op rather than an error.
+Setting it clears the flag from any previous holder and audits `provider_internal_default_set`. It is what knowledge curation, memory aggregation and distillation, and the machine-merge attempt on a [sync](/guide/sync) conflict all run on. With nothing marked, each of those is a clean no-op rather than an error.
 
-The **model** those passes use is a separate global setting — `GET`/`PUT /api/v1/internal-engine-config`, or **Settings → Engine** in the app, alongside each pass's own switch and interval. A connection may be both active for your agents and the internal default at once: one key, two uses.
+The **model** those passes use is a separate global setting — `GET`/`PUT /api/v1/internal-engine-config`, or **Settings → Engine** in the app, alongside each pass's own switch and interval and the bound on how long one call may take. A connection may be both active for your agents and the internal default at once: one key, two uses.
+
+Voice transcription is **not** on that connection. It has a flag of its own:
+
+```bash
+coffer provider transcribe-default my-openai
+```
+
+Speech-to-text needs an OpenAI-shaped `/audio/transcriptions` endpoint, and the gateway you point Coffer's engine at often does not have one — borrowing it would answer 404 on every voice message. So the two flags move independently, with no fallback either way, and the speech-to-text model is its own setting beside the engine's. With no connection marked here, or no model chosen, Coffer uploads nothing: the agent receives the audio file and the recording stays on your machine.
 
 ## When the flag and the file disagree
 

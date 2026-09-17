@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
+from coffer.application.engine_timeout import TimeoutReader
 from coffer.application.memory.aggregate import (
     AgentSourceResolver,
     AggregationResult,
@@ -131,7 +132,9 @@ class MemoryService:
         completion: LlmCompletionPort | None = None,
         model_selector: ModelSelectorPort | None = None,
         credential_resolver: Callable[[str], str] | None = None,
+        read_timeout: TimeoutReader | None = None,
     ) -> None:
+        self._read_timeout = read_timeout
         self._resources = resources
         self._audit = audit
         self._resolve_agent_source = agent_source_resolver
@@ -253,6 +256,7 @@ class MemoryService:
             model_selector=self._models,
             repository_path=_placement_of(row).repository_path,
             credential_resolver=self._credential_resolver,
+            read_timeout=self._read_timeout,
         )
         await self._audit.record(
             AuditEventType.MEMORY_DISTILLED.value,

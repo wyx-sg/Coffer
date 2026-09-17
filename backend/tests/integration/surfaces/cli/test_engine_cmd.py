@@ -215,3 +215,113 @@ def test_engine_upkeep_set_needs_something_to_change(engine_cli_daemon):
         ["engine", "upkeep", "set", "curate", "--interval", "900", "--default-interval"],
     )
     assert r.exit_code == 2, r.output
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="bound how long one call to Coffer's own model may take",
+)
+def test_engine_timeout_show_set_default(engine_cli_daemon):
+    """The bound on one model call, from a terminal.
+
+    The number is a property of the operator's endpoint, so an operator with
+    only a terminal has to be able to raise it: against a gateway slower than
+    the one the built-in bound was written for, every unattended pass defers
+    its work while reporting success.
+    """
+    http = engine_cli_daemon
+
+    # Nothing chosen: the terminal says which bound is actually in force rather
+    # than printing a blank the reader has to interpret.
+    r = _runner.invoke(cli_app, ["engine", "timeout", "show"])
+    assert r.exit_code == 0, r.output
+    assert "default (60s)" in r.output
+
+    r = _runner.invoke(cli_app, ["engine", "timeout", "set", "180"])
+    assert r.exit_code == 0, r.output
+    assert "180" in r.output
+    assert http.get("/internal-engine-config").json()["model_timeout_s"] == 180
+
+    r = _runner.invoke(cli_app, ["engine", "timeout", "show", "--json"])
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.output) == {"model_timeout_s": 180, "default_model_timeout_s": 60}
+
+    # Out of range is refused by the same rule the page writes through (exit 6
+    # — invalid input), not quietly rounded to something that fits.
+    r = _runner.invoke(cli_app, ["engine", "timeout", "set", "1"])
+    assert r.exit_code == 6, r.output
+    assert http.get("/internal-engine-config").json()["model_timeout_s"] == 180
+
+    r = _runner.invoke(cli_app, ["engine", "timeout", "default"])
+    assert r.exit_code == 0, r.output
+    assert http.get("/internal-engine-config").json()["model_timeout_s"] is None
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="speech-to-text runs on its own connection and its own model",
+)
+def test_engine_transcribe_model_show_set_clear(engine_cli_daemon):
+    """The model Coffer hears speech with, set and given back up.
+
+    Clearing it is an operating decision, not a failure: with no model the
+    recording never leaves the machine and the agent is handed the audio file.
+    """
+    http = engine_cli_daemon
+
+    r = _runner.invoke(cli_app, ["engine", "transcribe-model", "show"])
+    assert r.exit_code == 0, r.output
+    assert "no transcription model chosen" in r.output
+
+    r = _runner.invoke(cli_app, ["engine", "transcribe-model", "set", "hears-things"])
+    assert r.exit_code == 0, r.output
+    assert "hears-things" in r.output
+    assert http.get("/internal-engine-config").json()["transcribe_model"] == "hears-things"
+
+    r = _runner.invoke(cli_app, ["engine", "transcribe-model", "show", "--json"])
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.output) == {"transcribe_model": "hears-things"}
+
+    r = _runner.invoke(cli_app, ["engine", "transcribe-model", "clear"])
+    assert r.exit_code == 0, r.output
+    assert http.get("/internal-engine-config").json()["transcribe_model"] is None
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="speech-to-text runs on its own connection and its own model",
+)
+def test_provider_transcribe_default_names_the_connection_speech_runs_on(engine_cli_daemon):
+    """The other half of transcription, from the same terminal.
+
+    Both halves or neither: the model is chosen on the engine's settings and
+    the ENDPOINT on a connection, so a terminal that could only reach one of
+    them could not turn transcription on at all.
+    """
+    http = engine_cli_daemon
+    created = http.post(
+        "/providers",
+        json={
+            "name": "hears",
+            "protocol": "openai",
+            "base_url": "https://gw/v1",
+            "secret_value": "sk-secret-value",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    r = _runner.invoke(cli_app, ["provider", "transcribe-default", "hears"])
+    assert r.exit_code == 0, r.output
+    assert "hears" in r.output
+
+    events = http.get("/audit", params={"event_type": "provider_transcribe_default_set"}).json()[
+        "entries"
+    ]
+    assert events, "the CLI write recorded no provider_transcribe_default_set entry"
+    assert events[0]["actor"] == "cli"
+    assert events[0]["details"]["to"] == "hears"
+
+    # A connection this vault does not have exits 4 (not found), the same way
+    # `provider internal-default` does.
+    r = _runner.invoke(cli_app, ["provider", "transcribe-default", "nope"])
+    assert r.exit_code == 4, r.output

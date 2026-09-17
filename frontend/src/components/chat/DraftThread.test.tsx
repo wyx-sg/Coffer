@@ -46,6 +46,7 @@ const activeConnection = {
   compatible_agents: ["claude_code"],
   is_active: true,
   internal_default: false,
+  transcribe_default: false,
   enabled: true,
   description: null,
   created_at: "",

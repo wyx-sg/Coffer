@@ -29,6 +29,7 @@ from coffer.application.knowledge.skill_delivery import KnowledgeSkillDelivery
 from coffer.application.resource_service import ResourceService
 from coffer.domain.internal_engine_config import CURATE
 from coffer.infrastructure.llm.agentic_reorg import LangchainAgenticReorg
+from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.knowledge.curation_state import set_curation_runner
 from coffer.surfaces.http.sync_wiring import SyncWiring
 
@@ -53,6 +54,7 @@ def wire_curation(
         models=models,
         credential_resolver=credential_resolver,
         on_corpus_changed=_redeliver,
+        read_timeout=read_internal_engine_timeout,
     )
     set_curation_runner(curation)
     return curation

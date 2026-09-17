@@ -3,14 +3,17 @@ info:
   title: Coffer — Internal Engine API
   version: "0.1.0"
   description: |
-    Coffer's own operating settings: the model its internal engine runs on, and
-    the switch and timer of every pass it runs unattended. Merged into the main
-    Coffer Management API at runtime; this document scopes only the routes the
-    internal-engine spec adds.
+    Coffer's own operating settings: the model its internal engine runs on, the
+    switch and timer of every pass it runs unattended, how long one call to
+    that model may take, and the model it transcribes speech with. Merged into
+    the main Coffer Management API at runtime; this document scopes only the
+    routes the internal-engine spec adds.
 
     The engine's ENDPOINT and key come from the connection flagged
-    `internal_default`, which spec provider-switching owns and serves under
-    `/api/v1/providers`. Only the model and the unattended work are here.
+    `internal_default`, and transcription's from the one flagged
+    `transcribe_default`; spec provider-switching owns both and serves them
+    under `/api/v1/providers`. Only the models and the unattended work are
+    here.
 
     All routes use the same `X-Coffer-Token` authentication from
     `specs/mcp-gateway/contracts/api.openapi.yaml`.
@@ -108,6 +111,76 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "500": { $ref: "#/components/responses/InternalError" }
 
+  /internal-engine-config/timeout:
+    put:
+      tags: [internal-engine]
+      operationId: updateModelTimeout
+      summary: Bound one call to Coffer's own model
+      description: |
+        How long ONE call to the internal engine's model may take before the
+        caller gives up (internal-engine FR-022). The right number is a
+        property of the operator's endpoint, not of Coffer: against a gateway
+        whose typical answer takes 25-30 seconds the built-in 60 leaves barely
+        a factor of two, and a pass that times out defers its work and reports
+        success — so the layer converges at a fraction of its rate while
+        nothing looks broken.
+
+        `null` returns the bound to `default_model_timeout_s`, which is the
+        only way back and keeps the default in one place. A value outside the
+        allowed range is REFUSED here rather than clamped, because this is the
+        operator asking for a number; the background passes clamp instead, so
+        a row written by an older build cannot take a pass down.
+
+        A value outside the range is refused by this route and by the CLI with
+        the same error (FR-024). One setting per request, for the reason
+        `UpkeepUpdate` records (FR-027). Emits an `internal_engine_model_set`
+        audit entry naming the actor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelTimeoutUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /internal-engine-config/transcribe-model:
+    put:
+      tags: [internal-engine]
+      operationId: updateTranscribeModel
+      summary: Set the model Coffer transcribes speech with
+      description: |
+        The speech-to-text model (internal-engine FR-025). Its ENDPOINT and key
+        come from the connection flagged `transcribe_default`, which spec
+        provider-switching serves under `/api/v1/providers` — NOT from the
+        `internal_default` one, and there is deliberately no fallback between
+        them: they are different models, and a chat gateway commonly serves no
+        `/audio/transcriptions` at all.
+
+        `null` or empty stops transcription, which is a real answer rather than
+        an unset one — with no model, or no connection marked, a turn carrying
+        audio hands the agent the file untouched and the recording never leaves
+        the machine. Emits an `internal_engine_model_set` audit entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TranscribeModelUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
 components:
   securitySchemes:
     cofferToken:
@@ -136,6 +209,24 @@ components:
           description: >-
             Keyed by pass name (`aggregate`, `distil`, `curate`).
           additionalProperties: { $ref: "#/components/schemas/UpkeepSettingOut" }
+        model_timeout_s:
+          type: integer
+          nullable: true
+          description: >-
+            The chosen bound on one model call, or null while none has been
+            chosen.
+        default_model_timeout_s:
+          type: integer
+          description: >-
+            What bounds a call while `model_timeout_s` is null — reported for
+            the same reason `default_interval_s` is, so a settings surface can
+            name the default rather than show a blank.
+        transcribe_model:
+          type: string
+          nullable: true
+          description: >-
+            The speech-to-text model, or null when Coffer transcribes nothing
+            and hands the agent the audio file untouched.
 
     UpkeepSettingOut:
       type: object
@@ -186,6 +277,32 @@ components:
           type: string
           nullable: true
 
+    ModelTimeoutUpdate:
+      type: object
+      description: >-
+        Bound one call to Coffer's own model; null returns it to the default.
+      properties:
+        seconds:
+          type: integer
+          nullable: true
+          minimum: 5
+          maximum: 600
+          description: >-
+            Seconds one model call may take. The floor is not politeness —
+            below it the bound would expire before a healthy endpoint could
+            answer — and the ceiling bounds the damage a typo does, since an
+            unattended pass holding a wedged connection for an hour is the
+            failure the bound exists to prevent.
+
+    TranscribeModelUpdate:
+      type: object
+      description: >-
+        Set the speech-to-text model; null/empty stops transcription.
+      properties:
+        model:
+          type: string
+          nullable: true
+
     ErrorOut:
       type: object
       required: [error, message]
@@ -212,6 +329,7 @@ components:
         Validation failure. The cases this surface has:
         - an unknown `pass` name
         - an `interval_s` below the floor
+        - a `seconds` outside the allowed bound range
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorOut" }

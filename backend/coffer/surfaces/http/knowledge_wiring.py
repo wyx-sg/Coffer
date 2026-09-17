@@ -36,6 +36,7 @@ from coffer.application.knowledge.skill_delivery import KnowledgeSkillDelivery
 from coffer.domain.agent.config import AgentConfig
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
+from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.knowledge.dependencies import (
     set_ingest_service,
     set_knowledge_service,
@@ -80,6 +81,7 @@ def wire_knowledge_kind(
         models=models,
         completion=LangchainLlmCompletion(),
         credential_resolver=credential_resolver,
+        read_timeout=read_internal_engine_timeout,
     )
     set_ingest_service(ingest_service)
 

@@ -44,6 +44,23 @@ def build_config_services(
     return internal_svc
 
 
+async def read_internal_engine_timeout() -> int | None:
+    """How long one call to Coffer's own model may take, or ``None`` for the
+    default. An ``engine_timeout.TimeoutReader``, read per call for the reason
+    in the module docstring."""
+    return (await get_internal_engine_config_service().get()).model_timeout_s
+
+
+async def read_transcribe_model() -> str | None:
+    """The speech-to-text model, or ``None`` when Coffer transcribes nothing.
+
+    Deliberately NOT falling back to the engine model: they run on different
+    connections and the endpoints that serve one commonly do not serve the
+    other (spec internal-engine FR-025).
+    """
+    return (await get_internal_engine_config_service().get()).transcribe_model
+
+
 async def read_internal_engine_model() -> str | None:
     """The model Coffer's own engine runs on, or ``None`` if none is chosen.
 
@@ -64,6 +81,12 @@ class _EngineModelStore:
 
     async def clear_model(self, *, actor: str) -> None:
         await get_internal_engine_config_service().update(model=None, actor=actor)
+
+    async def get_transcribe_model(self) -> str | None:
+        return await read_transcribe_model()
+
+    async def clear_transcribe_model(self, *, actor: str) -> None:
+        await get_internal_engine_config_service().set_transcribe_model(None, actor=actor)
 
 
 def internal_default_model_guard() -> InternalDefaultModelGuard:
