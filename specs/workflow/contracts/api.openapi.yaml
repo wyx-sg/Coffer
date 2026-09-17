@@ -246,6 +246,38 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /api/v1/workflow/runs/{run_id}/send-back:
+    post:
+      tags: [workflow]
+      operationId: sendWorkflowRunBack
+      summary: Send work back to an earlier stage along a feedback edge.
+      description: |
+        Adds a task to the edge's target stage carrying what was found (FR-025).
+        No node that already ran is reopened. An edge that has already fired the
+        template's ceiling fails the run instead, which comes back as `200` with
+        a null `task` and the run's new status (FR-026).
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendBackIn"
+      responses:
+        "200":
+          description: The run afterwards, and the task the edge created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendBackOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /api/v1/workflow/runs/{run_id}/inputs:
     get:
       tags: [workflow]
@@ -584,7 +616,9 @@ components:
         attempt_ceiling:
           type: integer
           minimum: 1
-          description: How many attempts any one node may have across a run (FR-026).
+          description: |
+            How many attempts any one node may have, and how many times any one
+            feedback edge may fire, across a run (FR-026).
         token_budget:
           type: integer
           nullable: true
@@ -818,6 +852,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RunInput"
+        send_backs:
+          type: array
+          description: |
+            Every feedback edge in the run's frozen template, so a surface can
+            offer the ones leaving the stage it is showing.
+          items:
+            $ref: "#/components/schemas/SendBackEdgeOut"
 
     StageOut:
       type: object
@@ -946,6 +987,45 @@ components:
           description: |
             Overrides the run's working directory — the way a task that touches
             a second repository is expressed.
+
+    SendBackIn:
+      type: object
+      required: [version, from_stage, reason]
+      properties:
+        version: { type: integer }
+        from_stage: { type: string }
+        reason:
+          type: string
+          description: Names the edge; matched exactly against the template's edges.
+        note:
+          type: string
+          nullable: true
+          description: |
+            What is wrong, in the developer's words. It becomes the brief of the
+            task that lands in the earlier stage.
+
+    SendBackOut:
+      type: object
+      required: [run]
+      properties:
+        run:
+          $ref: "#/components/schemas/RunOut"
+        task:
+          allOf:
+            - $ref: "#/components/schemas/NodeAttemptOut"
+          nullable: true
+          description: |
+            Null in one case only: the edge had already fired the template's
+            ceiling, so the run failed instead of sending work back (FR-026).
+
+    SendBackEdgeOut:
+      type: object
+      required: [from_stage, to_stage, to_stage_name, reason]
+      properties:
+        from_stage: { type: string }
+        to_stage: { type: string }
+        to_stage_name: { type: string }
+        reason: { type: string }
 
     RunInputIn:
       type: object

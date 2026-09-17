@@ -163,8 +163,8 @@ def test_no_workflow_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_seventeen_routes(spec_doc: dict[str, Any]) -> None:
-    """A run's whole management plane, counted. An eighteenth arriving is a
+def test_the_management_plane_is_eighteen_routes(spec_doc: dict[str, Any]) -> None:
+    """A run's whole management plane, counted. A nineteenth arriving is a
     decision, not an accident.
 
     It was thirteen while a run had a main thread of its own. Four inputs
@@ -172,9 +172,12 @@ def test_the_management_plane_is_seventeen_routes(spec_doc: dict[str, Any]) -> N
     run has no conversation to say anything in. The seventeenth reads ONE file
     out of the run's directory (FR-064), so the context table can show what it
     lists rather than only naming it — read-only, one path, and guarded
-    against everything that is not this run's to read.
+    against everything that is not this run's to read. The eighteenth takes a
+    feedback edge (FR-025): the edges were in every template and no surface
+    could cross one, which made "send work back" a promise the product did not
+    keep.
     """
-    assert len(_declared_operations(spec_doc)) == 17
+    assert len(_declared_operations(spec_doc)) == 18
 
 
 def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]) -> None:

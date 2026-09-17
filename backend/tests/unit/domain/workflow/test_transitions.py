@@ -321,22 +321,22 @@ def test_a_near_miss_resolves_to_nothing_rather_than_a_guess(from_stage: str, re
 
 
 @pytest.mark.acceptance(
-    spec="workflow", scenario="a feedback edge opens a new attempt without resetting what passed"
+    spec="workflow", scenario="sending work back adds a task and resets nothing"
 )
-def test_taking_an_edge_reopens_the_target_stage_and_nothing_else():
+def test_taking_an_edge_puts_a_new_task_in_the_target_stage():
     outcome = take_feedback_edge(
         template(),
         "testing",
         "code_issue",
-        completed_keys={"draft_td", "implement"},
-        attempts={"implement": 1},
+        task_key="adhoc:code-issue",
+        firings_used=0,
     )
-    assert outcome.target.node_key == "implement"
     assert outcome.target.stage_key == "coding"
-    assert outcome.reopened_keys == ("implement",)
-    assert outcome.attempt == 2
-    # `draft_td` completed before the edge's target and keeps its result.
-    assert "draft_td" not in outcome.reopened_keys
+    assert outcome.target.node_key == "adhoc:code-issue"
+    assert outcome.firing == 1
+    # Nothing that ran is named: the outcome has no way to express "reopen
+    # `implement`", which is FR-025 held up by the type rather than by care.
+    assert not hasattr(outcome, "reopened_keys")
 
 
 def test_taking_an_edge_the_template_does_not_have_is_refused():
@@ -345,8 +345,8 @@ def test_taking_an_edge_the_template_does_not_have_is_refused():
             template(),
             "testing",
             "design_issue",
-            completed_keys=set(),
-            attempts={},
+            task_key="adhoc:design-issue",
+            firings_used=0,
         )
     assert caught.value.attempted == "design_issue"
     assert caught.value.allowed == ("code_issue->coding",)
@@ -355,7 +355,7 @@ def test_taking_an_edge_the_template_does_not_have_is_refused():
 @pytest.mark.acceptance(
     spec="workflow", scenario="a loop between two stages stops at the attempt ceiling"
 )
-def test_the_ceiling_ends_the_loop_instead_of_opening_another_attempt():
+def test_the_ceiling_ends_the_loop_instead_of_adding_another_task():
     """FR-026: testing sends work back to coding three times; the fourth fails
     the run with the reason."""
     with pytest.raises(AttemptCeilingReached) as caught:
@@ -363,22 +363,23 @@ def test_the_ceiling_ends_the_loop_instead_of_opening_another_attempt():
             template(),
             "testing",
             "code_issue",
-            completed_keys={"implement"},
-            attempts={"implement": 3},  # the template's ceiling
+            task_key="adhoc:code-issue-4",
+            firings_used=3,  # the template's ceiling
         )
-    assert caught.value.node_key == "implement"
+    # The refusal names the task it declined to create, not a node that passed.
+    assert caught.value.node_key == "adhoc:code-issue-4"
     assert caught.value.ceiling == 3
 
 
-def test_the_last_attempt_under_the_ceiling_is_still_allowed():
+def test_the_last_firing_under_the_ceiling_is_still_allowed():
     outcome = take_feedback_edge(
         template(),
         "testing",
         "code_issue",
-        completed_keys={"implement"},
-        attempts={"implement": 2},
+        task_key="adhoc:code-issue-3",
+        firings_used=2,
     )
-    assert outcome.attempt == 3
+    assert outcome.firing == 3
 
 
 def test_a_retry_and_a_feedback_edge_stop_at_the_same_number():

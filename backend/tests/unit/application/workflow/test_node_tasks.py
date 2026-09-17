@@ -1,9 +1,9 @@
 """Feedback edges and ad-hoc tasks — the two commands that reshape a run.
 
 The two questions worth proving here are the ones a delivery engine usually
-gets wrong: a feedback edge must not reset what already passed (FR-025), and a
-loop between two stages must end at the ceiling rather than run all night
-(FR-026).
+gets wrong: sending work back must not reset what already passed (FR-025) — it
+adds a task saying what is wrong — and a loop between two stages must end at
+the ceiling rather than run all night (FR-026).
 """
 
 from __future__ import annotations
@@ -41,12 +41,12 @@ async def _design_done_coding_in_review(engine: Engine) -> str:
 
 
 @pytest.mark.acceptance(
-    spec="workflow", scenario="a feedback edge opens a new attempt without resetting what passed"
+    spec="workflow", scenario="sending work back adds a task and resets nothing"
 )
-async def test_a_feedback_edge_reopens_the_target_without_resetting_the_rest(
+async def test_sending_work_back_adds_a_task_and_leaves_what_passed_alone(
     engine: Engine,
 ) -> None:
-    """FR-025: the nodes completed in between keep their results."""
+    """FR-025: the fix is new work, not a second version of finished work."""
     run = await engine.started()
     engine.artifacts.add(run.id, "draft_td", 1, "td.md")
     await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
@@ -56,37 +56,60 @@ async def test_a_feedback_edge_reopens_the_target_without_resetting_the_rest(
         run.id,
         from_stage="coding",
         reason="design_issue",
+        note="the retry policy contradicts section 3",
         version=completed.run.version,
     )
 
-    reopened = await engine.attempts.latest_attempt(run.id, "draft_td")
-    assert reopened.attempt == 2
-    assert reopened.status == NodeStatus.PENDING.value
-    # Attempt 1 is untouched: its status, summary and conversation survive.
-    first = (await engine.attempts.list_attempts(run.id))[0]
-    assert first.status == NodeStatus.COMPLETED.value
-    assert first.summary == "drafted"
-    assert engine.types(run.id)[-1] == "node.retried"
-    assert result.run.current_node_key == "draft_td"
+    # The node that passed is untouched — same attempt, same status, same summary.
+    passed = await engine.attempts.latest_attempt(run.id, "draft_td")
+    assert passed.attempt == 1
+    assert passed.status == NodeStatus.COMPLETED.value
+    assert passed.summary == "drafted"
+
+    # What arrived is a task in the target stage, briefed with what was found.
+    task = await engine.attempts.latest_attempt(run.id, "adhoc:design-issue")
+    assert task is not None
+    assert task.stage_key == "design"
+    assert task.status == NodeStatus.PENDING.value
+    assert task.instructions == "the retry policy contradicts section 3"
+    assert engine.types(run.id)[-1] == "node.adhoc_added"
+    assert result.attempt is not None and result.attempt.node_key == "adhoc:design-issue"
 
 
-async def test_the_walk_hands_back_the_reopened_node_then_returns_to_the_source() -> None:
-    """The reopened node runs first even though the source is still in review."""
+async def test_a_send_back_with_nothing_written_still_says_where_it_came_from(
+    engine: Engine,
+) -> None:
+    """A task with no brief at all would reach its agent saying nothing."""
+    run = await engine.started()
+
+    await engine.nodes.take_feedback(
+        run.id, from_stage="coding", reason="design_issue", note="   ", version=run.version
+    )
+
+    task = await engine.attempts.latest_attempt(run.id, "adhoc:design-issue")
+    assert task.instructions == "Sent back from coding: design_issue."
+
+
+async def test_the_walk_hands_back_the_new_task_then_returns_to_the_source() -> None:
+    """The fix runs first even though the source is still in review."""
     engine = build_engine({"delivery": _reviewed_coding_template()})
     run_id = await _design_done_coding_in_review(engine)
     current = await engine.run_repo.get_run(run_id)
     await engine.nodes.take_feedback(
-        run_id, from_stage="coding", reason="design_issue", version=current.version
+        run_id,
+        from_stage="coding",
+        reason="design_issue",
+        note="rewrite section 3",
+        version=current.version,
     )
 
     position = await engine.nodes.next_position(run_id)
     assert position is not None
-    assert position.node_key == "draft_td"
+    assert position.node_key == "adhoc:design-issue"
 
     current = await engine.run_repo.get_run(run_id)
-    await engine.nodes.act(run_id, "draft_td", NodeAction.START, version=current.version)
-    engine.artifacts.add(run_id, "draft_td", 2, "td.md")
-    await engine.nodes.record_output(run_id, "draft_td", summary="redrafted")
+    await engine.nodes.act(run_id, "adhoc:design-issue", NodeAction.START, version=current.version)
+    await engine.nodes.record_output(run_id, "adhoc:design-issue", summary="rewritten")
 
     # Back where the edge was taken from: `write_code` kept its attempt and its
     # review, so the run stops there for the developer rather than running on.
@@ -94,6 +117,24 @@ async def test_the_walk_hands_back_the_reopened_node_then_returns_to_the_source(
     assert walk.startable is None
     assert walk.occupied_by == "write_code"
     assert (await engine.run_repo.get_run(run_id)).status == RunStatus.RUNNING.value
+
+
+async def test_a_second_crossing_of_the_same_edge_is_a_second_task() -> None:
+    """Two findings are two pieces of work, and the second is the edge's
+    second firing rather than the first task's second attempt."""
+    engine = build_engine({"delivery": _reviewed_coding_template()})
+    run_id = await _design_done_coding_in_review(engine)
+    current = await engine.run_repo.get_run(run_id)
+    first = await engine.nodes.take_feedback(
+        run_id, from_stage="coding", reason="design_issue", note="one", version=current.version
+    )
+    second = await engine.nodes.take_feedback(
+        run_id, from_stage="coding", reason="design_issue", note="two", version=first.run.version
+    )
+
+    assert second.attempt is not None
+    assert second.attempt.node_key == "adhoc:design-issue-2"
+    assert second.attempt.attempt == 1, "the second finding reopened the first task"
 
 
 async def test_an_unknown_reason_takes_no_edge() -> None:
@@ -112,20 +153,24 @@ async def test_an_unknown_reason_takes_no_edge() -> None:
 @pytest.mark.acceptance(
     spec="workflow", scenario="a loop between two stages stops at the attempt ceiling"
 )
-async def test_the_loop_stops_at_the_attempt_ceiling_by_failing_the_run() -> None:
-    """FR-026: the next pass fails the run instead of opening another try."""
+async def test_the_loop_stops_at_the_ceiling_by_failing_the_run() -> None:
+    """FR-026: the crossing past the ceiling fails the run instead of sending
+    work back one more time."""
     engine = build_engine({"delivery": {**_reviewed_coding_template(), "attempt_ceiling": 1}})
     run_id = await _design_done_coding_in_review(engine)
     current = await engine.run_repo.get_run(run_id)
+    first = await engine.nodes.take_feedback(
+        run_id, from_stage="coding", reason="design_issue", note="one", version=current.version
+    )
 
     result = await engine.nodes.take_feedback(
-        run_id, from_stage="coding", reason="design_issue", version=current.version
+        run_id, from_stage="coding", reason="design_issue", note="two", version=first.run.version
     )
 
     assert result.run.status == RunStatus.FAILED.value
     assert engine.types(run_id)[-1] == "run.failed"
-    # No second attempt was opened.
-    assert (await engine.attempts.latest_attempt(run_id, "draft_td")).attempt == 1
+    # No second task was created.
+    assert await engine.attempts.latest_attempt(run_id, "adhoc:design-issue-2") is None
     assert engine.audit.types()[-1] == "workflow_run_finished"
 
 

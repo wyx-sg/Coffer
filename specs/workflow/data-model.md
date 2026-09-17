@@ -56,7 +56,7 @@ JSON path of the offending field:
 | `nodes[].approval` | `never` \| `always` |
 | `nodes[].on_failure.action` | `stop` \| `continue` \| `retry`, with `times` ≥ 1 when `retry` |
 | `edges[]` | both stages exist; `to_stage` strictly earlier than `from_stage` — a forward edge is the default order and is not written |
-| `attempt_ceiling` | ≥ 1; the ceiling for any one node key across a run (FR-026) |
+| `attempt_ceiling` | ≥ 1; the ceiling for any one node key's attempts AND for any one feedback edge's firings across a run (FR-026) |
 
 The engine reads no meaning from any `key` (FR-003). `design`, `coding`,
 `张三的阶段` are the same to it.

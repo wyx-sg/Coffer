@@ -347,12 +347,19 @@ class WorkflowNodeService:
         *,
         from_stage: str,
         reason: str,
+        note: str | None = None,
         version: int,
         actor: EventActor = DEFAULT_ACTOR,
     ) -> CommandResult:
         """Send the run back along a feedback edge (FR-025, FR-026)."""
         return await node_tasks.take_feedback(
-            self._ops, run_id, from_stage=from_stage, reason=reason, version=version, actor=actor
+            self._ops,
+            run_id,
+            from_stage=from_stage,
+            reason=reason,
+            note=note,
+            version=version,
+            actor=actor,
         )
 
     async def add_adhoc_task(

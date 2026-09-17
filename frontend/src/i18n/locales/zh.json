@@ -1956,6 +1956,17 @@
       "backToRun": "返回这次运行",
       "fileNotFound": "这个文件不在",
       "notTextTitle": "没什么可显示的"
+    },
+    "sendBack": {
+      "action": "退回",
+      "title": "退回到{{stage}}",
+      "description": "会在那个阶段新建一个任务，写上你发现的问题，并接着往下跑。已经跑完的节点不会被重开——它回答的是另一个问题，答案保留。",
+      "reasonLabel": "原因",
+      "reasonOption": "{{reason}} —— 退回到{{stage}}",
+      "noteLabel": "问题是什么",
+      "notePlaceholder": "你写的就是那个修复任务的任务书：你发现了什么，在哪里？",
+      "submit": "退回到{{stage}}",
+      "ceiling": "这条退回已经用满了工作流允许的次数，运行直接失败，而不是再绕一圈。"
     }
   }
 }

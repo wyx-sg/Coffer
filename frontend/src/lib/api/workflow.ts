@@ -31,6 +31,9 @@ export type Node = Schemas["NodeOut"];
 export type NodeStatus = Node["status"];
 export type NodeAttempt = Schemas["NodeAttemptOut"];
 export type AdhocTask = Schemas["AdhocTaskIn"];
+export type SendBack = Schemas["SendBackIn"];
+export type SendBackResult = Schemas["SendBackOut"];
+export type SendBackEdge = Schemas["SendBackEdgeOut"];
 export type Artifact = Schemas["ArtifactOut"];
 /** One file under a run's directory, as the preview reads it (FR-064). */
 export type RunFile = Schemas["RunFileOut"];
@@ -80,6 +83,14 @@ export const workflowApi = {
   // not call it, so it does not carry a method for it.
   addAdhocTask: (runId: string, body: AdhocTask) =>
     call<NodeAttempt>(`/workflow/runs/${enc(runId)}/tasks`, { method: "POST", body }),
+
+  /**
+   * Cross a feedback edge: a task describing what is wrong lands in the
+   * earlier stage (FR-025). `task` comes back null when the edge has already
+   * fired the template's ceiling and the run failed instead (FR-026).
+   */
+  sendBack: (runId: string, body: SendBack) =>
+    call<SendBackResult>(`/workflow/runs/${enc(runId)}/send-back`, { method: "POST", body }),
 
   // Inputs — what the run READS (FR-032). Editable for the whole of a run's
   // life, not only at creation (FR-050), so all four verbs live here.

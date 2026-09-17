@@ -120,6 +120,19 @@ class AdhocTaskIn(BaseModel):
     workdir: str | None = None
 
 
+class SendBackIn(BaseModel):
+    """Take a feedback edge out of ``from_stage`` (FR-025)."""
+
+    version: int
+    from_stage: str
+    #: Names the edge; matched exactly against the template's edges.
+    reason: str
+    #: What is wrong, in the developer's words. It becomes the brief of the
+    #: task that lands in the earlier stage, so it is the one field worth
+    #: writing carefully.
+    note: str | None = None
+
+
 class PromotionIn(BaseModel):
     collection: str
 
@@ -210,10 +223,40 @@ class InputListOut(BaseModel):
     items: list[RunInput]
 
 
+class SendBackEdgeOut(BaseModel):
+    """An edge the template wrote, resolved for display (FR-005).
+
+    The target's display name travels with it: a surface offering "send back"
+    would otherwise have to look the stage up, and one of them would eventually
+    show a key to a person.
+    """
+
+    from_stage: str
+    to_stage: str
+    to_stage_name: str
+    reason: str
+
+
 class RunDetailOut(BaseModel):
     run: RunOut
     stages: list[StageOut]
     inputs: list[RunInput] = Field(default_factory=list)
+    #: Every feedback edge in the run's frozen template, so a surface can offer
+    #: the ones leaving the stage it is showing.
+    send_backs: list[SendBackEdgeOut] = Field(default_factory=list)
+
+
+class SendBackOut(BaseModel):
+    """What sending work back did.
+
+    ``task`` is null in exactly one case: the edge had already fired the
+    template's ceiling, so what the run got instead of a task was a failure
+    (FR-026). The run says so in its status, which is why this is an answer
+    rather than an error — the command was accepted, and it ended the run.
+    """
+
+    run: RunOut
+    task: NodeAttemptOut | None = None
 
 
 class EventActorOut(BaseModel):

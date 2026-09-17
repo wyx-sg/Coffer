@@ -1,8 +1,8 @@
 """``/api/v1/workflow/runs/{run_id}/nodes`` and ``…/tasks`` — one node at a time.
 
-Two routes, both of which answer with the node's latest attempt: the six node
-actions (FR-021) and the ad-hoc task that joins a stage with instructions of the
-developer's own (FR-028).
+Three routes: the six node actions (FR-021), the ad-hoc task that joins a stage
+with instructions of the developer's own (FR-028), and the feedback edge that
+sends work back to an earlier stage by adding a task there (FR-025).
 
 Neither route decides anything. Which actions are legal, what an action leaves
 behind, whether a required artifact may be waived and where the ceiling is are
@@ -15,24 +15,27 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, status
 
 from coffer.application.workflow.node_service import WorkflowNodeService
-from coffer.application.workflow.ports import AttemptRepoPort, AttemptRow, EventRepoPort
+from coffer.application.workflow.ports import AttemptRepoPort
+from coffer.application.workflow.run_service import WorkflowRunService
 from coffer.domain.workflow.errors import IllegalTransition
-from coffer.domain.workflow.events import EventType
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.workflow.converters import (
     attempt_out,
     event_actor,
+    run_out,
 )
 from coffer.surfaces.http.workflow.dependencies import (
     get_workflow_attempt_repo,
-    get_workflow_event_repo,
     get_workflow_node_service,
+    get_workflow_run_service,
 )
 from coffer.surfaces.http.workflow.schemas import (
     AdhocTaskIn,
     NodeActionIn,
     NodeAttemptOut,
+    SendBackIn,
+    SendBackOut,
 )
 
 router = APIRouter(
@@ -79,8 +82,6 @@ async def add_adhoc_task(
     run_id: str,
     body: AdhocTaskIn,
     nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
-    attempts: AttemptRepoPort = Depends(get_workflow_attempt_repo),  # noqa: B008
-    events: EventRepoPort = Depends(get_workflow_event_repo),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> NodeAttemptOut:
     """Add an unplanned task to a stage, with instructions of your own (FR-028).
@@ -90,7 +91,7 @@ async def add_adhoc_task(
     silently sharing another task's attempts — so the key comes back out of the
     log the command just wrote, which is where it was recorded.
     """
-    await nodes.add_adhoc_task(
+    result = await nodes.add_adhoc_task(
         run_id,
         stage_key=body.stage_key,
         name=body.name,
@@ -100,27 +101,39 @@ async def add_adhoc_task(
         workdir=body.workdir,
         actor=event_actor(actor),
     )
-    row = await _first_attempt_of_new_task(events, attempts, run_id)
-    if row is None:  # pragma: no cover - the command appends the event it reads
+    if result.attempt is None:  # pragma: no cover - the command opens the attempt it answers with
         raise IllegalTransition(f"run {run_id}", "adhoc", body.stage_key, ())
-    return attempt_out(row)
+    return attempt_out(result.attempt)
 
 
-async def _first_attempt_of_new_task(
-    events: EventRepoPort,
-    attempts: AttemptRepoPort,
+@router.post("/runs/{run_id}/send-back", response_model=SendBackOut)
+async def send_back(
     run_id: str,
-) -> AttemptRow | None:
-    """The attempt of the ad-hoc task added last — the one just added.
+    body: SendBackIn,
+    nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
+    runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> SendBackOut:
+    """Send work back to an earlier stage along a feedback edge (FR-025).
 
-    Read from the event log rather than by diffing the attempt table around the
-    command: the log is the run's record of truth, and its last
-    ``node.adhoc_added`` is by definition the task this request created.
+    What lands there is a new task carrying ``note`` as its brief. The node
+    that already passed in that stage is not reopened, retried or rewound —
+    it answered a different question, and it keeps its answer.
+
+    The one case with no task in the answer is the ceiling (FR-026): an edge
+    that has already fired as many times as the template allows fails the run
+    instead of sending work back again. That is an outcome, not a refusal, so
+    it comes back as this run with ``task`` null rather than as an error.
     """
-    node_key: str | None = None
-    for row in await events.list_events(run_id):
-        if row.event_type == EventType.NODE_ADHOC_ADDED.value and row.node_key:
-            node_key = row.node_key
-    if node_key is None:
-        return None
-    return await attempts.latest_attempt(run_id, node_key)
+    result = await nodes.take_feedback(
+        run_id,
+        from_stage=body.from_stage,
+        reason=body.reason,
+        note=body.note,
+        version=body.version,
+        actor=event_actor(actor),
+    )
+    return SendBackOut(
+        run=run_out(result.run, owned_here=runs.owned_here(result.run)),
+        task=None if result.attempt is None else attempt_out(result.attempt),
+    )

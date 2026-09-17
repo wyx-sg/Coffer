@@ -8,16 +8,17 @@ application layer has exactly one place to ask "may this happen?".
 The two rules worth stating up front, because they are the ones a delivery
 engine usually gets wrong:
 
-* A **feedback edge** opens a new attempt of the target stage's nodes and
-  resets nothing else (FR-025). The nodes that completed in between keep their
-  results; the run simply walks forward again and skips what is still done.
+* A **feedback edge** sends the run back by adding ONE new task to the target
+  stage, and resets nothing (FR-025). The work that already passed keeps its
+  results and its history; the fix is a new piece of work with its own
+  conversation, not a second version of an old one.
 * A **ceiling** ends a loop (FR-026). Testing can send work back to coding
   three times; the fourth fails the run instead of spending the night on it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from coffer.domain.workflow.errors import (
@@ -94,17 +95,21 @@ class NodePosition:
 
 @dataclass(frozen=True)
 class FeedbackOutcome:
-    """What taking a feedback edge does.
+    """What taking a feedback edge does: one new task, and nothing else.
 
-    ``reopened_keys`` is exactly the target stage's nodes. Nothing outside that
-    stage is touched — that is FR-025 expressed as data rather than as a
-    promise in a docstring.
+    ``target`` is where that task goes — the edge's stage, and the key minted
+    for the task. No existing node appears here at all, which is FR-025
+    expressed as data rather than as a promise in a docstring: a node that
+    passed is not reopened, retried or rewound by somebody else's finding.
+
+    ``firing`` is which crossing of this edge the task is, counted from one. It
+    is what the ceiling is measured against (FR-026), because the loop that
+    needs bounding is the edge, not any one node.
     """
 
     edge: FeedbackEdge
     target: NodePosition
-    reopened_keys: tuple[str, ...]
-    attempt: int
+    firing: int
 
 
 def allowed_run_signals(status: RunStatus) -> frozenset[RunSignal]:
@@ -254,19 +259,26 @@ def take_feedback_edge(
     from_stage: str,
     reason: str,
     *,
-    completed_keys: Collection[str],
-    attempts: Mapping[str, int],
+    task_key: str,
+    firings_used: int,
 ) -> FeedbackOutcome:
-    """Take a feedback edge: say which nodes reopen and at which attempt.
+    """Take a feedback edge: say where the fix goes and which crossing it is.
 
-    The caller applies the outcome — removes ``reopened_keys`` from the run's
-    completed set and inserts a new attempt row for ``target``. Everything the
-    edge does **not** name keeps its results (FR-025).
+    The caller applies the outcome — it inserts an attempt row for a NEW task
+    at ``target``, carrying whatever the developer wrote about what is wrong.
+    Nothing that already ran is touched (FR-025): the coding node that passed
+    review keeps its conversation, its summary and its artifacts, and the fix
+    is a separate piece of work that the stage's walk picks up next.
+
+    ``task_key`` is minted by the caller, which is the layer that can see the
+    run's other node keys. It is needed here only so the ceiling refusal can
+    name the task it declined to create.
 
     Raises:
         IllegalTransition: no edge leaves ``from_stage`` for ``reason``.
-        AttemptCeilingReached: the target node has used the template's ceiling,
-            so the run fails with that reason instead of looping (FR-026).
+        AttemptCeilingReached: this edge has fired the template's ceiling
+            already, so the run fails with that reason instead of sending work
+            back a fourth time (FR-026).
     """
     edge = resolve_feedback_edge(template, from_stage, reason)
     if edge is None:
@@ -281,17 +293,11 @@ def take_feedback_edge(
     if target_stage is None:  # pragma: no cover - parse_template proves both ends exist
         raise IllegalTransition(f"stage {from_stage!r}", "unknown target", edge.to_stage, ())
 
-    target_node = target_stage.nodes[0]
-    attempt = attempts.get(target_node.key, 0) + 1
-    if attempt > template.attempt_ceiling:
-        raise AttemptCeilingReached(target_node.key, template.attempt_ceiling)
-
-    reopened = tuple(node.key for node in target_stage.nodes if node.key in set(completed_keys))
+    firing = check_attempt_ceiling(task_key, firings_used, template.attempt_ceiling)
     return FeedbackOutcome(
         edge=edge,
-        target=NodePosition(stage_key=target_stage.key, node_key=target_node.key),
-        reopened_keys=reopened,
-        attempt=attempt,
+        target=NodePosition(stage_key=target_stage.key, node_key=task_key),
+        firing=firing,
     )
 
 
@@ -300,7 +306,8 @@ def check_attempt_ceiling(node_key: str, attempts_used: int, ceiling: int) -> in
 
     Shared by the retry action and the feedback edge so both loops stop at the
     same number — a ceiling honoured on one path and not the other is no
-    ceiling at all (FR-026).
+    ceiling at all (FR-026). What is counted differs, and deliberately: a retry
+    counts one node's tries, an edge counts its own crossings.
 
     Raises:
         AttemptCeilingReached: when the next attempt would exceed the ceiling.

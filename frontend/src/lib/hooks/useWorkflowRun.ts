@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
 import { workflowApi } from "@/lib/api/workflow";
-import type { AdhocTask, RunDetail } from "@/lib/api/workflow";
+import type { AdhocTask, RunDetail, SendBack } from "@/lib/api/workflow";
 import { workflowArtifactsKey, workflowRunKey, workflowRunsKey } from "@/lib/api/queryKeys";
 import { useToast } from "@/components/ui/toast";
 
@@ -73,6 +73,32 @@ export function useAddAdhocTask(runId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: workflowRunKey(runId) });
       void qc.invalidateQueries({ queryKey: workflowRunsKey });
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Cross a feedback edge (FR-025): a task saying what is wrong lands in the
+ * earlier stage. Nothing that already ran is reopened, so the invalidation is
+ * the same one an added task does — the run has one more task than it had.
+ *
+ * The one answer with no task in it is the ceiling (FR-026): the run failed
+ * instead of going round again, which is reported here rather than swallowed,
+ * because a run that just ended is the thing the developer most needs told.
+ */
+export function useSendBack(runId: string) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (body: SendBack) => workflowApi.sendBack(runId, body),
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: workflowRunKey(runId) });
+      void qc.invalidateQueries({ queryKey: workflowRunsKey });
+      if (result.task === null || result.task === undefined) {
+        toast.error(t("workflow.sendBack.ceiling"));
+      }
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

@@ -1956,6 +1956,17 @@
       "backToRun": "Back to the run",
       "fileNotFound": "This file is not there",
       "notTextTitle": "Nothing to show"
+    },
+    "sendBack": {
+      "action": "Send back",
+      "title": "Send this back to {{stage}}",
+      "description": "A task describing what you found joins that stage and runs next. Nothing that already passed is reopened — it answered a different question, and it keeps its answer.",
+      "reasonLabel": "Reason",
+      "reasonOption": "{{reason}} — back to {{stage}}",
+      "noteLabel": "What is wrong",
+      "notePlaceholder": "You are writing the brief of the task that will fix it. What did you find, and where?",
+      "submit": "Send back to {{stage}}",
+      "ceiling": "This send-back has been used as many times as the workflow allows, so the run failed instead of going round again."
     }
   }
 }

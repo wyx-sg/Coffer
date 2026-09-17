@@ -11,7 +11,7 @@
 //   • A task that has never started says so, rather than showing an empty
 //     thread that reads like a conversation in which nothing was said.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -22,6 +22,7 @@ import type { Approval, RunDetail } from "@/lib/api/workflow";
 
 const getRun = vi.fn();
 const listApprovals = vi.fn();
+const sendBack = vi.fn();
 
 vi.mock("@/lib/api/workflow", () => ({
   WORKFLOW_TEMPLATE_KIND: "workflow",
@@ -29,6 +30,7 @@ vi.mock("@/lib/api/workflow", () => ({
     getRun: (...a: unknown[]) => getRun(...a),
     listApprovals: (...a: unknown[]) => listApprovals(...a),
     decideApproval: vi.fn(),
+    sendBack: (...a: unknown[]) => sendBack(...a),
   },
 }));
 
@@ -153,6 +155,10 @@ describe("WorkflowNodePage", () => {
   beforeEach(() => {
     getRun.mockResolvedValue(detail());
     listApprovals.mockResolvedValue({ items: [] });
+    sendBack.mockResolvedValue({
+      run: detail().run,
+      task: { node_key: "adhoc:code-issue", stage_key: "design", attempt: 1 },
+    });
   });
   afterEach(() => vi.clearAllMocks());
 
@@ -221,6 +227,44 @@ describe("WorkflowNodePage", () => {
   test("a node key this run does not have is reported, not rendered blank", async () => {
     render(wrap("/runs/run-1/nodes/nope"));
     expect(await screen.findByText("This task is not part of this run")).toBeInTheDocument();
+  });
+
+  test("a stage the template sends nothing back from offers no send-back", async () => {
+    render(wrap());
+    await screen.findByRole("heading", { name: "Write the TD" });
+    expect(screen.queryByRole("button", { name: "Send back" })).not.toBeInTheDocument();
+  });
+
+  acceptance("workflow", "sending work back adds a task and resets nothing", async () => {
+    getRun.mockResolvedValue({
+      ...detail(),
+      send_backs: [
+        {
+          from_stage: "design",
+          to_stage: "intake",
+          to_stage_name: "Intake",
+          reason: "missing_requirement",
+        },
+      ],
+    });
+    render(wrap());
+    fireEvent.click(await screen.findByRole("button", { name: "Send back" }));
+
+    // The dialog names the stage the work goes to, not a key.
+    expect(await screen.findByRole("heading", { name: "Send this back to Intake" })).toBeVisible();
+    fireEvent.change(screen.getByLabelText("What is wrong"), {
+      target: { value: "the acceptance criteria contradict section 2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send back to Intake" }));
+
+    await waitFor(() =>
+      expect(sendBack).toHaveBeenCalledWith("run-1", {
+        version: 4,
+        from_stage: "design",
+        reason: "missing_requirement",
+        note: "the acceptance criteria contradict section 2",
+      }),
+    );
   });
 
   test("a run another machine advances is read-only here", async () => {

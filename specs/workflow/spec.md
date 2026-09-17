@@ -181,8 +181,8 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-022**: A retry MUST append a new attempt; an attempt's conversation, output and feedback MUST survive it.
 - **FR-023**: A node that owes a required artifact and has not produced it MUST NOT complete; it MUST wait for the developer to supply it or waive it.
 - **FR-024**: A node failure MUST be handled by the node's declared failure behaviour: stop the run, continue to the next node, or retry up to a stated number of times.
-- **FR-025**: Taking a feedback edge MUST open a new attempt of the target node and MUST NOT reset the nodes that completed between them.
-- **FR-026**: A node MUST have an attempt ceiling; reaching it MUST fail the run with the reason rather than loop.
+- **FR-025**: Taking a feedback edge MUST add a new task to the target stage carrying what was found, and MUST NOT reopen, retry or reset any node that already ran.
+- **FR-026**: A node's attempts and a feedback edge's firings MUST both be bounded by the template's ceiling; reaching either MUST fail the run with the reason rather than loop.
 - **FR-027**: A node whose turn was interrupted by a daemon restart MUST be reported as failed with an `interrupted` reason, with its conversation preserved and readable.
 - **FR-028**: The developer MUST be able to add an ad-hoc task to any stage of a run at any time, writing its instructions themselves; it MUST be recorded, contextualised and attributed exactly as a template node is.
 
@@ -315,16 +315,16 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** its turn ends without that artifact
 - **Then** the node does not complete and waits for the developer (FR-023)
 
-### Scenario: a feedback edge opens a new attempt without resetting what passed
+### Scenario: sending work back adds a task and resets nothing
 
 - **Given** a completed coding node and a testing node that found a code issue
 - **When** the feedback edge is taken
-- **Then** a new attempt of the coding node opens and the nodes completed in between keep their results (FR-025)
+- **Then** a task describing the issue joins the coding stage, the run goes back to it, and every node that already ran keeps its result and its conversation (FR-025)
 
 ### Scenario: a loop between two stages stops at the attempt ceiling
 
-- **Given** a node at its attempt ceiling
-- **When** a feedback edge would open another attempt
+- **Given** a feedback edge that has fired the template's ceiling
+- **When** it would send work back once more
 - **Then** the run fails with the reason instead of looping (FR-026)
 
 ### Scenario: a task is its own conversation, opened from the run
