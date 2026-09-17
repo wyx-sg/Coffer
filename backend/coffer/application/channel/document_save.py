@@ -4,8 +4,8 @@ the Knowledge page are two ends of one entrance).
 Free functions beside ``commands.py``, split out purely for that file's size
 budget, exactly like ``card_delivery.py`` was: they take the owning
 ``ChannelCommands`` as their first argument and read its ports
-(``_threads``/``_collections``/``_ingest``) the same way ``card_delivery``
-already reads ``_agents``/``_conversations``/``_model_suggestions``.
+(``_collections``/``_ingest``) the same way ``card_delivery`` already reads
+``_agents``/``_conversations``/``_model_suggestions``.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ import pathlib
 from asyncio import to_thread
 from typing import TYPE_CHECKING, Any
 
-from coffer.application.channel.agent_routing import effective_agent
 from coffer.application.channel.ports import ChannelBinding, ChannelPeer
 from coffer.application.channel.selection_cards import collection_card
 
@@ -42,11 +41,10 @@ async def cmd_save(
     exactly like every other slash word — see ``inbound.py``), so it always
     follows the document as its own message, optionally naming the collection.
 
-    The collection is confirmed, never guessed (FR-038): a name that is both
-    known and visible to this thread's agent is used outright — the owner
-    already confirmed it by typing it — anything else (no name, or one that
-    doesn't resolve) falls back to a selection card so the tap itself is the
-    confirmation.
+    The collection is confirmed, never guessed (FR-038): a name that is an
+    existing collection is used outright — the owner already confirmed it by
+    typing it — anything else (no name, or one that doesn't resolve) falls back
+    to a selection card so the tap itself is the confirmation.
     """
     # Deferred to break the module cycle: ``card_delivery`` calls
     # ``apply_save_collection`` below (a card tap is a confirmed choice), so
@@ -63,13 +61,13 @@ async def cmd_save(
             thread_id=thread_id,
         )
         return
-    row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
-    agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
+    # Asked once, and the same question either way: `/save <name>` checks the
+    # name against it, and a `/save` with no usable name offers it as a card.
+    known = await commands._collections.enabled_collections()
     parts = text.split(maxsplit=1)
     named = parts[1].strip() if len(parts) > 1 else ""
     if named:
-        visible = await commands._collections.visible_collections(agent_key)
-        if named in visible:
+        if named in known:
             await apply_save_collection(
                 commands,
                 binding,
@@ -91,8 +89,7 @@ async def cmd_save(
             chat_kind=chat_kind,
             thread_id=thread_id,
         )
-    visible = await commands._collections.visible_collections(agent_key)
-    if not visible:
+    if not known:
         await send(
             binding,
             peer.chat_id,
@@ -101,12 +98,12 @@ async def cmd_save(
             thread_id=thread_id,
         )
         return
-    card = collection_card(choices=visible)
+    card = collection_card(choices=known)
     if binding.adapter.capabilities.supports_buttons and await deliver_card(
         binding, peer, card, chat_kind=chat_kind, thread_id=thread_id
     ):
         return
-    listing = "\n".join(f"• {name}" for name in visible)
+    listing = "\n".join(f"• {name}" for name in known)
     await send(
         binding,
         peer.chat_id,
@@ -160,19 +157,16 @@ async def apply_save_collection(
             thread_id=thread_id,
         )
         return
-    row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
-    agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
     try:
         doc = await commands._ingest.ingest(
             collection=collection,
             filename=pending.filename,
             data=data,
             actor="user",
-            agent=agent_key,
         )
     except Exception as e:
         # The ingest service's own exceptions (UnsupportedDocument,
-        # UploadTooLarge, an unknown/unauthorized collection) are all
+        # UploadTooLarge, an unknown collection) are all
         # one-line-message-carrying by design — that message IS the reason,
         # never a stack trace. Logged here (with the trace) for the daemon
         # log; the chat only ever sees the former.

@@ -152,12 +152,12 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **Then** no partition is created for it, and its entries are held for the distil pass to judge
 - **And** a partition whose repository has since been deleted from disk is reported as unresolvable rather than silently delivered to nobody (FR-015, FR-016)
 
-### Scenario: a partition is registered as a resource scoped to the agents it came from
+### Scenario: a partition is registered as a resource keyed on its repository
 
 - **Given** exactly one registered agent contributing one raw entry about a repository
 - **When** aggregation runs
-- **Then** a `memory` Resource exists for that partition, its scope names exactly that one agent, and its config records the repository's absolute path
-- **And** after the developer narrows the scope by hand, a later pass over a changed source leaves the scope alone (FR-013)
+- **Then** a `memory` Resource exists for that partition, and its config records the repository's own absolute path — the identity of a partition is the repository, so that path is what a later pass resolves it by (FR-014)
+- **And** no per-agent reach is written for it: the partition is served to every agent, including the one that contributed nothing to it, which is the whole reason the memory of several agents is aggregated into one place (FR-013)
 
 ### Scenario: two agents' differently-worded entries distil into one note
 
@@ -255,7 +255,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **Given** a partition holding notes, one of them retired, both matching a distinctive phrase
 - **When** `coffer__recall` is called with that phrase
 - **Then** the active note comes back with its **absolute path**, title and description, and the retired one does not
-- **And** the answer spans only the partitions the calling agent's scope allows, and carries no score, no mode and no ranking (FR-035)
+- **And** the answer spans every enabled partition, whichever agent is asking, and carries no score, no mode and no ranking (FR-013, FR-035)
 
 ### Scenario: an agent whose native memory shape is unreadable degrades loudly
 
@@ -283,7 +283,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-010**: A **partition** is a top-level directory under `~/.coffer/memory/` and is one `memory` Resource. There MUST be exactly one partition per repository plus one named `global`; no other partitioning axis exists.
 - **FR-011**: An entry MUST be filed into the partition of the repository it was learned in, except that one **about the person rather than a project** — the user's own preferences and standing instructions — MUST be filed into `global` whichever repository it came from. A source whose project root is the user's home directory MUST resolve to `global`.
 - **FR-012**: Partitions MUST be **created by aggregation**, not by the user, and MUST NOT be created by an agent's working directory at read time.
-- **FR-013**: A partition MUST support the Resource framework's per-agent scope. Its default scope on creation MUST be the set of agents it was aggregated from, so memory flows back to its sources without a setup step; the user MAY narrow or widen it afterwards. Scope MUST be enforced on every path Coffer itself serves — delivery and recall — and the layer MUST describe it as such: see FR-046.
+- **FR-013**: A partition MUST NOT carry the Resource framework's per-agent reach. Every **enabled** partition MUST be served to **every** agent, on both paths Coffer itself serves — delivery (FR-028) and recall (FR-035). The per-agent form is withdrawn because its default worked directly against the point of aggregating: a partition was created scoped to the agents it had been aggregated from, so `memory/coffer` came out scoped to `claude-code` alone and a Codex session in the Coffer repository was served no project memory at all, while the `account*` partitions came out scoped to `codex` alone. Nobody chose any of that — a layer whose whole job is to let each agent read what the others learned was defaulting to withholding it from the one agent that had not learned it yet. `enabled` is the only gate. It gates **what Coffer serves**, not what a process on this machine can open: a note is a file an agent is given the path to (FR-028), so a partition that is not delivered is one nothing points at, and the layer MUST NOT present `enabled` as a filesystem boundary it is not.
 - **FR-014**: A partition's identity is the **repository**, not a path. The main checkout, any worktree of it, and a second clone of it MUST resolve to one partition. The partition MUST be named by a readable slug — never an opaque id — and MUST record the repository's own absolute path on its Resource and restate it in its `MEMORY.md`. A name collision MUST be resolved by adding a distinguishing path segment.
 - **FR-015**: A working directory that is **not** a repository MUST NOT create a partition. Its entries MUST be held for the distil pass, which decides on their merits whether they belong in `global` or nowhere. The previous design partitioned on the raw `cwd`, which turned six dated scratch folders on the maintainer's machine into six permanent partitions whose contents could never reach the project they were actually about.
 - **FR-016**: A partition whose repository can no longer be resolved MUST be reported as unresolvable on the partitions surface and MUST remain deletable. It MUST NOT be silently delivered to nobody, which is what an orphaned partition does today.
@@ -317,7 +317,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 ### Surfaces
 
 - **FR-034**: The MCP gateway MUST expose exactly one built-in tool for this layer, `coffer__recall`, and its description MUST state that it **locates** notes rather than returning them: matching is literal, and the answer is where to read. There MUST be no `remember` tool: an agent records something by recording it the way it already does, and Coffer reads it on the next pass.
-- **FR-035**: `coffer__recall` MUST take a word or phrase, span only the partitions the calling agent's scope allows, exclude retired notes and `.raw/`, and return each match's **absolute path**, title and description — not its body, which the caller reads for itself (FR-022). Matching MUST be a case-insensitive literal scan with no score, no mode and no reason in the answer, and MUST need no internal connection. Its job is to answer "where is the note about X" for a partition the session was not opened in; for the partition it *was* opened in, the index is already in front of the caller and recall should not be needed at all.
+- **FR-035**: `coffer__recall` MUST take a word or phrase, span every enabled partition (FR-013), exclude retired notes and `.raw/`, and return each match's **absolute path**, title and description — not its body, which the caller reads for itself (FR-022). Matching MUST be a case-insensitive literal scan with no score, no mode and no reason in the answer, and MUST need no internal connection. Its job is to answer "where is the note about X" for a partition the session was not opened in; for the partition it *was* opened in, the index is already in front of the caller and recall should not be needed at all.
 - **FR-036**: A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, run an aggregation, run a distil pass, compose the session context, read what has been retired, and install/inspect/remove delivery for an agent.
 - **FR-037**: The web UI MUST present partitions **as a table**, in the same shape whether or not any exist. One partition MUST be presented as a **file tree over its own directory** with a read-only preview beside it — the same two panes a skill's Files tab is — showing `MEMORY.md`, `notes/`, `RETIRED.md` and `.raw/`, and MUST offer open-in-editor and reveal-in-file-manager on the previewed file. It MUST NOT carry per-note actions: a partition is a folder of derived Markdown, and the surface that browses it says so by looking like one.
 - **FR-038**: Every lifecycle act — aggregation, distil, retirement, delivery installed, removed or fired — MUST record an audit event with its actor. A recall MUST record the usual `mcp_invocations` row and nothing about its query or results.
@@ -331,7 +331,6 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-043**: File content MUST leave the machine only through the internal connection the developer configured, and only for the distil pass (FR-023) — and not at all when none is configured (FR-024). Delivery and recall MUST send nothing anywhere.
 - **FR-044**: Reading MUST be confined to the memory paths of registered agents' config directories. Every path built from a source's contents MUST pass a traversal guard.
 - **FR-045**: This layer MUST NOT reintroduce transcript distillation, a journal lane, native-memory projection, or a per-agent capability matrix. The two readers are written as two readers; a third agent earns an abstraction, not before.
-- **FR-046**: Because a note is a file an agent is given the path to (FR-028), per-agent scope governs **what Coffer serves**, not what a process on this machine can open. The layer MUST describe it that way wherever it is presented — exactly as spec [knowledge](../knowledge/spec.md) FR-013 already does for collections — and MUST NOT present it as a filesystem boundary it is not.
 
 
 ## Success Criteria

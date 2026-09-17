@@ -42,11 +42,11 @@ The developer works with Claude Code in the morning and Codex in the afternoon. 
 
 **Independent Test**: write a source through one MCP client; run a curation pass; confirm a topic document holding the fact, and read it back from a second client with a different agent identity.
 
-### User Story 2 — Collections are the human's filing, and the unit of authorization (Priority: P1)
+### User Story 2 — Collections are the human's filing, and `enabled` is the switch (Priority: P1)
 
-Some knowledge is a company's internal detail and must not reach every agent the developer runs; some is about a side project and may reach any of them. The developer creates a collection deliberately, puts the sensitive material in it, and authorizes only the agents that may see it. Authorization now bites at **delivery**: the skill Coffer writes into an unauthorized agent's directory does not mention that collection, its catalogue or its path.
+Some knowledge is a company's internal detail; some is about a side project. The developer creates a collection deliberately, files the material into it, and decides one thing about it: whether it is served at all. A collection they are not ready to hand to their agents is **disabled**, and no agent's delivered skill mentions it, its catalogue or any path inside it. Every enabled collection reaches every agent — the per-agent variant of this switch was withdrawn, because the skill it trimmed hands the agent the absolute knowledge root in the same breath (FR-010).
 
-**Independent Test**: create two collections, authorize one for a single agent, and confirm the other agent's delivered skill names neither the collection nor any path inside it.
+**Independent Test**: create two collections, disable one, and confirm each agent's delivered skill names the enabled one and names neither the disabled collection nor any path inside it.
 
 ### User Story 3 — Find the right file without an index and without a tool (Priority: P1)
 
@@ -130,14 +130,14 @@ A source says a service counts daily actives with a plain Set; the topic documen
 - **Then** the command exits non-zero and no `typo` directory exists
   afterwards: a read never provisions a collection
 
-### Scenario: a collection outside an agent's scope is absent from its skill
+### Scenario: a disabled collection is absent from every agent's skill
 
-- **Given** `shopee` activated for `claude-code` alone and `personal`
-  activated for every agent, both holding topic documents
-- **When** the skill is rendered for each agent and delivered
-- **Then** `claude-code`'s copy names both collections and lists both
-  catalogues, and `codex`'s copy names only `personal` — neither `shopee`,
-  its catalogue, nor any path inside it appears in the second file
+- **Given** a disabled `shopee` collection and an enabled `personal` one, both
+  holding topic documents
+- **When** the skill is rendered for each of two agents and delivered
+- **Then** neither copy names `shopee`, its catalogue, or any path inside it
+- **And** both copies name `personal` and list its catalogue — `enabled` is the
+  only thing that decides, and it decides the same way for every agent
 
 ### Scenario: the two agents' skill files are independent copies
 
@@ -146,13 +146,14 @@ A source says a service counts daily actives with a plain Set; the topic documen
   knowledge skill delivered to each
 - **When** each agent's `<config_dir>/skills/coffer-knowledge/SKILL.md` is read
 - **Then** neither is a symlink, the stale link has been replaced rather than
-  written through, and editing one does not change the other — per-agent
-  content is what makes delivery the authorization point
+  written through, and editing one does not change the other — the two copies
+  carry the same text, and they are still two files, so one can be re-rendered,
+  staled or removed without reaching through into the other
 
 ### Scenario: the skill body carries the catalogue and the absolute root
 
 - **Given** a collection holding three topic documents
-- **When** the skill is rendered for an agent authorized for it
+- **When** the skill is rendered for an agent
 - **Then** its body carries each document's collection-relative path, title and
   description, and the absolute path of the knowledge root, and it instructs
   the agent to read those files with its own tools
@@ -325,14 +326,14 @@ A source says a service counts daily actives with a plain Set; the topic documen
 
 - **FR-008**: A **collection** is a top-level subdirectory of the knowledge root and is one `knowledge` Resource. It MUST be created deliberately — through the REST/CLI/UI surface — and MUST NOT be provisioned by a read, a write, or an agent's working directory. Creating one MUST create both lanes.
 - **FR-009**: The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `global` scope, no `project-<ULID>` naming, no git-root resolution and no scope-to-project-root mapping table.
-- **FR-010**: A collection MUST support the Resource framework's **per-agent scope**, and that scope MUST be enforced **at delivery**: the skill rendered for an agent MUST name only the collections activated for it, and MUST NOT disclose an unauthorized collection's name, catalogue, description or path. `coffer__write` MUST additionally refuse a write into a collection the calling agent is not activated for, using the session's handshake identity (spec [mcp-gateway](../mcp-gateway/spec.md) FR-013) written in as an `agent` argument no tool advertises and no caller can set.
+- **FR-010**: A collection MUST NOT carry the Resource framework's **per-agent reach**. Every **enabled** collection MUST be named, catalogued and served to **every** agent, and a **disabled** collection MUST appear in no agent's delivered skill — not its name, not its catalogue, not its description, not a path inside it. The per-agent form is withdrawn because it never chose anything and could not have: in the live vault every collection's scope was null, and its only effect would have been to omit a collection from one agent's rendered skill while that same skill hands the agent the absolute knowledge root and tells it to grep the whole thing. It was non-disclosure, and it disclosed anyway. `enabled` is now the only gate on this layer, and it is a real one. `coffer__write` MUST refuse a write naming a collection that does not exist or is disabled, and MUST answer with the collections that **are** available.
 - **FR-011**: A collection's one-line description MUST be the first paragraph of its `README.md`, absent when there is none, and MUST be read off disk on every listing. It MUST NOT be stored in the database — not even in the `resources` row's own generic `description` column, which for this kind stays empty: a copy written once and read by nothing is wrong from the first time the person edits the file. It is also what the delivered skill's own description draws on (FR-036), so a collection that fails to describe itself is a collection an agent never recognises.
-- **FR-012**: Per-agent authorization is **non-disclosure, not access control**, and the system MUST describe it as such: an agent that is not told a path can still read it with the shell tools it has. It prevents mistaken retrieval, not deliberate access.
+- **FR-012**: What this layer serves is **files on disk**, and the system MUST describe it as such wherever it is presented: a delivered path is the whole of the access story, because an agent handed the knowledge root reads anything under it with the shell tools it already has. `enabled` is therefore a **delivery** gate, and MUST NOT be presented as a filesystem boundary either — a disabled collection is one no skill names, not one no process can open.
 
 ### The sources lane
 
 - **FR-013**: `sources/` MUST be writable by exactly three entrances — a person using their own tools, an upload, and `coffer__write` — and by nothing else. Curation MUST NOT write, move or delete anything in it.
-- **FR-014**: `coffer__write` MUST create a file in a named collection's `sources/` from `title`, `description` and body text, or replace one at an existing source path. A write MUST be a plain file write — no LLM, no conversion, no indexing step — and MUST record one `mcp_invocations` row and one audit event naming the calling agent. A write naming a collection the caller may not write MUST be refused with the collections it **may** write: that discloses exactly what this agent's own delivered skill already lists, and it turns a dead end into a correction for a model that reached for the tool without opening the skill.
+- **FR-014**: `coffer__write` MUST create a file in a named collection's `sources/` from `title`, `description` and body text, or replace one at an existing source path. A write MUST be a plain file write — no LLM, no conversion, no indexing step — and MUST record one `mcp_invocations` row and one audit event naming the calling agent, taken from the session's handshake identity (spec [mcp-gateway](../mcp-gateway/spec.md) FR-013) written in as an `agent` argument no tool advertises and no caller can set. A write naming a collection that does not exist or is disabled MUST be refused with the collections that **are** available: that names exactly what this agent's own delivered skill already lists, and it turns a dead end into a correction for a model that reached for the tool without opening the skill.
 - **FR-015**: Placing a file in `sources/` MUST remain a complete way to add knowledge — no import, no registration, no conversion step. Ingestion below is an additional entrance, never a required one.
 - **FR-016**: The system MUST accept a document upload into a named collection and convert it to Markdown. Supported inputs MUST be exactly what `markitdown` handles plus plain text and CSV; an unsupported type MUST be refused with the type named, never stored half-converted. Both the **original** and the extracted Markdown MUST land in `sources/`, the original under its own name and extension and byte-identical to what was sent — **except** when the extraction is the upload itself, as it is for a Markdown or plain-text file, where the file that landed *is* the original and a second copy would be one document in the lane twice and two curation passes over the same facts.
 - **FR-017**: The extracted Markdown MUST carry FR-003's frontmatter — `title` from the document (falling back to its file name) and `description` filled in, by the internal connection when one is configured and from the document's opening prose when not.
@@ -358,15 +359,15 @@ A source says a service counts daily actives with a plain Set; the topic documen
 ### Tools and delivery
 
 - **FR-033**: Coffer's MCP gateway MUST expose exactly **one** built-in knowledge tool: `coffer__write`. There MUST be no `list`, `grep`, `read`, `search` or `delete`. An agent reads knowledge with its own file tools at the paths the skill gives it.
-- **FR-034**: Coffer MUST write a generated **knowledge skill** into each registered agent's own skill directory — the same `<config_dir>/skills/` spec [skill-manager](../skill-manager/spec.md) delivers into, but as a file this layer owns and regenerates rather than a registered skill Resource, because its content differs per agent and a shared master cannot express that. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
-- **FR-035**: The skill MUST be **generated per agent**, not shared: its content depends on which collections that agent may see (FR-010), so each agent's copy MUST be real bytes rather than a link into one master folder, and a delivery MUST replace a link left by an earlier design rather than write through it. It MUST be re-rendered whenever the catalogue changes — after a curation pass, a collection's creation or deletion, or a scope change — and delivery MUST never raise: a failure leaves the corpus readable at paths a person can still give an agent.
-- **FR-036**: The skill's **frontmatter description** MUST name the subjects the agent's authorized collections cover, drawn from their READMEs. It is the only part of this layer that is always in a model's context, so it MUST carry matchable specifics rather than a description of the layer.
-- **FR-037**: The skill's **body** MUST carry the absolute path of the knowledge root, and, for each authorized collection, every topic document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools and to reach for `coffer__write` when it learns something durable.
+- **FR-034**: Coffer MUST write a generated **knowledge skill** into each registered agent's own skill directory — the same `<config_dir>/skills/` spec [skill-manager](../skill-manager/spec.md) delivers into, but as a file this layer owns and regenerates rather than a registered skill Resource, because its content is derived from the catalogue and is rewritten whenever the catalogue moves, which is not something a person curating a bundle can keep up with. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
+- **FR-035**: The skill MUST be **written into each agent's own directory, not linked**: each agent's copy MUST be real bytes rather than a link into one master folder, and a delivery MUST replace a link an earlier design left behind rather than write through it. Its text is now the same for every agent (FR-010), so what this requires is independence of the *file*, not difference in the content: a copy that is a link into a shared master is a copy this layer cannot re-render, stale or reclaim for one agent without doing it to all of them. It MUST be re-rendered whenever the catalogue changes — after a curation pass, or a collection's creation, deletion, enabling or disabling — and delivery MUST never raise: a failure leaves the corpus readable at paths a person can still give an agent.
+- **FR-036**: The skill's **frontmatter description** MUST name the subjects the enabled collections cover, drawn from their READMEs. It is the only part of this layer that is always in a model's context, so it MUST carry matchable specifics rather than a description of the layer.
+- **FR-037**: The skill's **body** MUST carry the absolute path of the knowledge root, and, for each enabled collection, every topic document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools and to reach for `coffer__write` when it learns something durable.
 - **FR-038**: The MCP gateway's own instructions text MUST describe this layer as it now is — a directory read with the agent's own tools, with the catalogue in the skill — and MUST NOT name a retrieval tool.
 
 ### Surfaces
 
-- **FR-039**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list a lane at a path, read a file, write a source, upload a document, delete a source, and trigger curation. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source, embedding-configuration or per-scope settings endpoint. These surfaces serve the human and the UI; they are not an agent's retrieval path.
+- **FR-039**: The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list a lane at a path, read a file, write a source, upload a document, delete a source, and trigger curation. Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/knowledge/{name}`). There MUST be no index, reindex, check-sources, update-source or embedding-configuration endpoint, no settings endpoint for the cwd-derived scope axis FR-009 forbids, and no per-agent reach endpoint for this kind (FR-010) — a collection's one switch is `enabled`, which the framework already serves. These surfaces serve the human and the UI; they are not an agent's retrieval path.
 - **FR-040**: The web UI MUST present a collection as **two trees** — `sources/` and `topics/` — with the file chosen from either rendered read-only in the pane beside them, through the unified file preview with open-in-external-editor and reveal-in-file-manager. A source MUST additionally offer delete, naming the exact path before it runs, reporting a refusal in place, and leaving the preview on no file afterwards. A topic document MUST offer no delete and no editor, and MUST be labelled as written by curation. The page MUST offer upload into the collection in view and a manual curation trigger that reports a pass already in flight. It MUST NOT carry a retrieval box: the one input beside a tree narrows the names already on screen, client-side.
 - **FR-041**: Read responses MUST carry the file's absolute path and its containing folder's absolute path.
 
@@ -385,12 +386,12 @@ A source says a service counts daily actives with a plain Set; the topic documen
 
 - **SC-001**: A fact written by one agent is readable by a different agent as a curated topic document, with no index step in between.
 - **SC-002**: A source the human adds or edits outside Coffer is folded into the topics by the next sweep, with no import or reconciliation.
-- **SC-003**: An agent authorized for one collection is never told the name, path or contents of another.
+- **SC-003**: A disabled collection's name, catalogue and paths appear in no agent's delivered skill, and every enabled collection's appear in all of them.
 - **SC-004**: The layer holds no knowledge-specific table in `coffer.db` and keeps no derived copy of a file's content anywhere outside `topics/`, which is itself rebuildable from `sources/`.
 - **SC-005**: Deleting `topics/` entirely and re-running curation reproduces a corpus carrying the same facts.
 - **SC-006**: The gateway advertises exactly one knowledge tool, and an agent reaches every topic document without calling it.
 - **SC-007**: A document sent from a channel is a file in the intended collection's `sources/` afterwards, with its original beside it.
-- **SC-008**: Two agents with different authorizations hold two different `SKILL.md` files, neither of which is a link to a shared one.
+- **SC-008**: Every agent holds its own `SKILL.md` — real bytes in its own skill directory, not a link into a shared master — so one agent's copy is re-rendered, staled or reclaimed without touching another's.
 
 ## Assumptions
 

@@ -1,8 +1,8 @@
 # Knowledge
 
-**Knowledge** is Coffer's one store of everything your agents should know — what an agent (or you) wrote down, and the documents you uploaded. It is a directory of Markdown files under `~/.coffer/knowledge/`, one folder per collection, and those files are the whole of it. There is no index: no vector store, no full-text tables, nothing in `coffer.db` to keep in step with the disk. A file you edited in your own editor, a file an agent just wrote, and a file `git` pulled in all look the same to Coffer, because there is nothing in between.
+**Knowledge** is Coffer's one store of everything your agents should know — what you or an agent wrote down, and the documents you uploaded. It is a directory of Markdown files under `~/.coffer/knowledge/`, and those files are the whole of it. There is no index: no vector store, no full-text tables, nothing in `coffer.db` to keep in step with the disk. A file you edited in your own editor, a file an agent just wrote, and a file `git` pulled in all look the same to Coffer, because there is nothing in between.
 
-Coffer used to embed these files and rank retrieval by meaning. That capability was removed deliberately: retrieval is now a literal text search over the files themselves. Nothing is built, rebuilt, or kept fresh, and nothing can be stale.
+What the layer adds on top of the directory is **curation**: you write things down as they come to you, and Coffer's own model folds each one into a document worth reading. So there are two lanes — what people contribute, and what an agent reads — and the second is derived from the first.
 
 ## Collections
 
@@ -14,28 +14,35 @@ coffer knowledge collections
 coffer resource delete knowledge:handbook     # collection lifecycle is a Resource concern
 ```
 
-Because a collection is a Resource, the framework's per-agent scope decides who may read it. An agent's calls span every collection activated for that agent by default, and there is no collection an agent is authorized for that it has to ask for by name.
+A collection describes itself in its own `README.md`, which sits at the collection root outside both lanes. That first paragraph is the description — it is read off disk on every listing, never copied into the database, and it is what the skill Coffer delivers to your agents draws on. A collection that fails to describe itself is a collection an agent never recognises.
 
-There is no **scope** argument on any knowledge tool — scope is Coffer's, decided per agent, and not something a caller can widen. `grep` and `search` do take an optional `collection` argument, but it only ever *narrows*: it restricts the pass to one collection the caller could already see. Omitting it searches every collection the caller may read.
+A collection carries **no per-agent reach**: every enabled collection is served to every agent, and switching one off is the only way to take it out of what Coffer serves.
 
-That authorization is a convention, not a security boundary: an agent holding shell tools can read the directory itself. It prevents mistaken retrieval, not deliberate access.
+```bash
+coffer resource disable knowledge:handbook
+coffer resource enable knowledge:handbook
+```
 
-## What a collection holds
+It could once be activated for some agents and not others. That was withdrawn, because it never authorized anything: what Coffer hands an agent is a catalogue of absolute paths into a directory that agent can already grep, so leaving a collection out of one agent's catalogue prevented a mistaken read at best and nothing at all at worst. Switching a collection off is a **delivery** gate for the same reason — a disabled collection is one no skill names, not one no process can open.
 
-`~/.coffer/knowledge/<collection>/` is a plain directory tree you can read, edit, grep and back up with ordinary tools. Below the collection you nest folders however you like; Coffer assigns none of that structure any meaning of its own.
+## The two lanes
 
-Every file is Markdown with frontmatter carrying a title and a one-sentence description. The description is not decoration — it is what someone browsing the catalogue chooses from, so write it as "what is in here, and when would I want it". A `README.md` describes the folder it sits in rather than counting as one of its files.
+```
+~/.coffer/knowledge/handbook/
+├── README.md          # what this collection is for
+├── sources/           # what you and your agents contribute
+└── topics/            # what curation derives, and what agents read
+```
 
-Coffer creates exactly two directories for itself, both dot-prefixed so ripgrep skips them and the catalogue walks past them:
+The division means exactly one thing: **who may write here**. `sources/` has three entrances — a person with their own editor, an upload, and `coffer__write` — and curation never touches it. `topics/` has one writer, the curation pass, and no other surface may write, move or delete a file in it.
 
-| Path        | What lives there                                                          |
-| ----------- | ------------------------------------------------------------------------- |
-| `.raw/`     | The original bytes behind an uploaded document, so a bad conversion can be redone. |
-| `.history/` | The revisions the tidy pass superseded.                                   |
+**Sources are the truth; topics are derived.** Delete `topics/` and re-run curation and you get a corpus carrying the same facts. That inversion is what makes an unattended rewriter safe to run: the thing being rewritten is never the only copy. It is also why the lanes are directories rather than a frontmatter key — "who may write here" is the one property a key inside a file cannot carry.
 
-Hand-editing any of this is fine and expected. There is no write path to hook and no reindex step to forget: the next search reads the file as it is on disk.
+Below `sources/` you nest folders however you like, and Coffer assigns none of that structure any meaning. The nesting under `topics/` is curation's own, and it may create and remove directories there.
 
-## Writing files
+Every Markdown file in either lane carries frontmatter with `title`, `description`, `actor` and timestamps. A file's **path is its identity** — names are readable slugs derived from the title, and there is no id anywhere. A source additionally picks up `coffer_ingested_at` once curation has consumed it: Coffer's watermark, compared against the file's own modification time, which is how a sweep knows what it still owes without any state file. Coffer writes no hidden directories of its own.
+
+## Writing a source
 
 ```bash
 coffer knowledge write --in handbook \
@@ -43,107 +50,121 @@ coffer knowledge write --in handbook \
   --description "Which package manager every repo here uses, and why" \
   --body "Prefer pnpm over npm in all repos."
 
-coffer knowledge ls handbook                       # one level of the catalogue
-coffer knowledge read handbook/package-manager.md
-coffer knowledge write --path handbook/package-manager.md --title … --description … --body …
-coffer knowledge delete handbook/package-manager.md
+coffer knowledge ls handbook/sources          # one level of the lane
+coffer knowledge read handbook/sources/package-manager.md
+coffer knowledge delete handbook/sources/package-manager.md
 ```
 
-A write is stored verbatim — there is no LLM at write time, and an agent never has to think about filing. `--in` creates a new file in a collection or folder; `--path` replaces an existing one. Dropping a Markdown file into the directory with any editor is an equally complete way to add knowledge.
+A write is stored verbatim — no LLM, no conversion, no indexing step — and it always lands in `sources/`. You never spell that segment: which lane a write goes to is not something a surface gets to choose. `--folder` nests it if you want.
+
+Dropping a Markdown file into `sources/` with any editor is an equally complete way to add knowledge. Nothing has to be imported or registered; the next sweep notices the file by its modification time.
+
+Deleting is a person's action, and only in `sources/`. A topic document has no delete: it is generated, and the answer to a wrong one is a new source saying what is actually true.
 
 ## Uploading documents
 
-Hand Coffer a file in any format and it converts it to Markdown and files the result as an ordinary knowledge file, keeping the original in `.raw/`.
+Hand Coffer a file in any format and it converts it to Markdown and files the result in `sources/`, keeping the original beside it.
 
 ```bash
 coffer knowledge upload ./onboarding.pdf --collection handbook
-coffer knowledge upload ./notes.docx --collection handbook --directory onboarding
+coffer knowledge upload ./notes.docx --collection handbook --folder onboarding
 ```
 
-- Conversion covers pdf, docx, pptx, xlsx, html and more. An upload over the 20 MB ceiling is refused before anything is converted or written, and an unsupported type is refused by name.
-- A converted document is indistinguishable from one you typed: same frontmatter, same audit event, same place in the tree.
+- Conversion covers what [markitdown](https://github.com/microsoft/markitdown) handles — pdf, docx, pptx, xlsx, html and more — plus plain text and CSV. An unsupported type is refused by name, never stored half-converted, and a failed conversion leaves neither file behind.
+- Both files land in `sources/`: the original under its own name, byte-identical to what you sent, and the extracted Markdown beside it. A Markdown or text upload is its own original, so it lands once rather than twice.
+- One file per call, a 20 MB ceiling, and a refusal that names the limit.
 - The description is optional input but never optional output. With no internal model connection configured, Coffer draws one from the document's own opening prose rather than leaving the catalogue entry blank.
 
-## Finding things
+A document sent to a Coffer channel rides the same entrance, so your phone and the Knowledge page are two ends of one path into `sources/`.
 
-Three motions, and you pick by what you already know:
+## Curation
 
-```bash
-coffer knowledge ls handbook/onboarding      # browse: folders and files, with descriptions
-coffer knowledge grep "SO_REUSEADDR"         # every matching line, as path:line
-coffer knowledge search "daemon port"        # the files that match, with the lines that matched
-```
+A collection accumulates the way notes do: the same fact written twice from two sessions, one file that grew until it covers four subjects, a correction that contradicts what is already there. Nothing about that is wrong at write time, which is why writing stays dumb. The sorting out is a **curation pass** — a bounded agentic rewrite, driven by your internal model connection, that reads one source and folds it into `topics/`.
 
-`ls` walks the catalogue one level at a time, so you choose a file from titles and descriptions. `grep` and `search` are the same matcher over the same files — ripgrep across every collection the caller may see — reported two ways: `grep` gives you every matching line, `search` gives you one result per file, with that file's title and description alongside the lines that matched. Reach for `search` when you want the file rather than the line.
+A pass is deliberately small:
 
-Matching is literal: a regular expression, case sensitive. Give it a distinctive word or an exact phrase, not a question in your own words — there is no ranking, no scoring and no modes to choose between. What comes back is the files that contain what you typed.
+- It sees **one source in full**, at most **five** candidate topic documents in full, and the collection's whole catalogue of titles and descriptions. Candidates are found by matching distinctive strings from the source against `topics/`; the catalogue is there so the model can conclude that none of them is the right home and open a new document instead.
+- It may make at most **eight writes**, so one source can never trigger a corpus-wide rewrite.
+- It **preserves every fact it is shown**. Merging integrates rather than regenerates, and a document may only be retired when the same pass has written its content somewhere else.
+- Where a source contradicts a topic document, the **source wins**, and the result keeps the superseded statement legible as a dated correction. Knowledge is about a world that changes, and when it changed is itself worth keeping.
+- A topic document may not name another knowledge file by path. That is enforced at the write rather than asked for in a prompt, because a hand-maintained map of generated paths is what rotted last time: 343 of 398 cross-references in this corpus had been broken by renames the prose never saw.
 
-## The tidy pass
-
-A collection accumulates the way notes do: the same fact written twice from two sessions, one file that grew until it covers four subjects. Nothing about that is wrong at write time, which is why writing stays dumb. The tidying is deferred to a **tidy pass** — a bounded agentic rewrite that reads a collection's files and merges duplicates, splits an overgrown file, and gives each one a title and description that earn it.
-
-The pass needs an internal model connection; with none configured it does nothing at all, cleanly. A background sweep runs it on an interval, and it is off until an operator switches it on — an unattended rewriter should be something you turned on, never something you discover running. In a vault that spans machines the sweep runs on exactly one of them, because two machines merging the same files produce two different documents that git would merge as two additions.
-
-`.history/` is the entire safety net. Every tool the pass uses archives a file's prior revision before overwriting or retiring it, so a rewrite is always recoverable — there is no diff to approve before a pass lands.
-
-Run one by hand whenever you want:
+Passes run when material changes — immediately for the entrances Coffer serves itself, and on an interval sweep that finds files you changed out of band. Run one by hand whenever you want:
 
 ```bash
-coffer knowledge organize handbook
+coffer knowledge curate handbook
+coffer knowledge curate handbook --source handbook/sources/package-manager.md
 ```
 
-The collection's page in the web UI has a **Tidy** button that does the same thing.
+The answer is a status: `ok`, `up_to_date`, `no_model` when no internal connection is configured, `too_large`, or `failed`. With no connection the pass is a clean no-op — no topic written, no watermark set, nothing created. Only one pass per collection runs at a time, whoever started it; a second trigger is refused rather than queued.
+
+Two switches govern the unattended sweep, and both are read on every tick: whether it is on, and which single machine owns it. A vault that spans machines must curate on exactly one of them, because two machines rewriting the same files produce two different documents that git would merge as two additions. It defaults **on**, because curation is the only path from a source to something an agent reads.
+
+## How an agent reads it
+
+**There is no retrieval tool, and that is the design.** An audit of 448 Claude Code sessions after this corpus was built found that the delivered skill had never once been loaded and that no knowledge tool had ever been called. A tool an agent does not remember to call is not retrieval — and every agent Coffer supports already has `Read` and `Grep`, which need no remembering. So the layer's whole job is to put the right absolute paths in front of the model.
+
+It does that with a generated **skill**, written into each agent's own skill directory as `coffer-knowledge/SKILL.md`:
+
+- Its **frontmatter description** names the subjects your collections cover, in their READMEs' own words. That line is the only part of this layer always in a model's context, so it carries specifics a model can match — the version it replaces described the layer instead, and across those 448 sessions no model ever recognised it.
+- Its **body** carries the absolute knowledge root and, for every topic document, its path, title and description. Measured at ~5.2K tokens for 58 documents, and paid only when the model opens it. Once it has, it never has to guess what exists or what a file is called.
+
+The file is Coffer's own output, rewritten whenever the catalogue moves — after a curation pass, or a collection being created, deleted, enabled or disabled. Editing it has no lasting effect. Each agent gets its own real copy rather than a link into one shared folder, so one can be re-rendered or removed without reaching through into another's.
+
+Nothing is pushed into a session. Knowledge is pulled; session-start delivery is [memory](/guide/memory)'s job, with its own ceiling and its own consent.
+
+::: tip Coffer embeds nothing
+Ranked semantic retrieval over a vector sidecar was built, shipped and then deliberately removed. What replaces conceptual recall is the model reading a catalogue, which works while the catalogue fits in context — into the hundreds of files. Literal matching is a placeholder, not a verdict.
+:::
 
 ## The CLI
 
 Everything above lives under one group, `coffer knowledge`:
 
-| Area        | Commands                        |
-| ----------- | ------------------------------- |
-| Collections | `collections` · `create`        |
+| Area        | Commands                                     |
+| ----------- | -------------------------------------------- |
+| Collections | `collections` · `create`                     |
 | Files       | `ls` · `read` · `write` · `delete` · `upload` |
-| Retrieval   | `grep` · `search`               |
-| Tidy        | `organize`                      |
+| Curation    | `curate`                                     |
 
-Deleting a collection is a Resource operation: `coffer resource delete knowledge:<name>`.
+Deleting a collection is a Resource operation: `coffer resource delete knowledge:<name>`. So is switching one off: `coffer resource disable knowledge:<name>`.
 
 ## The REST surface
 
-The daemon serves knowledge under `/api/v1/knowledge`. These routes are the *user's* surface and therefore unscoped — per-agent authorization governs what an agent sees through the MCP tools, not what the person who owns the vault sees in their own UI.
+The daemon serves knowledge under `/api/v1/knowledge`. These routes are the *user's* surface, and there is nothing per-agent about them or about what an agent reaches: a collection is either enabled for everyone or served to nobody.
 
-| Route                                             | Purpose                                     |
-| ------------------------------------------------- | ------------------------------------------- |
-| `GET`/`POST` `/api/v1/knowledge/collections`      | List collections; create one.               |
-| `GET` `/api/v1/knowledge/tree?path=…`             | One level of the catalogue.                 |
-| `GET`/`PUT`/`DELETE` `/api/v1/knowledge/file`     | Read, write or delete one file.             |
-| `GET` `/api/v1/knowledge/grep`                    | Matching lines.                             |
-| `POST` `/api/v1/knowledge/search`                 | Matching files, with their matched lines.   |
-| `POST` `/api/v1/knowledge/upload`                 | Convert a document and file it.             |
-| `POST` `/api/v1/knowledge/collections/{name}/tidy` | Run the tidy pass now.                     |
+| Route                                                | Purpose                                      |
+| ---------------------------------------------------- | -------------------------------------------- |
+| `GET`/`POST` `/api/v1/knowledge/collections`         | List collections; create one.                |
+| `GET` `/api/v1/knowledge/tree?path=…`                | One level of one lane.                       |
+| `GET`/`PUT`/`DELETE` `/api/v1/knowledge/file`        | Read a file from either lane; write a source; delete a source. |
+| `POST` `/api/v1/knowledge/upload`                    | Convert a document and file it.              |
+| `POST` `/api/v1/knowledge/collections/{name}/curate` | Run a curation pass now.                     |
 
-A search answers with `{"results": [{path, title, description, lines: [{line_number, line}]}]}` — the files, and what matched in each.
+A read answers with the file's absolute path and its containing folder's absolute path, so whatever you hand the answer to can open it directly.
 
-Deleting a whole collection goes through the kind-agnostic resource route, `DELETE /api/v1/resources/knowledge/{name}` — there is no `DELETE /api/v1/knowledge/collections/{name}`.
+There is no index, reindex, search or embedding-configuration route, and no per-agent reach route for this kind. Deleting a whole collection goes through the kind-agnostic resource route, `DELETE /api/v1/resources/knowledge/{name}` — there is no `DELETE /api/v1/knowledge/collections/{name}`.
 
-## The MCP tools
+## The MCP tool
 
-Every connected MCP client gets six built-in knowledge tools. None of them takes a **scope**: a call spans every collection the calling agent is authorized for, and the gateway supplies that identity at session handshake. `coffer__grep` and `coffer__search` accept an optional `collection` to *narrow* a call to one of those collections when the agent already knows where to look — it can never reach one the agent was not authorized for.
+Every connected MCP client gets exactly **one** built-in knowledge tool.
 
-| Tool             | What it does                                                                    |
-| ---------------- | ------------------------------------------------------------------------------- |
-| `coffer__list`   | The collections you may read, or one level of the catalogue under a path.        |
-| `coffer__grep`   | Every line matching a pattern, with its file and line number.                    |
-| `coffer__search` | The files matching a word or phrase, each with its title, description and lines. |
-| `coffer__read`   | One file in full, by path.                                                       |
-| `coffer__write`  | Create a file in a collection or folder, or replace one at a path.               |
-| `coffer__delete` | Remove one file, and the `.raw/` original behind it if it had one.               |
+| Tool            | What it does                                                            |
+| --------------- | ----------------------------------------------------------------------- |
+| `coffer__write` | File a source in a named collection from a title, description and body. |
 
-The motion they are shaped around is **catalogue, then grep**: `list` to choose which file, `grep` to find which line, `search` for when you cannot afford to browse first. They are deliberately not modes of one tool — an agent picks by what it knows, not by a flag.
+Writing is where an agent genuinely needs Coffer: the collection, the lane, the frontmatter and the audit entry are Coffer's to decide, and it is the one place an invocation record still gets written. A write naming a collection that does not exist or is disabled is refused with the collections that *are* available — which turns a dead end into a correction for a model that reached for the tool without opening its skill.
 
-Agents both read and write here: a file one agent records is what the next agent finds, which is the point of keeping it in Coffer rather than in any single agent's own store.
+There is no `coffer__list`, `coffer__grep`, `coffer__read`, `coffer__search` or `coffer__delete`. Reading is the agent's own `Read` and `Grep` against the paths its skill gave it; deleting is a person's action on the human surfaces.
+
+Agents both read and write here: a source one agent files becomes, after the next pass, part of what the next agent reads — which is the point of keeping this in Coffer rather than in any single agent's own store.
 
 ## In the web UI
 
-Knowledge is one page under **Resources**. `/knowledge` lists your collections with a description and a file count, and **New collection** creates one. `/knowledge/:collection` opens one collection: a folder tree you walk a level at a time with a filter box that matches names as you type, the selected file rendered beside it, a search box over that collection, and two buttons — **Upload** to convert a document into the tree, **Tidy** to run the tidy pass on demand.
+Knowledge is one page under **Resources**. `/knowledge` lists your collections with a description, a count for each lane and an on/off control, and **New collection** creates one. The two lanes are counted apart on purpose: they answer different questions — how much you have contributed, and how much of it an agent can read today.
+
+`/knowledge/:collection` opens one collection as **two trees**, `sources/` and `topics/`, with the file you pick rendered read-only beside them. A source offers delete — naming the exact path first — plus open in your external editor and reveal in your file manager. A topic document offers none of those and is labelled as written by curation. The header carries **Upload** and a manual curation trigger that tells you when a pass is already in flight.
+
+There is no search box on the page. The one input beside a tree narrows the names already on screen, client-side — retrieval here is reading a catalogue, not querying an index.
 
 [Memory →](/guide/memory)

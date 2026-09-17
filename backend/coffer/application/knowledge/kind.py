@@ -1,24 +1,24 @@
 """The ``knowledge`` Kind for the composition root.
 
 A collection carries no config and no lifecycle beyond existing, so the kind is
-almost all default. The two fields that are not:
+almost all default. The one field that is not:
 
-- ``supports_scope`` is True, because per-agent authorization is the reason a
-  collection is a Resource at all (spec knowledge FR-010). Without it a
-  directory would not need the framework. The scope no longer gates a
-  retrieval tool — there is none — so it bites in two other places: at
-  **delivery**, where the skill rendered for an agent names only that agent's
-  collections and so never discloses another's name, path or catalogue; and at
-  ``coffer__write``, which refuses a write into a collection the calling agent
-  is not activated for. Both are non-disclosure rather than access control
-  (FR-012): an agent told no path can still read one with its own shell.
 - ``generic_create_allowed`` is False, because a collection is a directory as
   much as a row: the generic ``POST /resources`` path would create the row with
   no folder behind it. ``KnowledgeService.create_collection`` opts in
   explicitly (CODE-REG), the same way the skill and agent kinds do.
 
-There is no ``on_update_config`` — nothing in the config can change, because
-there is nothing in the config.
+Two defaults are worth naming, because an earlier design set them otherwise:
+
+- ``supports_scope`` stays False: this kind carries **no per-agent reach**.
+  Every enabled collection is served to every agent, and ``enabled`` is the
+  only gate there is. A scope here would have been fiction rather than a
+  narrowing — the skill Coffer delivers hands the agent the absolute knowledge
+  root and tells it to grep the whole thing, so a collection kept out of one
+  agent's catalogue was still a directory that agent could read. It was never
+  used either: every ``knowledge`` row in the real vault had an empty scope.
+- There is no ``on_update_config`` — nothing in the config can change, because
+  there is nothing in the config.
 """
 
 from __future__ import annotations
@@ -51,5 +51,4 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         config_schema=KnowledgeConfig,
         on_delete=_on_delete,
         generic_create_allowed=False,
-        supports_scope=True,
     )

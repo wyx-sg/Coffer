@@ -45,7 +45,7 @@ import os
 import pathlib
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from coffer.domain.memory.errors import UnreadableMemory
@@ -135,12 +135,19 @@ GLOBAL_PLACEMENT = Placement(name=GLOBAL_PARTITION)
 
 @dataclass(frozen=True)
 class PartitionTouch:
-    """A partition this pass wrote into, and the agents whose memory it came
-    from — which is the partition's default per-agent scope on creation, so
-    memory flows back to its own sources with no setup step (FR-013)."""
+    """A partition this pass wrote into, and the repository it resolved to.
+
+    It used to carry the agents whose memory the partition came from as well,
+    for one consumer: ``MemoryService._register_partition`` seeded the row's
+    per-agent scope with them. That scope is gone — a partition aggregated
+    from one agent was thereby hidden from every other one, which is the
+    opposite of what a shared memory layer is for — and with it the only
+    reason this pass ever tracked *whose* entry landed where. Nothing else
+    read the field, so it is not computed any more rather than computed and
+    ignored.
+    """
 
     placement: Placement
-    agents: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -312,7 +319,11 @@ def run_aggregation(
     old_state = source_state.load()
     new_state: dict[str, str] = {}
     failures: list[SourceFailure] = []
-    touched: dict[str, set[str]] = defaultdict(set)
+    # Doubles as the set of partitions this pass filed into: every raw entry
+    # written records its placement here, so the keys are exactly the touched
+    # partitions. A separate ``touched`` map used to sit beside it, keyed the
+    # same way but holding the contributing agents' names — the seed for a
+    # per-agent scope that no longer exists.
     placements: dict[str, Placement] = {}
     sources_read = 0
     sources_skipped = 0
@@ -352,7 +363,6 @@ def run_aggregation(
                 entries_written += 1
                 written.add((stored.partition, stored.entry_id))
                 placements[placement.name] = placement
-                touched[placement.name].add(agent_source.agent)
 
             for stale in standing:
                 if (stale.partition, stale.entry_id) not in written:
@@ -361,16 +371,13 @@ def run_aggregation(
     source_state.save(new_state)
     return AggregationOutcome(
         result=AggregationResult(
-            partitions=tuple(sorted(touched)),
+            partitions=tuple(sorted(placements)),
             entries_written=entries_written,
             sources_read=sources_read,
             sources_skipped=sources_skipped,
             failures=tuple(failures),
         ),
-        touched=tuple(
-            PartitionTouch(placement=placements[name], agents=tuple(sorted(touched[name])))
-            for name in sorted(touched)
-        ),
+        touched=tuple(PartitionTouch(placement=placements[name]) for name in sorted(placements)),
     )
 
 

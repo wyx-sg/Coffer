@@ -6,9 +6,10 @@ here rather than assumed: the description carries subjects a model can match on
 (FR-036), and the body carries every document's path plus the absolute root so
 nothing has to be guessed (FR-037).
 
-Authorization moved here too. A collection an agent is not activated for must
-not appear in that agent's copy at all — not its name, not its description, not
-a path inside it (FR-010).
+The rendering is the same for every agent — a collection carries no per-agent
+reach — so what the tests below pin about delivery is the other axis: a
+*disabled* collection is in nobody's copy, and each agent still gets its own
+real file rather than a shared one (FR-035).
 """
 
 from __future__ import annotations
@@ -28,11 +29,10 @@ from coffer.application.knowledge.skill_render import (
 )
 from coffer.domain.knowledge.entry import CollectionEntry
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
 from coffer.infrastructure.knowledge import fs, paths
 
 
-def _resource(rid: int, name: str, scope: Scope | None) -> Resource:
+def _resource(rid: int, name: str, *, enabled: bool = True) -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
         id=rid,
@@ -40,19 +40,22 @@ def _resource(rid: int, name: str, scope: Scope | None) -> Resource:
         name=name,
         description=None,
         config={},
-        enabled=True,
+        enabled=enabled,
         created_at=now,
         updated_at=now,
-        scope=scope,
+        scope=None,
     )
 
 
 class _Resources:
+    """A fake registry that honours the ``enabled`` filter, because that filter
+    is now the only thing standing between a collection and every agent."""
+
     def __init__(self, rows: list[Resource]) -> None:
         self._rows = rows
 
     async def list(self, kind=None, enabled=None):  # type: ignore[no-untyped-def]
-        return list(self._rows)
+        return [r for r in self._rows if enabled is None or r.enabled is enabled]
 
 
 class _Audit:
@@ -67,7 +70,7 @@ class _Agent:
 
 @pytest.fixture
 def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    """Two collections: ``shopee`` restricted to claude-code, ``personal`` open."""
+    """Two collections on disk, ``shopee`` and ``personal``, one topic each."""
     root = tmp_path / "knowledge"
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(root))
     for name, blurb in (
@@ -88,17 +91,13 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     return root
 
 
+def _service(rows: list[Resource]) -> KnowledgeService:
+    return KnowledgeService(resources=_Resources(rows), audit=_Audit())
+
+
 @pytest.fixture
 def service(corpus) -> KnowledgeService:  # type: ignore[no-untyped-def]
-    return KnowledgeService(
-        resources=_Resources(
-            [
-                _resource(1, "shopee", Scope(agents=["claude-code"])),
-                _resource(2, "personal", None),
-            ]
-        ),
-        audit=_Audit(),
-    )
+    return _service([_resource(1, "shopee"), _resource(2, "personal")])
 
 
 # ----- what the description says ------------------------------------------
@@ -138,7 +137,7 @@ def test_an_empty_corpus_still_describes_itself() -> None:
 )
 @pytest.mark.anyio
 async def test_the_body_carries_every_document_and_the_absolute_root(service, corpus) -> None:  # type: ignore[no-untyped-def]
-    catalogue = await service.catalogue("claude-code")
+    catalogue = await service.catalogue()
     text = render(str(corpus), catalogue)
 
     assert str(corpus) in text
@@ -162,30 +161,51 @@ async def test_a_collection_with_no_documents_says_so_rather_than_looking_empty(
     service, corpus
 ) -> None:  # type: ignore[no-untyped-def]
     fs.delete_file("personal/topics/deploy-notes.md")
-    text = render(str(corpus), await service.catalogue("claude-code"))
+    text = render(str(corpus), await service.catalogue())
     assert "Nothing curated here yet" in text
 
 
-# ----- authorization at delivery ------------------------------------------
+# ----- what reaches which agent -------------------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="a collection outside an agent's scope is absent from its skill"
+    spec="knowledge", scenario="a disabled collection is absent from every agent's skill"
 )
 @pytest.mark.anyio
-async def test_an_unauthorized_collection_is_absent_from_the_other_agent_s_copy(
-    service, corpus
-) -> None:  # type: ignore[no-untyped-def]
-    mine = render(str(corpus), await service.catalogue("claude-code"))
-    theirs = render(str(corpus), await service.catalogue("codex"))
+async def test_a_disabled_collection_reaches_no_agent_and_an_enabled_one_reaches_all(  # type: ignore[no-untyped-def]
+    corpus, tmp_path
+) -> None:
+    """``enabled`` is the whole of the gate, and it is not per agent.
 
-    assert "shopee" in mine and "personal" in mine
-    # Not the name, not the description, not a path inside it: naming a
-    # collection the caller may not have is itself the disclosure.
-    assert "shopee" not in theirs
-    assert "account system" not in theirs
-    assert "session-who-owns-login-state.md" not in theirs
-    assert "personal" in theirs
+    ``shopee`` is switched off while its directory and its topic document sit
+    right there on disk, so this is the registry's answer being honoured rather
+    than an empty folder looking the same as a withheld one.
+    """
+    service = _service([_resource(1, "shopee", enabled=False), _resource(2, "personal")])
+    dirs = {
+        "claude-code": tmp_path / "claude" / "skills",
+        "codex": tmp_path / "codex" / "skills",
+    }
+    for d in dirs.values():
+        d.mkdir(parents=True)
+    delivery = KnowledgeSkillDelivery(
+        service=service,
+        list_agents=_agents_returning([_Agent("claude-code"), _Agent("codex")]),
+        resolve_skill_dir=lambda a: dirs[a.name],  # type: ignore[union-attr]
+    )
+    assert await delivery.deliver_all() == 2
+
+    assert paths.topics_dir("shopee").is_dir(), "the directory is still there"
+    for name, directory in dirs.items():
+        text = (directory / "coffer-knowledge" / "SKILL.md").read_text(encoding="utf-8")
+        # The enabled one reaches every agent, catalogue and all.
+        assert "personal" in text, name
+        assert "deploy-notes.md" in text, name
+        # The disabled one reaches none of them — not its name, not its
+        # description, not a path inside it.
+        assert "shopee" not in text, name
+        assert "account system" not in text, name
+        assert "session-who-owns-login-state.md" not in text, name
 
 
 @pytest.mark.acceptance(
@@ -203,8 +223,9 @@ async def test_each_agent_gets_real_bytes_and_a_stale_symlink_is_replaced(  # ty
         d.mkdir(parents=True)
 
     # A vault upgraded from the previous delivery has a symlink into one shared
-    # master here. Writing through it would edit the copy every other agent
-    # points at, so it has to be replaced rather than followed.
+    # master here. Nothing regenerates that master, so writing through the link
+    # would leave the corpus's one stale copy in circulation — it has to be
+    # replaced rather than followed.
     master = tmp_path / "master" / "coffer-knowledge"
     master.mkdir(parents=True)
     (master / "SKILL.md").write_text("the old shared one\n", encoding="utf-8")
@@ -222,9 +243,10 @@ async def test_each_agent_gets_real_bytes_and_a_stale_symlink_is_replaced(  # ty
         assert not path.is_symlink()
         assert not path.parent.is_symlink()
     assert (master / "SKILL.md").read_text(encoding="utf-8") == "the old shared one\n"
-    # Independent bytes, and they differ — which is what makes delivery the
-    # place authorization is enforced.
-    assert files["claude-code"].read_text() != files["codex"].read_text()
+    # Identical text, because every agent is told the same thing — but two
+    # separate files, each inside the directory its own agent reads.
+    assert files["claude-code"].read_text() == files["codex"].read_text()
+    assert not files["claude-code"].samefile(files["codex"])
 
 
 @pytest.mark.anyio

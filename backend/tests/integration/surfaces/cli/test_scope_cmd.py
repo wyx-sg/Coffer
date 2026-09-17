@@ -1,9 +1,13 @@
 """Integration tests for `coffer scope ...` CLI subcommands (ADR per-agent-resource-scope).
 
 Reuses the shared ``in_proc_daemon`` fixture (see conftest.py), which wires
-``fake_scoped`` (supports_scope=True, mirrors mcp_server/skill) alongside the
-plain ``fake_kind`` (no scope support, mirrors agent/channel/knowledge_base/
-memory) used by test_resource_cmd.py.
+``fake_scoped`` (supports_scope=True, mirrors the four kinds that carry reach —
+mcp_server, skill, provider, channel) alongside the plain ``fake_kind`` (no
+scope support, mirrors agent, knowledge and memory) used by
+test_resource_cmd.py. Doubles rather than real kinds on purpose: what is under
+test is the ``coffer scope`` surface, which must behave identically for any
+kind, so a kind withdrawing from reach — as knowledge and memory did — changes
+nothing here.
 
 Setup/assertions talk to the resource-scope HTTP routes directly via the
 monkeypatched client (bypassing the CLI, like test_resource_cmd.py's

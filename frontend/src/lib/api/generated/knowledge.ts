@@ -33,7 +33,8 @@ export interface paths {
          * Create a collection
          * @description Creates one collection: a directory under the knowledge root holding
          *     both lanes (`sources/` and `topics/`), and one `knowledge` Resource for
-         *     it so the framework's per-agent scope has something to authorize.
+         *     it — which is what gives the collection a lifecycle, an audit trail and
+         *     its one `enabled` switch.
          *     Nothing else creates one — not a read, not a write, not an agent's
          *     working directory (FR-008).
          *

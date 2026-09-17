@@ -15,16 +15,19 @@ by a person, an upload and `coffer__write`, and `topics/`, written only by the
 curation pass that derives it from those sources. Sources are the truth; topics
 are derived and rebuildable, which is what makes it safe for Coffer's own model
 to rewrite them unattended. A **collection** is a top-level folder and one
-`knowledge` Resource, created deliberately, and it exists so the framework's
-per-agent scope can authorize it.
+`knowledge` Resource, created deliberately, and being a Resource is what gives
+it a lifecycle, an audit trail and one `enabled` switch. It carries **no**
+per-agent reach (FR-010).
 
 **The agent does not retrieve through Coffer.** The gateway exposes exactly one
 knowledge tool, `coffer__write`; `list`, `grep`, `read`, `search` and `delete`
 are gone. An agent reads `topics/` with its own `Read` and `Grep`, at absolute
-paths carried by a **per-agent generated skill** whose description names the
-subjects its collections cover and whose body is the whole catalogue. That moves
-per-agent authorization from the tool surface to delivery: an agent's skill file
-never mentions a collection it is not activated for.
+paths carried by a **generated skill** whose description names the subjects the
+enabled collections cover and whose body is the whole catalogue. The skill is
+written per agent — real bytes in each agent's own directory rather than a link
+into one master — but its text is the same for every one of them: a disabled
+collection appears in none of the copies, and an enabled one in all of them
+(FR-010, FR-035).
 
 One entrance exists beside the filesystem. A document — a PDF, a docx, a
 spreadsheet — is uploaded from the Knowledge page or forwarded to a Coffer
@@ -77,7 +80,7 @@ backend/coffer/
 │                                   # outside a lane), UploadTooLarge,
 │                                   # TopicReferencesFile, CurationBoundExceeded
 ├── application/knowledge/
-│   ├── kind.py                     # make_knowledge_kind(); supports_scope=True
+│   ├── kind.py                     # make_knowledge_kind(); no per-agent reach
 │   ├── service.py                  # the one service: collections, both lanes,
 │   │                               # catalogue(), write_source, delete_source,
 │   │                               # match_topics (internal candidate matching)
@@ -147,8 +150,9 @@ frontend/src/
 - **MCP — one tool**: `coffer__write`, into a named collection's `sources/`
   (FR-033). It takes no `scope`, no `path` and no lane: which lane a write lands
   in is not something a caller gets to choose. The session's agent identity is
-  written in as an `agent` argument the schema does not advertise, and the
-  service refuses a collection that agent is not activated for (FR-010). There
+  written in as an `agent` argument the schema does not advertise — it names the
+  calling agent in the audit entry and narrows nothing, since the service
+  refuses only a collection that does not exist or is disabled (FR-010). There
   is no `list`, `grep`, `read`, `search` or `delete` — an agent reads with its
   own tools, and deletion is a person's action.
 - **HTTP — eight operations** under `/api/v1/knowledge`: `GET`/`POST
@@ -217,8 +221,8 @@ arriving mid-pass is refused (`UPKEEP_ALREADY_RUNNING`, 409) and the sweep skips
 that collection rather than waiting behind it (FR-030). A finished pass re-runs
 skill delivery, because a topic document no catalogue names is one no agent can
 find — and the worker re-delivers on **every** tick, outside the enabled check,
-because a collection created, deleted or re-scoped changes what each agent must
-be told even on a machine that is not the curation owner (FR-035).
+because a collection created, deleted, enabled or disabled changes what each
+agent must be told even on a machine that is not the curation owner (FR-035).
 
 ## Migration
 
@@ -254,7 +258,7 @@ raises, and no compatibility shim is left behind anywhere. Details in
 | **Per-agent skill copies must be reconciled.** A shared master needed one write; N agents need N. | Delivery is idempotent, re-armed by every catalogue change, and replaces a stale symlink rather than writing through it. A failure is logged per agent and never propagates: this must not be able to fail a boot or a pass. |
 | **No semantic matching anywhere**, including in candidate selection. | Accepted, with a ceiling: it works while the catalogue fits in a skill body — ~5.2K tokens for 58 documents. Past that the answer is a real semantic stack built for that need, not the one removed here, which was never configured. |
 | **Migration is destructive and one-way.** The lane agents read comes back empty, and a corpus the user wrote by hand returns in a machine's words. | Deliberate, and paid for with the backup taken before the first file moves. This is the cost the user accepted in exchange for the 343 broken references going away. |
-| **Per-agent authorization is non-disclosure, not a security boundary.** An agent with shell tools can read any file under the root. | Stated as such on every surface (FR-012). Moving enforcement to delivery changed nothing about that: the previous enforcement point was equally bypassable. Real isolation would need a separate vault or filesystem permissions, and is out of scope. |
+| **Nothing here is a security boundary.** An agent with shell tools can read any file under the root. | Stated as such on every surface (FR-012): `enabled` decides what Coffer *delivers*, never what a process can open. Real isolation would need a separate vault or filesystem permissions, and is out of scope. The per-agent reach that once sat in front of this row is gone — an allow-list withholding a path from a reader who already has the root was an authorization in name only (FR-010). |
 
 ## Out of scope
 

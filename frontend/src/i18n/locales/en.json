@@ -1395,6 +1395,7 @@
     "machineLocal": "Reach is set on this machine only — it is not synced, so each machine you use sets its own.",
     "choicesLabel": "Reach",
     "setReach": "Set reach…",
+    "setStatus": "Set status…",
     "everywhere": "Every agent",
     "restricted": "Only selected agents",
     "agentCount_one": "{{count}} agent",

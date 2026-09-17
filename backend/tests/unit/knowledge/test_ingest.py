@@ -32,15 +32,14 @@ from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import CollectionNotFound, KnowledgeFileNotFound, UploadTooLarge
 from coffer.domain.provider.config import ProviderConfig, ResolvedConnection
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
 from coffer.infrastructure.knowledge import catalogue, fs, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 
 
 class _Resources:
-    """A fake ``ResourceService``: just enough for ``visible_collections``."""
+    """A fake ``ResourceService``: just enough for ``enabled_collections``."""
 
-    def __init__(self, entries: list[tuple[str, Scope | None]]) -> None:
+    def __init__(self, names: list[str]) -> None:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
@@ -52,9 +51,9 @@ class _Resources:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
-                scope=scope,
+                scope=None,
             )
-            for i, (name, scope) in enumerate(entries, start=1)
+            for i, name in enumerate(names, start=1)
         ]
 
     async def list(self, kind=None, enabled=None):  # type: ignore[no-untyped-def]
@@ -108,11 +107,11 @@ def fake_connection() -> ResolvedConnection:
 
 @pytest.fixture
 def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    """A ``KnowledgeService`` over an isolated tree with one open collection
-    (``shopee``) and one an unrelated agent may not see (``restricted``)."""
+    """A ``KnowledgeService`` over an isolated tree with one collection
+    (``shopee``); ``elsewhere`` is a name no collection answers to."""
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
-    resources = _Resources([("shopee", None), ("restricted", Scope(agents=["only-agent"]))])
+    resources = _Resources(["shopee"])
     return KnowledgeService(
         resources=resources,
         audit=_Audit(),
@@ -415,22 +414,24 @@ async def test_a_failure_keeping_the_original_takes_the_markdown_back(
     assert _sources() == []
 
 
-# ----- scope: an ingest is a write, and a write is enforced -------------
+# ----- an ingest is a write, and a write names a real collection --------
 
 
-async def test_ingest_into_a_collection_the_caller_may_not_see_fails(knowledge) -> None:  # type: ignore[no-untyped-def]
+async def test_ingest_into_a_collection_that_does_not_exist_fails(knowledge) -> None:  # type: ignore[no-untyped-def]
+    """Refused before any conversion, and it leaves no directory behind: the
+    check is the same one ``write_source`` makes, hoisted so an unusable name
+    costs nothing."""
     service = _service(knowledge)
 
     with pytest.raises(CollectionNotFound):
         await service.ingest(
-            collection="restricted",
+            collection="elsewhere",
             filename="notes.md",
             data=b"# Notes\n\nshould never land\n",
             actor="tester",
-            agent="someone-else",
         )
 
-    assert not paths.collection_dir("restricted").exists()
+    assert not paths.collection_dir("elsewhere").exists()
 
 
 # ----- two files, two lifetimes (FR-016, FR-020) -----------------------

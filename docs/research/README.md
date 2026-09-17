@@ -106,13 +106,15 @@ called it the highest-priority borrow.
 **Update: this shipped.** Per-agent scope is now a framework-level facility
 ([Per-Agent Resource Scope](../decisions/per-agent-resource-scope.md)) — see
 `backend/coffer/domain/scope.py` and the gateway's own enforcement point,
-`backend/coffer/application/mcp/gateway_scope.py`. **Six of the seven resource
-kinds declare `supports_scope=True`** (`mcp`, `skill`, `channel`, `knowledge`,
-`memory`, `provider`); the one that does not is **`agent`**, deliberately — scope
-names the agents a resource is active for, so an agent scoping itself is
-meaningless, and a non-null scope on an agent is rejected at validation. A
-resource's reach is **machine-local**: it is set on the machine it applies to
-and never synced.
+`backend/coffer/application/mcp/gateway_scope.py`. **Four of the seven resource
+kinds declare `supports_scope=True`** (`mcp`, `skill`, `channel`, `provider`),
+which covers the gap the research named — withholding a sensitive server from an
+agent is exactly what `mcp` scope does. Three declare none: **`agent`**,
+deliberately, since scope names the agents a resource is active for and an agent
+scoping itself is meaningless; and **`knowledge`** and **`memory`**, which
+withdrew on 2026-09-18 because both serve files an agent is handed the path to,
+so a scope there withheld a name and nothing else. A resource's reach is
+**machine-local**: it is set on the machine it applies to and never synced.
 
 ### A cross-cutting security/integrity opportunity
 

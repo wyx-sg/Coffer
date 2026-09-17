@@ -226,15 +226,24 @@ async def test_codexs_search_terms_reach_the_entry_and_the_index_line(vault) -> 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="memory",
-    scenario="a partition is registered as a resource scoped to the agents it came from",
+    scenario="a partition is registered as a resource keyed on its repository",
 )
-async def test_the_partition_is_scoped_to_both_agents_it_was_aggregated_from(vault) -> None:  # type: ignore[no-untyped-def]
+async def test_a_partition_two_real_agents_filled_records_its_repository_only(vault) -> None:  # type: ignore[no-untyped-def]
+    """Both real readers contribute to one partition, and the row that comes
+    out of it carries the repository and no per-agent reach.
+
+    This is the live-vault bug asserted at the tier that reproduces it: the
+    row used to be scoped to the agents it had been aggregated from, and on
+    the maintainer's own machine ``memory/coffer`` came out serving
+    ``claude-code`` alone while Codex, working in that repository daily, got
+    no project memory at all.
+    """
     await vault["service"].aggregate()
 
     row = await vault["resources"].get(ResourceRef(KIND_MEMORY, "coffer"))
-    assert row.scope is not None
-    assert set(row.scope.agents or []) == {"claude-code", "codex"}
     assert row.config["repository_path"] == str(vault["project_root"].resolve())
+    assert row.scope is None
+    assert await vault["service"].enabled_partitions() == ["coffer", "global"]
 
 
 @pytest.mark.asyncio

@@ -2,18 +2,31 @@
 // The collections list, rendered via the shared DataTable. A collection is a
 // top-level folder under the knowledge root and one `knowledge` Resource, so a
 // row carries what a folder has — its name, what its README says it is for, and
-// the size of each of its two lanes — plus the reach control every Resource
-// gets, exactly as the mcp-servers, skills and memory lists render it per row.
+// the size of each of its two lanes — plus the status control every Resource
+// gets, in the shape this kind's Resource actually has.
+//
+// A collection carries NO PER-AGENT REACH. The `knowledge` kind declares no
+// scope (the backend answers `supports_scope: false` and refuses a scope
+// write), because every enabled collection is served to every agent: an agent
+// reads the files at the paths its delivered skill carries, and that skill
+// names the collections — there is no per-agent cut of the knowledge root to
+// make. So `ScopeControl` and the bulk bar are both told `supportsScope={false}`
+// and collapse to the two choices this kind has.
+//
+// The column survives that because `enabled` is a REAL gate, not a label: a
+// disabled collection appears in no agent's delivered skill at all. Only the
+// header changes — it says "Status", since enabled/disabled is the whole of
+// what it reports.
 //
 // The lanes are counted APART because they answer different questions: how much
 // the person has contributed, and how much of it an agent can read today. A
 // collection with sources and no topics is one curation has not reached yet,
 // which a single total would hide (spec knowledge FR-001).
 //
-// `enabled`/`scope` are generic Resource fields and are NOT on
-// /knowledge/collections (which reads the folders off disk), so they are merged
-// in from `GET /resources?kind=knowledge` via useKindReach: one extra request
-// for the table, never one per row.
+// `enabled` is a generic Resource field and is NOT on /knowledge/collections
+// (which reads the folders off disk), so it is merged in from
+// `GET /resources?kind=knowledge` via useKindReach: one extra request for the
+// table, never one per row.
 //
 // Deleting goes through the kind-agnostic resource route, which cascades the
 // directory — collection lifecycle is a Resource concern, not a knowledge one.
@@ -55,9 +68,12 @@ export function KnowledgeTable({
   const [deletingName, setDeletingName] = useState<string | null>(null);
   const bulk = useBulkMutate({ invalidate: [resourcesKey, knowledgeCollectionsKey] });
 
+  // `scope` is deliberately not read back out of the merge: this kind declares
+  // none, so `enabled` is the whole of a row's status and anything still stored
+  // under a collection's name is not this table's answer to anything.
   const reachOf = (r: CollectionOut) => ({
     enabled: reach.get(r.name)?.enabled ?? true,
-    scope: reach.get(r.name)?.scope ?? null,
+    scope: null,
   });
 
   const columns: Column<CollectionOut>[] = [
@@ -90,12 +106,13 @@ export function KnowledgeTable({
       cell: (r) => <span className="text-sm text-muted-foreground">{r.description ?? ""}</span>,
     },
     {
-      key: "reach",
-      header: t("resources.cols.reach"),
+      key: "status",
+      // Not "Reach": with no scope to narrow, the control reports one thing.
+      header: t("resources.cols.status"),
       className: "whitespace-nowrap text-right",
       cell: (r) => (
         <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-          <ScopeControl kind={KIND} name={r.name} {...reachOf(r)} />
+          <ScopeControl kind={KIND} name={r.name} supportsScope={false} {...reachOf(r)} />
         </div>
       ),
     },
@@ -124,7 +141,7 @@ export function KnowledgeTable({
           accessor: (r) => `${r.name} ${r.description ?? ""}`,
           placeholder: t("knowledge.searchPlaceholder"),
         }}
-        filters={[reachFilter(t, reachOf)]}
+        filters={[reachFilter(t, reachOf, false)]}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
@@ -134,6 +151,9 @@ export function KnowledgeTable({
             <>
               <BulkReachActions
                 rows={selectedRows.map((r) => ({ kind: KIND, name: r.name }))}
+                // Same two choices as the rows: enable or disable the lot, and
+                // no scope write the server would refuse anyway.
+                supportsScope={false}
                 invalidate={[knowledgeCollectionsKey]}
                 onDone={clear}
               />

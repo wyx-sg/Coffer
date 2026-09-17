@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0087"
+HEAD_REVISION = "0088"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -153,7 +153,13 @@ HEAD_REVISION = "0087"
 # 0080 is DATA-only too: it rewrites a ``runs_on`` that cannot be a machine id
 # (the retired axis wrote ULIDs into the same key) to this machine, so a vault
 # carrying that fossil does not upgrade into a channel bound to nobody real —
-# no DDL, table/column set unchanged at head.
+# no DDL, table/column set unchanged at head. 0088 is DATA-only as well: it
+# NULLs ``resources.scope_json`` for every ``kind='knowledge'`` and
+# ``kind='memory'`` row, because those two kinds stop declaring reach — the one
+# revision here that widens on purpose, and its docstring argues why that is
+# safe for these two kinds and for no others; no DDL, table/column set
+# unchanged at head, and its downgrade writes nothing because the cleared
+# values cannot be recovered.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

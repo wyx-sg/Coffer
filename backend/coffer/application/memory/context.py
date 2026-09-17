@@ -16,12 +16,16 @@ in three weeks it produced exactly zero calls.
 
 Three things this module is deliberately narrow about:
 
-* **It never resolves an agent's scope or a cwd's partition from scratch.**
-  :class:`MemoryPort` below is the narrow slice of ``MemoryService`` this
-  needs — visible partitions, a partition's notes, the partition list — so a
-  unit test can fake it with no database at all, and the production
-  composition root hands in the real service unchanged (structural typing:
-  the Protocol is not a base class ``MemoryService`` has to inherit from).
+* **It never resolves a cwd's partition from scratch, and it has no caller
+  identity to resolve anything against.** :class:`MemoryPort` below is the
+  narrow slice of ``MemoryService`` this needs — the enabled partitions, a
+  partition's notes, the partition list — so a unit test can fake it with no
+  database at all, and the production composition root hands in the real
+  service unchanged (structural typing: the Protocol is not a base class
+  ``MemoryService`` has to inherit from). There is deliberately no ``agent``
+  among those: every enabled partition is composed for every agent (FR-013),
+  because memory aggregated from several agents exists so each of them can
+  read what the others learned.
 * **It reads the notes as the distil pass left them.** There is no second
   judgement on top: no hide, no pin, no status. A retired note is not
   filtered here because it is not here — retirement takes the file out of
@@ -87,9 +91,10 @@ class PartitionView(Protocol):
 
 
 class MemoryPort(Protocol):
-    """The slice of ``MemoryService`` composing a context needs: scope and
-    reads, never aggregation. Matches ``MemoryService``'s real signatures
-    structurally, so the production service satisfies it with no adapter.
+    """The slice of ``MemoryService`` composing a context needs: which
+    partitions are served and what is in them, never aggregation. Matches
+    ``MemoryService``'s real signatures structurally, so the production
+    service satisfies it with no adapter.
 
     ``list_notes`` answers from the partition's ``notes/`` directory, which
     is what makes FR-025 hold on this path: a retired note's file has left
@@ -98,9 +103,9 @@ class MemoryPort(Protocol):
     how the previous design went on serving 11 dead facts.
     """
 
-    async def visible_partitions(self, agent: str | None) -> Sequence[str]: ...
+    async def enabled_partitions(self) -> Sequence[str]: ...
 
-    async def list_notes(self, partition: str, *, agent: str | None = None) -> Sequence[Note]: ...
+    async def list_notes(self, partition: str) -> Sequence[Note]: ...
 
     async def list_partitions(self) -> Sequence[PartitionView]: ...
 
@@ -228,7 +233,6 @@ def _take(notes: Sequence[Note], ceiling: _Ceiling) -> list[str]:
 async def compose_context(
     memory: MemoryPort,
     *,
-    agent: str | None,
     cwd: str,
     ceiling_tokens: int = DEFAULT_CEILING_TOKENS,
 ) -> ComposedContext:
@@ -250,16 +254,16 @@ async def compose_context(
     FR-031's channel turn appends this only when it is non-empty, and an
     empty memory header is worse than none.
     """
-    visible = set(await memory.visible_partitions(agent))
+    served = set(await memory.enabled_partitions())
     partitions = await memory.list_partitions()
     project_partition = _resolve_cwd_partition(partitions, cwd)
 
     global_notes: Sequence[Note] = ()
-    if GLOBAL_PARTITION in visible:
-        global_notes = await memory.list_notes(GLOBAL_PARTITION, agent=agent)
+    if GLOBAL_PARTITION in served:
+        global_notes = await memory.list_notes(GLOBAL_PARTITION)
     project_notes: Sequence[Note] = ()
-    if project_partition != GLOBAL_PARTITION and project_partition in visible:
-        project_notes = await memory.list_notes(project_partition, agent=agent)
+    if project_partition != GLOBAL_PARTITION and project_partition in served:
+        project_notes = await memory.list_notes(project_partition)
 
     seen = {n.key: n for n in list(global_notes) + list(project_notes)}
     global_visible = _ordered(n for n in seen.values() if n.partition == GLOBAL_PARTITION)

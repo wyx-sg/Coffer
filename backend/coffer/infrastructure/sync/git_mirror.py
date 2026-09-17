@@ -6,19 +6,11 @@ because the point of the design is that what lands on the remote is an ordinary
 git repository the user can clone, inspect and restore from with their own
 tools — the same binary they would reach for.
 
-The push credential is why the rest of this module is shaped the way it is. It
-reaches git through ``GIT_ASKPASS`` plus an environment variable and nowhere
-else: never interpolated into the remote URL, never in argv (which any process
-on the machine can read), never written into ``.git/config`` (which is itself
-pushed to a remote the user may share). The askpass script is a ``0o700`` temp
-file deleted in a ``finally``, so a crash leaves no readable helper behind, and
-every captured stderr passes through ``redact`` before it is raised — git
-echoes the URL it tried back at you when authentication fails.
-
-Each invocation also runs with ``GIT_CONFIG_GLOBAL``/``GIT_CONFIG_SYSTEM``
-pointed at ``/dev/null`` and its commit identity supplied with ``-c``: a
-developer's own git config must not be able to change what the daemon's round
-does, and Coffer must not write an identity into the user's repository.
+This module is *what* the round asks git for. How an invocation is made safe —
+the push credential's route through ``GIT_ASKPASS``, the user's own git config
+pinned at ``/dev/null``, the redaction every raised message passes through —
+is ``git_invoke.py`` beside it, because that changes for entirely different
+reasons than a new git command does.
 
 Nothing the user configured is ever the first thing after a subcommand. The
 remote URL and the branch are validated in the domain (no leading ``-``), and
@@ -29,97 +21,29 @@ takes no ``--``. The two layers are redundant on purpose.
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
-import os
 import pathlib
 import re
-import tempfile
-from collections.abc import Iterator
 from datetime import UTC, date, datetime
-from typing import NamedTuple
 
-from coffer.domain.error_base import CofferError
-from coffer.domain.sync.backup import redact
+from coffer.infrastructure.sync.git_invoke import (
+    DEFAULT_TIMEOUT_S,
+    Completed,
+    GitMirrorError,
+    failure_message,
+    run_git,
+)
 
-DEFAULT_TIMEOUT_S = 120.0
-
-# Reads the token from the environment and writes it to stdout: git asks this
-# helper for the password instead of prompting, so the secret is never an
-# argument and never touches the terminal.
-_ASKPASS_BODY = "#!/bin/sh\nprintf '%s' \"$COFFER_GIT_TOKEN\"\n"
-_TOKEN_ENV = "COFFER_GIT_TOKEN"
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-# Pinned onto every invocation rather than passed per command, so nothing added
-# later can be reached without them: quotepath keeps a path out of git's
-# C-quoting — a note named in Chinese otherwise comes back escaped and matches
-# no file on disk — and the identity is what a commit is authored as, the
-# user's own git config being pinned at /dev/null below.
-_QUOTEPATH = ("-c", "core.quotepath=false")
-_IDENTITY = ("-c", "user.name=Coffer", "-c", "user.email=coffer@localhost")
-_PINNED = _QUOTEPATH + _IDENTITY
+# The all-zero object id ``git diff --raw`` prints for the side a change has
+# none of: an addition has no "before", a deletion has no "after". It is not a
+# content id and must never be compared as one.
+_NULL_BLOB = re.compile(r"^0+$")
 
 #: Written into the repository's *local* config the moment Coffer initialises
 #: or adopts a working tree. Its absence on a repository whose ``origin`` is
 #: somewhere else is how ``ensure_repo`` tells "the user's own checkout" from
 #: "the tree Coffer made and the user has since repointed".
 _MANAGED_KEY = "coffer.managed"
-
-
-class GitMirrorError(CofferError):
-    """A git invocation failed; the message is already redacted. Maps to 502."""
-
-    code = "GIT_MIRROR_FAILED"
-
-
-class _Completed(NamedTuple):
-    returncode: int
-    stdout: str
-    stderr: str
-    stdout_bytes: bytes = b""
-
-
-@contextlib.contextmanager
-def _askpass_script(token: str | None) -> Iterator[str | None]:
-    """Yield the path to a private askpass helper, deleted on the way out.
-
-    Without a token there is nothing to hand over and no file is created, so a
-    local-path or already-authenticated remote costs nothing.
-    """
-    if not token:
-        yield None
-        return
-    fd, path = tempfile.mkstemp(prefix="coffer-askpass-", suffix=".sh")
-    try:
-        with os.fdopen(fd, "w") as handle:
-            handle.write(_ASKPASS_BODY)
-        os.chmod(path, 0o700)
-        yield path
-    finally:
-        with contextlib.suppress(OSError):
-            os.unlink(path)
-
-
-def _git_env(token: str | None, askpass: str | None) -> dict[str, str]:
-    """The environment one git invocation runs in.
-
-    Inherits the parent environment for ``PATH`` and friends, then pins
-    everything that could change git's behaviour or leak the secret: any
-    askpass helper the user already had is dropped, and the token is added only
-    when this call actually needs it.
-    """
-    env = dict(os.environ)
-    for leftover in ("GIT_ASKPASS", "SSH_ASKPASS", "SSH_ASKPASS_REQUIRE", _TOKEN_ENV):
-        env.pop(leftover, None)
-    env["GIT_TERMINAL_PROMPT"] = "0"
-    env["GIT_CONFIG_GLOBAL"] = os.devnull
-    env["GIT_CONFIG_SYSTEM"] = os.devnull
-    env["GIT_CONFIG_NOSYSTEM"] = "1"
-    if token and askpass:
-        env["GIT_ASKPASS"] = askpass
-        env[_TOKEN_ENV] = token
-    return env
 
 
 class GitMirror:
@@ -135,43 +59,11 @@ class GitMirror:
     def worktree(self) -> pathlib.Path:
         return self._worktree
 
-    async def _git(
-        self,
-        *args: str,
-        token: str | None = None,
-        check: bool = True,
-    ) -> _Completed:
-        """Run ``git -C <worktree> <args>`` and capture its output.
-
-        ``asyncio.create_subprocess_exec`` — never a shell — so nothing in
-        ``args`` can be re-parsed as a command, and a remote URL or branch name
-        that happens to contain shell metacharacters is just a string.
-        """
-        with _askpass_script(token) as askpass:
-            env = _git_env(token, askpass)
-            argv = ("git", "-C", str(self._worktree), *_PINNED, *args)
-            pipe = asyncio.subprocess.PIPE
-            proc = await asyncio.create_subprocess_exec(*argv, stdout=pipe, stderr=pipe, env=env)
-            try:
-                raw_out, raw_err = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
-            except TimeoutError:
-                proc.kill()
-                await proc.wait()
-                raise GitMirrorError(
-                    f"git {args[0]} timed out after {self._timeout:.0f}s"
-                ) from None
-        text = raw_out.decode("utf-8", errors="replace")
-        problem = raw_err.decode("utf-8", errors="replace")
-        done = _Completed(proc.returncode or 0, text, problem, raw_out)
-        if check and done.returncode != 0:
-            raise GitMirrorError(self._failure(args, done, token))
-        return done
-
-    @staticmethod
-    def _failure(args: tuple[str, ...], done: _Completed, token: str | None) -> str:
-        detail = done.stderr.strip() or done.stdout.strip() or f"exit {done.returncode}"
-        subcommand = next((arg for arg in args if not arg.startswith("-")), "git")
-        return redact(f"git {subcommand} failed: {detail}", token)
+    async def _git(self, *args: str, token: str | None = None, check: bool = True) -> Completed:
+        """One git invocation in this working tree (see ``git_invoke``)."""
+        return await run_git(
+            self._worktree, *args, token=token, check=check, timeout_s=self._timeout
+        )
 
     async def ensure_repo(self, *, remote_url: str, branch: str) -> None:
         """Make the working tree a repository on ``branch`` with ``origin`` set.
@@ -240,7 +132,7 @@ class GitMirror:
             return False
         if diff.returncode == 1:
             return True
-        raise GitMirrorError(self._failure(("diff",), diff, None))
+        raise GitMirrorError(failure_message(("diff",), diff, None))
 
     async def commit(self, message: str) -> str:
         await self._git("commit", "-m", message)
@@ -262,7 +154,7 @@ class GitMirror:
         unmerged = await self._git("diff", "--name-only", "--diff-filter=U", "-z")
         conflicted = [path for path in unmerged.stdout.split("\0") if path]
         if not conflicted:
-            raise GitMirrorError(self._failure(("merge",), done, None))
+            raise GitMirrorError(failure_message(("merge",), done, None))
         return conflicted
 
     async def commit_merge(self, message: str) -> str:
@@ -281,14 +173,34 @@ class GitMirror:
         await self._git("checkout", f"--{side}", "--", path)
         await self._git("add", "--", path)
 
-    async def diff_paths(self, base: str, head: str) -> list[tuple[str, str]]:
-        """``(status, path)`` for every change between two commits.
+    async def diff_paths(self, base: str, head: str) -> list[tuple[str, str, str]]:
+        """``(status, path, blob)`` for every change between two commits.
 
         ``--no-renames`` so a move arrives as its delete and its add: the vault
-        applies one path at a time. ``-z`` because a path may hold a newline."""
-        out = await self._git("diff", "--name-status", "--no-renames", "-z", base, head)
+        applies one path at a time. ``-z`` because a path may hold a newline.
+
+        ``--raw`` rather than ``--name-status`` for one reason: it carries the
+        content id of each side, which is what lets the deletion guard pair a
+        deletion with the addition that received its bytes — a move — without
+        reading a single file. ``--abbrev=40`` because raw output abbreviates
+        by default, and a prefix is not an identity.
+
+        The blob reported is the side the change is *about*: what a deletion
+        removed, what an addition or a modification left behind. A line whose
+        relevant side is all zeroes reports the empty string, which no caller
+        may treat as content."""
+        out = await self._git("diff", "--raw", "--abbrev=40", "--no-renames", "-z", base, head)
         fields = [field for field in out.stdout.split("\0") if field]
-        return [(fields[i][:1], fields[i + 1]) for i in range(0, len(fields) - 1, 2)]
+        changes = []
+        for i in range(0, len(fields) - 1, 2):
+            # ``:<old mode> <new mode> <old blob> <new blob> <status>``
+            parts = fields[i].split(" ")
+            if len(parts) < 5:  # pragma: no cover - git does not emit these
+                continue
+            status = parts[4][:1]
+            blob = parts[2] if status == "D" else parts[3]
+            changes.append((status, fields[i + 1], "" if _NULL_BLOB.match(blob) else blob))
+        return changes
 
     async def file_count(self, revision: str, prefix: str) -> int:
         """Files a commit holds under ``prefix``, read from the tree so the share

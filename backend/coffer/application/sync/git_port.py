@@ -45,12 +45,19 @@ class GitMirrorPort(Protocol):
     async def abort_merge(self) -> None:
         """Undo an in-progress merge, leaving the tree at the pre-merge commit."""
 
-    async def diff_paths(self, base: str, head: str) -> list[tuple[str, str]]:
-        """``(status, path)`` for every change between two commits.
+    async def diff_paths(self, base: str, head: str) -> list[tuple[str, str, str]]:
+        """``(status, path, blob)`` for every change between two commits.
 
-        ``status`` is one of ``A`` / ``M`` / ``D``; a rename is reported as its
-        delete and add, because the vault applies paths and has no use for the
-        pairing. ``base`` may be ``EMPTY_TREE``."""
+        ``status`` is one of ``A`` / ``M`` / ``D``. A rename is reported as its
+        delete and its add, because the vault applies paths one at a time and
+        has no use for git's own pairing — but ``blob``, the content id of the
+        side the change is about, is what lets the **deletion guard** do the
+        pairing itself: a deletion whose content turns up at another path in
+        the same diff moved, and a move loses nothing (domain ``sync.diff``).
+
+        An implementation MUST return a content id that is an identity rather
+        than a prefix of one, and the empty string where the change has no such
+        side. ``base`` may be ``EMPTY_TREE``."""
 
     async def file_count(self, revision: str, prefix: str) -> int:
         """How many files a revision holds under ``prefix``.

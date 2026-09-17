@@ -15,10 +15,12 @@ this module was rewritten:
 * It named a tool as the way to reach a body, and in three weeks no agent ever
   called it. The payload now names a path.
 
-``MemoryPort`` is faked: composing needs scope and reads, never a database.
-The port's own promise — ``list_notes`` answers from ``notes/``, so a retired
-note is not there to filter — is exercised for real in
-``tests/integration/memory/test_distil_lifecycle.py``.
+``MemoryPort`` is faked: composing needs the enabled partitions and their
+notes, never a database. There is no calling agent in any of this — every
+enabled partition is composed for every agent — so the only gate the fake
+models is ``enabled``. The port's own promise — ``list_notes`` answers from
+``notes/``, so a retired note is not there to filter — is exercised for real
+in ``tests/integration/memory/test_distil_lifecycle.py``.
 """
 
 from __future__ import annotations
@@ -54,18 +56,16 @@ class _FakeMemory:
         notes: dict[str, list[Note]],
         *,
         partitions: Sequence[_Partition],
-        visible: Sequence[str] | None = None,
+        enabled: Sequence[str] | None = None,
     ) -> None:
         self._notes = notes
         self._partitions = list(partitions)
-        self._visible = list(visible) if visible is not None else [p.name for p in partitions]
+        self._enabled = list(enabled) if enabled is not None else [p.name for p in partitions]
 
-    async def visible_partitions(self, agent: str | None) -> list[str]:
-        return list(self._visible)
+    async def enabled_partitions(self) -> list[str]:
+        return list(self._enabled)
 
-    async def list_notes(self, partition: str, *, agent: str | None = None) -> list[Note]:
-        if agent is not None and partition not in self._visible:
-            return []
+    async def list_notes(self, partition: str) -> list[Note]:
         return list(self._notes.get(partition, []))
 
     async def list_partitions(self) -> list[_Partition]:
@@ -120,7 +120,7 @@ async def test_every_note_in_both_partitions_gets_exactly_one_line() -> None:
 
     memory = _memory(project_notes=3, global_notes=2)
 
-    composed = await compose_context(memory, agent="codex", cwd=f"{_REPOSITORY}/backend")
+    composed = await compose_context(memory, cwd=f"{_REPOSITORY}/backend")
 
     assert composed.partition == "coffer"
     assert composed.notes_included == 5
@@ -137,7 +137,7 @@ async def test_every_note_in_both_partitions_gets_exactly_one_line() -> None:
     scenario="the composed context carries the whole index and the path to the bodies",
 )
 async def test_the_payload_names_the_absolute_notes_path_and_no_tool() -> None:
-    composed = await compose_context(_memory(), agent="codex", cwd=_REPOSITORY)
+    composed = await compose_context(_memory(), cwd=_REPOSITORY)
 
     notes_dir = str(memory_paths.notes_dir("coffer"))
     assert notes_dir in composed.text
@@ -150,14 +150,14 @@ async def test_the_payload_names_the_absolute_notes_path_and_no_tool() -> None:
 
 @pytest.mark.asyncio
 async def test_the_repository_is_named_so_the_session_knows_which_project() -> None:
-    composed = await compose_context(_memory(), agent="codex", cwd=_REPOSITORY)
+    composed = await compose_context(_memory(), cwd=_REPOSITORY)
     assert "partition `coffer`" in composed.text
     assert _REPOSITORY in composed.text
 
 
 @pytest.mark.asyncio
 async def test_a_directory_in_no_partition_still_gets_what_is_known_about_the_developer() -> None:
-    composed = await compose_context(_memory(), agent="codex", cwd="/tmp/scratch-2026-09-17")
+    composed = await compose_context(_memory(), cwd="/tmp/scratch-2026-09-17")
 
     assert composed.partition == "global"
     assert "personal-0" in composed.text
@@ -174,7 +174,7 @@ async def test_a_nested_repository_resolves_to_the_inner_one() -> None:
             _Partition("global", ""),
         ],
     )
-    composed = await compose_context(memory, agent=None, cwd="/home/dev/outer/vendor/inner/src")
+    composed = await compose_context(memory, cwd="/home/dev/outer/vendor/inner/src")
     assert composed.partition == "inner"
 
 
@@ -182,19 +182,26 @@ async def test_a_nested_repository_resolves_to_the_inner_one() -> None:
 async def test_nothing_to_deliver_is_an_empty_payload_not_a_bare_header() -> None:
     """FR-031's channel turn appends this only when it is non-empty."""
     memory = _FakeMemory({}, partitions=[_Partition("global", "")])
-    composed = await compose_context(memory, agent="codex", cwd=_REPOSITORY)
+    composed = await compose_context(memory, cwd=_REPOSITORY)
     assert composed.text == ""
     assert composed.notes_included == 0
 
 
 @pytest.mark.asyncio
-async def test_a_partition_out_of_the_agents_scope_contributes_nothing() -> None:
+async def test_a_disabled_partition_contributes_nothing() -> None:
+    """``enabled`` is the only gate on the payload.
+
+    It used to be one of two: a partition also carried a per-agent reach,
+    defaulted to the agents it had been aggregated from, so a repository's own
+    memory could be withheld from an agent working in that repository. Nothing
+    is withheld by caller any more — only by the switch the developer sets.
+    """
     memory = _FakeMemory(
         {"coffer": [_note("p", "coffer")], "global": [_note("g", "global", type=TYPE_USER)]},
         partitions=[_Partition("coffer", _REPOSITORY), _Partition("global", "")],
-        visible=["global"],
+        enabled=["global"],
     )
-    composed = await compose_context(memory, agent="codex", cwd=_REPOSITORY)
+    composed = await compose_context(memory, cwd=_REPOSITORY)
     assert "`p.md`" not in composed.text
     assert "`g.md`" in composed.text
 
@@ -212,7 +219,7 @@ async def _binding_ceiling(memory: _FakeMemory, *, room_for: int) -> int:
     """
     from coffer.domain.memory.budget import estimate_tokens
 
-    full = await compose_context(memory, agent="codex", cwd=_REPOSITORY)
+    full = await compose_context(memory, cwd=_REPOSITORY)
     assert full.notes_omitted == 0, "the untrimmed payload is the baseline"
     lines = [line for line in full.text.split("\n") if line.startswith("- **")]
     scaffolding = estimate_tokens(full.text) - sum(estimate_tokens(line) for line in lines)
@@ -237,7 +244,7 @@ async def test_the_current_repositorys_lines_survive_and_globals_are_dropped() -
     memory = _memory(project_notes=6, global_notes=6)
     ceiling = await _binding_ceiling(memory, room_for=8)
 
-    composed = await compose_context(memory, agent="codex", cwd=_REPOSITORY, ceiling_tokens=ceiling)
+    composed = await compose_context(memory, cwd=_REPOSITORY, ceiling_tokens=ceiling)
 
     assert composed.notes_omitted > 0
     for i in range(6):
@@ -254,7 +261,7 @@ async def test_a_trim_names_how_many_were_dropped_and_the_directory_holding_them
     memory = _memory(project_notes=40, global_notes=0)
     ceiling = await _binding_ceiling(memory, room_for=10)
 
-    composed = await compose_context(memory, agent="codex", cwd=_REPOSITORY, ceiling_tokens=ceiling)
+    composed = await compose_context(memory, cwd=_REPOSITORY, ceiling_tokens=ceiling)
 
     assert composed.notes_omitted > 0
     notice = f"({composed.notes_omitted} older line(s) not shown"
@@ -279,7 +286,7 @@ async def test_the_trim_drops_the_oldest_lines_rather_than_an_arbitrary_set() ->
     )
     ceiling = await _binding_ceiling(memory, room_for=4)
 
-    composed = await compose_context(memory, agent="codex", cwd=_REPOSITORY, ceiling_tokens=ceiling)
+    composed = await compose_context(memory, cwd=_REPOSITORY, ceiling_tokens=ceiling)
 
     assert composed.notes_included >= 1
     kept = [y for y in (20, 21, 22, 23, 24, 25, 26) if f"`note-{y}.md`" in composed.text]
@@ -321,7 +328,7 @@ async def test_the_payload_stays_at_or_under_the_ceiling() -> None:
 
     memory = _memory(project_notes=50, global_notes=50)
     ceiling = await _binding_ceiling(memory, room_for=12)
-    composed = await compose_context(memory, agent="codex", cwd=_REPOSITORY, ceiling_tokens=ceiling)
+    composed = await compose_context(memory, cwd=_REPOSITORY, ceiling_tokens=ceiling)
     assert composed.notes_omitted > 0
     assert estimate_tokens(composed.text) <= ceiling
 
@@ -331,6 +338,6 @@ async def test_an_ordinary_index_is_nowhere_near_the_default_ceiling() -> None:
     """The ceiling guards the assumption breaking; it is not the ordinary path
     the previous ~600-token budget made it."""
     memory = _memory(project_notes=40, global_notes=20)
-    composed = await compose_context(memory, agent="codex", cwd=_REPOSITORY)
+    composed = await compose_context(memory, cwd=_REPOSITORY)
     assert composed.notes_omitted == 0
     assert DEFAULT_CEILING_TOKENS >= 9000

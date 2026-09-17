@@ -1395,6 +1395,7 @@
     "machineLocal": "生效范围只在本机设置——它不参与同步，你用的每台机器都要各自设置。",
     "choicesLabel": "生效范围",
     "setReach": "设置生效范围…",
+    "setStatus": "设置状态…",
     "everywhere": "所有 Agent",
     "restricted": "只限选中的",
     "agentCount_one": "{{count}} 个 Agent",

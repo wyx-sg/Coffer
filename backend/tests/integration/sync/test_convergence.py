@@ -772,3 +772,118 @@ def _sleep_past_a_fernet_second() -> None:
     import time
 
     time.sleep(1.05)
+
+
+# --- a move is not a deletion (spec vault-sync FR-090) ----------------------
+
+
+def _relayout(machine: VaultMachine, names: list[str]) -> None:
+    """Move documents from ``notes/`` into ``notes/sources/``, byte for byte.
+
+    The knowledge two-lane rewrite, which is what put the user's vault on this
+    path: every document changed its address and not one changed its content.
+    """
+    for name in names:
+        body = machine.read_knowledge("notes", name)
+        assert body is not None
+        machine.write_knowledge("notes/sources", name, body)
+        machine.delete_knowledge("notes", name)
+
+
+@pytest.mark.acceptance(spec="vault-sync", scenario="a re-layout publishes without asking")
+async def test_a_relayout_publishes_unattended_and_lands_on_the_other_machine(pair) -> None:
+    """The measured bug: 56 of 58 knowledge documents moved into a
+    subdirectory, the guard counted the deletions alone, and the vault sat
+    awaiting a confirmation for a day for a round that lost nothing.
+    """
+    a, b = pair
+    names = [f"n{i:02d}" for i in range(30)]
+    for name in names:
+        a.write_knowledge("notes", name, f"body of {name}\n")
+    await settle(a, b)
+    assert len(b.knowledge_paths()) == 30
+
+    _relayout(a, names)
+    published = await a.converge()
+
+    assert published.status is ConvergeStatus.OK, published.error
+    assert published.pending is None
+    assert await a.state.pending() is None
+    # The diff genuinely carries all 60 changes; it is the *guard* that now
+    # tells the 30 deletions from the 30 documents receiving their content.
+    assert len(deleted(published.published)) == 30
+    assert len(added(published.published)) == 30
+    assert {p for p in await a.remote_paths() if p.startswith("knowledge/")} == {
+        f"knowledge/notes/sources/{name}.md" for name in names
+    }
+
+    # And the machine on the receiving end absorbs it just as unattended.
+    applied = await b.converge()
+
+    assert applied.status is ConvergeStatus.OK, applied.error
+    assert applied.pending is None
+    assert b.knowledge_paths() == {f"notes/sources/{name}.md" for name in names}
+    assert b.read_knowledge("notes/sources", "n00") == "body of n00\n"
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an oversized deletion is held for confirmation"
+)
+async def test_a_mass_deletion_beside_a_relayout_is_still_held_for_the_deletion(pair) -> None:
+    """The other half of the pair, and the half that must not have moved: the
+    deletions with nowhere to reappear are counted, held and listed on their
+    own, without 20 relocations padding the list the user has to read."""
+    a, b = pair
+    names = [f"n{i:02d}" for i in range(30)]
+    for name in names:
+        a.write_knowledge("notes", name, f"body of {name}\n")
+    await settle(a, b)
+
+    _relayout(a, names[:20])
+    for name in names[20:]:
+        a.delete_knowledge("notes", name)
+
+    held = await a.converge()
+
+    assert held.status is ConvergeStatus.AWAITING_CONFIRMATION
+    assert held.pending is not None
+    assert held.pending.direction is GuardDirection.PUBLISH
+    assert held.pending.breaches == (("knowledge", 10, 30),)
+    assert sorted(held.pending.paths) == [f"knowledge/notes/{name}.md" for name in names[20:]]
+    # Nothing was published: the round stops before the push either way.
+    assert len({p for p in await a.remote_paths() if p.startswith("knowledge/")}) == 30
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a hold is released once its diff no longer breaches"
+)
+async def test_a_hold_whose_breach_has_gone_releases_itself(pair) -> None:
+    """A latch is an unanswered question about one diff, not a state a vault
+    sits in. The user's vault was held on a question the guard would no longer
+    ask, and every later round re-reported it instead of re-deriving it — which
+    is why a day of hourly rounds changed nothing.
+    """
+    a, b = pair
+    names = [f"n{i:02d}" for i in range(30)]
+    for name in names:
+        a.write_knowledge("notes", name, f"body of {name}\n")
+    await settle(a, b)
+
+    for name in names[:10]:
+        a.delete_knowledge("notes", name)
+    held = await a.converge()
+    assert held.status is ConvergeStatus.AWAITING_CONFIRMATION
+    assert await a.state.pending() is not None
+
+    # Nobody answers. The reason for the question goes away instead: the
+    # documents are back, whether from a restore, a re-sync of the source or a
+    # defect on this machine being fixed.
+    for name in names[:10]:
+        a.write_knowledge("notes", name, f"body of {name}\n")
+
+    resumed = await a.converge()
+
+    assert resumed.ok, resumed.error
+    assert resumed.pending is None
+    assert await a.state.pending() is None
+    assert len({p for p in await a.remote_paths() if p.startswith("knowledge/")}) == 30

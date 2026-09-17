@@ -16,13 +16,14 @@ deliberately never serves file contents — so the shape here follows
 ``knowledge/routes.py``'s own ``tree``/``file`` pair instead, scoped to one
 partition.
 
-Like knowledge's REST surface, these routes are the *owner's* view and are
-therefore unscoped: ``list_notes``/``list_partitions`` are called with no
-``agent``, so nothing here is filtered by a Resource's scope. Scope IS enforced
-on the one route a real agent's own session actually reaches — ``POST /context``
-composes over ``MemoryService.visible_partitions(agent)`` underneath
-(``application.memory.context.compose_context``) — and on ``coffer__recall``,
-which this surface does not expose at all (FR-034).
+**Nothing here is filtered by who is asking, and neither is anything
+elsewhere in this layer.** A partition carries no per-agent reach (FR-013):
+every enabled partition is served to every agent, so ``POST /context`` composes the
+same payload whoever fired it and ``coffer__recall`` — which this surface does
+not expose at all (FR-034) — scans the same corpus for whoever calls it. The
+route still takes an ``agent``, because ``record_fired`` has to name the agent
+whose hook fired; that name identifies the caller for the audit log and
+decides nothing about the content.
 
 **No route here records an audit event.** That is a change from the organise
 pass, which was a pure function and had to be audited at this boundary.
@@ -338,16 +339,17 @@ async def context(
     svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     delivery: DeliveryService = Depends(get_memory_delivery_service),  # noqa: B008
 ) -> ComposedContextOut:
-    """Compose the session-start payload for one agent in one directory.
+    """Compose the session-start payload for one directory.
 
-    The one route a real agent's own session reaches, and therefore the one that
-    enforces its per-agent scope (FR-013). ``record_fired`` is what the installed
-    hook sets; a management surface previewing the payload leaves it false so it
-    never records a fire that did not happen (FR-033).
+    The one route a real agent's own session reaches. ``body.agent`` names who
+    fired and nothing more: it does not reach ``compose_context``, which has no
+    caller identity to narrow by, and exists here for ``record_fired`` — the
+    audited "this agent's hook fired" event. ``record_fired`` is what the
+    installed hook sets; a management surface previewing the payload leaves it
+    false so it never records a fire that did not happen (FR-033).
     """
     composed = await compose_context(
         svc,
-        agent=body.agent,
         cwd=body.cwd,
         ceiling_tokens=body.ceiling_tokens or DEFAULT_CEILING_TOKENS,
     )

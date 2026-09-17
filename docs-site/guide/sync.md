@@ -201,6 +201,10 @@ awaiting_confirmation
 
 Both directions are guarded. The **apply** side protects this vault from a remote that went wrong; the **publish** side protects the other machines from *this* one — a reinstall, a failed restore or a stray `rm -rf` would otherwise publish the loss as an ordinary deletion and take the fleet down with it.
 
+**Moving documents is not deleting them.** What the guard counts is what a round would *lose*: a document whose content turns up at another path in the same round has moved, and a move is published without asking, however much of an area it touches. Reorganising a collection into subdirectories is the ordinary case. A document whose content goes nowhere is a deletion and is held exactly as before — and if a round both moves documents and deletes others, only the deletions are held and listed.
+
+**One question is asked once.** A confirmation that nobody has answered stays one row in the Runs table and one line in the log, not one per tick: the round is re-derived on every pass, but re-reporting it would say nothing new. Re-deriving it also means a hold can let go by itself — if the documents come back, or the reason the guard objected is gone by the next pass, the vault converges again without anyone pressing anything.
+
 ```bash
 coffer sync confirm    # yes, let it finish
 coffer sync reject     # no — discard the round, the vault was never touched

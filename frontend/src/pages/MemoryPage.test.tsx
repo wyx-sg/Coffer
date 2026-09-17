@@ -88,7 +88,10 @@ describe("MemoryPage", () => {
     const headers = within(table)
       .getAllByRole("columnheader")
       .map((h) => h.textContent);
-    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes", "Reach"]));
+    // "Status", not "Reach": the `memory` kind declares no per-agent scope, so
+    // the last column reports whether the partition is served and nothing else.
+    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes", "Status"]));
+    expect(headers).not.toContain("Reach");
 
     // The empty state is a row INSIDE that table, not a card replacing it.
     expect(within(table).getByText(/no partitions yet/i)).toBeInTheDocument();

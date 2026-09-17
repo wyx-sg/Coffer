@@ -22,8 +22,9 @@ the disk.
 
 The only database presence a collection has is the same one every Resource has:
 a row in the kind-agnostic `resources` table. That row carries the collection's
-name, its `enabled` flag and its per-agent `scope`, and nothing about its
-contents.
+name and its `enabled` flag, and nothing about its contents. There is no
+per-agent reach column in play for this kind (FR-010): the row's one switch is
+`enabled`.
 
 ## On-disk layout
 
@@ -210,18 +211,24 @@ so removing a field from the wire never means hiding one from the layer.
 
 ## The `knowledge` Resource
 
-`make_knowledge_kind()` declares `supports_scope=True` — per-agent authorization
-is the whole reason a collection is a Resource (FR-010) — and
-`generic_create_allowed=False`, because a collection is a directory as much as a
-row and the generic `POST /resources` path would create the row with no folder
-behind it.
+`make_knowledge_kind()` leaves `supports_scope` at the Kind default of `False`
+and declares `generic_create_allowed=False`, because a collection is a directory
+as much as a row and the generic `POST /resources` path would create the row with
+no folder behind it. Being a Resource buys the collection a lifecycle, an audit
+trail and one switch — not a reach.
 
-**The scope no longer gates a retrieval tool, because there is none.** It bites
-in two other places. At **delivery**: the skill rendered for an agent names only
-the collections activated for it, so an unauthorized collection's name,
-description, catalogue and paths never appear in that agent's file at all. And at
-`coffer__write`, which refuses a write into a collection the calling agent is not
-activated for, using the handshake identity the gateway writes in.
+**`enabled` is that switch, and it bites in two places.** At **delivery**: a
+disabled collection's name, description, catalogue and paths appear in no agent's
+skill file at all, while an enabled one appears in every agent's. And at
+`coffer__write`, which refuses a write naming a collection that does not exist or
+is disabled, answering with the ones that are available.
+
+The per-agent reach that used to sit here is withdrawn (FR-010). It was never
+set — every collection's scope was null in the live vault — and it could not have
+withheld anything it was asked to: the skill it narrows hands the agent the
+absolute knowledge root and tells it to grep. `PUT .../scope` on this kind is now
+refused with `SCOPE_INVALID`, and migration `0088` cleared the column for every
+`knowledge` row.
 
 `KnowledgeConfig` (`domain/knowledge/config.py`) is **empty and forbids unknown
 keys**. A collection has no settings at all: no retrieval modes, no chunk size,
@@ -229,12 +236,14 @@ no entry-length cap, no embedding fields, no auto-update flag, no display label
 (FR-046). Anything that used to be configured per scope was configuring
 machinery that no longer exists.
 
-Enforcement is **non-disclosure, not access control**. An agent that also holds
-shell or file-read tools can read anything under `~/.coffer/knowledge/`: the
-scope prevents mistaken retrieval, not deliberate access, and the system says so
-rather than implying an isolation it does not provide (FR-012). Moving the
-enforcement point from the tool to the skill changed nothing about that — the
-previous point was equally bypassable.
+What the layer serves is **files on disk**, and `enabled` gates their
+**delivery** rather than their readability (FR-012). An agent that also holds
+shell or file-read tools can read anything under `~/.coffer/knowledge/`, so a
+collection left out of a skill is one no agent is told about, not one no process
+can open — and the system says so rather than implying an isolation it does not
+provide. The per-agent reach this row used to carry is withdrawn for the same
+reason taken one step further: an allow-list that withholds a path from a
+reader already holding the root withheld nothing at all (FR-010).
 
 ## Errors
 
