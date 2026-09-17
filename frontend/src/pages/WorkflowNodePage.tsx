@@ -16,6 +16,13 @@
 // is precisely what the gate exists to prevent, which is why this one is a
 // button and the rest are sentences.
 //
+// The composer is here WHATEVER state the task is in (FR-068), including
+// before it has started: what is typed then is the brief the task will open
+// with. Where the sentence goes is the one thing this page decides — a task
+// whose turn is in flight takes it in its conversation, where it queues for
+// the agent already reading; every other state hands it to the engine, which
+// decides whether it carries the attempt on or opens the next one.
+//
 // SEND BACK is in the header and is not an exception to any of that, because
 // it does nothing to this task: it opens a NEW task in an earlier stage
 // (FR-025), the way "Add task" does on the map. It is a button rather than a
@@ -29,7 +36,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { CornerUpLeft, MessageSquareDashed, Workflow } from "lucide-react";
+import { CornerUpLeft, Workflow } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -38,9 +45,10 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NodeThread } from "@/components/workflow/NodeThread";
 import { SendBackDialog } from "@/components/workflow/SendBackDialog";
+import { TaskBrief } from "@/components/workflow/TaskBrief";
 import { NodeStatusBadge } from "@/components/workflow/WorkflowStatusBadge";
 import { translateApiError } from "@/lib/api/errors";
-import { useWorkflowRun } from "@/lib/hooks/useWorkflowRun";
+import { useSayToTask, useWorkflowRun } from "@/lib/hooks/useWorkflowRun";
 import type { RunDetail } from "@/lib/api/workflow";
 
 /** The node with this key, and the stage it sits in. */
@@ -66,6 +74,7 @@ export function WorkflowNodePage() {
   const navigate = useNavigate();
   const { runId = "", nodeKey = "" } = useParams<{ runId: string; nodeKey: string }>();
   const { data: detail, isPending, error } = useWorkflowRun(runId);
+  const say = useSayToTask(runId);
   const [sendingBack, setSendingBack] = useState(false);
 
   const back = { to: `/runs/${runId}`, label: t("workflow.nodeConversation.backToRun") };
@@ -146,14 +155,23 @@ export function WorkflowNodePage() {
             ownedHere={run.owned_here}
             runId={run.id}
             attemptId={latest.id}
+            // Only a running task's turn can queue a message; every other
+            // state goes to the engine, which decides what the sentence means.
+            onSay={
+              node.status === "running"
+                ? undefined
+                : (text) => say.mutate({ nodeKey: node.key, text })
+            }
           />
         ) : (
-          // Honest rather than empty: a task that never started has no
-          // transcript, and an empty thread would read as one that said nothing.
-          <EmptyState
-            icon={MessageSquareDashed}
-            title={t("workflow.nodeConversation.notStartedTitle")}
-            description={t("workflow.nodeConversation.notStartedBody")}
+          // A task that never started has no transcript, and an empty thread
+          // would read as one in which nobody spoke. What it can have is a
+          // brief, written now rather than when the run reaches it (FR-068).
+          <TaskBrief
+            instructions={latest?.instructions}
+            ownedHere={run.owned_here}
+            onSay={(text) => say.mutate({ nodeKey: node.key, text })}
+            pending={say.isPending}
           />
         )}
       </div>

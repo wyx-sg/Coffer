@@ -23,6 +23,7 @@ import type { Approval, RunDetail } from "@/lib/api/workflow";
 const getRun = vi.fn();
 const listApprovals = vi.fn();
 const sendBack = vi.fn();
+const sayToNode = vi.fn();
 
 vi.mock("@/lib/api/workflow", () => ({
   WORKFLOW_TEMPLATE_KIND: "workflow",
@@ -31,13 +32,16 @@ vi.mock("@/lib/api/workflow", () => ({
     listApprovals: (...a: unknown[]) => listApprovals(...a),
     decideApproval: vi.fn(),
     sendBack: (...a: unknown[]) => sendBack(...a),
+    sayToNode: (...a: unknown[]) => sayToNode(...a),
   },
 }));
+
+const sendMessage = vi.fn().mockResolvedValue({ queued: true });
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     listMessages: vi.fn().mockResolvedValue({ messages: [] }),
-    sendMessage: vi.fn().mockResolvedValue({ queued: true }),
+    sendMessage: (...a: unknown[]) => sendMessage(...a),
     setPending: vi.fn().mockResolvedValue({ pending: [] }),
     interruptTurn: vi.fn().mockResolvedValue(undefined),
   },
@@ -159,6 +163,13 @@ describe("WorkflowNodePage", () => {
       run: detail().run,
       task: { node_key: "adhoc:code-issue", stage_key: "design", attempt: 1 },
     });
+    sayToNode.mockResolvedValue({
+      id: "att-3",
+      node_key: "review_td",
+      stage_key: "design",
+      attempt: 1,
+      status: "pending",
+    });
   });
   afterEach(() => vi.clearAllMocks());
 
@@ -220,8 +231,39 @@ describe("WorkflowNodePage", () => {
     render(wrap("/runs/run-1/nodes/review_td"));
     expect(await screen.findByText("This task has not started")).toBeInTheDocument();
     expect(screen.getByText(/A task's conversation opens when the task does/)).toBeInTheDocument();
-    // No thread, no composer — there is nothing to say it to yet.
+    // No transcript — nobody has spoken. The brief panel is what is there.
     expect(screen.queryByRole("region", { name: "Task conversation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Task brief" })).toBeInTheDocument();
+  });
+
+  test("a task that has not started can still be told what to do", async () => {
+    render(wrap("/runs/run-1/nodes/review_td"));
+    await screen.findByRole("region", { name: "Task brief" });
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), {
+      target: { value: "use the 0088 migration style" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() =>
+      expect(sayToNode).toHaveBeenCalledWith("run-1", "review_td", "use the 0088 migration style"),
+    );
+  });
+
+  test("a running task's sentence goes to its conversation, not to the engine", async () => {
+    render(wrap());
+    await screen.findByRole("region", { name: "Task conversation" });
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Message input" }), {
+      target: { value: "stop and check the fixtures" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    // The agent is reading that conversation right now and the message queues
+    // there; routing it through the engine would be a second way to say it.
+    await waitFor(() => expect(sendMessage).toHaveBeenCalled());
+    expect(sendMessage.mock.calls[0][0]).toBe("conv-td");
+    expect(sayToNode).not.toHaveBeenCalled();
   });
 
   test("a node key this run does not have is reported, not rendered blank", async () => {

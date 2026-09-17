@@ -163,8 +163,8 @@ def test_no_workflow_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_eighteen_routes(spec_doc: dict[str, Any]) -> None:
-    """A run's whole management plane, counted. A nineteenth arriving is a
+def test_the_management_plane_is_nineteen_routes(spec_doc: dict[str, Any]) -> None:
+    """A run's whole management plane, counted. A twentieth arriving is a
     decision, not an accident.
 
     It was thirteen while a run had a main thread of its own. Four inputs
@@ -175,9 +175,11 @@ def test_the_management_plane_is_eighteen_routes(spec_doc: dict[str, Any]) -> No
     against everything that is not this run's to read. The eighteenth takes a
     feedback edge (FR-025): the edges were in every template and no surface
     could cross one, which made "send work back" a promise the product did not
-    keep.
+    keep. The nineteenth is one sentence to one task (FR-068) — a run is driven
+    by talking, and until it existed a task could only be talked to during the
+    hours its turn was in flight.
     """
-    assert len(_declared_operations(spec_doc)) == 18
+    assert len(_declared_operations(spec_doc)) == 19
 
 
 def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]) -> None:

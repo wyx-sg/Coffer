@@ -344,3 +344,52 @@ def test_the_crossing_past_the_ceiling_answers_with_a_failed_run_and_no_task(
     body = response.json()
     assert body["task"] is None
     assert body["run"]["status"] == "failed"
+
+
+# --- saying something to a task ----------------------------------------------
+
+
+def _say(surface: Surface, run_id: str, node_key: str, text: str):
+    return surface.client.post(f"{_RUNS}/{run_id}/nodes/{node_key}/say", json={"text": text})
+
+
+def test_a_task_that_has_not_started_is_briefed_and_says_what_it_carries(
+    surface: Surface,
+) -> None:
+    run = started_run(surface.client)
+
+    response = _say(surface, run["id"], "write_code", "use the 0088 migration style")
+
+    assert response.status_code == 200, response.text
+    attempt = response.json()
+    assert attempt["attempt"] == 1
+    assert attempt["status"] == "pending"
+    assert attempt["instructions"] == "use the 0088 migration style"
+    # And the run's detail carries it too, so a page can show what is queued.
+    node = node_of(detail(surface.client, run["id"]), "write_code")
+    assert node["latest"]["instructions"] == "use the 0088 migration style"
+
+
+def test_talking_to_a_task_whose_turn_is_in_flight_is_409(surface: Surface) -> None:
+    run = started_run(surface.client)
+    act(surface.client, run["id"], "draft_td", "start", run["version"])
+
+    response = _say(surface, run["id"], "draft_td", "stop")
+    assert response.status_code == 409
+    assert code_of(response) == "WORKFLOW_ILLEGAL_TRANSITION"
+
+
+def test_saying_nothing_is_refused(surface: Surface) -> None:
+    run = started_run(surface.client)
+    assert _say(surface, run["id"], "write_code", "   ").status_code == 409
+
+
+def test_talking_to_a_task_carries_no_version_and_survives_the_run_moving(
+    surface: Surface,
+) -> None:
+    """FR-068: a sentence addressed to a named task means the same wherever the
+    run has got to, so there is no stale version to be refused for."""
+    run = started_run(surface.client)
+    act(surface.client, run["id"], "draft_td", "start", run["version"])  # version moves
+
+    assert _say(surface, run["id"], "write_code", "mind the fixtures").status_code == 200

@@ -70,6 +70,7 @@ class WorkflowAttemptRepo:
         conversation_id: str | None = None,
         summary: str | None = None,
         failure_reason: str | None = None,
+        instructions: str | None = None,
         tokens: int | None = None,
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
@@ -78,8 +79,8 @@ class WorkflowAttemptRepo:
 
         There is deliberately no way to clear a field back to NULL: an attempt
         only moves forward — it acquires a conversation, a summary, a reason it
-        failed — and a retry that wants a clean slate gets a new row, not this
-        one blanked.
+        failed, another line of what the developer told it — and a retry that
+        wants a clean slate gets a new row, not this one blanked.
         """
         values: dict[str, Any] = {}
         for column, value in (
@@ -87,6 +88,7 @@ class WorkflowAttemptRepo:
             ("conversation_id", conversation_id),
             ("summary", summary),
             ("failure_reason", failure_reason),
+            ("instructions", instructions),
             ("tokens", tokens),
             ("started_at", started_at),
             ("finished_at", finished_at),

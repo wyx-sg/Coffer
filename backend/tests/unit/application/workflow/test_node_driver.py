@@ -126,6 +126,8 @@ class FakeAttempt:
     attempt: int = 1
     status: str = "running"
     conversation_id: str | None = None
+    #: What the developer queued for this attempt before it opened (FR-068).
+    instructions: str | None = None
 
 
 def make_driver(

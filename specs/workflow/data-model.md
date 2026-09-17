@@ -119,7 +119,7 @@ Event types — a closed set, and the whole vocabulary:
 `run.completed`, `run.failed`, `run.budget_exceeded`,
 `node.started`, `node.output_ready`, `node.feedback_submitted`,
 `node.completed`, `node.failed`, `node.retried`, `node.skipped`,
-`node.restored`, `node.adhoc_added`,
+`node.restored`, `node.adhoc_added`, `node.briefed`,
 `approval.created`, `approval.approved`, `approval.rejected`,
 `approval.expired`, `artifact.added`.
 

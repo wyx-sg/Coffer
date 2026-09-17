@@ -41,6 +41,7 @@ DOCUMENTED_EVENT_TYPES = {
     "node.skipped",
     "node.restored",
     "node.adhoc_added",
+    "node.briefed",
     "approval.created",
     "approval.approved",
     "approval.rejected",

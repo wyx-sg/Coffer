@@ -236,10 +236,22 @@ class NodeOps:
         event_type: EventType,
         payload: dict[str, Any],
         actor: EventActor,
+        instructions: str | None = None,
     ) -> CommandResult:
-        """Open the next attempt at a node; never rewrite the last one (FR-022)."""
+        """Open the next attempt at a node; never rewrite the last one (FR-022).
+
+        ``instructions`` overrides what the new attempt opens with. Left alone
+        it carries the last attempt's brief forward, which is what a retry
+        means: the same work, tried again.
+        """
         number = check_attempt_ceiling(node.key, attempt.attempt, template.attempt_ceiling)
-        opened = await self.open_attempt(run.id, stage_key, node.key, number, attempt.instructions)
+        opened = await self.open_attempt(
+            run.id,
+            stage_key,
+            node.key,
+            number,
+            attempt.instructions if instructions is None else instructions,
+        )
         return await self.cmd.commit(
             run,
             [

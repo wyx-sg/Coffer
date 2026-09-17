@@ -120,6 +120,17 @@ class AdhocTaskIn(BaseModel):
     workdir: str | None = None
 
 
+class SayIn(BaseModel):
+    """One sentence to one task (FR-068).
+
+    No ``version``: this is addressed to a named task and means the same
+    wherever the run has got to, so it is outside the optimistic lock the way
+    mounting an input is.
+    """
+
+    text: str
+
+
 class SendBackIn(BaseModel):
     """Take a feedback edge out of ``from_stage`` (FR-025)."""
 
@@ -182,6 +193,10 @@ class NodeAttemptOut(BaseModel):
     conversation_id: str | None = None
     summary: str | None = None
     failure_reason: str | None = None
+    #: What the developer wrote for THIS attempt (FR-068) — the brief it opens
+    #: with, on top of whatever the template said. Readable so a task that has
+    #: not started can show what it has been told it will do.
+    instructions: str | None = None
     tokens: int = 0
     started_at: datetime | None = None
     finished_at: datetime | None = None

@@ -79,6 +79,27 @@ export function useAddAdhocTask(runId: string) {
 }
 
 /**
+ * Say something to one task (FR-068). What it means is the daemon's answer, so
+ * this hook carries no rules of its own: it sends the sentence and re-reads the
+ * run, because the sentence may have queued a brief, carried an attempt on, or
+ * opened the next one.
+ */
+export function useSayToTask(runId: string) {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: ({ nodeKey, text }: { nodeKey: string; text: string }) =>
+      workflowApi.sayToNode(runId, nodeKey, text),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: workflowRunKey(runId) });
+      void qc.invalidateQueries({ queryKey: workflowRunsKey });
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
  * Cross a feedback edge (FR-025): a task saying what is wrong lands in the
  * earlier stage. Nothing that already ran is reopened, so the invalidation is
  * the same one an added task does — the run has one more task than it had.

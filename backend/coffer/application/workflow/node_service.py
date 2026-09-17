@@ -23,7 +23,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from coffer.application.workflow import node_reports, node_tasks
+from coffer.application.workflow import node_reports, node_say, node_tasks
 from coffer.application.workflow.commands import (
     DEFAULT_ACTOR,
     ENGINE_ACTOR,
@@ -120,7 +120,9 @@ class WorkflowNodeService:
         apply_node_action(NodeStatus(attempt.status), action, node.type)
 
         if action is NodeAction.FEEDBACK:
-            return await self._feedback(run, node, stage_key, attempt, feedback, actor)
+            return await node_say.feedback(
+                ops, run, node, stage_key, attempt, feedback or "", actor
+            )
         if action is NodeAction.COMPLETE:
             return await self._complete(
                 run, template, node, stage_key, attempt, waive_artifacts, actor
@@ -206,38 +208,6 @@ class WorkflowNodeService:
         # honest is ``node_reports``, where a manual node always stops for the
         # developer rather than completing on its own.
         await ops.dispatch(result.run, stage_key, node, started or attempt, None)
-        return result
-
-    async def _feedback(
-        self,
-        run: RunRow,
-        node: Node,
-        stage_key: str,
-        attempt: AttemptRow,
-        text: str | None,
-        actor: EventActor,
-    ) -> CommandResult:
-        """More to do on the attempt already open — not a new try (FR-021)."""
-        ops = self._ops
-        if not text or not text.strip():
-            raise IllegalTransition(
-                f"node {node.key!r}", attempt.status, "feedback", (NodeAction.COMPLETE.value,)
-            )
-        running = await ops.attempts.update_attempt(attempt.id, status=NodeStatus.RUNNING.value)
-        result = await ops.cmd.commit(
-            run,
-            [
-                PendingEvent(
-                    event_type=EventType.NODE_FEEDBACK_SUBMITTED,
-                    stage_key=stage_key,
-                    node_key=node.key,
-                    payload={"attempt": attempt.attempt, "feedback": text},
-                )
-            ],
-            actor=actor,
-            attempt=running or attempt,
-        )
-        await ops.dispatch(result.run, stage_key, node, running or attempt, text)
         return result
 
     async def _complete(
@@ -338,6 +308,17 @@ class WorkflowNodeService:
     ) -> CommandResult:
         row = await self._ops.attempt_row(attempt_id)
         return await self.record_failure(row.run_id, row.node_key, reason=reason, detail=detail)
+
+    async def say(
+        self,
+        run_id: str,
+        node_key: str,
+        *,
+        text: str,
+        actor: EventActor = DEFAULT_ACTOR,
+    ) -> CommandResult:
+        """Say something to one task, whatever state it is in (FR-068)."""
+        return await node_say.say(self._ops, run_id, node_key, text=text, actor=actor)
 
     # -- feedback edges and ad-hoc work -----------------------------------
 

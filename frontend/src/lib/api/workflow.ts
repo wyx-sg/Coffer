@@ -31,6 +31,7 @@ export type Node = Schemas["NodeOut"];
 export type NodeStatus = Node["status"];
 export type NodeAttempt = Schemas["NodeAttemptOut"];
 export type AdhocTask = Schemas["AdhocTaskIn"];
+export type Say = Schemas["SayIn"];
 export type SendBack = Schemas["SendBackIn"];
 export type SendBackResult = Schemas["SendBackOut"];
 export type SendBackEdge = Schemas["SendBackEdgeOut"];
@@ -81,6 +82,18 @@ export const workflowApi = {
   // engine's and the CLI's, and the web UI drives a task by talking to it
   // (FR-063) rather than by pressing Retry. The route stays; this client does
   // not call it, so it does not carry a method for it.
+  /**
+   * Say something to one task, whatever state it is in (FR-068). The daemon
+   * decides what it means — a brief, more to do, or the next attempt — and
+   * answers with the attempt the sentence landed on. There is no `version`: a
+   * sentence addressed to a named task means the same wherever the run is.
+   */
+  sayToNode: (runId: string, nodeKey: string, text: string) =>
+    call<NodeAttempt>(`/workflow/runs/${enc(runId)}/nodes/${enc(nodeKey)}/say`, {
+      method: "POST",
+      body: { text } satisfies Say,
+    }),
+
   addAdhocTask: (runId: string, body: AdhocTask) =>
     call<NodeAttempt>(`/workflow/runs/${enc(runId)}/tasks`, { method: "POST", body }),
 

@@ -100,6 +100,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/runs/{run_id}/nodes/{node_key}/say": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Say something to one task, whatever state it is in.
+         * @description What one sentence means depends on where the task is (FR-068). Not
+         *     started: it is queued onto the attempt the task will open with, and
+         *     arrives in its brief. Waiting for review: the same attempt carries on
+         *     with more to do. Finished: the next attempt opens with it, bounded by
+         *     the template's ceiling.
+         *
+         *     Two states refuse with `409`, because something else owns the task: a
+         *     turn in flight (say it in the conversation, which queues it) and a
+         *     pending approval (decide it).
+         *
+         *     There is no `version`: a sentence addressed to a named task means the
+         *     same wherever the run has got to, so it is outside the optimistic lock
+         *     the way mounting an input is.
+         */
+        post: operations["sayToWorkflowNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/runs/{run_id}/tasks": {
         parameters: {
             query?: never;
@@ -526,6 +558,12 @@ export interface components {
             summary?: string | null;
             /** @enum {string|null} */
             failure_reason?: "interrupted" | "agent_error" | "missing_artifact" | "attempt_ceiling" | null;
+            /**
+             * @description What the developer wrote for THIS attempt (FR-068), on top of
+             *     whatever the template said. Readable so a task that has not started
+             *     can show what it has been told it will do.
+             */
+            instructions?: string | null;
             tokens?: number;
             /** Format: date-time */
             started_at?: string | null;
@@ -561,6 +599,10 @@ export interface components {
              *     a second repository is expressed.
              */
             workdir?: string | null;
+        };
+        SayIn: {
+            /** @description What the developer wants this task to know. */
+            text: string;
         };
         SendBackIn: {
             version: number;
@@ -921,6 +963,38 @@ export interface operations {
         };
         responses: {
             /** @description The node's latest attempt after the action. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeAttemptOut"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    sayToWorkflowNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id. */
+                run_id: components["parameters"]["RunId"];
+                /** @description The node's key in the template, or `adhoc:<slug>`. */
+                node_key: components["parameters"]["NodeKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SayIn"];
+            };
+        };
+        responses: {
+            /** @description The attempt the sentence landed on. */
             200: {
                 headers: {
                     [name: string]: unknown;

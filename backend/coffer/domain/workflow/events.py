@@ -68,6 +68,11 @@ class EventType(StrEnum):
     NODE_SKIPPED = "node.skipped"
     NODE_RESTORED = "node.restored"
     NODE_ADHOC_ADDED = "node.adhoc_added"
+    #: The developer wrote something for a task that has not started yet — a
+    #: brief, queued onto the attempt the task will open with (FR-068). It is
+    #: NOT a position event: saying what a later task should do does not move
+    #: the run to it.
+    NODE_BRIEFED = "node.briefed"
     APPROVAL_CREATED = "approval.created"
     APPROVAL_APPROVED = "approval.approved"
     APPROVAL_REJECTED = "approval.rejected"

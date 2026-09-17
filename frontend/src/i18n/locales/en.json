@@ -1967,6 +1967,10 @@
       "notePlaceholder": "You are writing the brief of the task that will fix it. What did you find, and where?",
       "submit": "Send back to {{stage}}",
       "ceiling": "This send-back has been used as many times as the workflow allows, so the run failed instead of going round again."
+    },
+    "brief": {
+      "label": "Task brief",
+      "queuedTitle": "What this task has been told"
     }
   }
 }

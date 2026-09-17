@@ -126,6 +126,7 @@ class AttemptRepoPort(Protocol):
         conversation_id: str | None = None,
         summary: str | None = None,
         failure_reason: str | None = None,
+        instructions: str | None = None,
         tokens: int | None = None,
         started_at: datetime | None = None,
         finished_at: datetime | None = None,

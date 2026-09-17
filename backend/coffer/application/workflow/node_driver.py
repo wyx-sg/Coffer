@@ -252,6 +252,7 @@ def _request_for(dispatch: NodeDispatch) -> NodeContextRequest:
         node=dispatch.node,
         attempt=dispatch.attempt.attempt,
         inputs=parse_inputs(dispatch.run.inputs),
+        instructions=dispatch.attempt.instructions,
     )
 
 

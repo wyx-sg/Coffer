@@ -46,9 +46,20 @@ interface Props {
   runId: string;
   /** The attempt whose approvals belong in this thread (FR-039). */
   attemptId: string | null | undefined;
+  /**
+   * Where a typed sentence goes when the task's turn is NOT in flight.
+   *
+   * Only a running task takes a message straight to its conversation, where it
+   * queues server-side for the agent already reading it. Every other state —
+   * waiting for review, completed, failed — has no turn to queue against, so
+   * the sentence goes to the engine, which decides whether it carries the
+   * attempt on or opens the next one (FR-068). Left undefined, everything goes
+   * to the conversation.
+   */
+  onSay?: (text: string) => void;
 }
 
-export function NodeThread({ conversationId, ownedHere, runId, attemptId }: Props) {
+export function NodeThread({ conversationId, ownedHere, runId, attemptId, onSay }: Props) {
   const { t } = useTranslation();
   const turn = useChatTurn(conversationId);
   const { messages, isPending, error } = useMessageThread(
@@ -105,7 +116,7 @@ export function NodeThread({ conversationId, ownedHere, runId, attemptId }: Prop
           // Never disabled by streaming: a message sent mid-turn queues
           // server-side, and a node's turn can run for hours.
           <Composer
-            onSend={(text) => void turn.send(text)}
+            onSend={onSay ?? ((text) => void turn.send(text))}
             streaming={turn.isStreaming}
             onStop={() => void turn.interrupt()}
           />

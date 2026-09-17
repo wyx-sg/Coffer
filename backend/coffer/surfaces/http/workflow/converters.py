@@ -170,6 +170,7 @@ def attempt_out(row: AttemptRow) -> NodeAttemptOut:
         conversation_id=row.conversation_id,
         summary=row.summary,
         failure_reason=row.failure_reason,
+        instructions=row.instructions,
         tokens=row.tokens,
         started_at=row.started_at,
         finished_at=row.finished_at,

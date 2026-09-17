@@ -1,8 +1,9 @@
 """``/api/v1/workflow/runs/{run_id}/nodes`` and ``…/tasks`` — one node at a time.
 
-Three routes: the six node actions (FR-021), the ad-hoc task that joins a stage
-with instructions of the developer's own (FR-028), and the feedback edge that
-sends work back to an earlier stage by adding a task there (FR-025).
+Four routes: the six node actions (FR-021), one sentence to a task whatever
+state it is in (FR-068), the ad-hoc task that joins a stage with instructions of
+the developer's own (FR-028), and the feedback edge that sends work back to an
+earlier stage by adding a task there (FR-025).
 
 Neither route decides anything. Which actions are legal, what an action leaves
 behind, whether a required artifact may be waived and where the ceiling is are
@@ -34,6 +35,7 @@ from coffer.surfaces.http.workflow.schemas import (
     AdhocTaskIn,
     NodeActionIn,
     NodeAttemptOut,
+    SayIn,
     SendBackIn,
     SendBackOut,
 )
@@ -71,6 +73,30 @@ async def act_on_node(
         # attempt to answer with, and the run's new status is the answer.
         raise IllegalTransition(f"run {run_id}", result.run.status, f"node.{body.action.value}", ())
     return attempt_out(row)
+
+
+@router.post("/runs/{run_id}/nodes/{node_key}/say", response_model=NodeAttemptOut)
+async def say_to_node(
+    run_id: str,
+    node_key: str,
+    body: SayIn,
+    nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> NodeAttemptOut:
+    """Say something to one task, whenever (FR-068).
+
+    What it means depends on where the task is, and the service decides: a task
+    that has not started is briefed, one waiting for review carries on, one
+    that finished opens its next attempt. A task whose turn is in flight is the
+    agent's — that sentence goes to the conversation, not here.
+
+    The answer is the attempt the sentence landed on, which is how a caller
+    learns whether it was queued onto the same one or opened the next.
+    """
+    result = await nodes.say(run_id, node_key, text=body.text, actor=event_actor(actor))
+    if result.attempt is None:  # pragma: no cover - every branch answers with an attempt
+        raise IllegalTransition(f"run {run_id}", "say", node_key, ())
+    return attempt_out(result.attempt)
 
 
 @router.post(

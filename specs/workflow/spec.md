@@ -236,6 +236,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-066**: A disabled workflow MUST start no new runs, and the refusal MUST come from the daemon rather than from one client's list — a rule that lives only in the web UI is not a rule. Runs already created from it MUST be unaffected: they froze their own snapshot (FR-011), so switching a workflow off retires it from the menu and does not reach into work already under way.
 - **FR-065**: A mounted external reference MUST be reported with what it points at — Confluence, Jira, a Google doc — when that can be recognised from its address, and with nothing when it cannot. The node's context MUST carry it, so that "go and read this" resolves to one tool rather than a guess. It MUST be derived on read rather than stored, so a reference mounted before its provider was recognisable is recognised without a migration.
 - **FR-064**: A file in a run's context MUST be readable from the app: an uploaded input and a produced artifact by their contents, a mounted collection by its own page, and an external reference by its address. Reading MUST be bounded — a path outside the run's own directory is refused, a long file is returned as its head and says so, and bytes that are not text are reported as such rather than rendered.
+- **FR-068**: The developer MUST be able to say something to any task at any point in its life, in ordinary words, in one place. Before the task starts, what they say MUST be queued onto the attempt it opens with and reach its brief; while it waits for review, it MUST carry that attempt on; once it has finished, it MUST open the task's next attempt within the ceiling. A task whose turn is in flight or whose approval is pending MUST say so rather than accept it silently.
 - **FR-063**: A task's page MUST offer no control that advances or alters the run. Retrying, redirecting and correcting are said in the task's conversation, where what is said also reaches every later task (FR-029). Deciding an approval is the one exception (FR-039), because a payload cannot honestly be approved by typing into a composer.
 
 ### Key Entities
@@ -350,6 +351,18 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **Given** the web UI
 - **When** the developer looks for the shape of work as opposed to a delivery of it
 - **Then** the template is listed among the vault's resources and the run is not, and neither list is reachable only through the other (FR-059, FR-001)
+
+### Scenario: a task can be told something before it starts
+
+- **Given** a task the run has not reached yet
+- **When** the developer writes what it should do
+- **Then** what they wrote is carried on the attempt the task opens with and is part of the brief it reads (FR-068, FR-029)
+
+### Scenario: talking to a finished task reopens it
+
+- **Given** a task that has completed
+- **When** the developer says it is not right
+- **Then** the task's next attempt opens carrying what they said, bounded by the same ceiling as every other loop (FR-068, FR-026)
 
 ### Scenario: a task is driven by talking to it, not by buttons
 
