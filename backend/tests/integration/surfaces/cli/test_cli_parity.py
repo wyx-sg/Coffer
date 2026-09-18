@@ -44,7 +44,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "open": set(),
     # ``rename`` is here, on the KIND-AGNOSTIC group, because that is where
     # renaming now lives: the name is a label on every resource, so moving
-    # it is one command for all nine kinds rather than a per-kind route
+    # it is one command for every kind rather than a per-kind route
     # only ``provider`` ever grew (ADR resource-identity-is-an-immutable-uid).
     "resource": {"list", "show", "rename", "enable", "disable", "delete"},
     "scope": {"show", "set", "clear"},
@@ -164,6 +164,31 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # an operator most needs.
     "engine timeout": {"show", "set", "default"},
     "engine transcribe-model": {"show", "set", "clear"},
+    # spec workflow. Approvals sit at the top of the group rather than under a
+    # sub-group of their own: `coffer workflow approve <id>` is what a person
+    # reaches for when a notification says something is waiting.
+    "workflow": {"approvals", "approve", "reject", "run", "node", "template"},
+    "workflow run": {
+        "abort",
+        "artifacts",
+        "create",
+        "delete",
+        "events",
+        "inputs",
+        "list",
+        "pause",
+        "promote",
+        "relabel",
+        "resume",
+        "show",
+        "start",
+    },
+    # There is no `run say`: a run has no conversation of its own (FR-030), so
+    # redirecting one is said in the task's own conversation through the chat
+    # surface, not through a command here.
+    "workflow run inputs": {"add", "list", "rm", "upload"},
+    "workflow node": {"act", "add"},
+    "workflow template": {"add", "list", "rm", "show", "update"},
 }
 
 #: The groups whose surface is options rather than subcommands. Each is

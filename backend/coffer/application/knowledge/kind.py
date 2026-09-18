@@ -25,6 +25,12 @@ Two defaults are worth naming, because an earlier design set them otherwise:
   used either: every ``knowledge`` row in the real vault had an empty scope.
 - There is no ``on_update_config`` — nothing in the config can change, because
   there is nothing in the config.
+
+``on_delete`` and ``on_enabled_changed`` both end by telling the service its
+catalogue moved. The catalogue is carried by Coffer's own skill (FR-034), and
+that skill is a file: switching a collection off changes nothing an agent can
+see until the file is rewritten, so a re-render that waited for the next boot
+would leave the agent reading a catalogue the owner had already changed.
 """
 
 from __future__ import annotations
@@ -51,6 +57,10 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
                 extra={"collection": resource.name},
                 exc_info=True,
             )
+        await service.catalogue_changed()
+
+    async def _on_enabled_changed(resource: Resource) -> None:
+        await service.catalogue_changed()
 
     async def _on_rename(resource: Resource, new_name: str) -> None:
         """Carry the collection's directory to the new label.
@@ -81,5 +91,8 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         config_schema=KnowledgeConfig,
         on_delete=_on_delete,
         on_rename=_on_rename,
+        # ``enabled`` is this kind's only switch, and it decides what the
+        # delivered catalogue names — so it has to reach the file.
+        on_enabled_changed=_on_enabled_changed,
         generic_create_allowed=False,
     )

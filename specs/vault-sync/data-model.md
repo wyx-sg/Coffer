@@ -244,7 +244,7 @@ one:
 | | before | after |
 | --- | --- | --- |
 | unrestricted | `null` | `null` |
-| agents only | `{"agents": ["claude-code"], "machines": null}` | `{"agents": ["claude-code"]}` (later rewritten to agent uids by migration 0090) |
+| agents only | `{"agents": ["claude-code"], "machines": null}` | `{"agents": ["claude-code"]}` (later rewritten to agent uids by migration 0096) |
 | dormant | `{"agents": [], "machines": null}` | `{"agents": []}` |
 | named machines, this one among them | `{"agents": A, "machines": [… this id …]}` | `{"agents": A}` |
 | named machines, this one not among them | `{"agents": A, "machines": [… other ids …]}` | `{"agents": []}` |

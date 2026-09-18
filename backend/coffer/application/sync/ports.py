@@ -148,7 +148,13 @@ class BundlePort(Protocol):
     def mirror_trees_out(self) -> None:
         """Converge the bundle's ``knowledge/`` and ``skills/`` on the live
         trees. Symlinks and anything under a ``.git`` directory are skipped
-        and logged, never copied."""
+        and logged, never copied.
+
+        An implementation MAY hold back subtrees that are derived output — a
+        folder every machine regenerates for itself (spec vault-sync FR-093).
+        Held back means invisible in both directions: not copied out, and not
+        removed from the tree either, so a copy an older build published is
+        left inert rather than staged as a deletion the fleet would act on."""
 
     def tree_counts(self) -> list[tuple[str, int]]:
         """(subdir, file count) for each mirrored tree present in the bundle,
@@ -157,7 +163,11 @@ class BundlePort(Protocol):
     def write_manifest(self, manifest: Manifest) -> None: ...
 
     def write_resource_docs(
-        self, docs: Sequence[Mapping[str, object]], *, unserializable: Sequence[str] = ()
+        self,
+        docs: Sequence[Mapping[str, object]],
+        *,
+        unserializable: Sequence[str] = (),
+        withheld: Sequence[str] = (),
     ) -> None:
         """Converge ``resources/`` on ``docs`` — one deterministic YAML file
         per doc at ``resources/<kind>/<uid>.yaml``, writing only what changed
@@ -165,8 +175,12 @@ class BundlePort(Protocol):
 
         Filed under the resource's uid rather than its name, so a rename edits
         one file instead of removing one and adding another
-        (ADR resource-identity-is-an-immutable-uid); ``unserializable`` is
-        spelled the same way, ``<kind>/<uid>``."""
+        (ADR resource-identity-is-an-immutable-uid).
+
+        ``unserializable`` and ``withheld`` are both ``<kind>/<uid>`` refs
+        absent from ``docs`` for a reason that is not a deletion, so their
+        paths survive: one could not be rendered, the other declined to travel
+        row by row (``Kind.converges_row``)."""
 
     def read_resource_docs(self) -> list[ResourceDoc]: ...
 

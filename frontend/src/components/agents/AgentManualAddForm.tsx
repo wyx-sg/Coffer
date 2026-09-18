@@ -10,7 +10,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import { FolderPickerField } from "@/components/agents/FolderPickerField";
+import { FolderPickerField } from "@/components/FolderPickerField";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {

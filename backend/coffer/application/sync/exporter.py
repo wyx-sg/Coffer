@@ -8,10 +8,10 @@ been deliberately deleted. That rule is normative (spec vault-sync "Why deletion
 is safe") and it lives in :mod:`coffer.infrastructure.sync.tree_mirror`; what
 this module owes it is an honest and *complete* account of what this vault
 publishes, area by area, on every export. Complete means every resource of
-every kind that converges: what is held back is a resource's reach and a
-non-converging kind's rows, and both are held back the same way on every
-export, so an absence in the tree is always a deletion somebody made rather
-than a document that went missing.
+every kind that converges: what is held back is a resource's reach, a
+non-converging kind's rows, and the rows a converging kind declines one by one,
+and each is held back the same way on every export, so an absence in the tree
+is always a deletion somebody made rather than a document that went missing.
 
 Credentials are omitted unless the remote is configured to carry them, and even
 then only Fernet ciphertext travels; the master key is never written.
@@ -37,7 +37,8 @@ from coffer.domain.sync.serialization import resource_to_doc
 # which is the guard that objection was missing, so it travels like everything
 # else.
 #
-# What decides now is ``Kind.converges``, declared where the kind is defined.
+# What decides now is ``Kind.converges``, declared where the kind is defined,
+# refined per row by ``Kind.converges_row``.
 # The one kind that answers False is ``memory``: a partition row is derived
 # from the agents installed on THIS machine, and spec memory FR-016 forbids it
 # converging for a concrete reason — the second machine would show a partition
@@ -51,6 +52,26 @@ from coffer.domain.sync.serialization import resource_to_doc
 # deletion. That is the cleanup rather than a loss — nothing at the other end
 # is derived from them — but it is a deletion, so the publish-side guard is
 # what stands between a mid-upgrade fleet and a surprise.
+#
+# ``Kind.converges_row`` is a refinement of the same rule and NOT the return of
+# the list, for the reason that made the list wrong: the list named kinds, in
+# the sync layer, so the sync layer had to be edited whenever a kind changed
+# its mind, and it could only ever speak about a kind as a whole. This still
+# lives on the kind and this module still only asks — ``converges_row`` merely
+# lets a kind that mostly travels say that one of its rows is derived output.
+# `skill` is that kind: every skill a person imported travels, and Coffer's own
+# `coffer-guide` does not, because it is rendered here from the running build
+# and this machine's own reach. No name and no table appears below; the answer
+# comes out of the row's own config.
+#
+# Its withheld rows are the one place the "publish the absence as a deletion"
+# rule above is suspended, and that suspension is deliberate. A withheld KIND's
+# document at the other end is backed by nothing (its files never travelled),
+# so clearing it is housekeeping. A withheld ROW's document at the other end is
+# backed by a live master folder that machine wrote itself, and an older build
+# there has no row-level rule to protect it — it would take the deletion and
+# tear the folder down. So those paths are handed to the bundle as protected
+# and simply stop being touched. The stale copies go inert rather than away.
 
 
 class SyncExporter:
@@ -64,11 +85,15 @@ class SyncExporter:
     re-answer, silently and every round, a question the machine at the other
     end had already answered for itself.
 
-    Beyond that, only a kind that declares ``converges=False`` is held back —
-    ``memory``, whose rows each machine derives for itself (spec memory FR-016). Every other kind is
-    exported, ``channel`` included: a channel's
-    own config now names the machine that runs it, so the document can travel
-    without the adapter travelling with it."""
+    Beyond that, a kind that declares ``converges=False`` is held back whole —
+    ``memory``, whose rows each machine derives for itself (spec memory FR-016)
+    — and a kind that declares ``converges_row`` may hold back individual rows
+    of its own: `skill` does, for Coffer's generated `coffer-guide`, which
+    every machine renders for itself from the live catalogue and its own reach
+    (spec vault-sync FR-093). Every other kind and every other row is exported,
+    ``channel`` included: a channel's own config now names the machine that
+    runs it, so the document can travel without the adapter travelling with
+    it."""
 
     def __init__(
         self,
@@ -87,11 +112,18 @@ class SyncExporter:
         summary = ExportSummary(path=bundle.path, credentials_included=with_credentials)
         docs: list[dict[str, object]] = []
         unserializable: list[str] = []
+        withheld: list[str] = []
         for r in await self._resources.list():
             # The flag only ever withholds: a kind nobody declared anything
             # about keeps exporting, so this cannot quietly stop publishing a
             # kind by failing to recognise it.
             if not self._resources.converges(r.kind):
+                continue
+            # A row of a converging kind that the kind itself declines to
+            # publish. Its path is protected below rather than left to be
+            # converged away — see the header.
+            if not self._resources.converges_row(r.kind, r.config):
+                withheld.append(f"{r.kind}/{r.uid}")
                 continue
             try:
                 config = dict(r.config)
@@ -144,7 +176,14 @@ class SyncExporter:
 
         # All filesystem IO runs off the event loop.
         await asyncio.to_thread(
-            self._dump, bundle, docs, state_docs, blobs, with_credentials, unserializable
+            self._dump,
+            bundle,
+            docs,
+            state_docs,
+            blobs,
+            with_credentials,
+            unserializable,
+            withheld,
         )
 
         summary.areas.append(AreaCount("resources", len(docs)))
@@ -164,10 +203,11 @@ class SyncExporter:
         blobs: dict[str, bytes],
         with_credentials: bool,
         unserializable: list[str],
+        withheld: list[str],
     ) -> None:
         bundle.open_for_write()
         bundle.write_manifest(Manifest())
-        bundle.write_resource_docs(docs, unserializable=unserializable)
+        bundle.write_resource_docs(docs, unserializable=unserializable, withheld=withheld)
         for area, area_docs in state_docs:
             bundle.write_state_docs(area, area_docs)
         bundle.mirror_trees_out()

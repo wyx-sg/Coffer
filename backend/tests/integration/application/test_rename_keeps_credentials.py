@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.mcp.kind import make_mcp_kind
-from coffer.application.resource_kind_hooks import extract_credential_refs
+from coffer.application.resource_kind_ops import credential_refs
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Kind
 from coffer.infrastructure.persistence.base import Base
@@ -100,7 +100,7 @@ async def _resolves(svc: ResourceService, store: _Store, uid: str) -> dict[str, 
     through the kind's own extractor and then the store, never by string."""
     resource = await svc.get(uid)
     kind_def = svc._kinds[resource.kind]
-    refs = extract_credential_refs(kind_def, resource.config)
+    refs = credential_refs(kind_def, resource.config)
     return {key: store.get(ref) for key, ref in refs.items() if store.get(ref) is not None}
 
 

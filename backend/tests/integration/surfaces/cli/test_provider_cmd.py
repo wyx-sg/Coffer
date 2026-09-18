@@ -276,7 +276,7 @@ def test_cli_use_builtin_rejects_a_wire_that_is_not_one(provider_daemon):
 
 
 def test_cli_edit_corrects_a_mis_probed_wire(provider_daemon):
-    """`PATCH /providers/{name}` has accepted `protocol` since the probe could
+    """`PATCH /providers/{uid}` has accepted `protocol` since the probe could
     be wrong; the CLI could not send it, and its help said the field was
     immutable — so a terminal-only user had no way to correct a wrong wire at
     all, and was told the correction did not exist."""

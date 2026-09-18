@@ -35,7 +35,7 @@ class MCPInvocationModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    #: WHICH server, by identity (migration 0091). The log is history, so it has
+    #: WHICH server, by identity (migration 0097). The log is history, so it has
     #: to survive the rename that a name-keyed column would have split it across.
     #: Not a foreign key: a deleted server's invocations stay readable, and two
     #: reserved non-uid values live here — see ``domain.mcp.capability``.

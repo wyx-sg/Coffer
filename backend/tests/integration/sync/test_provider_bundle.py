@@ -23,7 +23,7 @@ import yaml
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.resource_service import ResourceService
-from coffer.application.sync.appliers import ResourceApplier
+from coffer.application.sync.appliers_resource import ResourceApplier
 from coffer.application.sync.exporter import SyncExporter
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope

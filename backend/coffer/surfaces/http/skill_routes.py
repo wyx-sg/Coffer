@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, Response, status
 from pydantic import BaseModel, Field
 
+from coffer.application.skill.builtin_seed import is_builtin
 from coffer.application.skill.service import SkillService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
@@ -62,6 +63,12 @@ class SkillOut(BaseModel):
     name: str
     description: str
     source: dict[str, Any]
+    # Coffer's own: the folder is rewritten from the running build at every
+    # boot, so deleting it is refused (409 RESOURCE_PROTECTED) while enabling,
+    # disabling and narrowing its scope stay the owner's to decide. The surface
+    # carries it as its own flag rather than making every reader re-derive it
+    # from ``source["type"]``.
+    builtin: bool
     # The two halves of the delivery predicate: a skill reaches an agent iff
     # ``enabled`` and that agent is inside ``scope``
     # (None = every agent; [] matches nothing).
@@ -172,6 +179,7 @@ async def _to_skill_out(
         name=r.name,
         description=cfg.skill_md_description,
         source=cfg.source.model_dump(mode="json"),
+        builtin=is_builtin(r.config),
         enabled=r.enabled,
         scope=ScopeOut.of(r.scope),
         version_hash=cfg.version_hash,

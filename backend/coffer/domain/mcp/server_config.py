@@ -68,7 +68,24 @@ Transport = Annotated[
 ]
 
 
+#: Whether a tool changes anything outside Coffer. Only two answers are useful:
+#: the workflow gate holds a ``write`` and lets a ``read`` past, and there is no
+#: third behaviour for a third value to select.
+ToolWriteClass = Literal["read", "write"]
+
+
 class MCPServerConfig(BaseModel):
     transport: Transport
     spawn_timeout_seconds: int = Field(default=30, ge=5, le=120)
     request_timeout_seconds: int = Field(default=120, ge=5, le=1800)
+    # Per-tool write-class judgements, keyed by this server's own *unprefixed*
+    # tool name (``create_issue``, not ``jira__create_issue``). A tool absent
+    # from the map is treated as write-class by the workflow gate, and the
+    # developer's answer to the first approval writes the entry, so the same
+    # tool is not asked about twice (spec workflow FR-036).
+    #
+    # It lives on the server rather than in a table of its own because whether
+    # ``create_issue`` writes is a fact about the tool, not about a machine —
+    # as resource config it travels with sync, which is the behaviour that
+    # fact deserves.
+    tool_write_class: dict[str, ToolWriteClass] = Field(default_factory=dict)

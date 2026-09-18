@@ -50,6 +50,10 @@ acceptance(
       // Agents
       /^Agents$/i,
       /^Chat$/i,
+      // A RUN is operational state rather than a vault asset, so it sits here
+      // beside Chat — both are things you do WITH an agent — and the WORKFLOW
+      // it runs sits under Resources with the other kinds.
+      /^Runs$/i,
       // Resources — one per resource kind with a list UI
       /^MCP servers$/i,
       /^Skills$/i,
@@ -57,15 +61,16 @@ acceptance(
       /^Memory$/i,
       /^Model providers$/i,
       /^Channels$/i,
+      /^Workflows$/i,
       // System
       /^Activity$/i,
       /^Sync$/i,
       /^Settings$/i,
     ];
     // Scoped to the sidebar's own <nav>, reached through the labelled <aside>
-    // around it: the count assertion below has to see the eleven NAV_GROUPS
-    // rows and nothing else — not the logo link, which sits in the aside but
-    // outside the nav.
+    // around it: the count assertion below has to see the NAV_GROUPS rows and
+    // nothing else — not the logo link, which sits in the aside but outside
+    // the nav.
     const nav = page
       .getByRole("complementary", { name: /Primary navigation/i })
       .getByRole("navigation");
@@ -74,7 +79,7 @@ acceptance(
         nav.getByRole("link", { name: label }).first(),
       ).toBeVisible();
     }
-    // The upper bound: no twelfth entry.
+    // The upper bound: nothing in the sidebar this list does not name.
     await expect(nav.getByRole("link")).toHaveCount(SIDEBAR_LABELS.length);
 
     // Grouped under Agents / Resources / System headings.

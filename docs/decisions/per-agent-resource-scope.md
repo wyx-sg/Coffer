@@ -52,7 +52,7 @@ resource's **reach**, and reach is machine-local.
    [Resource Identity Is an Immutable `uid`](./resource-identity-is-an-immutable-uid.md):
    a scope is a reference to another resource, and a name is a label its owner
    may change. While it held names, renaming an agent silently emptied every
-   scope naming it. Migration `0090` rewrote the stored lists. Nothing else in
+   scope naming it. Migration `0096` rewrote the stored lists. Nothing else in
    this item changes — read `"claude-code"` above as that agent's uid.]
 
    - `None` is unrestricted; a list restricts to it.
@@ -407,7 +407,7 @@ resource's **reach**, and reach is machine-local.
 - **2026-09-18, later the same day** — The scope's allow-list stops holding
   agent **names** and holds agent **uids**
   ([Resource Identity Is an Immutable `uid`](./resource-identity-is-an-immutable-uid.md),
-  migration `0090`). Nothing about the decision changes: one nullable
+  migration `0096`). Nothing about the decision changes: one nullable
   allow-list, `is_active(scope, agent)` the only predicate, machine-local,
   per-kind enforcement seams. What changes is what the list points at, and it
   closes two holes this ADR had lived with — renaming an agent silently emptied

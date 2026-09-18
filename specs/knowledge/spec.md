@@ -16,7 +16,7 @@
 1. **Sources are truth; topics are derived.** Every topic document MUST be reconstructible from the sources behind it. A topic that is not is a defect.
 2. **Write is split.** `sources/` is written only by a person, an upload, or `coffer__write`. `topics/` is written only by the curation pass. There is no third writer of either.
 3. **A topic MUST NOT reference another file by name.** Topic paths are chosen by curation and change as the corpus is reorganised; a name written into prose is a link that rots. Name the subject, not the file.
-4. **Retrieval is the agent's own.** Coffer exposes no tool for reading, listing, grepping or searching knowledge. It delivers a skill carrying a catalogue and an absolute path; the agent reads the files with the tools it already has.
+4. **Retrieval is the agent's own.** Coffer exposes no tool for reading, listing, grepping or searching knowledge. The catalogue and the path ride in Coffer's own delivered skill, `coffer-guide`; the agent reads the files with the tools it already has.
 
 ## What this layer is not
 
@@ -62,9 +62,9 @@ The developer drops a Markdown file into `sources/` from Finder, corrects a wron
 
 ### User Story 5 — The agent knows what is in the corpus, not merely that it exists (Priority: P1)
 
-A skill Coffer delivers names the domains the corpus covers in its description — the part that is always in the agent's context — and carries the full catalogue in its body. It arrives through the same channel that already delivers Coffer's other skills, so every managed agent gets it without a hook and without anything being written into the agent's own memory.
+A skill Coffer delivers names the domains the corpus covers in its description — the part that is always in the agent's context — and carries the full catalogue in its body, after Coffer's own manual. It is a registered skill like any other, so it arrives through exactly the machinery that already delivers the user's own skills, and every managed agent gets it without a hook and without anything being written into the agent's own memory.
 
-**Independent Test**: with two collections and a managed agent bound, confirm the skill in that agent's directory is a real file (not a shared link), that its description names the collections' subjects, and that its body lists each topic document.
+**Independent Test**: with two collections and a managed agent bound, confirm the agent's `skills/coffer-guide` is the ordinary managed link into the master folder, that its description names the collections' subjects, and that its body lists each topic document.
 
 ### User Story 6 — Knowledge arrives through a conversation (Priority: P1)
 
@@ -134,32 +134,76 @@ A source says a service counts daily actives with a plain Set; the topic documen
 
 - **Given** a disabled `shopee` collection and an enabled `personal` one, both
   holding topic documents
-- **When** the skill is rendered for each of two agents and delivered
-- **Then** neither copy names `shopee`, its catalogue, or any path inside it
-- **And** both copies name `personal` and list its catalogue — `enabled` is the
-  only thing that decides, and it decides the same way for every agent
+- **When** the guide skill is re-rendered and seeded into its master folder
+- **Then** the master `SKILL.md` names neither `shopee`, its catalogue, nor any
+  path inside it
+- **And** it names `personal` and lists its catalogue — `enabled` is the only
+  thing that decides, and, because every agent reads the one master, it decides
+  the same way for every agent
 
-### Scenario: the two agents' skill files are independent copies
+### Scenario: Coffer's own skill is an ordinary skill resource
 
-- **Given** both agents registered, a symlink left at one agent's
-  `skills/coffer-knowledge` by the previous shared-master delivery, and the
-  knowledge skill delivered to each
-- **When** each agent's `<config_dir>/skills/coffer-knowledge/SKILL.md` is read
-- **Then** neither is a symlink, the stale link has been replaced rather than
-  written through, and editing one does not change the other — the two copies
-  carry the same text, and they are still two files, so one can be re-rendered,
-  staled or removed without reaching through into the other
+- **Given** a daemon starting with a collection holding topic documents
+- **When** the boot refresh runs
+- **Then** there is one `coffer-guide` master folder under `~/.coffer/skills/`
+  and one `skill:coffer-guide` resource row carrying the `builtin` source, and
+  the skills listing shows it beside the user's imported skills
+- **And** this layer has written nothing into any agent's own skill directory
+  itself, and nothing into any agent's memory files
+
+### Scenario: every agent reaches the guide through the one master folder
+
+- **Given** two registered agents and the `coffer-guide` skill seeded
+- **When** each agent's `<config_dir>/skills/coffer-guide` is inspected
+- **Then** each is the ordinary Coffer-managed link into
+  `~/.coffer/skills/coffer-guide/`, not a directory of real bytes
+- **And** a re-render that changes the catalogue changes what both agents read
+  in one write, while narrowing the skill's scope to one agent reclaims only
+  the other agent's link and leaves the master untouched
 
 ### Scenario: the skill body carries the catalogue and the absolute root
 
 - **Given** a collection holding three topic documents
-- **When** the skill is rendered for an agent
+- **When** the skill is rendered
 - **Then** its body carries each document's collection-relative path, title and
-  description, and the absolute path of the knowledge root, and it instructs
-  the agent to read those files with its own tools
+  description, and the path of the knowledge root, and it instructs the agent
+  to read those files with its own tools
 - **And** the frontmatter `description` names the collection's subject, taken
   from the collection's own `README.md`, so a model matching on it has
   something to match
+
+### Scenario: one skill carries both Coffer's manual and the catalogue
+
+- **Given** a rendered `coffer-guide` `SKILL.md`
+- **When** its frontmatter and its body are read
+- **Then** the description names Coffer and its built-in tools as well as the
+  enabled collections' subjects, and is within 1024 characters — a catalogue
+  too large to fit drops whole collection subjects from the tail rather than
+  ending mid-sentence
+- **And** the body carries the manual first — the four built-in tools, the
+  tiering contract, that Coffer never writes an agent's memory, and that no
+  Coffer tool waits on an approval — and the catalogue after it, in one file
+
+### Scenario: the rendered skill is byte-identical on two machines
+
+- **Given** the same build and the same catalogue rendered twice, once with the
+  knowledge root at each of two different home directories, and once again with
+  the root explicitly relocated
+- **When** the two default-placed renderings are compared byte for byte
+- **Then** they are identical, and the knowledge root appears in its
+  `~`-relative form rather than as either home's absolute path
+- **And** the relocated root is written out in full, and the skill's stored
+  config carries no timestamp of when it was generated
+
+### Scenario: the handshake names Coffer's tools and points at the skill
+
+- **Given** a real daemon driven over its `/mcp` endpoint by the MCP SDK
+- **When** the client initializes, both with upstream tools hidden and with
+  none hidden
+- **Then** the `instructions` text is within its character cap, names
+  `coffer__write`, `coffer__recall`, `coffer__diagnose` and
+  `coffer__search_tools`, and points at the `coffer-guide` skill for the rest
+- **And** it names no retrieval tool and carries no collection catalogue
 
 ### Scenario: an upload lands both the original and its text in sources
 
@@ -310,6 +354,21 @@ A source says a service counts daily actives with a plain Set; the topic documen
 - **And** the collection's `README.md` stays at the collection root, outside
   both lanes
 
+### Scenario: migration removes the retired knowledge skill and spares a foreign folder
+
+- **Given** two registered agents, one holding the old generated delivery at
+  `<config_dir>/skills/coffer-knowledge` as a directory of real bytes and the
+  other holding it as a symlink left by the delivery before it, and a third
+  agent whose `skills/coffer-knowledge` is a folder a person put there, which
+  carries neither of the two files the generated delivery always wrote
+- **When** the database is upgraded
+- **Then** the first two are gone from those agents' skill directories, so no
+  agent is left holding a manual for a layer whose contract has moved
+- **And** the third is untouched — it is somebody else's skill that happens to
+  share the name, and the sweep only removes what it can positively recognise
+  as Coffer's own: a symlink, or a directory holding both `SKILL.md` and
+  `README.md`
+
 ## Requirements
 
 ### Storage
@@ -359,11 +418,12 @@ A source says a service counts daily actives with a plain Set; the topic documen
 ### Tools and delivery
 
 - **FR-033**: Coffer's MCP gateway MUST expose exactly **one** built-in knowledge tool: `coffer__write`. There MUST be no `list`, `grep`, `read`, `search` or `delete`. An agent reads knowledge with its own file tools at the paths the skill gives it.
-- **FR-034**: Coffer MUST write a generated **knowledge skill** into each registered agent's own skill directory — the same `<config_dir>/skills/` spec [skill-manager](../skill-manager/spec.md) delivers into, but as a file this layer owns and regenerates rather than a registered skill Resource, because its content is derived from the catalogue and is rewritten whenever the catalogue moves, which is not something a person curating a bundle can keep up with. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
-- **FR-035**: The skill MUST be **written into each agent's own directory, not linked**: each agent's copy MUST be real bytes rather than a link into one master folder, and a delivery MUST replace a link an earlier design left behind rather than write through it. Its text is now the same for every agent (FR-010), so what this requires is independence of the *file*, not difference in the content: a copy that is a link into a shared master is a copy this layer cannot re-render, stale or reclaim for one agent without doing it to all of them. It MUST be re-rendered whenever the catalogue changes — after a curation pass, or a collection's creation, deletion, enabling or disabling — and delivery MUST never raise: a failure leaves the corpus readable at paths a person can still give an agent.
-- **FR-036**: The skill's **frontmatter description** MUST name the subjects the enabled collections cover, drawn from their READMEs. It is the only part of this layer that is always in a model's context, so it MUST carry matchable specifics rather than a description of the layer.
-- **FR-037**: The skill's **body** MUST carry the absolute path of the knowledge root, and, for each enabled collection, every topic document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools and to reach for `coffer__write` when it learns something durable.
-- **FR-038**: The MCP gateway's own instructions text MUST describe this layer as it now is — a directory read with the agent's own tools, with the catalogue in the skill — and MUST NOT name a retrieval tool.
+- **FR-034**: The catalogue MUST be carried by Coffer's own skill, `coffer-guide`, which MUST be an ordinary registered `skill` Resource — one master folder under `~/.coffer/skills/`, one row, delivered by the predicate and the links every imported skill uses (spec [skill-manager](../skill-manager/spec.md) FR-028, FR-012, FR-008). This layer contributes the **text** and nothing else: it renders, and the skill kind writes, registers and delivers. **This reverses what this requirement used to say.** The generated skill was deliberately kept outside the resource framework — written per agent into `<config_dir>/skills/` by this layer, as a file the skill kind knew nothing about — on the grounds that a skill Resource is a bundle a person imports and curates, and no person can keep a bundle level with a catalogue that moves whenever curation runs. That reason has expired: a skill's master folder is now regenerated from the running build at every boot and whenever the catalogue changes (spec skill-manager FR-028), so "generated" and "registered as a Resource" stopped being alternatives. What the old rule bought was a folder nobody had to maintain; what it cost was a second delivery mechanism with its own writer and its own per-agent copies, invisible on the Skills surface, unreachable by `enabled` or scope, and outside every piece of machinery the skill kind already had — drift verification, repair, reclaim and the audit trail. The per-agent copies of the retired `coffer-knowledge` delivery MUST be removed rather than left in an agent's skill directory describing a layer whose contract has moved. This layer MUST NOT push anything into a session of its own accord and MUST NOT write into any agent's own memory files: knowledge is pulled. Session-start delivery belongs to spec [memory](../memory/spec.md), which carries its own budget and its own consent.
+- **FR-035**: The skill MUST reach each agent as the **ordinary shared-master link** of spec skill-manager FR-008 — one master folder, one link per agent — and MUST NOT be written into an agent's directory as real bytes. **This too reverses what this requirement used to say.** The rule was that each agent's copy be independent bytes, because a link into a shared master was "a copy this layer cannot re-render, stale or reclaim". Neither half of that is true any more: the master is re-rendered in place at every boot and whenever the catalogue changes, which re-renders every agent's view of it at once; and reclaiming is the skill kind's own per-agent reconciliation against the delivery predicate (spec skill-manager FR-019), which removes one agent's link without touching another's or the master. The text is the same for every agent (FR-010), so per-agent bytes were buying independence nothing asked for while paying for it with a delivery path of this layer's own. Re-rendering MUST happen whenever the catalogue changes — after a curation pass, or a collection's creation, deletion, enabling or disabling — and MUST never raise: a failed render leaves the previous master exactly where it was, and the corpus stays readable at paths a person can still give an agent.
+- **FR-036**: The skill's **frontmatter description** MUST describe Coffer itself — naming its built-in tools so a model recognises them — **and** name the subjects the enabled collections cover, drawn from their READMEs. It is the only part of this layer that is always in a model's context, so it MUST carry matchable specifics rather than a description of the layer, and it MUST fit the tightest frontmatter ceiling any importer imposes (1024 characters), dropping whole collection subjects from the tail rather than cutting a sentence mid-way.
+- **FR-037**: The skill's **body** MUST be one merged manual: Coffer's own — its four built-in tools and when to reach for each, the tiering contract that makes an unlisted upstream tool still callable, the fact that Coffer reads an agent's memory and never writes it, that no Coffer tool waits on a human approval, and what does not belong in knowledge — **followed by** the catalogue: the path of the knowledge root, and, for each enabled collection, every topic document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools and to reach for `coffer__write` when it learns something durable. One skill, not a set: a frontmatter description is resident in every session whether the skill is opened or not, while a body is paid for only when a model reaches for it, so a second skill would spend the resident budget again to describe something most sessions never open.
+- **FR-038**: The MCP gateway's own `initialize` instructions MUST stay within their character cap and MUST carry only what a skill cannot: what Coffer is, the names of its four built-in tools (`coffer__write`, `coffer__recall`, `coffer__diagnose`, `coffer__search_tools`) so they are recognisable in a tool list, the tiering sentence when tools are actually hidden this session, and a pointer to the `coffer-guide` skill for everything else. It MUST NOT restate the manual, MUST NOT name a retrieval tool, and MUST NOT carry the catalogue — the catalogue is in the skill body, which costs a session nothing until a model opens it.
+- **FR-047**: The rendered `SKILL.md` MUST be a **pure function of the running build and the catalogue it is given**: the same build over the same enabled collections MUST produce the same bytes, run after run and machine after machine. Nothing machine-specific may enter it — not an absolute home directory, not a timestamp, not a build path — and the skill's own config MUST likewise carry no timestamp of its generation. **The reason is no longer convergence, and that changes what the requirement is worth saying.** It used to read "byte-identical on every machine running the same build against the same catalogue", with the hedge doing the real work, because the artifact converged: a purely local difference would have had two vaults overwriting each other's copy forever. It no longer converges at all (spec [vault-sync](../vault-sync/spec.md) FR-093) — every machine renders its own from files that converge plus its own reach, and two machines are *expected* to differ whenever their enabled sets differ, which is exactly what the hedge was excusing. What determinism buys now is local and still worth paying for: an unchanged vault re-rendering to the same bytes is what lets the seed skip the write, so a boot or a curation tick that changed nothing registers nothing, audits nothing and re-delivers nothing (spec [skill-manager](../skill-manager/spec.md) FR-028) — and it is what makes the `version_hash` in the row mean "the content moved" rather than "time passed". The knowledge root MUST still be written in its `~`-relative form whenever it sits in its default place, so a path an agent reads is one a person can retype; an explicitly relocated root (`COFFER_KNOWLEDGE_ROOT`) MUST be written out in full, because an accurate path is worth more than a tidy one.
 
 ### Surfaces
 
@@ -373,7 +433,7 @@ A source says a service counts daily actives with a plain Set; the topic documen
 
 ### Migration
 
-- **FR-042**: One migration MUST rewrite the on-disk corpus: every content file at a collection's root moves into that collection's `sources/`, every `.raw/` original moves into `sources/` as a visible file beside it, `topics/` is created empty, and `.raw/` and `.history/` are removed. `README.md` stays at the collection root. It MUST also retire the previous delivery: the shared `coffer-knowledge` skill Resource, its master folder and every link to it go, so no agent is left holding a stale shared copy beside its generated one. The migration MUST be one-way, with **no compatibility shim left behind**.
+- **FR-042**: One migration MUST rewrite the on-disk corpus: every content file at a collection's root moves into that collection's `sources/`, every `.raw/` original moves into `sources/` as a visible file beside it, `topics/` is created empty, and `.raw/` and `.history/` are removed. `README.md` stays at the collection root. It MUST also retire the previous delivery: the shared `coffer-knowledge` skill Resource, its master folder and every link to it go, so no agent was left holding a stale shared copy beside the per-agent one delivery then wrote (which FR-034 in turn retires). The migration MUST be one-way, with **no compatibility shim left behind**.
 - **FR-043**: The migration MUST back the knowledge root up before it writes, and MUST report where. The corpus is the user's own writing and this migration empties the lane an agent reads until the first curation pass runs.
 - **FR-044**: `auto_curate_enabled` MUST be seeded on, and `curate_owner_machine_id` MUST default to the machine the migration runs on, so a vault that has just been migrated curates itself rather than staying dark until the setting is found.
 
@@ -391,7 +451,8 @@ A source says a service counts daily actives with a plain Set; the topic documen
 - **SC-005**: Deleting `topics/` entirely and re-running curation reproduces a corpus carrying the same facts.
 - **SC-006**: The gateway advertises exactly one knowledge tool, and an agent reaches every topic document without calling it.
 - **SC-007**: A document sent from a channel is a file in the intended collection's `sources/` afterwards, with its original beside it.
-- **SC-008**: Every agent holds its own `SKILL.md` — real bytes in its own skill directory, not a link into a shared master — so one agent's copy is re-rendered, staled or reclaimed without touching another's.
+- **SC-008**: Coffer's own skill is indistinguishable from an imported one everywhere the skill kind touches it — it is listed, scoped, enabled, delivered, verified for drift and repaired by the same code — and the only thing that sets it apart is that its master folder is Coffer's to rewrite and its deletion is refused.
+- **SC-009**: Two machines running the same build over the same catalogue render the same bytes, so a converge round between them carries no change to this skill at all.
 
 ## Assumptions
 

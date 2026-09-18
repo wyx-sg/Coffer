@@ -22,7 +22,7 @@ CapabilityType = Literal["tool", "resource", "prompt"]
 #: 32-character ``uuid4().hex``, so this literal can never collide with one.
 BUILTIN_SERVER_UID = "coffer"
 
-#: The prefix migration 0091 gave an invocation whose server had already been
+#: The prefix migration 0097 gave an invocation whose server had already been
 #: deleted when the log was re-keyed from names to uids. The identity of such a
 #: row was never recorded and cannot be recovered, so the label it *did* carry is
 #: preserved behind a marker that is visibly not a uid — the history survives, the

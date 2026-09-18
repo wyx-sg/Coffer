@@ -24,7 +24,7 @@ HealthStatus = Literal["healthy", "failing"]
 class MCPServerHealthModel(Base):
     """Persisted health state written by the per-server "test connection" route.
 
-    One row per mcp_server, keyed by the server's **uid** (migration 0091). It
+    One row per mcp_server, keyed by the server's **uid** (migration 0097). It
     was keyed by the name, which made a rename look like a brand-new server that
     had never been tested — the old row stayed behind as a permanent orphan
     nothing would ever overwrite, and the status page went blank for a server

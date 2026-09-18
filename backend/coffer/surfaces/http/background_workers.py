@@ -27,7 +27,6 @@ from coffer.application.engine.resolve import InternalEngineConnection
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.service import KnowledgeService
-from coffer.application.knowledge.skill_delivery import KnowledgeSkillDelivery
 from coffer.application.memory.service import MemoryService
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
@@ -38,6 +37,7 @@ from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentia
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.logging.files import prune_log_dir
 from coffer.surfaces.http.curation_wiring import start_curation_worker
+from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.memory.distil_state import DistilRunner
 from coffer.surfaces.http.memory_wiring import start_aggregate_worker, start_distil_worker
 from coffer.surfaces.http.sync_contributions import SyncContributions
@@ -66,7 +66,7 @@ def start_background_workers(
     retention_svc: RetentionService,
     knowledge_service: KnowledgeService,
     curation_pass: CurationPass,
-    skill_delivery: KnowledgeSkillDelivery,
+    guide: BuiltinGuide,
     distil: DistilRunner,
     memory_service: MemoryService,
     transcript_reader: FileTranscriptReader,
@@ -107,7 +107,7 @@ def start_background_workers(
     # Curation: a sweep that folds whatever sources have changed since they
     # were last consumed into the collection's topic documents.
     curation_task = start_curation_worker(
-        knowledge_service, curation_pass, skill_delivery, resource_svc, engine_config, sync
+        knowledge_service, curation_pass, guide, resource_svc, engine_config, sync
     )
     distil_task = start_distil_worker(distil, resource_svc, engine_config)
     # Aggregation (spec memory FR-007): a catch-up pass now, then hourly. It

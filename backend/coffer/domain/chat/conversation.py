@@ -28,6 +28,11 @@ class Conversation:
     longer exists, and — once the old name is free again — could come to name a
     different one. Everywhere a human or a model reads the channel, the label
     is resolved from the uid at that moment; nothing keeps a second copy of it.
+
+    ``owner`` says whose conversation this is. ``None`` is the developer's own,
+    which is what the chat list shows; a name is the surface that owns it — a
+    workflow task's conversation belongs to its run (spec workflow, FR-030) and
+    is not one of the developer's threads, however ordinary its transcript is.
     """
 
     id: str
@@ -37,4 +42,5 @@ class Conversation:
     updated_at: datetime
     archived_at: datetime | None = None
     channel_uid: str | None = None
+    owner: str | None = None
     peer_chat_id: str | None = None

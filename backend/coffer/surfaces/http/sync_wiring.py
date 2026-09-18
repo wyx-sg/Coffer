@@ -39,10 +39,10 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import (
     CredentialApplier,
-    ResourceApplier,
     StateApplier,
     TreeApplier,
 )
+from coffer.application.sync.appliers_resource import ResourceApplier
 from coffer.application.sync.conflicts import ConflictArbiter
 from coffer.application.sync.convergence import ConvergeRound
 from coffer.application.sync.exporter import SyncExporter
@@ -74,7 +74,11 @@ from coffer.infrastructure.sync.conflict_resolver import (
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.identity import coffer_dir, machine_name, resolve_identity
-from coffer.infrastructure.sync.paths import knowledge_root, skills_root
+from coffer.infrastructure.sync.paths import (
+    knowledge_root,
+    non_converging_tree_paths,
+    skills_root,
+)
 from coffer.surfaces.http.knowledge.curation_state import set_vault_write_lock
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.sync_routes import set_machine_registry, set_sync_service
@@ -173,7 +177,17 @@ def wire_sync(
             state=state,
             appliers=[
                 TreeApplier("knowledge/", worktree=worktree, live_root=knowledge_root()),
-                TreeApplier("skills/", worktree=worktree, live_root=skills_root()),
+                # The skills tree carries one folder this machine generates for
+                # itself and therefore never receives from another (spec
+                # vault-sync FR-093). ``Bundle`` defaults to the same set on
+                # the publish side; the applier is handed it explicitly because
+                # the application layer may not read infrastructure.
+                TreeApplier(
+                    "skills/",
+                    worktree=worktree,
+                    live_root=skills_root(),
+                    excluded=non_converging_tree_paths(),
+                ),
                 ResourceApplier(resource_svc, worktree=worktree, gates=gates, home=home),
                 StateApplier(providers, worktree=worktree, home=home),
                 CredentialApplier(cred_sync, worktree=worktree),

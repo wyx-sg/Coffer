@@ -11,13 +11,12 @@ imports any kind-specific module. Each mutation is audited via
 AuditService. `delete` calls the kind's optional `on_delete` hook
 BEFORE persistence; a hook that raises aborts the deletion.
 
-Three mutation paths delegate to sibling ops modules to keep this file under
-the 400-LOC ceiling (mirroring `skill/service.py` + its `*_ops.py` satellites):
-`update_scope`'s body lives in `resource_scope_ops`, `rename`'s in
-`resource_rename_ops`, and `delete`'s credential-release step in
-`resource_delete_ops`. The two pure adapters over a kind's config hooks live in
-`resource_kind_hooks`, where the delete path can reach them without importing
-back into this module.
+Four sibling ops modules keep this file under the 400-LOC ceiling (mirroring
+`skill/service.py` + its `*_ops.py` satellites): `update_scope`'s body lives in
+`resource_scope_ops`, `rename`'s in `resource_rename_ops`, `delete`'s
+credential-release step in `resource_delete_ops`, and every question about what
+a kind *declares* — what converges, what redacts, what cites a credential, what
+it will accept as a name — in `resource_kind_ops`.
 """
 
 from __future__ import annotations
@@ -27,18 +26,15 @@ import builtins
 import inspect
 import logging
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from pydantic import ValidationError
 
+from coffer.application import resource_kind_ops
 from coffer.application.audit_service import AuditService
 from coffer.application.repos import ResourceRepo
-from coffer.application.resource_kind_hooks import (
-    audit_safe_config,
-    check_name,
-    extract_credential_refs,
-)
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     ConfigValidationError,
@@ -95,7 +91,7 @@ class ResourceService:
         """
         if self._credentials is None:
             return
-        for _key, ref in extract_credential_refs(kind_def, config).items():
+        for _key, ref in resource_kind_ops.credential_refs(kind_def, config).items():
             if await asyncio.to_thread(self._credentials.get, ref) is None:
                 raise CredentialMissing(ref)
 
@@ -105,22 +101,12 @@ class ResourceService:
         return self._kinds[kind]
 
     def converges(self, kind: str) -> bool:
-        """Whether this kind's rows travel to the sync remote (spec vault-sync).
+        """Whether this kind's rows travel to the sync remote (spec vault-sync)."""
+        return resource_kind_ops.converges(self._kinds, kind)
 
-        Public for the same reason ``supports_scope`` is: the sync layer has to
-        ask, and the answer belongs to the kind.
-
-        An unregistered kind answers **True**, which is the conservative answer
-        and not the obvious one. This flag exists only to withhold, so a kind
-        nobody has declared anything about must keep whatever behaviour it had:
-        an unknown kind arriving in a document still reaches
-        ``register`` and is still refused there by name (``UnknownKind``).
-        Answering False would have turned that named refusal into a silent skip
-        — a document quietly doing nothing is exactly what a converge round
-        must not produce.
-        """
-        kind_def = self._kinds.get(kind)
-        return kind_def.converges if kind_def is not None else True
+    def converges_row(self, kind: str, config: Mapping[str, Any]) -> bool:
+        """Whether **this one row** travels to the sync remote (spec vault-sync)."""
+        return resource_kind_ops.converges_row(self._kinds, kind, config)
 
     def supports_scope(self, kind: str) -> bool:
         """Whether the kind carries a per-agent activation scope (ADR per-agent-resource-scope).
@@ -169,7 +155,7 @@ class ResourceService:
         # artifact; the kind's dedicated service opts in explicitly.
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
             raise GenericCreateNotAllowed(kind)
-        check_name(kind_def, name)
+        resource_kind_ops.check_name(kind_def, name)
         validated = self._validate_config(kind_def, config)
         # Kind-supplied semantic validation beyond shape, at REGISTRATION only
         # (e.g. a channel's workspace directories must exist on disk). Kept off
@@ -228,7 +214,7 @@ class ResourceService:
             AuditEventType.RESOURCE_CREATED.value,
             resource=created,
             actor=actor,
-            details={"config": audit_safe_config(kind_def, validated)},
+            details={"config": resource_kind_ops.audit_safe_config(kind_def, validated)},
         )
         return created
 
@@ -306,8 +292,8 @@ class ResourceService:
             resource=updated,
             actor=actor,
             details={
-                "before": audit_safe_config(kind_def, before.config),
-                "after": audit_safe_config(kind_def, validated),
+                "before": resource_kind_ops.audit_safe_config(kind_def, before.config),
+                "after": resource_kind_ops.audit_safe_config(kind_def, validated),
             },
         )
         return updated
@@ -355,12 +341,17 @@ class ResourceService:
         and each audit row goes on saying what the resource was called when
         that event happened. That is the whole of what making the uid the
         identity bought, and it is why this is a field on ``PATCH`` for every
-        kind rather than one kind's private route.
+        kind rather than one kind's private route, and with no
+        ``supports_rename`` gate: that flag existed because a kind whose name
+        was written out somewhere this move could not reach would be left
+        pointing at nothing. Nothing writes the name out any more.
 
         Delegates to ``resource_rename_ops`` to keep this module under the
         file-size limit; see that module for the order of operations.
         """
         from coffer.application.resource_rename_ops import rename as _rename
+
+        return await _rename(self, uid, new_name, actor)
 
         return await _rename(self, uid, new_name, actor)
 
@@ -371,6 +362,10 @@ class ResourceService:
 
         snapshot = await self.get(uid)  # raises ResourceNotFound if missing
         kind_def = self._require_kind(snapshot.kind)
+        if kind_def.validate_delete is not None:
+            # Pre-write guard: refuses BEFORE on_delete tears anything down,
+            # so a refused delete leaves the resource exactly as it was.
+            kind_def.validate_delete(snapshot)
         if kind_def.on_delete is not None:
             # CODE-033: await an async on_delete hook so side effects (e.g.
             # evicting live upstream connections, tearing down skill symlinks)
@@ -391,7 +386,7 @@ class ResourceService:
                 "snapshot": {
                     "kind": snapshot.kind,
                     "name": snapshot.name,
-                    "config": audit_safe_config(kind_def, snapshot.config),
+                    "config": resource_kind_ops.audit_safe_config(kind_def, snapshot.config),
                     "enabled": snapshot.enabled,
                 }
             },

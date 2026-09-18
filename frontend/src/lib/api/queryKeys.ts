@@ -118,6 +118,32 @@ export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as con
 export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as const;
 
 // ---------------------------------------------------------------------------
+// workflow — runs, their events/artifacts, and approvals across every run
+// ---------------------------------------------------------------------------
+//
+// Templates are resources of kind `workflow` (FR-001) and live under
+// `resourcesKey`, so nothing for them here. Everything else nests under the
+// run it belongs to, so a node action can invalidate `workflowRunKey(id)` and
+// sweep the run's detail, events and artifacts together.
+
+export const workflowRunsKey = ["workflow", "runs"] as const;
+/** The run list, narrowed by status. Object segment so a status-less
+ *  invalidation of `workflowRunsKey` still catches every filtered list. */
+export const workflowRunsListKey = (status?: string) => ["workflow", "runs", { status }] as const;
+export const workflowRunKey = (runId: string) => ["workflow", "runs", runId] as const;
+export const workflowArtifactsKey = (runId: string) =>
+  ["workflow", "runs", runId, "artifacts"] as const;
+/** What the run READS. Its own key because inputs are editable for the whole
+ *  of a run's life (FR-050) and change without the run's position moving. */
+export const workflowInputsKey = (runId: string) => ["workflow", "runs", runId, "inputs"] as const;
+/** Approvals are their own subtree, not a child of a run: the page that
+ *  decides one lists them across every run (FR-045). The root exists because
+ *  a decision moves every filtered list at once. */
+export const workflowApprovalsRootKey = ["workflow", "approvals"] as const;
+export const workflowApprovalsKey = (filters: Record<string, unknown>) =>
+  ["workflow", "approvals", filters] as const;
+
+// ---------------------------------------------------------------------------
 // daemon
 // ---------------------------------------------------------------------------
 

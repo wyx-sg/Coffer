@@ -34,7 +34,7 @@ class ResourceModel(Base):
     #: process may use — two machines allocate the same row number to different
     #: resources.
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    #: The identity (migration 0089): opaque, immutable, and the same value on
+    #: The identity (migration 0095): opaque, immutable, and the same value on
     #: every machine holding this resource. Everything outside the process
     #: addresses a resource by this — routes, cross-resource references, the
     #: synced document's filename.
@@ -49,7 +49,7 @@ class ResourceModel(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     # Framework-level per-agent activation scope (ADR per-agent-resource-scope): a JSON list of
     # agent UIDS; NULL means unscoped. Added by migration 0046; rewritten from
-    # names to uids by migration 0090.
+    # names to uids by migration 0096.
     scope_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (

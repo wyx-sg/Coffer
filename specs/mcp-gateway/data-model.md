@@ -76,9 +76,15 @@ Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server
 | `spawn_timeout_seconds`   | `int`                                                                     | default `30`; range `5–120`                                           |
 | `request_timeout_seconds` | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
 | `idle_timeout_seconds`    | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
+| `tool_write_class`        | `dict[str, Literal["read", "write"]]`                                     | per-tool judgement, keyed by unprefixed tool name; absent means write-class (spec workflow FR-036) |
 
-All three are editable in the web UI's edit-server dialog, not only over the
-API. Before they had a UI every registered server ran on the defaults
+`tool_write_class` is the only field here nothing in this spec reads: it is
+written and read by the workflow layer's approval gate, and it lives on the
+server because whether a tool writes is a fact about the tool rather than about
+a machine — as resource config it travels with sync.
+
+All three timeouts are editable in the web UI's edit-server dialog, not only
+over the API. Before they had a UI every registered server ran on the defaults
 regardless of its upstream — and measured latency across one vault's servers
 spanned three orders of magnitude (9ms to 10.9s average), with the slowest
 routinely exceeding 60s against a 120s default. A timeout error names the
@@ -145,7 +151,7 @@ neither can collide with one (`domain/mcp/capability.py`):
 | Value              | Means                                                                                                                                                                                                                                                           |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `coffer`           | one of Coffer's own `coffer__*` builtin tools. Builtins share this log so retention and the activity surfaces work uniformly, but no `mcp_server` row stands behind them and there is no uid to record.                                                          |
-| `deleted:<name>`   | a server already deleted when migration 0091 re-keyed the log. Its identity was never recorded and cannot be recovered, so the label it did carry survives behind a marker that is visibly not an identity. The row joins to no resource, which is the truth about it. |
+| `deleted:<name>`   | a server already deleted when migration 0097 re-keyed the log. Its identity was never recorded and cannot be recovered, so the label it did carry survives behind a marker that is visibly not an identity. The row joins to no resource, which is the truth about it. |
 
 A row carrying either joins to nothing, which is what the tiering query's inner
 join relies on.
@@ -188,7 +194,7 @@ CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_uid, timestamp
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);
 CREATE INDEX idx_invocations_session  ON mcp_invocations(session_id, timestamp);
 
--- MCP-specific: persisted upstream health (revision 0003; re-keyed by 0091)
+-- MCP-specific: persisted upstream health (revision 0003; re-keyed by 0097)
 CREATE TABLE mcp_server_health (
     resource_uid   TEXT      PRIMARY KEY,
     status         TEXT      NOT NULL,                    -- 'healthy' | 'failing' | 'unknown'
@@ -219,7 +225,7 @@ Each ORM model provides:
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELETE FROM resources WHERE id=?`        | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does. |
 | `DELETE FROM mcp_capability_preferences`  | never done directly: a preference is flipped, not removed, which is what makes a decision survive an upstream upgrade (FR-008).                                       |
-| `mcp_server_health`                       | keyed by the server's `uid` rather than by its name or its row id (migration 0091), so a rename keeps the row it already has. Keyed by name it left a permanent orphan nothing would overwrite, and the status page went blank for a server that had tested green a second earlier. |
+| `mcp_server_health`                       | keyed by the server's `uid` rather than by its name or its row id (migration 0097), so a rename keeps the row it already has. Keyed by name it left a permanent orphan nothing would overwrite, and the status page went blank for a server that had tested green a second earlier. |
 
 The kind-agnostic rules these sit under — what a rename does to the audit trail
 (nothing: the identity does not move, so the history follows the resource),

@@ -63,6 +63,7 @@
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE",
     "RESOURCE_ALREADY_EXISTS",
     "RESOURCE_NOT_FOUND",
+    "RESOURCE_PROTECTED",
     "SCOPE_INVALID",
     "SHIM_NOT_FOUND",
     "SKILL_DIR_NOT_WRITABLE",
@@ -87,7 +88,21 @@
     "UNMANAGED_SKILL_NOT_FOUND",
     "UPKEEP_ALREADY_RUNNING",
     "UPSTREAM_TIMEOUT",
-    "UPSTREAM_UNAVAILABLE"
+    "UPSTREAM_UNAVAILABLE",
+    "WORKFLOW_ATTEMPT_CEILING",
+    "WORKFLOW_ERROR",
+    "WORKFLOW_ILLEGAL_TRANSITION",
+    "WORKFLOW_INPUT_NOT_FOUND",
+    "WORKFLOW_MISSING_ARTIFACT",
+    "WORKFLOW_NOT_THIS_MACHINE",
+    "WORKFLOW_REPO_MOUNT_FAILED",
+    "WORKFLOW_RUN_LABEL_INVALID",
+    "WORKFLOW_RUN_TERMINAL",
+    "WORKFLOW_TEMPLATE_DISABLED",
+    "WORKFLOW_TEMPLATE_INVALID",
+    "WORKFLOW_UNKNOWN_AGENT",
+    "WORKFLOW_UNSAFE_PATH",
+    "WORKFLOW_VERSION_CONFLICT"
   ],
   "auditEvents": [
     "agent_config_file_deleted",
@@ -143,6 +158,10 @@
     "sync_rejected",
     "sync_rolled_back",
     "sync_run",
-    "token_rotated"
+    "token_rotated",
+    "workflow_approval_decided",
+    "workflow_run_finished",
+    "workflow_run_started",
+    "workflow_tool_call_gated"
   ]
 }

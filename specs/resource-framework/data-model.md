@@ -179,7 +179,7 @@ revisions included.
 -- Resources: kind-agnostic core
 CREATE TABLE resources (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,      -- internal, per-machine; the FK kinds hold
-    uid           TEXT      NOT NULL,                     -- THE IDENTITY (migration 0089)
+    uid           TEXT      NOT NULL,                     -- THE IDENTITY (migration 0095)
     kind          TEXT      NOT NULL,
     name          TEXT      NOT NULL,                     -- a mutable label
     description   TEXT,
@@ -187,7 +187,7 @@ CREATE TABLE resources (
     enabled       BOOLEAN   NOT NULL DEFAULT 1,
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    scope_json    TEXT,              -- per-agent scope, agent UIDS; NULL = unscoped (0046, rewritten by 0090)
+    scope_json    TEXT,              -- per-agent scope, agent UIDS; NULL = unscoped (0046, rewritten by 0096)
     UNIQUE (kind, name)              -- the LABEL is unique within its kind; that is a constraint, not identity
 );
 CREATE UNIQUE INDEX uq_resources_uid      ON resources(uid);
@@ -245,7 +245,7 @@ Each ORM model provides:
 | `DELETE FROM resources WHERE id=?` | cascades to whatever a kind owns by FK (spec mcp-gateway's `mcp_capability_preferences`, for one). Does **not** cascade to `audit_log` or to any kind's invocation log — history outlives the resource it describes.                                                     |
 | `UPDATE resources SET kind=?`      | forbidden — the application layer never updates `kind`.                                                                                                                                                                                                                |
 | `UPDATE resources SET name=?`      | allowed, through `ResourceService.rename` only, which is reached by every kind through `PATCH /api/v1/resources/{uid}`. It writes one column and records `resource_renamed`. Nothing else is repointed, because nothing else holds the name: cross-resource references, the synced document and the audit trail all hold identity, so history follows the resource while each row keeps saying what it was called then. A kind with an on-disk artifact named after the resource moves it in its `on_rename` hook. |
-| `UPDATE resources SET uid=?`       | forbidden — the identity is minted once at creation and never changes. The only writer is migration 0089's one-time backfill.                                                                                                                                                                                                                                       |
+| `UPDATE resources SET uid=?`       | forbidden — the identity is minted once at creation and never changes. The only writer is migration 0095's one-time backfill.                                                                                                                                                                                                                                       |
 | `DELETE FROM retention_policies`   | forbidden — policies are upserted at startup, never deleted.                                                                                                                                                                                                           |
 
 ## Default retention policy seed (run on first daemon startup)

@@ -58,7 +58,7 @@ from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
 )
-from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.app_shutdown import Running, shutdown
 from coffer.surfaces.http.background_workers import start_background_workers
 from coffer.surfaces.http.channel_wiring import wire_channel_kind
 from coffer.surfaces.http.chat_wiring import wire_chat
@@ -67,7 +67,7 @@ from coffer.surfaces.http.credential_composition import (
     make_credential_resolver,
     run_legacy_keychain_migration,
 )
-from coffer.surfaces.http.curation_wiring import stop_curation_worker, wire_curation
+from coffer.surfaces.http.curation_wiring import wire_curation
 from coffer.surfaces.http.daemon_identity import publish_daemon_identity
 from coffer.surfaces.http.dependencies import (
     set_audit_service,
@@ -76,19 +76,21 @@ from coffer.surfaces.http.dependencies import (
     set_retention_service,
 )
 from coffer.surfaces.http.engine_config_composition import build_config_services
+from coffer.surfaces.http.guide_wiring import run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
-    shutdown_all_sessions,
     start_session_reaper,
 )
-from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_distil_worker
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_contributions import SyncContributions
-from coffer.surfaces.http.sync_wiring import stop_converge_worker
-from coffer.surfaces.http.transcript_warm_wiring import stop_transcript_warm_worker
+from coffer.surfaces.http.workflow_adapters import conversation_env_lookup
+from coffer.surfaces.http.workflow_wiring import (
+    build_attempt_repo,
+    start_workflow,
+)
 
 
 def _db_url() -> str:
@@ -220,6 +222,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_store,
         kinds.agent_skill.agent_service,
         resource_svc,
+        # The lookup that gives a node's agent its run identity (workflow FR-035).
+        conversation_env_lookup(build_attempt_repo(sm)),
     )
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
@@ -230,15 +234,28 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # a collection's `topics/` lane from the sources people write. It carries
     # the skill delivery too, because a document nothing has re-rendered a
     # catalogue for is a document no agent has a path to (spec knowledge).
-    curation_pass = wire_curation(
-        kinds.knowledge.models, credential_resolver, kinds.knowledge.skill_delivery
-    )
+    curation_pass = wire_curation(kinds.knowledge.models, credential_resolver, kinds.guide)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat platform's handles, and `/save` through the
     # knowledge kind's.
     channel_runtime = wire_channel_kind(
         app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
+    )
+
+    # The delivery engine: after chat and channels — see workflow_wiring.
+    workflow = await start_workflow(
+        app,
+        resource_svc=resource_svc,
+        audit=audit,
+        sm=sm,
+        chat=chat,
+        knowledge=kinds.knowledge.service,
+        skills=kinds.agent_skill.skill_service,
+        attempts=build_attempt_repo(sm),
+        gate_holder=kinds.mcp.tool_gate,
+        provider=kinds.provider.service,
+        credential_resolver=credential_resolver,
     )
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
@@ -249,11 +266,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(kinds.provider.boot_heal)
     await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
-    # Each agent's knowledge skill, rendered from whatever the corpus holds
-    # right now. Done every boot rather than only on change: it is cheap, it
-    # heals a copy someone edited or deleted, and it is what replaces a
-    # shared-master symlink on a vault upgraded from the previous delivery.
-    await kinds.knowledge.skill_delivery.deliver_all()
+    # Coffer's own skill, re-rendered from this build and whatever the corpus
+    # holds right now, and seeded into the master store as an ordinary skill
+    # resource. Done every boot rather than only on change: it is cheap when
+    # nothing moved (two reads and a comparison), it heals a master someone
+    # edited, and it is what upgrades a vault that still holds the previous
+    # per-agent rendering.
+    await run_builtin_guide_refresh(kinds.guide)
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -268,7 +287,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         retention_svc=retention_svc,
         knowledge_service=kinds.knowledge.service,
         curation_pass=curation_pass,
-        skill_delivery=kinds.knowledge.skill_delivery,
+        guide=kinds.guide,
         distil=kinds.memory.distil,
         memory_service=kinds.memory.service,
         transcript_reader=kinds.agent_skill.transcript_reader,
@@ -309,52 +328,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        daemon_routes.set_daemon_phase("draining")
-        workers.retention_worker.stop()
-        await stop_converge_worker(workers.converge_worker)
-        await stop_curation_worker(workers.curation_task)
-        await stop_distil_worker(workers.distil_task)
-        await stop_aggregate_worker(workers.aggregate_task)
-        await stop_transcript_warm_worker(workers.warm_worker, workers.warm_task)
-        # Stop channel adapters first so no new turns start mid-teardown.
-        # Order matters: cancel the reconciler task BEFORE dispose() so an
-        # in-flight tick cannot resurrect adapters dispose() just stopped;
-        # every step is best-effort so a dead reconciler (stored exception)
-        # can never abort the rest of this teardown.
-        channel_runtime.stop()
-        channel_runtime_task.cancel()
-        await _best_effort("channel_runtime", asyncio.wait_for(channel_runtime_task, timeout=2.0))
-        await _best_effort("channel_runtime.dispose", channel_runtime.dispose())
-        # The retention worker was asked to stop above; give it a grace period
-        # to finish an in-flight prune, then cancel it.
-        try:
-            await asyncio.wait_for(workers.retention_task, timeout=2.0)
-        except TimeoutError:
-            _logger.warning("shutdown.retention_worker.grace_expired; cancelling")
-            workers.retention_task.cancel()
-        except asyncio.CancelledError:
-            _logger.debug("shutdown.retention_worker.cancelled")
-            workers.retention_task.cancel()
-        reaper_task.cancel()
-        await _best_effort("mcp_session_reaper", reaper_task)
-        # Drain the buffered invocation writer before tearing down sessions.
-        await _best_effort("invocation_repo", kinds.mcp.invocation_repo.stop())
-        # Dispose the built-in agent's chat gateway session first (best-effort);
-        # its on_dispose callback removes its entry from session_supervisors.
-        await _best_effort("chat_gateway_session", chat.gateway_session.dispose())
-        # Dispose MCP supervisors (best-effort). The process-wide supervisor is
-        # IN this registry now — it has to be, or the kind's delete and rename
-        # hooks cannot reach the upstreams it holds — so the loop covers it and
-        # the separate call it used to get would only dispose it twice.
-        for session_id, sup in list(kinds.mcp.session_supervisors.items()):
-            await _best_effort(f"session_supervisor[{session_id}]", sup.dispose())
-        kinds.mcp.session_supervisors.clear()
-        # Close per-/mcp/-session state in the protocol routes
-        await _best_effort("mcp_sessions", shutdown_all_sessions())
-        # The knowledge service holds no long-lived handles (the directory is
-        # session-maker-bound + lazy), so only the shared engine needs disposal.
-        await engine.dispose()
-        set_active_token(None)
+        await shutdown(
+            Running(
+                workers=workers,
+                workflow=workflow,
+                channel_runtime=channel_runtime,
+                channel_runtime_task=channel_runtime_task,
+                reaper_task=reaper_task,
+                kinds=kinds,
+                chat=chat,
+                engine=engine,
+            )
+        )
 
 
 def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:

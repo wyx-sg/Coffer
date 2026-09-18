@@ -375,7 +375,20 @@ components:
           }
 
     SkillSource:
-      $ref: "#/components/schemas/LocalImportSource"
+      oneOf:
+        - $ref: "#/components/schemas/LocalImportSource"
+        - $ref: "#/components/schemas/BuiltinSource"
+      discriminator:
+        propertyName: type
+        # The mapping is not optional decoration here. Without it a generator
+        # is free to fall back on the schema NAMES as the discriminator values,
+        # and openapi-typescript does exactly that — it emitted
+        # `type: "LocalImportSource"` / `type: "BuiltinSource"` while the wire
+        # carries `local_import` / `builtin`. Every value below must equal the
+        # variant's own `type` enum.
+        mapping:
+          local_import: "#/components/schemas/LocalImportSource"
+          builtin: "#/components/schemas/BuiltinSource"
 
     LocalImportSource:
       type: object
@@ -383,6 +396,18 @@ components:
       properties:
         type: { type: string, enum: [local_import] }
         original_path: { type: string }
+
+    BuiltinSource:
+      type: object
+      description:
+        "Coffer generated this skill. It carries no provenance fields at all:
+        the master folder is rewritten from the running build at every start,
+        so nothing about where it came from would still be true tomorrow — and
+        a skill's config converges to the user's other machines, where anything
+        machine-specific would never settle."
+      required: [type]
+      properties:
+        type: { type: string, enum: [builtin] }
 
     SkillOut:
       type: object
@@ -392,6 +417,7 @@ components:
           name,
           description,
           source,
+          builtin,
           enabled,
           scope,
           version_hash,
@@ -417,6 +443,14 @@ components:
             `master_path` on the response after a rename is the new one.
         description: { type: string }
         source: { $ref: "#/components/schemas/SkillSource" }
+        builtin:
+          type: boolean
+          description: >-
+            True for a skill Coffer generates and owns: its master folder is
+            rewritten from the running build at every boot, so DELETE is
+            refused with 409 `RESOURCE_PROTECTED`. Enabling, disabling and
+            narrowing its scope stay available — those decide reach, which is
+            the owner's to decide, while existence is not.
         enabled: { type: boolean }
         scope: { $ref: "#/components/schemas/ScopeOut" }
         version_hash: { type: string }

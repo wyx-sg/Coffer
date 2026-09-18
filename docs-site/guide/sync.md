@@ -137,6 +137,8 @@ The server itself still converges to both machines — it is registered and visi
 
 The cost is worth knowing: a resource arriving on a machine for the first time starts at that machine's default reach, not at the reach it has elsewhere. That is a state you can see on the page and change in one click, and it is the direction that asks rather than assumes.
 
+**Coffer's own skill does not sync.** `coffer-guide` — the manual Coffer writes for itself, carrying the catalogue of your knowledge — is regenerated on each machine at every start and whenever the catalogue moves. Part of what goes into it is which collections are *enabled*, and that is reach, which stays on the machine it was set on. So the laptop and the desktop legitimately hold different copies, and publishing either would only have them overwriting each other on every round. Neither its folder nor its registration is ever pushed; each machine writes its own. Your own imported skills converge exactly as before.
+
 **Channels do not sync at all.** A channel is an inbound surface bound to one machine — its port, its tunnel, the webhook URL the platform was told to call — so a channel arriving on a second machine would at best do nothing and at worst answer the same conversation twice. Configure channels on each machine that needs one.
 
 ## The machines in your vault

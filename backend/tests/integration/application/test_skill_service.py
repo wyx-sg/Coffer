@@ -938,7 +938,7 @@ async def test_rename_moves_master_and_redelivers_under_the_new_name(tmp_path):
     assert "name: after" in (new_master / "SKILL.md").read_text(encoding="utf-8")
     assert renamed.config["version_hash"] != skill.config["version_hash"]
     # The name is recorded in exactly one place on the row. A config field
-    # mirroring it is what migration 0092 removed.
+    # mirroring it is what migration 0098 removed.
     assert "skill_md_name" not in renamed.config
 
     # And nothing about the move reads as drift.

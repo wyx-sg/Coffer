@@ -1,8 +1,8 @@
-"""0089 and 0090 — the identity backfill and the cross-reference rewrite.
+"""0095 and 0096 — the identity backfill and the cross-reference rewrite.
 
 These two run once, over the user's real vault, and both can do damage that
-nothing reports: 0089 has to produce the SAME uid on two machines that never
-talk to each other, and 0090 rewrites allow-lists, where every mistake in the
+nothing reports: 0095 has to produce the SAME uid on two machines that never
+talk to each other, and 0096 rewrites allow-lists, where every mistake in the
 widening direction is invisible — a resource simply becomes live somewhere the
 user had said it should not be.
 
@@ -71,7 +71,7 @@ def test_0089_derives_the_same_uid_on_two_independent_machines(db, tmp_path, mon
             "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
             "VALUES ('skill', 'writing', '{}', 1, '2026-01-01', '2026-01-01')"
         )
-    command.upgrade(cfg, "0089")
+    command.upgrade(cfg, "0095")
     with sqlite3.connect(db) as conn:
         first = dict(conn.execute("SELECT name, uid FROM resources").fetchall())
 
@@ -87,7 +87,7 @@ def test_0089_derives_the_same_uid_on_two_independent_machines(db, tmp_path, mon
             "VALUES ('skill', 'writing', '{}', 1, '2026-01-01', '2026-01-01')"
         )
         conn.execute(*_agent("claude-code", "claude_code"))
-    command.upgrade(cfg2, "0089")
+    command.upgrade(cfg2, "0095")
     with sqlite3.connect(other) as conn:
         second = dict(conn.execute("SELECT name, uid FROM resources").fetchall())
         ids = dict(conn.execute("SELECT name, id FROM resources").fetchall())
@@ -108,11 +108,11 @@ def test_0089_is_idempotent(db):
             "INSERT INTO resources (kind, name, config_json, enabled, created_at, updated_at) "
             "VALUES ('skill', 'writing', '{}', 1, '2026-01-01', '2026-01-01')"
         )
-    command.upgrade(cfg, "0089")
+    command.upgrade(cfg, "0095")
     with sqlite3.connect(db) as conn:
         before = conn.execute("SELECT uid FROM resources").fetchone()[0]
     command.downgrade(cfg, "0088")
-    command.upgrade(cfg, "0089")
+    command.upgrade(cfg, "0095")
     with sqlite3.connect(db) as conn:
         assert conn.execute("SELECT uid FROM resources").fetchone()[0] == before
 
@@ -139,7 +139,7 @@ def test_0090_rewrites_all_three_scope_vocabularies(db):
             "VALUES ('provider', 'anthropic', '{}', ?, 1, '2026-01-01', '2026-01-01')",
             (json.dumps({"agents": ["claude_code"]}),),
         )
-    command.upgrade(cfg, "0090")
+    command.upgrade(cfg, "0096")
 
     with sqlite3.connect(db) as conn:
         uids = dict(conn.execute("SELECT name, uid FROM resources").fetchall())
@@ -182,7 +182,7 @@ def test_0090_never_turns_a_restriction_into_no_restriction(db):
             "VALUES ('skill', 'open', '{}', ?, 1, '2026-01-01', '2026-01-01')",
             (json.dumps({"agents": None}),),
         )
-    command.upgrade(cfg, "0090")
+    command.upgrade(cfg, "0096")
 
     with sqlite3.connect(db) as conn:
         rows = dict(
@@ -213,7 +213,7 @@ def test_0090_leaves_an_unresolvable_default_agent_verbatim(db):
             "VALUES ('channel', 'broken', ?, 1, '2026-01-01', '2026-01-01')",
             (json.dumps({"default_agent": "an_agent_type_nobody_has"}),),
         )
-    command.upgrade(cfg, "0090")
+    command.upgrade(cfg, "0096")
 
     with sqlite3.connect(db) as conn:
         uids = dict(conn.execute("SELECT name, uid FROM resources").fetchall())

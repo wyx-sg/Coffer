@@ -35,10 +35,10 @@ from cryptography.fernet import Fernet
 
 from coffer.application.sync.appliers import (
     CredentialApplier,
-    ResourceApplier,
     StateApplier,
     TreeApplier,
 )
+from coffer.application.sync.appliers_resource import ResourceApplier
 from coffer.domain.errors import UnknownKind
 from coffer.domain.scope import Scope
 from coffer.domain.sync.errors import SyncSerializationError

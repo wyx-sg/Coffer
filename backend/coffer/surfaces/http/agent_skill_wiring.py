@@ -28,6 +28,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.resource_service import ResourceService
 from coffer.application.skill.boot_reconcile import SkillDriftBootHeal
+from coffer.application.skill.builtin_seed import BuiltinSkillSeed
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
@@ -74,6 +75,11 @@ class AgentSkillWiring:
     agent_service: AgentService
     skill_service: SkillService
     boot_heal: SkillDriftBootHeal
+    #: Writes Coffer's own generated skill into the master store. Paired
+    #: with a renderer by ``guide_wiring`` — the skill kind cannot reach the
+    #: knowledge layer that produces the text, so the pairing is the
+    #: composition root's to make.
+    builtin_seed: BuiltinSkillSeed
     #: The one reader the Conversations listing uses. Handed back rather than
     #: kept here, because the boot-time warm pass must warm THIS instance — a
     #: second one would fill a second cache and leave the listing's as cold as
@@ -285,6 +291,7 @@ def wire_agent_and_skill_kinds(
         agent_service=agent_svc,
         skill_service=skill_svc,
         boot_heal=SkillDriftBootHeal(skill_service=skill_svc),
+        builtin_seed=BuiltinSkillSeed(skill_service=skill_svc),
         transcript_reader=transcript_reader,
     )
 

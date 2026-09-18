@@ -12,7 +12,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from coffer.application.resource_kind_hooks import extract_credential_refs
+from coffer.application.resource_kind_ops import credential_refs
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind, Resource
 
@@ -38,7 +38,7 @@ async def release_orphaned_credentials(
     if service._credentials is None:
         return []
     released: list[str] = []
-    for cred_ref in dict.fromkeys(extract_credential_refs(kind_def, config).values()):
+    for cred_ref in dict.fromkeys(credential_refs(kind_def, config).values()):
         try:
             # Off the loop thread: the store is a blocking SQLite writer, and
             # calling it inline competes with the connection this coroutine is
@@ -82,6 +82,6 @@ async def citations_of(service: ResourceService, credential_ref: str) -> list[Re
         kind_def = service._kinds.get(resource.kind)
         if kind_def is None:
             continue
-        if credential_ref in extract_credential_refs(kind_def, resource.config).values():
+        if credential_ref in credential_refs(kind_def, resource.config).values():
             citing.append(resource)
     return citing

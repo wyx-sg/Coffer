@@ -10,12 +10,10 @@ FR-033).
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.knowledge.skill_delivery import KnowledgeSkillDelivery
 
 __all__ = [
     "KIND_KNOWLEDGE",
     "KnowledgeService",
-    "KnowledgeSkillDelivery",
     "make_knowledge_kind",
     "register_knowledge_builtin_tools",
 ]

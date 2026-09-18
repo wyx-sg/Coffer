@@ -36,6 +36,9 @@ from coffer.domain.sync.errors import SyncBundleInvalid, SyncSerializationError
 from coffer.domain.sync.manifest import MANIFEST_PATH, Manifest
 from coffer.domain.sync.serialization import ResourceDoc, parse_resource_doc
 from coffer.infrastructure.sync.paths import mirrored_trees as _default_mirrored_trees
+from coffer.infrastructure.sync.paths import (
+    non_converging_tree_paths as _default_excluded_paths,
+)
 from coffer.infrastructure.sync.tree_mirror import _converge_files, _mirror_tree
 
 _logger = logging.getLogger(__name__)
@@ -71,6 +74,7 @@ class Bundle:
         root: pathlib.Path,
         trees: Sequence[tuple[str, pathlib.Path]] | None = None,
         held_paths: Callable[[], set[str]] | None = None,
+        excluded: AbstractSet[str] | None = None,
     ) -> None:
         """``held_paths`` returns bundle-relative paths the export MUST NOT
         delete even though local state does not produce them — the retry and
@@ -87,6 +91,16 @@ class Bundle:
         asynchronously from convergence state while these methods are
         synchronous blocking IO: the caller hands over a view that resolves at
         write time instead of a snapshot taken before the round began.
+
+        ``excluded`` holds bundle-relative directory prefixes inside the
+        mirrored trees that this machine neither publishes nor deletes — the
+        derived output of :data:`~coffer.infrastructure.sync.paths
+        .NON_CONVERGING_TREE_PATHS`. It **defaults to that set** rather than to
+        nothing on purpose: forgetting it at a construction site would silently
+        resume the publishing this rule exists to stop, and there is no vault
+        for which publishing derived output is the right answer. A caller may
+        still pass ``frozenset()`` to mirror everything, which is what the
+        tree-mirror's own tests want.
         """
         self._root = root
         # The file-backed trees to mirror. Injectable so each vault (and each
@@ -94,6 +108,7 @@ class Bundle:
         # ``$COFFER_*_ROOT`` defaults.
         self._trees = list(trees) if trees is not None else _default_mirrored_trees()
         self._held_paths = held_paths
+        self._excluded = frozenset(excluded) if excluded is not None else _default_excluded_paths()
 
     @property
     def path(self) -> str:
@@ -106,6 +121,11 @@ class Bundle:
             return frozenset()
         head = prefix.rstrip("/") + "/"
         return {p[len(head) :] for p in self._held_paths() if p.startswith(head)}
+
+    def _excluded_under(self, prefix: str) -> AbstractSet[str]:
+        """The excluded prefixes inside ``prefix``, rebased relative to it."""
+        head = prefix.rstrip("/") + "/"
+        return {p[len(head) :] for p in self._excluded if p.startswith(head)}
 
     # --- lifecycle ---------------------------------------------------------
 
@@ -140,7 +160,13 @@ class Bundle:
             skipped.extend(
                 f"{subdir}/{rel}"
                 for rel in _mirror_tree(
-                    live_root, self._root / subdir, protected=self._held_under(subdir)
+                    live_root,
+                    self._root / subdir,
+                    protected=self._held_under(subdir),
+                    # Derived output: not published, and not deleted from the
+                    # tree either if an older build put it there (spec
+                    # vault-sync FR-093).
+                    excluded=self._excluded_under(subdir),
                 )
             )
         if skipped:
@@ -180,7 +206,11 @@ class Bundle:
     # --- resource docs -----------------------------------------------------
 
     def write_resource_docs(
-        self, docs: Sequence[Mapping[str, object]], *, unserializable: Sequence[str] = ()
+        self,
+        docs: Sequence[Mapping[str, object]],
+        *,
+        unserializable: Sequence[str] = (),
+        withheld: Sequence[str] = (),
     ) -> None:
         """Converge ``resources/`` on ``docs``: ``docs`` is everything this
         vault publishes, so a document it does not name was deleted here —
@@ -209,9 +239,33 @@ class Bundle:
         receiving machine reads the new name out of the document. Keyed on the
         name, the same edit left the tree as a deletion beside an addition —
         and this method's own contract ("a document ``docs`` does not name was
-        deleted here") is precisely what turned it into one."""
+        deleted here") is precisely what turned it into one.
+
+        ``withheld`` is the second escape hatch, and it is the one that makes
+        the paragraph above precise: it holds ``<kind>/<uid>`` for rows a
+        **converging kind** declined to publish row by row (``Kind
+        .converges_row`` — today, Coffer's own generated skill). Those are
+        protected; a whole withheld *kind*'s documents are not. The asymmetry
+        is about what the document is standing on at the other end. A `memory`
+        row over there was derived from files that never travelled, so clearing
+        it takes nothing away. A builtin skill row over there is backed by a
+        real master folder that machine wrote itself and still delivers, so
+        publishing its deletion would ask the fleet to tear down something
+        live — and an older build, which has no row-level rule, would obey.
+
+        One thing the uid key narrowed: a withheld path is protected only at a
+        uid THIS machine holds, where the name-keyed version protected the
+        label wherever it came from. Benign, because a build on this layout
+        never publishes a guide document at all — the only way one exists in
+        the tree is a machine that published it before FR-093, and that one
+        registered it at the identity the document carried, so it is the same
+        uid."""
         desired = {f"{doc['kind']}/{doc['uid']}.yaml": _dump(doc) for doc in docs}
-        protected = self._held_under(_RESOURCES) | {f"{ref}.yaml" for ref in unserializable}
+        protected = (
+            self._held_under(_RESOURCES)
+            | {f"{ref}.yaml" for ref in unserializable}
+            | {f"{ref}.yaml" for ref in withheld}
+        )
         _converge_files(self._root / _RESOURCES, desired, protected=protected)
 
     def read_resource_docs(self) -> list[ResourceDoc]:

@@ -90,14 +90,12 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         # on: its own routes, the scope allow-list, the binding rows reported.
         agent_uid = r.json()["uid"]
 
-        # list skills — empty, because every skill here is one the user
-        # imported. Coffer no longer seeds one of its own: the knowledge skill
-        # is rendered per agent and written straight into that agent's skill
-        # directory (spec knowledge FR-034), never registered as a Resource
-        # this route could list.
+        # list skills — just Coffer's own, which it seeds for itself at boot
+        # (spec knowledge FR-034). The user has imported nothing yet, so the
+        # lifecycle below is measured against that one row.
         r = c.get("/api/v1/skills")
         assert r.status_code == 200
-        assert r.json()["items"] == []
+        assert [i["name"] for i in r.json()["items"]] == ["coffer-guide"]
 
         # import
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
@@ -300,6 +298,54 @@ def test_reimport_with_overwrite_replaces(tmp_path, monkeypatch):
         # delivered symlink and audit row citing it. A fresh uid here would mean
         # the re-import quietly produced a different skill.
         assert skill["uid"] == first_uid
+
+
+def test_import_cannot_overwrite_a_skill_coffer_generates(tmp_path, monkeypatch):
+    """The name of a builtin skill is reserved against an overwriting import.
+
+    DELETE already refuses a builtin skill, but the guard reads the row's
+    ``source``. An import with ``overwrite=true`` from a folder whose
+    frontmatter says ``coffer-guide`` rewrote that field to ``local_import``,
+    and the protection went with it: the skill was deletable until the next
+    boot seeded it back. The rule is about *generated* skills, not about one
+    magic name — the same ``is_builtin`` predicate decides all three.
+    """
+    app = _app(tmp_path, monkeypatch, 59618)
+    src = tmp_path / "impostor"
+    _write_skill_folder(src, name="coffer-guide")
+    with _client(app) as c:
+        # The seeded builtin is there to begin with.
+        uid = _skill_uid_by_name(c, "coffer-guide")
+        before = c.get(f"/api/v1/skills/{uid}")
+        assert before.status_code == 200, before.text
+        assert before.json()["builtin"] is True
+
+        r = c.post("/api/v1/skills/import", json={"path": str(src), "overwrite": True})
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "RESOURCE_PROTECTED"
+
+        # Untouched — the same ROW, not merely the same name: an overwriting
+        # import that had got through would have left one called this either
+        # way, and the uid is what tells the two apart.
+        assert _skill_uid_by_name(c, "coffer-guide") == uid
+        after = c.get(f"/api/v1/skills/{uid}")
+        assert after.json()["source"] == {"type": "builtin"}
+        assert after.json()["builtin"] is True
+        assert after.json()["version_hash"] == before.json()["version_hash"]
+        assert c.delete(f"/api/v1/skills/{uid}").status_code == 409
+
+
+def test_import_without_overwrite_still_reports_the_reservation(tmp_path, monkeypatch):
+    """Even the plain 409 path names the right reason for a builtin name."""
+    app = _app(tmp_path, monkeypatch, 59620)
+    src = tmp_path / "impostor"
+    _write_skill_folder(src, name="coffer-guide")
+    with _client(app) as c:
+        r = c.post("/api/v1/skills/import", json={"path": str(src)})
+        assert r.status_code == 409, r.text
+        # Without --force this is an ordinary name clash; the reservation is
+        # what ``overwrite=true`` would otherwise have walked around.
+        assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
 
 
 def test_skill_repair_route(tmp_path, monkeypatch):

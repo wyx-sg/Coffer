@@ -36,7 +36,12 @@ The framework unifies:
   their directory through an `on_rename` hook. The integer `resources.id` stays
   an internal surrogate primary key — the FK the four kind-owned tables hold —
   and is never an external identity)
-- Lifecycle (register / update / enable / disable / delete)
+- Lifecycle (register / update / enable / disable / delete). A kind may supply a
+  **pre-write delete guard** (`Kind.validate_delete`), run once the resource is
+  resolved and before its cleanup hook, so a refusal costs nothing and reads the
+  same through the kind's own route and the kind-agnostic one — a validator,
+  not a rejection from inside `on_delete`, which is a reaction to a delete
+  already decided. Only `skill` supplies one (spec resource-framework FR-010).
 - Audit (every lifecycle change recorded with actor)
 - Schema validation (per-kind Pydantic schema, kind-agnostic dispatch)
 - Scope (an optional activation list of agent `uid`s, `null` meaning every
@@ -57,11 +62,12 @@ Currently registered kinds:
 | ---------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mcp_server`     | [mcp-gateway](../../specs/mcp-gateway/spec.md)       | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs.                                                                                                                                                                                                                                                                                  |
 | `agent`          | [agent-registry](../../specs/agent-registry/spec.md) | A registered coding agent (e.g. Claude Code). Carries its config directory and the Coffer-MCP install state. The workspace amendment also surfaces the agent's own files as **read-only** facets — MCP entries (listed, with adopt-into-Coffer the one write), plugins (listed only), and directory config entries with per-child edit — all derived at read time, never stored. Coffer no longer writes into another tool's private config to remove, toggle or uninstall an entry: the plugin toggle/uninstall surface and the MCP entry remove/toggle surface are gone, and with them the `agent_plugin_toggled`, `agent_plugin_uninstalled` and `agent_mcp_entry_removed` audit events.                                                       |
-| `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store). Delivery is decided by the skill's own `enabled` flag intersected with its agent scope and reconciled on every change to either — the agent-side follow-master-library policy this row once described is gone.                                                                                                     |
+| `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store). Delivery is decided by the skill's own `enabled` flag intersected with its agent scope and reconciled on every change to either — the agent-side follow-master-library policy this row once described is gone. One skill is Coffer's own: `coffer-guide`, whose `builtin` source means the master folder is rewritten from the running build at every boot and whenever the knowledge catalogue moves, whose deletion is refused (`RESOURCE_PROTECTED`, 409) while `enabled` and scope stay the owner's, and which is otherwise delivered, verified, repaired and audited by exactly the same code as an imported skill ([Coffer Ships Its Own Skill](../../docs/decisions/coffer-ships-its-own-skill.md)).                                                                                                     |
 | `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | One **collection** — a top-level folder under `~/.coffer/knowledge/` holding two lanes, `sources/` (what people contribute) and `topics/` (what curation derives and agents read). The collection is the only boundary the system knows, and it is a Resource for its lifecycle and its one switch: `enabled`, which decides whether it is served at all. It carries **no per-agent reach** — every enabled collection is catalogued into every agent's delivered skill, since the per-agent form only trimmed a skill that hands the agent the whole knowledge root anyway (spec knowledge FR-010). Nothing is derived from a cwd and nothing auto-provisions. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md). |
 | `channel`        | [channels](../../specs/channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with managed agents from the IM app and receives notifications. Its per-agent scope is read INVERTED — it names the agents this channel may drive, since a channel is an inbound surface no agent consumes — narrowing `/agent` and the channel's own default agent; a channel that may drive nothing does not run. A channel DOES sync, and carries `runs_on` — the `machine_id` of the one machine whose daemon starts its adapter, so the document travels and the adapter does not (spec channels FR-026). Thin adapters over the turn-platform seams (spec chat FR-001…FR-026), which the web Chat page sits on as the second surface (spec chat FR-029…FR-041) — once a message reaches the turn orchestrator nothing downstream knows which surface it came from ([Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md), [Chat Is a Single-Owner Live Mirror](../../docs/decisions/chat-single-owner-live-mirror.md)).                                                                                              |
 | `memory`         | [memory](../../specs/memory/spec.md)                 | One **partition** of aggregated agent memory — a project, or `global`. Its facts are read out of the registered agents' own native memories, never written back; everything on disk is derived and rebuildable, with no non-derived state left beside it — the per-fact hide/pin/mark-superseded/settle-a-conflict overrides went with the surface that recorded them, and the table that stored them was dropped. It carries **no per-agent reach**: an enabled partition is delivered to, and recalled by, every agent — the reach it used to default to, the agents it had been aggregated from, withheld a repository's notes from the other agent working in that same repository, which is the opposite of what aggregating is for (spec memory FR-013) ([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)).                                                                                              |
 | `provider`       | [provider-switching](../../specs/provider-switching/spec.md) | One **model-provider profile** — a wire protocol, a base URL and one `credential_ref`. Pure config with no on-disk artifact, so it takes the framework's generic create/update path. Its per-agent scope names the agents it projects into, which is the reach this kind used to carry itself as `compatible_agents` inside its own config; `application/provider/targets.py` is the enforcement point the switch, the per-agent key lookup, the import reconcile and the boot self-heal all read. A new profile starts scoped to the agents its protocol can actually serve rather than to every agent ([Provider Switching](../../docs/decisions/provider-switching.md)). |
+| `workflow`       | [workflow](../../specs/workflow/spec.md) | One **delivery template** — an ordered list of stages, the nodes inside them, and the feedback edges between them. The engine reads no meaning from any stage key, so a three-stage flow and an eight-stage flow are the same code. Its per-agent scope is read INVERTED, as the agents this template may drive — a node naming an agent outside it is refused at validation, the way a channel's scope names the agents it may drive. Only the template is a Resource: a **run** is operational state, belongs to one machine, does not sync and has no reach ([A Workflow Run's Writes Are Gated at the Gateway](../../docs/decisions/workflow-gates-tool-calls.md)). |
 
 The knowledge layer is **a directory, not a database**, and it has two lanes.
 Under `~/.coffer/knowledge/<collection>/`, `sources/` holds what a person, an
@@ -112,16 +118,26 @@ semantic retrieval is expected back
 The layer contributes **one** builtin tool, `coffer__write` (see
 [Builtin tools](#builtin-tools)), because writing is where an agent genuinely
 needs Coffer: the collection, the lane, the frontmatter and the audit entry are
-Coffer's to decide. Everything else rides a **generated skill**, written per
-agent into `<config_dir>/skills/coffer-knowledge/SKILL.md` as real bytes rather
-than a link into one shared master. Its frontmatter description names the
-subjects the agent's collections cover — the only part of this layer always in
-a model's context — and its body carries the absolute knowledge root and every
-topic document's path, title and description. Per-agent authorization is
-enforced **there**: a collection an agent is not activated for is never named,
-so it is non-disclosure rather than a refusal after the fact. Nothing is
-injected into a session and no agent's own memory is written to
+Coffer's to decide. Everything else rides **Coffer's own skill**, `coffer-guide`
+([Coffer Ships Its Own Skill](../../docs/decisions/coffer-ships-its-own-skill.md)).
+This layer renders the text — `application/knowledge/guide_render.py`, pure, with
+the hand-written half of the body shipped as package data in `skill_assets/` —
+and the skill kind writes, registers and delivers it like any other skill; the
+composition root (`surfaces/http/guide_wiring.py`) is the one place allowed to
+join the two, since the kinds may not import each other. Its description names
+Coffer, its builtin tools and the subjects the enabled collections cover — the
+only part always in a model's context — and its body carries Coffer's manual
+followed by the knowledge root and every topic document's path, title and
+description. Nothing is injected into a session and no agent's own memory is
+written to
 ([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)).
+
+The rendered file **must be byte-identical on every machine** running the same
+build over the same catalogue: the master folder and the resource row both
+converge while the file is regenerated locally at every boot, so a machine-local
+difference — an absolute home path, a timestamp — would have two vaults
+overwriting each other forever. Hence the `~`-relative knowledge root and the
+fieldless `builtin` source (spec knowledge FR-047, spec skill-manager FR-028).
 
 The **curation** pass is a bounded agentic rewrite of one collection's
 `topics/`, driven by the internal-engine connection. One pass sees one source
@@ -155,7 +171,6 @@ without passing through the registry.
 | ----------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | knowledge   | `coffer__write`                                                                                           | `application/knowledge/builtin_tools.py`                                   |
 | memory      | `coffer__recall`                                                                                          | `application/memory/builtin_recall_tool.py`                                |
-| skill       | `coffer__list_skills`, `coffer__load_skill`                                                               | `application/skill/builtin_tools.py`                                       |
 | diagnostics | `coffer__diagnose`                                                                                        | `application/diagnostics.py`                                               |
 | gateway     | `coffer__search_tools` ([Tool Retrieval](../../docs/decisions/tool-retrieval-for-overload.md))            | `application/mcp/gateway_builtin.py`                                       |
 
@@ -183,7 +198,8 @@ backend/coffer/
 │   ├── chat/                     # conversation, message, attachment, turn events
 │   ├── memory/                   # fact, partition, budget, delivery, reader protocol
 │   ├── provider/                 # provider config, modality, projection rules
-│   └── sync/                     # manifest, models, diff, convergence + machine rules
+│   ├── sync/                     # manifest, models, diff, convergence + machine rules
+│   └── workflow/                 # template validation, run/node/approval state, transitions, event fold
 ├── application/
 │   ├── resource_service.py       # kind-agnostic CRUD; reads app.state.kinds
 │   ├── audit_service.py
@@ -193,15 +209,16 @@ backend/coffer/
 │   ├── credentials/              # shared CredentialResolver (refs → secrets)
 │   ├── mcp/                      # gateway, supervisor, discovery, search_tools + make_mcp_kind
 │   ├── agent/                    # agent services + make_agent_kind
-│   ├── skill/                    # skill services, list_skills/load_skill + make_skill_kind
-│   ├── knowledge/                # one service, one tool, curation, skill rendering + make_knowledge_kind
+│   ├── skill/                    # skill services, builtin-skill seed + make_skill_kind
+│   ├── knowledge/                # one service, one tool, curation, the guide skill's text + make_knowledge_kind
 │   ├── channel/                  # adapter protocol, pairing, inbound, runtime + make_channel_kind
 │   ├── chat/                     # turn orchestrator, runner, state, conversation service
 │   ├── memory/                   # aggregate, digest, delivery, recall + make_memory_kind
 │   ├── provider/                 # provider service, projection, reconcile + make_provider_kind
 │   ├── engine/                   # which connection Coffer's own unattended passes run on; must not import the provider kind
 │   ├── sync/                     # converge round, exporter, appliers, worker, ports
-│   └── fs/                       # filesystem browse / pick / open / editor services
+│   ├── fs/                       # filesystem browse / pick / open / editor services
+│   └── workflow/                 # run + node services, node driver, context composer, approvals, gate, advancer + make_workflow_kind
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
 │   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
@@ -218,29 +235,32 @@ backend/coffer/
 │   ├── chat/                     # Claude SDK / Codex adapters, persistence, document extraction
 │   ├── memory/                   # native-memory readers, store, delivery state
 │   ├── provider/                 # provider introspector
-│   └── sync/                     # git mirror, tree mirror, bundle, machine id
+│   ├── sync/                     # git mirror, tree mirror, bundle, machine id
+│   └── workflow/                 # run/event/attempt/approval repos, run paths, artifact store
 └── surfaces/
     ├── http/                     # FastAPI app, composition root, per-kind routers + `*_wiring.py`
     │   ├── chat/                 # conversation + turn routes
     │   ├── knowledge/            # knowledge routes
     │   ├── mcp/                  # MCP protocol endpoint, capability + invocation routes
-    │   └── memory/               # memory routes
+    │   ├── memory/               # memory routes
+    │   └── workflow/             # run, node, approval and artifact routes
     ├── cli/                      # Typer app + per-kind subcommand groups
     ├── shim/                     # coffer-mcp-shim entry
     └── callback/                 # channel callback listener (separate process)
 ```
 
 Composition root (`surfaces/http/app.py`, `surfaces/cli/main.py`) explicitly
-wires each of the seven kinds — no global registry, no import side effects.
+wires each of the eight kinds — no global registry, no import side effects.
 Each kind's `make_*_kind()` factory (`make_mcp_kind`, `make_agent_kind`,
 `make_skill_kind`, `make_knowledge_kind`, `make_channel_kind`,
-`make_provider_kind`, `make_memory_kind`) returns a frozen `Kind`
+`make_provider_kind`, `make_memory_kind`, `make_workflow_kind`) returns a frozen `Kind`
 (`domain/resource.py`), and the composition root populates the per-app
 `app.state.kinds` dict (`kind_name → Kind`) directly: `app_mcp_composition.py`
 sets `"mcp_server"`, `agent_skill_wiring.py` sets `"agent"` and `"skill"`,
 `knowledge_wiring.py` sets `"knowledge"`, `channel_wiring.py` sets
-`"channel"`, `provider_wiring.py` sets `"provider"` and `memory_wiring.py`
-sets `"memory"`. `ResourceService` reads that dict for kind-agnostic dispatch.
+`"channel"`, `provider_wiring.py` sets `"provider"`, `memory_wiring.py`
+sets `"memory"` and `workflow_wiring.py` sets `"workflow"`.
+`ResourceService` reads that dict for kind-agnostic dispatch.
 The surface-layer artefacts a kind contributes (HTTP routers, Typer groups)
 are registered by those same wiring modules; there is no carrier object for
 them, and nothing in `domain/` knows they exist.

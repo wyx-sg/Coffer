@@ -21,7 +21,7 @@ A Pydantic model recording where a managed skill came from. In v1, only local-fo
 
 Pydantic v2 `BaseModel`. It carries no copy of the skill's name: the name comes
 from the SKILL.md frontmatter at import and is stored once, as `Resource.name`.
-A `skill_md_name` key mirrored it until migration 0092 stripped it — one fact
+A `skill_md_name` key mirrored it until migration 0098 stripped it — one fact
 written twice, with nothing reading the second copy and two places to disagree
 once renaming arrived ([Resource Identity Is an Immutable
 `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).

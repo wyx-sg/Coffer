@@ -42,6 +42,7 @@ const SAMPLE: SkillOut[] = [
     name: "hello",
     description: "h",
     source: { type: "local_import", original_path: "/tmp/h" },
+    builtin: false,
     enabled: true,
     scope: null,
     version_hash: "x",

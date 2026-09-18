@@ -56,6 +56,7 @@ _STATUS: dict[str, int] = {
     # spec skill-manager
     "SKILL_INVALID": 422,
     "TARGET_CONFLICT": 409,
+    "RESOURCE_PROTECTED": 409,
     # agent workspace (specs agent-registry/skill-manager amendment)
     "MCP_ENTRY_NOT_FOUND": 404,
     "PLUGIN_NOT_FOUND": 404,
@@ -150,7 +151,41 @@ _STATUS: dict[str, int] = {
     # that asked should already have been showing the running one
     # (``application.upkeep_runs``).
     "UPKEEP_ALREADY_RUNNING": 409,
+    # spec workflow. The four 409s are exactly the codes the contract's
+    # ``Conflict`` response names (specs/workflow/contracts/api.openapi.yaml):
+    # a stale version, a terminal run, a run this machine does not own, and an
+    # illegal transition. ``WORKFLOW_ATTEMPT_CEILING`` joins them because it is
+    # the same kind of answer — the loop has ended and no retry will be
+    # accepted again — rather than a malformed request.
+    "WORKFLOW_VERSION_CONFLICT": 409,
+    "WORKFLOW_RUN_TERMINAL": 409,
+    "WORKFLOW_NOT_THIS_MACHINE": 409,
+    "WORKFLOW_ILLEGAL_TRANSITION": 409,
+    "WORKFLOW_ATTEMPT_CEILING": 409,
+    # A workflow that is switched off: the request is well formed and the
+    # workflow exists, so it is a conflict with its state rather than a bad
+    # request — the same answer shape as a terminal run.
+    "WORKFLOW_TEMPLATE_DISABLED": 409,
+    "WORKFLOW_RUN_LABEL_INVALID": 422,
+    "WORKFLOW_UNKNOWN_AGENT": 422,
+    # A template whose config does not validate, and a node completed without
+    # the artifact it owes: both are the request being refused, and both name
+    # the field or the file in ``details.reason``.
+    "WORKFLOW_TEMPLATE_INVALID": 400,
+    "WORKFLOW_MISSING_ARTIFACT": 400,
+    # An uploaded input's filename, or a node key on its way to a path. It is
+    # refused deep in the path layer, but it is the CALLER's input, so it is a
+    # 400 rather than the 500 an unmapped domain error would become.
+    "WORKFLOW_UNSAFE_PATH": 400,
+    # Asked to unmount an input the run does not have: the thing named in the
+    # path is not there, which is what 404 says.
+    "WORKFLOW_INPUT_NOT_FOUND": 404,
 }
+
+#: The one refusal that carries more than a message: a stale version is refused
+#: with the run's CURRENT version and position so the client can re-read and
+#: decide in one round trip rather than two (spec workflow FR-015).
+_VERSION_CONFLICT_DETAILS = ("current", "expected", "status", "stage_key", "node_key")
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
 # bare HTTPException. This keeps the response shape consistent so frontend
@@ -205,6 +240,14 @@ def _details_for(exc: errors.CofferError) -> dict[str, Any]:
     hint = getattr(exc, "hint", None)
     if hint:
         out["hint"] = hint
+    if exc.code == "WORKFLOW_VERSION_CONFLICT":
+        # Keyed on the code rather than on an isinstance check so this module
+        # stays free of any one kind's imports, and narrow so no other error's
+        # envelope changes shape.
+        for field in _VERSION_CONFLICT_DETAILS:
+            value = getattr(exc, field, None)
+            if value is not None:
+                out[field] = value
     return out
 
 

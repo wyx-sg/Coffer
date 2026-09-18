@@ -531,13 +531,13 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-zA-Z0-9_.\\-]+$"
           description: >-
             Renaming is a field, not an operation — the same level as editing a
             description, for every kind. Absent leaves the label alone; a label
             another resource of this kind already holds answers 409.
-          minLength: 1
-          maxLength: 64
-          pattern: "^[a-zA-Z0-9_.-]+$"
         description:
           type: string
           nullable: true

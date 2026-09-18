@@ -100,34 +100,43 @@ async def update_resource(
 
     ``name`` is an ordinary field here, at the same level as ``description``,
     which is the whole user-facing point of the identity change: while the name
-    WAS the identity, moving it needed its own route, and only one kind of the
-    seven ever got one.
+    WAS the identity, moving it needed its own route, and only one kind ever
+    got one.
 
-    The rename runs first and on its own, because it is the one part that can
-    be refused for a reason the config half knows nothing about — a label
-    another resource of this kind already holds (409).
+    An ABSENT field leaves what is stored alone, and so does an explicit null.
+    ``model_fields_set``, not a value comparison: every field here is optional
+    and ``None`` is a legal VALUE for ``description``, so "the client did not
+    mention it" and "the client asked to clear it" are the same ``None`` and can
+    only be told apart by which keys the body carried. Comparing values instead
+    read a rename-only PATCH as a request to clear the description, and wiped it
+    — silently, with a spurious update event in the audit trail to match. For
+    ``config`` there is no clearing at all: a resource without a config is not a
+    state any kind has, so a client that wanted it emptied would say ``{}``, and
+    one that said null is a client that filled in a field it had no value for.
     """
-    r = await svc.get(uid)
-    if body.name is not None:
-        r = await svc.rename(uid, body.name, actor=actor)
-    # ``model_fields_set``, not a value comparison. Every field here is
-    # optional and ``None`` is a legal VALUE for ``description``, so "the
-    # client did not mention it" and "the client asked to clear it" are the
-    # same ``None`` and can only be told apart by which keys the body carried.
-    # Comparing values instead read a rename-only PATCH as a request to clear
-    # the description, and wiped it — silently, with a spurious update event in
-    # the audit trail to match.
     sent = body.model_fields_set
-    if "config" in sent or "description" in sent:
+    edits_config = "config" in sent and body.config is not None
+    edits_description = "description" in sent
+
+    # A rename ALONE touches no config, so it runs no config write. Rewriting
+    # the stored config back over itself is not a no-op: it re-validates, it
+    # re-probes every credential the config cites, it fires the kind's update
+    # hook and it records a `resource_updated` with identical before and after.
+    # A rename refused because a credential this resource mentions has since
+    # been deleted is a refusal about something the caller did not touch.
+    r = await svc.get(uid)
+    if edits_config or edits_description:
         r = await svc.update_config(
             uid,
-            # An explicit ``"config": null`` leaves the config alone rather
-            # than clearing it: a resource without a config is not a state any
-            # kind has, so there is nothing for null to mean here.
             new_config=body.config if body.config is not None else r.config,
             actor=actor,
-            description=body.description if "description" in sent else r.description,
+            description=body.description if edits_description else r.description,
         )
+    # The rename comes LAST, so a refused config leaves the name alone: one
+    # PATCH that renamed a resource and then rejected its config would have
+    # moved the thing the caller was about to retry against.
+    if body.name is not None:
+        r = await svc.rename(uid, body.name, actor=actor)
     return _to_out(r)
 
 

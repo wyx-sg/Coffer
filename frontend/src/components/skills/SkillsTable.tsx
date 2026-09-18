@@ -11,7 +11,10 @@
 // The name cell also carries the copy_fallback "Copied" chip (FR-011): when a
 // delivery had to fall back to a copy, the UI must say so, and this list is the
 // only place the whole library is in view — the agent's Skills tab no longer
-// repeats it.
+// repeats it. Beside it sits the "Built-in" chip: Coffer's own generated skill
+// sits in the same library as the user's, so the list has to say which one the
+// daemon rewrites at every start — and that row gives up both deletes, the
+// per-row one (disabled, with the reason) and the bulk one (no checkbox).
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -24,9 +27,40 @@ import {
 } from "@/components/skills/SkillsTableActions";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SkillOut } from "@/lib/api/skills";
 import { useRemoveSkill } from "@/lib/hooks/useSkills";
 import { reachFilter } from "@/lib/reachFilter";
+import { toneClass } from "@/lib/statusColors";
+import { cn } from "@/lib/utils";
+
+/** The mark on the one skill Coffer writes itself. Informational, not a
+ *  warning: nothing is wrong with a built-in skill, it is simply not the
+ *  reader's to edit or delete — so it wears the muted tone rather than the
+ *  status-warn the "Copied" chip beside it uses. */
+function BuiltinBadge() {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      {/* The span is the trigger, not the Badge: Badge is a plain function
+          component, so Radix has nothing to anchor the tooltip to if it is
+          handed the ref. `tabIndex` keeps the hint reachable from the keyboard,
+          which a hover-only mark would not be. */}
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="inline-flex shrink-0 rounded-full">
+          <Badge
+            variant="outline"
+            data-testid="skill-builtin-badge"
+            className={cn("cursor-default border-transparent", toneClass("muted"))}
+          >
+            {t("skills.builtinBadge")}
+          </Badge>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{t("skills.builtinTooltip")}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 export function SkillsTable({
   skills,
@@ -51,6 +85,7 @@ export function SkillsTable({
       cell: (s) => (
         <span className="flex items-center gap-2">
           <span className="font-medium">{s.name}</span>
+          {s.builtin && <BuiltinBadge />}
           {s.bindings.some((b) => b.link_mode === "copy_fallback") && (
             <Badge
               variant="outline"
@@ -116,6 +151,12 @@ export function SkillsTable({
         }}
         filters={filters}
         onRowClick={(s) => navigate(`/skills/${encodeURIComponent(s.uid)}`)}
+        // A built-in skill cannot be deleted, and this table's selection feeds
+        // exactly one destructive bulk action, so it gets no checkbox at all
+        // rather than a selection the bulk bar would then have to refuse. Its
+        // reach is still fully editable from the row's own ScopeControl — only
+        // the bulk shortcut to it is given up, which is the smaller loss.
+        isSelectable={(s) => !s.builtin}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.name}`,

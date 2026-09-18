@@ -15,7 +15,9 @@ this layer is concerned.
 from __future__ import annotations
 
 import dataclasses
+import logging
 import pathlib
+from collections.abc import Awaitable, Callable
 
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -37,6 +39,12 @@ from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import catalogue, fs, paths
 from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES, RipgrepSearch
 
+logger = logging.getLogger(__name__)
+
+#: Called when the set of collections changes, so the skill that carries
+#: the catalogue can be re-rendered (spec knowledge FR-035).
+CatalogueChanged = Callable[[], Awaitable[object]]
+
 KIND_KNOWLEDGE = "knowledge"
 
 
@@ -47,10 +55,16 @@ class KnowledgeService:
         resources: ResourceService,
         audit: AuditService,
         search: RipgrepSearch | None = None,
+        on_catalogue_changed: CatalogueChanged | None = None,
     ) -> None:
         self._resources = resources
         self._audit = audit
         self._search = search or RipgrepSearch()
+        # Fired when the set of collections changes, so Coffer's own skill —
+        # which carries the catalogue — is re-rendered rather than going stale
+        # until the next boot or curation pass. Injected, because what renders
+        # it lives outside this kind.
+        self._on_catalogue_changed = on_catalogue_changed
 
     # ----- collections -------------------------------------------------
 
@@ -126,9 +140,25 @@ class KnowledgeService:
         fs.create_collection_dir(name)
         if description:
             paths.readme_path(name).write_text(f"# {name}\n\n{description}\n", encoding="utf-8")
+        await self.catalogue_changed()
         return CollectionEntry(
             uid=registered.uid, name=name, description=catalogue.readme_description(name)
         )
+
+    async def catalogue_changed(self) -> None:
+        """Tell whoever renders the catalogue that it moved.
+
+        Never raises: the collection has already been created, deleted or
+        switched by the time this runs, and a failure to re-render must not
+        turn a completed operation into an error the caller sees. The next
+        boot renders it anyway.
+        """
+        if self._on_catalogue_changed is None:
+            return
+        try:
+            await self._on_catalogue_changed()
+        except Exception:
+            logger.warning("knowledge.catalogue_changed.notify_failed", exc_info=True)
 
     async def list_collections(self) -> list[CollectionEntry]:
         """The enabled collections, each carrying the uid its routes address.

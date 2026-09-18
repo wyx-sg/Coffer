@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from coffer.application.skill.builtin_seed import is_builtin
+from coffer.domain.errors import ResourceProtected
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.frontmatter import validate_frontmatter_name
@@ -37,6 +39,51 @@ OnEnabledChangedHook = Callable[[Resource], Awaitable[None] | None]
 #: ``(skill_as_it_stands, new_name)``. Awaited by ResourceService.rename
 #: BEFORE the row moves.
 AsyncOnRename = Callable[[Resource, str], Awaitable[None]]
+
+
+def _refuse_builtin_delete(skill: Resource) -> None:
+    """Refuse to delete a skill Coffer generates.
+
+    The master folder is rewritten from the running build at the next boot, so
+    the delete would undo itself — a destructive-looking operation that leaves
+    the vault exactly where it started, minus whatever links it tore down on
+    the way. ``enabled`` and ``scope`` stay available: those decide reach,
+    which is the owner's call; existence is not.
+    """
+    if is_builtin(skill.config):
+        raise ResourceProtected(
+            # The LABEL, not the uid: this message is read by whoever asked
+            # for the delete, and they asked for it by name. The import half
+            # of the same refusal, over in ``lifecycle_ops``, phrases its
+            # subject exactly this way, so the two read as one rule.
+            f"skill {skill.name}",
+            "it is rewritten from the running build at every start, so "
+            "deleting it would not last; disable it instead, or narrow its scope",
+        )
+
+
+def _row_converges(config: dict[str, object]) -> bool:
+    """Whether one skill row travels to the user's other machines.
+
+    Every skill a person imported does. Coffer's own does not: its master
+    folder is rendered locally from the running build, the knowledge files
+    (which converge on their own) and **this machine's own switches** — which
+    collections are enabled is machine-local reach (spec vault-sync FR-014) and
+    deliberately stays home.
+
+    So two machines holding identical knowledge but a different set of
+    collections switched on render different bytes, each correct where it is.
+    Publishing either — the folder or the row whose ``version_hash`` is that
+    folder's digest — makes the other overwrite it, and the overwritten machine
+    re-renders on its next boot or curation tick and publishes back. That is a
+    commit and an audit event per tick on both machines, forever, over an
+    artifact neither machine reads from the other. The same is true of any
+    version skew, since the shipped half of the text moves between builds.
+
+    It is derived output, so it is regenerated rather than received: every
+    machine already has everything it takes to produce its own.
+    """
+    return not is_builtin(config)
 
 
 def make_skill_kind(
@@ -75,6 +122,15 @@ def make_skill_kind(
         # every copy delivered into an agent's skills dir, so renaming the row
         # alone would leave the label pointing at nothing.
         on_rename=_on_rename,
+        # A builtin skill's row is Coffer's, not the user's: deleting it is a
+        # no-op the next boot undoes, so the framework refuses it up front
+        # for every surface at once.
+        validate_delete=_refuse_builtin_delete,
+        # ...and for the same reason its row does not travel, while every
+        # other skill's does. ``converges`` stays True for the kind; this
+        # withholds the one row that is derived output (spec vault-sync
+        # FR-093).
+        converges_row=_row_converges,
         # A skill row must be backed by an imported master folder under
         # ~/.coffer/skills/. Only SkillService (which creates that folder) may
         # register it; the generic POST /resources path is rejected (CODE-REG).

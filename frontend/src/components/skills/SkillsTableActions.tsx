@@ -15,6 +15,7 @@ import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
 import { RowDeleteButton } from "@/components/table/RowDeleteButton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { skillsApi, type SkillOut } from "@/lib/api/skills";
 import { skillsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
@@ -40,7 +41,12 @@ export function SkillStatusCell({ skill }: { skill: SkillOut }) {
 /** The per-row action: Delete (confirm). The dialog it opens is rendered at the
  *  table level (hoisted out of the clickable row) so closing it can't fall
  *  through to the row's navigation — this button just signals the parent via
- *  onDelete. */
+ *  onDelete.
+ *
+ *  Coffer's own generated skill is the one row that cannot be deleted: the
+ *  daemon rewrites its folder at every start, so the delete would be refused
+ *  (409 RESOURCE_PROTECTED) and, were it not, would undo itself one boot later.
+ *  The button is disabled and says why rather than offering a no-op. */
 export function SkillRowActions({
   skill,
   onDelete,
@@ -51,14 +57,31 @@ export function SkillRowActions({
   deleteDisabled: boolean;
 }) {
   const { t } = useTranslation();
+  const button = (
+    <RowDeleteButton
+      ariaLabel={t("skills.deleteAria", { name: skill.name })}
+      disabled={deleteDisabled || skill.builtin}
+      onDelete={onDelete}
+    />
+  );
 
   return (
     <div className="flex items-center justify-end gap-2">
-      <RowDeleteButton
-        ariaLabel={t("skills.deleteAria", { name: skill.name })}
-        disabled={deleteDisabled}
-        onDelete={onDelete}
-      />
+      {skill.builtin ? (
+        <Tooltip>
+          {/* The span is the trigger, not the button: a disabled button fires
+              no pointer events, so the only affordance that can still explain
+              the refusal is a wrapper around it. */}
+          <TooltipTrigger asChild>
+            <span tabIndex={0} className="inline-flex">
+              {button}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">{t("skills.builtinDeleteHint")}</TooltipContent>
+        </Tooltip>
+      ) : (
+        button
+      )}
     </div>
   );
 }

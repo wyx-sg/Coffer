@@ -70,6 +70,13 @@ datas = (
             "coffer/infrastructure/persistence/migrations",
             "coffer/infrastructure/persistence/migrations",
         ),
+        # The hand-written half of Coffer's own skill. It is markdown, so
+        # nothing imports it and PyInstaller's import graph cannot find it; a
+        # build without it seeds a skill whose whole manual is missing.
+        (
+            "coffer/application/knowledge/skill_assets",
+            "coffer/application/knowledge/skill_assets",
+        ),
     ]
     + collect_data_files("mcp", include_py_files=False)
 )

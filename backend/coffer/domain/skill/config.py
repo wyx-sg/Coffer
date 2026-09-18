@@ -19,7 +19,7 @@ class SkillConfig(BaseModel):
     # SKILL.md frontmatter's ``name``, which is also where the resource's own
     # name comes from — so it was a second spelling of ``Resource.name``, with
     # no reader anywhere and two places to disagree once renaming existed
-    # (ADR resource-identity-is-an-immutable-uid). Migration 0092 strips it.
+    # (ADR resource-identity-is-an-immutable-uid). Migration 0098 strips it.
     # The skill's name is ``Resource.name``; ask the row.
     #
     # Capped at 1024 to match the SKILL.md frontmatter ``description`` cap

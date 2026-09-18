@@ -19,10 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.application.resource_service import ResourceService
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.surfaces.http.agent_skill_wiring import AgentSkillWiring, wire_agent_and_skill_kinds
 from coffer.surfaces.http.app_mcp_composition import McpWiring, wire_mcp_kind
+from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring, wire_knowledge_kind
 from coffer.surfaces.http.memory_wiring import MemoryWiring, wire_memory_kind
 from coffer.surfaces.http.provider_wiring import ProviderWiring, wire_provider_kind
@@ -38,6 +40,10 @@ class KindWirings:
     knowledge: KnowledgeWiring
     memory: MemoryWiring
     mcp: McpWiring
+    #: Coffer's own skill. Built here rather than by either kind because it is
+    #: the knowledge layer's text written through the skill layer's store, and
+    #: the two may not import each other.
+    guide: BuiltinGuide
 
 
 async def wire_resource_kinds(
@@ -62,10 +68,27 @@ async def wire_resource_kinds(
         app, resource_svc, audit, credential_store, agent_skill.agent_service, sync
     )
 
+    # Coffer's own skill carries the knowledge catalogue, so a collection
+    # appearing, going or being switched has to reach the rendered file. The
+    # binding is late by necessity and not by accident: what renders that file
+    # needs the knowledge service to exist first, so the hook reads ``guide``
+    # at call time rather than closing over what it was at wiring time.
+    guide: BuiltinGuide | None = None
+
+    async def _catalogue_changed() -> None:
+        if guide is not None:
+            await guide.refresh()
+
     # The one knowledge kind: a directory of markdown files. Also builds ranked
     # retrieval and ingestion, and registers its built-in tools.
     knowledge = wire_knowledge_kind(
-        app, resource_svc, audit, builtin_tools, provider.internal_connection, credential_resolver
+        app,
+        resource_svc,
+        audit,
+        builtin_tools,
+        provider.internal_connection,
+        credential_resolver,
+        _catalogue_changed,
     )
 
     # Before wire_mcp_kind below, so the gateway advertises `coffer__recall`.
@@ -82,6 +105,19 @@ async def wire_resource_kinds(
     # Wire up MCP-specific plumbing (after other kinds so the gateway picks
     # their built-in tools).
     mcp = wire_mcp_kind(app, resource_svc, audit, sm, credential_store, builtin_tools, sync)
+
+    # Last, because it needs both ends: the knowledge kind's renderer and the
+    # skill kind's seed. The lifespan refreshes it once every kind is up.
+    guide = BuiltinGuide(
+        name=GUIDE_SKILL_NAME,
+        render=knowledge.render_guide,
+        seed=agent_skill.builtin_seed,
+    )
     return KindWirings(
-        agent_skill=agent_skill, provider=provider, knowledge=knowledge, memory=memory, mcp=mcp
+        agent_skill=agent_skill,
+        provider=provider,
+        knowledge=knowledge,
+        memory=memory,
+        mcp=mcp,
+        guide=guide,
     )

@@ -16,7 +16,7 @@ import dataclasses
 import inspect
 from typing import TYPE_CHECKING
 
-from coffer.application.resource_kind_hooks import check_name
+from coffer.application.resource_kind_ops import check_name
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.domain.resource import Kind, Resource

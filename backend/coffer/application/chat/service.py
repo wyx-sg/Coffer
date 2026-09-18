@@ -139,6 +139,7 @@ class ChatService:
         agent_config: dict[str, Any] | None = None,
         channel_uid: str | None = None,
         peer_chat_id: str | None = None,
+        owner: str | None = None,
     ) -> Conversation:
         """Create a conversation for the named agent.
 
@@ -154,6 +155,12 @@ class ChatService:
         naming the same channel after the user renames it, and only the uid does
         (ADR resource-identity-is-an-immutable-uid). Chat itself never reads the
         channel's label; whoever shows it resolves it from the uid.
+
+        ``owner`` names the surface this conversation belongs to, and only a
+        caller that is not the developer passes one. It keeps the conversation
+        out of the chat list without keeping it out of this table: a workflow
+        task's transcript is an ordinary transcript, read through this service
+        like any other, and that is the whole reason a task IS a conversation.
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 
@@ -166,6 +173,7 @@ class ChatService:
             updated_at=now,
             channel_uid=channel_uid,
             peer_chat_id=peer_chat_id,
+            owner=owner,
         )
         created = await self._conversations.create(conv)
 

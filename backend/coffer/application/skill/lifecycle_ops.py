@@ -15,8 +15,9 @@ import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from coffer.application.skill.builtin_seed import is_builtin
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import CofferError, ResourceAlreadyExists
+from coffer.domain.errors import CofferError, ResourceAlreadyExists, ResourceProtected
 from coffer.domain.resource import Resource
 from coffer.domain.scope import is_active
 from coffer.domain.skill.binding import LinkMode
@@ -51,6 +52,25 @@ def infer_link_mode(link: pathlib.Path) -> LinkMode:
     return LinkMode.COPY_FALLBACK
 
 
+def _refuse_overwriting_a_builtin(existing: list[Resource], name: str) -> None:
+    """Refuse an import that would take over a skill Coffer generates.
+
+    Deleting such a skill is already refused, but an overwriting import walked
+    around that: it rewrote the row's ``source`` to ``local_import``, and a row
+    that no longer looks builtin is no longer protected — the skill became
+    deletable until the next boot seeded it back. The rule is deliberately
+    "you may not overwrite a skill Coffer generates" rather than "this one name
+    is magic", so it reads the same ``is_builtin`` predicate the delete guard
+    and the read model do, and covers every generated skill there will ever be.
+    """
+    if any(r.name == name and is_builtin(r.config) for r in existing):
+        raise ResourceProtected(
+            f"skill {name}",
+            "the name belongs to a skill Coffer generates and rewrites at every "
+            "start; import under a different name",
+        )
+
+
 async def register_from_validated(
     *,
     service: SkillService,
@@ -70,6 +90,7 @@ async def register_from_validated(
     name_taken = existing_row is not None or service._store.exists(name)
     if name_taken and not overwrite:
         raise ResourceAlreadyExists("skill", name)
+    _refuse_overwriting_a_builtin(existing, name)
 
     now = datetime.now(tz=UTC)
     cfg = SkillConfig(
