@@ -36,17 +36,14 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { CornerUpLeft, Workflow } from "lucide-react";
+import { Workflow } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { NodeThread } from "@/components/workflow/NodeThread";
+import { NodeHeader } from "@/components/workflow/NodeHeader";
+import { NodeWorkspace } from "@/components/workflow/NodeWorkspace";
 import { SendBackDialog } from "@/components/workflow/SendBackDialog";
-import { TaskBrief } from "@/components/workflow/TaskBrief";
-import { NodeStatusBadge } from "@/components/workflow/WorkflowStatusBadge";
 import { translateApiError } from "@/lib/api/errors";
 import { useSayToTask, useWorkflowRun } from "@/lib/hooks/useWorkflowRun";
 import type { RunDetail } from "@/lib/api/workflow";
@@ -64,7 +61,9 @@ function locate(detail: RunDetail, nodeKey: string) {
  *  no height, so the padding is cancelled here and the screen height taken
  *  back — the same trick, and for the same reason, as ChatPage. */
 const WORKSPACE = "-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10";
-const GUTTER = "shrink-0 px-6 pt-10 md:px-10";
+/** The header, and nothing else, keeps a margin. Everything under it is the
+ *  work, and the work runs to the edges. */
+const GUTTER = "shrink-0 border-b border-border px-6 py-4 md:px-8";
 
 /** Run statuses that refuse every command, send-back included (FR-013). */
 const TERMINAL = ["completed", "aborted", "failed"];
@@ -113,32 +112,13 @@ export function WorkflowNodePage() {
   return (
     <div className={WORKSPACE}>
       <div className={GUTTER}>
-        <PageHeader
+        <NodeHeader
+          run={run}
+          stage={stage}
+          node={node}
           back={back}
-          title={node.name}
-          subtitle={t("workflow.nodeConversation.subtitle", {
-            run: run.title,
-            stage: stage.name,
-            type: t(`workflow.node.types.${node.type}`),
-          })}
-          actions={
-            canSendBack ? (
-              <Button variant="outline" size="sm" onClick={() => setSendingBack(true)}>
-                <CornerUpLeft aria-hidden />
-                {t("workflow.sendBack.action")}
-              </Button>
-            ) : undefined
-          }
-          badges={
-            <div className="flex flex-wrap items-center gap-2">
-              <NodeStatusBadge status={node.status} />
-              <Badge variant="outline">{t("workflow.node.attempt", { count: node.attempt })}</Badge>
-              {node.adhoc ? (
-                <Badge variant="secondary">{t("workflow.node.unplanned")}</Badge>
-              ) : null}
-              {node.skill ? <Badge variant="outline">{node.skill}</Badge> : null}
-            </div>
-          }
+          canSendBack={canSendBack}
+          onSendBack={() => setSendingBack(true)}
         />
 
         {latest?.failure_reason ? (
@@ -148,34 +128,22 @@ export function WorkflowNodePage() {
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 px-6 pb-6 pt-4 md:px-10">
-        {latest?.conversation_id ? (
-          <NodeThread
-            conversationId={latest.conversation_id}
-            ownedHere={run.owned_here}
-            runId={run.id}
-            attemptId={latest.id}
-            // Only a running task's turn can queue a message; every other
-            // state goes to the engine, which decides what the sentence means.
-            onSay={
-              node.status === "running"
-                ? undefined
-                : (text) => say.mutate({ nodeKey: node.key, text })
-            }
-          />
-        ) : (
-          // A task that never started has no transcript, and an empty thread
-          // would read as one in which nobody spoke. What it can have is a
-          // brief, written now rather than when the run reaches it (FR-068).
-          <TaskBrief
-            instructions={latest?.instructions}
-            started={node.status !== "pending"}
-            ownedHere={run.owned_here}
-            onSay={(text) => say.mutate({ nodeKey: node.key, text })}
-            pending={say.isPending}
-          />
-        )}
-      </div>
+      <NodeWorkspace
+        runId={run.id}
+        conversationId={latest?.conversation_id ?? null}
+        attemptId={latest?.id}
+        ownedHere={run.owned_here}
+        started={node.status !== "pending"}
+        instructions={latest?.instructions}
+        // Only a running task's turn can queue a message; every other state
+        // goes to the engine, which decides what the sentence means (FR-068).
+        onSay={
+          node.status === "running" && latest?.conversation_id
+            ? null
+            : (text: string) => say.mutate({ nodeKey: node.key, text })
+        }
+        saying={say.isPending}
+      />
 
       <SendBackDialog
         runId={run.id}

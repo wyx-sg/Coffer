@@ -10,20 +10,23 @@
 // rest of the run without being restated.
 //
 // The conversation is an ORDINARY Coffer conversation, so the chat layer owns
-// it end to end: `useChatTurn` for the live turn and the send, `useMessageThread`
-// for the rows, `MessageBubble` for each one, `Composer` for the input. A
-// second message renderer for workflow messages would be a second chat.
+// it end to end: `useMessageThread` for the rows and `MessageBubble` for each
+// one. A second message renderer for workflow messages would be a second chat.
+//
+// The TURN is handed in rather than started here: the composer sits below this
+// panel and the panel beside it, because what you type is addressed to the
+// task and not to one column of it. Send, stop and "is it streaming" are one
+// state, so they live where the composer is.
 import { useTranslation } from "react-i18next";
 
 import type { Message } from "@/lib/api/chat";
-import { Composer } from "@/components/chat/Composer";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatErrorBanner } from "@/components/chat/ChatErrorBanner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NodeApprovals } from "@/components/workflow/NodeApprovals";
 import { describeTurnError } from "@/lib/chat/turnErrors";
 import { translateApiError } from "@/lib/api/errors";
-import { useChatTurn, type PendingEcho } from "@/lib/hooks/useChatTurn";
+import type { PendingEcho, UseChatTurnResult } from "@/lib/hooks/useChatTurn";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
 
 /** Shape a just-sent prompt as a user message so MessageBubble renders it. */
@@ -41,27 +44,15 @@ function echoAsMessage(echo: PendingEcho, conversationId: string): Message {
 
 interface Props {
   conversationId: string;
-  /** False when another machine advances this run — read-only here (FR-012). */
-  ownedHere: boolean;
   runId: string;
   /** The attempt whose approvals belong in this thread (FR-039). */
   attemptId: string | null | undefined;
-  /**
-   * Where a typed sentence goes when the task's turn is NOT in flight.
-   *
-   * Only a running task takes a message straight to its conversation, where it
-   * queues server-side for the agent already reading it. Every other state —
-   * waiting for review, completed, failed — has no turn to queue against, so
-   * the sentence goes to the engine, which decides whether it carries the
-   * attempt on or opens the next one (FR-068). Left undefined, everything goes
-   * to the conversation.
-   */
-  onSay?: (text: string) => void;
+  /** The live turn, owned by the workspace because the composer is. */
+  turn: UseChatTurnResult;
 }
 
-export function NodeThread({ conversationId, ownedHere, runId, attemptId, onSay }: Props) {
+export function NodeThread({ conversationId, runId, attemptId, turn }: Props) {
   const { t } = useTranslation();
-  const turn = useChatTurn(conversationId);
   const { messages, isPending, error } = useMessageThread(
     conversationId,
     turn.liveMessage,
@@ -71,10 +62,10 @@ export function NodeThread({ conversationId, ownedHere, runId, attemptId, onSay 
 
   return (
     <section
-      className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card"
+      className="flex h-full min-h-0 flex-col"
       aria-label={t("workflow.nodeConversation.threadLabel")}
     >
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div className="flex-1 space-y-3 overflow-y-auto px-6 py-5">
         {isPending ? (
           <Skeleton className="h-16 w-full" />
         ) : error ? (
@@ -110,20 +101,6 @@ export function NodeThread({ conversationId, ownedHere, runId, attemptId, onSay 
           onDismiss={turn.clearError}
         />
       ) : null}
-
-      <div className="border-t border-border p-3">
-        {ownedHere ? (
-          // Never disabled by streaming: a message sent mid-turn queues
-          // server-side, and a node's turn can run for hours.
-          <Composer
-            onSend={onSay ?? ((text) => void turn.send(text))}
-            streaming={turn.isStreaming}
-            onStop={() => void turn.interrupt()}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">{t("workflow.nodeConversation.readOnly")}</p>
-        )}
-      </div>
     </section>
   );
 }

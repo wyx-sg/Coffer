@@ -82,11 +82,15 @@ describe("MessageBubble", () => {
     expect(screen.getByText("Attachment")).toBeInTheDocument();
   });
 
-  test("bubbles size to their content within a readable max width", () => {
+  test("bubbles size to their content, capped by the column and not only by a number", () => {
     const { container } = render(<MessageBubble message={makeUser({})} />);
     const bubble = container.querySelector(".rounded-xl") as HTMLElement;
     expect(bubble.className).toContain("w-fit");
-    expect(bubble.className).toContain("max-w-3xl");
-    expect(bubble.className).not.toMatch(/max-w-\[/);
+    // 48rem OR the column, whichever is smaller. A flat cap was fine while the
+    // thread owned the window; beside a context panel the column is narrower
+    // than 48rem, and an oversized child of an `items-end` column overflows
+    // the START edge — so a long message slid left, under the sidebar, with
+    // its first characters cut off.
+    expect(bubble.className).toContain("max-w-[min(48rem,100%)]");
   });
 });

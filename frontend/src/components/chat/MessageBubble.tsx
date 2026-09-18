@@ -45,14 +45,14 @@ function MessageBubbleImpl({ message, live }: Props) {
     return (
       <div className="flex flex-col items-end gap-1">
         {text && (
-          <div className="w-fit max-w-3xl whitespace-pre-wrap break-words rounded-xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
+          <div className="w-fit max-w-[min(48rem,100%)] whitespace-pre-wrap break-words rounded-xl rounded-tr-sm bg-primary/10 px-4 py-2.5 text-sm text-foreground">
             {text}
           </div>
         )}
         {attachments.map((a, i) => (
           <div
             key={`${a.filename ?? "file"}-${i}`}
-            className="flex w-fit max-w-3xl items-center gap-1.5 rounded-xl bg-muted px-3 py-1 text-xs text-muted-foreground"
+            className="flex w-fit max-w-[min(48rem,100%)] items-center gap-1.5 rounded-xl bg-muted px-3 py-1 text-xs text-muted-foreground"
             title={a.mime ?? undefined}
           >
             <span aria-hidden="true">📎</span>
@@ -78,7 +78,7 @@ function MessageBubbleImpl({ message, live }: Props) {
 
   return (
     <div className="flex justify-start">
-      <div className="w-fit max-w-3xl space-y-1">
+      <div className="w-fit max-w-[min(48rem,100%)] space-y-1">
         {pairs.map((p) => (
           <ToolCallCard key={p.use.tool_use_id} toolUse={p.use} toolResult={p.result} />
         ))}

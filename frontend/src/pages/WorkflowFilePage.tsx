@@ -10,25 +10,18 @@
 // The path is the run's to validate, not this page's: the daemon guards it
 // segment by segment and refuses anything that is not this run's to read, so
 // a hand-edited URL gets a refusal rather than a file.
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { FileQuestion } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
-import { Markdown } from "@/components/Markdown";
 import { PageHeader } from "@/components/PageHeader";
+import { RunFileView } from "@/components/workflow/RunFileView";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useWorkflowRunFile } from "@/lib/hooks/useWorkflowRun";
 import { formatBytes } from "@/lib/utils";
-
-/** Markdown is rendered; everything else is shown as it is written. A `.py`
- *  put through a prose renderer would lose its indentation, and a note the
- *  developer wrote in Markdown shown as source would be the raw asterisks. */
-function isMarkdown(name: string): boolean {
-  return /\.(md|markdown)$/i.test(name);
-}
 
 export function WorkflowFilePage() {
   const { t } = useTranslation();
@@ -85,30 +78,9 @@ export function WorkflowFilePage() {
         }
       />
 
-      {data.text === null || data.text === undefined ? (
-        // Honest rather than mojibake: the daemon says when the bytes are not
-        // text, and a preview that rendered them anyway would claim to have
-        // shown the developer something.
-        <EmptyState
-          icon={FileQuestion}
-          title={t("workflow.context.notTextTitle")}
-          description={t("workflow.context.notText")}
-        />
-      ) : isMarkdown(data.name) ? (
-        <div className="rounded-md border border-border bg-card p-5">
-          <Markdown>{data.text}</Markdown>
-        </div>
-      ) : (
-        <pre className="overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted p-4 font-mono text-xs">
-          {data.text}
-        </pre>
-      )}
-
-      {/* The run is where this file belongs; the header's back link is the
-          way out, and this is the way out for someone who scrolled. */}
-      <Link to={back.to} className="inline-block text-sm text-muted-foreground hover:underline">
-        {back.label}
-      </Link>
+      <div className="rounded-md border border-border bg-card p-5">
+        <RunFileView runId={runId} path={path} />
+      </div>
     </div>
   );
 }

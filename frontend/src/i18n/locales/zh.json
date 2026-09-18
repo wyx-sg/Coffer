@@ -1969,7 +1969,9 @@
       "reveal": "在文件管理器中显示",
       "backToRun": "返回这次运行",
       "fileNotFound": "这个文件不在",
-      "notTextTitle": "没什么可显示的"
+      "notTextTitle": "没什么可显示的",
+      "backToList": "返回列表",
+      "resize": "拖动可以调整上下文面板的宽度"
     },
     "sendBack": {
       "action": "退回",

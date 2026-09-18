@@ -1969,7 +1969,9 @@
       "reveal": "Show in the file manager",
       "backToRun": "Back to the run",
       "fileNotFound": "This file is not there",
-      "notTextTitle": "Nothing to show"
+      "notTextTitle": "Nothing to show",
+      "backToList": "Back to the list",
+      "resize": "Drag to resize the context panel"
     },
     "sendBack": {
       "action": "Send back",
