@@ -61,7 +61,10 @@ async def rename(
 
     # The vault is not touched: the ref is an address the config already holds,
     # and it does not spell the name out.
-    await service._resources.rename(service._ref(name), new, actor)
+    # ``allow_lifecycle_kind``: a connection's name is written out into another
+    # tool's config file, so the kind-agnostic rename is refused for it and
+    # this path — which re-projects afterwards — is the one that may move it.
+    await service._resources.rename(service._ref(name), new, actor, allow_lifecycle_kind=True)
 
     renamed = await service.get(new)
     await _reproject(service, new, renamed)

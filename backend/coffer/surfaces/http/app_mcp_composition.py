@@ -29,6 +29,7 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
+from coffer.application.mcp.gateway_gate import LateBoundToolGate
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.mcp.sync_state import McpPreferenceSyncState
@@ -72,6 +73,10 @@ class McpWiring:
     session_supervisors: dict[str, SubprocessSupervisor]
     session_factory: McpSessionFactory
     invocation_repo: MCPInvocationRepo
+    #: The holder every gateway session was handed. The workflow gate is bound
+    #: into it later in the lifespan — the gate cannot exist yet, because it
+    #: needs the chat platform, which is wired after this kind.
+    tool_gate: LateBoundToolGate
 
 
 def wire_mcp_kind(
@@ -113,6 +118,10 @@ def wire_mcp_kind(
     )
 
     # 5. Build the per-session MCPGatewaySession factory
+    # One holder for every session this factory ever builds, so binding the
+    # gate once reaches sessions opened before and after (FR-034).
+    tool_gate = LateBoundToolGate()
+
     def mcp_session_factory(session_id: str) -> MCPGatewaySession:
         supervisor = SubprocessSupervisor(
             resource_service=resource_svc,
@@ -135,6 +144,7 @@ def wire_mcp_kind(
         )
         return MCPGatewaySession(
             session_id=session_id,
+            tool_gate=tool_gate,
             resource_service=resource_svc,
             supervisor=supervisor,
             discovery=discovery,
@@ -155,6 +165,7 @@ def wire_mcp_kind(
         session_supervisors=session_supervisors,
         session_factory=mcp_session_factory,
         invocation_repo=inv_repo,
+        tool_gate=tool_gate,
     )
 
 

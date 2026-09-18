@@ -144,6 +144,12 @@ _ANNOTATION_KEYS = frozenset(
 #: reached by name from ``test_schemas_match_openapi._DOMAIN_SCHEMAS`` instead.
 _ORPHANS_BY_DESIGN = {
     "specs/mcp-gateway/contracts/api.openapi.yaml": {"MCPServerConfig"},
+    # A workflow template's ``config``, declared for the editor's generated
+    # type (spec workflow FR-054) and served by no route on purpose: a template
+    # is written through the kind-agnostic resource endpoint (FR-056), and a
+    # second write path would be a second contract for the same data. Named by
+    # ``tests/contract/test_workflow_openapi.py``, which walks out from it.
+    "specs/workflow/contracts/api.openapi.yaml": {"WorkflowTemplate"},
 }
 
 _MAX_DEPTH = 12

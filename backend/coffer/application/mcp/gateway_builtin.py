@@ -13,6 +13,8 @@ from typing import Any
 
 from coffer.application.builtin_tools import COFFER_TOOL_PREFIX, BuiltinToolRegistry
 from coffer.application.eval_capture import record_tool_search
+from coffer.application.mcp.discovery import CapabilityDiscovery
+from coffer.application.mcp.gateway_aggregate_lists import EnsureSubscribed, list_tools_across
 from coffer.application.mcp.gateway_handlers import _safe_error_summary
 from coffer.application.mcp.gateway_tool_search import (
     execute_tool_search,
@@ -249,3 +251,31 @@ async def dispatch_tool_search(
             session_id=session_id,
         )
         return {"content": [{"type": "text", "text": _tool_error_text(exc)}], "isError": True}
+
+
+async def run_tool_search(
+    params: dict[str, Any],
+    *,
+    discovery: CapabilityDiscovery,
+    ensure_subscribed: EnsureSubscribed,
+    servers: list[str],
+    invocations: MCPInvocationRepoPort,
+    session_id: str,
+    clock: Callable[[], datetime],
+) -> dict[str, Any]:
+    """Aggregate the catalogue, then search it.
+
+    Deliberately the untiered outcome: search is what makes an unlisted tool
+    reachable, so it must see the whole catalogue. Failed servers are ignored
+    here rather than recorded as degraded — a search that ranks what is
+    reachable is more useful than one that refuses, and ``tools/list`` is the
+    path that owns the degraded-server retry.
+    """
+    outcome = await list_tools_across(discovery, ensure_subscribed, servers)
+    return await dispatch_tool_search(
+        params=params,
+        aggregated_tools=outcome.items,
+        invocations=invocations,
+        session_id=session_id,
+        clock=clock,
+    )

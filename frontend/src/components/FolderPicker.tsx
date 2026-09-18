@@ -1,4 +1,4 @@
-// frontend/src/components/agents/FolderPicker.tsx — spec agent-registry v2, FR-050.
+// frontend/src/components/FolderPicker.tsx — spec agent-registry v2, FR-050.
 // Skill-directory picker. The browser can't read absolute paths, so Browse asks
 // the loopback daemon to open the host's OS-native directory dialog, and falls
 // back to a daemon-backed in-app folder browser when this host has no native
@@ -48,7 +48,7 @@ export function FolderPicker({
   return (
     <>
       <Button type="button" variant="outline" size="sm" onClick={onBrowse}>
-        {t("agents.folderPicker.browse")}
+        {t("picker.browse")}
       </Button>
       <FolderBrowserDialog
         open={browserOpen}
@@ -89,8 +89,8 @@ function FolderBrowserDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("agents.folderPicker.title")}</DialogTitle>
-          <DialogDescription>{t("agents.folderPicker.subtitle")}</DialogDescription>
+          <DialogTitle>{t("folderPicker.title")}</DialogTitle>
+          <DialogDescription>{t("folderPicker.subtitle")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ function FolderBrowserDialog({
               size="sm"
               disabled={!data?.parent}
               onClick={() => data?.parent && setPath(data.parent)}
-              aria-label={t("agents.folderPicker.up")}
+              aria-label={t("folderPicker.up")}
             >
               <ChevronUp className="size-4" />
             </Button>
@@ -118,7 +118,7 @@ function FolderBrowserDialog({
               <p className="p-4 text-sm text-destructive">{translateApiError(t, browse.error)}</p>
             ) : (data?.entries.length ?? 0) === 0 ? (
               <p className="p-4 text-sm text-muted-foreground">
-                {t("agents.folderPicker.emptyDir")}
+                {t("folderPicker.emptyDir")}
               </p>
             ) : (
               <ul>
@@ -147,7 +147,7 @@ function FolderBrowserDialog({
             disabled={!data?.path}
             onClick={() => data?.path && onSelect(data.path)}
           >
-            {t("agents.folderPicker.select")}
+            {t("folderPicker.select")}
           </Button>
         </DialogFooter>
       </DialogContent>

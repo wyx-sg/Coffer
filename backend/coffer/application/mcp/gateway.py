@@ -6,7 +6,9 @@ One instance per downstream MCP client connection. Owns:
 - A queue of upstream notifications to forward downstream
 
 Invocation handlers (tools/call, resources/read, prompts/get) live in
-`gateway_handlers` to keep this module under 400 LOC.
+`gateway_handlers` to keep this module under 400 LOC, and the tools/list
+composition — aggregate, plus built-ins, minus what tiering hides — lives in
+`gateway_tools_list`.
 
 Server-initiated request plumbing (T-061 sampling, T-062 roots) lives in
 `gateway_server_requests` for the same reason. The pure envelope-parsing
@@ -38,24 +40,23 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway_aggregate_lists import (
     list_prompts_across,
     list_resources_across,
-    list_tools_across,
 )
 from coffer.application.mcp.gateway_builtin import (
-    append_builtin_tools,
     dispatch_builtin_tool,
-    dispatch_tool_search,
     inject_session_context,
+    run_tool_search,
 )
+from coffer.application.mcp.gateway_gate import ToolCallGatePort, gated_upstream_call
 from coffer.application.mcp.gateway_handlers import (
     handle_prompts_get,
     handle_resources_read,
-    handle_tools_call,
 )
 from coffer.application.mcp.gateway_instructions import build_initialize_result
 from coffer.application.mcp.gateway_notifications import forward_upstream_notification
 from coffer.application.mcp.gateway_parsing import (
     _extract_agent,
     _extract_cwd,
+    _extract_run,
 )
 from coffer.application.mcp.gateway_recovery import DegradedTracker
 from coffer.application.mcp.gateway_scope import enabled_mcp_servers
@@ -63,8 +64,8 @@ from coffer.application.mcp.gateway_server_requests import (
     ServerRequestRegistry,
     build_session_callbacks,
 )
-from coffer.application.mcp.gateway_tiering import apply_tiering
 from coffer.application.mcp.gateway_tool_search import TOOL_SEARCH_NAME
+from coffer.application.mcp.gateway_tools_list import build_tools_listing
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
@@ -99,6 +100,7 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         tiering: TieringConfig | None = None,
+        tool_gate: ToolCallGatePort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -138,6 +140,12 @@ class MCPGatewaySession:
         # created from an agent's cwd at read time). The shim still stamps it
         # and this still threads it, so the behaviour outlives its requirement.
         self._session_cwd: str | None = None
+        # FR-035: the workflow run + node attempt whose turn this session
+        # serves, reported by the shim (params._meta["coffer/run"]).
+        self._session_run: str | None = None
+        # The gate that holds a run's write-class upstream calls. None here and
+        # None above are the same promise, read from two sides: see gateway_gate.
+        self._tool_gate = tool_gate
         # Track which servers we've subscribed to notifications on so we
         # only attach the handler once per (session, server) pair.
         self._notification_subscriptions: set[str] = set()
@@ -182,11 +190,18 @@ class MCPGatewaySession:
         # self-reported `--agent` name, when it stamped one
         # (params._meta["coffer/agent"]).
         self._session_agent = _extract_agent(params)
+        self._session_run = _extract_run(params)
         self._initialized = True
         # Tool tiering: the instructions field is the only channel into the client's
         # system prompt. On the first handshake nothing has been listed yet, so
         # hidden_count is 0 and the tiering paragraph is omitted.
         return build_initialize_result(hidden_count=self.last_hidden_count)
+
+    @property
+    def run_context(self) -> str | None:
+        """The run identity this session's calls are attributable to, or None
+        (FR-035). Read-only: only the handshake sets it."""
+        return self._session_run
 
     # --- Request dispatch ---
 
@@ -198,11 +213,15 @@ class MCPGatewaySession:
         if method == "tools/call":
             return await self._handle_tools_call(params)
         if method == "resources/list":
-            return await self._handle_resources_list()
+            return await list_resources_across(
+                self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
+            )
         if method == "resources/read":
             return await self._handle_resources_read(params)
         if method == "prompts/list":
-            return await self._handle_prompts_list()
+            return await list_prompts_across(
+                self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
+            )
         if method == "prompts/get":
             return await self._handle_prompts_get(params)
         raise UpstreamUnavailable(f"method not supported by gateway: {method!r}")
@@ -254,30 +273,18 @@ class MCPGatewaySession:
     # module's header for the per-server budget + parallelism rationale.
 
     async def _handle_tools_list(self) -> dict[str, Any]:
-        outcome = await list_tools_across(
-            self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
-        )
-        self._degraded.record(outcome.failed_servers)
-        tools = list(outcome.items)
-        append_builtin_tools(tools, self._builtin)
-        tiered = await apply_tiering(
-            tools,
+        listing = await build_tools_listing(
+            discovery=self._discovery,
+            ensure_subscribed=self._ensure_subscribed,
+            servers=await self._enabled_mcp_servers(),
+            builtin=self._builtin,
             invocations=self._invocations,
-            config=self._tiering,
+            tiering=self._tiering,
             clock=self._clock,
         )
-        self.last_hidden_count = tiered.hidden_count
-        return {"tools": tiered.listed}
-
-    async def _handle_resources_list(self) -> dict[str, Any]:
-        return await list_resources_across(
-            self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
-        )
-
-    async def _handle_prompts_list(self) -> dict[str, Any]:
-        return await list_prompts_across(
-            self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
-        )
+        self._degraded.record(listing.failed_servers)
+        self.last_hidden_count = listing.hidden_count
+        return {"tools": listing.tools}
 
     # --- tools/call, resources/read, prompts/get (delegated to gateway_handlers) ---
 
@@ -292,19 +299,18 @@ class MCPGatewaySession:
     async def _handle_tools_call(self, params: dict[str, Any]) -> Any:
         name = str(params.get("name") or "")
         if name == TOOL_SEARCH_NAME:
-            # Deliberately the untiered outcome: search is what makes an
-            # unlisted tool reachable, so it must see the whole catalogue.
-            outcome = await list_tools_across(
-                self._discovery, self._ensure_subscribed, await self._enabled_mcp_servers()
-            )
-            return await dispatch_tool_search(
-                params=params,
-                aggregated_tools=outcome.items,
+            return await run_tool_search(
+                params,
+                discovery=self._discovery,
+                ensure_subscribed=self._ensure_subscribed,
+                servers=await self._enabled_mcp_servers(),
                 invocations=self._invocations,
                 session_id=self.id,
                 clock=self._clock,
             )
         if self._builtin.is_builtin(name):
+            # Never gated: a built-in reaches the developer's own vault, not
+            # the outside world (ADR workflow-gates-tool-calls).
             params = self._inject_session_context(name, params)
             return await dispatch_builtin_tool(
                 prefixed_name=name,
@@ -314,7 +320,9 @@ class MCPGatewaySession:
                 session_id=self.id,
                 clock=self._clock,
             )
-        return await self._dispatch_handler(handle_tools_call, params)
+        return await gated_upstream_call(
+            params, self._tool_gate, self._session_run, self._dispatch_handler
+        )
 
     def _inject_session_context(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
         return inject_session_context(

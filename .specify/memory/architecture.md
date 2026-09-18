@@ -59,6 +59,7 @@ Currently registered kinds:
 | `channel`        | [channels](../../specs/channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with managed agents from the IM app and receives notifications. Its per-agent scope is read INVERTED — it names the agents this channel may drive, since a channel is an inbound surface no agent consumes — narrowing `/agent` and the channel's own default agent; a channel that may drive nothing does not run. A channel DOES sync, and carries `runs_on` — the `machine_id` of the one machine whose daemon starts its adapter, so the document travels and the adapter does not (spec channels FR-026). Thin adapters over the turn-platform seams (spec chat FR-001…FR-026), which the web Chat page sits on as the second surface (spec chat FR-029…FR-041) — once a message reaches the turn orchestrator nothing downstream knows which surface it came from ([Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md), [Chat Is a Single-Owner Live Mirror](../../docs/decisions/chat-single-owner-live-mirror.md)).                                                                                              |
 | `memory`         | [memory](../../specs/memory/spec.md)                 | One **partition** of aggregated agent memory — a project, or `global`. Its facts are read out of the registered agents' own native memories, never written back; everything on disk is derived and rebuildable, with no non-derived state left beside it — the per-fact hide/pin/mark-superseded/settle-a-conflict overrides went with the surface that recorded them, and the table that stored them was dropped. It carries **no per-agent reach**: an enabled partition is delivered to, and recalled by, every agent — the reach it used to default to, the agents it had been aggregated from, withheld a repository's notes from the other agent working in that same repository, which is the opposite of what aggregating is for (spec memory FR-013) ([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)).                                                                                              |
 | `provider`       | [provider-switching](../../specs/provider-switching/spec.md) | One **model-provider profile** — a wire protocol, a base URL and one `credential_ref`. Pure config with no on-disk artifact, so it takes the framework's generic create/update path. Its per-agent scope names the agents it projects into, which is the reach this kind used to carry itself as `compatible_agents` inside its own config; `application/provider/targets.py` is the enforcement point the switch, the per-agent key lookup, the import reconcile and the boot self-heal all read. A new profile starts scoped to the agents its protocol can actually serve rather than to every agent ([Provider Switching](../../docs/decisions/provider-switching.md)). |
+| `workflow`       | [workflow](../../specs/workflow/spec.md) | One **delivery template** — an ordered list of stages, the nodes inside them, and the feedback edges between them. The engine reads no meaning from any stage key, so a three-stage flow and an eight-stage flow are the same code. Its per-agent scope is read INVERTED, as the agents this template may drive — a node naming an agent outside it is refused at validation, the way a channel's scope names the agents it may drive. Only the template is a Resource: a **run** is operational state, belongs to one machine, does not sync and has no reach ([A Workflow Run's Writes Are Gated at the Gateway](../../docs/decisions/workflow-gates-tool-calls.md)). |
 
 The knowledge layer is **a directory, not a database**, and it has two lanes.
 Under `~/.coffer/knowledge/<collection>/`, `sources/` holds what a person, an
@@ -189,7 +190,8 @@ backend/coffer/
 │   ├── chat/                     # conversation, message, attachment, turn events
 │   ├── memory/                   # fact, partition, budget, delivery, reader protocol
 │   ├── provider/                 # provider config, modality, projection rules
-│   └── sync/                     # manifest, models, diff, convergence + machine rules
+│   ├── sync/                     # manifest, models, diff, convergence + machine rules
+│   └── workflow/                 # template validation, run/node/approval state, transitions, event fold
 ├── application/
 │   ├── resource_service.py       # kind-agnostic CRUD; reads app.state.kinds
 │   ├── audit_service.py
@@ -207,7 +209,8 @@ backend/coffer/
 │   ├── provider/                 # provider service, projection, reconcile + make_provider_kind
 │   ├── engine/                   # which connection Coffer's own unattended passes run on; must not import the provider kind
 │   ├── sync/                     # converge round, exporter, appliers, worker, ports
-│   └── fs/                       # filesystem browse / pick / open / editor services
+│   ├── fs/                       # filesystem browse / pick / open / editor services
+│   └── workflow/                 # run + node services, node driver, context composer, approvals, gate, advancer + make_workflow_kind
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
 │   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
@@ -224,29 +227,32 @@ backend/coffer/
 │   ├── chat/                     # Claude SDK / Codex adapters, persistence, document extraction
 │   ├── memory/                   # native-memory readers, store, delivery state
 │   ├── provider/                 # provider introspector
-│   └── sync/                     # git mirror, tree mirror, bundle, machine id
+│   ├── sync/                     # git mirror, tree mirror, bundle, machine id
+│   └── workflow/                 # run/event/attempt/approval repos, run paths, artifact store
 └── surfaces/
     ├── http/                     # FastAPI app, composition root, per-kind routers + `*_wiring.py`
     │   ├── chat/                 # conversation + turn routes
     │   ├── knowledge/            # knowledge routes
     │   ├── mcp/                  # MCP protocol endpoint, capability + invocation routes
-    │   └── memory/               # memory routes
+    │   ├── memory/               # memory routes
+    │   └── workflow/             # run, node, approval and artifact routes
     ├── cli/                      # Typer app + per-kind subcommand groups
     ├── shim/                     # coffer-mcp-shim entry
     └── callback/                 # channel callback listener (separate process)
 ```
 
 Composition root (`surfaces/http/app.py`, `surfaces/cli/main.py`) explicitly
-wires each of the seven kinds — no global registry, no import side effects.
+wires each of the eight kinds — no global registry, no import side effects.
 Each kind's `make_*_kind()` factory (`make_mcp_kind`, `make_agent_kind`,
 `make_skill_kind`, `make_knowledge_kind`, `make_channel_kind`,
-`make_provider_kind`, `make_memory_kind`) returns a frozen `Kind`
+`make_provider_kind`, `make_memory_kind`, `make_workflow_kind`) returns a frozen `Kind`
 (`domain/resource.py`), and the composition root populates the per-app
 `app.state.kinds` dict (`kind_name → Kind`) directly: `app_mcp_composition.py`
 sets `"mcp_server"`, `agent_skill_wiring.py` sets `"agent"` and `"skill"`,
 `knowledge_wiring.py` sets `"knowledge"`, `channel_wiring.py` sets
-`"channel"`, `provider_wiring.py` sets `"provider"` and `memory_wiring.py`
-sets `"memory"`. `ResourceService` reads that dict for kind-agnostic dispatch.
+`"channel"`, `provider_wiring.py` sets `"provider"`, `memory_wiring.py`
+sets `"memory"` and `workflow_wiring.py` sets `"workflow"`.
+`ResourceService` reads that dict for kind-agnostic dispatch.
 The surface-layer artefacts a kind contributes (HTTP routers, Typer groups)
 are registered by those same wiring modules; there is no carrier object for
 them, and nothing in `domain/` knows they exist.

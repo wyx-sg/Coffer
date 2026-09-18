@@ -521,6 +521,14 @@ components:
     ResourceUpdate:
       type: object
       properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-zA-Z0-9_.\\-]+$"
+          description: |
+            A new name (FR-011). Absent leaves it alone. A kind that declares
+            no rename refuses it with 409 rather than ignoring it.
         description:
           type: string
           nullable: true

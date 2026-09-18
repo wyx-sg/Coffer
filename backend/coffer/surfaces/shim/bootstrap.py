@@ -34,6 +34,18 @@ _CWD_META_KEY = "coffer/cwd"
 #: MCP-reserved extension key the daemon reads the shim's self-reported
 #: ``--agent`` identity from (spec mcp-gateway FR-013, amended).
 _AGENT_META_KEY = "coffer/agent"
+#: MCP-reserved extension key the daemon reads the workflow run identity from
+#: (spec workflow FR-035).
+_RUN_META_KEY = "coffer/run"
+#: The variable a workflow node's turn sets in the agent process's environment;
+#: the CLI passes it down to the shim it spawns, and the shim reports it here.
+#: Its value is ``"<run_id>/<node_attempt_id>"`` — the gate needs BOTH: which
+#: run is calling, and which attempt to hold and resume. One string rather than
+#: two variables because an agent process is one node's turn, so the pair is
+#: never half-set; ``/`` because neither id can contain one. Carried verbatim
+#: end to end — neither the shim nor the gateway splits it, which keeps the
+#: workflow kind's id shapes out of the transport.
+_RUN_ENV_VAR = "COFFER_RUN_CONTEXT"
 
 
 def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
@@ -41,7 +53,12 @@ def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
     — into an ``initialize`` envelope's ``params._meta`` so the daemon can
     resolve the per-project memory scope and which resources are active for
     this agent. The agent key is omitted entirely when no name was given (an
-    unnamed shim launch, or a client that hasn't been re-installed yet)."""
+    unnamed shim launch, or a client that hasn't been re-installed yet).
+
+    A third key rides the same bag when this shim was launched inside a
+    workflow node's turn. It is omitted for every ordinary launch — which is
+    almost all of them — so a session without it is indistinguishable from one
+    before this key existed, and stays ungated."""
     params = envelope.get("params")
     if not isinstance(params, dict):
         params = {}
@@ -54,6 +71,9 @@ def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
         meta[_CWD_META_KEY] = os.getcwd()
     if agent:
         meta[_AGENT_META_KEY] = agent
+    run = (os.environ.get(_RUN_ENV_VAR) or "").strip()
+    if run:
+        meta[_RUN_META_KEY] = run
 
 
 def _setup_shim_log() -> None:

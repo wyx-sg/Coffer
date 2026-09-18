@@ -9,7 +9,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { FolderPicker } from "./FolderPicker";
+import { FolderPicker } from "@/components/FolderPicker";
 
 vi.mock("@/lib/api/fs", () => ({ fsApi: { browse: vi.fn(), pickFolder: vi.fn() } }));
 const { fsApi } = await import("@/lib/api/fs");

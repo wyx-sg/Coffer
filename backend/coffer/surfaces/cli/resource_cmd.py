@@ -96,6 +96,25 @@ def disable(
     typer.echo(f"disabled: {ref}")
 
 
+@app.command("rename")
+def rename(
+    ctx: typer.Context,
+    ref: str = typer.Argument(..., help="<kind>:<name>"),
+    new_name: str = typer.Argument(..., help="the new name, within the same kind"),
+) -> None:
+    """Give a resource a different name."""
+    verbose = (ctx.obj or {}).get("verbose", False)
+    kind, _, name = ref.partition(":")
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.patch(f"/resources/{kind}/{name}", json={"name": new_name})
+        if r.status_code == 404:
+            typer.echo(r.json()["error"]["message"], err=True)
+            raise typer.Exit(4)
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"renamed: {ref} -> {kind}:{new_name}")
+
+
 @app.command("delete")
 def delete(
     ctx: typer.Context,

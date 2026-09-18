@@ -1,4 +1,6 @@
 # backend/tests/integration/surfaces/http/test_resource_routes.py
+import sqlite3
+
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -38,6 +40,15 @@ async def _client(tmp_path):
             name="fake_kind",
             display_name="Fake",
             config_schema=_FakeConfig,
+        ),
+        # A kind that may be renamed and one that may not, because FR-011 is
+        # half about the refusal.
+        "nameable": Kind(
+            name="nameable",
+            display_name="Nameable",
+            config_schema=_FakeConfig,
+            supports_rename=True,
+            supports_scope=True,
         ),
     }
     repo = SqlAlchemyResourceRepo(sm)
@@ -382,4 +393,129 @@ async def test_register_with_present_credential_succeeds(tmp_path):
             },
         )
         assert r.status_code == 201, r.text
+    await engine.dispose()
+
+
+def _events(tmp_path, event_type: str) -> list[tuple[str, str]]:
+    """Every audit entry of one type, as (kind, name-at-the-time)."""
+    with sqlite3.connect(tmp_path / "c.db") as db:
+        rows = db.execute(
+            "SELECT resource_kind, resource_name FROM audit_log WHERE event_type = ? ORDER BY id",
+            (event_type,),
+        ).fetchall()
+    return [(kind, name) for kind, name in rows]
+
+
+def _renames(tmp_path) -> list[tuple[str, str]]:
+    """Every `resource_renamed` entry, as (kind, name-at-the-time)."""
+    with sqlite3.connect(tmp_path / "c.db") as db:
+        rows = db.execute(
+            "SELECT resource_kind, resource_name FROM audit_log "
+            "WHERE event_type = 'resource_renamed' ORDER BY id"
+        ).fetchall()
+    return [(kind, name) for kind, name in rows]
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="a resource is given a different name",
+)
+async def test_a_resource_is_given_a_different_name(tmp_path):
+    """FR-011: the name is a label, so it moves and nothing else does."""
+    c, engine = await _client(tmp_path)
+    async with c:
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "nameable", "name": "draft", "config": {"foo": 1}, "description": "hi"},
+        )
+        await c.put("/api/v1/resources/nameable/draft/scope", json={"scope": {"agents": ["a"]}})
+        await c.post("/api/v1/resources/nameable/draft/disable")
+
+        r = await c.patch("/api/v1/resources/nameable/draft", json={"name": "release"})
+        assert r.status_code == 200, r.text
+        assert r.json()["ref"] == "nameable:release"
+
+        # Everything that was not the name came with it.
+        moved = (await c.get("/api/v1/resources/nameable/release")).json()
+        assert moved["config"] == {"foo": 1, "bar": "default"}
+        assert moved["description"] == "hi"
+        assert moved["enabled"] is False
+        assert moved["scope"] == {"agents": ["a"]}
+        assert (await c.get("/api/v1/resources/nameable/draft")).status_code == 404
+
+        # The trail is against the ROW, which never moved. Read straight out
+        # of the table: this app mounts the resource router only.
+        assert _renames(tmp_path) == [("nameable", "release")]
+
+        # A name already taken, and a kind that declares no rename.
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "nameable", "name": "taken", "config": {"foo": 2}},
+        )
+        clash = await c.patch("/api/v1/resources/nameable/release", json={"name": "taken"})
+        assert clash.status_code == 409
+        assert clash.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
+
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "fixed", "config": {"foo": 3}},
+        )
+        refused = await c.patch("/api/v1/resources/fake_kind/fixed", json={"name": "moved"})
+        assert refused.status_code == 409
+        assert refused.json()["error"]["code"] == "RENAME_NOT_SUPPORTED"
+
+        # The name it already has is a no-op, not a second audit entry.
+        same = await c.patch("/api/v1/resources/nameable/release", json={"name": "release"})
+        assert same.status_code == 200
+        assert len(_renames(tmp_path)) == 1
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_rename_alone_does_not_rewrite_the_config(tmp_path):
+    """FR-010: a PATCH carrying only a name touches only the name.
+
+    Writing the stored config back over itself is not a no-op — it re-validates,
+    re-probes every credential the config cites, fires the kind's update hook
+    and records a `resource_updated` whose before and after are identical. A
+    rename refused because of something the caller never touched is the failure
+    this guards.
+    """
+    c, engine = await _client(tmp_path)
+    async with c:
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "nameable", "name": "draft", "config": {"foo": 1}},
+        )
+        before = len(_events(tmp_path, "resource_updated"))
+
+        r = await c.patch("/api/v1/resources/nameable/draft", json={"name": "release"})
+
+        assert r.status_code == 200, r.text
+        assert len(_events(tmp_path, "resource_updated")) == before
+        assert _renames(tmp_path) == [("nameable", "release")]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_null_config_leaves_the_stored_one_alone(tmp_path):
+    """A client that fills in a field it has no value for has said nothing
+    about the config — not that the config should be emptied. One that wants it
+    empty says `{}`."""
+    c, engine = await _client(tmp_path)
+    async with c:
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "t", "config": {"foo": 7, "bar": "keep"}},
+        )
+
+        r = await c.patch(
+            "/api/v1/resources/fake_kind/t",
+            json={"config": None, "description": "only the words changed"},
+        )
+
+        assert r.status_code == 200, r.text
+        assert r.json()["config"] == {"foo": 7, "bar": "keep"}
+        assert r.json()["description"] == "only the words changed"
     await engine.dispose()

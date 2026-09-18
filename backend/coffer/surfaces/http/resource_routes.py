@@ -89,17 +89,40 @@ async def update_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ResourceOut:
-    if body.config is None:
+    # An ABSENT field leaves what is stored alone. The service takes a WHOLE
+    # resource, so anything this route does not carry forward it writes a null
+    # over — which a PATCH that can now say only `{"name": ...}` would turn
+    # into a silent erasure of the description beside it.
+    #
+    # An explicit null is "leave it alone" too, and not "make it empty". The
+    # config is a document a kind's own schema owns; a client that wanted it
+    # emptied would say `{}`, and one that said null is a client that filled in
+    # a field it had no value for.
+    sent = body.model_fields_set
+    edits_config = "config" in sent and body.config is not None
+    edits_description = "description" in sent
+
+    # A rename ALONE touches no config, so it runs no config write. Rewriting
+    # the stored config back over itself is not a no-op: it re-validates, it
+    # re-probes every credential the config cites, it fires the kind's update
+    # hook and it records a `resource_updated` with identical before and after.
+    # A rename refused because a credential this resource mentions has since
+    # been deleted is a refusal about something the caller did not touch.
+    if edits_config or edits_description:
         existing = await svc.get(ResourceRef(kind, name))
-        config = existing.config
+        r = await svc.update_config(
+            ResourceRef(kind, name),
+            new_config=body.config if body.config is not None else existing.config,
+            actor=actor,
+            description=body.description if edits_description else existing.description,
+        )
     else:
-        config = body.config
-    r = await svc.update_config(
-        ResourceRef(kind, name),
-        new_config=config,
-        actor=actor,
-        description=body.description,
-    )
+        r = await svc.get(ResourceRef(kind, name))
+    # The rename comes LAST, so a refused config leaves the name alone: one
+    # PATCH that renamed a resource and then rejected its config would have
+    # moved the thing the caller was about to retry against.
+    if body.name is not None:
+        r = await svc.rename(ResourceRef(kind, name), body.name, actor=actor)
     return _to_out(r)
 
 

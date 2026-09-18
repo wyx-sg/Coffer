@@ -74,9 +74,15 @@ Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server
 | `spawn_timeout_seconds`   | `int`                                                                     | default `30`; range `5–120`                                           |
 | `request_timeout_seconds` | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
 | `idle_timeout_seconds`    | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
+| `tool_write_class`        | `dict[str, Literal["read", "write"]]`                                     | per-tool judgement, keyed by unprefixed tool name; absent means write-class (spec workflow FR-036) |
 
-All three are editable in the web UI's edit-server dialog, not only over the
-API. Before they had a UI every registered server ran on the defaults
+`tool_write_class` is the only field here nothing in this spec reads: it is
+written and read by the workflow layer's approval gate, and it lives on the
+server because whether a tool writes is a fact about the tool rather than about
+a machine — as resource config it travels with sync.
+
+All three timeouts are editable in the web UI's edit-server dialog, not only
+over the API. Before they had a UI every registered server ran on the defaults
 regardless of its upstream — and measured latency across one vault's servers
 spanned three orders of magnitude (9ms to 10.9s average), with the slowest
 routinely exceeding 60s against a 120s default. A timeout error names the

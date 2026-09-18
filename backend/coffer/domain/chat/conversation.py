@@ -20,6 +20,11 @@ class Conversation:
     (spec channels). A conversation "has a channel binding" iff ``channel_name`` is set.
     Under the single-owner premise the IM peer is always the owner, so there is no
     separate peer identity to display.
+
+    ``owner`` says whose conversation this is. ``None`` is the developer's own,
+    which is what the chat list shows; a name is the surface that owns it — a
+    workflow task's conversation belongs to its run (spec workflow, FR-030) and
+    is not one of the developer's threads, however ordinary its transcript is.
     """
 
     id: str
@@ -28,5 +33,6 @@ class Conversation:
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None = None
+    owner: str | None = None
     channel_name: str | None = None
     peer_chat_id: str | None = None

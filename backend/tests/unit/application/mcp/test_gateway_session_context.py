@@ -64,6 +64,40 @@ async def test_initialize_without_agent_meta_leaves_session_agent_none():
     assert session._session_agent is None
 
 
+@pytest.mark.asyncio
+async def test_initialize_captures_run_context_from_meta():
+    """Spec workflow FR-035: a shim launched inside a node's turn reports the
+    run identity on the same ``_meta`` bag, so the gateway can attribute the
+    tool calls of that session to the run and attempt that caused them."""
+    session = _session_with(BuiltinToolRegistry())
+    await session.handle_initialize(
+        {"protocolVersion": "x", "_meta": {"coffer/run": "run_01J/att_07"}}
+    )
+    assert session.run_context == "run_01J/att_07"
+
+
+@pytest.mark.asyncio
+async def test_initialize_without_run_meta_leaves_run_context_none():
+    """Every conversation a person is driving: no run identity, and therefore
+    nothing for a gate to attribute. None, never a default object — a session
+    that reports no run must behave exactly as it did before the key existed."""
+    session = _session_with(BuiltinToolRegistry())
+    await session.handle_initialize(
+        {"protocolVersion": "x", "_meta": {"coffer/cwd": "/p", "coffer/agent": "claude_code"}}
+    )
+    assert session.run_context is None
+
+
+@pytest.mark.asyncio
+async def test_run_context_ignores_a_blank_or_non_string_value():
+    """A client that sets the key to something empty is saying nothing, not
+    claiming an unnamed run."""
+    for value in ("", 7, None):
+        session = _session_with(BuiltinToolRegistry())
+        await session.handle_initialize({"protocolVersion": "x", "_meta": {"coffer/run": value}})
+        assert session.run_context is None
+
+
 def _registry_with_cwd_tool() -> tuple[BuiltinToolRegistry, list[dict]]:
     seen: list[dict] = []
 

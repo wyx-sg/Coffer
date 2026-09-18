@@ -7,11 +7,13 @@
 // page, and this action reads the agents' native memory rather than converging
 // anything with a remote.
 //
-// One table, always — the same shape whether the vault holds a hundred
-// partitions or none, exactly like every other list page. An empty vault gets
-// the table's own empty row, not a different page: a surface that changes
-// shape with its data teaches the reader nothing about where things will be.
-// Sync stays in the header, so it is reachable from the empty state too.
+// An EMPTY vault gets the welcome panel every other first-run surface gives —
+// skills, knowledge, agents, channels, providers — so arriving at an empty
+// Memory reads like arriving at an empty anything else. Once a partition
+// exists it is the table, and the table's own empty row covers a search that
+// matched nothing. (The run context table inside a run is the other way round
+// on purpose: there the columns say what a run can be MADE of, which is worth
+// seeing before anything is in it.)
 //
 // Two things that used to render here have moved out. Per-agent DELIVERY is
 // per-agent state — it installs a hook into one agent's own settings file — so
@@ -26,6 +28,7 @@ import {
   MemoryPartitionsTable,
   type MemoryPartitionRow,
 } from "@/components/memory/MemoryPartitionsTable";
+import { MemoryWelcomePanel } from "@/components/memory/MemoryWelcomePanel";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,10 +59,15 @@ export function MemoryPage() {
         title={t("memory.title")}
         subtitle={t("memory.subtitle")}
         actions={
-          <Button onClick={() => sync.mutate()} disabled={sync.isPending}>
-            <RefreshCw className={sync.isPending ? "mr-1 size-4 animate-spin" : "mr-1 size-4"} />
-            {sync.isPending ? t("memory.reading") : t("memory.readFromAgents")}
-          </Button>
+          // Only once there is something to re-read: on an empty vault the
+          // welcome panel carries the same button, and two of them would be
+          // the page asking twice.
+          rows.length > 0 ? (
+            <Button onClick={() => sync.mutate()} disabled={sync.isPending}>
+              <RefreshCw className={sync.isPending ? "mr-1 size-4 animate-spin" : "mr-1 size-4"} />
+              {sync.isPending ? t("memory.reading") : t("memory.readFromAgents")}
+            </Button>
+          ) : null
         }
       />
 
@@ -74,10 +82,9 @@ export function MemoryPage() {
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>
           </CardContent>
         </Card>
+      ) : !isPending && rows.length === 0 ? (
+        <MemoryWelcomePanel onRead={() => sync.mutate()} reading={sync.isPending} />
       ) : (
-        // No zero-row branch: DataTable renders its header and its own empty
-        // row, so "no partitions yet" is a line inside the table rather than
-        // a card standing where the table would be.
         <MemoryPartitionsTable rows={rows} isLoading={isPending} />
       )}
     </div>

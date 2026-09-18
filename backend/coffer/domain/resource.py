@@ -143,6 +143,16 @@ class Kind:
     # the exporter holds a ``Resource``, while the sync applier holds only a
     # document that has just arrived and has no row behind it yet.
     converges_row: Callable[[dict[str, Any]], bool] | None = None
+    # Whether this kind's rows may be RENAMED in place. A name is a label the
+    # user chose, so in principle every kind should allow it; in practice a
+    # kind may only allow it once nothing else keys off that name. `workflow`
+    # does: the only thing that records a template's name is a run's
+    # `template_ref`, which is documented provenance and is allowed to dangle
+    # the same way a deleted template leaves it dangling. Kinds that are
+    # referenced by name elsewhere — an agent named in another resource's
+    # scope, a skill with a master folder on disk — leave this False, and the
+    # rename is refused rather than half-done.
+    supports_rename: bool = False
 
     # --- Pre-write validators: run BEFORE persistence; raising rejects the write ---
 

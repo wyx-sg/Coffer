@@ -31,6 +31,18 @@ class UnknownKind(CofferError):  # noqa: N818
         self.kind = kind
 
 
+class RenameNotSupported(CofferError):  # noqa: N818
+    """This kind's rows are addressed by name somewhere this rename cannot
+    reach, so changing it would leave the reference pointing at nothing.
+    Maps to 409."""
+
+    code = "RENAME_NOT_SUPPORTED"
+
+    def __init__(self, kind: str) -> None:
+        super().__init__(f"a {kind!r} cannot be renamed")
+        self.kind = kind
+
+
 class GenericCreateNotAllowed(CofferError):  # noqa: N818
     """The generic /resources endpoints cannot create or update this kind; a
     dedicated endpoint owns its lifecycle invariants. Maps to 409."""

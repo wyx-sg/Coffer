@@ -71,10 +71,46 @@ const components: Components = {
   img: (props) => <img className="my-3 max-w-full rounded-md" {...props} />,
 };
 
-export function Markdown({ children }: { children: string }) {
+interface Props {
+  children: string;
+  /**
+   * Where an image's `src` should really point. Used where the bytes are not
+   * publicly addressable — a run's own directory is behind the daemon's token
+   * (FR-069), so the page fetches each image and hands this map of object URLs
+   * in.
+   *
+   * Returning undefined means DO NOT RENDER IT, and the name is shown instead.
+   * Falling back to the written `src` would point an `<img>` at a path this
+   * app does not serve: the SPA answers with its own index.html, so the
+   * browser fetches a document, fails to decode it as an image, and shows a
+   * broken one — for every image, on every first paint.
+   */
+  resolveImage?: (src: string) => string | undefined;
+}
+
+export function Markdown({ children, resolveImage }: Props) {
+  const overrides: Components =
+    resolveImage === undefined
+      ? components
+      : {
+          ...components,
+          img: ({ src, alt, ...props }) => {
+            const resolved = typeof src === "string" ? resolveImage(src) : undefined;
+            if (resolved === undefined) {
+              return (
+                <span className="my-3 block text-sm text-muted-foreground">
+                  {alt || (typeof src === "string" ? src : "")}
+                </span>
+              );
+            }
+            return (
+              <img className="my-3 max-w-full rounded-md" src={resolved} alt={alt} {...props} />
+            );
+          },
+        };
   return (
     <div className="text-sm text-foreground">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={overrides}>
         {children}
       </ReactMarkdown>
     </div>
