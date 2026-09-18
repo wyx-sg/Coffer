@@ -159,8 +159,9 @@ HEAD_REVISION = "0094"
 # revision here that widens on purpose, and its docstring argues why that is
 # safe for these two kinds and for no others; no DDL, table/column set
 # unchanged at head, and its downgrade writes nothing because the cleared
-# values cannot be recovered. 0089 retires the generated knowledge skill. 0090 CREATEs the four workflow execution tables —
-# ``workflow_runs`` plus its cascading ``workflow_events``,
+# values cannot be recovered. 0089 retires the generated knowledge skill, which
+# Coffer's own shipped one replaces. 0090 CREATEs the four workflow execution
+# tables — ``workflow_runs`` plus its cascading ``workflow_events``,
 # ``workflow_node_attempts`` and ``workflow_approvals`` (spec workflow); a
 # template needs no table of its own, so nothing else is added and the four are
 # dropped together by the same revision's downgrade. 0091 adds a nullable

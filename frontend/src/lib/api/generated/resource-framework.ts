@@ -301,7 +301,7 @@ export interface components {
         };
         ResourceUpdate: {
             /**
-             * @description A new name (FR-010). Absent leaves it alone. A kind that declares
+             * @description A new name (FR-011). Absent leaves it alone. A kind that declares
              *     no rename refuses it with 409 rather than ignoring it.
              */
             name?: string;
