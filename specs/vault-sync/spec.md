@@ -45,6 +45,17 @@ enough for the two to stay alike.
   `channel` definitions MUST converge, serialized to text from SQLite, which
   stays the system of record. A resource document is identity, description and
   config — what the resource *is*. What it reaches is not in it (FR-014).
+- **FR-093**: A resource document MUST be stored at a path keyed by the
+  resource's **uid**, and MUST carry that uid inside it. A machine receiving a
+  document MUST match it to a local resource by uid, and MUST create a missing
+  one *at that uid* rather than minting its own — two machines holding one
+  resource hold one identity for it.
+  Keying the path by the name made a rename a deletion beside an addition, and
+  the receiving machine could not tell that from a delete-and-create: it ran the
+  full deletion, which released the credential nothing else cited and dropped
+  the kind-owned state the row cascaded to. The name lives inside the document,
+  where changing it is a modification of one file
+  ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
 - **FR-005**: Every kind MUST travel **except one it declares for itself**: a
   kind sets `converges=False` when its rows are derived on each machine rather
   than authored by the user, and `memory` is the only kind that does (spec
@@ -281,10 +292,12 @@ machine can state alone, because it is about which of them acts.
 
 - **FR-050**: For `knowledge/**` and `skills/**`, an addition or a modification
   MUST write the file and a deletion MUST remove it.
-- **FR-051**: For `resources/<kind>/<name>.yaml`, an addition or a modification
+- **FR-051**: For `resources/<kind>/<uid>.yaml`, an addition or a modification
   MUST upsert through the kind-agnostic resource service with `${HOME}` expanded
   and the kind's import gate run, leaving the local resource's reach untouched
-  (FR-014); a deletion MUST delete the resource.
+  (FR-014); a deletion MUST delete the resource. A document whose name differs
+  from the local resource's MUST be applied as a **rename** of that resource,
+  never as the arrival of a different one.
 - **FR-052**: For `state/<area>/**`, the area's provider MUST apply the document
   and MUST remove it on deletion (FR-058).
 - **FR-053**: For `credentials/<ref>.enc`, an addition or a modification MUST
@@ -731,6 +744,18 @@ reported as a conflict.
   still disabled, the restricted one still restricted — and a later edit to the
   server's configuration on either machine reaches the other without carrying
   its reach along.
+
+### Scenario: a rename travels as a rename
+
+- **Given** a resource that both machines hold, whose config cites a credential,
+  and which the receiving machine has given a reach of its own,
+- **When** the user renames it on one machine and the two converge,
+- **Then** the other machine holds the same resource under the new name — not a
+  new resource — with its credential still in the store, its kind-owned state
+  intact, and the reach that machine set for itself unchanged,
+- **And** this holds whichever way the new name sorts against the old one,
+  because the ordering of the paths a round applies must not decide whether a
+  rename is lossless.
 
 ### Scenario: a path under the home directory applies on a machine with a different home
 

@@ -22,7 +22,6 @@ import pathlib
 import pytest
 
 from coffer.domain.credential_errors import CredentialUnreadable
-from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.convergence import ConvergeStatus, GuardDirection, JoinKind
 from coffer.domain.sync.diff import ChangeStatus, DeletionGuard
 from tests.integration.sync.harness import VaultMachine, settle, two_machines
@@ -442,18 +441,16 @@ async def test_an_agent_resolution_that_validates_is_applied_and_named(pair) -> 
     await a.register("mcp_server", "contested", {"value": "original"})
     await settle(a, b)
 
-    await a.resources.update_config(
-        _ref("mcp_server", "contested"), {"value": "from-a"}, "test", allow_lifecycle_kind=True
-    )
-    await b.resources.update_config(
-        _ref("mcp_server", "contested"), {"value": "from-b"}, "test", allow_lifecycle_kind=True
-    )
+    await a.edit_config("mcp_server", "contested", {"value": "from-a"})
+    await b.edit_config("mcp_server", "contested", {"value": "from-b"})
     await a.converge()
 
-    path = "resources/mcp_server/contested.yaml"
+    uid = await b.uid("mcp_server", "contested")
+    path = await b.doc_path("mcp_server", "contested")
     b.resolver.enabled = True
     b.resolver.writes[path] = (
-        b"config:\n  value: reconciled\ndescription: null\nkind: mcp_server\nname: contested\n"
+        b"config:\n  value: reconciled\ndescription: null\nkind: mcp_server\n"
+        b"name: contested\nuid: " + uid.encode() + b"\n"
     )
 
     run = await b.converge()
@@ -476,19 +473,16 @@ async def test_an_agent_resolution_leaving_a_conflict_marker_is_refused(pair) ->
     await settle(a, b)
     pointer_before = await b.state.pointer()
 
-    await a.resources.update_config(
-        _ref("mcp_server", "contested"), {"value": "from-a"}, "test", allow_lifecycle_kind=True
-    )
-    await b.resources.update_config(
-        _ref("mcp_server", "contested"), {"value": "from-b"}, "test", allow_lifecycle_kind=True
-    )
+    await a.edit_config("mcp_server", "contested", {"value": "from-a"})
+    await b.edit_config("mcp_server", "contested", {"value": "from-b"})
     await a.converge()
 
-    path = "resources/mcp_server/contested.yaml"
+    uid = await b.uid("mcp_server", "contested")
+    path = await b.doc_path("mcp_server", "contested")
     b.resolver.enabled = True
     # It claims the path, but what it wrote still carries git's markers.
     b.resolver.writes[path] = (
-        b"kind: mcp_server\nname: contested\nconfig:\n"
+        b"uid: " + uid.encode() + b"\nkind: mcp_server\nname: contested\nconfig:\n"
         b"<<<<<<< ours\n  value: from-b\n=======\n  value: from-a\n>>>>>>> theirs\n"
     )
 
@@ -542,7 +536,7 @@ async def test_a_path_that_will_not_apply_is_held_and_retried(pair) -> None:
     b.gate.refuse_value = "not-ready"
     first = await b.converge()
 
-    path = "resources/mcp_server/needs-setup.yaml"
+    path = await a.doc_path("mcp_server", "needs-setup")
     assert [p for p, _reason in first.failures] == [path]
     assert await b.find("mcp_server", "needs-setup") is None
     retry, not_applicable = await b.state.held_paths()
@@ -586,7 +580,7 @@ async def test_a_path_that_can_never_apply_here_is_recorded_as_not_applicable(pa
     b.gate.refuse_permanently = True
     run = await b.converge()
 
-    path = "resources/mcp_server/wrong-machine.yaml"
+    path = await a.doc_path("mcp_server", "wrong-machine")
     retry, not_applicable = await b.state.held_paths()
     assert path in not_applicable and path not in retry
     assert [p for p, _r in run.failures] == [path]
@@ -759,10 +753,6 @@ async def test_the_repository_carries_ciphertext_and_no_key_material(pair) -> No
     # "Locked", not "silently wrong": reading it here is refused outright.
     with pytest.raises(CredentialUnreadable):
         b.credential_store.get("mcp/files/token")
-
-
-def _ref(kind: str, name: str) -> ResourceRef:
-    return ResourceRef(kind, name)
 
 
 def _sleep_past_a_fernet_second() -> None:

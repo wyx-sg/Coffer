@@ -100,6 +100,7 @@ class SyncExporter:
                     config = normalize_home(config, self._home)
                 docs.append(
                     resource_to_doc(
+                        uid=r.uid,
                         kind=r.kind,
                         name=r.name,
                         description=r.description,
@@ -110,8 +111,15 @@ class SyncExporter:
                 # Reported, not fatal — and its path is protected below, so a
                 # row this build cannot render is never published as a
                 # deletion the user never made.
+                #
+                # The two keys deliberately differ, because they answer
+                # different questions. The protected path has to be the path
+                # the tree actually uses, and the tree files a resource under
+                # its uid. The failure subject is a sentence the user reads,
+                # and a user recognises the resource they named, not the hex
+                # it was minted with — so that one keeps the name.
                 summary.failures.append((f"{r.kind}:{r.name}", str(e)))
-                unserializable.append(f"{r.kind}/{r.name}")
+                unserializable.append(f"{r.kind}/{r.uid}")
 
         state_docs: list[tuple[str, list[tuple[str, dict[str, object]]]]] = []
         for provider in self._state_providers:

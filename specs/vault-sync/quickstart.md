@@ -167,7 +167,7 @@ own.
 So say it on the laptop, sitting at the laptop:
 
 ```bash
-coffer resource disable mcp_server:work-jira
+coffer resource disable mcp_server work-jira
 ```
 
 It stays registered and visible there, its configuration keeps converging, and
@@ -179,7 +179,7 @@ Restricting to one agent works the same way, and is also local to the machine
 you run it on:
 
 ```bash
-coffer scope set mcp_server:work-jira --agents claude-code
+coffer scope set mcp_server work-jira --agents claude-code
 ```
 
 List your machines whenever you want to see who is in the vault:

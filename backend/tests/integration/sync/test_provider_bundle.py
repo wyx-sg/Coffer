@@ -25,7 +25,7 @@ from coffer.application.provider.kind import make_provider_kind
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import ResourceApplier
 from coffer.application.sync.exporter import SyncExporter
-from coffer.domain.resource import ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
@@ -41,7 +41,12 @@ from tests.integration.sync.harness import NoKeyring
 
 pytestmark = pytest.mark.timeout(60)
 
-DOC = "resources/provider/acme.yaml"
+
+def _doc(resource: Resource) -> str:
+    """Where this connection's document sits: under its uid, not its name
+    (ADR resource-identity-is-an-immutable-uid)."""
+    return f"resources/{resource.kind}/{resource.uid}.yaml"
+
 
 CONFIG = {
     "protocol": "openai",
@@ -118,27 +123,30 @@ def _applier(vault: Vault, bundle_dir: pathlib.Path) -> ResourceApplier:
 
 async def test_a_provider_connection_crosses_to_another_vault_unchanged(machines) -> None:  # type: ignore[no-untyped-def]
     a, b, bundle_dir = machines
-    await a.resources.register("provider", "acme", dict(CONFIG), "test", description="Acme gateway")
+    acme = await a.resources.register(
+        "provider", "acme", dict(CONFIG), "test", description="Acme gateway"
+    )
     # Narrowed on A, and deliberately: the assertion below is that B does NOT
     # inherit it. Which agents a connection reaches is its reach, and reach is
     # set on the machine it applies to — a connection arriving somewhere for
     # the first time takes that machine's own default instead.
-    await a.resources.update_scope(
-        ResourceRef("provider", "acme"), Scope(agents=["claude_code"]), actor="test"
-    )
+    await a.resources.update_scope(acme.uid, Scope(agents=["claude_code"]), actor="test")
 
     summary = await _exporter(a).export(Bundle(bundle_dir, trees=[]))
     assert summary.failures == []
 
     # The document on disk is plain scalars — no python object tags, nothing a
     # build that does not share our classes would choke on.
-    raw = (bundle_dir / DOC).read_text(encoding="utf-8")
+    raw = (bundle_dir / _doc(acme)).read_text(encoding="utf-8")
     assert "!!python" not in raw
     assert yaml.safe_load(raw)["config"]["models"] == CONFIG["models"]
 
-    await _applier(b, bundle_dir).upsert(DOC)
+    await _applier(b, bundle_dir).upsert(_doc(acme))
 
-    got = await b.resources.get(ResourceRef("provider", "acme"))
+    got = await b.resources.get(acme.uid)
+    # The same identity on both machines — which is what makes it the same
+    # connection rather than a lookalike.
+    assert got.uid == acme.uid
     assert got.config == CONFIG
     assert got.description == "Acme gateway"
     # The connection crossed; A's answer about how far it reaches did not.
@@ -162,25 +170,30 @@ async def test_a_provider_connection_crosses_to_another_vault_unchanged(machines
 
 async def test_a_changed_provider_connection_crosses_again(machines) -> None:  # type: ignore[no-untyped-def]
     a, b, bundle_dir = machines
-    await a.resources.register("provider", "acme", dict(CONFIG), "test", description="Acme gateway")
+    acme = await a.resources.register(
+        "provider", "acme", dict(CONFIG), "test", description="Acme gateway"
+    )
     await _exporter(a).export(Bundle(bundle_dir, trees=[]))
-    await _applier(b, bundle_dir).upsert(DOC)
+    await _applier(b, bundle_dir).upsert(_doc(acme))
 
     edited = dict(CONFIG)
     edited["base_url"] = "https://gw-2/v1"
     edited["is_active"] = False
     edited["models"] = [{"id": "gpt-5-mini", "modality": "text"}]
-    await a.resources.update_config(
-        ResourceRef("provider", "acme"), edited, "test", description="Acme gateway (eu)"
-    )
+    await a.resources.update_config(acme.uid, edited, "test", description="Acme gateway (eu)")
+    # And the label changes too, on the machine the user is sitting at. It
+    # rides the SAME document — the path is the uid — so B sees one modified
+    # file rather than a deletion beside an addition.
+    await a.resources.rename(acme.uid, "acme-eu", "test")
 
     await _exporter(a).export(Bundle(bundle_dir, trees=[]))
-    await _applier(b, bundle_dir).upsert(DOC)
+    await _applier(b, bundle_dir).upsert(_doc(acme))
 
-    got = await b.resources.get(ResourceRef("provider", "acme"))
+    got = await b.resources.get(acme.uid)
     assert got.config == edited
     assert got.description == "Acme gateway (eu)"
-    assert [r.name for r in await b.resources.list(kind="provider")] == ["acme"]
+    assert got.name == "acme-eu"
+    assert [r.name for r in await b.resources.list(kind="provider")] == ["acme-eu"]
 
 
 @pytest.mark.acceptance(
@@ -201,7 +214,9 @@ async def test_a_provider_key_crosses_as_ciphertext_and_never_as_plaintext(
     a, b, bundle_dir = machines
     secret = "sk-acme-do-not-leak"
     EncryptedCredentialStore(a.home / "coffer.db", a.key).set(CONFIG["credential_ref"], secret)
-    await a.resources.register("provider", "acme", dict(CONFIG), "test", description="Acme gateway")
+    acme = await a.resources.register(
+        "provider", "acme", dict(CONFIG), "test", description="Acme gateway"
+    )
 
     bundle = Bundle(bundle_dir, trees=[])
     summary = await _exporter(a).export(bundle, with_credentials=True)
@@ -219,7 +234,7 @@ async def test_a_provider_key_crosses_as_ciphertext_and_never_as_plaintext(
         assert a.key not in content
 
     # The profile itself still lands on the other vault intact.
-    await _applier(b, bundle_dir).upsert(DOC)
-    got = await b.resources.get(ResourceRef("provider", "acme"))
+    await _applier(b, bundle_dir).upsert(_doc(acme))
+    got = await b.resources.get(acme.uid)
     assert got.config["credential_ref"] == CONFIG["credential_ref"]
     assert got.config == CONFIG

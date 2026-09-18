@@ -160,8 +160,13 @@ class BundlePort(Protocol):
         self, docs: Sequence[Mapping[str, object]], *, unserializable: Sequence[str] = ()
     ) -> None:
         """Converge ``resources/`` on ``docs`` — one deterministic YAML file
-        per doc, writing only what changed and removing only what ``docs`` no
-        longer names (never a held path)."""
+        per doc at ``resources/<kind>/<uid>.yaml``, writing only what changed
+        and removing only what ``docs`` no longer names (never a held path).
+
+        Filed under the resource's uid rather than its name, so a rename edits
+        one file instead of removing one and adding another
+        (ADR resource-identity-is-an-immutable-uid); ``unserializable`` is
+        spelled the same way, ``<kind>/<uid>``."""
 
     def read_resource_docs(self) -> list[ResourceDoc]: ...
 
