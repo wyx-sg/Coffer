@@ -164,20 +164,19 @@ def _register_agent(home: pathlib.Path, name: str) -> pathlib.Path:
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
-def test_skill_list_json_is_empty_on_a_fresh_vault(skill_cli_daemon):
+def test_skill_list_json_holds_only_coffers_own_on_a_fresh_vault(skill_cli_daemon):
     """`skill list --json` before the user imports anything.
 
-    It is empty. The knowledge skill is generated per agent and written straight
-    into that agent's own skills directory (spec knowledge FR-034), so it is not
-    a skill Resource and never appears here.
+    Exactly one row, and it is Coffer's: the manual it seeds for itself (spec
+    knowledge FR-034). It is an ordinary skill Resource, which is precisely why
+    it appears here — the rendering it replaced was written straight into each
+    agent's own directory and this listing never knew about it.
     """
     result = _runner.invoke(cli_app, ["skill", "list", "--json"])
     assert result.exit_code == 0, result.output
     items = json.loads(_extract_json(result.output))
-    # Nothing is seeded any more: the knowledge skill is generated per agent
-    # and written straight into that agent's own skills directory, so it is
-    # not a skill Resource and never appears in this listing.
-    assert [i["name"] for i in items] == []
+    assert [i["name"] for i in items] == ["coffer-guide"]
+    assert items[0]["source"] == {"type": "builtin"}
 
 
 def test_skill_list_table_default(skill_cli_daemon):
@@ -306,6 +305,55 @@ def test_skill_rm_force(skill_cli_daemon):
 def test_skill_rm_not_found(skill_cli_daemon):
     r = _runner.invoke(cli_app, ["skill", "rm", "ghost", "--force"])
     assert r.exit_code == 4, r.output
+
+
+def test_skill_rm_of_coffers_own_reports_the_refusal(skill_cli_daemon):
+    """A protected skill must come back as a message, not a traceback.
+
+    ``coffer skill rm`` used to call ``r.raise_for_status()`` bare, so the 409
+    the server answers for a builtin skill escaped as an unhandled
+    ``httpx.HTTPStatusError`` — while ``coffer resource delete
+    skill:coffer-guide`` rendered it properly. Two doors onto the same refusal
+    behaved differently; this pins them together.
+    """
+    r = _runner.invoke(cli_app, ["skill", "rm", "coffer-guide", "--force"])
+
+    assert r.exception is None or isinstance(r.exception, SystemExit), r.exception
+    # 5 == ExitCode.CONFLICT, the same code `resource delete` returns.
+    assert r.exit_code == 5, r.output
+    assert "is managed by Coffer" in r.output
+    assert "Traceback" not in r.output
+
+    # And the refusal stuck: the skill is still there.
+    show = _runner.invoke(cli_app, ["skill", "show", "coffer-guide"])
+    assert show.exit_code == 0, show.output
+
+
+def test_skill_rm_and_resource_delete_agree_on_a_protected_skill(skill_cli_daemon):
+    """The two CLI doors onto the same DELETE report the same thing."""
+    via_skill = _runner.invoke(cli_app, ["skill", "rm", "coffer-guide", "--force"])
+    via_resource = _runner.invoke(cli_app, ["resource", "delete", "skill:coffer-guide", "--force"])
+    assert via_skill.exit_code == via_resource.exit_code
+    assert "is managed by Coffer" in via_skill.output
+    assert "is managed by Coffer" in via_resource.output
+
+
+def test_skill_import_cannot_take_over_coffers_own_name(skill_cli_daemon):
+    """``--force`` must not let an import claim a skill Coffer generates.
+
+    Overwriting rewrote the row's ``source`` to ``local_import``, and the
+    delete guard reads exactly that field — so the skill became deletable
+    until the next boot seeded it back.
+    """
+    src = skill_cli_daemon / "impostor"
+    _write_skill_folder(src, name="coffer-guide")
+
+    r = _runner.invoke(cli_app, ["skill", "import", str(src), "--force"])
+    assert r.exit_code != 0, r.output
+
+    show = _runner.invoke(cli_app, ["skill", "show", "coffer-guide", "--json"])
+    assert show.exit_code == 0, show.output
+    assert json.loads(_extract_json(show.output))["source"] == {"type": "builtin"}
 
 
 def test_skill_rm_without_force_aborts(skill_cli_daemon):

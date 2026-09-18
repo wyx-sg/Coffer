@@ -75,11 +75,30 @@ def _walk(
             out[rel] = path
 
 
+def _under(rel: str, prefixes: AbstractSet[str]) -> bool:
+    """Whether a tree-relative POSIX path sits inside one of ``prefixes``.
+
+    The prefixes are directory prefixes and carry their trailing ``/``, so
+    ``skills/coffer-guide/`` never matches ``skills/coffer-guidelines/``.
+    """
+    return any(rel.startswith(prefix) for prefix in prefixes)
+
+
+def _excluding(
+    files: dict[pathlib.Path, pathlib.Path], prefixes: AbstractSet[str]
+) -> dict[pathlib.Path, pathlib.Path]:
+    """``files`` without the entries under any of ``prefixes``."""
+    if not prefixes:
+        return files
+    return {rel: path for rel, path in files.items() if not _under(rel.as_posix(), prefixes)}
+
+
 def _mirror_tree(
     src: pathlib.Path,
     dst: pathlib.Path,
     *,
     protected: AbstractSet[str] = frozenset(),
+    excluded: AbstractSet[str] = frozenset(),
 ) -> list[str]:
     """Converge ``dst`` on ``src`` by copying only changed files and deleting
     only files gone from ``src`` — never a blanket rmtree.
@@ -90,13 +109,31 @@ def _mirror_tree(
     the held paths, which this vault has not absorbed and therefore has not
     deleted either.
 
+    ``excluded`` holds directory prefixes, relative to both trees, that this
+    mirror **does not see at all**: nothing under one is copied out, and
+    nothing under one is deleted from ``dst`` either. Both halves matter and
+    they are not the same rule as ``protected``.
+
+    * Not copied, because what lives there is derived output every machine
+      regenerates for itself and no two machines render identically (spec
+      vault-sync FR-093).
+    * Not deleted, because the working tree may already carry a copy an older
+      build published. Removing it would stage a deletion — and a deletion is
+      the one change every machine acts on. A machine still running that older
+      build would take it as an instruction to unlink its own live master
+      folder, which is exactly the mid-upgrade surprise this change exists to
+      avoid. The stale bytes are inert instead: no build that has this rule
+      reads them, writes them or diffs them again.
+
     Returns the ``src``-relative paths it skipped — symlinks and ``.git``
-    entries — so the caller can report them.
+    entries — so the caller can report them. Excluded paths are not reported:
+    a symlink is a surprise worth a line in the log, while this is policy.
     """
     dst.mkdir(parents=True, exist_ok=True)
-    skipped: list[str] = []
-    src_files = _tree_files(src, skipped)
-    dst_files = _tree_files(dst)
+    seen: list[str] = []
+    src_files = _excluding(_tree_files(src, seen), excluded)
+    dst_files = _excluding(_tree_files(dst), excluded)
+    skipped = [rel for rel in seen if not _under(rel, excluded)]
     for rel, src_path in src_files.items():
         target = dst_files.get(rel)
         if target is not None and target.read_bytes() == src_path.read_bytes():

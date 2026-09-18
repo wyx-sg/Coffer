@@ -3,10 +3,9 @@
 Three things only a composition root can supply meet here: the langgraph loop
 adapter (import contract 9a keeps langgraph inside ``infrastructure.llm``, so
 ``application.knowledge`` reaches it only through the injected port), the
-installation-wide switch that decides whether the worker runs, and the skill
-delivery the pass re-runs after every corpus change — a new topic document is
-unreachable until the catalogue in each agent's skill names it (spec knowledge
-FR-035).
+installation-wide switch that decides whether the worker runs, and Coffer's
+own skill, which the pass re-renders after every corpus change — a new topic
+document is unreachable until the catalogue in that skill names it.
 
 Kept out of ``app.py`` / ``chat_wiring.py``, both at the 400-LOC ceiling,
 mirroring the sibling ``*_wiring.py`` modules. Teardown never fires a pending
@@ -25,11 +24,11 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.knowledge.skill_delivery import KnowledgeSkillDelivery
 from coffer.application.resource_service import ResourceService
 from coffer.domain.internal_engine_config import CURATE
 from coffer.infrastructure.llm.agentic_reorg import LangchainAgenticReorg
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
+from coffer.surfaces.http.guide_wiring import BuiltinGuide
 from coffer.surfaces.http.knowledge.curation_state import set_curation_runner
 from coffer.surfaces.http.sync_wiring import SyncWiring
 
@@ -39,15 +38,15 @@ _log = logging.getLogger(__name__)
 def wire_curation(
     models: ModelSelectorPort,
     credential_resolver: Callable[[str], str],
-    skill_delivery: KnowledgeSkillDelivery,
+    guide: BuiltinGuide,
 ) -> CurationPass:
     """Build the pass and register it for the route, the CLI and the worker."""
 
     async def _redeliver() -> None:
-        # Every agent's copy, not one: the catalogue each carries differs by
-        # what that agent is activated for, which is where this layer's
-        # authorization is enforced (FR-010).
-        await skill_delivery.deliver_all()
+        # One rendering for the machine: the catalogue is the whole enabled
+        # corpus, not a per-agent slice of it, so every agent's copy is the
+        # same bytes and re-seeding the master updates all of them at once.
+        await guide.refresh()
 
     curation = CurationPass(
         agent=LangchainAgenticReorg(),
@@ -63,7 +62,7 @@ def wire_curation(
 def start_curation_worker(
     knowledge_service: KnowledgeService,
     curation: CurationPass,
-    skill_delivery: KnowledgeSkillDelivery,
+    guide: BuiltinGuide,
     resources: ResourceService,
     engine_config: InternalEngineConfigService,
     sync: SyncWiring,
@@ -113,7 +112,7 @@ def start_curation_worker(
     worker = CurationWorker(
         service=knowledge_service,
         curate=curation,
-        deliver=skill_delivery.deliver_all,
+        deliver=guide.refresh,
         is_enabled=is_enabled,
         read_interval=read_interval,
         list_collections=list_collections,

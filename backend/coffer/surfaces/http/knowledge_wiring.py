@@ -1,8 +1,8 @@
 """Wiring for the one ``knowledge`` kind.
 
 Three things are built here: the directory service, ``IngestService`` (document
-upload, spec knowledge FR-016..FR-019), and ``KnowledgeSkillDelivery``, which
-renders each agent's own copy of the knowledge skill.
+upload, spec knowledge FR-016..FR-019), and the renderer for Coffer's own
+skill, which carries the catalogue.
 
 There is no ``SearchService`` any more, and no retrieval tool to register
 alongside it. The layer exposes exactly one built-in, ``coffer__write``
@@ -13,30 +13,36 @@ document's own opening prose (FR-017). The model port is handed in rather than
 built here — which connection the internal engine runs on is the engine's
 question, not this kind's (spec internal-engine FR-005).
 
-Delivery bridges two kinds — it has to resolve an *agent's* skill directory to
-write a *knowledge* artifact into it — and a composition root is the one place
-allowed to do that (Contract 5), which is why the resolver is defined here
-rather than inside ``application.knowledge``.
+What this module hands back is TEXT, not a delivery. The skill that carries
+the catalogue is an ordinary skill resource now, written into the master store
+by the skill kind (``application.skill.builtin_seed``) and delivered by the
+same links as any other. Those two kinds may not import each other, so the
+pairing is made one level up, in ``guide_wiring`` — a composition root is the
+one place allowed to bridge kinds (Contract 5).
 """
 
 from __future__ import annotations
 
-import pathlib
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
+from coffer.application.knowledge import guide_render
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.kind import make_knowledge_kind
-from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
-from coffer.application.knowledge.skill_delivery import KnowledgeSkillDelivery
-from coffer.domain.agent.config import AgentConfig
+from coffer.application.knowledge.service import (
+    KIND_KNOWLEDGE,
+    CatalogueChanged,
+    KnowledgeService,
+)
+from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
+from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
     set_ingest_service,
     set_knowledge_service,
@@ -47,20 +53,19 @@ if TYPE_CHECKING:
 
     from coffer.application.audit_service import AuditService
     from coffer.application.resource_service import ResourceService
-    from coffer.domain.resource import Resource
 
 
 @dataclass(frozen=True)
 class KnowledgeWiring:
     """What the knowledge kind hands back: the directory service and its
     consumers (the channel ``/save`` card takes the first two), the
-    internal-model selector the curation pass shares, and the skill delivery
-    the pass re-runs whenever the corpus changes."""
+    internal-model selector the curation pass shares, and the renderer for
+    Coffer's own skill, which the pass re-runs whenever the corpus changes."""
 
     service: KnowledgeService
     ingest_service: IngestService
     models: ModelSelectorPort
-    skill_delivery: KnowledgeSkillDelivery
+    render_guide: GuideRenderer
 
 
 def wire_knowledge_kind(
@@ -70,9 +75,12 @@ def wire_knowledge_kind(
     builtin_tools: BuiltinToolRegistry,
     models: ModelSelectorPort,
     credential_resolver: Callable[[str], str],
+    on_catalogue_changed: CatalogueChanged,
 ) -> KnowledgeWiring:
     """Wire the ``knowledge`` kind into the app and return what it built."""
-    service = KnowledgeService(resources=resource_svc, audit=audit)
+    service = KnowledgeService(
+        resources=resource_svc, audit=audit, on_catalogue_changed=on_catalogue_changed
+    )
     set_knowledge_service(service)
 
     ingest_service = IngestService(
@@ -85,20 +93,13 @@ def wire_knowledge_kind(
     )
     set_ingest_service(ingest_service)
 
-    async def _list_agents() -> list[Resource]:
-        return await resource_svc.list(kind="agent")
-
-    def _agent_skill_dir(r: object) -> pathlib.Path:
-        # Typed as ``object`` to match the port: delivery does not care what
-        # kind of record it is handed, only that this resolver knows how to
-        # turn it into a directory.
-        return AgentConfig.model_validate(cast("Resource", r).config).resolved_skill_dir()
-
-    skill_delivery = KnowledgeSkillDelivery(
-        service=service,
-        list_agents=_list_agents,
-        resolve_skill_dir=_agent_skill_dir,
-    )
+    async def _render_guide() -> str:
+        # One rendering for the whole machine: the catalogue carries no
+        # per-agent slice, so there is one text and every agent gets it.
+        return guide_render.render(
+            guide_render.display_root(paths.knowledge_root()),
+            await service.catalogue(),
+        )
 
     register_knowledge_builtin_tools(builtin_tools, knowledge_service=service)
     app.state.kinds[KIND_KNOWLEDGE] = make_knowledge_kind(service)
@@ -106,5 +107,5 @@ def wire_knowledge_kind(
         service=service,
         ingest_service=ingest_service,
         models=models,
-        skill_delivery=skill_delivery,
+        render_guide=_render_guide,
     )

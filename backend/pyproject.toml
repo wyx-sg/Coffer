@@ -99,8 +99,9 @@ coffer-mcp-shim = "coffer.surfaces.shim.main:run"
 packages = ["coffer"]
 
 [tool.setuptools.package-data]
-# The knowledge skill seeded at boot (spec knowledge FR-029) is a file, so an
-# installed wheel has to carry it alongside the modules.
+# The hand-written half of Coffer's own skill (spec knowledge FR-037) is a
+# markdown file, not a module, so an installed wheel has to be told to carry
+# it. A frozen build is told separately, in backend/coffer-daemon.spec.
 coffer = ["application/knowledge/skill_assets/**/*.md"]
 
 [tool.ruff]

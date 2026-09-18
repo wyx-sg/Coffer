@@ -76,6 +76,7 @@ from coffer.surfaces.http.dependencies import (
     set_retention_service,
 )
 from coffer.surfaces.http.engine_config_composition import build_config_services
+from coffer.surfaces.http.guide_wiring import run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     shutdown_all_sessions,
@@ -223,9 +224,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # a collection's `topics/` lane from the sources people write. It carries
     # the skill delivery too, because a document nothing has re-rendered a
     # catalogue for is a document no agent has a path to (spec knowledge).
-    curation_pass = wire_curation(
-        kinds.knowledge.models, credential_resolver, kinds.knowledge.skill_delivery
-    )
+    curation_pass = wire_curation(kinds.knowledge.models, credential_resolver, kinds.guide)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
     # drives turns through the chat platform's handles, and `/save` through the
@@ -242,11 +241,13 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(kinds.provider.boot_heal)
     await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
-    # Each agent's knowledge skill, rendered from whatever the corpus holds
-    # right now. Done every boot rather than only on change: it is cheap, it
-    # heals a copy someone edited or deleted, and it is what replaces a
-    # shared-master symlink on a vault upgraded from the previous delivery.
-    await kinds.knowledge.skill_delivery.deliver_all()
+    # Coffer's own skill, re-rendered from this build and whatever the corpus
+    # holds right now, and seeded into the master store as an ordinary skill
+    # resource. Done every boot rather than only on change: it is cheap when
+    # nothing moved (two reads and a comparison), it heals a master someone
+    # edited, and it is what upgrades a vault that still holds the previous
+    # per-agent rendering.
+    await run_builtin_guide_refresh(kinds.guide)
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
@@ -261,7 +262,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         retention_svc=retention_svc,
         knowledge_service=kinds.knowledge.service,
         curation_pass=curation_pass,
-        skill_delivery=kinds.knowledge.skill_delivery,
+        guide=kinds.guide,
         distil=kinds.memory.distil,
         memory_service=kinds.memory.service,
         transcript_reader=kinds.agent_skill.transcript_reader,

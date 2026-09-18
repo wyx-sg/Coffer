@@ -94,14 +94,21 @@ agent reads with its own tools. There is still no derived index.**
   needs Coffer — the collection, the frontmatter, the lane and the audit entry
   are Coffer's to decide — and because it is the one place an invocation record
   still gets written. Deletion becomes a person's action on the human surfaces.
-- **The skill is generated per agent, and it carries the catalogue.** Its
+- **The skill is generated, and it carries the catalogue.** Its
   frontmatter description names the subjects of the enabled collections, drawn
   from their READMEs — that description is the only part of this
   layer always in a model's context, so it must carry matchable specifics. Its
-  body carries the absolute knowledge root and, per collection, every topic
+  body carries the knowledge root and, per collection, every topic
   document's path, title and description: roughly 5.2K tokens for 58 documents,
   cheaper than the memory layer's session-start digest and paid only when the
   model reaches for it. It is re-rendered whenever the catalogue changes.
+
+  *Amended 2026-09-18.* "Per agent" is gone from this bullet's title and the
+  skill is no longer this layer's to deliver: the catalogue is now one section
+  of Coffer's own `coffer-guide` skill, an ordinary `skill` Resource with one
+  master folder, generated at every boot. This layer renders the text and
+  nothing else. Everything else above still holds. See
+  [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md).
 - **Authorization moves to delivery.** A collection is still one `knowledge`
   Resource with the framework's per-agent scope, but the scope now decides what
   an agent's skill file says rather than what a tool returns. So the skill is
@@ -110,18 +117,23 @@ agent reads with its own tools. There is still no derived index.**
   deleted with `coffer__list_skills`: both existed for agents without a native
   skill mechanism, and both agents Coffer supports have one.
 
-  *Withdrawn 2026-09-18.* The per-agent scope this bullet moved is gone — no
-  collection ever carried one, and this decision's own delivered skill hands the
-  agent the knowledge root and tells it to grep, so the omission authorized
-  nothing. Every enabled collection is now named in every agent's copy. The
-  independent **copy** survives on its own merit: it is what keeps a delivery
-  from writing through a link into a folder every other agent reads. See
-  [Per-Agent Resource Scope](per-agent-resource-scope.md)'s revision history.
+  *Withdrawn 2026-09-18, in full.* The per-agent scope this bullet moved is gone
+  — no collection ever carried one, and this decision's own delivered skill
+  hands the agent the knowledge root and tells it to grep, so the omission
+  authorized nothing. Every enabled collection is now named in the one rendered
+  skill. The independent **copy** went with it, later the same day: it was kept
+  on the grounds that a shared master is a copy this layer cannot re-render,
+  stale or reclaim, and that ceased to be true once the master is regenerated at
+  every boot and reclaim is the skill kind's own per-agent reconciliation. The
+  delivery is the ordinary shared-master link again. See
+  [Per-Agent Resource Scope](per-agent-resource-scope.md)'s revision history and
+  [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md).
 
 **Removed:** `coffer__list`, `coffer__grep`, `coffer__read`, `coffer__search`,
 `coffer__delete`, `coffer__list_skills`, `coffer__load_skill`; `.history/` and
 `.raw/`; the `tidy_owner_machine_id`/`auto_tidy_enabled` pair's default-off
-posture; shared-master delivery for this one skill.
+posture; shared-master delivery for this one skill *(restored 2026-09-18 — see
+the amendment above)*.
 
 **Kept:** no index of any kind — no vectors, no FTS5, no sidecar, no chunking,
 no reindex; path as identity; frontmatter as metadata; a collection describing
@@ -203,7 +215,17 @@ itself in its own `README.md`; the `knowledge` Resource kind; no table in
   scope, so the mechanism had never once narrowed anything — and it could not
   have, because the skill it narrows hands the agent the knowledge root and
   tells it to grep. Every enabled collection is now served to every agent, and
-  `enabled` is the only gate the kind has. What survives is the independent
-  per-agent skill **copy**, which earns its place by keeping a delivery from
-  writing through a shared link. See
+  `enabled` is the only gate the kind has. The independent per-agent skill
+  **copy** was kept in that revision, on the grounds that it stops a delivery
+  writing through a shared link; the next revision withdrew that too. See
   [Per-Agent Resource Scope](per-agent-resource-scope.md).
+- **2026-09-18, later the same day** — **the generated skill leaves this layer.**
+  Coffer's manual and this catalogue merge into one skill, `coffer-guide`, which
+  is an ordinary `skill` Resource: one master folder, one row, delivered by the
+  same predicate and the same links as any imported skill, and regenerated from
+  the running build at every boot. This layer renders the text and no longer
+  writes, delivers or reclaims anything. The per-agent copy goes with it — a
+  master that is re-rendered in place, and a reclaim the skill kind already
+  performs per agent, answer the two objections that kept it. What this decision
+  still owns is unchanged: the files, the lanes, curation, one tool, and no
+  index. See [Coffer Ships Its Own Skill](coffer-ships-its-own-skill.md).

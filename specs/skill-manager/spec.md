@@ -195,7 +195,9 @@ server's tools.
   are its **reach**, and reach is machine-local: it is set here, it takes effect
   here, and it is not carried to another machine by a converge round (spec
   vault-sync, `## What does not sync`). What converges is the skill — its files,
-  its metadata, what it *is*. So a skill may be delivered to every agent on the
+  its metadata, what it *is* — unless the skill is Coffer's own generated one,
+  which converges in neither half because each machine renders it for itself
+  (spec vault-sync FR-093). So a skill may be delivered to every agent on the
   desktop and dormant on the laptop, and that is not a scope naming machines
   but two machines each holding their own answer. The surface that sets reach
   says so, because someone narrowing a skill is entitled to know the narrowing
@@ -444,6 +446,27 @@ Per `.agents/sdd.md`, every scenario in this section is referenced by at least o
 - **When** it calls `tools/list`,
 - **Then** no skill tool is among the results — `coffer__list_skills` and `coffer__load_skill` are absent — and the `initialize` instructions name no skill tool either, because every supported agent already reads its delivered skills from disk.
 
+### Scenario: Coffer's own skill is rewritten from the build at every start
+
+- **Given** a registered builtin skill whose master `SKILL.md` a person has edited by hand,
+- **When** the daemon starts and the builtin seed runs,
+- **Then** the master folder holds the text the running build renders, the hand edit is gone, the resource row's `version_hash` and description match the new text, and every agent the delivery predicate grants reads the new text through its existing link,
+- **And** a second start over an unchanged catalogue writes nothing, registers nothing and records no audit entry, while a render or a write that fails leaves the previous master intact and does not fail startup.
+
+### Scenario: deleting Coffer's own skill is refused on every surface
+
+- **Given** a registered builtin skill, delivered to an agent,
+- **When** a delete is attempted through the skill route, through the kind-agnostic resource route, and through the CLI,
+- **Then** each is refused with `RESOURCE_PROTECTED` (409) and a message naming the skill and pointing at disable and scope instead,
+- **And** nothing was torn down on the way — the master folder, the resource row, the bindings and the agent's link are all exactly as they were — while disabling the same skill and narrowing its scope both succeed and reclaim its links normally.
+
+### Scenario: the skills surface marks the built-in skill and offers no delete
+
+- **Given** the Skills page listing one imported skill and one builtin skill,
+- **When** the list is read,
+- **Then** the builtin row is marked as built-in with the reason available on the mark, and it offers neither the per-row delete nor a selection checkbox for the bulk delete, while the imported row offers both,
+- **And** the builtin row still offers enable/disable and scope, and the read model carries an explicit `builtin` flag rather than requiring the client to infer it from the source variant.
+
 ## Requirements
 
 ### Functional Requirements
@@ -451,7 +474,7 @@ Per `.agents/sdd.md`, every scenario in this section is referenced by at least o
 **Resource model**
 
 - **FR-001**: System MUST register each managed skill as a Resource of kind `skill`, identified by `skill:<name>` where `<name>` comes from SKILL.md frontmatter.
-- **FR-002**: System MUST validate skill configuration against a kind-specific schema with fields `source` (variant: `local_import` only), `skill_md_name`, `skill_md_description`, `version_hash`, and `last_synced_from_source_at`.
+- **FR-002**: System MUST validate skill configuration against a kind-specific schema with fields `source` (variants: `local_import`, carrying the path it was imported from, and `builtin`, carrying nothing at all — see FR-028), `skill_md_name`, `skill_md_description`, `version_hash`, and `last_synced_from_source_at`.
 
 **Canonical storage**
 
@@ -491,7 +514,7 @@ Per `.agents/sdd.md`, every scenario in this section is referenced by at least o
 
 **Lifecycle**
 
-- **FR-021**: Removing a skill MUST remove every enabled per-agent symlink, cascade-delete bindings, delete the master folder, and audit the removal with a snapshot.
+- **FR-021**: Removing a skill MUST remove every enabled per-agent symlink, cascade-delete bindings, delete the master folder, and audit the removal with a snapshot. A builtin skill is the one exception, and it is refused before any of this begins (FR-029).
 - **FR-022**: Removing an agent (via spec agent-registry) MUST trigger an `on_delete` hook in the skill module that removes that agent's bindings and symlinks before the agent row is deleted.
 
 **Surfaces**
@@ -509,10 +532,16 @@ Per `.agents/sdd.md`, every scenario in this section is referenced by at least o
 
 **Observability**
 
+**Coffer's own skill**
+
+- **FR-028**: System MUST support a **builtin** skill — one whose `source` is `builtin` and whose master folder Coffer writes itself rather than a person importing it. Its content MUST be rewritten from the running build whenever the material it describes moves: at every daemon boot, and on each change to what it carries (for `coffer-guide`, a curation pass or a collection being created, deleted, enabled or disabled — spec [knowledge](../knowledge/spec.md) FR-034). A write MUST be skipped when the master already holds exactly that text, so an unchanged boot registers, audits and re-delivers nothing. Everything downstream of the master folder is the ordinary machinery: the same validation (FR-004), the same resource row, the same delivery predicate (FR-012) and the same links (FR-008), the same drift verification and repair (FR-013, FR-015). It follows that **an edit to a builtin skill does not survive** — the next rewrite replaces it — and the surfaces MUST say so rather than letting a person discover it; a correction belongs in the build, not in the folder. A builtin skill MUST NOT converge — neither its master folder nor its resource row (spec [vault-sync](../vault-sync/spec.md) FR-093): it is derived output, regenerated on each machine from material that already converges plus that machine's own reach, so publishing it is churn. The `skill` kind therefore declares the row derived while every other skill row keeps travelling, and the mirrored `skills/` tree leaves that one folder alone in both directions. The `builtin` source variant MUST still carry no fields — a path, a timestamp or a build id would each be a fact about one machine stored in a shape nothing reads. Seeding MUST NOT be able to fail a startup: a render or a write that fails leaves the previous master exactly where it was and every other skill still delivers.
+- **FR-029**: Deleting a builtin skill MUST be **refused** — `RESOURCE_PROTECTED`, 409 — through the framework's pre-write delete guard (spec [resource-framework](../resource-framework/spec.md) FR-010), so the refusal is identical on `DELETE /api/v1/skills/{name}`, on `DELETE /api/v1/resources/skill/{name}` and on the CLI, and nothing is torn down on the way. The reason is honesty rather than protection: the next boot writes the master folder back, so a delete would read as destructive and behave as a no-op that had removed some links in passing. `enabled` and `scope` MUST stay fully available on a builtin skill, and the refusal MUST name them — those two decide **reach**, which is the owner's call, while **existence** is not.
+- **FR-030**: Every surface that lists or shows a skill MUST mark a builtin one as built-in and MUST NOT offer its deletion: the read model carries an explicit `builtin` flag rather than leaving each client to infer it from the source variant, the web UI marks the row and withholds it from both the per-row delete and any bulk selection, and the CLI reports the same refusal the API does if a delete is attempted anyway. Enable, disable and scope controls MUST remain offered unchanged — a surface that hid them would be hiding the only decisions the owner still has over this skill.
+
 ### Key Entities
 
 - **Skill**: A Resource of kind `skill`, identified by `skill:<name>` (name from SKILL.md frontmatter). Holds source provenance, content hash, and metadata; the content folder lives on disk at `~/.coffer/skills/<name>/`. Carries a framework-level `scope` (one allow-list of agents, `null` meaning unrestricted; `None` for every agent) which, together with the resource's own `enabled` flag, determines delivery outright (ADR per-agent-resource-scope; see "Skill delivery scope").
-- **Skill Source**: A record capturing where the skill came from. For local imports, it includes the original path for informational purposes only.
+- **Skill Source**: A record capturing where the skill came from. For local imports, it includes the original path for informational purposes only. For a **builtin** skill it carries nothing but the variant name — Coffer generates the folder from the running build, so there is no provenance that would still be true tomorrow, and no field that would be the same on two machines (FR-028).
 - **Skill–Agent Binding**: Internal delivery bookkeeping, not a user-facing toggle. A row joining one skill Resource and one agent Resource (kind `agent`, per spec agent-registry) records that this agent currently holds a delivered copy, with last-link-path, link-mode and last-linked-at metadata. Symlink existence on disk is the live representation; the row is the persistent record of what was delivered.
 - **Drift Report**: An ephemeral structure produced by `verify` listing each binding whose on-disk target disagrees with the binding state, categorized by drift type with a suggested remedy.
 - **Unmanaged Skill**: A derived (never stored) view of a skill-shaped entry found in an agent's skill locations that Coffer does not manage — name, path, location, `valid` flag. The filesystem is the source of truth; adoption or deletion are the only mutations.

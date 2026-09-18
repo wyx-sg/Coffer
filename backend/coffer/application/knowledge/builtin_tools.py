@@ -128,7 +128,7 @@ def register_knowledge_builtin_tools(
                 "repeats something. Not for what is already in the repository in "
                 "front of you, not for anything transient to this session, and "
                 "never for secrets. To READ this knowledge, use your own file "
-                "tools at the paths the coffer-knowledge skill lists — there is "
+                "tools at the paths the coffer-guide skill lists — there is "
                 "no read tool here."
             ),
             input_schema={
@@ -138,7 +138,7 @@ def register_knowledge_builtin_tools(
                         "type": "string",
                         "description": (
                             "Which collection to file it under. The "
-                            "coffer-knowledge skill names them all."
+                            "coffer-guide skill names them all."
                         ),
                     },
                     "title": {

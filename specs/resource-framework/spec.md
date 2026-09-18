@@ -128,6 +128,10 @@ cleanup, confirm older entries are gone and newer ones remain.
 - **A deletion whose kind hook fails.** The hook runs while the resource can
   still be resolved and a hook that raises aborts the deletion, so a resource is
   never left registered with its on-disk half already gone.
+- **A deletion the kind refuses outright.** Some resources are not the owner's to
+  delete — one Coffer generates and rewrites at every boot. The kind says so
+  through a pre-write guard that runs before anything is torn down, so the
+  refusal costs the caller nothing and leaves no trace but the refusal itself.
 - **A retention policy for a table nobody registered.** Policies are upserted at
   startup from the prunable-table registry and never deleted, so a table that
   stops existing leaves a policy that prunes nothing rather than a prune aimed
@@ -180,6 +184,14 @@ scenario in this section is referenced by at least one test marked
 - **When** triggered through the command line,
 - **Then** the user sees an actionable message and a non-zero exit code; `--verbose` shows a full trace.
 
+### Scenario: a kind refuses a deletion before anything is torn down
+
+- **Given** a registered kind supplying a pre-write delete guard, and one resource of that kind the guard refuses,
+- **When** the delete is attempted through the kind's own route and through the kind-agnostic one,
+- **Then** both are refused with the same error the guard raised, carrying the same code and the same status,
+- **And** the kind's cleanup hook never ran, the resource and everything it owns are exactly as they were, and no deletion audit entry was written,
+- **And** a resource of the same kind the guard does not refuse still deletes normally.
+
 ### Scenario: audit lifecycle changes
 
 - **Given** the user performs any add / enable / disable / update / delete on a server or capability,
@@ -210,6 +222,7 @@ scenario in this section is referenced by at least one test marked
 - **FR-003**: Creation is a per-kind seam and MUST stay one. The kind-agnostic create route MUST accept only kinds that declare themselves creatable through it, and MUST refuse a kind that owns a creation invariant beyond config validation — a skill's master folder, an agent's on-disk detection — so that such a kind is registered through its own surface, which can hold that invariant. There is deliberately no `coffer resource create`: a generic create would have to guess a config shape it cannot know. What this spec owns is everything that happens to a resource once a kind has made one.
 - **FR-004**: System MUST carry a framework-level per-agent reach on every resource — one allow-list of agents, `null` meaning every agent, `[]` meaning none ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)) — and MUST serve it for every kind through one kind-agnostic pair of routes rather than per kind, reporting whether the kind supports reach at all so a client can render the right control without knowing the kinds itself. A non-null reach on a kind that declares none, and a payload carrying a property the schema does not define, MUST both be refused rather than stored or silently widened — a client still sending a withdrawn axis means "only there", and keeping what is left would store "every agent". A reach write MUST be audited and MUST fire the kind's post-write reaction, so delivery and reclaim stay in step with the edit. *Enforcing* reach is each kind's own seam at its own choke point; this spec owns the value, its validation and its write path.
 - **FR-005**: Deleting a resource MUST run the kind's own cleanup hook while the resource can still be resolved, and a hook that fails MUST abort the deletion rather than leave a half-deleted thing. Rows a kind owns MUST cascade; history MUST NOT — the audit log and the invocation log outlive the resource they describe. Credentials that no remaining resource cites MUST be released, and a failure to release MUST NOT turn an already-completed deletion into a caller-facing error; the store behind those refs is spec credentials'.
+- **FR-010**: A kind MAY supply a **pre-write delete guard**: given the resource a delete names, it refuses the deletion before anything is torn down. The framework MUST run it after resolving the resource and **before** the kind's cleanup hook of FR-005, MUST turn its refusal into the caller's error unchanged, and MUST leave the resource exactly as it was — no link removed, no row touched, no lifecycle audit entry for a deletion that did not happen. The refusal MUST be identical whichever door the delete came through, the kind's own route or the kind-agnostic one, which is the whole reason it belongs here: a guard written into one route is a guard the second route silently lacks, and the kind-agnostic surface exists precisely so a caller need not know the kind. It is a **validator**, alongside the registration validators of FR-002, rather than a rejection raised from inside `on_delete` — that hook is a *reaction to an already-decided delete*, run to tear the kind's own half down, so a kind refusing from in there refuses only after the framework has committed to the operation and the caller has been told it is under way. The guard is the seam for a resource whose existence is not the owner's to decide: the only one today is a builtin skill, whose master folder the next boot writes back (spec [skill-manager](../skill-manager/spec.md) FR-029).
 
 **Audit**
 
@@ -230,7 +243,7 @@ scenario in this section is referenced by at least one test marked
 ### Key Entities
 
 - **Resource**: A user-managed entity inside Coffer, identified by `(kind, name)`. Carries kind-specific configuration, an enabled flag, a description, a per-agent reach and timestamps. Kind-agnostic by construction, so a new kind adds a row shape rather than a table.
-- **Kind**: The descriptor one kind's spec contributes — its config schema, its name rule, its pre-write validators, its post-write reactions, whether it is creatable generically and whether it supports reach. Pure data: it names no router and no service, so the domain layer never references a surface.
+- **Kind**: The descriptor one kind's spec contributes — its config schema, its name rule, its pre-write validators (registration, and the optional delete guard of FR-010), its post-write reactions, whether it is creatable generically and whether it supports reach. Pure data: it names no router and no service, so the domain layer never references a surface.
 - **Scope**: A resource's reach — one allow-list of agents, `null` for every agent, `[]` for none. Machine-local (spec vault-sync, `## What does not sync`).
 - **AuditEntry**: One lifecycle change — timestamp, event type, the resource's stable row id, the kind and name it carried at the time, the actor, and a JSON payload describing what changed.
 - **RetentionPolicy**: One prunable table's period — `null` for keep-forever — plus when it was last pruned and how many rows went.

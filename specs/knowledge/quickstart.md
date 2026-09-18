@@ -40,7 +40,7 @@ coffer resource enable knowledge:shopee
 ```
 
 That gate decides what an agent is **told**, not what a process can open: the
-skill Coffer writes into every agent's directory stops mentioning a disabled
+skill Coffer delivers to every agent stops mentioning a disabled
 collection — its subjects, its catalogue and its paths all go with it — but an
 agent holding a shell can still read the directory. The per-agent form of this
 was withdrawn: it withheld a name from a reader who already had the root, which
@@ -75,10 +75,15 @@ plainly — the next curation pass decides where it belongs and merges it with w
 is already there, so you do not have to check whether it repeats something.
 `folder` is optional filing inside `sources/`, nothing more.
 
-An agent finds the corpus through the generated `coffer-knowledge` skill in its
-own skills directory: its description names the subjects your collections cover,
-and its body is the whole catalogue — every topic document's path, title and
-description, plus the absolute root. Reading is then just:
+An agent finds the corpus through `coffer-guide`, the skill Coffer generates for
+itself and delivers into every agent's skills directory: its description names
+Coffer's own tools and the subjects your collections cover, and its body is
+Coffer's manual followed by the whole catalogue — every topic document's path,
+title and description, plus the knowledge root. It is one skill for both, because
+a description is resident in every session while a body is paid for only when a
+model opens it. You will see it on the Skills page beside your own, marked
+built-in: it can be disabled or scoped like any other, but not deleted or edited,
+because Coffer rewrites it at every start. Reading is then just:
 
 ```text
 Read  ~/.coffer/knowledge/shopee/topics/account/login-sessions.md

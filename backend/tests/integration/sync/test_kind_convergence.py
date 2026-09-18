@@ -85,3 +85,36 @@ def test_every_kind_the_daemon_registers_answers_the_question(kinds) -> None:  #
     assert set(kinds) >= _NON_CONVERGING, (
         f"{sorted(_NON_CONVERGING - set(kinds))} is named above but is not a registered kind"
     )
+
+
+def test_the_skill_kind_withholds_its_own_generated_row(kinds) -> None:  # type: ignore[no-untyped-def]
+    """spec vault-sync FR-093, asserted against the registry the daemon built.
+
+    ``converges_row`` has exactly the failure mode ``converges`` has and this
+    file exists for: a predicate can be written, tested and honoured by the
+    exporter while nothing hands it to the kind, and the symptom — an artifact
+    quietly converging again — looks like nothing at all until two machines
+    have been fighting over it for a week.
+
+    So this asks the real kind, and it asks it in both directions: an imported
+    skill still travels, and only the builtin one does not.
+    """
+    skill = kinds["skill"]
+    assert skill.converges is True, "the kind as a whole must keep converging"
+    assert skill.converges_row is not None, "nothing wired the per-row predicate"
+    assert skill.converges_row({"source": {"type": "builtin"}}) is False
+    assert skill.converges_row({"source": {"type": "local_import", "original_path": "/x"}}) is True
+    # A row with no source at all is the user's until something says otherwise.
+    assert skill.converges_row({}) is True
+
+
+def test_no_other_kind_quietly_took_up_per_row_withholding(kinds) -> None:  # type: ignore[no-untyped-def]
+    """The same exact-set discipline the flag above gets.
+
+    A per-row predicate is easier to add than a kind-level flag and harder to
+    notice: it withholds some rows and not others, so the surface still shows
+    the kind converging. Naming the one kind that has one keeps a second from
+    arriving without a reviewer seeing it.
+    """
+    refined = {name for name, kind in kinds.items() if kind.converges_row is not None}
+    assert refined == {"skill"}, f"kinds with a per-row convergence rule drifted: {sorted(refined)}"

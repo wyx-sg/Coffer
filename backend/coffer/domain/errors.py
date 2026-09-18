@@ -238,6 +238,28 @@ class TargetConflict(CofferError):  # noqa: N818
         self.reason = reason
 
 
+class ResourceProtected(CofferError):  # noqa: N818
+    """A resource Coffer owns outright, asked to be taken over.
+
+    Raised for the two ways that can be asked: deleting it, and importing over
+    its name. Neither would stick — the same daemon writes the resource back at
+    the next boot — so both read as decisive and behave as no-ops. The honest
+    answer is to refuse and say which resource it is, which is why the verb
+    lives in ``reason`` rather than in the message prefix: one class, two
+    refusals, each able to say what it is actually refusing.
+
+    Disabling the resource, or narrowing its scope, stays available: those
+    decide reach, which is the owner's to decide, while existence is not.
+    """
+
+    code = "RESOURCE_PROTECTED"
+
+    def __init__(self, ref: str, reason: str) -> None:
+        super().__init__(f"{ref} is managed by Coffer: {reason}")
+        self.ref = ref
+        self.reason = reason
+
+
 class DatabaseSchemaTooNew(CofferError):  # noqa: N818
     """The on-disk DB was migrated by a newer/divergent Coffer build.
 

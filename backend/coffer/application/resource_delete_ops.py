@@ -12,6 +12,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from coffer.application.resource_kind_ops import credential_refs
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Kind
 
@@ -34,12 +35,10 @@ async def release_orphaned_credentials(
     already-completed deletion into a caller-facing error — the credential
     then merely lingers, which was the status quo.
     """
-    from coffer.application.resource_service import _extract_credential_refs
-
     if service._credentials is None:
         return []
     released: list[str] = []
-    for cred_ref in dict.fromkeys(_extract_credential_refs(kind_def, config).values()):
+    for cred_ref in dict.fromkeys(credential_refs(kind_def, config).values()):
         try:
             # Off the loop thread: the store is a blocking SQLite writer, and
             # calling it inline competes with the connection this coroutine is
