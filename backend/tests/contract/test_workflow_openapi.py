@@ -163,8 +163,8 @@ def test_no_workflow_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_twenty_two_routes(spec_doc: dict[str, Any]) -> None:
-    """A run's whole management plane, counted. A twenty-third arriving is a
+def test_the_management_plane_is_twenty_three_routes(spec_doc: dict[str, Any]) -> None:
+    """A run's whole management plane, counted. A twenty-fourth arriving is a
     decision, not an accident.
 
     It was thirteen while a run had a main thread of its own. Four inputs
@@ -179,9 +179,12 @@ def test_the_management_plane_is_twenty_two_routes(spec_doc: dict[str, Any]) -> 
     by talking, and until it existed a task could only be talked to during the
     hours its turn was in flight. The last three are the developer's own notes
     (FR-069) — writing one, rewriting it, and serving the bytes of an image
-    pasted into it, which the text preview cannot answer for by design.
+    pasted into it, which the text preview cannot answer for by design. The
+    twenty-third rewrites the run's LABEL (FR-070): its title is typed before
+    the first task has opened, when the developer knows least about the work,
+    and until this existed it could never be corrected.
     """
-    assert len(_declared_operations(spec_doc)) == 22
+    assert len(_declared_operations(spec_doc)) == 23
 
 
 def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]) -> None:
@@ -195,22 +198,40 @@ def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]
 
 
 def test_a_run_is_never_edited_in_place(spec_doc: dict[str, Any]) -> None:
-    """A run is operational state driven by commands and rebuilt from its event
-    log (FR-014) — there is no PUT or PATCH of a run's row anywhere here, and a
-    surface that offered one would be a second writer of the projection.
+    """A run's POSITION is rebuilt from its event log (FR-014), so no surface
+    may write it in place — one that did would be a second writer of the
+    projection, and the log would stop being the record of truth.
 
-    A note's contents are exempt and nothing else is: a note is a FILE under
-    the run's directory (FR-069), and replacing a file's bytes is what PUT is
-    for. What the invariant protects is the projection, which no inputs route
-    touches — they write the `inputs` column, which is outside the version
-    cycle for exactly this reason.
+    What the invariant protects is the PROJECTION: `status`,
+    `current_stage_key`, `current_node_key`, `version`, `tokens_spent`. Two
+    kinds of edit are outside it and are named here rather than left to be
+    rediscovered:
+
+    * a note's contents — a note is a FILE under the run's directory (FR-069),
+      and replacing a file's bytes is what PUT is for;
+    * the run's LABEL — its title and description (FR-070). A label is what the
+      developer called the work, typed before the first task opened, when they
+      knew least about it. It is not folded from anything and it moves the run
+      nowhere, which is why it carries no `version` either.
+
+    Anything else gaining a PUT or a PATCH is the failure this guards.
     """
+    allowed = {("PATCH", "/api/v1/workflow/runs/{run_id}")}
     edits = {
         (method, path)
         for method, path in _declared_operations(spec_doc)
         if method in {"PUT", "PATCH"} and "/inputs/" not in path
-    }
+    } - allowed
     assert not edits, f"the workflow surface gained an in-place edit: {sorted(edits)}"
+
+
+def test_the_one_editable_thing_on_a_run_is_its_label(spec_doc: dict[str, Any]) -> None:
+    """The exemption above is narrow by construction: the body that PATCH takes
+    carries a title and a description and nothing else, so it cannot grow into
+    a way to write the projection without this going red."""
+    body = spec_doc["components"]["schemas"]["RunLabelIn"]
+    assert set(body["properties"]) == {"title", "description"}
+    assert "version" not in body["properties"], "a label edit must not join the lock cycle"
 
 
 def test_every_mutating_run_command_carries_a_version(spec_doc: dict[str, Any]) -> None:

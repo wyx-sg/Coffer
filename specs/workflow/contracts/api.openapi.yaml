@@ -117,6 +117,38 @@ paths:
                 $ref: "#/components/schemas/RunDetailOut"
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [workflow]
+      operationId: relabelWorkflowRun
+      summary: Rewrite what this run is called and what it is for.
+      description: |
+        The one in-place edit of a run's row, and it touches nothing the event
+        log owns (FR-070). A run's status, stage and position are folded from
+        its events and only the engine writes them (FR-014); the title is a
+        label the developer typed before the first task had opened. No
+        `version`: the optimistic lock guards the position, and this moves the
+        run nowhere.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunLabelIn"
+      responses:
+        "200":
+          description: The run, relabelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: This machine does not advance this run (FR-012).
+        "422":
+          description: The title was empty.
     delete:
       tags: [workflow]
       operationId: deleteWorkflowRun
@@ -951,6 +983,12 @@ components:
       properties:
         id: { type: string }
         title: { type: string }
+        description:
+          type: string
+          nullable: true
+          description: |
+            What the developer says this delivery is. A label like the title —
+            neither is folded from the events (FR-070).
         template_ref: { type: string }
         status:
           type: string
@@ -982,6 +1020,21 @@ components:
             bounded by each task's own attempt ceiling (FR-026).
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time, nullable: true }
+
+    RunLabelIn:
+      type: object
+      required: [title]
+      description: |
+        A run's title and description. No `version`, deliberately: this changes
+        no state the optimistic lock guards (FR-070).
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          nullable: true
 
     RunListOut:
       type: object

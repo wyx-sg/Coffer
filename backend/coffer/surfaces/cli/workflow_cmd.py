@@ -274,6 +274,24 @@ def promote(
     typer.echo(f"copied {body['copied']} file(s) into knowledge:{body['collection']}")
 
 
+@run_app.command("relabel")
+def relabel_run(
+    ctx: typer.Context,
+    run_id: str = typer.Argument(...),
+    title: str = typer.Option(..., "--title", help="What this delivery is called"),
+    description: str | None = typer.Option(None, "--description", "-d"),
+) -> None:
+    """Rewrite what a run is called and what it is for. Moves nothing else."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.patch(
+            f"/workflow/runs/{run_id}",
+            json={"title": title, "description": description},
+        )
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"relabelled run {run_id}")
+
+
 @run_app.command("delete")
 def delete_run(
     ctx: typer.Context,

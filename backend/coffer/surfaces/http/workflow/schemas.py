@@ -191,6 +191,9 @@ class RunOut(BaseModel):
     machine_id: str
     #: False when another machine advances this run (FR-012).
     owned_here: bool
+    #: What the developer called this delivery, and what it is for. Labels,
+    #: not projection: neither is folded from the events (FR-070).
+    description: str | None = None
     current_stage_key: str | None = None
     #: What the developer CALLED that stage, read from the run's own frozen
     #: snapshot. A key is an identity the engine reads no meaning from and the
@@ -198,10 +201,19 @@ class RunOut(BaseModel):
     #: parses or no longer has that stage.
     current_stage_name: str | None = None
     current_node_key: str | None = None
+    #: What this run has spent so far. A readout, not a cap: a run is bounded
+    #: by each task's own attempt ceiling (FR-026), not by a number of tokens.
     tokens_spent: int = 0
-    token_budget: int | None = None
     created_at: datetime
     updated_at: datetime | None = None
+
+
+class RunLabelIn(BaseModel):
+    """A run's title and description. No ``version``, and deliberately: this
+    changes no state the optimistic lock guards (FR-070)."""
+
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = None
 
 
 class RunListOut(BaseModel):

@@ -60,6 +60,10 @@ class WorkflowRunModel(Base):
     template_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     template_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
+    #: What this delivery is, in the developer's own words. A LABEL, like the
+    #: title: neither is folded from the events, and both may be corrected
+    #: after the fact (FR-070).
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Absolute path every node conversation runs in (FR-019).
     workdir: Mapped[str] = mapped_column(String, nullable=False)
     #: Only this machine's daemon advances the run; elsewhere it is read-only

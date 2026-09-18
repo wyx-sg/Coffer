@@ -41,7 +41,16 @@ export interface paths {
         delete: operations["deleteWorkflowRun"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rewrite what this run is called and what it is for.
+         * @description The one in-place edit of a run's row, and it touches nothing the event
+         *     log owns (FR-070). A run's status, stage and position are folded from
+         *     its events and only the engine writes them (FR-014); the title is a
+         *     label the developer typed before the first task had opened. No
+         *     `version`: the optimistic lock guards the position, and this moves the
+         *     run nowhere.
+         */
+        patch: operations["relabelWorkflowRun"];
         trace?: never;
     };
     "/api/v1/workflow/runs/{run_id}/signals": {
@@ -561,6 +570,11 @@ export interface components {
         RunOut: {
             id: string;
             title: string;
+            /**
+             * @description What the developer says this delivery is. A label like the title —
+             *     neither is folded from the events (FR-070).
+             */
+            description?: string | null;
             template_ref: string;
             /** @enum {string} */
             status: "draft" | "running" | "paused" | "completed" | "aborted" | "failed";
@@ -591,6 +605,14 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at?: string | null;
+        };
+        /**
+         * @description A run's title and description. No `version`, deliberately: this changes
+         *     no state the optimistic lock guards (FR-070).
+         */
+        RunLabelIn: {
+            title: string;
+            description?: string | null;
         };
         RunListOut: {
             items: components["schemas"]["RunOut"][];
@@ -990,6 +1012,48 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    relabelWorkflowRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id. */
+                run_id: components["parameters"]["RunId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunLabelIn"];
+            };
+        };
+        responses: {
+            /** @description The run, relabelled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description This machine does not advance this run (FR-012). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The title was empty. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     signalWorkflowRun: {

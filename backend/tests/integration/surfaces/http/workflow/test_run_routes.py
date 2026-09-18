@@ -290,3 +290,52 @@ def test_deleting_a_run_takes_its_directory_with_it(surface: Surface) -> None:
 
 def test_deleting_an_unknown_run_is_404(surface: Surface) -> None:
     assert surface.client.delete(f"{_RUNS}/nope").status_code == 404
+
+
+# --- labels ------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a run is renamed after the work has shown what it is"
+)
+def test_a_run_is_renamed_after_the_work_has_shown_what_it_is(surface: Surface) -> None:
+    """FR-070: the title is a label, so correcting it moves nothing else."""
+    run = create_run(surface.client)
+    surface.client.post(f"{_RUNS}/{run['id']}/signals", json={"signal": "start", "version": 1})
+    before = surface.client.get(f"{_RUNS}/{run['id']}").json()["run"]
+    events_before = surface.client.get(f"{_RUNS}/{run['id']}/events").json()["items"]
+
+    response = surface.client.patch(
+        f"{_RUNS}/{run['id']}",
+        json={"title": "Ship the collections page", "description": "One repository, design first"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["title"] == "Ship the collections page"
+    assert body["description"] == "One repository, design first"
+    # Everything the event log owns is exactly as it was, including the version:
+    # a label edit is outside the lock cycle because it moves the run nowhere.
+    assert body["status"] == before["status"]
+    assert body["current_stage_key"] == before["current_stage_key"]
+    assert body["current_node_key"] == before["current_node_key"]
+    assert body["version"] == before["version"]
+    events_after = surface.client.get(f"{_RUNS}/{run['id']}/events").json()["items"]
+    assert len(events_after) == len(events_before)
+
+
+def test_a_run_may_not_be_called_nothing(surface: Surface) -> None:
+    run = create_run(surface.client)
+    response = surface.client.patch(f"{_RUNS}/{run['id']}", json={"title": "   "})
+    assert response.status_code == 422
+    assert surface.client.get(f"{_RUNS}/{run['id']}").json()["run"]["title"] == run["title"]
+
+
+def test_relabelling_a_run_another_machine_owns_is_refused(surface: Surface) -> None:
+    """FR-012: read-only here means read-only, labels included — two machines
+    disagreeing about what one run is called has nothing to reconcile them."""
+    run = create_run(surface.client)
+    surface.engine.machine.machine_id = "somewhere-else"
+    response = surface.client.patch(f"{_RUNS}/{run['id']}", json={"title": "mine now"})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "WORKFLOW_NOT_THIS_MACHINE"

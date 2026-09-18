@@ -1669,7 +1669,12 @@
       "failed": "已失败"
     },
     "run": {
-      "tokens": "{{spent}} / {{budget}} tokens"
+      "tokens": "已用 {{spent}} tokens",
+      "editTitle": "编辑运行",
+      "editDescription": "这次交付叫什么、是什么。阶段和任务不在这里编辑。",
+      "titleField": "标题",
+      "descriptionField": "描述",
+      "descriptionPlaceholder": "做过一轮之后，这次交付到底是什么。"
     },
     "tabs": {
       "flow": "阶段",

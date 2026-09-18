@@ -1669,7 +1669,12 @@
       "failed": "Failed"
     },
     "run": {
-      "tokens": "{{spent}} / {{budget}} tokens"
+      "tokens": "{{spent}} tokens spent",
+      "editTitle": "Edit run",
+      "editDescription": "What this delivery is called and what it is. Its stages and tasks are not edited here.",
+      "titleField": "Title",
+      "descriptionField": "Description",
+      "descriptionPlaceholder": "What this delivery is, now that the work has shown it."
     },
     "tabs": {
       "flow": "Stages",

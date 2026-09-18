@@ -41,7 +41,7 @@ from coffer.application.workflow.ports import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.resource import Resource, ResourceRef
-from coffer.domain.workflow.errors import TemplateDisabled
+from coffer.domain.workflow.errors import RunLabelInvalid, TemplateDisabled
 from coffer.domain.workflow.events import EventActor, EventType
 from coffer.domain.workflow.run import (
     FailureReason,
@@ -328,6 +328,41 @@ class WorkflowRunService:
             if after.version != before:
                 rebuilt += 1
         return rebuilt
+
+    # -- labels -----------------------------------------------------------
+
+    async def relabel_run(
+        self,
+        run_id: str,
+        *,
+        title: str,
+        description: str | None,
+    ) -> RunRow:
+        """Rewrite what this run is CALLED and what it is for (FR-070).
+
+        Not a signal and not a command: it advances nothing, takes no version
+        and appends no event. A run's status, stage and position are folded
+        from its log and only the engine writes them (FR-014); its title is a
+        label the developer typed at the moment they knew least about the work,
+        and a label that cannot be corrected makes a list of forty runs
+        unreadable.
+
+        Still guarded by ownership (FR-012): a run this machine does not
+        advance is read-only here, and that includes its label — otherwise two
+        machines could disagree about what the same run is called with nothing
+        to reconcile them.
+        """
+        run = await self._cmd.require_run(run_id)
+        self._cmd.guard(run, "relabel", None)
+        clean = title.strip()
+        if not clean:
+            raise RunLabelInvalid("a run's title must not be empty")
+        updated = await self._runs.set_label(
+            run_id, title=clean, description=(description or None)
+        )
+        # ``require_run`` just resolved it, so a miss here means it was deleted
+        # between the two reads — the run the caller asked about is gone.
+        return updated if updated is not None else run
 
     # -- deletion ---------------------------------------------------------
 

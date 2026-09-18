@@ -81,6 +81,24 @@ class RunRepoPort(Protocol):
         version for a change that moves the run nowhere."""
         ...
 
+    async def set_label(
+        self,
+        run_id: str,
+        *,
+        title: str,
+        description: str | None,
+        now: datetime | None = None,
+    ) -> RunRow | None:
+        """Rewrite the run's title and description; ``None`` when it is gone.
+
+        Outside the version cycle for the same reason ``set_inputs`` is
+        (FR-070): a label is not the projection. The status, the stage and the
+        position are folded from the events and only the engine writes them;
+        what the developer called the work is theirs to correct, and bumping
+        the version for it would invalidate every open client's observed
+        version for a change that moves the run nowhere."""
+        ...
+
     async def delete_run(self, run_id: str) -> None: ...
 
 

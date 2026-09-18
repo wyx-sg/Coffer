@@ -81,6 +81,7 @@ timestamps are UTC.
 | `template_ref` | TEXT | `workflow:<name>` — provenance only; the snapshot is authoritative |
 | `template_snapshot` | JSON not null | frozen at creation (FR-010) |
 | `title` | TEXT not null | |
+| `description` | TEXT nullable | what the developer says this delivery is; a LABEL like the title, and like it outside the version cycle (FR-070) |
 | `workdir` | TEXT not null | absolute path the node conversations run in |
 | `machine_id` | TEXT not null | only this machine advances the run (FR-012) |
 | `status` | TEXT not null | `draft` \| `running` \| `paused` \| `completed` \| `aborted` \| `failed` |

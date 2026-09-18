@@ -62,6 +62,7 @@ from coffer.surfaces.http.workflow.schemas import (
     EventListOut,
     NodeOut,
     RunCreateIn,
+    RunLabelIn,
     RunDetailOut,
     RunListOut,
     RunOut,
@@ -174,6 +175,25 @@ async def get_run(
 def _stage_name(template: WorkflowTemplate, stage_key: str) -> str:
     stage = template.stage(stage_key)
     return stage_key if stage is None else stage.name
+
+
+@router.patch("/runs/{run_id}", response_model=RunOut)
+async def relabel_run(
+    run_id: str,
+    body: RunLabelIn,
+    runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
+) -> RunOut:
+    """Rewrite what this run is called and what it is for (FR-070).
+
+    The ONE in-place edit of a run's row, and it touches nothing the event log
+    owns. A run's status, its stage and its position are folded from its events
+    and only the engine writes them (FR-014); the title is a label the
+    developer typed before the first task had opened, when they knew least
+    about the work. No ``version``: the optimistic lock guards the position,
+    and this moves the run nowhere.
+    """
+    run = await runs.relabel_run(run_id, title=body.title, description=body.description)
+    return run_out(run, owned_here=runs.owned_here(run))
 
 
 @router.delete(

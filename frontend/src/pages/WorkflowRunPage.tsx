@@ -18,7 +18,7 @@
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Trash2, Workflow } from "lucide-react";
+import { Pencil, Trash2, Workflow } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -28,6 +28,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdhocTaskDialog } from "@/components/workflow/AdhocTaskDialog";
+import { RunRelabelDialog } from "@/components/workflow/RunRelabelDialog";
 import { RunContext } from "@/components/workflow/RunContext";
 import { RunStages } from "@/components/workflow/RunStages";
 import { RunStatusBadge } from "@/components/workflow/WorkflowStatusBadge";
@@ -52,6 +53,7 @@ export function WorkflowRunPage() {
   const del = useDeleteRun();
   const [adhocStage, setAdhocStage] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [relabelling, setRelabelling] = useState(false);
 
   const requested = params.get("tab");
   const tab: RunTab = isRunTab(requested) ? requested : "flow";
@@ -94,38 +96,60 @@ export function WorkflowRunPage() {
       <PageHeader
         back={back}
         title={run.title}
-        subtitle={run.template_ref}
+        // What the developer says this delivery IS, with what it was started
+        // from underneath — the description is theirs and the template ref is
+        // provenance, and only one of them is worth the larger line.
+        subtitle={run.description ?? run.template_ref}
         badges={
           <div className="flex flex-wrap items-center gap-2">
             <RunStatusBadge status={run.status} />
             {run.owned_here ? null : (
               <Badge variant="secondary">{t("workflow.owner.otherMachine", { machine })}</Badge>
             )}
-            {run.token_budget ? (
+            {/* What it has spent, as a readout. There is no budget to spend it
+                AGAINST: a run is bounded by each task's own attempt ceiling
+                (FR-026), and a number of tokens was never a judgement about
+                whether the work should continue. */}
+            {run.tokens_spent ? (
               <Badge variant="outline">
-                {t("workflow.run.tokens", {
-                  spent: run.tokens_spent ?? 0,
-                  budget: run.token_budget,
-                })}
+                {t("workflow.run.tokens", { spent: run.tokens_spent })}
               </Badge>
             ) : null}
           </div>
         }
-        // Delete and nothing else. A run is operational state driven by
-        // commands and rebuilt from its event log (FR-014) — there is no edit
-        // of a run's row anywhere, and the title it was created with is the
-        // title every one of its events was attributed under.
+        // Edit and Delete, and nothing that MOVES the run: its position is
+        // folded from the event log (FR-014) and is driven from the task's own
+        // page, where what is being decided is in front of the developer
+        // (FR-052). Editing the title and description touches none of that
+        // (FR-070). Neither button is offered for a run this machine does not
+        // advance — it is read-only here, labels included (FR-012).
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => setDeleting(true)}
-          >
-            <Trash2 className="mr-1 size-3.5" aria-hidden />
-            {t("common.delete")}
-          </Button>
+          run.owned_here ? (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setRelabelling(true)}>
+                <Pencil className="mr-1 size-3.5" aria-hidden />
+                {t("common.edit")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => setDeleting(true)}
+              >
+                <Trash2 className="mr-1 size-3.5" aria-hidden />
+                {t("common.delete")}
+              </Button>
+            </div>
+          ) : null
         }
+      />
+
+      <RunRelabelDialog
+        runId={run.id}
+        title={run.title}
+        description={run.description}
+        open={relabelling}
+        onOpenChange={setRelabelling}
       />
 
       <ConfirmDialog

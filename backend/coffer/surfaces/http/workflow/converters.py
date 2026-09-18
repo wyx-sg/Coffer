@@ -91,6 +91,7 @@ def run_out(run: RunRow, *, owned_here: bool) -> RunOut:
     return RunOut(
         id=run.id,
         title=run.title,
+        description=run.description,
         # Required and non-nullable on the wire: a run always executes a
         # template, and the column is nullable only because a deleted resource
         # must not cascade into the run that froze it.

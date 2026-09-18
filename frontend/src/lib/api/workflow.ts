@@ -77,6 +77,14 @@ export const workflowApi = {
 
   deleteRun: (runId: string) => call<void>(`/workflow/runs/${enc(runId)}`, { method: "DELETE" }),
 
+  /**
+   * Rewrite what a run is called and what it is for (FR-070). No `version`:
+   * the optimistic lock guards the run's position, and a label moves it
+   * nowhere — the status, the stage and the log come back untouched.
+   */
+  relabelRun: (runId: string, body: Schemas["RunLabelIn"]) =>
+    call<Schemas["RunOut"]>(`/workflow/runs/${enc(runId)}`, { method: "PATCH", body }),
+
   listEvents: (runId: string) =>
     call<Schemas["EventListOut"]>(`/workflow/runs/${enc(runId)}/events`),
 

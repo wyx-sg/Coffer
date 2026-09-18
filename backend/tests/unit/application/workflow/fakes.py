@@ -1,7 +1,7 @@
 """In-memory stand-ins for every port the workflow engine reaches through.
 
 No database, no agent, no filesystem: the point of this tier is that a whole
-run — advance, review, retry, loop, ceiling, budget — can be driven in
+run — advance, review, retry, loop, ceiling — can be driven in
 milliseconds, which is only true if none of these touch anything real. They are
 plain classes rather than mocks so a test reads as "given this state" instead of
 "given these call expectations".
@@ -41,6 +41,7 @@ class FakeRun:
     current_node_key: str | None = None
     version: int = 1
     tokens_spent: int = 0
+    description: str | None = None
     inputs: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = NOW
     updated_at: datetime | None = NOW
@@ -142,6 +143,24 @@ class FakeRunRepo:
         if row is None:
             return None
         row.inputs = list(inputs)
+        row.updated_at = now or NOW
+        return _copy(row)
+
+    async def set_label(
+        self,
+        run_id: str,
+        *,
+        title: str,
+        description: str | None,
+        now: datetime | None = None,
+    ) -> FakeRun | None:
+        row = self.rows.get(run_id)
+        if row is None:
+            return None
+        # Neither the version nor the projection moves: a label is not state
+        # the event log owns (FR-070).
+        row.title = title
+        row.description = description
         row.updated_at = now or NOW
         return _copy(row)
 

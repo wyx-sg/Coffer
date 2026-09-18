@@ -173,6 +173,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "list",
         "pause",
         "promote",
+        "relabel",
         "resume",
         "show",
         "start",

@@ -235,6 +235,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-066**: A disabled workflow MUST start no new runs, and the refusal MUST come from the daemon rather than from one client's list — a rule that lives only in the web UI is not a rule. Runs already created from it MUST be unaffected: they froze their own snapshot (FR-011), so switching a workflow off retires it from the menu and does not reach into work already under way.
 - **FR-065**: A mounted external reference MUST be reported with what it points at — Confluence, Jira, a Google doc — when that can be recognised from its address, and with nothing when it cannot. The node's context MUST carry it, so that "go and read this" resolves to one tool rather than a guess. It MUST be derived on read rather than stored, so a reference mounted before its provider was recognisable is recognised without a migration.
 - **FR-069**: The developer MUST be able to write a note of their own into a run's context, in markdown, and to keep editing it for as long as the run lives. A note MUST be stored as a file under the run's own directory and listed to every task as the developer's own words; an image pasted into one MUST be stored with the run and MUST be displayable, which the text preview cannot answer for.
+- **FR-070**: A run's title and description MUST be editable for as long as the run exists, on the run's own page and through the command line. They are LABELS: the title is typed before the first task has opened, when the developer knows least about the work, and a label that cannot be corrected makes a list of forty runs unreadable. Editing one MUST NOT append an event, MUST NOT carry the run's version and MUST NOT touch the run's status, stage or position — those are folded from the log and only the engine writes them (FR-014). A blank title MUST be refused, and a run this machine does not advance MUST refuse the edit like every other change to it (FR-012).
 - **FR-064**: A file in a run's context MUST be readable from the app: an uploaded input and a produced artifact by their contents, a mounted collection by its own page, and an external reference by its address. Reading MUST be bounded — a path outside the run's own directory is refused, a long file is returned as its head and says so, and bytes that are not text are reported as such rather than rendered.
 - **FR-068**: The developer MUST be able to say something to any task at any point in its life, in ordinary words, in one place. Before the task starts, what they say MUST be queued onto the attempt it opens with and reach its brief; while it waits for review, it MUST carry that attempt on; once it has finished, it MUST open the task's next attempt within the ceiling. A task whose turn is in flight or whose approval is pending MUST say so rather than accept it silently.
 - **FR-063**: A task's page MUST offer no control that advances or alters the run. Retrying, redirecting and correcting are said in the task's conversation, where what is said also reaches every later task (FR-029). Deciding an approval is the one exception (FR-039), because a payload cannot honestly be approved by typing into a composer.
@@ -531,6 +532,12 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **Given** a running run with an uploaded file, a note and a link, and no artifact
 - **When** the developer saves it into a knowledge collection
 - **Then** the file and the note are copied there, the link is recorded as an address in a written reference, and the run's directory is unchanged (FR-043)
+
+### Scenario: a run is renamed after the work has shown what it is
+
+- **Given** a run created with a hurried title and no description
+- **When** the developer rewrites both on the run's own page
+- **Then** the run carries the new words, its status, stage and position are exactly as they were, its version has not moved, and its event log has gained nothing (FR-070, FR-014)
 
 ### Scenario: a run is read-only on a machine that does not own it
 

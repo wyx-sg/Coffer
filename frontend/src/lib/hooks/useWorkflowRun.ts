@@ -28,6 +28,20 @@ function isLive(detail: RunDetail | undefined): boolean {
  * running: a node completing and the next one opening is exactly the thing the
  * developer opened this page to watch, and nothing pushes it.
  */
+/** Rewrite a run's title and description (FR-070). Invalidates the run and
+ *  the list, because both print the words that just changed. */
+export function useRelabelRun(runId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { title: string; description: string | null }) =>
+      workflowApi.relabelRun(runId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: workflowRunKey(runId) });
+      void qc.invalidateQueries({ queryKey: workflowRunsKey });
+    },
+  });
+}
+
 export function useWorkflowRun(runId: string) {
   return useQuery({
     queryKey: workflowRunKey(runId),

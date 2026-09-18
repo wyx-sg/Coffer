@@ -189,6 +189,36 @@ class WorkflowRunRepo:
             row: WorkflowRunModel | None = (await session.execute(refreshed)).scalar_one_or_none()
             return row
 
+    async def set_label(
+        self,
+        run_id: str,
+        *,
+        title: str,
+        description: str | None,
+        now: datetime | None = None,
+    ) -> WorkflowRunModel | None:
+        """Rewrite what the developer called this run (FR-070).
+
+        No version predicate and no version bump, exactly as ``set_inputs``:
+        a label is not the projection, so it is deliberately outside the
+        optimistic-lock cycle that guards the run's position. ``updated_at``
+        still moves, because the list is ordered by it.
+        """
+        stmt = (
+            update(WorkflowRunModel)
+            .where(WorkflowRunModel.id == run_id)
+            .values(title=title, description=description, updated_at=_now(now))
+        )
+        async with self._sm() as session:
+            result = await session.execute(stmt)
+            if result.rowcount == 0:
+                await session.rollback()
+                return None
+            await session.commit()
+            refreshed = select(WorkflowRunModel).where(WorkflowRunModel.id == run_id)
+            row: WorkflowRunModel | None = (await session.execute(refreshed)).scalar_one_or_none()
+            return row
+
     async def delete_run(self, run_id: str) -> None:
         """Delete the run; its events, attempts and approvals go with it.
 

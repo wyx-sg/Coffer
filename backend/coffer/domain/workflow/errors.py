@@ -148,6 +148,17 @@ class TemplateDisabled(WorkflowError):  # noqa: N818
         self.template = template
 
 
+class RunLabelInvalid(WorkflowError):  # noqa: N818
+    """A run was asked to be called nothing at all (FR-070).
+
+    A title is what tells one delivery from another in a list, so a blank one
+    is refused rather than stored — an empty row in that list is worse than
+    the wrong words in it.
+    """
+
+    code = "WORKFLOW_RUN_LABEL_INVALID"
+
+
 class AttemptCeilingReached(WorkflowError):  # noqa: N818
     """A node would open an attempt past the template's ceiling (FR-026).
 
