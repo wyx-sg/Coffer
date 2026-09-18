@@ -17,11 +17,8 @@ from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.errors import CofferError
 
 if TYPE_CHECKING:
-    from coffer.application.channel.ports import (
-        ChannelBinding,
-        ChannelPeer,
-        ChannelThreadConversationRepoPort,
-    )
+    from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversationRepoPort
 
 __all__ = [
     "ConversationPort",
@@ -41,7 +38,7 @@ class ConversationPort(Protocol):
         *,
         agent_key: str,
         agent_config: dict[str, Any] | None,
-        channel_name: str | None = None,
+        channel_uid: str | None = None,
         peer_chat_id: str | None = None,
     ) -> Any: ...
 
@@ -65,7 +62,7 @@ async def open_conversation(
     Conversation identity is per ``(resource_id, chat_id, thread_id)`` — a DM
     (``thread_id=""``) and each group thread open independently, so concurrent
     turns in different threads never collide on one conversation."""
-    row = await threads.get(binding.resource_id, peer.chat_id, thread_id)
+    row = await threads.get(binding.resource.id, peer.chat_id, thread_id)
     spec = resolve_conversation_spec(
         default_agent=binding.default_agent,
         default_agent_config=binding.default_agent_config,
@@ -75,10 +72,13 @@ async def open_conversation(
     conv = await conversations.create_conversation(
         agent_key=spec.agent_key,
         agent_config=spec.agent_config,
-        channel_name=binding.name,
+        # The channel's uid, not its name: this is the return address a relayed
+        # reply comes back to, and it has to keep naming the same channel after
+        # the owner renames it (ADR resource-identity-is-an-immutable-uid).
+        channel_uid=binding.resource.uid,
         peer_chat_id=peer.chat_id,
     )
-    await threads.set_active_conversation(binding.resource_id, peer.chat_id, thread_id, conv.id)
+    await threads.set_active_conversation(binding.resource.id, peer.chat_id, thread_id, conv.id)
     return str(conv.id)
 
 
@@ -90,7 +90,7 @@ async def ensure_conversation(
     thread_id: str = "",
 ) -> str:
     """Return this thread's active conversation, recreating it if it was deleted."""
-    row = await threads.get(binding.resource_id, peer.chat_id, thread_id)
+    row = await threads.get(binding.resource.id, peer.chat_id, thread_id)
     if row is not None and row.active_conversation_id is not None:
         try:
             await conversations.get_conversation(row.active_conversation_id)

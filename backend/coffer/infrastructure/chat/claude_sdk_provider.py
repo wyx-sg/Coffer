@@ -19,6 +19,7 @@ from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
+    ChannelNameResolver,
     MemoryContextComposer,
     ModelLister,
     compose_system_context,
@@ -70,6 +71,7 @@ class ClaudeSdkProvider:
         list_models: ModelLister | None = None,
         transcriber_factory: TranscriberFactory | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
+        resolve_channel_name: ChannelNameResolver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -84,6 +86,11 @@ class ClaudeSdkProvider:
         # provider used outside the composition root that wires it) — never a
         # header with nothing under it.
         self._compose_memory_context = compose_memory_context
+        # Turns the conversation's stored channel uid into the name the system
+        # prompt reads. ``None`` ⇒ a channel turn still gets its channel append,
+        # just without naming the channel — the uid is what decides that it IS a
+        # channel turn, and the label was only ever colour.
+        self._resolve_channel_name = resolve_channel_name
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -131,11 +138,12 @@ class ClaudeSdkProvider:
 
         system_context = await compose_system_context(
             agent_key=self.agent_key,
-            channel_name=conv.channel_name or "",
+            channel_uid=conv.channel_uid or "",
             cwd=config.cwd,
             model=config.model,
             list_models=self._list_models,
             compose_memory=self._compose_memory_context,
+            resolve_channel_name=self._resolve_channel_name,
         )
 
         return ClaudeSdkAgentAdapter(

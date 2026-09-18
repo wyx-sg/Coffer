@@ -8,7 +8,7 @@ receive notifications pushed by Coffer. The architecture must stay uniform:
 more channels and more agents will be added, so a new channel never touches
 agent code and a new agent never touches channel code."
 
-A channel is a registered resource (`channel:<name>`) that connects one IM
+A channel is a registered resource of kind `channel` that connects one IM
 account to Coffer's turn platform (spec `chat`). Messages from the paired owner
 become turns in an ordinary conversation; the agent's reply goes back to the IM
 chat. The channel layer and the agent layer meet only at the turn platform's
@@ -43,7 +43,7 @@ also proves the resource-framework integration (lifecycle, audit, credential
 probing) end to end.
 
 **Independent Test**: Store a bot token under a credential ref, register
-`channel:my-telegram` pointing at it, see it listed via REST, CLI, and the
+a `channel` resource named `my-telegram` pointing at it, see it listed via REST, CLI, and the
 Channels page; attempt a registration with a dangling ref and see it rejected
 with no row persisted.
 
@@ -521,26 +521,38 @@ success sends no completion summary while a failed turn does.
     the listing, the selection card, and the validation of a chosen key
     (typed or tapped). They MUST read one narrowed set — a card that offers an
     agent the next check rejects is the specific failure this requires.
-  - **The two names an agent has.** A scope names agent **resources** —
-    whatever the owner called them — because that is what a reach picker can
-    offer and what the resource table holds. `default_agent`, `/agent` and the
-    turn router all speak the agent **key** the turn platform routes on. Every
-    comparison between the two MUST be made in ONE vocabulary, translated
-    through the agent registry. Comparing the strings directly refuses the only
-    narrowing a user is able to express, and accepts in its place a value the
-    reach picker must then render as an agent registered nowhere. Two agent
-    resources of the same type collapse to one key, and a scope naming a
-    resource this vault does not hold admits no agent at all.
+  - **One vocabulary above the binding.** A scope and a `default_agent` both
+    name agent **uids**, which is also what a reach picker offers, so every
+    comparison between them is made directly and no translation exists to get
+    backwards. A uid this vault does not hold admits no agent at all.
+  - **One crossing, below it.** `/agent`, the sticky per-thread choice and the
+    turn router all speak the agent **key** the turn platform routes on. That
+    key MUST be derived from the uid at exactly ONE place — the runtime gate,
+    where the resource row becomes a live binding — and nothing below that point
+    may hold a uid. Two agent resources of the same type collapse to one key
+    there. While the two vocabularies met in several places at once, each of
+    them compared a scope written in one to a default written in the other:
+    the only narrowing a user could express was refused, and the value accepted
+    in its place was one the reach picker then had to render as an agent
+    registered nowhere.
   - **The invariant:** a channel's `default_agent` MUST be an agent the channel
-    may drive — inside its scope whenever that scope is non-empty. It MUST
-    be enforced on BOTH write paths, so the inconsistent state cannot be stored
-    at all: an edit to the configuration is rejected when it names a
-    `default_agent` outside the current scope, and an edit to the scope is
-    rejected when the proposed non-empty scope excludes the current
-    `default_agent`. A scope edit MUST NOT be accepted and then leave the
-    channel unable to run. Each rejection MUST name both the default agent and
-    the proposed set, so the owner sees the two ways forward: widen the scope,
-    or change the default agent first.
+    may drive — registered in this vault, and inside its scope whenever that
+    scope is non-empty. It MUST be enforced on BOTH write paths, so the
+    inconsistent state cannot be stored at all: a registration or an edit of the
+    configuration is rejected when it names a `default_agent` that is unknown or
+    outside the current scope, and an edit to the scope is rejected when the
+    proposed non-empty scope excludes the current `default_agent`. A scope edit
+    MUST NOT be accepted and then leave the channel unable to run. Each
+    rejection MUST name both sides **by label**, not by uid, so the owner sees
+    the two ways forward: widen the scope, or change the default agent first.
+  - **A channel that can route nowhere MUST NOT start.** Three states mean it:
+    it names no `default_agent` at all, its scope excludes the one it names, or
+    that uid names no agent registered here. In each the runtime declines to
+    start the adapter and records why, and the management surface reports the
+    channel as not running. There is NO fallback agent: `default_agent` is a
+    reference to an agent resource and a uid is minted per vault, so nothing a
+    schema could name would stand for "the usual agent". Silence with a reason
+    beats a bot that answers as an agent nobody chose.
   - `agents: []` (dormant) MUST mean the channel drives nothing, and MUST fail
     early rather than per-turn: the runtime does not start its adapter, so no
     message is ever accepted only to be refused. The management surface reports
@@ -893,7 +905,9 @@ therefore two mechanisms and a probe, not one mechanism.
 
 ### Key Entities
 
-- **Channel** — resource `channel:<name>`; config = type, credential refs,
+- **Channel** — a resource of kind `channel`, addressed by its immutable `uid`
+  ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md));
+  config = type, credential refs,
   default agent + config, and `runs_on` — the `machine_id` of the one machine
   whose daemon runs this channel's adapter (see "Where a channel runs").
 - **ChannelPeer** — the paired owner of a channel: `(resource, chat_id)`,
@@ -1015,7 +1029,7 @@ have.
 ### Scenario: register a telegram channel
 
 - **Given** a bot token stored under a credential ref
-- **When** the user registers `channel:tg` with type telegram and that ref
+- **When** the user registers a channel named `tg` with type telegram and that ref
 - **Then** the channel is listed with its config and enabled state
 - **And** the registration is audited
 
@@ -1681,8 +1695,25 @@ have.
 - **When** the owner narrows its scope to a non-empty set that excludes that
   agent,
 - **Then** the edit is rejected with a message naming both the default agent and
-  the proposed scope, nothing is persisted, and the channel keeps running — the
-  narrowing never silently takes the bot offline.
+  the proposed scope — by the labels the owner gave them, not by uid — nothing
+  is persisted, and the channel keeps running: the narrowing never silently
+  takes the bot offline.
+
+### Scenario: a channel bound to an agent that does not exist is refused
+
+- **Given** a vault with at least one registered agent,
+- **When** a channel is registered, or edited, with a `default_agent` naming no
+  agent resource in this vault,
+- **Then** the write is rejected and no row is created or changed, rather than
+  the channel being stored and failing at its first turn.
+
+### Scenario: a channel bound to no agent never starts
+
+- **Given** an enabled channel whose `default_agent` is unset, or names an agent
+  this machine does not have,
+- **When** the channel runtime reconciles,
+- **Then** its adapter is never started, the reason is recorded, and the channel
+  reports as not running — it is never started against a substitute agent.
 
 ### Scenario: edit a dormant channel's configuration
 

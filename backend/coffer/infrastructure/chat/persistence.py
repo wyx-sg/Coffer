@@ -63,8 +63,15 @@ class ConversationModel(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     # Optional channel binding (return address, spec channels) for a conversation the
-    # owner also drives from an IM channel; "has a binding" iff channel_name set.
-    channel_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    # owner also drives from an IM channel; "has a binding" iff channel_uid set.
+    #
+    # The channel resource's uid, not its name. This is a cross-resource
+    # reference and the name is a mutable label (ADR
+    # resource-identity-is-an-immutable-uid) — storing the label would leave
+    # every row written before a rename pointing at a channel that no longer
+    # answers to it. The name the user and the agent read is resolved from this
+    # uid at read time.
+    channel_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
@@ -135,7 +142,7 @@ class ConversationRepo:
             created_at=_tz(row.created_at),
             updated_at=_tz(row.updated_at),
             archived_at=_tz(row.archived_at) if row.archived_at else None,
-            channel_name=row.channel_name,
+            channel_uid=row.channel_uid,
             peer_chat_id=row.peer_chat_id,
         )
 
@@ -147,7 +154,7 @@ class ConversationRepo:
                 title=conversation.title,
                 created_at=conversation.created_at,
                 updated_at=conversation.updated_at,
-                channel_name=conversation.channel_name,
+                channel_uid=conversation.channel_uid,
                 peer_chat_id=conversation.peer_chat_id,
             )
             session.add(row)

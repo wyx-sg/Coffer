@@ -71,8 +71,8 @@ the chat surface offers the agent's own models and runs.
   kind's `default_scope` hook — both coding agents for a credentialed wire,
   nothing for `ollama` — rather than starting out reaching every agent, which is
   what the framework's unscoped default would have meant. Re-targeting is a
-  scope edit (`PUT /api/v1/resources/provider/{name}/scope`,
-  `coffer scope set provider:<name> --agents …`), on the surface every scoped
+  scope edit (`PUT /api/v1/resources/{uid}/scope`,
+  `coffer scope set provider <name> --agents …`), on the surface every scoped
   kind shares. `scope = []` is dormant: the connection reaches no agent, so no
   agent resolves its key.
 - **F1a — `enabled` narrows the projection and only the projection.** A disabled
@@ -126,7 +126,7 @@ the chat surface offers the agent's own models and runs.
   and changing the connection or the model resets the result. Confirming PATCHes
   the per-agent binding and then activates the connection — the only step that
   writes native config. Switching back to the built-in login needs no test.
-- **The activate operation.** `POST /api/v1/providers/{name}/activate` /
+- **The activate operation.** `POST /api/v1/providers/{uid}/activate` /
   `coffer provider switch <name>`:
   1. the connection must exist, else 404;
   2. project into each agent its scope reaches, and de-project the agents the
@@ -158,7 +158,7 @@ the chat surface offers the agent's own models and runs.
 The raw key stays in the Fernet vault and is materialised on demand. It is NEVER
 written to `settings.json`, `config.toml`, or any other native config file.
 
-- **Claude Code**: `apiKeyHelper = "coffer provider key --connection <name>"`.
+- **Claude Code**: `apiKeyHelper = "coffer provider key --connection-uid <uid>"`.
   Claude Code invokes that command to fetch the key, and because it re-invokes
   the helper periodically a future hot-switch is nearly free.
 - **Codex**: `env_key = "COFFER_PROVIDER_KEY"` in the `[model_providers.coffer]`
@@ -166,7 +166,7 @@ written to `settings.json`, `config.toml`, or any other native config file.
   the environment of any Codex process it spawns itself. A Codex the user starts
   in their own shell needs the variable exported there — the accepted cost of
   credential isolation, since Codex offers no helper-command seam.
-- **F3 — Keys resolve per CONNECTION.** `GET /api/v1/providers/{name}/key`
+- **F3 — Keys resolve per CONNECTION.** `GET /api/v1/providers/{uid}/key`
   answers for exactly the connection the projected helper names, so routing a
   connection to the "other" wire's agent can never resolve a different
   connection's key. Codex's variable is filled from the connection active for
@@ -336,31 +336,35 @@ API and the contract.
 
 ### Renaming a connection
 
-**A1 — The name is editable, and renaming is one operation.** A connection's
-name is its IDENTITY: the vault entry it owns is `provider/<name>/key`, its
-audit rows are filed under `provider:<name>`, and the name is written verbatim
-into the agent config Coffer projects. A rename therefore moves all of it
-together, which is why it is `POST /api/v1/providers/{name}/rename` and not
-another `PATCH` field: a patch edits a connection's settings, and a name another
-connection already holds must be a 409 rather than an edit that silently merges
-two connections.
+**A1 — The name is an editable label, and renaming it moves nothing else.** A
+connection's IDENTITY is the framework's immutable `uid`
+([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)),
+so the name is a label and renaming is the `name` field on
+`PATCH /api/v1/resources/{uid}` — the same one every kind gets. This kind used
+to own the only rename route in Coffer, and it existed because the connection's
+name was written into another tool's config file; the projected `apiKeyHelper`
+cites the uid now, so the route is deleted and nothing is left for it to do.
 
-- The owned vault entry moves with the name — written under the new ref before
-  the row moves, the old one removed after, so no step can leave the connection
-  pointing at a secret that is not there. A ref that ANOTHER resource also cites
-  stays where it is.
-- The audit trail follows the resource, and the rename itself is recorded as
-  `resource_renamed` with both names.
-- An ACTIVE connection is re-projected under the new name, so an agent Coffer put
-  on it keeps resolving its key.
-- Renaming to the current name is a no-op, not an error.
+- The owned vault entry does not move: the ref is an opaque address
+  (`provider/<uuid4>/key`), never derived from the name, so a rename has nothing
+  to rewrite. Ownership is decided by citation, not by the ref spelling the name.
+- The audit trail follows the resource by uid, and the rename itself is recorded
+  as `resource_renamed` with both names. The older rows are NOT repointed — the
+  row that recorded the creation still says the name the connection had then.
+- An ACTIVE connection is not re-projected: the `apiKeyHelper` line reads exactly
+  as it did before, because it names the uid. Codex's provider label
+  (`Coffer (<name>)`) is cosmetic — nothing resolves it — so it goes stale until
+  the next projection rewrites it, and nothing breaks in the meantime.
+- A name another connection already holds is refused with 409
+  `RESOURCE_ALREADY_EXISTS`, because the label stays unique within the kind.
+- Renaming to the current name is a no-op, not an error, and records nothing.
 
 ### Convergence
 
 Modelling `provider` as a resource kind puts a connection into the sync tree
 automatically (spec [vault-sync](../vault-sync/spec.md)):
 
-- The exporter writes each row to `resources/provider/<name>.yaml` via
+- The exporter writes each row to `resources/provider/<uid>.yaml` via
   `resource_to_doc` as step 1 of a converge round; git three-way-merges the tree
   against the remote, and the **applier** puts the resulting difference back, one
   document at a time.
@@ -519,8 +523,8 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
 
 - `GET /api/v1/providers` → `{providers: [ProviderOut, …]}`
 - `POST /api/v1/providers` → create (credential-source rule below)
-- `GET /api/v1/providers/{name}` → one connection
-- `PATCH /api/v1/providers/{name}` → update `base_url`, `protocol`, `models`,
+- `GET /api/v1/providers/{uid}` → one connection
+- `PATCH /api/v1/providers/{uid}` → update `base_url`, `protocol`, `models`,
   `secret_value`, `description`. `credential_ref` is immutable; `secret_value`
   rotates the stored secret; `models` is a whole-value replace (`null` leaves it
   alone, `[]` clears the restriction). A `protocol` that actually MOVES is
@@ -530,20 +534,20 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
   a conflict. Reach is not a patch field — it is a scope
   edit, and `ProviderOut.compatible_agents` reports the CONFIGURED reach
   read-only, with `enabled` riding the same payload
-- `POST /api/v1/providers/{name}/rename` (`{new_name}`) → rename; 409 when
-  another connection holds the name, 404 when this one is absent, a no-op when
-  unchanged
-- `DELETE /api/v1/providers/{name}` → delete; `find_credential_citations` guards
+- Rename is the framework's — the `name` field on
+  `PATCH /api/v1/resources/{uid}`; this kind serves no rename route of its own
+  (A1)
+- `DELETE /api/v1/providers/{uid}` → delete; `find_credential_citations` guards
   the owned secret
-- `POST /api/v1/providers/{name}/activate` → switch; returns
+- `POST /api/v1/providers/{uid}/activate` → switch; returns
   `{activated, protocol, projected, skipped}`
 - `POST /api/v1/providers/use-builtin/{wire}` → revert the agent behind that
   wire to its built-in login; idempotent
-- `POST /api/v1/providers/{name}/internal-default` → set the internal-engine
+- `POST /api/v1/providers/{uid}/internal-default` → set the internal-engine
   default; returns the updated `ProviderOut`
-- `POST /api/v1/providers/{name}/transcribe-default` → set the speech-to-text
+- `POST /api/v1/providers/{uid}/transcribe-default` → set the speech-to-text
   default; returns the updated `ProviderOut`
-- `GET /api/v1/providers/{name}/key` → the named connection's key (what the
+- `GET /api/v1/providers/{uid}/key` → that connection's key (what the
   projected `apiKeyHelper` calls)
 - `GET /api/v1/providers/active-key/{wire}` → the legacy wire-keyed form,
   resolving through that wire's agent
@@ -560,10 +564,11 @@ under `/api/v1/internal-engine-config`. This spec's only internal-engine
 surfaces are the two flags above.
 
 **Reach** is the framework's own surface:
-`GET` / `PUT /api/v1/resources/provider/{name}/scope`.
+`GET` / `PUT /api/v1/resources/{uid}/scope`.
 
 **Credential source rule**: for `anthropic` / `openai` / `unknown`, exactly one
-of `secret_value` (stored under `provider/<name>/key`, kept as a ref) or
+of `secret_value` (stored under a freshly minted opaque ref
+`provider/<uuid4>/key`, kept as that ref) or
 `credential_ref` (reuse an existing entry) must be supplied on create; both or
 neither is rejected. An `ollama` connection must supply NEITHER.
 
@@ -589,17 +594,21 @@ with `--json` on `list`.
 - `rm <name>` removes the connection, and its owned vault entry when nothing
   else cites it.
 - `switch <name>` activates the connection for every agent its scope reaches.
-- `key --connection <name>` prints that connection's key — what Coffer projects.
-  `--wire <wire>` is the legacy form, resolving through the wire's agent. The raw
-  value goes to stdout only and is never logged.
+- `key --connection-uid <uid>` prints that connection's key — what Coffer
+  projects. This one command takes a uid rather than a name, because its caller
+  is the `apiKeyHelper` line in another tool's config file rather than a person,
+  and that line has to keep resolving after a rename. `--wire <wire>` is the
+  legacy form, resolving through the wire's agent. The raw value goes to stdout
+  only and is never logged.
 - `internal-default <name>` marks the connection Coffer's internal engine uses,
   clearing any previous one.
 - `transcribe-default <name>` marks the connection Coffer transcribes speech on,
   clearing any previous one. A separate flag, with no fallback to or from the
   one above.
 
-Re-targeting a connection is `coffer scope set provider:<name> --agents …`, and
-a rename is available over HTTP or from the connection's detail page.
+Re-targeting a connection is `coffer scope set provider <name> --agents …`, and
+a rename is `coffer resource rename provider <name> <new>` — the kind-agnostic
+command that serves every kind — or the connection's detail page.
 
 ## Frontend
 
@@ -617,12 +626,14 @@ a rename is available over HTTP or from the connection's detail page.
   rather than stored, so an endpoint matching no preset reads as Custom; the
   protocol stays on the detail page, where it answers a question rather than
   sorting a list. The **name** column keeps the user's own name for the
-  connection: it is the id the routes and CLI address.
+  connection: it is what the CLI addresses and what a person recognises, while
+  the row links to the detail page by `uid`.
 - The connection **detail page** splits into **Overview** and **Models** tabs,
   like agent and MCP-server detail. Its header carries the shared `ScopeControl`
   — the single place the connection's reach and its enabled state are both shown
-  and changed. The edit dialog's Name field submits a rename ahead of the patch,
-  with the page following the new URL (the route IS the name).
+  and changed. The edit dialog's Name field submits the kind-agnostic rename
+  (`PATCH /api/v1/resources/{uid}`) ahead of the patch; the page stays where it
+  is, because the route is the uid and a rename does not move it.
 - The **Models** tab is a `DataTable`, one row per model id: id, type and
   offered, with search, a Type filter and an Offered filter. The type is a
   five-value Select pre-filled from what introspection guessed and correctable in
@@ -814,7 +825,7 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 ### Scenario: resolve the active provider key for the apiKeyHelper
 
 - **Given** a connection is active with a known secret stored in the vault,
-- **When** its key is resolved — `coffer provider key --connection <name>`, or
+- **When** its key is resolved — `coffer provider key --connection-uid <uid>`, or
   the legacy `--wire anthropic` form,
 - **Then** the raw key is printed to stdout and the vault key is NOT logged.
 
@@ -855,8 +866,8 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
   created and then scoped to `["claude_code"]`,
 - **When** the user activates that connection,
 - **Then** it projects into Claude Code's `settings.json` (the anthropic shape)
-  with `apiKeyHelper = "coffer provider key --connection <name>"`,
-  `GET /providers/{name}/key` returns exactly that connection's key, and the
+  with `apiKeyHelper = "coffer provider key --connection-uid <uid>"`,
+  `GET /providers/{uid}/key` returns exactly that connection's key, and the
   reported agent set follows the scope.
 
 ### Scenario: per-agent key routing follows the connection's scope
@@ -935,7 +946,7 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 - **Given** a connection created with `models: ["opus", "sonnet", "opus"]`,
 - **When** it is read back, then patched with `models: ["haiku"]`, then patched
   on an unrelated field,
-- **Then** the create response, `GET /api/v1/providers/{name}` and the list route
+- **Then** the create response, `GET /api/v1/providers/{uid}` and the list route
   all report `["opus", "sonnet"]` (stored verbatim, deduplicated, in the order
   chosen); the patch REPLACES the whole set with `["haiku"]`; the unrelated patch
   leaves it alone; and the change is visible in the `resource_updated` audit
@@ -954,26 +965,28 @@ one test marked `@pytest.mark.acceptance(spec="provider-switching", scenario="�
 
 **Given** an active connection `acme` with an inline secret, projected into a
 registered Claude Code agent,
-**When** `POST /api/v1/providers/acme/rename {"new_name": "acme-eu"}` is called,
-**Then** the connection answers at `acme-eu` and no longer at `acme`, its
-`credential_ref` is `provider/acme-eu/key` with the secret readable there and the
-old ref gone, the agent's projected `apiKeyHelper` names `acme-eu`, and the audit
-rows recorded under the old name are returned when querying the new one.
+**When** `PATCH /api/v1/resources/<uid> {"name": "acme-eu"}` is called,
+**Then** the connection keeps the same `uid` and answers there under the label
+`acme-eu`, its `credential_ref` is unchanged with the secret still readable at
+it, the agent's projected `apiKeyHelper` is byte-for-byte what it was (it names
+the uid), and the whole history — including the rows recorded before the rename,
+which still spell the old name — comes back when querying the audit log by uid.
 
 ### Scenario: reject a rename onto a name another connection already uses
 
 **Given** two connections `acme` and `taken`,
 **When** `acme` is renamed to `taken`,
 **Then** the response is 409 `RESOURCE_ALREADY_EXISTS` and both connections still
-resolve under their original names with their credentials intact.
+carry their original labels, each still reachable at its own uid with its
+credential intact.
 
 ### Scenario: an agent bound to a renamed connection still resolves its key
 
 **Given** a Claude Code agent running on connection `acme`,
 **When** `acme` is renamed,
-**Then** `GET /api/v1/providers/<new name>/key` returns the same secret, the
-connection the projected config names is the new one, and the connection is
-still active and still reaches that agent.
+**Then** `GET /api/v1/providers/<uid>/key` returns the same secret, the uid the
+projected `apiKeyHelper` cites still resolves to it, and the connection is still
+active and still reaches that agent.
 
 ### Scenario: the models table lists the endpoint's models when it opens
 
@@ -1021,7 +1034,9 @@ connection's existing curated selection is left exactly as it was.
 **Resource model**
 
 - **FR-001**: System MUST register each managed connection as a Resource of kind
-  `provider`, identified by `provider:<name>`.
+  `provider`, identified by the framework's immutable `uid`
+  ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md));
+  its `name` is a mutable label, unique within the kind.
 - **FR-002**: System MUST validate a connection's config against a kind-specific
   schema over `{protocol, base_url, credential_ref, models, is_active,
   internal_default, transcribe_default}`, rejecting any other key. The config
@@ -1034,7 +1049,9 @@ connection's existing curated selection is left exactly as it was.
 **Credential handling**
 
 - **FR-004**: On create with `secret_value`, System MUST store the raw key under
-  `provider/<name>/key` in the Fernet vault and persist only the ref. For
+  a freshly minted opaque ref (`provider/<uuid4>/key`) in the Fernet vault and
+  persist only that ref — deriving the ref from the name would make the name a
+  key, which it is not. For
   `anthropic` / `openai` / `unknown`, exactly one of `secret_value` or
   `credential_ref` must be supplied; both or neither MUST be rejected `422`.
 - **FR-005**: On `PATCH` with `secret_value`, System MUST rotate the stored
@@ -1083,7 +1100,7 @@ connection's existing curated selection is left exactly as it was.
 
 **Switch operation**
 
-- **FR-012**: `POST /api/v1/providers/{name}/activate` MUST apply FR-011, then
+- **FR-012**: `POST /api/v1/providers/{uid}/activate` MUST apply FR-011, then
   project into every ENABLED registered agent the connection's scope reaches. If
   no such agent is registered, it MUST record the connection active and return a
   non-empty `skipped` list — NOT an error.
@@ -1100,10 +1117,13 @@ connection's existing curated selection is left exactly as it was.
 
 **Key resolution**
 
-- **FR-016**: `coffer provider key --connection <name>` /
-  `GET /api/v1/providers/{name}/key` MUST resolve exactly that connection's
+- **FR-016**: `coffer provider key --connection-uid <uid>` /
+  `GET /api/v1/providers/{uid}/key` MUST resolve exactly that connection's
   credential ref, decrypt via `EncryptedCredentialStore.get(ref)`, and print or
-  return it without logging the value. The wire-keyed form
+  return it without logging the value. This is the one CLI command that takes a
+  uid instead of a name: its caller is the `apiKeyHelper` line Coffer writes into
+  another tool's config file, so it MUST keep resolving to the same connection
+  after a rename. The wire-keyed form
   (`--wire <wire>` / `GET /api/v1/providers/active-key/{wire}`) MUST remain for
   back-compat, resolving through the connection active for that wire's agent.
 
@@ -1142,16 +1162,18 @@ connection's existing curated selection is left exactly as it was.
   offers the edit — REST, `coffer provider edit`, and the connection's form.
 - **FR-020**: Create, switch, revert-to-built-in, rename and delete MUST be
   available via (a) the REST API, (b) `coffer provider …` with `--json` on
-  `list`, and (c) the web surfaces — the Model providers library for create and
-  delete, the Agent detail page for the switch, the connection's own page for
-  the rename. Editing a connection MUST be available over REST, over the CLI
+  `list` — rename excepted, which is `coffer resource rename provider <name>
+  <new>`, the kind-agnostic command — and (c) the web surfaces — the Model
+  providers library for create and delete, the Agent detail page for the switch,
+  the connection's own page for the rename. Editing a connection MUST be
+  available over REST, over the CLI
   (`coffer provider edit`) and from its detail page, **including correcting the
   wire** (`--protocol`), which the CLI could not send while its own help called
   the field immutable. Reverting is `coffer provider use-builtin <wire>`: a
   surface that can put an agent onto a Coffer connection and not take it off
   again is half an operation.
-- **FR-021**: The CLI `key` subcommand MUST accept `--connection <name>` as its
-  primary form and `--wire <wire>` as the back-compat form, and MUST refuse a
+- **FR-021**: The CLI `key` subcommand MUST accept `--connection-uid <uid>` as
+  its primary form and `--wire <wire>` as the back-compat form, and MUST refuse a
   call naming neither.
 
 **Internal-engine connection**
@@ -1179,7 +1201,7 @@ connection's existing curated selection is left exactly as it was.
   internal engine use?" a question with no defined answer. A partial unique index
   restricted to flagged provider rows makes a second one unrepresentable,
   whatever writes it.
-- **FR-025**: `POST /api/v1/providers/{name}/internal-default` MUST set the named
+- **FR-025**: `POST /api/v1/providers/{uid}/internal-default` MUST set the named
   connection as the internal-engine default (applying FR-024), emit a
   `provider_internal_default_set` audit event, and return the updated
   `ProviderOut`. Setting the internal default MUST notify the engine so it can
@@ -1210,16 +1232,19 @@ connection's existing curated selection is left exactly as it was.
 
 **Rename**
 
-- **FR-029**: A connection MUST be renamable through a route of its own
-  (`POST /api/v1/providers/{name}/rename`), NOT a `ProviderPatch` field. The
-  operation MUST move, together: the resource row, the vault entry the
-  connection owns (`provider/<name>/key` — unless another resource also cites
-  that ref, in which case it MUST be left alone), the `audit_log` rows filed
-  under `provider:<old>`, and — when the connection is active — the projection
-  in every agent it reaches. It MUST record a `resource_renamed` audit event
+- **FR-029**: A connection MUST be renamable through the framework's own
+  kind-agnostic route — the `name` field on `PATCH /api/v1/resources/{uid}` — and
+  this kind MUST NOT serve a rename route of its own. The operation MUST change
+  the label and NOTHING else: the resource keeps its `uid`, its `credential_ref`
+  MUST be left where it is (the ref is an opaque address, never derived from the
+  name), the `audit_log` rows MUST NOT be repointed — they follow the resource by
+  uid and go on spelling the name each event carried when it happened — and an
+  active connection MUST NOT be re-projected, because the projected
+  `apiKeyHelper` cites the uid. It MUST record a `resource_renamed` audit event
   naming both names. A name another connection already holds MUST be refused
   with `RESOURCE_ALREADY_EXISTS` (409) BEFORE anything is written; an absent
-  connection MUST be a 404; renaming to the current name MUST be a no-op.
+  connection MUST be a 404; renaming to the current name MUST be a no-op and MUST
+  record nothing.
 
 **Model introspection on the connection detail page**
 
@@ -1293,7 +1318,7 @@ connection's existing curated selection is left exactly as it was.
   [internal-engine](../internal-engine/spec.md) FR-026). The two flags MUST move
   independently — setting one MUST NOT read, write or clear the other, and
   neither MUST fall back to the other at resolution time — and one connection
-  MAY carry both. `POST /api/v1/providers/{name}/transcribe-default` and
+  MAY carry both. `POST /api/v1/providers/{uid}/transcribe-default` and
   `coffer provider transcribe-default <name>` MUST be the surfaces, returning
   and printing the updated `ProviderOut`.
 

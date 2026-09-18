@@ -19,6 +19,7 @@ hopeful one.
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -29,16 +30,36 @@ from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.note import TYPE_PROJECT
 from coffer.domain.memory.reader import RawEntry, SourceFile
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.memory import store
 
 
 class FakeResources:
-    """Just enough ``ResourceService`` for the two passes' database half."""
+    """Just enough ``ResourceService`` for the two passes' database half.
+
+    Rows are held by **uid**, exactly as the real service addresses them, so a
+    test that renames a partition exercises the same lookup production does:
+    the identity is the key and the name is a column.
+    """
 
     def __init__(self) -> None:
-        self.rows: dict[tuple[str, str], Resource] = {}
+        self.rows: dict[str, Resource] = {}
         self._next_id = 1
+
+    # --- helpers the tests use, not part of the ResourceService surface ---
+
+    def by_name(self, kind: str, name: str) -> Resource:
+        """The row a test knows by its label. A test writes names because a
+        person does; everything under test is handed the uid."""
+        for row in self.rows.values():
+            if row.kind == kind and row.name == name:
+                return row
+        raise ResourceNotFound(f"no {kind} named {name!r}")
+
+    def uid_of(self, kind: str, name: str) -> str:
+        return self.by_name(kind, name).uid
+
+    # --- the ResourceService slice ---------------------------------------
 
     async def list(self, kind: str | None = None, enabled: bool | None = None) -> list[Resource]:
         return [
@@ -47,10 +68,10 @@ class FakeResources:
             if (kind is None or r.kind == kind) and (enabled is None or r.enabled == enabled)
         ]
 
-    async def get(self, ref: ResourceRef) -> Resource:
-        row = self.rows.get((ref.kind, ref.name))
+    async def get(self, uid: str) -> Resource:
+        row = self.rows.get(uid)
         if row is None:
-            raise ResourceNotFound(ref.kind, ref.name)
+            raise ResourceNotFound(uid)
         return row
 
     async def register(
@@ -63,76 +84,99 @@ class FakeResources:
         description: str | None = None,
         allow_lifecycle_kind: bool = False,
     ) -> Resource:
-        now = datetime.now(tz=UTC)
-        row = Resource(
-            id=self._next_id,
-            kind=kind,
-            name=name,
-            description=description,
-            config=dict(config),
-            enabled=True,
-            created_at=now,
-            updated_at=now,
-            scope=None,
-        )
-        self._next_id += 1
-        self.rows[(kind, name)] = row
+        row = self._row(kind=kind, name=name, config=dict(config), description=description)
         return row
 
     async def update_config(
         self,
-        ref: ResourceRef,
+        uid: str,
         new_config: dict[str, Any],
         actor: str,
         description: str | None = None,
         *,
         allow_lifecycle_kind: bool = False,
     ) -> Resource:
-        row = await self.get(ref)
+        row = await self.get(uid)
         row.config = dict(new_config)
         return row
 
-    async def delete(self, ref: ResourceRef, actor: str) -> None:
-        await self.get(ref)
-        del self.rows[(ref.kind, ref.name)]
+    async def rename(self, uid: str, new_name: str, actor: str) -> Resource:
+        """The label moves; the key does not.
+
+        Stands in for the real service's rename INCLUDING the one line of
+        wiring that matters to this layer — the kind's ``on_rename`` hook,
+        which is what carries the directory. Without it a test would prove the
+        column changed and nothing about the thing the hook exists for.
+        """
+        row = await self.get(uid)
+        if row.kind == KIND_MEMORY:
+            store.rename_partition(row.name, new_name)
+        row.name = new_name
+        return row
+
+    async def delete(self, uid: str, actor: str) -> None:
+        row = await self.get(uid)
+        del self.rows[uid]
         # Stands in for the one line of wiring the real ``ResourceService``
         # does through the kind's ``on_delete`` hook.
-        if ref.kind == KIND_MEMORY:
-            store.delete_partition(ref.name)
+        if row.kind == KIND_MEMORY:
+            store.delete_partition(row.name)
 
     def add_agent(
         self, name: str, agent_type: str, config_dir: str, *, enabled: bool = True
     ) -> Resource:
+        return self._row(
+            kind="agent",
+            name=name,
+            config={"type": agent_type, "config_dir": config_dir},
+            enabled=enabled,
+        )
+
+    def _row(
+        self,
+        *,
+        kind: str,
+        name: str,
+        config: dict[str, Any],
+        description: str | None = None,
+        enabled: bool = True,
+    ) -> Resource:
         now = datetime.now(tz=UTC)
         row = Resource(
             id=self._next_id,
-            kind="agent",
+            uid=uuid.uuid4().hex,
+            kind=kind,
             name=name,
-            description=None,
-            config={"type": agent_type, "config_dir": config_dir},
+            description=description,
+            config=config,
             enabled=enabled,
             created_at=now,
             updated_at=now,
             scope=None,
         )
         self._next_id += 1
-        self.rows[("agent", name)] = row
+        self.rows[row.uid] = row
         return row
 
 
 class FakeAudit:
     def __init__(self) -> None:
         self.events: list[tuple[str, str, dict[str, Any]]] = []
+        #: The resource each event was tied to, kept separately so a test can
+        #: assert an event was attributed to an identity rather than to
+        #: whatever the row happened to be called.
+        self.resources: list[Resource | None] = []
 
     async def record(
         self,
         event_type: str,
         *,
-        ref: ResourceRef | None = None,
+        resource: Resource | None = None,
         actor: str = "system",
         details: dict[str, Any] | None = None,
     ) -> None:
         self.events.append((event_type, actor, details or {}))
+        self.resources.append(resource)
 
 
 def agent_source_resolver(resource: Resource) -> AgentSource:

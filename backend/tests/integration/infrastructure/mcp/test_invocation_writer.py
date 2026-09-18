@@ -24,6 +24,9 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 
+#: An opaque uuid4 hex, the shape a real resource uid has.
+_FS_UID = "aa11bb22cc33dd44ee55ff6677889900"
+
 
 async def _make_repo(tmp_path, **kwargs):
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
@@ -37,7 +40,7 @@ def _inv(key: str) -> MCPInvocation:
     return MCPInvocation(
         id=None,
         timestamp=datetime.now(tz=UTC),
-        resource_name="fs",
+        resource_uid=_FS_UID,
         capability_type="tool",
         capability_key=key,
         duration_ms=1,

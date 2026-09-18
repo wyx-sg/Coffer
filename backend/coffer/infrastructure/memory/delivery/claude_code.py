@@ -35,14 +35,14 @@ class ClaudeCodeDelivery:
     config_key: str = CONFIG_KEY
     event: str = EVENT
 
-    def command_for(self, agent_key: str) -> str:
-        return delivery.hook_command(agent_key)
+    def command_for(self, agent_uid: str) -> str:
+        return delivery.hook_command(agent_uid)
 
-    def install(self, text: str, agent_key: str) -> str:
+    def install(self, text: str, agent_uid: str) -> str:
         return delivery.install_entry(
             text,
             event=self.event,
-            command=self.command_for(agent_key),
+            command=self.command_for(agent_uid),
             matcher=MATCHER,
             timeout=TIMEOUT_SECONDS,
         )

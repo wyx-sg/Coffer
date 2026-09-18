@@ -35,8 +35,8 @@ Every enabled collection is served to every agent. Switching one off is the only
 gate:
 
 ```bash
-coffer resource disable knowledge:shopee
-coffer resource enable knowledge:shopee
+coffer resource disable knowledge shopee
+coffer resource enable knowledge shopee
 ```
 
 That gate decides what an agent is **told**, not what a process can open: the
@@ -50,7 +50,7 @@ Deleting a collection goes through the Resource framework, not a knowledge
 route — same lifecycle, audit and cascade as any other resource:
 
 ```bash
-coffer resource delete knowledge:shopee
+coffer resource delete knowledge shopee
 ```
 
 ## Through an MCP client

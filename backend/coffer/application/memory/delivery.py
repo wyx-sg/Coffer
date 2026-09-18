@@ -45,7 +45,7 @@ from coffer.domain.memory.delivery import (
     DeliveryUnsupported,
     MalformedDeliveryConfig,
 )
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.memory.delivery import CLAUDE_CODE_ADAPTER, CODEX_ADAPTER
 
 #: One adapter per agent type Coffer knows how to deliver into (spec memory
@@ -78,7 +78,15 @@ class AgentConfigWriter(Protocol):
 # AgentService (and keeps this service unit-testable with a fake), mirroring
 # AgentConfigFileService's own `_AgentLookup`.
 class _AgentLookup(Protocol):
-    async def get(self, name: str) -> Resource: ...
+    """How delivery reaches an agent: by uid, never by name.
+
+    ``uid`` is positional-only, so this Protocol is satisfied by whatever the
+    agent kind calls its own parameter — the composition root injects
+    ``AgentService`` here, and a structural port has no business pinning down a
+    keyword nobody passes.
+    """
+
+    async def get(self, uid: str, /) -> Resource: ...
     async def list(self) -> list[Resource]: ...
 
 
@@ -94,10 +102,16 @@ class DeliveryService:
         self._audit = audit
         self._store = store
 
-    async def _config_for(self, name: str) -> AgentConfig:
-        # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        resource = await self._agents.get(name)
-        return AgentConfig.model_validate(resource.config)
+    async def _agent(self, agent_uid: str) -> tuple[Resource, AgentConfig]:
+        """The agent row and its parsed config, together.
+
+        Both halves travel from here because every operation needs both: the
+        config decides which adapter and which file, and the row is what the
+        audit event is tied to and what the status carries the label from.
+        Raises ResourceNotFound (→ 404) when the agent doesn't exist.
+        """
+        resource = await self._agents.get(agent_uid)
+        return resource, AgentConfig.model_validate(resource.config)
 
     @staticmethod
     def _adapter(agent_type: AgentType) -> DeliveryAdapter:
@@ -126,25 +140,29 @@ class DeliveryService:
         except MalformedDeliveryConfig as e:
             raise MalformedDeliveryConfig(f"{spec.path}: {e}") from e
 
-    async def _status_for(self, name: str, cfg: AgentConfig) -> DeliveryStatus:
+    async def _status_for(self, agent: Resource, cfg: AgentConfig) -> DeliveryStatus:
         adapter = self._adapter(cfg.type)
         spec = self._spec(cfg, adapter)
         text = self._read(spec)
         command = self._with_path(spec, adapter.find_command, text)
         return DeliveryStatus(
-            agent=name,
+            agent_uid=agent.uid,
+            agent_name=agent.name,
             installed=command is not None,
-            command=command or adapter.command_for(name),
+            # What IS installed when something is, otherwise what an install
+            # would write. Both spell the agent by uid; the name beside them is
+            # for the person reading the row, and never goes into the command.
+            command=command or adapter.command_for(agent.uid),
             event=adapter.event,
         )
 
-    async def status(self, agent: str | None = None) -> tuple[DeliveryStatus, ...]:
-        """Delivery status for `agent`, or for every registered agent that
+    async def status(self, agent_uid: str | None = None) -> tuple[DeliveryStatus, ...]:
+        """Delivery status for one agent, or for every registered agent that
         has an adapter (types with none are silently skipped, not errored,
         since a mixed-fleet status view shouldn't fail on an untouchable
         one)."""
-        if agent is not None:
-            cfg = await self._config_for(agent)
+        if agent_uid is not None:
+            agent, cfg = await self._agent(agent_uid)
             return (await self._status_for(agent, cfg),)
         out: list[DeliveryStatus] = []
         for resource in await self._agents.list():
@@ -154,31 +172,36 @@ class DeliveryService:
                 continue
             if cfg.type not in _ADAPTERS:
                 continue
-            out.append(await self._status_for(resource.name, cfg))
+            out.append(await self._status_for(resource, cfg))
         return tuple(out)
 
-    async def install(self, agent: str, *, actor: str) -> DeliveryStatus:
-        """Install Coffer's hook for `agent`. Idempotent: a prior install is
-        replaced in place, never duplicated. Always audited with `actor`."""
-        cfg = await self._config_for(agent)
+    async def install(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
+        """Install Coffer's hook for one agent. Idempotent: a prior install is
+        replaced in place, never duplicated. Always audited with `actor`.
+
+        The uid is what goes into the installed command, so the entry keeps
+        naming this agent however the user relabels it afterwards — and a
+        rename costs no reinstall, which is the point of installing an identity
+        rather than a label."""
+        agent, cfg = await self._agent(agent_uid)
         adapter = self._adapter(cfg.type)
         spec = self._spec(cfg, adapter)
         text = self._read(spec)
-        new_text = self._with_path(spec, adapter.install, text, agent)
+        new_text = self._with_path(spec, adapter.install, text, agent.uid)
         assert new_text is not None  # install() always returns text, never None
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.MEMORY_DELIVERY_INSTALLED.value,
-            ref=ResourceRef("agent", agent),
+            resource=agent,
             actor=actor,
             details={"event": adapter.event, "path": str(spec.path)},
         )
         return await self._status_for(agent, cfg)
 
-    async def remove(self, agent: str, *, actor: str) -> DeliveryStatus:
-        """Remove Coffer's hook for `agent`. A clean no-op — no write, no
+    async def remove(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
+        """Remove Coffer's hook for one agent. A clean no-op — no write, no
         audit entry — when nothing is installed."""
-        cfg = await self._config_for(agent)
+        agent, cfg = await self._agent(agent_uid)
         adapter = self._adapter(cfg.type)
         spec = self._spec(cfg, adapter)
         text = self._read(spec)
@@ -189,22 +212,28 @@ class DeliveryService:
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.MEMORY_DELIVERY_REMOVED.value,
-            ref=ResourceRef("agent", agent),
+            resource=agent,
             actor=actor,
             details={"event": adapter.event, "path": str(spec.path)},
         )
         return await self._status_for(agent, cfg)
 
-    async def record_fired(self, agent: str) -> None:
-        """Record that `agent`'s hook just fired (spec memory FR-033).
+    async def record_fired(self, agent_uid: str) -> None:
+        """Record that an agent's hook just fired (spec memory FR-033).
 
         Called by whatever actually serves the context — never by
         `install()`, `status()`, or anything else in this class — so every
-        audited fire is a real one. The actor is the agent: nobody clicked
+        audited fire is a real one. The uid arrives from the installed command
+        itself (`--agent-uid`), and it is resolved to a row here rather than
+        recorded raw: an audit entry that named only a uid would be unreadable,
+        and the row is what ties the fire to the agent's history.
+
+        The actor is the agent, by the name it answers to now: nobody clicked
         anything, the hook ran because that agent started a session.
         """
+        agent = await self._agents.get(agent_uid)
         await self._audit.record(
             AuditEventType.MEMORY_DELIVERY_FIRED.value,
-            ref=ResourceRef("agent", agent),
-            actor=agent,
+            resource=agent,
+            actor=agent.name,
         )

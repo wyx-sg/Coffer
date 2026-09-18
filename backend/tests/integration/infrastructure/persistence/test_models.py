@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -28,6 +29,7 @@ async def test_resource_model_round_trip(tmp_path):
     async with sm() as s:
         s.add(
             ResourceModel(
+                uid=uuid.uuid4().hex,
                 kind="fake_kind",
                 name="t",
                 description=None,
@@ -55,6 +57,7 @@ async def test_resource_unique_kind_name(tmp_path):
     async with sm() as s:
         s.add(
             ResourceModel(
+                uid=uuid.uuid4().hex,
                 kind="fake_kind",
                 name="t",
                 description=None,
@@ -71,6 +74,7 @@ async def test_resource_unique_kind_name(tmp_path):
     async with sm() as s:
         s.add(
             ResourceModel(
+                uid=uuid.uuid4().hex,
                 kind="fake_kind",
                 name="t",
                 description=None,

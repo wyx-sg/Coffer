@@ -65,9 +65,15 @@ _CLAUDE_MARKETPLACES = _CLAUDE_CONFIG_DIR / "plugins" / "known_marketplaces.json
 # ---------------------------------------------------------------------------
 
 
-def _agent_resource(name: str, agent_type: str, config_dir: pathlib.Path) -> Resource:
+# Each agent is addressed by its uid; the names below are only labels.
+_CC_UID = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
+_CX_UID = "9f8e7d6c5b4a39281706f5e4d3c2b1a0"
+
+
+def _agent_resource(uid: str, name: str, agent_type: str, config_dir: pathlib.Path) -> Resource:
     return Resource(
         id=1,
+        uid=uid,
         kind="agent",
         name=name,
         description=None,
@@ -79,18 +85,18 @@ def _agent_resource(name: str, agent_type: str, config_dir: pathlib.Path) -> Res
 
 
 class FakeAgentLookup:
-    """Map fixture names to agents of each supported type; else 404."""
+    """Map fixture uids to agents of each supported type; else 404."""
 
-    _AGENTS: ClassVar[dict[str, tuple[str, pathlib.Path]]] = {
-        "cc": ("claude_code", _CLAUDE_CONFIG_DIR),
-        "cx": ("codex", _CODEX_CONFIG_DIR),
+    _AGENTS: ClassVar[dict[str, tuple[str, str, pathlib.Path]]] = {
+        _CC_UID: ("cc", "claude_code", _CLAUDE_CONFIG_DIR),
+        _CX_UID: ("cx", "codex", _CODEX_CONFIG_DIR),
     }
 
-    async def get(self, name: str) -> Resource:
-        if name in self._AGENTS:
-            agent_type, config_dir = self._AGENTS[name]
-            return _agent_resource(name, agent_type, config_dir)
-        raise ResourceNotFound("agent", name)
+    async def get(self, uid: str) -> Resource:
+        if uid in self._AGENTS:
+            name, agent_type, config_dir = self._AGENTS[uid]
+            return _agent_resource(uid, name, agent_type, config_dir)
+        raise ResourceNotFound(uid)
 
 
 @dataclass
@@ -285,7 +291,7 @@ async def test_list_codex_groups_and_cache_flag(store, audit_svc):
     cache_dirs: set[pathlib.Path] = {_CODEX_CONFIG_DIR / "plugins" / "cache" / "npm" / "lint-tool"}
     svc = _make_svc(store, audit_svc, cache_dirs=cache_dirs)
 
-    out = await svc.list_plugins("cx")
+    out = await svc.list_plugins(_CX_UID)
 
     assert out.parse_errors == []
     by_id = {v.id: v for v in out.items}
@@ -317,7 +323,7 @@ async def test_list_codex_surfaces_detail_from_reader(store, audit_svc):
     )
     svc = _make_svc(store, audit_svc, detail_reader=reader)
 
-    out = await svc.list_plugins("cx")
+    out = await svc.list_plugins(_CX_UID)
 
     by_id = {v.id: v for v in out.items}
     lint = by_id["lint-tool@npm"]
@@ -340,7 +346,7 @@ async def test_list_codex_missing_config_empty(store, audit_svc):
     # No config.toml in the store.
     svc = _make_svc(store, audit_svc)
 
-    out = await svc.list_plugins("cx")
+    out = await svc.list_plugins(_CX_UID)
 
     assert out.items == []
     assert out.marketplaces == []
@@ -356,7 +362,7 @@ async def test_list_codex_parse_error_degrades(store, audit_svc):
     store._files[_CODEX_CONFIG] = "[[[[broken toml"
     svc = _make_svc(store, audit_svc)
 
-    out = await svc.list_plugins("cx")
+    out = await svc.list_plugins(_CX_UID)
 
     assert out.items == []
     assert len(out.parse_errors) == 1
@@ -377,7 +383,7 @@ async def test_list_claude_inventory_and_enabled(store, audit_svc):
     store._files[_CLAUDE_SETTINGS] = _SETTINGS_JSON_DISABLED_B
     svc = _make_svc(store, audit_svc)
 
-    out = await svc.list_plugins("cc")
+    out = await svc.list_plugins(_CC_UID)
 
     assert out.parse_errors == []
     by_id = {v.id: v for v in out.items}
@@ -422,7 +428,7 @@ async def test_list_claude_surfaces_detail_from_reader(store, audit_svc):
     )
     svc = _make_svc(store, audit_svc, detail_reader=reader)
 
-    out = await svc.list_plugins("cc")
+    out = await svc.list_plugins(_CC_UID)
 
     by_id = {v.id: v for v in out.items}
     a = by_id["plugin-a@npm"]
@@ -446,7 +452,7 @@ async def test_list_claude_without_reader_has_no_detail(store, audit_svc):
     store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
     svc = _make_svc(store, audit_svc)  # detail_reader=None
 
-    out = await svc.list_plugins("cc")
+    out = await svc.list_plugins(_CC_UID)
 
     assert out.parse_errors == []
     for v in out.items:
@@ -461,7 +467,7 @@ async def test_list_claude_settings_only_orphan_gets_false_cache(store, audit_sv
     store._files[_CLAUDE_SETTINGS] = '{"enabledPlugins": {"orphan@npm": false}}'
     svc = _make_svc(store, audit_svc)
 
-    out = await svc.list_plugins("cc")
+    out = await svc.list_plugins(_CC_UID)
 
     assert out.parse_errors == []
     by_id = {v.id: v for v in out.items}
@@ -478,7 +484,7 @@ async def test_toggle_codex_writes_config_only(store, audit_svc):
     store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
     svc = _make_svc(store, audit_svc)
 
-    await svc.set_enabled("cx", "lint-tool@npm", False, actor="cli")
+    await svc.set_enabled(_CX_UID, "lint-tool@npm", False, actor="cli")
 
     # Only config.toml was written.
     written_paths = [p for p, _ in store._writes]
@@ -509,7 +515,7 @@ async def test_toggle_claude_unknown_plugin_404(store, audit_svc):
     svc = _make_svc(store, audit_svc)
 
     with pytest.raises(PluginNotFound):
-        await svc.set_enabled("cc", "never-installed@npm", False, actor="test")
+        await svc.set_enabled(_CC_UID, "never-installed@npm", False, actor="test")
 
     assert store._writes == []
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_TOGGLED.value)
@@ -523,7 +529,7 @@ async def test_toggle_claude_writes_settings_only_internal_untouched(store, audi
     svc = _make_svc(store, audit_svc)
 
     # Toggle plugin-a to disabled.
-    await svc.set_enabled("cc", "plugin-a@npm", False, actor="test")
+    await svc.set_enabled(_CC_UID, "plugin-a@npm", False, actor="test")
 
     # Only settings.json was written; internal files untouched.
     written_paths = [p for p, _ in store._writes]
@@ -554,7 +560,7 @@ async def test_uninstall_claude_via_cli_calls_runner(store, audit_svc):
     runner = FakeCliRunner(available=True)
     svc = _make_svc(store, audit_svc, cli_runner=runner)
 
-    await svc.uninstall("cc", "plugin-a@npm", actor="cli")
+    await svc.uninstall(_CC_UID, "plugin-a@npm", actor="cli")
 
     # Delegated to `claude plugin uninstall`; Coffer wrote no config files itself.
     assert runner.calls == ["plugin-a@npm"]
@@ -568,7 +574,7 @@ async def test_uninstall_claude_without_cli_runner_rejected(store, audit_svc):
     # No runner wired → uninstall is unavailable (the listing hides the button).
     svc = _make_svc(store, audit_svc)
     with pytest.raises(PluginUninstallUnsupported):
-        await svc.uninstall("cc", "plugin-a@npm")
+        await svc.uninstall(_CC_UID, "plugin-a@npm")
     assert store._writes == []
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
     assert entries == []
@@ -578,7 +584,7 @@ async def test_uninstall_claude_cli_unavailable_rejected(store, audit_svc):
     runner = FakeCliRunner(available=False)
     svc = _make_svc(store, audit_svc, cli_runner=runner)
     with pytest.raises(PluginUninstallUnsupported):
-        await svc.uninstall("cc", "plugin-a@npm")
+        await svc.uninstall(_CC_UID, "plugin-a@npm")
     assert runner.calls == []  # never attempted when the CLI is absent
 
 
@@ -586,7 +592,7 @@ async def test_uninstall_claude_cli_failure_propagates(store, audit_svc):
     runner = FakeCliRunner(available=True, fail=PluginUninstallFailed("plugin-a@npm", "boom"))
     svc = _make_svc(store, audit_svc, cli_runner=runner)
     with pytest.raises(PluginUninstallFailed):
-        await svc.uninstall("cc", "plugin-a@npm")
+        await svc.uninstall(_CC_UID, "plugin-a@npm")
     # A failed uninstall records no success audit event.
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
     assert entries == []
@@ -597,14 +603,14 @@ async def test_list_can_uninstall_gating(store, audit_svc):
     store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
     with_cli = await _make_svc(
         store, audit_svc, cli_runner=FakeCliRunner(available=True)
-    ).list_plugins("cc")
+    ).list_plugins(_CC_UID)
     assert with_cli.can_uninstall is True
-    without_cli = await _make_svc(store, audit_svc).list_plugins("cc")
+    without_cli = await _make_svc(store, audit_svc).list_plugins(_CC_UID)
     assert without_cli.can_uninstall is False
 
     # Codex (config-edit strategy): always available, no CLI needed.
     store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
-    codex = await _make_svc(store, audit_svc).list_plugins("cx")
+    codex = await _make_svc(store, audit_svc).list_plugins(_CX_UID)
     assert codex.can_uninstall is True
 
 
@@ -620,7 +626,7 @@ async def test_uninstall_codex_removes_entry_and_cache(store, audit_svc):
     cache_dirs: set[pathlib.Path] = {cache_dir}
     svc = _make_svc(store, audit_svc, cache_dirs=cache_dirs, rmtree_calls=rmtree_calls)
 
-    await svc.uninstall("cx", "lint-tool@npm", actor="cli")
+    await svc.uninstall(_CX_UID, "lint-tool@npm", actor="cli")
 
     # Config was written.
     assert len(store._writes) == 1
@@ -649,7 +655,7 @@ async def test_uninstall_codex_cache_missing_ok(store, audit_svc):
     # No cache directories exist.
     svc = _make_svc(store, audit_svc, cache_dirs=set(), rmtree_calls=rmtree_calls)
 
-    await svc.uninstall("cx", "format-tool@pypi")
+    await svc.uninstall(_CX_UID, "format-tool@pypi")
 
     # Entry removed.
     new_text = store._files[_CODEX_CONFIG]
@@ -682,7 +688,7 @@ async def test_uninstall_codex_never_deletes_outside_the_cache_root(store, audit
         rmtree_calls=rmtree_calls,
     )
 
-    await svc.uninstall("cx", "..@..")
+    await svc.uninstall(_CX_UID, "..@..")
 
     assert rmtree_calls == []
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
@@ -700,7 +706,7 @@ async def test_uninstall_codex_unknown_plugin_404(store, audit_svc):
     svc = _make_svc(store, audit_svc, cache_dirs=set(), rmtree_calls=rmtree_calls)
 
     with pytest.raises(PluginNotFound):
-        await svc.uninstall("cx", "nonexistent@npm")
+        await svc.uninstall(_CX_UID, "nonexistent@npm")
 
     # No writes, no rmtree, no audit events.
     assert store._writes == []

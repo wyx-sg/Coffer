@@ -12,9 +12,14 @@ from typing import Any
 
 #: The extension key the shim stamps the launch cwd into (initialize handshake).
 _CWD_META_KEY = "coffer/cwd"
-#: The extension key the shim stamps its self-reported ``--agent`` identity
-#: into (spec mcp-gateway FR-013, amended).
-_AGENT_META_KEY = "coffer/agent"
+#: The extension key the shim stamps its self-reported agent identity into
+#: (spec mcp-gateway FR-013, amended). The value is the agent resource's **uid**,
+#: which is also why the key is not the older ``coffer/agent``: that one carried
+#: a name, and a shim installed by an older Coffer is still out there sending it.
+#: Reading only the new key is what makes such a shim *unidentified* rather than
+#: quietly matched against a scope by a stale label (ADR
+#: resource-identity-is-an-immutable-uid; "no name fallback").
+_AGENT_UID_META_KEY = "coffer/agent-uid"
 
 
 def _extract_cwd(params: dict[str, Any]) -> str | None:
@@ -28,15 +33,16 @@ def _extract_cwd(params: dict[str, Any]) -> str | None:
     return None
 
 
-def _extract_agent(params: dict[str, Any]) -> str | None:
-    """Pull the shim's self-reported agent identity from an ``initialize``
-    envelope's ``params._meta["coffer/agent"]`` (set by the shim when it was
-    launched with ``--agent <name>``). Absent → None."""
+def _extract_agent_uid(params: dict[str, Any]) -> str | None:
+    """Pull the shim's self-reported agent uid from an ``initialize`` envelope's
+    ``params._meta["coffer/agent-uid"]`` (set by the shim when it was launched
+    with ``--agent-uid <uid>``). Absent → None, i.e. an unidentified session,
+    which then matches unscoped resources only."""
     meta = params.get("_meta")
     if isinstance(meta, dict):
-        agent = meta.get(_AGENT_META_KEY)
-        if isinstance(agent, str) and agent:
-            return agent
+        agent_uid = meta.get(_AGENT_UID_META_KEY)
+        if isinstance(agent_uid, str) and agent_uid:
+            return agent_uid
     return None
 
 

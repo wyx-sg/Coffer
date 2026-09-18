@@ -67,17 +67,27 @@ class ProviderProjector:
         ]
 
     def project_type(
-        self, name: str, cfg: ProviderConfig, agents: list[Resource], agent_type: AgentType
+        self,
+        connection: Resource,
+        cfg: ProviderConfig,
+        agents: list[Resource],
+        agent_type: AgentType,
     ) -> list[str]:
-        """Project connection ``name`` into every enabled agent of ``agent_type``;
+        """Project ``connection`` into every enabled agent of ``agent_type``;
         return the projected agent names (empty if the type is unprojectable or no
-        such agent is registered)."""
+        such agent is registered).
+
+        The whole resource rather than its name, because the projection needs
+        both halves of it and they are no longer the same thing: its UID is what
+        the ``apiKeyHelper`` resolves, its NAME is only what a human reads in
+        Codex's provider label.
+        """
         target = target_for_agent(agent_type)
         if target is None:
             return []
         projected: list[str] = []
         for agent in self.agents_of_type(agents, agent_type):
-            self._project(name, cfg, agent, target.config_key, agent_type)
+            self._project(connection, cfg, agent, target.config_key, agent_type)
             projected.append(agent.name)
         return projected
 
@@ -97,7 +107,7 @@ class ProviderProjector:
 
     def _project(
         self,
-        name: str,
+        connection: Resource,
         cfg: ProviderConfig,
         agent: Resource,
         config_key: str,
@@ -111,14 +121,16 @@ class ProviderProjector:
         # connection no longer carries one. An unbound agent projects no model so
         # it runs on its OWN default model.
         if agent_type is AgentType.CLAUDE_CODE:
-            # apiKeyHelper names THIS connection, so the projected agent always
-            # reads exactly its key regardless of wire (the agnes case).
+            # apiKeyHelper names THIS connection by uid, so the projected agent
+            # always reads exactly its key regardless of wire (the agnes case)
+            # — and goes on reading it after the connection is renamed, which is
+            # why a rename no longer re-projects anything.
             new_text = apply_anthropic_settings(
                 text,
                 base_url=cfg.base_url,
                 model=agent_cfg.model,
                 fast_model=agent_cfg.fast_model,
-                api_key_helper=anthropic_api_key_helper(name),
+                api_key_helper=anthropic_api_key_helper(connection.uid),
             )
             self._write_if_changed(spec.path, current, new_text)
             return
@@ -143,7 +155,17 @@ class ProviderProjector:
             base_url=cfg.base_url,
             model=agent_cfg.model,
             wire_api=agent_cfg.wire_api or "responses",
-            display_name=f"Coffer ({name})",
+            # DELIBERATELY the name, not the uid. This is the label Codex shows
+            # in its own provider picker, so it has to be the word the user
+            # chose; "Coffer (a3f1…)" would be unreadable. Nothing resolves it —
+            # Coffer's ownership of the block is the ``coffer`` provider id, and
+            # the key comes from ``env_key`` — so a rename leaves this line
+            # cosmetically stale until the next projection rewrites it, and
+            # nothing breaks in the meantime. That is the whole reason a rename
+            # needs no re-projection: the only OTHER place a connection's name
+            # reached into another tool's file was the ``apiKeyHelper``, and
+            # that now carries the uid.
+            display_name=f"Coffer ({connection.name})",
             catalog_path=catalog_path if catalog is not None else None,
         )
         self._write_if_changed(spec.path, current, new_text)

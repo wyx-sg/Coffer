@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 from coffer.application.skill.lifecycle_ops import infer_link_mode
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
-from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import is_active
 from coffer.domain.skill.binding import BindingState
 from coffer.domain.workspace_errors import SkillOutOfScope
@@ -28,20 +27,27 @@ if TYPE_CHECKING:
 async def enable_skill_for_agent(
     *,
     service: SkillService,
-    skill_name: str,
-    agent_name: str,
+    skill_uid: str,
+    agent_uid: str,
     force: bool,
     actor: str,
 ) -> BindingState:
-    skill = await service._rs.get(ResourceRef("skill", skill_name))
-    agent = await service._rs.get(ResourceRef("agent", agent_name))
+    skill = await service._rs.get(skill_uid)
+    agent = await service._rs.get(agent_uid)
     # Hard grant: scope overrides manual bindings — an agent outside
-    # the skill's scope can never be bound, even with force=True.
-    if not is_active(skill.scope, agent_name):
-        raise SkillOutOfScope(skill_name, agent_name)
+    # the skill's scope can never be bound, even with force=True. Both sides
+    # of the comparison are uids: the scope stores the agent's uid, so an
+    # agent the user renames does not silently fall out of every scope that
+    # named it (ADR resource-identity-is-an-immutable-uid). The error still
+    # reports NAMES, because that is what the user typed and reads.
+    if not is_active(skill.scope, agent.uid):
+        raise SkillOutOfScope(skill.name, agent.name)
     target_dir = service._resolve_agent_skill_dir(agent)
-    link_path = target_dir / skill_name
-    master = service._store.paths_for(skill_name).folder
+    # The delivered copy is named after the skill's LABEL, not its uid: the
+    # agent product discovers a skill by its directory name. That is why the
+    # skill kind has an ``on_rename`` hook at all (see ``rename_ops``).
+    link_path = target_dir / skill.name
+    master = service._store.paths_for(skill.name).folder
 
     # The mode recorded on any prior binding — needed so a copy-fallback
     # target (a real directory by design) isn't misread as drift.
@@ -94,10 +100,13 @@ async def enable_skill_for_agent(
     )
     await service._audit.record(
         AuditEventType.SKILL_BOUND.value,
-        ref=ResourceRef("skill", skill_name),
+        resource=skill,
         actor=actor,
         details={
-            "agent": agent_name,
+            # The agent's LABEL, deliberately: ``details`` is a historical
+            # record, and every audit row already says what its resources were
+            # called at the moment the event happened (see AuditService).
+            "agent": agent.name,
             "link": str(link_path),
             "mode": mode.value,
         },
@@ -108,12 +117,12 @@ async def enable_skill_for_agent(
 async def disable_skill_for_agent(
     *,
     service: SkillService,
-    skill_name: str,
-    agent_name: str,
+    skill_uid: str,
+    agent_uid: str,
     actor: str,
 ) -> BindingState:
-    skill = await service._rs.get(ResourceRef("skill", skill_name))
-    agent = await service._rs.get(ResourceRef("agent", agent_name))
+    skill = await service._rs.get(skill_uid)
+    agent = await service._rs.get(agent_uid)
     existing = await service._bindings.find(skill_id=skill.id, agent_id=agent.id)
     if existing is None:
         # Nothing was ever bound — disabling is a no-op. Don't write a
@@ -137,8 +146,8 @@ async def disable_skill_for_agent(
     )
     await service._audit.record(
         AuditEventType.SKILL_UNBOUND.value,
-        ref=ResourceRef("skill", skill_name),
+        resource=skill,
         actor=actor,
-        details={"agent": agent_name},
+        details={"agent": agent.name},
     )
     return binding

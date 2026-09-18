@@ -104,7 +104,7 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 
 - **Given** a stored credential whose ref is cited by at least one registered resource,
 - **When** the user deletes it,
-- **Then** the request is refused with `409 CREDENTIAL_IN_USE`, the message names every citing resource as `<kind>:<name>`, and the ciphertext row is still present afterwards.
+- **Then** the request is refused with `409 CREDENTIAL_IN_USE`, the message names every citing resource as its kind plus its current name (`channel 'my-bot'`, `mcp_server 'github'`) rather than as a uid — the user has to go and find the thing, and an opaque identity is not what the page they go to shows them, and the ciphertext row is still present afterwards.
 
 ### Scenario: an unreadable ciphertext names its ref
 
@@ -195,7 +195,7 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 - **FR-012**: `GET /api/v1/credentials/{ref}` MUST return the decrypted value, record a `credential_read` audit entry carrying the ref only, and answer `404` when the ref is absent — so every deliberate read of a secret leaves a trail.
 - **FR-013**: `GET /api/v1/credentials/{ref}/exists` MUST report presence without decrypting, and MUST NOT audit. It is the probe a surface uses when it needs to know whether to ask the user for a value, which is not an access to the secret.
 - **FR-014**: `DELETE /api/v1/credentials/{ref}` MUST be idempotent, answer `204` whether or not the ref was present, and record a `credential_deleted` audit entry when it removed something.
-- **FR-015**: The delete MUST be refused with `409 CREDENTIAL_IN_USE` while any registered resource's configuration still cites the ref, and the error MUST name every citing resource, so the user knows exactly what to detach first.
+- **FR-015**: The delete MUST be refused with `409 CREDENTIAL_IN_USE` while any registered resource's configuration still cites the ref, and the error MUST name every citing resource by kind and current name, so the user knows exactly what to detach first; it MUST NOT identify them by uid, which is the identity the system keeps across a rename and not something the user can recognise on a page ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
 
 **The command line**
 

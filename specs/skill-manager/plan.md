@@ -82,8 +82,8 @@ backend/coffer/infrastructure/persistence/migrations/versions/
   20260526_0005_skill_tables.py   # skill_agent_bindings
 
 backend/coffer/surfaces/http/skill_routes.py                  # /skills, /skills/import, /skills/verify, /skills/repair
-backend/coffer/surfaces/http/skill_file_routes.py             # /skills/{name}/files[/content] — GET + PUT
-backend/coffer/surfaces/http/agent_unmanaged_skill_routes.py  # /agents/{name}/unmanaged-skills*
+backend/coffer/surfaces/http/skill_file_routes.py             # /skills/{uid}/files[/content] — GET + PUT
+backend/coffer/surfaces/http/agent_unmanaged_skill_routes.py  # /agents/{uid}/unmanaged-skills*
 backend/coffer/surfaces/http/agent_skill_wiring.py            # cross-kind composition (agent on_delete → skill cleanup)
 backend/coffer/surfaces/http/skill_dependencies.py            # the kind's FastAPI dependencies
 backend/coffer/surfaces/cli/skill_cmd.py                      # coffer skill list|import|show|rm|verify|unmanaged|adopt|rm-unmanaged

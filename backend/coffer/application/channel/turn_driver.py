@@ -31,8 +31,8 @@ from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
 )
-from coffer.application.channel.ports import (
-    ChannelBinding,
+from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel.store_ports import (
     ChannelPeer,
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
@@ -204,10 +204,10 @@ class TurnDriver:
         queue: asyncio.Queue[Any],
     ) -> None:
         """The orchestrator began this message's turn: render it into the chat."""
-        session = self._session(binding.name, peer.chat_id, item.thread_id)
+        session = self._session(binding.resource.name, peer.chat_id, item.thread_id)
         task = asyncio.create_task(
             self._render(binding, peer, item, conversation_id, queue, session),
-            name=f"channel-render:{binding.name}:{peer.chat_id}:{item.thread_id}",
+            name=f"channel-render:{binding.resource.name}:{peer.chat_id}:{item.thread_id}",
         )
         # Track the live turn so /stop and unbind can target it even after /new
         # rebinds the peer to a fresh conversation mid-turn.
@@ -243,7 +243,7 @@ class TurnDriver:
             )
 
         renderer = TurnRenderer(
-            channel=binding.name,
+            channel=binding.resource.name,
             adapter=adapter,
             chat_id=peer.chat_id,
             conversation_id=conversation_id,
@@ -259,7 +259,7 @@ class TurnDriver:
         except asyncio.CancelledError:
             raise
         except Exception:
-            _logger.exception("channel.turn.failed", extra={"channel": binding.name})
+            _logger.exception("channel.turn.failed", extra={"channel": binding.resource.name})
         finally:
             # The next turn's renderer may already have been spawned (the queue
             # advances the moment a turn ends); only the renderer on record

@@ -11,6 +11,12 @@ from typing import Any
 
 from coffer.application.channel.runtime import ChannelRuntime
 
+from .conftest import channel_row
+
+#: The uid ``channel_row`` mints for the channel named "st". The controllers
+#: are keyed by uid, not by name (``runtime_supervision``).
+_ST = "uid-of-st"
+
 
 class _FakeTunnel:
     def __init__(self, *, fail: bool = False) -> None:
@@ -66,16 +72,19 @@ def _seatalk(token_ref: str | None) -> dict[str, object]:
 async def test_starts_tunnel_for_managed_channel_with_materialized_token():
     tunnel = _FakeTunnel()
     rt = _runtime(tunnel)
-    await rt._reconcile_tunnels({"st": (1, _seatalk("channel/st/tunnel-token"))})
-    assert tunnel.started == {"st": "token::channel/st/tunnel-token"}
-    assert tunnel.running("st") is True
+    await rt._reconcile_tunnels({"st": channel_row("st", _seatalk("channel/st/tunnel-token"))})
+    assert tunnel.started == {_ST: "token::channel/st/tunnel-token"}
+    assert tunnel.running(_ST) is True
 
 
 async def test_skips_channel_without_token_ref():
     tunnel = _FakeTunnel()
     rt = _runtime(tunnel)
     await rt._reconcile_tunnels(
-        {"st": (1, _seatalk(None)), "tg": (2, {"channel_type": "telegram"})}
+        {
+            "st": channel_row("st", _seatalk(None)),
+            "tg": channel_row("tg", {"channel_type": "telegram"}, id=2),
+        }
     )
     assert tunnel.started == {}
 
@@ -83,20 +92,20 @@ async def test_skips_channel_without_token_ref():
 async def test_stops_tunnel_when_token_ref_removed():
     tunnel = _FakeTunnel()
     rt = _runtime(tunnel)
-    await rt._reconcile_tunnels({"st": (1, _seatalk("channel/st/tunnel-token"))})
-    assert tunnel.running("st") is True
+    await rt._reconcile_tunnels({"st": channel_row("st", _seatalk("channel/st/tunnel-token"))})
+    assert tunnel.running(_ST) is True
     # token-ref cleared (or channel disabled → absent from desired)
-    await rt._reconcile_tunnels({"st": (1, _seatalk(None))})
-    assert "st" in tunnel.stopped
-    assert tunnel.running("st") is False
+    await rt._reconcile_tunnels({"st": channel_row("st", _seatalk(None))})
+    assert _ST in tunnel.stopped
+    assert tunnel.running(_ST) is False
 
 
 async def test_spawn_failure_is_latched_not_raised():
     tunnel = _FakeTunnel(fail=True)
     rt = _runtime(tunnel)
     # cloudflared missing → must not raise out of the reconcile tick
-    await rt._reconcile_tunnels({"st": (1, _seatalk("channel/st/tunnel-token"))})
-    assert tunnel.running("st") is False
+    await rt._reconcile_tunnels({"st": channel_row("st", _seatalk("channel/st/tunnel-token"))})
+    assert tunnel.running(_ST) is False
 
 
 async def test_materialize_failure_is_latched_not_raised():
@@ -105,5 +114,5 @@ async def test_materialize_failure_is_latched_not_raised():
 
     tunnel = _FakeTunnel()
     rt = _runtime(tunnel, materialize=boom)
-    await rt._reconcile_tunnels({"st": (1, _seatalk("channel/st/tunnel-token"))})
+    await rt._reconcile_tunnels({"st": channel_row("st", _seatalk("channel/st/tunnel-token"))})
     assert tunnel.started == {}

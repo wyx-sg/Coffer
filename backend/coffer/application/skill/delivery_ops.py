@@ -6,11 +6,13 @@ conceptually private to the skill subpackage.
 
 One rule decides delivery, and nothing else does::
 
-    delivered(skill, agent) == skill.enabled and scope.is_active(skill.scope, agent)
+    delivered(skill, agent) == skill.enabled and scope.is_active(skill.scope, agent.uid)
 
 Both halves live on the SKILL resource, so this module needs nothing from the
-agent's config beyond its name (Contract 5c): the agent carries no
-skill-delivery policy at all.
+agent's config (Contract 5c): the agent carries no skill-delivery policy at
+all. The uid on the right-hand side is the agent's identity, which is what the
+scope stores — there is one vocabulary here and it is the one the user cannot
+change out from under a reference.
 """
 
 from __future__ import annotations
@@ -19,7 +21,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from coffer.domain.errors import CofferError
-from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import is_active
 
 if TYPE_CHECKING:
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def apply_scope_for_agent(*, service: SkillService, agent_name: str, actor: str) -> list[str]:
+async def apply_scope_for_agent(*, service: SkillService, agent_uid: str, actor: str) -> list[str]:
     """Reconcile one agent's delivered set against the delivery predicate.
 
     ``wanted`` is every skill that is enabled AND in scope for this agent.
@@ -52,38 +53,48 @@ async def apply_scope_for_agent(*, service: SkillService, agent_name: str, actor
     the rest of the run.
     """
     try:
-        agent = await service._rs.get(ResourceRef("agent", agent_name))
+        agent = await service._rs.get(agent_uid)
     except CofferError:
         return []
     skills = await service.list_skills()
-    names_by_id = {s.id: s.name for s in skills}
+    # Two maps over the same rows: the binding table joins on the integer
+    # ``resources.id``, while everything this function decides and reports is
+    # keyed on the uid. Neither is a translation between two names for the same
+    # thing — the id is the join key, the uid is the identity.
+    by_id = {s.id: s for s in skills}
+    by_uid = {s.uid: s for s in skills}
     bound = {
-        name
+        skill.uid
         for b in await service._bindings.list_for_agent(agent.id)
-        if b.enabled and (name := names_by_id.get(b.skill_resource_id)) is not None
+        if b.enabled and (skill := by_id.get(b.skill_resource_id)) is not None
     }
     # A disabled agent wants nothing: the predicate decides which agents a skill
     # is FOR, but an agent the user switched off is one Coffer does not write
     # into at all. Everything already delivered is reclaimed below, and
     # re-enabling the agent runs this again and puts it back.
     wanted = (
-        {s.name for s in skills if s.enabled and is_active(s.scope, agent_name)}
+        {s.uid for s in skills if s.enabled and is_active(s.scope, agent.uid)}
         if agent.enabled
         else set()
     )
 
+    # Sorted by NAME, not by uid: a uid is random, so ordering by it would make
+    # the sequence of deliveries — and of any failures reported below —
+    # arbitrary from one run to the next.
+    def _by_name(uid: str) -> str:
+        return by_uid[uid].name
+
     failures: list[str] = []
-    for name in sorted(wanted - bound):
+    for uid in sorted(wanted - bound, key=_by_name):
+        name = by_uid[uid].name
         try:
-            await service.enable_for(
-                skill_name=name, agent_name=agent_name, force=False, actor=actor
-            )
+            await service.enable_for(skill_uid=uid, agent_uid=agent.uid, force=False, actor=actor)
         except (CofferError, OSError) as e:
             # Per-skill failures (TargetConflict, OSError, …) must not abort
             # the rest of the reconciliation — but they must be observable.
-            logger.warning("delivery of skill %r to agent %r skipped: %s", name, agent_name, e)
+            logger.warning("delivery of skill %r to agent %r skipped: %s", name, agent.name, e)
             failures.append(f"skill {name!r}: {e}")
-    for name in sorted(bound - wanted):
-        await service.disable_for(skill_name=name, agent_name=agent_name, actor=actor)
+    for uid in sorted(bound - wanted, key=_by_name):
+        await service.disable_for(skill_uid=uid, agent_uid=agent.uid, actor=actor)
 
     return failures

@@ -35,7 +35,7 @@ from coffer.application.channel.agent_routing import (
     routable_keys,
 )
 from coffer.application.channel.conversation_ops import ensure_conversation
-from coffer.application.channel.ports import ChannelBinding, ChannelPeer
+from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.selection_cards import (
     SelectionCard,
     agent_card,
@@ -45,6 +45,7 @@ from coffer.application.channel.selection_cards import (
     model_card,
     parse_page_turn,
 )
+from coffer.application.channel.store_ports import ChannelPeer
 
 if TYPE_CHECKING:
     from coffer.application.channel.commands import ChannelCommands, SafeSend
@@ -81,7 +82,11 @@ async def deliver_card(
     except Exception:
         _logger.warning(
             "channel.card.rejected",
-            extra={"channel": binding.name, "card": card.title, "buttons": len(card.buttons)},
+            extra={
+                "channel": binding.resource.name,
+                "card": card.title,
+                "buttons": len(card.buttons),
+            },
             exc_info=True,
         )
         return False
@@ -210,7 +215,7 @@ async def refresh_selection_card(
         )
     except Exception:
         _logger.warning(
-            "channel.card.refresh_failed", extra={"channel": binding.name}, exc_info=True
+            "channel.card.refresh_failed", extra={"channel": binding.resource.name}, exc_info=True
         )
 
 
@@ -245,7 +250,9 @@ async def turn_card_page(
     try:
         card = await _current_card(commands, binding, peer, kind, thread_id, page=page)
     except Exception:
-        _logger.warning("channel.card.page_failed", extra={"channel": binding.name}, exc_info=True)
+        _logger.warning(
+            "channel.card.page_failed", extra={"channel": binding.resource.name}, exc_info=True
+        )
         card = None
     if card is None or not card.buttons:
         # "collection" is the card's internal namespace; the command that
@@ -274,7 +281,7 @@ async def turn_card_page(
         except Exception:
             _logger.warning(
                 "channel.card.page_update_failed",
-                extra={"channel": binding.name, "card": card.title, "page": card.page},
+                extra={"channel": binding.resource.name, "card": card.title, "page": card.page},
                 exc_info=True,
             )
     if await deliver_card(binding, peer, card, chat_kind=chat_kind, thread_id=thread_id):
@@ -308,7 +315,7 @@ async def _current_card(
     is what the card must reflect, and only the store knows whether it landed.
     ``page`` is ``None`` for "the page holding the current choice".
     """
-    row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
+    row = await commands._threads.get(binding.resource.id, peer.chat_id, thread_id)
     agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
     if kind == "agent":
         return agent_card(

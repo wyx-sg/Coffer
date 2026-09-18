@@ -15,8 +15,9 @@ import pathlib
 from asyncio import to_thread
 from typing import TYPE_CHECKING, Any
 
-from coffer.application.channel.ports import ChannelBinding, ChannelPeer
+from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.selection_cards import collection_card
+from coffer.application.channel.store_ports import ChannelPeer
 
 if TYPE_CHECKING:
     from coffer.application.channel.commands import ChannelCommands, SafeSend
@@ -172,7 +173,7 @@ async def apply_save_collection(
         # log; the chat only ever sees the former.
         _logger.warning(
             "channel.save.failed",
-            extra={"channel": binding.name, "collection": collection},
+            extra={"channel": binding.resource.name, "collection": collection},
             exc_info=True,
         )
         await send(

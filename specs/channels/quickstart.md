@@ -162,15 +162,16 @@ Coffer then keeps a `cloudflared` child alive for exactly as long as the channel
 is enabled, restarting it if it dies. The channel's status card shows whether the
 managed tunnel is up.
 
-Either way, set the app's **Event Callback URL** to
-`<public-url>/seatalk/my-seatalk` on the Open Platform. SeaTalk sends a
-verification challenge; the listener answers it automatically — the portal shows
-the URL as verified. `coffer channel status my-seatalk` prints the whole chain:
+Either way, set the app's **Event Callback URL** to the path Coffer composes,
+`<public-url>/seatalk/<channel uid>`, on the Open Platform — don't type it by
+hand; `coffer channel status my-seatalk` prints it under `register:`. SeaTalk
+sends a verification challenge; the listener answers it automatically — the
+portal shows the URL as verified. That same command prints the whole chain:
 
 ```
-inbound:  webhook 127.0.0.1:8790/seatalk/my-seatalk (listener up)
+inbound:  webhook 127.0.0.1:8790/seatalk/<channel uid> (listener up)
 tunnel:   managed (up)
-register: https://<public-host>/seatalk/my-seatalk
+register: https://<public-host>/seatalk/<channel uid>
 ```
 
 The tunnel line reads `not managed by Coffer` when you front the callback
@@ -200,7 +201,8 @@ Push a message to a paired channel any time — no inbound message needed:
 coffer channel notify my-telegram "nightly build finished ✅"
 ```
 
-REST: `POST /api/v1/channels/my-telegram/notify {"text": "..."}`.
+REST: `POST /api/v1/channels/{uid}/notify {"text": "..."}` — the routes
+address a channel by its immutable uid; the CLI above is what takes the name.
 
 UI: the channel detail page has a **Send test message** card — type a line and
 push it to the paired peer (the natural way to confirm delivery right after

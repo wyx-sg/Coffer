@@ -23,6 +23,7 @@ import pytest
 
 from coffer.application.knowledge.ingest import MAX_UPLOAD_BYTES, IngestedDocument, IngestService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.knowledge.converter import (
     Conversion,
     EmptyConversion,
@@ -44,6 +45,10 @@ class _Resources:
         self._rows = [
             Resource(
                 id=i,
+                # A uid a test can spell, and deliberately not the name: a
+                # lookup that worked because the two matched would prove
+                # nothing about addressing a collection by identity.
+                uid=f"uid-{i}",
                 kind=KIND_KNOWLEDGE,
                 name=name,
                 description=None,
@@ -55,6 +60,18 @@ class _Resources:
             )
             for i, name in enumerate(names, start=1)
         ]
+
+    async def get(self, uid):  # type: ignore[no-untyped-def]
+        for row in self._rows:
+            if row.uid == uid:
+                return row
+        raise ResourceNotFound(uid)
+
+    def uid_of(self, name: str) -> str:
+        """The uid a test knows the collection by its name — the resolution a
+        person's CLI or the web page does before anything inside the daemon
+        is handed an identity."""
+        return next(r.uid for r in self._rows if r.name == name)
 
     async def list(self, kind=None, enabled=None):  # type: ignore[no-untyped-def]
         return list(self._rows)

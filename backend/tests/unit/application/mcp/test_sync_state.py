@@ -1,11 +1,16 @@
 """MCP capability preferences as a synced state area (spec vault-sync).
 
 A server's document lists what is disabled on it and exists only while that
-list is non-empty. So import makes a named server's disabled set exactly the
+list is non-empty. So import makes one server's disabled set exactly the
 document's, touches no other server (the applier hands over one document at a
 time), and a deleted document re-enables everything on that server — the rows
 stay, because enabled is their default and their seen-timestamps are this
 machine's own.
+
+Documents are addressed by the server's **uid**, which is the same value on
+every machine in the fleet (ADR resource-identity-is-an-immutable-uid). The
+uids below are written out as opaque hex so nothing in these tests can pass by
+accidentally matching a name.
 """
 
 from __future__ import annotations
@@ -18,20 +23,25 @@ import pytest
 from coffer.application.mcp.sync_state import AREA, McpPreferenceSyncState
 from coffer.domain.mcp.capability import CapabilityType, MCPCapabilityPreference
 
+JIRA_UID = "aa11bb22cc33dd44ee55ff6677889900"
+SMART_UID = "0099887766ff55ee44dd33cc22bb11aa"
+ELSEWHERE_UID = "1234567890abcdef1234567890abcdef"
+
 
 @dataclass
 class _Resource:
     id: int
+    uid: str
     name: str
 
 
 class _Resources:
-    def __init__(self, servers: dict[str, int]) -> None:
+    def __init__(self, servers: dict[str, tuple[int, str]]) -> None:
         self._servers = servers
 
     async def list(self, kind: str | None = None) -> list[_Resource]:
         assert kind == "mcp_server"
-        return [_Resource(i, n) for n, i in self._servers.items()]
+        return [_Resource(i, uid, n) for n, (i, uid) in self._servers.items()]
 
 
 class _Prefs:
@@ -87,7 +97,7 @@ def _state() -> tuple[McpPreferenceSyncState, _Prefs]:
     prefs.seed(1, "tool", "search", enabled=False)
     prefs.seed(1, "tool", "write", enabled=True)
     prefs.seed(2, "prompt", "summarize", enabled=False)
-    resources = _Resources({"jira": 1, "smart": 2})
+    resources = _Resources({"jira": (1, JIRA_UID), "smart": (2, SMART_UID)})
     return McpPreferenceSyncState(resources, prefs), prefs  # type: ignore[arg-type]
 
 
@@ -97,10 +107,15 @@ def _state() -> tuple[McpPreferenceSyncState, _Prefs]:
 )
 async def test_export_writes_a_doc_only_for_servers_with_something_disabled() -> None:
     state, _prefs = _state()
-    await state.delete_docs(["smart"])
+    await state.delete_docs([SMART_UID])
     docs = await state.export_docs()
     assert AREA == "mcp-preferences"
-    assert docs == [("jira", {"server": "jira", "disabled": [{"type": "tool", "key": "search"}]})]
+    assert docs == [
+        (
+            JIRA_UID,
+            {"server_uid": JIRA_UID, "disabled": [{"type": "tool", "key": "search"}]},
+        )
+    ]
 
 
 @pytest.mark.acceptance(
@@ -110,7 +125,7 @@ async def test_export_writes_a_doc_only_for_servers_with_something_disabled() ->
 async def test_deleting_a_servers_doc_re_enables_everything_on_that_server_only() -> None:
     state, prefs = _state()
 
-    await state.delete_docs(["jira"])
+    await state.delete_docs([JIRA_UID])
 
     assert prefs.disabled(1) == set()
     assert prefs.keys(1) == {"search", "write"}, "rows stay; only their state changes"
@@ -119,14 +134,14 @@ async def test_deleting_a_servers_doc_re_enables_everything_on_that_server_only(
 
 async def test_export_after_delete_no_longer_carries_the_server() -> None:
     state, _prefs = _state()
-    await state.delete_docs(["jira"])
+    await state.delete_docs([JIRA_UID])
     docs = await state.export_docs()
-    assert [rel for rel, _ in docs] == ["smart"]
+    assert [rel for rel, _ in docs] == [SMART_UID]
 
 
 async def test_deleting_an_unknown_servers_doc_is_ignored() -> None:
     state, prefs = _state()
-    await state.delete_docs(["not-registered-here"])
+    await state.delete_docs([ELSEWHERE_UID])
     assert prefs.disabled(1) == {"search"}
     assert prefs.disabled(2) == {"summarize"}
 
@@ -136,7 +151,7 @@ async def test_import_of_one_doc_leaves_the_other_servers_alone() -> None:
     has not been decided about."""
     state, prefs = _state()
     errors = await state.import_docs(
-        [("jira", {"server": "jira", "disabled": [{"type": "tool", "key": "write"}]})]
+        [(JIRA_UID, {"server_uid": JIRA_UID, "disabled": [{"type": "tool", "key": "write"}]})]
     )
     assert errors == []
     assert prefs.disabled(1) == {"write"}
@@ -146,7 +161,7 @@ async def test_import_of_one_doc_leaves_the_other_servers_alone() -> None:
 async def test_import_inserts_a_capability_this_machine_has_not_seen_yet() -> None:
     state, prefs = _state()
     await state.import_docs(
-        [("smart", {"server": "smart", "disabled": [{"type": "tool", "key": "deploy"}]})]
+        [(SMART_UID, {"server_uid": SMART_UID, "disabled": [{"type": "tool", "key": "deploy"}]})]
     )
     assert prefs.disabled(2) == {"deploy"}
 
@@ -154,7 +169,7 @@ async def test_import_inserts_a_capability_this_machine_has_not_seen_yet() -> No
 async def test_import_for_a_server_not_registered_here_is_skipped() -> None:
     state, prefs = _state()
     errors = await state.import_docs(
-        [("elsewhere", {"server": "elsewhere", "disabled": [{"type": "tool", "key": "x"}]})]
+        [(ELSEWHERE_UID, {"server_uid": ELSEWHERE_UID, "disabled": [{"type": "tool", "key": "x"}]})]
     )
     assert errors == []
     assert prefs.disabled(1) == {"search"}

@@ -28,7 +28,7 @@ from coffer.domain.errors import (
     PrivilegedPath,
     SkillDirNotWritable,
 )
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 
 # Privileged path defence. Each entry is matched at component boundary (the
 # entry itself or entry + os.sep) — so "/var" rejects "/var/run/x" but NOT
@@ -132,7 +132,9 @@ class AgentService:
         # existing call sites and unit fakes need not supply one.
         self._config_file_store = config_file_store
         # Cross-kind hooks (wired at the composition root). None in contexts
-        # that don't manage skills.
+        # that don't manage skills. Both are called with the agent's UID — a
+        # skill's scope holds agent uids, so handing the hook a name would only
+        # make the far side translate it back.
         # - on_config_dir_changed: re-deliver an agent's skills after its
         #   config dir moves, so the old links aren't orphaned and the new
         #   dir isn't left empty.
@@ -189,7 +191,7 @@ class AgentService:
         # FR-012): every enabled skill whose scope names it. Per-skill failures
         # are tolerated inside the hook.
         if self._reconcile_skill_delivery is not None:
-            await self._reconcile_skill_delivery(name)
+            await self._reconcile_skill_delivery(registered.uid)
         return registered
 
     @staticmethod
@@ -216,18 +218,24 @@ class AgentService:
     async def list(self) -> list[Resource]:
         return await self._rs.list(kind="agent")
 
-    async def get(self, name: str) -> Resource:
-        return await self._rs.get(ResourceRef("agent", name))
+    async def get(self, uid: str) -> Resource:
+        """One agent row by its uid.
+
+        Every caller inside the daemon holds a uid — the surfaces resolve the
+        name a human typed once, at the edge, through
+        ``ResourceService.get_by_name``. Raises ``ResourceNotFound`` (→ 404).
+        """
+        return await self._rs.get(uid)
 
     async def update_config_dir(
         self,
         *,
-        name: str,
+        uid: str,
         new_config_dir: str | None,
         actor: str = "api",
         description: str | None = None,
     ) -> Resource:
-        existing = await self.get(name)
+        existing = await self.get(uid)
         cfg = AgentConfig.model_validate(existing.config)
         # `model_copy(update=...)` does NOT run validators (Pydantic v2). To
         # surface field-level errors as ConfigValidationError we go through
@@ -247,7 +255,7 @@ class AgentService:
         if dir_changed:
             self._ensure_skill_dir(new_cfg.resolved_config_dir(), new_cfg.resolved_skill_dir())
         updated = await self._rs.update_config(
-            ResourceRef("agent", name),
+            uid,
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
             description=description,
@@ -258,13 +266,13 @@ class AgentService:
         # resolves the new dir. Without this the old links orphan and verify
         # falsely reports no drift.
         if dir_changed and self._on_config_dir_changed is not None:
-            await self._on_config_dir_changed(name)
+            await self._on_config_dir_changed(uid)
         return updated
 
     async def set_model_binding(
         self,
         *,
-        name: str,
+        uid: str,
         model: str | None = None,
         fast_model: str | None = None,
         clear_fast_model: bool = False,
@@ -277,7 +285,7 @@ class AgentService:
         next time the agent's connection is (re-)activated — the caller re-runs
         ``activate`` to re-project, mirroring how the connection-model PATCH
         worked before."""
-        existing = await self.get(name)
+        existing = await self.get(uid)
         cfg = AgentConfig.model_validate(existing.config)
         overrides: dict[str, object] = {}
         if model is not None:
@@ -295,14 +303,14 @@ class AgentService:
         except Exception as e:  # pydantic ValidationError
             raise ConfigValidationError(str(e)) from e
         return await self._rs.update_config(
-            ResourceRef("agent", name),
+            uid,
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
             allow_lifecycle_kind=True,  # CODE-REG: value-level binding change only
         )
 
-    async def remove(self, *, name: str, actor: str = "api") -> None:
+    async def remove(self, *, uid: str, actor: str = "api") -> None:
         # A removal is never permanent: detection is discovery-only, so the
         # next scan re-surfaces this agent as a candidate. We simply delete
         # the resource row (the generic ResourceService audits the deletion).
-        await self._rs.delete(ResourceRef("agent", name), actor=actor)
+        await self._rs.delete(uid, actor=actor)

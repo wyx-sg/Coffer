@@ -116,8 +116,8 @@ to, and recalled by, every agent. Switching one off is the only gate, and it
 stops Coffer serving it anywhere.
 
 ```bash
-coffer resource disable memory:coffer
-coffer resource enable memory:coffer
+coffer resource disable memory coffer
+coffer resource enable memory coffer
 ```
 
 It used to carry a reach, defaulted to the agents it had been aggregated from —
@@ -136,7 +136,7 @@ so it runs the same lifecycle, audit and cascade as any other resource — and
 takes the directory with it:
 
 ```bash
-coffer resource delete memory:coffer
+coffer resource delete memory coffer
 ```
 
 Deleting it is safe in the sense that matters: the tree is derived, so the next
@@ -204,7 +204,7 @@ Claude Code or Codex rather than answering from the daemon. You can see exactly
 what an agent would get:
 
 ```bash
-coffer memory context --agent claude-code --cwd "$PWD"
+coffer memory context --agent-uid <agent uid> --cwd "$PWD"
 ```
 
 This is the same command the installed hook runs, which is why it fails
@@ -237,7 +237,7 @@ it already does; Coffer reads that on its next pass.
 Everything above is also `/api/v1/memory/*`, specified in
 [`contracts/api.openapi.yaml`](./contracts/api.openapi.yaml). Partition
 deletion is not among them: it is the kind-agnostic
-`DELETE /api/v1/resources/memory/{name}`.
+`DELETE /api/v1/resources/{uid}`.
 
 ## Switching the unattended passes off
 

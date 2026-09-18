@@ -44,7 +44,7 @@ def test_coffer_internal_errors_keep_their_message() -> None:
 
 
 def test_resource_not_found_keeps_message() -> None:
-    summary = _safe_error_summary(ResourceNotFound("mcp_server", "ghost"))
+    summary = _safe_error_summary(ResourceNotFound.named("mcp_server", "ghost"))
     assert "ResourceNotFound" in summary
     assert "ghost" in summary
 

@@ -52,7 +52,7 @@ from coffer.domain.agent.plugin_state import (
     set_codex_enabled,
 )
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
     AgentConfigParseError,
     PluginNotFound,
@@ -62,7 +62,7 @@ from coffer.domain.workspace_errors import (
 
 
 class _AgentLookup(Protocol):
-    async def get(self, name: str) -> Resource: ...
+    async def get(self, uid: str) -> Resource: ...
 
 
 def _empty() -> PluginsOut:
@@ -97,21 +97,24 @@ class AgentPluginService:
         # (Claude). When absent, CLI-strategy agents report can_uninstall=False.
         self._cli_runner = cli_runner
 
-    async def _config_for(self, name: str) -> AgentConfig:
-        resource = await self._agents.get(name)
-        return AgentConfig.model_validate(resource.config)
+    async def _agent(self, uid: str) -> tuple[Resource, AgentConfig]:
+        """The agent row and its parsed config — the row because the toggle and
+        uninstall paths audit against it, and ``AuditService.record`` takes the
+        resource rather than an identifier to look up again."""
+        resource = await self._agents.get(uid)
+        return resource, AgentConfig.model_validate(resource.config)
 
-    async def _capability(self, name: str) -> tuple[AgentConfig, PluginCapability | None]:
-        cfg = await self._config_for(name)
-        return cfg, descriptor_for(cfg.type).plugins
+    async def _capability(self, uid: str) -> tuple[Resource, AgentConfig, PluginCapability | None]:
+        agent, cfg = await self._agent(uid)
+        return agent, cfg, descriptor_for(cfg.type).plugins
 
     # ------------------------------------------------------------------
     # list_plugins
     # ------------------------------------------------------------------
 
-    async def list_plugins(self, name: str) -> PluginsOut:
-        """Return all plugins for the named agent with metadata."""
-        cfg, cap = await self._capability(name)
+    async def list_plugins(self, uid: str) -> PluginsOut:
+        """Return all plugins for the agent with metadata."""
+        _agent, cfg, cap = await self._capability(uid)
         if cap is None:
             return _empty()
         cfg_dir = cfg.resolved_config_dir()
@@ -231,10 +234,10 @@ class AgentPluginService:
     # ------------------------------------------------------------------
 
     async def set_enabled(
-        self, name: str, plugin_id: str, enabled: bool, *, actor: str = "api"
+        self, uid: str, plugin_id: str, enabled: bool, *, actor: str = "api"
     ) -> None:
         """Enable or disable a plugin by id."""
-        cfg, cap = await self._capability(name)
+        agent, cfg, cap = await self._capability(uid)
         if cap is None or not cap.can_toggle:
             raise PluginToggleUnsupported(cfg.type.value)
         spec_path = self._surface_path(cfg, cap)
@@ -261,7 +264,7 @@ class AgentPluginService:
 
         await self._audit.record(
             AuditEventType.AGENT_PLUGIN_TOGGLED.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"plugin": plugin_id, "enabled": enabled},
         )
@@ -270,7 +273,7 @@ class AgentPluginService:
     # uninstall
     # ------------------------------------------------------------------
 
-    async def uninstall(self, name: str, plugin_id: str, *, actor: str = "api") -> None:
+    async def uninstall(self, uid: str, plugin_id: str, *, actor: str = "api") -> None:
         """Remove a plugin entry (and, for Codex, its cache).
 
         Dispatches on the capability's uninstall strategy: CLI-strategy agents
@@ -278,7 +281,7 @@ class AgentPluginService:
         Coffer never hand-writes that agent's internal inventory — while the
         rest edit their documented config surface directly.
         """
-        cfg, cap = await self._capability(name)
+        agent, cfg, cap = await self._capability(uid)
         if cap is None or not cap.can_uninstall:
             raise PluginUninstallUnsupported(cfg.type.value)
 
@@ -287,7 +290,7 @@ class AgentPluginService:
                 cli_runner=self._cli_runner,
                 audit=self._audit,
                 agent_type=cfg.type.value,
-                name=name,
+                agent=agent,
                 plugin_id=plugin_id,
                 actor=actor,
             )
@@ -301,7 +304,7 @@ class AgentPluginService:
             audit=self._audit,
             dir_exists=self._dir_exists,
             rmtree=self._rmtree,
-            name=name,
+            agent=agent,
             plugin_id=plugin_id,
             spec_path=spec_path,
             cfg_dir=cfg_dir,

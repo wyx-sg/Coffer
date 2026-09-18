@@ -9,6 +9,12 @@ offering models only the CLI's own login can serve.
 The regression it guards: the channel ``/model`` card offered ``claude-opus-5``
 while every turn went to a gateway that has never heard of it, so tapping it
 failed the turn at the SDK.
+
+The agents are REGISTERED rows here rather than a hand-built list, which they
+did not have to be before: a connection's reach is a scope holding agent UIDS
+(ADR resource-identity-is-an-immutable-uid), so resolving that reach back into
+the agent TYPE this catalogue is asked about only works against a registry that
+actually holds the agents.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
+from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.kind import make_provider_kind
@@ -28,7 +35,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedModel, Protocol
 from coffer.domain.provider.modality import Modality
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.model_discovery import NativeConfigModelDiscovery
@@ -51,6 +58,10 @@ _CLI_MODELS = ["claude-opus-5", "claude-sonnet-5"]
 #: STORED, never read back out of its id.
 _GATEWAY_MODELS = ["agnes-2.5-pro-beta", "agnes-video-2.5"]
 
+#: The agents this vault holds, as a user names them — deliberately not the
+#: agent keys they map to, so nothing here can pass by comparing the two.
+_AGENTS = {AgentType.CLAUDE_CODE: "claude-code", AgentType.CODEX: "codex-cli"}
+
 
 def _text(*ids: str) -> list[CuratedModel]:
     """Curated chat entries — the kind a set holds unless a test says otherwise."""
@@ -71,27 +82,26 @@ class _DictStore:
         self._d.pop(ref, None)
 
 
-class _FakeAgents:
-    """The agent registry, narrowed to what both services ask of it."""
+class _RegisteredAgents:
+    """The agent registry, narrowed to what both services ask of it.
 
-    def __init__(self, resources: list[Resource]) -> None:
+    Backed by the real resource table rather than a fixed list: the uids a
+    connection's scope names are minted at registration, so the only registry
+    that can answer for them is the one that minted them.
+    """
+
+    def __init__(self, resources: ResourceService) -> None:
         self._resources = resources
 
     async def list(self) -> list[Resource]:
-        return list(self._resources)
+        return await self._resources.list(kind="agent")
 
 
-def _agent_resource(config_dir: pathlib.Path, agent_type: str) -> Resource:
-    return Resource(
-        id=1,
-        kind="agent",
-        name=agent_type,
-        description=None,
-        config={"type": agent_type, "config_dir": str(config_dir)},
-        enabled=True,
-        created_at=_NOW,
-        updated_at=_NOW,
-    )
+class _NoAgents:
+    """An empty registry, for the projector only — see the fixture."""
+
+    async def list(self) -> list[Resource]:
+        return []
 
 
 class _Env:
@@ -100,10 +110,13 @@ class _Env:
         providers: ProviderService,
         catalogue: AgentModelCatalogueService,
         resources: ResourceService,
+        agent_uids: dict[AgentType, str],
     ) -> None:
         self.providers = providers
         self.catalogue = catalogue
         self.resources = resources
+        #: Each agent type's registered uid — what a scope is written in.
+        self.agent_uids = agent_uids
 
 
 @pytest.fixture()
@@ -125,29 +138,52 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
     sm = session_maker(engine)
     store = _DictStore()
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    agents = _FakeAgents([_agent_resource(config_dir, "claude_code")])
     resources = ResourceService(
-        kinds={"provider": make_provider_kind()},
+        kinds={"provider": make_provider_kind(), "agent": make_agent_kind()},
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
         credentials=store,
     )
+    # One agent per type, registered through the service (the agent kind
+    # refuses the generic create path) so each has a real uid to be scoped by.
+    # Only Claude Code's config dir is the one seeded above: Codex's catalogue
+    # is never the thing under test, only what an active connection does to it.
+    agent_uids: dict[AgentType, str] = {}
+    for agent_type, agent_name in _AGENTS.items():
+        dir_of = config_dir if agent_type is AgentType.CLAUDE_CODE else tmp_path / agent_name
+        dir_of.mkdir(exist_ok=True)
+        registered = await resources.register(
+            kind="agent",
+            name=agent_name,
+            config={"type": agent_type.value, "config_dir": str(dir_of)},
+            actor="test",
+            allow_lifecycle_kind=True,
+        )
+        agent_uids[agent_type] = registered.uid
     providers = ProviderService(
         resources=resources,
         credentials=store,
         config_store=ConfigFileStore(),
-        agents=_FakeAgents([]),  # nothing to project into: this test reads, not writes
+        # Nothing to project into: this test reads, not writes. The registry
+        # handed here decides only which agents' native config files a switch
+        # writes — the catalogue resolves a connection's REACH through the real
+        # resource table (``_ActiveProviderModels`` below), which is the seam
+        # under test.
+        agents=_NoAgents(),
         audit=audit,
     )
     set_provider_service(providers)
     yield _Env(
         providers,
         AgentModelCatalogueService(
-            agents=agents,
+            agents=_RegisteredAgents(resources),
             discovery=NativeConfigModelDiscovery(),
-            provider_models=_ActiveProviderModels(),
+            # A connection's reach names agent uids, so turning it back into an
+            # agent type is a registry read — a plain dependency of the adapter.
+            provider_models=_ActiveProviderModels(resources=resources),
         ),
         resources,
+        agent_uids,
     )
     set_provider_service(None)
     await engine.dispose()
@@ -156,7 +192,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
 async def _gateway(
     env: _Env, *, models: list[CuratedModel], agents: list[AgentType], name: str = "agnes"
 ) -> None:
-    await env.providers.create(
+    connection = await env.providers.create(
         name,
         protocol=Protocol.OPENAI,
         base_url="https://agnes.example.test/v1",
@@ -164,13 +200,15 @@ async def _gateway(
         models=models,
     )
     # Which agents a connection reaches is its framework scope now, not a
-    # create argument (ADR per-agent-resource-scope).
+    # create argument (ADR per-agent-resource-scope) — and the scope names them
+    # by uid, not by agent type (ADR resource-identity-is-an-immutable-uid), so
+    # the types a test reads at are resolved through the registered rows.
     await env.resources.update_scope(
-        ResourceRef("provider", name),
-        Scope(agents=[a.value for a in agents]),
+        connection.uid,
+        Scope(agents=[env.agent_uids[a] for a in agents]),
         actor="test",
     )
-    await env.providers.activate(name)
+    await env.providers.activate(connection.uid)
 
 
 async def test_without_a_provider_the_agent_s_own_models_are_offered(env: _Env) -> None:

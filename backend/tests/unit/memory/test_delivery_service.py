@@ -30,8 +30,14 @@ _NOW = datetime(2026, 1, 1, tzinfo=UTC)
 _CLAUDE_CONFIG_DIR = pathlib.Path("/fake/home/.claude")
 _CODEX_CONFIG_DIR = pathlib.Path("/fake/home/.codex")
 
+#: The uids the tests address the two agents by. Opaque on purpose: nothing in
+#: this module may work because a uid happens to look like its agent's name.
+_CC_UID = "9f3c1b0a4d5e4f7b8c1d2e3f40516273"
+_CODEX_UID = "1a2b3c4d5e6f708192a3b4c5d6e7f809"
+
 _CLAUDE_RESOURCE = Resource(
     id=1,
+    uid=_CC_UID,
     kind="agent",
     name="cc",
     description=None,
@@ -43,6 +49,7 @@ _CLAUDE_RESOURCE = Resource(
 
 _CODEX_RESOURCE = Resource(
     id=2,
+    uid=_CODEX_UID,
     kind="agent",
     name="codex",
     description=None,
@@ -54,17 +61,19 @@ _CODEX_RESOURCE = Resource(
 
 
 class FakeAgentLookup:
-    def __init__(self, resources: list[Resource]) -> None:
-        self._by_name = {r.name: r for r in resources}
+    """Keyed by uid, like the real agent service: a name gets you nothing."""
 
-    async def get(self, name: str) -> Resource:
+    def __init__(self, resources: list[Resource]) -> None:
+        self._by_uid = {r.uid: r for r in resources}
+
+    async def get(self, uid: str) -> Resource:
         try:
-            return self._by_name[name]
+            return self._by_uid[uid]
         except KeyError:
-            raise ResourceNotFound("agent", name) from None
+            raise ResourceNotFound(uid) from None
 
     async def list(self) -> list[Resource]:
-        return list(self._by_name.values())
+        return list(self._by_uid.values())
 
 
 @dataclass
@@ -143,7 +152,7 @@ _CODEX_HOOKS_PATH = _CODEX_CONFIG_DIR / "hooks.json"
 async def test_install_adds_one_marker_scoped_entry_to_an_empty_config(
     svc: DeliveryService, store: FakeStore
 ) -> None:
-    status = await svc.install("cc", actor="tester")
+    status = await svc.install(_CC_UID, actor="tester")
 
     assert status.installed is True
     assert status.event == "SessionStart"
@@ -157,8 +166,8 @@ async def test_install_adds_one_marker_scoped_entry_to_an_empty_config(
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
 async def test_install_is_idempotent(svc: DeliveryService, store: FakeStore) -> None:
-    await svc.install("cc", actor="tester")
-    await svc.install("cc", actor="tester")
+    await svc.install(_CC_UID, actor="tester")
+    await svc.install(_CC_UID, actor="tester")
 
     written = json.loads(store._files[_CC_SETTINGS_PATH])
     assert len(written["hooks"]["SessionStart"]) == 1
@@ -186,7 +195,7 @@ async def test_install_into_a_config_holding_foreign_hooks_leaves_them_untouched
     }
     store._files[_CC_SETTINGS_PATH] = json.dumps(foreign)
 
-    await svc.install("cc", actor="tester")
+    await svc.install(_CC_UID, actor="tester")
 
     written = json.loads(store._files[_CC_SETTINGS_PATH])
     assert written["env"] == {}
@@ -197,10 +206,32 @@ async def test_install_into_a_config_holding_foreign_hooks_leaves_them_untouched
     assert len(written["hooks"]["SessionStart"]) == 1
 
 
+@pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
+async def test_the_installed_command_names_the_agent_by_uid_not_by_name(
+    svc: DeliveryService, store: FakeStore
+) -> None:
+    """The hook outlives every rename the agent will ever have.
+
+    An installed entry sits in somebody else's settings file for months. If it
+    spelled the agent's registry name, renaming the agent would leave a hook
+    reporting a name nothing answers to — and with no name fallback on the
+    reading side, a session that silently delivered no memory. So the command
+    carries the uid, and the agent's name appears nowhere in it.
+    """
+    status = await svc.install(_CC_UID, actor="tester")
+
+    assert f"--agent-uid {_CC_UID}" in status.command
+    assert "--agent " not in status.command
+    assert "cc" not in status.command.replace(_CC_UID, "")
+
+    written = json.loads(store._files[_CC_SETTINGS_PATH])
+    assert written["hooks"]["SessionStart"][0]["hooks"][0]["command"] == status.command
+
+
 async def test_install_records_an_audit_event_with_the_actor(
     svc: DeliveryService, audit: AuditService
 ) -> None:
-    await svc.install("cc", actor="alice")
+    await svc.install(_CC_UID, actor="alice")
     repo: FakeAuditRepo = audit._repo  # type: ignore[attr-defined]
     assert len(repo.entries) == 1
     entry = repo.entries[0]
@@ -223,7 +254,7 @@ async def test_install_for_codex_writes_a_guarded_entry_into_hooks_json(
     a once-per-session lock-file guard keyed on the invoking process. Without
     the guard, Coffer's context would be prepended to every single prompt.
     """
-    status = await svc.install("codex", actor="tester")
+    status = await svc.install(_CODEX_UID, actor="tester")
 
     assert [path for path, _ in store.writes] == [_CODEX_HOOKS_PATH]
     assert _CC_SETTINGS_PATH not in store._files
@@ -242,7 +273,7 @@ async def test_install_for_codex_writes_a_guarded_entry_into_hooks_json(
 
 
 async def test_status_never_writes(svc: DeliveryService, store: FakeStore) -> None:
-    await svc.status("cc")
+    await svc.status(_CC_UID)
     assert store.writes == []
 
 
@@ -259,9 +290,9 @@ async def test_remove_takes_out_only_coffers_entry(svc: DeliveryService, store: 
         }
     }
     store._files[_CC_SETTINGS_PATH] = json.dumps(foreign)
-    await svc.install("cc", actor="tester")
+    await svc.install(_CC_UID, actor="tester")
 
-    status = await svc.remove("cc", actor="tester")
+    status = await svc.remove(_CC_UID, actor="tester")
 
     assert status.installed is False
     written = json.loads(store._files[_CC_SETTINGS_PATH])
@@ -272,7 +303,7 @@ async def test_remove_takes_out_only_coffers_entry(svc: DeliveryService, store: 
 async def test_remove_with_nothing_installed_is_a_clean_no_op(
     svc: DeliveryService, store: FakeStore, audit: AuditService
 ) -> None:
-    status = await svc.remove("cc", actor="tester")
+    status = await svc.remove(_CC_UID, actor="tester")
 
     assert status.installed is False
     assert store.writes == []
@@ -281,8 +312,8 @@ async def test_remove_with_nothing_installed_is_a_clean_no_op(
 
 
 async def test_remove_records_an_audit_event(svc: DeliveryService, audit: AuditService) -> None:
-    await svc.install("codex", actor="tester")
-    await svc.remove("codex", actor="bob")
+    await svc.install(_CODEX_UID, actor="tester")
+    await svc.remove(_CODEX_UID, actor="bob")
     repo: FakeAuditRepo = audit._repo  # type: ignore[attr-defined]
     event_types = [e.event_type for e in repo.entries]
     assert AuditEventType.MEMORY_DELIVERY_REMOVED.value in event_types
@@ -298,15 +329,17 @@ async def test_remove_records_an_audit_event(svc: DeliveryService, audit: AuditS
 
 
 async def test_status_reports_not_installed_for_a_fresh_agent(svc: DeliveryService) -> None:
-    (status,) = await svc.status("cc")
+    (status,) = await svc.status(_CC_UID)
     assert status.installed is False
-    assert status.agent == "cc"
+    assert status.agent_uid == _CC_UID
+    # The label travels beside the identity so a surface has something to show.
+    assert status.agent_name == "cc"
     assert status.event == "SessionStart"
 
 
 async def test_status_reports_installed_after_install(svc: DeliveryService) -> None:
-    await svc.install("codex", actor="tester")
-    (status,) = await svc.status("codex")
+    await svc.install(_CODEX_UID, actor="tester")
+    (status,) = await svc.status(_CODEX_UID)
     assert status.installed is True
     assert status.event == "UserPromptSubmit"
 
@@ -314,12 +347,12 @@ async def test_status_reports_installed_after_install(svc: DeliveryService) -> N
 async def test_status_with_no_agent_reports_every_registered_agent(
     svc: DeliveryService,
 ) -> None:
-    await svc.install("cc", actor="tester")
+    await svc.install(_CC_UID, actor="tester")
     statuses = await svc.status()
-    by_agent = {s.agent: s for s in statuses}
-    assert set(by_agent) == {"cc", "codex"}
-    assert by_agent["cc"].installed is True
-    assert by_agent["codex"].installed is False
+    by_agent = {s.agent_uid: s for s in statuses}
+    assert set(by_agent) == {_CC_UID, _CODEX_UID}
+    assert by_agent[_CC_UID].installed is True
+    assert by_agent[_CODEX_UID].installed is False
 
 
 # ---------------------------------------------------------------------------
@@ -333,7 +366,7 @@ async def test_record_fired_writes_one_audit_entry_naming_the_agent(
 ) -> None:
     repo: FakeAuditRepo = audit._repo  # type: ignore[attr-defined]
 
-    await svc.record_fired("cc")
+    await svc.record_fired(_CC_UID)
 
     fires = [e for e in repo.entries if e.event_type == AuditEventType.MEMORY_DELIVERY_FIRED.value]
     assert len(fires) == 1
@@ -343,8 +376,8 @@ async def test_record_fired_writes_one_audit_entry_naming_the_agent(
 
 
 async def test_record_fired_does_not_affect_installed_state(svc: DeliveryService) -> None:
-    await svc.record_fired("cc")
-    (status,) = await svc.status("cc")
+    await svc.record_fired(_CC_UID)
+    (status,) = await svc.status(_CC_UID)
     assert status.installed is False
 
 
@@ -353,8 +386,8 @@ async def test_neither_install_nor_status_records_a_fire(
 ) -> None:
     repo: FakeAuditRepo = audit._repo  # type: ignore[attr-defined]
 
-    await svc.install("cc", actor="tester")
-    await svc.status("cc")
+    await svc.install(_CC_UID, actor="tester")
+    await svc.status(_CC_UID)
 
     assert not [
         e for e in repo.entries if e.event_type == AuditEventType.MEMORY_DELIVERY_FIRED.value
@@ -372,7 +405,7 @@ async def test_malformed_config_fails_loudly_with_the_path(
     store._files[_CC_SETTINGS_PATH] = "{not valid json"
 
     with pytest.raises(MalformedDeliveryConfig) as exc_info:
-        await svc.install("cc", actor="tester")
+        await svc.install(_CC_UID, actor="tester")
 
     assert str(_CC_SETTINGS_PATH) in str(exc_info.value)
     # The broken file is never touched.
@@ -381,4 +414,4 @@ async def test_malformed_config_fails_loudly_with_the_path(
 
 async def test_unknown_agent_raises_resource_not_found(svc: DeliveryService) -> None:
     with pytest.raises(ResourceNotFound):
-        await svc.install("does-not-exist", actor="tester")
+        await svc.install("00000000000000000000000000000000", actor="tester")

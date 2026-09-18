@@ -38,13 +38,27 @@ def suggested_remedy(kind: DriftKind) -> str:
 
 @dataclass
 class DriftEntry:
-    """One row in the drift report."""
+    """One row in the drift report.
+
+    Carries both the labels a person reads and the uids a repair addresses.
+    They are not two spellings of one thing: the names are what the report
+    SAYS, and the uids are what ``repair_drift`` re-delivers against, so a
+    skill renamed between the verify pass and the repair pass is still the
+    skill that gets repaired (ADR resource-identity-is-an-immutable-uid).
+
+    Both uids are ``None`` for an ORPHAN_MASTER entry, which is a folder on
+    disk that no resource row claims — there is no identity to record, and
+    nothing for a repair to address, which is why ``repair_drift`` skips that
+    kind outright.
+    """
 
     skill_name: str
     agent_name: str
     kind: DriftKind
     target_path: str
     suggested_remedy: str
+    skill_uid: str | None = None
+    agent_uid: str | None = None
 
 
 @dataclass

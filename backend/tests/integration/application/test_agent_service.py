@@ -125,11 +125,11 @@ async def test_update_config_dir(agent_bundle, tmp_path):
     new = tmp_path / "new"
     old.mkdir()
     new.mkdir()
-    await agent_bundle.svc.register(
+    agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX, name="a", config_dir=str(old), actor="cli"
     )
     updated = await agent_bundle.svc.update_config_dir(
-        name="a", new_config_dir=str(new), actor="cli"
+        uid=agent.uid, new_config_dir=str(new), actor="cli"
     )
     assert updated.config["config_dir"] == str(new)
     # The new config dir's skills subdir is auto-created on update.
@@ -141,12 +141,12 @@ async def test_update_config_dir(agent_bundle, tmp_path):
 async def test_update_config_dir_description_only(agent_bundle, tmp_path):
     """TEST25-108: a description-only change does not mutate config_dir.
 
-    Calling `update_config_dir(name, new_config_dir=current, description=new)`
+    Calling `update_config_dir(uid, new_config_dir=current, description=new)`
     is the service-layer counterpart of the HTTP PATCH-description-only route.
     """
     old = tmp_path / "old"
     old.mkdir()
-    await agent_bundle.svc.register(
+    agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="a",
         config_dir=str(old),
@@ -154,7 +154,7 @@ async def test_update_config_dir_description_only(agent_bundle, tmp_path):
         actor="cli",
     )
     updated = await agent_bundle.svc.update_config_dir(
-        name="a",
+        uid=agent.uid,
         new_config_dir=str(old),  # unchanged
         actor="cli",
         description="after",
@@ -174,13 +174,13 @@ async def test_remove_deletes_agent(agent_bundle, tmp_path):
     permanent — the next scan re-surfaces it as a candidate (no suppression)."""
     custom = tmp_path / "cfg"
     custom.mkdir()
-    await agent_bundle.svc.register(
+    agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="cur",
         config_dir=str(custom),
         actor="system",
     )
-    await agent_bundle.svc.remove(name="cur", actor="cli")
+    await agent_bundle.svc.remove(uid=agent.uid, actor="cli")
     assert (await agent_bundle.svc.list()) == []
     rows = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_DELETED.value)
     assert len(rows) == 1
@@ -248,13 +248,13 @@ async def test_discover_re_surfaces_removed_agent(agent_bundle, tmp_path, monkey
     (tmp_path / ".codex").mkdir()
     custom = tmp_path / "cfg"
     custom.mkdir()
-    await agent_bundle.svc.register(
+    agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX,
         name="x",
         config_dir=str(custom),
         actor="system",
     )
-    await agent_bundle.svc.remove(name="x", actor="cli")
+    await agent_bundle.svc.remove(uid=agent.uid, actor="cli")
 
     candidates = await agent_bundle.detect.discover()
     assert "codex" in [c.type.value for c in candidates]
@@ -388,12 +388,12 @@ async def test_update_config_dir_invalid_raises_config_validation_error(agent_bu
 
     custom = tmp_path / "cfg"
     custom.mkdir()
-    await agent_bundle.svc.register(
+    agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX, name="a", config_dir=str(custom), actor="cli"
     )
     with pytest.raises(ConfigValidationError):
         await agent_bundle.svc.update_config_dir(
-            name="a", new_config_dir="relative/path", actor="cli"
+            uid=agent.uid, new_config_dir="relative/path", actor="cli"
         )
 
 
@@ -408,13 +408,13 @@ async def test_audit_records_lifecycle_events(agent_bundle, tmp_path):
     custom.mkdir()
     new = tmp_path / "cfg2"
     new.mkdir()
-    await agent_bundle.svc.register(
+    agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX, name="a", config_dir=str(custom), actor="cli"
     )
     # Agents have no enable/disable concept — the lifecycle is create, update,
     # remove (each via the kind-agnostic resource_* events).
-    await agent_bundle.svc.update_config_dir(name="a", new_config_dir=str(new), actor="cli")
-    await agent_bundle.svc.remove(name="a", actor="cli")
+    await agent_bundle.svc.update_config_dir(uid=agent.uid, new_config_dir=str(new), actor="cli")
+    await agent_bundle.svc.remove(uid=agent.uid, actor="cli")
 
     created = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_CREATED.value)
     updated = await agent_bundle.audit.query(event_type=AuditEventType.RESOURCE_UPDATED.value)

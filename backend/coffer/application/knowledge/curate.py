@@ -43,9 +43,8 @@ from coffer.application.knowledge.curate_tools import (
     build_tools,
     topic_count,
 )
-from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
+from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.knowledge import catalogue, fs, paths
 
 if TYPE_CHECKING:
@@ -142,7 +141,7 @@ def _brief(
 
 async def run_curation(
     service: KnowledgeService,
-    collection: str,
+    collection_uid: str,
     *,
     source_relpath: str | None = None,
     actor: str = "system",
@@ -152,16 +151,26 @@ async def run_curation(
     recursion_limit: int = DEFAULT_CURATION_RECURSION_LIMIT,
     read_timeout: TimeoutReader | None = None,
 ) -> dict[str, Any]:
-    """Fold one pending source into ``collection``'s topic documents.
+    """Fold one pending source into the topic documents of one collection.
+
+    The collection is named by its **uid**, resolved once here. A pass takes
+    minutes and rewrites a corpus, so the thing it is aimed at has to be the
+    thing that cannot change underneath it: the label is read off the row and
+    used to build paths, and the row itself is what the audit event is tied to.
 
     ``status`` is ``no_model`` with no internal connection configured,
     ``up_to_date`` when every source has already been curated, ``too_large``
     for a source past :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop
     raised, and ``ok`` otherwise. Only ``ok`` writes the watermark.
+
+    Every outcome carries ``collection`` as the collection's NAME, because the
+    dict is what a surface renders and a person reads a pass's report by the
+    name they gave the collection, not by its identity.
     """
-    # Raises CollectionNotFound for a name that is not an enabled collection,
-    # which is what the HTTP route turns into a 404.
-    await service.require_enabled(collection)
+    # Raises ResourceNotFound for an unknown uid and CollectionNotFound for a
+    # disabled row — the two answers the HTTP route turns into a 404.
+    row = await service.collection(collection_uid)
+    collection = row.name
 
     model = await models.get_default()
     if model is None:
@@ -239,7 +248,7 @@ async def run_curation(
     with contextlib.suppress(Exception):
         await service._audit.record(
             AuditEventType.KNOWLEDGE_CURATED.value,
-            ref=ResourceRef(KIND_KNOWLEDGE, collection),
+            resource=row,
             actor=actor,
             details={
                 k: result[k]
@@ -253,7 +262,7 @@ class CurationPass:
     """``run_curation`` with its ports bound — the callable surfaces register.
 
     The HTTP route and the background worker both hold one of these and call
-    it as ``pass_(service, collection, actor=...)``, so neither has to know
+    it as ``pass_(service, collection_uid, actor=...)``, so neither has to know
     that a model port exists.
     """
 
@@ -281,14 +290,14 @@ class CurationPass:
     async def __call__(
         self,
         service: KnowledgeService,
-        collection: str,
+        collection_uid: str,
         *,
         source_relpath: str | None = None,
         actor: str = "system",
     ) -> dict[str, Any]:
         outcome = await run_curation(
             service,
-            collection,
+            collection_uid,
             source_relpath=source_relpath,
             actor=actor,
             agent=self._agent,

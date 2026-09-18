@@ -18,7 +18,7 @@ model is chosen at the point of use.
 |---|---|---|
 | `protocol` | `Protocol` | Required. `"anthropic"`, `"openai"`, `"ollama"` or `"unknown"`. The wire the endpoint speaks: it drives model introspection and whether a key is required, and supplies the scope a new connection STARTS with. It is not a projection gate — that is the resource's scope. Mutable (the probe that guessed it can be wrong). |
 | `base_url` | `str` | Required, non-blank (trimmed); the upstream endpoint. |
-| `credential_ref` | `str \| None` | Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`, conventionally `provider/<name>/key`; several connections MAY share one. Required for `anthropic` / `openai` / `unknown`; MUST be absent for `ollama`, which has no key. Immutable once set. |
+| `credential_ref` | `str \| None` | Fernet vault ref matching `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`, minted opaquely as `provider/<uuid4>/key`; several connections MAY share one. Required for `anthropic` / `openai` / `unknown`; MUST be absent for `ollama`, which has no key. Immutable once set. |
 | `models` | `list[CuratedModel]` | The curated set of models this connection OFFERS downstream. Default `[]` = no restriction (the endpoint's whole catalogue). Shape-validated only: non-blank ids, deduplicated by id preserving order, at most 200 ids of at most 200 characters. Ids are opaque and passed verbatim to the vendor — never checked against a list Coffer holds. Not a chosen model. |
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `is_active` | `bool` | At most one `True` per AGENT TYPE at any time, enforced by the switch op. It records that this connection is the one currently written INTO the agents it reaches — a claim about a file Coffer does not own, which is why the boot self-check exists. Always `False` for `ollama`, which projects into nothing. |
@@ -100,12 +100,13 @@ text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
   and its inverse `remove_codex_provider(text, *, provider_id) -> str`
 - `codex_model_catalog_json(models) -> str | None` — the catalogue document, or
   `None` when there is nothing honest to write; `codex_model_catalog_path(dir)`
-- `anthropic_api_key_helper(connection) -> str` — the only helper Coffer writes
+- `anthropic_api_key_helper(connection_uid) -> str` — the only helper Coffer
+  writes; it cites the connection's uid, so the line survives a rename
 - `ProjectionTarget`, `target_for(protocol)`, `target_for_agent(agent_type)`,
   `wire_for_agent(agent_type)`
 - Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `CODEX_MODEL_CATALOG_FILENAME`,
   `CODEX_MODEL_CATALOG_KEY`, `CODEX_CATALOG_TRUNCATION_LIMIT`,
-  `MANAGED_API_KEY_HELPER_PREFIX`, `ANTHROPIC_API_KEY_HELPER`
+  `MANAGED_API_KEY_HELPER_PREFIX`
 
 `CODEX_ENV_KEY` is re-exported from `domain/connection.py`, where it lives so
 the provider kind and the chat kind's Codex adapter can agree on the variable
@@ -122,7 +123,7 @@ is preserved, and the projection tests assert exactly this set.
 
 | Managed key path | Source |
 |---|---|
-| `apiKeyHelper` | `"coffer provider key --connection <name>"` |
+| `apiKeyHelper` | `"coffer provider key --connection-uid <uid>"` — the connection's immutable uid, so the line survives a rename |
 | `env.ANTHROPIC_BASE_URL` | the connection's `base_url` |
 | `env.ANTHROPIC_MODEL` | the AGENT binding's `model` (key removed when unbound) |
 | `env.ANTHROPIC_SMALL_FAST_MODEL` | the agent binding's `fast_model` (key removed when unset) |
@@ -138,7 +139,7 @@ De-projection removes an `apiKeyHelper` only when it starts with
 | `model` | the agent binding's `model` (key removed when unbound) |
 | `model_provider` | `"coffer"` |
 | `model_catalog_json` | the absolute path of the Coffer-owned catalogue, written only while the connection curates `text` models; dropped otherwise |
-| `model_providers.coffer.name` | `f"Coffer ({name})"` |
+| `model_providers.coffer.name` | `f"Coffer ({name})"` — deliberately the readable label, since nothing resolves it; it goes cosmetically stale after a rename until the next projection |
 | `model_providers.coffer.base_url` | the connection's `base_url` |
 | `model_providers.coffer.wire_api` | the agent binding's `wire_api`, defaulting to `"responses"` |
 | `model_providers.coffer.env_key` | `"COFFER_PROVIDER_KEY"` |
@@ -260,9 +261,9 @@ curated set, `0063` took it back off, and `0061` forced the agent binding's
 
 | Value | When emitted |
 |---|---|
-| `provider_switched` | a successful `POST /providers/{name}/activate` or `POST /providers/use-builtin/{wire}`; details `{from, to, protocol, agents}` |
-| `provider_internal_default_set` | a successful `POST /providers/{name}/internal-default`; details `{from, to}` |
-| `provider_transcribe_default_set` | a successful `PUT /providers/{name}/transcribe-default`; details `{from, to}` |
+| `provider_switched` | a successful `POST /providers/{uid}/activate` or `POST /providers/use-builtin/{wire}`; details `{from, to, protocol, agents}` |
+| `provider_internal_default_set` | a successful `POST /providers/{uid}/internal-default`; details `{from, to}` |
+| `provider_transcribe_default_set` | a successful `POST /providers/{uid}/transcribe-default`; details `{from, to}` |
 | `provider_projection_refused` | a native-config write refused because the file changed under Coffer |
 
 `resource_created` / `resource_updated` / `resource_deleted` / `resource_renamed`
@@ -277,19 +278,24 @@ kind declares no redactor because its config holds no secret).
 | Method | Purpose |
 |---|---|
 | `create(...) -> Resource` | Validate the credential source (exactly one, or neither for ollama); store the secret; register the resource with the wire's default scope. |
-| `list()` / `get(name)` | The rows, as the surfaces read them. |
-| `update(name, patch, secret_value?)` | Partial update; rotates the vault entry when a secret is supplied. |
-| `delete(name)` | Guard the owned credential via `find_credential_citations`, remove it when unowned elsewhere, delete the resource. |
-| `rename(name, new_name)` | The row, the owned vault entry, the audit trail and any live projection, together. |
-| `activate(name) -> ActivateResult` | Clear-then-set for the per-agent-type invariant; project into every agent the scope reaches; de-project the agents the previous connection covered and this one does not; emit `provider_switched`. |
+| `list()` / `get(uid)` | The rows, as the surfaces read them. |
+| `update(uid, patch, secret_value?)` | Partial update; rotates the vault entry when a secret is supplied. |
+| `delete(uid)` | Guard the owned credential via `find_credential_citations`, remove it when unowned elsewhere, delete the resource. |
+| `activate(uid) -> ActivateResult` | Clear-then-set for the per-agent-type invariant; project into every agent the scope reaches; de-project the agents the previous connection covered and this one does not; emit `provider_switched`. |
 | `deactivate(wire) -> DeactivateResult` | Revert the agent behind that wire to its built-in login; idempotent. |
-| `resolve_connection_key(name) -> str` | The named connection's key — what the projected `apiKeyHelper` calls. |
+| `resolve_connection_key(uid) -> str` | That connection's key — what the projected `apiKeyHelper` calls, by uid. |
 | `resolve_active_key_for_agent(agent_type) -> str` | The key of the connection active for that agent (what Codex's env var is filled from). |
 | `resolve_active_key(wire) -> str` | The legacy wire-keyed form, resolving through the wire's agent. |
-| `set_internal_default(name) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
-| `set_transcribe_default(name) -> Resource` | The global speech-to-text flag, the same three steps against its own field and its own event. Independent of the one above. |
+| `set_internal_default(uid) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
+| `set_transcribe_default(uid) -> Resource` | The global speech-to-text flag, the same three steps against its own field and its own event. Independent of the one above. |
 
 Decrypted values are returned to the caller and never logged.
+
+There is deliberately no `rename` here. It was this kind's alone, and it existed
+because the connection's NAME was written into another tool's config file; the
+helper carries the uid now, so renaming is `ResourceService.rename` — the same
+label edit every kind gets
+([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
 
 ### Results (`application/provider/results.py`)
 

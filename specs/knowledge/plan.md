@@ -157,10 +157,10 @@ frontend/src/
   own tools, and deletion is a person's action.
 - **HTTP — eight operations** under `/api/v1/knowledge`: `GET`/`POST
   /collections`, `GET /tree`, `GET`/`PUT`/`DELETE /file`, `POST /upload`, and
-  `POST /collections/{name}/curate`. The lane is part of the path a `tree` call
+  `POST /collections/{uid}/curate`. The lane is part of the path a `tree` call
   asks for, so the page asks twice rather than the route inventing a lane
   parameter. Deleting a collection goes through
-  `DELETE /api/v1/resources/knowledge/{name}` — a collection's lifecycle is a
+  `DELETE /api/v1/resources/{uid}` — a collection's lifecycle is a
   Resource's. See [`contracts/api.openapi.yaml`](./contracts/api.openapi.yaml).
 - **CLI — eight commands**: `collections`, `create`, `ls`, `read`, `write`,
   `delete`, `upload`, `curate`. There is deliberately no `grep` and no `search`:

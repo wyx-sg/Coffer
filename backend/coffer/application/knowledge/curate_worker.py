@@ -49,6 +49,11 @@ MAX_PASSES_PER_SWEEP = 5
 CurateCallable = Callable[..., Awaitable[dict[str, object]]]
 DeliverCallable = Callable[[], Awaitable[int]]
 EnabledCheck = Callable[[], Awaitable[bool]]
+#: Yields the **uids** of the collections to sweep. Uids rather than names
+#: because a pass takes minutes and rewrites a corpus: the sweep has to keep
+#: naming the same collection across one, and a label can be edited while it
+#: runs. It is also what the page's Curate button sends, so the claim below and
+#: the route's claim are keyed on the same value without either translating.
 CollectionLister = Callable[[], Awaitable[list[str]]]
 
 
@@ -131,28 +136,37 @@ class CurationWorker:
             await self._sweep()
 
     async def _sweep(self) -> None:
-        for collection in await self._list_collections():
+        for uid in await self._list_collections():
             try:
-                await self._drain(collection)
+                await self._drain(uid)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 # One collection failing must not skip the rest.
                 logger.warning(
                     "knowledge.curate_worker.collection_failed",
-                    extra={"collection": collection},
+                    extra={"collection_uid": uid},
                     exc_info=True,
                 )
 
-    async def _drain(self, collection: str) -> None:
-        """Up to ``max_passes`` sources of one collection, one pass each."""
+    async def _drain(self, uid: str) -> None:
+        """Up to ``max_passes`` sources of one collection, one pass each.
+
+        The collection is held as a uid and the *name* is read off its row,
+        once, because the name is only ever wanted for one thing here: it is
+        the directory ``pending_sources`` walks. The pass itself is handed the
+        uid and resolves the row again on its own — a second cheap lookup, in
+        exchange for a pass that cannot be aimed at a collection by a label
+        this worker read some seconds earlier.
+        """
+        collection = (await self._service.collection(uid)).name
         if not await asyncio.to_thread(fs.pending_sources, collection):
             return
         # Skip, never queue: a collection someone is already curating by hand
         # does not need a second pass behind the first, and the next sweep
         # comes round to it anyway. Busy is an ordinary state of a collection,
         # so it is not logged as a failure.
-        async with self._runs.claimed(KIND_KNOWLEDGE, collection) as claimed:
+        async with self._runs.claimed(KIND_KNOWLEDGE, uid) as claimed:
             if not claimed:
                 logger.debug(
                     "knowledge.curate_worker.collection_busy",
@@ -167,7 +181,7 @@ class CurationWorker:
             pending = await asyncio.to_thread(fs.pending_sources, collection)
             for relpath in pending[: self._max_passes]:
                 outcome = await self._curate(
-                    self._service, collection, source_relpath=relpath, actor="system"
+                    self._service, uid, source_relpath=relpath, actor="system"
                 )
                 status = str(outcome.get("status", ""))
                 if status in {"no_model", "failed"}:

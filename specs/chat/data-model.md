@@ -19,7 +19,7 @@ credential, and they are created by a message rather than by registration.
 | `created_at` | TIMESTAMP | |
 | `updated_at` | TIMESTAMP | Bumped at turn **start** and again at turn **finalise** (FR-014). |
 | `archived_at` | TIMESTAMP, NULL | NULL = active. Set by the owner or by the auto-archive stage (FR-016). |
-| `channel_name` | TEXT, NULL | Return address: the channel this thread is also reachable on. "Has a binding" iff set. |
+| `channel_uid` | TEXT, NULL | Return address: the **uid** of the channel this thread is also reachable on. "Has a binding" iff set. A uid and not a name, because a binding has to keep naming the same channel after the user renames it (ADR resource-identity-is-an-immutable-uid); the label a person or an agent reads is resolved from it at read time. |
 | `peer_chat_id` | TEXT, NULL | The chat id that return address aims at. |
 
 Indexes: `idx_conversations_updated (updated_at)` — the recency ordering of

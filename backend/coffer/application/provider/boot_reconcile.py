@@ -105,7 +105,7 @@ class ProviderProjectionBootHeal:
         """
         notes: list[str] = []
         agents = await self._enabled_agents()
-        active = await self._active_by_agent_type()
+        active = await self._active_by_agent_type(agents)
         for agent_type, connection in active.items():
             registered = ProviderProjector.agents_of_type(agents, agent_type)
             if not registered:
@@ -143,8 +143,14 @@ class ProviderProjectionBootHeal:
             rows.append(row)
         return rows
 
-    async def _active_by_agent_type(self) -> dict[AgentType, str]:
-        """The connection name flagged active for each agent type it covers."""
+    async def _active_by_agent_type(self, agents: list[Resource]) -> dict[AgentType, str]:
+        """The connection name flagged active for each agent type it covers.
+
+        ``agents`` is the registry the connections' scopes are resolved against
+        — a scope holds agent uids, so which types a connection reaches is a
+        question only the registry can answer. The caller has already read it
+        for the projection check, so it is passed in rather than re-listed.
+        """
         active: dict[AgentType, str] = {}
         for row in sorted(await self._providers.list(), key=lambda r: r.name):
             try:
@@ -156,7 +162,7 @@ class ProviderProjectionBootHeal:
             # Framework scope decides the reach (ADR per-agent-resource-scope); ``is_active``
             # decides only whether this is the connection currently projected
             # into those agents, which is the very claim this pass verifies.
-            for agent_type in projection_targets(row, cfg):
+            for agent_type in projection_targets(row, cfg, agents):
                 active.setdefault(agent_type, row.name)
         return active
 

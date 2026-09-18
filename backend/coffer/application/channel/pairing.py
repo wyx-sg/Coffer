@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.ports import ChannelBinding, ChannelPeer, ChannelPeerRepoPort
+from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel.store_ports import ChannelPeer, ChannelPeerRepoPort
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import ResourceRef
 
 _logger = logging.getLogger(__name__)
 
@@ -137,11 +137,11 @@ async def claim_pairing(
     """
     if not text.strip():
         return None
-    if not pairing.try_claim(binding.name, text):
-        _logger.debug("channel.inbound.ignored", extra={"channel": binding.name})
+    if not pairing.try_claim(binding.resource.name, text):
+        _logger.debug("channel.inbound.ignored", extra={"channel": binding.resource.name})
         return None
     peer = ChannelPeer(
-        resource_id=binding.resource_id,
+        resource_id=binding.resource.id,
         chat_id=chat_id,
         display_name=sender_display,
         paired_at=datetime.now(tz=UTC),
@@ -150,7 +150,11 @@ async def claim_pairing(
     await peers.upsert(peer)
     await audit.record(
         AuditEventType.CHANNEL_PAIRED.value,
-        ref=ResourceRef(kind="channel", name=binding.name),
+        # The row the binding was built from, so the pairing is filed under the
+        # channel's identity and stays in its history across a rename — the
+        # audit service takes the resource rather than a name to look up
+        # precisely so a caller that already holds the row cannot mis-file it.
+        resource=binding.resource,
         actor="channel",
         details={"chat_id": chat_id, "display_name": sender_display},
     )

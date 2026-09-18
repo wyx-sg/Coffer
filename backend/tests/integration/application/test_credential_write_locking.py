@@ -30,7 +30,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.credential_migration import migrate_legacy_keychain
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.types import AgentType
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -60,6 +60,7 @@ class _AgentLookup:
     async def get(self, name: str) -> Resource:
         return Resource(
             id=1,
+            uid="c0de3a1f5b2e47d98a6c1f0b3e7d5a24",
             kind="agent",
             name=name,
             description=None,
@@ -82,12 +83,19 @@ class _FileStore:
 
 
 class _ResourceService:
+    """Keyed by uid, like the real one — a resource is addressed by the identity
+    it keeps, never by the label it can be given (ADR
+    resource-identity-is-an-immutable-uid)."""
+
     def __init__(self) -> None:
         self.resources: dict[str, Resource] = {}
+        self._next_uid = 0
 
     async def register(self, kind, name, config, actor, description=None, **_) -> Resource:
+        self._next_uid += 1
         r = Resource(
-            id=100,
+            id=100 + self._next_uid,
+            uid=f"{self._next_uid:032x}",
             kind=kind,
             name=name,
             description=description,
@@ -96,17 +104,17 @@ class _ResourceService:
             created_at=_NOW,
             updated_at=_NOW,
         )
-        self.resources[name] = r
+        self.resources[r.uid] = r
         return r
 
-    async def get(self, ref: ResourceRef) -> Resource:
-        return self.resources[ref.name]
+    async def get(self, uid: str) -> Resource:
+        return self.resources[uid]
 
     async def list(self, kind=None, enabled=None) -> list[Resource]:
         return list(self.resources.values())
 
-    async def delete(self, ref: ResourceRef, actor: str) -> None:
-        self.resources.pop(ref.name, None)
+    async def delete(self, uid: str, actor: str) -> None:
+        self.resources.pop(uid, None)
 
 
 class _AuditRepo:

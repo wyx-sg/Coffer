@@ -22,7 +22,6 @@ import pytest
 from coffer.application.memory.index import index_line
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER, Note, Origin
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.memory import store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
@@ -240,7 +239,7 @@ async def test_a_partition_two_real_agents_filled_records_its_repository_only(va
     """
     await vault["service"].aggregate()
 
-    row = await vault["resources"].get(ResourceRef(KIND_MEMORY, "coffer"))
+    row = vault["resources"].by_name(KIND_MEMORY, "coffer")
     assert row.config["repository_path"] == str(vault["project_root"].resolve())
     assert row.scope is None
     assert await vault["service"].enabled_partitions() == ["coffer", "global"]

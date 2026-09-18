@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 import pytest
 
 from coffer.application.channel.conversation_ops import ensure_conversation
-from coffer.application.channel.ports import ChannelPeer
+from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.message import Role, TextBlock
 

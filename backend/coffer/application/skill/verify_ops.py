@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
 from coffer.domain.error_base import CofferError
-from coffer.domain.resource import ResourceRef
 from coffer.domain.skill.drift import (
     DriftEntry,
     DriftKind,
@@ -53,6 +52,8 @@ async def verify_drift(service: SkillService) -> DriftReport:
                     kind=status.drift,
                     target_path=status.target_path,
                     suggested_remedy=suggested_remedy(status.drift),
+                    skill_uid=skill.uid,
+                    agent_uid=agent.uid,
                 )
             )
 
@@ -60,6 +61,9 @@ async def verify_drift(service: SkillService) -> DriftReport:
     for orphan in service._store.find_orphans(known):
         report.entries.append(
             DriftEntry(
+                # A folder no row claims: there is no uid to record on either
+                # side, and ``orphan`` is a directory name, not a label Coffer
+                # issued. Left as the default None rather than invented.
                 skill_name=orphan,
                 agent_name="",
                 kind=DriftKind.ORPHAN_MASTER,
@@ -108,11 +112,17 @@ async def repair_drift(service: SkillService, *, actor: str) -> RepairResult:
     for entry in initial.entries:
         if entry.kind not in _REPAIRABLE_KINDS:
             continue
+        if entry.skill_uid is None or entry.agent_uid is None:
+            # Only ORPHAN_MASTER reaches here without uids and it is not a
+            # repairable kind, so this is unreachable today. Checked anyway
+            # because the alternative — repairing "whatever currently answers
+            # to that name" — is exactly the addressing this change removed.
+            continue
         force = entry.kind is DriftKind.TAMPERED_LINK
         try:
             await service.enable_for(
-                skill_name=entry.skill_name,
-                agent_name=entry.agent_name,
+                skill_uid=entry.skill_uid,
+                agent_uid=entry.agent_uid,
                 force=force,
                 actor=actor,
             )
@@ -128,7 +138,7 @@ async def repair_drift(service: SkillService, *, actor: str) -> RepairResult:
         remediated.append(entry)
         await service._audit.record(
             AuditEventType.SKILL_DRIFT_REMEDIATED.value,
-            ref=ResourceRef("skill", entry.skill_name),
+            resource=await service._rs.get(entry.skill_uid),
             actor=actor,
             details={
                 "agent": entry.agent_name,

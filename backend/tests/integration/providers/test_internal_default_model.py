@@ -119,6 +119,20 @@ async def _env(tmp_path: pathlib.Path, *, model: str | None, wire_engine: bool =
     )
 
 
+async def _uid(env: _Env, name: str) -> str:
+    """The uid of the connection labelled ``name``.
+
+    These tests say "deepseek" because a person would; every call into the
+    service takes the uid, because nothing inside the daemon addresses a
+    resource by a label the user may change. Resolving it here is the same
+    one-step lookup a surface does at its own front door.
+    """
+    for row in await env.providers.list():
+        if row.name == name:
+            return row.uid
+    raise AssertionError(f"no connection named {name!r}")
+
+
 @pytest.fixture()
 async def two_connections(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
     """``deepseek`` is the internal default and the singleton holds one of its
@@ -138,7 +152,7 @@ async def two_connections(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
         secret_value="k2",
         models=[CuratedModel(id="agnes-2.0-flash"), CuratedModel(id="agnes-1.5-flash")],
     )
-    await env.providers.set_internal_default("deepseek")
+    await env.providers.set_internal_default(await _uid(env, "deepseek"))
     assert env.engine_model.model == "deepseek-flash", "deepseek curates the model in force"
     yield env
 
@@ -150,7 +164,9 @@ async def two_connections(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
 async def test_switching_the_connection_drops_a_model_it_does_not_serve(
     two_connections: _Env,
 ) -> None:
-    await two_connections.providers.set_internal_default("agnes", actor="cli")
+    await two_connections.providers.set_internal_default(
+        await _uid(two_connections, "agnes"), actor="cli"
+    )
 
     assert two_connections.engine_model.model is None, (
         "the new connection has never heard of deepseek-flash"
@@ -164,9 +180,11 @@ async def test_switching_the_connection_drops_a_model_it_does_not_serve(
 async def test_switching_keeps_a_model_the_new_connection_curates(two_connections: _Env) -> None:
     # The same id appears on agnes's curated list: its own catalogue says it is
     # servable, so the selection survives the switch without probing anything.
-    await two_connections.providers.update("agnes", models=[CuratedModel(id="deepseek-flash")])
+    await two_connections.providers.update(
+        await _uid(two_connections, "agnes"), models=[CuratedModel(id="deepseek-flash")]
+    )
 
-    await two_connections.providers.set_internal_default("agnes")
+    await two_connections.providers.set_internal_default(await _uid(two_connections, "agnes"))
 
     assert two_connections.engine_model.model == "deepseek-flash"
     assert two_connections.engine_model.cleared_by == []
@@ -177,7 +195,7 @@ async def test_switching_keeps_a_model_the_new_connection_curates(two_connection
 
 
 async def test_re_setting_the_same_internal_default_changes_nothing(two_connections: _Env) -> None:
-    await two_connections.providers.set_internal_default("deepseek")
+    await two_connections.providers.set_internal_default(await _uid(two_connections, "deepseek"))
 
     assert two_connections.engine_model.model == "deepseek-flash"
     assert two_connections.engine_model.cleared_by == []
@@ -197,7 +215,7 @@ async def test_the_model_is_untouched_when_no_engine_port_is_wired(
         secret_value="k",
     )
 
-    await env.providers.set_internal_default("agnes")
+    await env.providers.set_internal_default(await _uid(env, "agnes"))
 
     assert env.engine_model.model == "deepseek-flash"
 
@@ -237,5 +255,5 @@ async def test_either_missing_half_answers_none_rather_than_raising(
         secret_value="k1",
         models=[CuratedModel(id="deepseek-flash")],
     )
-    await env2.providers.set_internal_default("deepseek")
+    await env2.providers.set_internal_default(await _uid(env2, "deepseek"))
     assert await env2.engine.get_default() is None

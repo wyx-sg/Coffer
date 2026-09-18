@@ -103,4 +103,4 @@ async def safe_send(
     try:
         await binding.adapter.send_text(chat_id, text, **kwargs)
     except Exception:
-        _logger.exception("channel.send.failed", extra={"channel": binding.name})
+        _logger.exception("channel.send.failed", extra={"channel": binding.resource.name})

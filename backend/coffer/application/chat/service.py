@@ -137,7 +137,7 @@ class ChatService:
         *,
         agent_key: str,
         agent_config: dict[str, Any] | None = None,
-        channel_name: str | None = None,
+        channel_uid: str | None = None,
         peer_chat_id: str | None = None,
     ) -> Conversation:
         """Create a conversation for the named agent.
@@ -148,8 +148,12 @@ class ChatService:
         via ``init_conversation``; if that fails the row is rolled back so an
         invalid configuration leaves nothing half-created.
 
-        An optional channel binding (``channel_name`` + ``peer_chat_id``) is the
+        An optional channel binding (``channel_uid`` + ``peer_chat_id``) is the
         return address for relaying output back to an IM channel (spec channels).
+        ``channel_uid`` is the channel resource's uid — the binding has to keep
+        naming the same channel after the user renames it, and only the uid does
+        (ADR resource-identity-is-an-immutable-uid). Chat itself never reads the
+        channel's label; whoever shows it resolves it from the uid.
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 
@@ -160,7 +164,7 @@ class ChatService:
             title=_PLACEHOLDER_TITLE,
             created_at=now,
             updated_at=now,
-            channel_name=channel_name,
+            channel_uid=channel_uid,
             peer_chat_id=peer_chat_id,
         )
         created = await self._conversations.create(conv)

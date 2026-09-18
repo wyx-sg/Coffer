@@ -5,6 +5,14 @@ the other machine should honor it. Docs carry only the DISABLED capabilities
 per server (enabled is the default; seen-timestamps stay machine-local), and a
 server's document exists only while something on it is disabled — so deleting
 it is how "nothing disabled here" travels.
+
+A document is named by the server's **uid**, matching the resource bundle's own
+layout (ADR resource-identity-is-an-immutable-uid). Naming it by the server's
+label would have made a rename cross the remote as a delete plus a create: the
+receiving machine would re-enable everything the user had switched off, then
+apply the new document — an outcome whose only defence was the order two file
+paths happen to sort in. The uid is the same on both machines, so a rename is
+what it always was: one document, modified.
 """
 
 from __future__ import annotations
@@ -64,9 +72,9 @@ class McpPreferenceSyncState:
             if disabled:
                 docs.append(
                     (
-                        resource.name,
+                        resource.uid,
                         {
-                            "server": resource.name,
+                            "server_uid": resource.uid,
                             "disabled": [{"type": t, "key": k} for t, k in disabled],
                         },
                     )
@@ -74,20 +82,24 @@ class McpPreferenceSyncState:
         return docs
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
-        """Make each named server's disabled set exactly what its document says.
+        """Make each identified server's disabled set exactly what its document says.
 
-        Only the servers the documents name are touched. The applier hands
+        Only the servers the documents identify are touched. The applier hands
         over one document at a time, so a server absent from ``docs`` has not
         been decided about here — its document was simply not in this batch.
         The one way a server's disabled set becomes empty is its document being
         deleted, which arrives through :meth:`delete_docs`.
+
+        A document naming a uid this machine does not hold is skipped, not
+        errored: the resource bundle and this state area converge independently,
+        so a freshly synced server can legitimately arrive one pass later.
         """
         errors: list[tuple[str, str]] = []
-        by_name = {r.name: r.id for r in await self._resources.list(kind="mcp_server")}
+        by_uid = {r.uid: r.id for r in await self._resources.list(kind="mcp_server")}
         for rel, doc in docs:
-            server = str(doc.get("server") or rel)
+            server = str(doc.get("server_uid") or rel)
             entries = doc.get("disabled")
-            resource_id = by_name.get(server)
+            resource_id = by_uid.get(server)
             if resource_id is None or not isinstance(entries, list):
                 continue
             wanted = {
@@ -113,9 +125,9 @@ class McpPreferenceSyncState:
         server this machine does not register is ignored; the deletion cannot
         have been about anything here.
         """
-        by_name = {r.name: r.id for r in await self._resources.list(kind="mcp_server")}
+        by_uid = {r.uid: r.id for r in await self._resources.list(kind="mcp_server")}
         for rel in rels:
-            resource_id = by_name.get(rel)
+            resource_id = by_uid.get(rel)
             if resource_id is not None:
                 await self._converge(resource_id, set())
 

@@ -32,10 +32,29 @@ from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs, paths
 
 
+def _entry(name: str, description: str, source_count: int, topic_count: int) -> CollectionEntry:
+    """A catalogue entry, built by KEYWORD.
+
+    These were positional until `CollectionEntry` grew its `uid` as the first
+    field, at which point every argument silently shifted one place and a
+    `description` became an `int` — a break no type checker could see, because
+    the shifted values were still a `str` and an `int`. One helper, named
+    arguments, and the next field to arrive cannot do it again.
+    """
+    return CollectionEntry(
+        uid=f"uid-{name}",
+        name=name,
+        description=description,
+        source_count=source_count,
+        topic_count=topic_count,
+    )
+
+
 def _resource(rid: int, name: str, *, enabled: bool = True) -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
         id=rid,
+        uid=f"uid-{rid}",
         kind=KIND_KNOWLEDGE,
         name=name,
         description=None,
@@ -105,8 +124,8 @@ def service(corpus) -> KnowledgeService:  # type: ignore[no-untyped-def]
 
 def test_the_description_names_subjects_rather_than_the_layer() -> None:
     catalogue = [
-        (CollectionEntry("shopee", "Shopee's account system and its platforms.", 3, 4), ()),
-        (CollectionEntry("personal", "Notes about the side project.", 1, 1), ()),
+        (_entry("shopee", "Shopee's account system and its platforms.", 3, 4), ()),
+        (_entry("personal", "Notes about the side project.", 1, 1), ()),
     ]
     described = render_description(catalogue)
     # The point of the rewrite: a model working on the account system has
@@ -118,7 +137,7 @@ def test_the_description_names_subjects_rather_than_the_layer() -> None:
 
 
 def test_the_description_drops_subjects_rather_than_overflowing() -> None:
-    catalogue = [(CollectionEntry(f"c{n}", "x" * 200, 1, 1), ()) for n in range(20)]
+    catalogue = [(_entry(f"c{n}", "x" * 200, 1, 1), ()) for n in range(20)]
     described = render_description(catalogue)
     assert len(described) <= MAX_DESCRIPTION_CHARS
     # Truncation drops whole subjects from the tail; it never cuts one open.

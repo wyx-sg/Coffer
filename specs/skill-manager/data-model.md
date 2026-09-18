@@ -19,12 +19,16 @@ A Pydantic model recording where a managed skill came from. In v1, only local-fo
 
 ### `SkillConfig` (`domain/skill/config.py`)
 
-Pydantic v2 `BaseModel`.
+Pydantic v2 `BaseModel`. It carries no copy of the skill's name: the name comes
+from the SKILL.md frontmatter at import and is stored once, as `Resource.name`.
+A `skill_md_name` key mirrored it until migration 0092 stripped it — one fact
+written twice, with nothing reading the second copy and two places to disagree
+once renaming arrived ([Resource Identity Is an Immutable
+`uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
 
 | Field                        | Type               | Notes                                               |
 | ---------------------------- | ------------------ | --------------------------------------------------- |
 | `source`                     | `LocalImportSource` | single local_import source                         |
-| `skill_md_name`              | `str`              | SKILL.md frontmatter `name`; equals `Resource.name` |
 | `skill_md_description`       | `str`              | frontmatter `description`                           |
 | `version_hash`               | `str`              | sha256 of SKILL.md content at last sync             |
 | `last_synced_from_source_at` | `datetime \| None` | UTC; set on import                                  |
@@ -240,7 +244,8 @@ Keys persisted:
 | Key                          | Source                                   | Notes                                        |
 | ---------------------------- | ---------------------------------------- | -------------------------------------------- |
 | `source`                     | `SkillConfig.source`                     | local_import source with original_path       |
-| `skill_md_name`              | `SkillConfig.skill_md_name`              | matches the master folder name at write time |
+| `name`                       | `Resource.name`                          | the master folder's name at write time       |
+| `imported_at`                | import timestamp                         | ISO-8601 UTC                                 |
 | `skill_md_description`       | `SkillConfig.skill_md_description`       |                                              |
 | `version_hash`               | `SkillConfig.version_hash`               | sha256 of SKILL.md at last sync              |
 | `last_synced_from_source_at` | `SkillConfig.last_synced_from_source_at` | ISO-8601 UTC                                 |
@@ -289,11 +294,11 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 
 | Method                                                                 | Purpose                                                                                                                                                                          |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_unmanaged(agent_name) -> list[UnmanagedView]`                    | FR-016 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
-| `adopt_unmanaged(agent_name, skill_name, location, actor) -> Resource` | FR-017: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
-| `delete_unmanaged(agent_name, skill_name, location, actor) -> None`    | FR-018: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
+| `list_unmanaged(agent_uid) -> list[UnmanagedView]`                     | FR-016 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
+| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | FR-017: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
+| `delete_unmanaged(agent_uid, skill_name, location, actor) -> None`     | FR-018: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
 | `list_skills() -> list[Resource]` (behind `coffer__list_skills`)       | FR-026: every registered `skill` row, name and description only, with no per-agent filter. |
-| `get_skill(name)` + `master_path(name)` (behind `coffer__load_skill`)  | FR-027: resolve the name through the registry, then read that master folder's `SKILL.md` verbatim; no other file is reachable. |
+| `get_skill(uid)` + `master_path(name)` (behind `coffer__load_skill`)  | FR-027: resolve the skill through the registry by uid, then read that master folder's `SKILL.md` verbatim — `master_path` still takes the NAME, because the folder on disk is named after the label; no other file is reachable. |
 | delivery reconciliation (`delivery_ops.py`)                            | FR-019: `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
 
 ### File viewer (`application/skill/file_ops.py`)

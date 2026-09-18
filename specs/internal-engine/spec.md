@@ -195,8 +195,8 @@ document in [contracts/api.openapi.yaml](./contracts/api.openapi.yaml).
   model; `null` or empty clears it, which stops transcription
 
 The connection half of each pair is spec provider-switching's:
-`POST /api/v1/providers/{name}/internal-default` and
-`POST /api/v1/providers/{name}/transcribe-default`.
+`POST /api/v1/providers/{uid}/internal-default` and
+`POST /api/v1/providers/{uid}/transcribe-default`.
 
 ## CLI
 
@@ -307,7 +307,7 @@ one test marked `@pytest.mark.acceptance(spec="internal-engine", scenario="…")
   the operator then clears the model, or moves the flag to a connection that
   does not curate that model
   (`PUT /api/v1/internal-engine-config/transcribe-model`,
-  `POST /api/v1/providers/{name}/transcribe-default`),
+  `POST /api/v1/providers/{uid}/transcribe-default`),
 - **Then** the pair resolves to that connection and that model while both halves
   are set; with either half missing it resolves to `None` and the audio is
   handed to the agent as a file rather than uploaded; the engine's own

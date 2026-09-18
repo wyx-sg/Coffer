@@ -22,7 +22,6 @@ import pytest
 
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.domain.memory.note import TYPE_USER
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.memory import store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
 from coffer.infrastructure.memory.repository import resolve_repository
@@ -183,7 +182,7 @@ async def test_the_partition_is_named_from_the_repository_and_records_its_path(
 
     await service.aggregate()
 
-    row = await resources.get(ResourceRef(KIND_MEMORY, "coffer"))
+    row = resources.by_name(KIND_MEMORY, "coffer")
     assert row.config["repository_key"] == "remote:github.com/owner/coffer"
     # The main checkout's path, not the worktree's, so a later session's cwd
     # matches whichever of the three it is opened in.

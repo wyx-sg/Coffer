@@ -2,7 +2,7 @@
 
 One rule decides delivery and nothing else does::
 
-    delivered(skill, agent) == skill.enabled and scope.is_active(skill.scope, agent)
+    delivered(skill, agent) == skill.enabled and scope.is_active(skill.scope, agent.uid)
 
 ``scope`` is the skill's single ``agents`` allow-list: activation is
 machine-local, so the machine holding the scope is already the machine answer.
@@ -28,7 +28,7 @@ from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import ScopeInvalidError
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 from coffer.domain.workspace_errors import SkillOutOfScope
 from coffer.infrastructure.persistence.base import Base
@@ -92,12 +92,12 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
         agent_skill_dir_resolver=_agent_skill_dir,
     )
 
-    async def _reconcile(agent_name: str) -> None:
-        await skill_svc.apply_scope_for_agent(agent_name, actor="system")
+    async def _reconcile(agent_uid: str) -> None:
+        await skill_svc.apply_scope_for_agent(agent_uid, actor="system")
 
-    async def _skill_delivery_changed(ref: ResourceRef) -> None:
+    async def _skill_delivery_changed(_skill: Resource) -> None:
         for row in await rs.list(kind="agent"):
-            await _reconcile(row.name)
+            await _reconcile(row.uid)
 
     agent_svc = AgentService(
         resource_service=rs,
@@ -106,13 +106,13 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
         reconcile_skill_delivery=_reconcile,
     )
 
-    async def _agent_on_delete(ref):
-        await skill_svc.cleanup_bindings_for_agent(ref)
+    async def _agent_on_delete(agent: Resource):
+        await skill_svc.cleanup_bindings_for_agent(agent)
 
-    async def _agent_enabled_changed(ref):
+    async def _agent_enabled_changed(agent: Resource):
         # Mirrors the composition root: toggling an agent re-runs ITS delivery,
         # so disabling reclaims and re-enabling puts back.
-        await _reconcile(ref.name)
+        await _reconcile(agent.uid)
 
     placeholder_kinds["agent"] = make_agent_kind(
         on_delete=_agent_on_delete,
@@ -120,6 +120,7 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
     )
     placeholder_kinds["skill"] = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
+        skill_svc.move_master_folder,
         on_scope_changed=_skill_delivery_changed if reconcile_hooks else None,
         on_enabled_changed=_skill_delivery_changed if reconcile_hooks else None,
     )
@@ -138,6 +139,16 @@ async def _register_agent(
         actor="cli",
     )
     return agent, config_dir / "skills"
+
+
+async def _by_name(skill_svc: SkillService, name: str) -> Resource:
+    """Resolve a skill LABEL to its row.
+
+    The one-shot resolution a surface does at its front door
+    (ADR resource-identity-is-an-immutable-uid): a test states what it means in
+    the name a person would type, and converts once.
+    """
+    return await skill_svc._rs.get_by_name("skill", name)
 
 
 async def _import_skill(skill_svc: SkillService, tmp_path: pathlib.Path, name: str) -> Resource:
@@ -185,7 +196,8 @@ async def test_dormant_skill_reaches_nobody(tmp_path):
     assert (dir1 / "dormant").is_symlink()
 
     # An empty agents axis is dormant: no agent is in scope.
-    await skill_svc._rs.update_scope(ResourceRef("skill", "dormant"), Scope(agents=[]), actor="cli")
+    dormant = await _by_name(skill_svc, "dormant")
+    await skill_svc._rs.update_scope(dormant.uid, Scope(agents=[]), actor="cli")
     assert not (dir1 / "dormant").exists()
     assert await _delivered_names(skill_svc, a1) == set()
 
@@ -206,10 +218,10 @@ async def test_import_delivers_only_where_scope_grants(tmp_path):
     a2, dir2 = await _register_agent(agent_svc, tmp_path, name="a2")
 
     # Import, then narrow the scope to a1 only.
-    await _import_skill(skill_svc, tmp_path, "only-a1")
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "only-a1"), Scope(agents=["a1"]), actor="cli"
-    )
+    only_a1 = await _import_skill(skill_svc, tmp_path, "only-a1")
+    # A scope names agents by UID: the identity a rename cannot move out from
+    # under the reference (ADR resource-identity-is-an-immutable-uid).
+    await skill_svc._rs.update_scope(only_a1.uid, Scope(agents=[a1.uid]), actor="cli")
     assert (dir1 / "only-a1").is_symlink()
     assert not (dir2 / "only-a1").exists()
 
@@ -234,7 +246,8 @@ async def test_disabling_a_skill_reclaims_every_copy(tmp_path):
     await _import_skill(skill_svc, tmp_path, "everywhere")
     assert (dir1 / "everywhere").is_symlink() and (dir2 / "everywhere").is_symlink()
 
-    await skill_svc._rs.set_enabled(ResourceRef("skill", "everywhere"), False, actor="cli")
+    everywhere = await _by_name(skill_svc, "everywhere")
+    await skill_svc._rs.set_enabled(everywhere.uid, False, actor="cli")
 
     assert not (dir1 / "everywhere").exists()
     assert not (dir2 / "everywhere").exists()
@@ -257,7 +270,7 @@ async def test_a_disabled_agent_is_never_written_into(tmp_path):
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     live, live_dir = await _register_agent(agent_svc, tmp_path, name="live")
     off, off_dir = await _register_agent(agent_svc, tmp_path, name="off")
-    await skill_svc._rs.set_enabled(ResourceRef("agent", "off"), False, actor="cli")
+    await skill_svc._rs.set_enabled(off.uid, False, actor="cli")
 
     # Import after the agent was switched off: only the live agent gets it.
     await _import_skill(skill_svc, tmp_path, "fresh")
@@ -266,12 +279,12 @@ async def test_a_disabled_agent_is_never_written_into(tmp_path):
     assert await _delivered_names(skill_svc, off) == set()
 
     # Re-enabling the agent reconciles it back.
-    await skill_svc._rs.set_enabled(ResourceRef("agent", "off"), True, actor="cli")
+    await skill_svc._rs.set_enabled(off.uid, True, actor="cli")
     assert (off_dir / "fresh").is_symlink()
     assert await _delivered_names(skill_svc, off) == {"fresh"}
 
     # And switching it off again reclaims what it holds.
-    await skill_svc._rs.set_enabled(ResourceRef("agent", "off"), False, actor="cli")
+    await skill_svc._rs.set_enabled(off.uid, False, actor="cli")
     assert not (off_dir / "fresh").exists()
     assert await _delivered_names(skill_svc, off) == set()
     assert (live_dir / "fresh").is_symlink()  # the live agent is untouched throughout
@@ -284,13 +297,12 @@ async def test_a_disabled_agent_is_never_written_into(tmp_path):
 async def test_re_enabling_a_skill_redelivers_it(tmp_path):
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     a1, dir1 = await _register_agent(agent_svc, tmp_path, name="a1")
-    await _import_skill(skill_svc, tmp_path, "back-again")
-    ref = ResourceRef("skill", "back-again")
+    back_again = await _import_skill(skill_svc, tmp_path, "back-again")
 
-    await skill_svc._rs.set_enabled(ref, False, actor="cli")
+    await skill_svc._rs.set_enabled(back_again.uid, False, actor="cli")
     assert not (dir1 / "back-again").exists()
 
-    await skill_svc._rs.set_enabled(ref, True, actor="cli")
+    await skill_svc._rs.set_enabled(back_again.uid, True, actor="cli")
     assert (dir1 / "back-again").is_symlink()
     assert await _delivered_names(skill_svc, a1) == {"back-again"}
     await engine.dispose()
@@ -306,13 +318,13 @@ async def test_scoping_away_reclaims_the_delivered_copy(tmp_path):
     the copy is reclaimed — no other trigger required."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
-    await _import_skill(skill_svc, tmp_path, "shared")
+    shared = await _import_skill(skill_svc, tmp_path, "shared")
     assert (skill_dir / "shared").is_symlink()
     assert await _delivered_names(skill_svc, agent) == {"shared"}
 
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "shared"), Scope(agents=["other"]), actor="cli"
-    )
+    # A uid that matches no registered agent is legal and simply never
+    # matches — the scope now names somebody who is not this agent.
+    await skill_svc._rs.update_scope(shared.uid, Scope(agents=["no-such-agent"]), actor="cli")
 
     assert not (skill_dir / "shared").exists()
     assert await _delivered_names(skill_svc, agent) == set()
@@ -327,8 +339,8 @@ async def test_disabled_skill_is_not_delivered_to_a_new_agent(tmp_path):
     """A disabled skill is invisible to delivery, including to an agent that
     registers later."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
-    await _import_skill(skill_svc, tmp_path, "switched-off")
-    await skill_svc._rs.set_enabled(ResourceRef("skill", "switched-off"), False, actor="cli")
+    switched_off = await _import_skill(skill_svc, tmp_path, "switched-off")
+    await skill_svc._rs.set_enabled(switched_off.uid, False, actor="cli")
 
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     assert not (skill_dir / "switched-off").exists()
@@ -341,16 +353,12 @@ async def test_scoping_back_in_redelivers(tmp_path):
     """The converse of the reclaim scenario: naming the agent again delivers
     the copy back, with no unrelated trigger."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
-    await _import_skill(skill_svc, tmp_path, "elsewhere")
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "elsewhere"), Scope(agents=["other"]), actor="cli"
-    )
+    elsewhere = await _import_skill(skill_svc, tmp_path, "elsewhere")
+    await skill_svc._rs.update_scope(elsewhere.uid, Scope(agents=["no-such-agent"]), actor="cli")
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
     assert not (skill_dir / "elsewhere").exists()
 
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "elsewhere"), Scope(agents=["a1"]), actor="cli"
-    )
+    await skill_svc._rs.update_scope(elsewhere.uid, Scope(agents=[agent.uid]), actor="cli")
 
     assert (skill_dir / "elsewhere").is_symlink()
     assert await _delivered_names(skill_svc, agent) == {"elsewhere"}
@@ -361,10 +369,10 @@ async def test_scoping_back_in_redelivers(tmp_path):
 async def test_master_removal_cleans_up_delivered_copies(tmp_path):
     skill_svc, agent_svc, _, engine = await _setup(tmp_path)
     agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
-    await _import_skill(skill_svc, tmp_path, "doomed")
+    doomed = await _import_skill(skill_svc, tmp_path, "doomed")
     assert (skill_dir / "doomed").is_symlink()
 
-    await skill_svc.remove(name="doomed", actor="cli")
+    await skill_svc.remove(uid=doomed.uid, actor="cli")
     assert not (skill_dir / "doomed").exists()
     assert not (skill_dir / "doomed").is_symlink()
     assert await skill_svc._bindings.list_for_agent(agent.id) == []
@@ -408,11 +416,11 @@ async def test_apply_scope_reports_per_skill_failures(tmp_path):
     foreign = config_dir / "skills" / "blocked"
     foreign.mkdir()
     (foreign / "mine.txt").write_text("user data", encoding="utf-8")
-    await agent_svc.register(
+    agent = await agent_svc.register(
         agent_type=AgentType.CLAUDE_CODE, name="a1", config_dir=str(config_dir), actor="cli"
     )
 
-    failures = await skill_svc.apply_scope_for_agent("a1", actor="sync")
+    failures = await skill_svc.apply_scope_for_agent(agent.uid, actor="sync")
     assert len(failures) == 1
     assert "blocked" in failures[0]
     await engine.dispose()
@@ -421,7 +429,7 @@ async def test_apply_scope_reports_per_skill_failures(tmp_path):
 @pytest.mark.asyncio
 async def test_apply_scope_for_unknown_agent_is_a_noop(tmp_path):
     skill_svc, _agent_svc, _audit, engine = await _setup(tmp_path)
-    assert await skill_svc.apply_scope_for_agent("ghost", actor="system") == []
+    assert await skill_svc.apply_scope_for_agent("no-such-uid", actor="system") == []
     await engine.dispose()
 
 
@@ -434,7 +442,7 @@ async def test_config_dir_move_preserves_delivery(tmp_path):
 
     new_dir = tmp_path / "moved-claude"
     new_dir.mkdir()
-    await agent_svc.update_config_dir(name="cc", new_config_dir=str(new_dir), actor="cli")
+    await agent_svc.update_config_dir(uid=_agent.uid, new_config_dir=str(new_dir), actor="cli")
     assert not (old_dir / "travels").exists()
     assert (new_dir / "skills" / "travels").is_symlink()
     await engine.dispose()
@@ -445,14 +453,12 @@ async def test_manual_enable_refused_out_of_scope(tmp_path):
     """The internal ``enable_for`` primitive must not be able to override an
     out-of-scope agent — scope is a hard grant."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, reconcile_hooks=False)
-    await _import_skill(skill_svc, tmp_path, "denied")
-    await skill_svc._rs.update_scope(
-        ResourceRef("skill", "denied"), Scope(agents=["other"]), actor="test"
-    )
-    await _register_agent(agent_svc, tmp_path, name="a1")
+    denied = await _import_skill(skill_svc, tmp_path, "denied")
+    await skill_svc._rs.update_scope(denied.uid, Scope(agents=["no-such-agent"]), actor="test")
+    agent, _ = await _register_agent(agent_svc, tmp_path, name="a1")
 
     with pytest.raises(SkillOutOfScope):
-        await skill_svc.enable_for(skill_name="denied", agent_name="a1", actor="cli")
+        await skill_svc.enable_for(skill_uid=denied.uid, agent_uid=agent.uid, actor="cli")
     await engine.dispose()
 
 
@@ -463,24 +469,26 @@ async def test_config_dir_change_does_not_resurrect_ungranted_link(tmp_path):
     a config_dir change blindly re-created every enabled binding's link."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path, reconcile_hooks=False)
     _agent, old_skill_dir = await _register_agent(agent_svc, tmp_path, name="a1")
-    await _import_skill(skill_svc, tmp_path, "shared")
+    shared = await _import_skill(skill_svc, tmp_path, "shared")
     old_link = old_skill_dir / "shared"
     assert old_link.is_symlink()
 
     # Disable the skill WITHOUT reconciliation (hooks omitted) — isolates the
     # config-dir-change relink path from apply_scope_for_agent's own reclaim.
-    await skill_svc._rs.set_enabled(ResourceRef("skill", "shared"), False, actor="test")
+    await skill_svc._rs.set_enabled(shared.uid, False, actor="test")
 
     new_config_dir = tmp_path / "moved-cfg"
     new_config_dir.mkdir()
-    await agent_svc.update_config_dir(name="a1", new_config_dir=str(new_config_dir), actor="cli")
+    await agent_svc.update_config_dir(
+        uid=_agent.uid, new_config_dir=str(new_config_dir), actor="cli"
+    )
 
     new_link = new_config_dir / "skills" / "shared"
     assert not old_link.exists(), "stale old link should still be torn down"
     assert not new_link.exists(), "an ungranted link must not be resurrected at the new config_dir"
     # The binding row itself is left untouched (not deleted) — reclaim is
     # apply_scope_for_agent's job, not relink's.
-    assert len(await skill_svc.bindings_for("shared")) == 1
+    assert len(await skill_svc.bindings_for(shared.uid)) == 1
     await engine.dispose()
 
 
@@ -489,9 +497,7 @@ async def test_update_scope_on_agent_kind_is_rejected(tmp_path):
     """The `agent` kind declares no scope (ADR per-agent-resource-scope) — scope names the agents a
     resource is active for, so an agent scoping itself is meaningless."""
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)
-    await _register_agent(agent_svc, tmp_path, name="a1")
+    agent, _ = await _register_agent(agent_svc, tmp_path, name="a1")
     with pytest.raises(ScopeInvalidError):
-        await skill_svc._rs.update_scope(
-            ResourceRef("agent", "a1"), Scope(agents=["a1"]), actor="cli"
-        )
+        await skill_svc._rs.update_scope(agent.uid, Scope(agents=[agent.uid]), actor="cli")
     await engine.dispose()

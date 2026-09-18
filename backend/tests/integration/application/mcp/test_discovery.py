@@ -16,7 +16,7 @@ from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
@@ -110,7 +110,7 @@ async def test_first_list_tools_populates_preferences_and_caches(
         # Prefixed correctly
         assert {t.prefixed_name for t in tools} == {"fs__read_file", "fs__write_file"}
         # Preferences row was inserted for each
-        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+        resource = await rsvc.get_by_name("mcp_server", "fs")
         pref_rows = await prefs.list_for(resource.id, "tool")
         assert {p.capability_key for p in pref_rows} == {"read_file", "write_file"}
         # Each row records when it was first seen.
@@ -151,7 +151,7 @@ async def test_disabled_tool_is_filtered_out(
     try:
         # Populate preferences first
         await discovery.list_tools("fs")
-        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+        resource = await rsvc.get_by_name("mcp_server", "fs")
         await prefs.set_enabled(resource.id, "tool", "write_file", False)
         # Force re-query (clear cache) and verify write_file is gone
         discovery.invalidate("fs", "tool")
@@ -249,7 +249,7 @@ async def test_newly_discovered_tool_is_enabled_by_default(
 
         # The upstream is upgraded and now exposes a second tool.
         await rsvc.update_config(
-            ResourceRef("mcp_server", "fs"),
+            (await rsvc.get_by_name("mcp_server", "fs")).uid,
             new_config=_stdio_config("read_file", "write_file"),
             actor="test",
         )
@@ -260,7 +260,7 @@ async def test_newly_discovered_tool_is_enabled_by_default(
         assert {t.original_name for t in tools} == {"read_file", "write_file"}
         assert all(t.enabled for t in tools)
 
-        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+        resource = await rsvc.get_by_name("mcp_server", "fs")
         pref_rows = await prefs.list_for(resource.id, "tool")
         wf = next(p for p in pref_rows if p.capability_key == "write_file")
         assert wf.enabled is True
@@ -289,7 +289,7 @@ async def test_missing_capability_preferences_preserved_across_invalidate(
     try:
         # Populate prefs + disable write_file
         await discovery.list_tools("fs")
-        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+        resource = await rsvc.get_by_name("mcp_server", "fs")
         await prefs.set_enabled(resource.id, "tool", "write_file", False)
 
         # Invalidate; re-query against the SAME upstream (which still has both)
@@ -349,7 +349,7 @@ async def test_register_http_mcp_server_discovers_capabilities(
 
             # --- Credential safety: scan every DB row for the secret value ---
             # Check resources table (config column stores transport JSON)
-            resource = await rsvc.get(ResourceRef("mcp_server", "http_srv"))
+            resource = await rsvc.get_by_name("mcp_server", "http_srv")
             config_str = str(resource.config)
             assert secret_value not in config_str, (
                 f"Credential leaked into resource.config: {config_str!r}"

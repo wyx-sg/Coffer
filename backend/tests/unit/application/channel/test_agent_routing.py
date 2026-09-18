@@ -8,6 +8,7 @@ provably read one answer. The end-to-end behaviour lives in
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from coffer.application.channel.agent_routing import (
@@ -16,6 +17,7 @@ from coffer.application.channel.agent_routing import (
     routable_keys,
 )
 from coffer.application.channel.ports import ChannelBinding
+from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 
 
@@ -29,11 +31,28 @@ class _Catalog:
         return [("claude_code", "Claude Code"), ("codex", "Codex")]
 
 
+def _channel_row() -> Resource:
+    now = datetime(2026, 9, 13, tzinfo=UTC)
+    return Resource(
+        id=1,
+        uid="uid-of-the-channel",
+        kind="channel",
+        name="tg",
+        description=None,
+        config={"channel_type": "telegram"},
+        enabled=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def _binding(scope: Scope | None, default_agent: str = "claude_code") -> ChannelBinding:
     adapter: Any = object()
+    # Everything on a binding below the gate is in agent KEYS — the scope
+    # included, because the gate projected it there (``wanted.Routing``). The
+    # channel's own row carries uids and nothing here reads them.
     return ChannelBinding(
-        name="tg",
-        resource_id=1,
+        resource=_channel_row(),
         channel_type="telegram",
         default_agent=default_agent,
         default_agent_config=None,

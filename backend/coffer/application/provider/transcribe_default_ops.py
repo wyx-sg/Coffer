@@ -45,15 +45,17 @@ async def _set_flag(
 ) -> None:
     config = dict(resource.config)
     config["transcribe_default"] = value
-    await service._resources.update_config(service._ref(resource.name), config, actor)
+    await service._resources.update_config(resource.uid, config, actor)
 
 
-async def set_transcribe_default(service: ProviderService, name: str, *, actor: str) -> Resource:
-    """Make ``name`` the global speech-to-text connection."""
-    resource = await service.get(name)
+async def set_transcribe_default(service: ProviderService, uid: str, *, actor: str) -> Resource:
+    """Make this connection the global speech-to-text connection."""
+    resource = await service.get(uid)
     previous: str | None = None
     for r in await service.list():
-        if r.name == name:
+        # Identity, not label: "is this the row being marked" must not be
+        # decided by a string the user may change between two reads.
+        if r.uid == uid:
             continue
         if service._cfg(r).transcribe_default:
             await _set_flag(service, r, value=False, actor=actor)
@@ -69,8 +71,10 @@ async def set_transcribe_default(service: ProviderService, name: str, *, actor: 
             )
     await service._audit.record(
         AuditEventType.PROVIDER_TRANSCRIBE_DEFAULT_SET.value,
-        ref=service._ref(name),
+        resource=resource,
         actor=actor,
-        details={"from": previous, "to": name},
+        # Labels for the reader; the row the event belongs to travels as
+        # ``resource``, so the trail survives a rename of either connection.
+        details={"from": previous, "to": resource.name},
     )
-    return await service.get(name)
+    return await service.get(uid)

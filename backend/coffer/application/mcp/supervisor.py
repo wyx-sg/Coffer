@@ -29,19 +29,26 @@ from coffer.domain.mcp.server_config import (
     MCPServerConfig,
     StdioTransport,
 )
-from coffer.domain.resource import ResourceRef
+from coffer.domain.resource import Resource
 
 # A factory the composition root injects to build connections without
 # pulling the infrastructure adapters into the application layer (CODE-005).
 # Signature: (transport, credentials_overlay, spawn_timeout, request_timeout,
-#             server_name) -> UpstreamConnectionPort.
+#             resource) -> UpstreamConnectionPort.
+#
+# The whole ``Resource`` rather than its name because the connection needs both
+# halves of a resource and for different reasons: the NAME is what a timeout
+# message and the upstream's own stderr file are titled with — a uid there would
+# make every diagnostic unreadable — while the UID is what the spawned process's
+# PID file is recorded under, since that file has to name the same server after a
+# rename (ADR resource-identity-is-an-immutable-uid).
 UpstreamFactory = Callable[
     [
         HttpTransport | StdioTransport,
         dict[str, str],
         int,
         int,
-        str,
+        Resource,
     ],
     UpstreamConnectionPort,
 ]
@@ -184,7 +191,7 @@ class SubprocessSupervisor:
             entry.state = UpstreamHealth.STARTING
 
             # Look up the config
-            resource = await self._resources.get(ResourceRef("mcp_server", server_name))
+            resource = await self._resources.get_by_name("mcp_server", server_name)
             if not resource.enabled:
                 entry.state = UpstreamHealth.UNHEALTHY
                 raise UpstreamUnavailable(f"{server_name!r} is disabled")
@@ -206,7 +213,7 @@ class SubprocessSupervisor:
             for attempt_idx in range(len(self._retry_delays) + 1):
                 try:
                     async with self._spawn_slots:
-                        conn = await self._build_connection(server_name, config)
+                        conn = await self._build_connection(resource, config)
                         await conn.spawn_and_initialize()
                     entry.connection = conn
                     entry.state = UpstreamHealth.HEALTHY
@@ -244,7 +251,7 @@ class SubprocessSupervisor:
             )
 
     async def _build_connection(
-        self, server_name: str, config: MCPServerConfig
+        self, resource: Resource, config: MCPServerConfig
     ) -> UpstreamConnectionPort:
         if isinstance(config.transport, StdioTransport | HttpTransport):
             # CODE-034: materialize() is a synchronous, potentially-blocking
@@ -259,7 +266,7 @@ class SubprocessSupervisor:
                 overlay,
                 config.spawn_timeout_seconds,
                 config.request_timeout_seconds,
-                server_name,
+                resource,
             )
         raise UpstreamUnavailable(f"unsupported transport type: {type(config.transport).__name__}")
 

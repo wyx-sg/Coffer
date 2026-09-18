@@ -290,3 +290,34 @@ def delete_partition(name: str) -> None:
     directory = paths.partition_dir(name)
     if directory.is_dir():
         shutil.rmtree(directory)
+
+
+def rename_partition(old: str, new: str) -> None:
+    """Move a partition's whole directory when its Resource is renamed.
+
+    The mirror of ``knowledge``'s ``rename_collection_dir``, and for the same
+    reason: a partition's name is its directory, so the label and the folder
+    have to move together. One move takes the index, ``notes/``, ``RETIRED.md``
+    and ``.raw/`` with it, which is what keeps a rename from costing the layer
+    the entries the distil pass has not been back to yet.
+
+    **A target that already exists is refused rather than merged into.** The
+    framework has checked that no ``memory`` *row* holds the new name; it has
+    not checked the filesystem, and it cannot — a directory can be there with
+    no row behind it, left by a partition whose cleanup failed. The check has
+    to be explicit because ``rename(2)`` makes the wrong call quietly: it fails
+    on a non-empty target but succeeds over an empty one. Merging would file
+    two repositories' raw entries into one partition, which is the one thing
+    FR-014's keying exists to prevent, and it would not be undone by the tree
+    being derived — the next pass would happily re-fill the merged directory.
+
+    A missing source is tolerated: a row whose directory is gone still renames,
+    and the next aggregation pass writes the directory under the new name.
+    """
+    target = paths.partition_dir(new)
+    if target.exists() or target.is_symlink():
+        raise FileExistsError(str(target))
+    source = paths.partition_dir(old)
+    if not source.is_dir():
+        return
+    source.rename(target)

@@ -43,8 +43,8 @@ coffer provider add local-ollama \
 Coffer:
 
 1. Validates the connection's shape.
-2. Stores the raw key in the Fernet vault under `provider/<name>/key` and keeps
-   only the ref.
+2. Stores the raw key in the Fernet vault under an opaque ref
+   (`provider/<uuid4>/key`) and keeps only the ref.
 3. Persists a resource of kind `provider` whose config holds the protocol, the
    base URL, the credential ref and the curated model set — never the key, and
    never a model it runs.
@@ -74,8 +74,8 @@ same surface every scoped kind uses. This is how an OpenAI-compatible gateway
 is pointed at Claude Code:
 
 ```bash
-coffer scope show provider:my-openai
-coffer scope set provider:my-openai --agents claude_code
+coffer scope show provider my-openai
+coffer scope set provider my-openai --agents claude_code
 ```
 
 `--no-agents` makes the connection dormant — it reaches nothing. Scope is a
@@ -121,7 +121,7 @@ before you switch (the web Agent page's Overview tab stages a connection + model
 draft, makes you test it, and only then confirms). Over HTTP:
 
 ```bash
-curl -X PATCH "$COFFER_URL/api/v1/agents/<agent-name>" \
+curl -X PATCH "$COFFER_URL/api/v1/agents/<agent uid>" \
   -H "X-Coffer-Token: $COFFER_TOKEN" \
   -d '{"model": "claude-opus-4-6", "fast_model": "claude-haiku-4-5"}'
 ```
@@ -139,10 +139,10 @@ unit.
 
 ## Claude Code — nothing else to do
 
-`apiKeyHelper = "coffer provider key --connection <name>"` is written into
+`apiKeyHelper = "coffer provider key --connection-uid <uid>"` is written into
 `settings.json`, so Claude Code fetches the key on demand from exactly the
-connection that was activated. No environment variable, and the raw key never
-lands on disk.
+connection that was activated — by uid, so renaming the connection leaves the
+line working. No environment variable, and the raw key never lands on disk.
 
 ## Codex — the key reaches it through an env var
 
@@ -152,7 +152,8 @@ a channel turn), it materialises the key into that variable for the child
 process. For a Codex you start yourself in a shell, export it first:
 
 ```bash
-export COFFER_PROVIDER_KEY="$(coffer provider key --connection my-openai)"
+export COFFER_PROVIDER_KEY="$(coffer provider key --connection-uid \
+  "$(coffer provider show my-openai | jq -r .uid)")"
 codex
 ```
 
@@ -175,7 +176,7 @@ Each entry is `{id, modality}`, where the modality is `text`, `embedding`,
 `image`, `video` or `audio`. An EMPTY set means no restriction — everything the
 endpoint serves. Chat pickers take the `text` entries only, so an embedding
 model can never be picked as an agent's chat model. Curation is done on the
-connection's detail page (Models tab) or over `PATCH /api/v1/providers/{name}`,
+connection's detail page (Models tab) or over `PATCH /api/v1/providers/{uid}`,
 whose `models` field replaces the whole set.
 
 ## Coffer's own engine
@@ -204,9 +205,11 @@ coffer provider show my-anthropic
 ## Print a key
 
 ```bash
-coffer provider key --connection my-anthropic   # what Coffer projects
-coffer provider key --wire anthropic            # legacy: whichever connection
-                                                # is active for that wire's agent
+# `key` is the one command here that takes a uid, because its caller is the
+# apiKeyHelper line in an agent's config file rather than a person.
+coffer provider key --connection-uid "$(coffer provider show my-anthropic | jq -r .uid)"
+coffer provider key --wire anthropic   # legacy: whichever connection is
+                                       # active for that wire's agent
 ```
 
 The raw key goes to stdout only, and is never logged.
@@ -221,9 +224,11 @@ coffer provider edit my-anthropic --base-url https://gateway.example.com
 coffer provider edit my-anthropic --secret sk-ant-newkey...
 ```
 
-`credential_ref` is immutable. Renaming is its own operation — it moves the
-vault entry, the audit trail and any live projection together — and is available
-on the detail page or over `POST /api/v1/providers/{name}/rename`.
+`credential_ref` is immutable. Renaming is an ordinary label edit — the vault
+entry, the audit trail and any live projection all stay where they are, because
+they follow the connection's uid — and is available on the detail page, over
+`PATCH /api/v1/resources/{uid}`, or as
+`coffer resource rename provider my-anthropic my-anthropic-eu`.
 
 ## Remove a connection
 
@@ -274,7 +279,7 @@ supply exactly one of `--secret` / `--credential-ref`; for `ollama` supply
 neither.
 
 **`no active provider for wire …`** — nothing is active for that wire's agent.
-Use `coffer provider key --connection <name>`, or switch a connection first.
+Use `coffer provider key --connection-uid <uid>`, or switch a connection first.
 
 **The agent still runs on its built-in login** — Coffer clears `is_active` at
 boot when the agent's native config no longer carries its projection: something

@@ -30,7 +30,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     assert text.startswith("✅ Paired.")
     assert "/help" in text  # the confirmation carries the command list
 
-    entries = await env.audit_entries("channel_paired", name="tg")
+    entries = await env.audit_entries("channel_paired", resource)
     assert len(entries) == 1
     assert entries[0].details == {"chat_id": "chat-1", "display_name": "Alice"}
 
@@ -40,7 +40,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     assert peer is not None
     assert peer.chat_id == "chat-1"
     assert len(adapter.sent) == 1  # no confirmation for the second chat
-    assert len(await env.audit_entries("channel_paired", name="tg")) == 1
+    assert len(await env.audit_entries("channel_paired", resource)) == 1
 
 
 @pytest.mark.acceptance(spec="channels", scenario="ignore messages from strangers")

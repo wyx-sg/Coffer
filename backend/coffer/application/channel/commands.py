@@ -31,15 +31,10 @@ from coffer.application.channel.conversation_ops import (
     explain_conversation_error,
     open_conversation,
 )
-from coffer.application.channel.ports import (
-    AgentCatalogPort,
-    ChannelBinding,
-    ChannelPeer,
-    ChannelThreadConversationRepoPort,
-    ModelSuggestionPort,
-)
+from coffer.application.channel.ports import AgentCatalogPort, ChannelBinding, ModelSuggestionPort
 from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
 from coffer.application.channel.selection_cards import agent_card
+from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversationRepoPort
 from coffer.domain.channel.commands import help_text
 from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget
 from coffer.domain.errors import CofferError
@@ -150,7 +145,7 @@ class ChannelCommands:
             )
         elif command == "/status":
             running = session.running_conversation_id is not None
-            row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+            row = await self._threads.get(binding.resource.id, peer.chat_id, thread_id)
             bound = row.active_conversation_id if row is not None else None
             conv = bound or "none yet"
             agent = effective_agent(binding, row.preferred_agent if row is not None else None)
@@ -195,7 +190,7 @@ class ChannelCommands:
         running on the previous conversation, and stopping the bound (idle) one
         would claim "Stopping…" while the real turn ran on.
         """
-        row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+        row = await self._threads.get(binding.resource.id, peer.chat_id, thread_id)
         bound = row.active_conversation_id if row is not None else None
         target = session.running_conversation_id or bound
         if target is not None:
@@ -233,7 +228,7 @@ class ChannelCommands:
         # narrowed set, so a card can never offer a key the check rejects.
         keys = routable_keys(binding, self._agents)
         if len(parts) < 2:
-            row = await self._threads.get(binding.resource_id, peer.chat_id, thread_id)
+            row = await self._threads.get(binding.resource.id, peer.chat_id, thread_id)
             current = effective_agent(binding, row.preferred_agent if row is not None else None)
             if keys and binding.adapter.capabilities.supports_buttons:
                 # A card the platform refuses must not end the command in
@@ -279,7 +274,7 @@ class ChannelCommands:
         stick it on THIS thread and open a fresh conversation for it (FR-033/040
         — a different thread of the same group can run a different agent). Shared
         by the text ``/agent <key>`` path and a card tap."""
-        await self._threads.set_preferred_agent(binding.resource_id, peer.chat_id, thread_id, key)
+        await self._threads.set_preferred_agent(binding.resource.id, peer.chat_id, thread_id, key)
         await self._open_and_report(
             binding,
             peer,

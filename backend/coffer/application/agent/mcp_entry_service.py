@@ -40,7 +40,7 @@ from coffer.domain.agent.mcp_entries import (
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigFileNotAllowed
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
     AgentConfigParseError,
@@ -79,7 +79,7 @@ class McpEntriesView:
 
 
 class _AgentLookup(Protocol):
-    async def get(self, name: str) -> Resource: ...
+    async def get(self, uid: str) -> Resource: ...
 
 
 class _ResourcePort(Protocol):
@@ -96,7 +96,7 @@ class _ResourcePort(Protocol):
         allow_lifecycle_kind: bool = False,
     ) -> Resource: ...
 
-    async def get(self, ref: ResourceRef) -> Resource: ...
+    async def get(self, uid: str) -> Resource: ...
 
     async def list(
         self,
@@ -104,7 +104,7 @@ class _ResourcePort(Protocol):
         enabled: bool | None = None,
     ) -> list[Resource]: ...
 
-    async def delete(self, ref: ResourceRef, actor: str) -> None: ...
+    async def delete(self, uid: str, actor: str) -> None: ...
 
 
 class _CredentialStorePort(Protocol):
@@ -147,16 +147,26 @@ class AgentMcpEntryService:
         self._rs = resource_service
         self._credentials = credentials
 
-    async def _config_for(self, name: str) -> AgentConfig:
-        # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        resource = await self._agents.get(name)
-        return AgentConfig.model_validate(resource.config)
+    async def _agent(self, uid: str) -> tuple[Resource, AgentConfig]:
+        """The agent row and its parsed config.
+
+        Both halves, because the write paths audit against the resource itself
+        — ``AuditService.record`` takes the row, not an identifier it would
+        have to resolve again.
+
+        Raises ResourceNotFound (→ 404) when the agent doesn't exist.
+        """
+        resource = await self._agents.get(uid)
+        return resource, AgentConfig.model_validate(resource.config)
+
+    async def _config_for(self, uid: str) -> AgentConfig:
+        return (await self._agent(uid))[1]
 
     def _source_specs(self, cfg: AgentConfig) -> list[ConfigFileSpec]:
         cfg_dir = cfg.resolved_config_dir()
         return [spec_for(cfg.type, key, cfg_dir) for key in _source_keys(cfg.type)]
 
-    async def list_entries(self, name: str) -> McpEntriesView:
+    async def list_entries(self, uid: str) -> McpEntriesView:
         """Merged MCP entries across all MCP-bearing config files.
 
         Missing files are skipped; unparseable files degrade to an explicit
@@ -164,7 +174,7 @@ class AgentMcpEntryService:
         Entries (except Coffer's own) are annotated with the name of an
         equivalent registered ``mcp_server`` resource, if any.
         """
-        cfg = await self._config_for(name)
+        cfg = await self._config_for(uid)
         items: list[McpEntry] = []
         parse_errors: list[ParseErrorInfo] = []
         for spec in self._source_specs(cfg):
@@ -196,7 +206,7 @@ class AgentMcpEntryService:
         return McpEntriesView(items=annotated, parse_errors=parse_errors)
 
     async def _locate(
-        self, name: str, entry: str, source: str | None
+        self, uid: str, entry: str, source: str | None
     ) -> tuple[ConfigFileSpec, str, McpEntry]:
         """Find the single source file containing ``entry``.
 
@@ -208,7 +218,7 @@ class AgentMcpEntryService:
         """
         if entry == COFFER_SERVER_KEY:
             raise McpEntryProtected(entry)
-        cfg = await self._config_for(name)
+        cfg = await self._config_for(uid)
         specs = self._source_specs(cfg)
         if source is not None:
             if source not in _source_keys(cfg.type):
@@ -242,11 +252,11 @@ class AgentMcpEntryService:
         return hits[0]
 
     async def remove_entry(
-        self, name: str, entry: str, *, source: str | None = None, actor: str = "api"
+        self, uid: str, entry: str, *, source: str | None = None, actor: str = "api"
     ) -> None:
         """Remove ``entry`` from the agent config file that contains it."""
-        cfg = await self._config_for(name)
-        spec, _text, _parsed = await self._locate(name, entry, source)
+        agent, cfg = await self._agent(uid)
+        spec, _text, _parsed = await self._locate(uid, entry, source)
         # Re-read immediately before the write, as ``adopt`` does: ``_locate``
         # awaits, so the text it returned can be stale by the time we get here.
         # The web UI deletes a whole selection at once and fans the requests out
@@ -261,7 +271,7 @@ class AgentMcpEntryService:
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.AGENT_MCP_ENTRY_REMOVED.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"entry": entry, "source": spec.key},
         )
@@ -284,7 +294,7 @@ class AgentMcpEntryService:
 
     async def adopt(
         self,
-        name: str,
+        uid: str,
         entry: str,
         *,
         source: str | None = None,
@@ -302,8 +312,8 @@ class AgentMcpEntryService:
         removed; a failure after registration deletes the new resource so the
         agent's file is never left without a working entry.
         """
-        cfg = await self._config_for(name)
-        spec, _text, parsed_entry = await self._locate(name, entry, source)
+        agent, cfg = await self._agent(uid)
+        spec, _text, parsed_entry = await self._locate(uid, entry, source)
 
         flagged = secret_env_keys({**parsed_entry.env, **parsed_entry.headers})
         unresolved = [k for k in flagged if k not in (secrets or {})]
@@ -352,7 +362,7 @@ class AgentMcpEntryService:
             raise
         try:
             # Verify the resource is really readable before touching the file.
-            await self._rs.get(ResourceRef("mcp_server", resource.name))
+            await self._rs.get(resource.uid)
             # Re-read the file immediately before the write to avoid a TOCTOU
             # window: another writer may have modified the file between _locate
             # and here (two awaits above).
@@ -368,12 +378,12 @@ class AgentMcpEntryService:
         except Exception:
             # Roll back: never leave both a half-adopted resource AND a
             # still-present (or half-removed) config entry inconsistent.
-            await self._rs.delete(ResourceRef("mcp_server", resource.name), actor=actor)
+            await self._rs.delete(resource.uid, actor=actor)
             await self._cleanup_refs(applicable)
             raise
         await self._audit.record(
             AuditEventType.AGENT_MCP_ENTRY_ADOPTED.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"entry": entry, "resource": resource.name, "source": spec.key},
         )

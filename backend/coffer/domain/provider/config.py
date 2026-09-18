@@ -16,10 +16,10 @@ asks for the kind it needs, so a chat dropdown never offers an image model.
 introspection and whether a key is needed. It does NOT fix which agent the
 connection projects into: that is the framework-level per-agent **scope** on the
 resource row (ADR per-agent-resource-scope), which the user may set to anything (e.g. an
-openai-compatible gateway routed to Claude Code). The wire only supplies the
-STARTING scope a newly created connection is given
-(``default_scope_for_protocol``), so a fresh connection behaves as it always
-did and the user narrows or widens it from there. Activation lives in
+openai-compatible gateway routed to Claude Code). The wire only decides whether
+a newly created connection starts DORMANT (``starts_dormant``) — it cannot
+supply a starting agent LIST any more, because a scope holds agent uids and no
+pure function of this config knows one. Activation lives in
 ``is_active`` (≤1 active per agent type, enforced by the switch op);
 ``internal_default`` (global, ≤1) marks the connection Coffer's internal engine
 uses.
@@ -41,43 +41,6 @@ from coffer.domain.provider.modality import Modality
 
 # Same ref grammar the credential store accepts (slash-namespaced segments).
 _CRED_REF_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+(/[A-Za-z0-9_.\-]+)*$")
-
-# Agent-type identifiers a connection may project into. Held as plain strings
-# (mirroring ``AgentType`` values) so this domain module does NOT import the agent
-# kind — the cross-kind import contract forbids ``application.memory`` (which
-# imports this config for the internal engine) from reaching the agent kind. The
-# application layer re-hydrates these into ``AgentType`` at the projection seam.
-_CLAUDE_CODE = "claude_code"
-_CODEX = "codex"
-
-# The scope a connection is CREATED with, by the wire the endpoint speaks. The
-# wire does not fix the projection target — the resource's scope does, and the
-# user may edit it — so a credentialed endpoint starts at the widest set (both
-# agents) and is narrowed from there. ollama is internal-only: no key, projects
-# into no agent, so it starts dormant.
-#
-# This is only a starting value. Were it absent, the framework's own default
-# for an unset scope ("every agent") would silently widen a new ollama
-# connection into both agents, which is why the provider kind supplies it
-# through ``Kind.default_scope`` instead of letting the framework default win.
-_DEFAULT_SCOPE: dict[str, list[str]] = {
-    "anthropic": [_CLAUDE_CODE, _CODEX],
-    "openai": [_CLAUDE_CODE, _CODEX],
-    "ollama": [],
-    "unknown": [_CLAUDE_CODE, _CODEX],
-}
-
-
-def default_scope_for_protocol(protocol: str) -> list[str]:
-    """The per-agent scope a connection on ``protocol`` is created with.
-
-    Agent-type VALUE strings, like every other agent reference in this module —
-    the application layer hydrates them at the projection seam so this module
-    stays independent of the agent kind. An unrecognised wire gets the widest
-    set, the same answer ``unknown`` gets.
-    """
-    return list(_DEFAULT_SCOPE.get(protocol, [_CLAUDE_CODE, _CODEX]))
-
 
 #: Shape-only bounds for the curated ``models`` set. Model ids are OPAQUE — they
 #: are passed verbatim to the vendor, and Coffer writes down no model name of its
@@ -109,17 +72,38 @@ class CuratedModel(BaseModel):
 class Protocol(StrEnum):
     """Upstream wire protocol a connection speaks (detected, not user-typed).
 
-    ``anthropic`` / ``openai`` set the scope a connection STARTS with (both
-    coding agents). ``ollama`` is internal-only: it starts scoped to NO agent
-    and is used solely by Coffer's internal LLM engine. ``unknown`` means the
-    probe was inconclusive — the connection starts open to every agent and the
-    user decides.
+    ``anthropic`` / ``openai`` / ``unknown`` connections start UNSCOPED — open
+    to every agent, including one registered tomorrow — and the user narrows
+    from there; ``unknown`` means the probe was inconclusive, and the
+    conservative answer to that is "ask", not "guess". ``ollama`` is
+    internal-only: it starts scoped to NO agent and is used solely by Coffer's
+    internal LLM engine.
     """
 
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     OLLAMA = "ollama"
     UNKNOWN = "unknown"
+
+
+def starts_dormant(protocol: str) -> bool:
+    """Whether a connection on ``protocol`` is CREATED scoped to no agent.
+
+    The whole of what the wire still says about scope, and all it can say. A
+    scope names agents by uid (ADR resource-identity-is-an-immutable-uid), and
+    a uid is not derivable from this config — so the old table that handed each
+    wire a starting agent LIST is gone, along with the ``claude_code`` /
+    ``codex`` name strings this module had to spell out to build it. What
+    survives is the one case where the framework's default would be wrong
+    rather than merely wide: ``ollama`` carries no key, so a scope of "every
+    agent" would advertise a reach it can never have. Every other wire starts
+    unscoped, which is what "the widest set" now means — and, unlike the
+    explicit list it replaces, it keeps covering an agent registered later.
+
+    An unrecognised wire is treated as credentialed, the same answer
+    ``unknown`` gets.
+    """
+    return protocol == Protocol.OLLAMA.value
 
 
 class ProviderConfig(BaseModel):
@@ -129,7 +113,8 @@ class ProviderConfig(BaseModel):
 
     protocol: Protocol
     base_url: str
-    # Fernet vault ref (e.g. ``provider/<name>/key``); multiple connections MAY
+    # Fernet vault ref — an opaque address (``provider/<uuid4>/key``), never
+    # derived from anything the user can change; multiple connections MAY
     # share one ref. Required for anthropic/openai/unknown; ``None`` for ollama
     # (no key). Probed for existence at register/update time by the kind's
     # credential_ref_extractor.

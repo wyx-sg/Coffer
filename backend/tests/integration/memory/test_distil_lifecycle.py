@@ -26,6 +26,7 @@ import pytest
 
 from coffer.application.memory.context import compose_context
 from coffer.application.memory.recall import RecallService
+from coffer.application.memory.service import KIND_MEMORY
 from coffer.domain.memory.note import TYPE_PROJECT
 from coffer.infrastructure.memory import paths, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
@@ -101,7 +102,10 @@ class _Vault:
         self.completion._responses.extend(answers)
         service = self.service()
         await service.aggregate()
-        return await service.distil(_PARTITION)
+        # Aggregation is what registers the partition, so its uid only exists
+        # after that half has run — which is also the order production takes:
+        # nothing can be distilled before something has filed into it.
+        return await service.distil(self.resources.uid_of(KIND_MEMORY, _PARTITION))
 
 
 @pytest.fixture
@@ -318,7 +322,7 @@ async def test_a_second_pass_over_unchanged_sources_does_not_re_open_it(vault: _
     service = vault.service()
     result = await service.aggregate()
     assert result.sources_skipped == 2 and result.sources_read == 0
-    distilled = await service.distil(_PARTITION)
+    distilled = await service.distil(vault.resources.uid_of(KIND_MEMORY, _PARTITION))
 
     assert len(vault.completion.calls) == calls_before  # nothing was even asked
     assert (distilled.opened, distilled.merged, distilled.retired) == (0, 0, 0)
@@ -384,6 +388,6 @@ async def test_an_entry_the_pass_kept_nothing_from_is_never_offered_to_a_model_t
 
     service = vault.service()
     await service.aggregate()
-    await service.distil(_PARTITION)
+    await service.distil(vault.resources.uid_of(KIND_MEMORY, _PARTITION))
 
     assert len(vault.completion.calls) == calls_before

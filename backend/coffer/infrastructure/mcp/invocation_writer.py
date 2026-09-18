@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.persistence.base import Base
+from coffer.infrastructure.persistence.models import ResourceModel
 
 
 class MCPInvocationModel(Base):
@@ -34,7 +35,11 @@ class MCPInvocationModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    resource_name: Mapped[str] = mapped_column(String, nullable=False)
+    #: WHICH server, by identity (migration 0091). The log is history, so it has
+    #: to survive the rename that a name-keyed column would have split it across.
+    #: Not a foreign key: a deleted server's invocations stay readable, and two
+    #: reserved non-uid values live here — see ``domain.mcp.capability``.
+    resource_uid: Mapped[str] = mapped_column(String, nullable=False)
     capability_type: Mapped[str] = mapped_column(String, nullable=False)
     capability_key: Mapped[str] = mapped_column(String, nullable=False)
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -43,7 +48,7 @@ class MCPInvocationModel(Base):
     session_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
-        Index("idx_invocations_resource", "resource_name", "timestamp"),
+        Index("idx_invocations_resource", "resource_uid", "timestamp"),
         Index("idx_invocations_time", "timestamp"),
         Index("idx_invocations_session", "session_id", "timestamp"),
     )
@@ -58,7 +63,7 @@ def _inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
     return MCPInvocation(
         id=row.id,
         timestamp=_tz(row.timestamp),
-        resource_name=row.resource_name,
+        resource_uid=row.resource_uid,
         capability_type=row.capability_type,  # type: ignore[arg-type]
         capability_key=row.capability_key,
         duration_ms=row.duration_ms,
@@ -71,7 +76,7 @@ def _inv_to_domain(row: MCPInvocationModel) -> MCPInvocation:
 def _inv_to_model(inv: MCPInvocation) -> MCPInvocationModel:
     return MCPInvocationModel(
         timestamp=inv.timestamp,
-        resource_name=inv.resource_name,
+        resource_uid=inv.resource_uid,
         capability_type=inv.capability_type,
         capability_key=inv.capability_key,
         duration_ms=inv.duration_ms,
@@ -154,15 +159,15 @@ class MCPInvocationRepo:
     async def query(
         self,
         *,
-        resource_name: str | None = None,
+        resource_uid: str | None = None,
         status: Literal["ok", "error", "timeout", "denied"] | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[MCPInvocation]:
         async with self._sm() as session:
             stmt = select(MCPInvocationModel).order_by(MCPInvocationModel.timestamp.desc())
-            if resource_name is not None:
-                stmt = stmt.where(MCPInvocationModel.resource_name == resource_name)
+            if resource_uid is not None:
+                stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
             if status is not None:
                 stmt = stmt.where(MCPInvocationModel.status == status)
             if since is not None:
@@ -176,29 +181,46 @@ class MCPInvocationRepo:
         *,
         since: datetime,
     ) -> dict[tuple[str, str], int]:
-        """Tool-invocation counts per (server, tool) at or after ``since``.
+        """Tool-invocation counts per (server NAME, tool) at or after ``since``.
 
         The ranking signal for tool tiering. Every status counts — an
         errored call still proves the agent reached for that tool, and demoting
         a tool because its upstream was flaky would hide it exactly when the
         user is trying to get it working.
+
+        Rows are STORED by uid and come back keyed by name, and the join that
+        turns one into the other belongs here rather than in the caller: the
+        only consumer is the tiering policy, which ranks the namespaced wire
+        names (``<server>__<tool>``) of an aggregated ``tools/list``, and that
+        namespace is the label. Doing it in SQL also means the counts already
+        answer to the server's CURRENT name — the history a rename used to split
+        in two now ranks as one server, which is the behaviour a user would
+        expect and never got.
+
+        An inner join, so rows that resolve to no resource simply do not appear:
+        Coffer's own built-ins (which never enter tiering — they are listed
+        unconditionally and outside the budget) and servers deleted before the
+        window closed (whose tools are not in the catalogue being ranked). No
+        count is attributed to the wrong server, and nothing is hidden by their
+        absence — tiering only ever decides an ORDER among tools that exist.
         """
         async with self._sm() as session:
             stmt = (
                 select(
-                    MCPInvocationModel.resource_name,
+                    ResourceModel.name,
                     MCPInvocationModel.capability_key,
                     func.count().label("n"),
                 )
+                .join(ResourceModel, ResourceModel.uid == MCPInvocationModel.resource_uid)
                 .where(MCPInvocationModel.capability_type == "tool")
                 .where(MCPInvocationModel.timestamp >= since)
                 .group_by(
-                    MCPInvocationModel.resource_name,
+                    ResourceModel.name,
                     MCPInvocationModel.capability_key,
                 )
             )
             rows = (await session.execute(stmt)).all()
-        return {(r.resource_name, r.capability_key): int(r.n) for r in rows}
+        return {(r.name, r.capability_key): int(r.n) for r in rows}
 
     # --- internals ------------------------------------------------------- #
 

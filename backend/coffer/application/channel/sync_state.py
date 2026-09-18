@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
-from coffer.application.channel.ports import ChannelPeer, ChannelPeerRepoPort
+from coffer.application.channel.store_ports import ChannelPeer, ChannelPeerRepoPort
 from coffer.application.resource_service import ResourceService
 
 #: Directory under ``state/`` in the bundle.
@@ -35,15 +35,25 @@ AREA = "channel-peers"
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
 
 
-def doc_path(channel: str, chat_id: str) -> str:
+def doc_path(channel_uid: str, chat_id: str) -> str:
     """The document's address, which is only an address.
 
-    Sanitising is lossy on purpose — two chat ids could in principle collapse to
+    Keyed by the channel's **uid**, not its name (ADR
+    resource-identity-is-an-immutable-uid). A name is a label its owner may
+    change, and while this path spelled one, renaming a channel republished
+    every pairing it had: the whole directory arrived at the other end as a
+    delete of every old path plus an add of every new one, and the deletions
+    are applied — ``delete_docs`` un-pairs — so the other machine lost the
+    pairings and the owner re-paired from their phone. A uid does not move, so
+    a rename now changes nothing in this area at all.
+
+    The uid needs no sanitising (it is hex), unlike the chat id. Sanitising the
+    chat id is lossy on purpose — two chat ids could in principle collapse to
     one path — so the payload carries the true ids and the path is never parsed
     back into one. Deterministic, which is what keeps an unchanged vault
     producing an unchanged tree.
     """
-    return f"{channel}/{_UNSAFE.sub('_', chat_id) or 'chat'}"
+    return f"{channel_uid}/{_UNSAFE.sub('_', chat_id) or 'chat'}"
 
 
 class ChannelPeerSyncState:
@@ -61,9 +71,14 @@ class ChannelPeerSyncState:
             for peer in await self._peers.list_by_resource(resource.id):
                 docs.append(
                     (
-                        doc_path(resource.name, peer.chat_id),
+                        doc_path(resource.uid, peer.chat_id),
                         {
-                            "channel": resource.name,
+                            # The channel's identity, spelled the same way the
+                            # resource document spells it. The channel's NAME is
+                            # deliberately absent: it is a label this machine
+                            # may not even agree with by the time the document
+                            # lands, and nothing here reads it.
+                            "channel_uid": resource.uid,
                             "chat_id": peer.chat_id,
                             "display_name": peer.display_name,
                             "sender_id": peer.sender_id,
@@ -75,23 +90,23 @@ class ChannelPeerSyncState:
 
     async def import_docs(self, docs: list[tuple[str, dict[str, object]]]) -> list[tuple[str, str]]:
         errors: list[tuple[str, str]] = []
-        by_name = {r.name: r.id for r in await self._resources.list(kind="channel")}
+        by_uid = {r.uid: r.id for r in await self._resources.list(kind="channel")}
         for path, doc in docs:
-            channel = str(doc.get("channel") or "")
+            channel_uid = str(doc.get("channel_uid") or "")
             chat_id = str(doc.get("chat_id") or "")
-            if not channel or not chat_id:
+            if not channel_uid or not chat_id:
                 # A document this build cannot read is not one it can apply.
                 # Reported rather than silently dropped: the round holds the
                 # path, so the next export cannot publish it as a deletion.
-                errors.append((path, "pairing document is missing 'channel' or 'chat_id'"))
+                errors.append((path, "pairing document is missing 'channel_uid' or 'chat_id'"))
                 continue
-            resource_id = by_name.get(channel)
+            resource_id = by_uid.get(channel_uid)
             if resource_id is None:
                 # The channel itself has not landed here yet — the resource
                 # documents and this area are applied path by path in one
                 # round, in no guaranteed order. Held and retried, exactly as a
                 # resource document that arrives before its credential is.
-                errors.append((path, f"channel '{channel}' is not registered here yet"))
+                errors.append((path, f"channel '{channel_uid}' is not registered here yet"))
                 continue
             try:
                 await self._peers.upsert(
@@ -116,14 +131,14 @@ class ChannelPeerSyncState:
         hold is nothing to do here.
         """
         wanted = set(rels)
-        by_name = {r.name: r.id for r in await self._resources.list(kind="channel")}
+        by_uid = {r.uid: r.id for r in await self._resources.list(kind="channel")}
         for rel in wanted:
-            channel = rel.split("/", 1)[0]
-            resource_id = by_name.get(channel)
+            channel_uid = rel.split("/", 1)[0]
+            resource_id = by_uid.get(channel_uid)
             if resource_id is None:
                 continue
             for peer in await self._peers.list_by_resource(resource_id):
-                if doc_path(channel, peer.chat_id) == rel:
+                if doc_path(channel_uid, peer.chat_id) == rel:
                     await self._peers.delete_by_chat(resource_id, peer.chat_id)
 
 

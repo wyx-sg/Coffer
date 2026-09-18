@@ -14,6 +14,9 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.models import ResourceModel
 
+#: An opaque uuid4 hex, the shape a real resource uid has.
+_FS_UID = "aa11bb22cc33dd44ee55ff6677889900"
+
 
 def _now() -> datetime:
     return datetime.now(tz=UTC)
@@ -27,6 +30,7 @@ async def test_capability_preference_round_trip(tmp_path):
     sm = session_maker(engine)
     async with sm() as s:
         r = ResourceModel(
+            uid=_FS_UID,
             kind="mcp_server",
             name="filesystem",
             description=None,
@@ -62,6 +66,7 @@ async def test_preference_cascade_on_resource_delete(tmp_path):
     sm = session_maker(engine)
     async with sm() as s:
         r = ResourceModel(
+            uid=_FS_UID,
             kind="mcp_server",
             name="fs",
             description=None,
@@ -101,6 +106,7 @@ async def test_preference_unique_constraint(tmp_path):
 
     async with sm() as s:
         r = ResourceModel(
+            uid=_FS_UID,
             kind="mcp_server",
             name="fs",
             description=None,
@@ -147,7 +153,7 @@ async def test_invocation_round_trip(tmp_path):
         s.add(
             MCPInvocationModel(
                 timestamp=_now(),
-                resource_name="filesystem",
+                resource_uid=_FS_UID,
                 capability_type="tool",
                 capability_key="read_file",
                 duration_ms=42,

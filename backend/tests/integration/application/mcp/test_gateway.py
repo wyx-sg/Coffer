@@ -18,7 +18,7 @@ from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import ResourceNotFound, ToolDisabled
 from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
@@ -131,6 +131,28 @@ async def _setup(
     return session, resource_svc, prefs_repo, inv_repo, engine
 
 
+#: Agent identities as the shim actually reports them — opaque uuid4 hex, not
+#: names. Written out rather than derived from a registered agent because these
+#: tests never register one: a scope is a list of strings and ``is_active``
+#: compares strings, so using name-shaped values here would let a test pass for
+#: the wrong reason (ADR resource-identity-is-an-immutable-uid).
+CLAUDE_CODE_UID = "9f2c41a0b7d94e6a8c1f35b2d07ae914"
+CODEX_UID = "3b7e08d1c4f2456ab90d61ea5c2f7d38"
+
+
+async def _uid(rsvc: ResourceService, name: str) -> str:
+    """The uid of a server these tests registered under ``name``.
+
+    The tests speak names because that is what the MCP wire namespace is made
+    of; the invocation log is keyed on identity, so the two meet here.
+    """
+    return (await rsvc.get_by_name("mcp_server", name)).uid
+
+
+async def _scope(rsvc: ResourceService, name: str, scope: Scope | None) -> None:
+    await rsvc.update_scope(await _uid(rsvc, name), scope, actor="test")
+
+
 @pytest.mark.asyncio
 async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -150,9 +172,9 @@ async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
         },
     )
     try:
-        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), Scope(agents=[]), actor="test")
+        await _scope(rsvc, "gh", Scope(agents=[]))
         await session.handle_initialize(
-            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent-uid": CLAUDE_CODE_UID}}
         )
         result = await session.handle_request("tools/list")
         names = {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
@@ -161,7 +183,7 @@ async def test_tools_list_excludes_dormant_server_and_unscoped_is_unaffected(
         conn = await session._supervisor.get_or_spawn("fs")
         assert conn is not None
         # The dormant doc is present/visible even though nothing activates it.
-        visible = await rsvc.get(ResourceRef("mcp_server", "gh"))
+        visible = await rsvc.get_by_name("mcp_server", "gh")
         assert visible is not None
         assert visible.scope == Scope(agents=[])
     finally:
@@ -188,22 +210,24 @@ async def test_initialize_returns_capabilities(
 
 
 @pytest.mark.asyncio
-async def test_initialize_captures_agent_identity_from_meta(
+async def test_initialize_captures_agent_uid_from_meta(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """MCP Gateway FR-013 (amended): the shim self-reports its bound agent's name
-    at the handshake via ``params._meta["coffer/agent"]``, alongside the
-    existing ``coffer/cwd`` key; the gateway captures it onto the session."""
+    at the handshake via ``params._meta["coffer/agent-uid"]``, alongside the
+    existing ``coffer/cwd`` key; the gateway captures it onto the session. It is
+    the agent's UID, so the value survives a rename of the agent and matches the
+    uids a resource's ``scope`` holds (ADR resource-identity-is-an-immutable-uid)."""
     _with_in_memory(monkeypatch)
     session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
     try:
         await session.handle_initialize(
             {
                 "protocolVersion": "2025-06-18",
-                "_meta": {"coffer/cwd": "/work/repo", "coffer/agent": "claude_code"},
+                "_meta": {"coffer/cwd": "/work/repo", "coffer/agent-uid": CLAUDE_CODE_UID},
             }
         )
-        assert session._session_agent == "claude_code"
+        assert session._session_agent_uid == CLAUDE_CODE_UID
         assert session._session_cwd == "/work/repo"
     finally:
         await session.dispose()
@@ -211,14 +235,14 @@ async def test_initialize_captures_agent_identity_from_meta(
 
 
 @pytest.mark.asyncio
-async def test_initialize_without_agent_meta_leaves_session_agent_none(
+async def test_initialize_without_agent_meta_leaves_session_agent_uid_none(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _with_in_memory(monkeypatch)
     session, _rsvc, _prefs, _inv, engine = await _setup(tmp_path, {})
     try:
         await session.handle_initialize({"protocolVersion": "2025-06-18"})
-        assert session._session_agent is None
+        assert session._session_agent_uid is None
     finally:
         await session.dispose()
         await _safe_dispose(engine)
@@ -229,7 +253,7 @@ async def _tools_list_names_for_agent(
     subdir: str,
     configs: dict,  # type: ignore[type-arg]
     scope: Scope | None,
-    agent: str | None,
+    agent_uid: str | None,
 ) -> set[str]:
     """Spin up one isolated session (own tmp_path/engine), scope `gh`,
     initialize with (or without) an agent identity, and return the
@@ -238,8 +262,8 @@ async def _tools_list_names_for_agent(
     path.mkdir()
     session, rsvc, _prefs, _inv, engine = await _setup(path, configs)
     try:
-        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), scope, actor="test")
-        meta: dict = {"coffer/agent": agent} if agent is not None else {}
+        await _scope(rsvc, "gh", scope)
+        meta: dict = {"coffer/agent-uid": agent_uid} if agent_uid is not None else {}
         await session.handle_initialize({"protocolVersion": "2025-06-18", "_meta": meta})
         result = await session.handle_request("tools/list")
         return {t["name"] for t in result["tools"] if not t["name"].startswith("coffer__")}
@@ -256,25 +280,24 @@ async def _tools_list_names_for_agent(
 async def test_tools_list_agent_scoped_server_visible_only_to_matching_agent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Per-agent scope (FR-012/021): a server scoped to ``["claude-code"]`` is visible
-    in tools/list to a session that initialized with agent ``claude-code``;
-    invisible to a session that initialized with agent ``codex``; and
-    invisible to an unidentified session (no ``coffer/agent`` key in the
-    initialize ``_meta``) — an unidentified session matches only an unscoped
-    resource."""
+    """Per-agent scope (FR-012/021): a server scoped to Claude Code's uid is
+    visible in tools/list to a session that initialized reporting that uid;
+    invisible to a session reporting Codex's; and invisible to an unidentified
+    session (no ``coffer/agent-uid`` key in the initialize ``_meta``) — an
+    unidentified session matches only an unscoped resource."""
     _with_in_memory(monkeypatch)
 
     configs = {
         "fs": _stdio_config(tools=["read_file"]),
         "gh": _stdio_config(tools=["create_issue"]),
     }
-    scope = Scope(agents=["claude-code"])
+    scope = Scope(agents=[CLAUDE_CODE_UID])
 
-    assert await _tools_list_names_for_agent(tmp_path, "a", configs, scope, "claude-code") == {
+    assert await _tools_list_names_for_agent(tmp_path, "a", configs, scope, CLAUDE_CODE_UID) == {
         "fs__read_file",
         "gh__create_issue",
     }
-    assert await _tools_list_names_for_agent(tmp_path, "b", configs, scope, "codex") == {
+    assert await _tools_list_names_for_agent(tmp_path, "b", configs, scope, CODEX_UID) == {
         "fs__read_file"
     }
     assert await _tools_list_names_for_agent(tmp_path, "c", configs, scope, None) == {
@@ -296,8 +319,8 @@ async def test_tools_list_unscoped_server_visible_to_all_sessions(
     }
     both = {"fs__read_file", "gh__create_issue"}
 
-    assert await _tools_list_names_for_agent(tmp_path, "a", configs, None, "claude-code") == both
-    assert await _tools_list_names_for_agent(tmp_path, "b", configs, None, "codex") == both
+    assert await _tools_list_names_for_agent(tmp_path, "a", configs, None, CLAUDE_CODE_UID) == both
+    assert await _tools_list_names_for_agent(tmp_path, "b", configs, None, CODEX_UID) == both
     assert await _tools_list_names_for_agent(tmp_path, "c", configs, None, None) == both
 
 
@@ -315,7 +338,7 @@ async def test_tools_call_refused_for_server_excluded_by_agent_axis(
     server that tools/list hides from it, even by calling tools/call
     directly with the server's still-guessable prefixed tool name — the
     supervisor has no session context, so this must be gated on the session's
-    invocation path where `_session_agent` lives."""
+    invocation path where `_session_agent_uid` lives."""
     _with_in_memory(monkeypatch)
 
     session, rsvc, _prefs, inv_repo, engine = await _setup(
@@ -323,18 +346,16 @@ async def test_tools_call_refused_for_server_excluded_by_agent_axis(
         {"gh": _stdio_config(tools=["create_issue"])},
     )
     try:
-        await rsvc.update_scope(
-            ResourceRef("mcp_server", "gh"), Scope(agents=["claude-code"]), actor="test"
-        )
+        await _scope(rsvc, "gh", Scope(agents=[CLAUDE_CODE_UID]))
         await session.handle_initialize(
-            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "codex"}}
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent-uid": CODEX_UID}}
         )
         with pytest.raises(ToolDisabled):
             await session.handle_request(
                 "tools/call",
                 {"name": "gh__create_issue", "arguments": {"title": "x"}},
             )
-        invocations = await inv_repo.query(resource_name="gh", status="denied")
+        invocations = await inv_repo.query(resource_uid=await _uid(rsvc, "gh"), status="denied")
         assert len(invocations) == 1
     finally:
         await session.dispose()
@@ -354,11 +375,9 @@ async def test_tools_call_allowed_for_server_included_by_agent_axis(
         {"gh": _stdio_config(tools=["create_issue"])},
     )
     try:
-        await rsvc.update_scope(
-            ResourceRef("mcp_server", "gh"), Scope(agents=["claude-code"]), actor="test"
-        )
+        await _scope(rsvc, "gh", Scope(agents=[CLAUDE_CODE_UID]))
         await session.handle_initialize(
-            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent-uid": CLAUDE_CODE_UID}}
         )
         result = await session.handle_request(
             "tools/call",
@@ -385,16 +404,16 @@ async def test_tools_call_refused_for_dormant_server(
         {"gh": _stdio_config(tools=["create_issue"])},
     )
     try:
-        await rsvc.update_scope(ResourceRef("mcp_server", "gh"), Scope(agents=[]), actor="test")
+        await _scope(rsvc, "gh", Scope(agents=[]))
         await session.handle_initialize(
-            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent": "claude-code"}}
+            {"protocolVersion": "2025-06-18", "_meta": {"coffer/agent-uid": CLAUDE_CODE_UID}}
         )
         with pytest.raises(ToolDisabled):
             await session.handle_request(
                 "tools/call",
                 {"name": "gh__create_issue", "arguments": {"title": "x"}},
             )
-        invocations = await inv_repo.query(resource_name="gh", status="denied")
+        invocations = await inv_repo.query(resource_uid=await _uid(rsvc, "gh"), status="denied")
         assert len(invocations) == 1
     finally:
         await session.dispose()
@@ -459,7 +478,7 @@ async def test_tools_call_routes_and_records_invocation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _with_in_memory(monkeypatch)
-    session, _rsvc, _prefs, inv_repo, engine = await _setup(
+    session, rsvc, _prefs, inv_repo, engine = await _setup(
         tmp_path, {"fs": _stdio_config(tools=["read_file"])}
     )
     try:
@@ -473,7 +492,7 @@ async def test_tools_call_routes_and_records_invocation(
         assert isinstance(result, dict)
         assert "content" in result
         # One invocation row recorded
-        invocations = await inv_repo.query(resource_name="fs")
+        invocations = await inv_repo.query(resource_uid=await _uid(rsvc, "fs"))
         assert len(invocations) == 1
         assert invocations[0].status == "ok"
         assert invocations[0].capability_key == "read_file"
@@ -495,7 +514,7 @@ async def test_tools_call_disabled_rejected_with_denied_invocation(
         # Trigger discovery to populate preferences
         await session.handle_request("tools/list")
         # Disable write_file
-        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+        resource = await rsvc.get_by_name("mcp_server", "fs")
         await prefs_repo.set_enabled(resource.id, "tool", "write_file", False)
         # Attempted call should raise + record denied
         with pytest.raises(ToolDisabled):
@@ -503,7 +522,7 @@ async def test_tools_call_disabled_rejected_with_denied_invocation(
                 "tools/call",
                 {"name": "fs__write_file", "arguments": {}},
             )
-        invocations = await inv_repo.query(resource_name="fs", status="denied")
+        invocations = await inv_repo.query(resource_uid=await _uid(rsvc, "fs"), status="denied")
         assert len(invocations) == 1
         assert invocations[0].capability_key == "write_file"
         assert invocations[0].duration_ms == 0
@@ -568,7 +587,7 @@ async def test_resources_read_routes_and_records(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _with_in_memory(monkeypatch)
-    session, _rsvc, _prefs, inv_repo, engine = await _setup(
+    session, rsvc, _prefs, inv_repo, engine = await _setup(
         tmp_path,
         {"fs": _stdio_config(tools=["stub"], resources=["file:///tmp/a.txt"])},
     )
@@ -581,7 +600,7 @@ async def test_resources_read_routes_and_records(
         )
         assert isinstance(result, dict)
         assert "contents" in result
-        invocations = await inv_repo.query(resource_name="fs")
+        invocations = await inv_repo.query(resource_uid=await _uid(rsvc, "fs"))
         assert len(invocations) == 1
         assert invocations[0].status == "ok"
         assert invocations[0].capability_type == "resource"
@@ -825,7 +844,7 @@ async def test_upstream_crash_mid_call_then_respawn(
 
     # Use retry_delays=() so respawn after crash is immediate — avoids the
     # default production delays (1 s, 5 s, 30 s) that can sleep ~36 s on CI.
-    session, _rsvc, _prefs, inv_repo, engine = await _setup(
+    session, rsvc, _prefs, inv_repo, engine = await _setup(
         tmp_path,
         {"crash_srv": crash_config},
         supervisor_retry_delays=(),
@@ -850,7 +869,7 @@ async def test_upstream_crash_mid_call_then_respawn(
         # least one "ok" row for the successful first call.  Using "error" (not
         # just "!= ok") ensures a stray "denied" row from an unrelated subtest
         # cannot falsely satisfy the assertion.
-        invocations = await inv_repo.query(resource_name="crash_srv")
+        invocations = await inv_repo.query(resource_uid=await _uid(rsvc, "crash_srv"))
         statuses = [i.status for i in invocations]
         assert "error" in statuses, (
             f"Expected an 'error' invocation row for the crash call, got: {statuses}"
@@ -1137,7 +1156,7 @@ async def test_handler_disabled_records_denied_invocation(
         # Pre-seed prefs with capability disabled so check_capability_enabled
         # sees a row and short-circuits with ToolDisabled.  set_enabled is a
         # no-op when the row is absent, so we use insert() directly.
-        resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+        resource = await rsvc.get_by_name("mcp_server", "fs")
         now = datetime.now(tz=UTC)
         await prefs.insert(
             resource_id=resource.id,
@@ -1165,7 +1184,7 @@ async def test_handler_disabled_records_denied_invocation(
                 ensure_subscribed=_noop_subscribe,
             )
 
-        rows = await inv.query(resource_name="fs")
+        rows = await inv.query(resource_uid=await _uid(rsvc, "fs"))
         denied = [r for r in rows if r.status == "denied"]
         assert len(denied) == 1, f"expected exactly one denied invocation, got: {rows}"
         assert denied[0].capability_type == capability_type
@@ -1256,7 +1275,7 @@ async def test_handler_records_timeout_invocation_on_upstream_timeout(
                 ensure_subscribed=_noop_subscribe,
             )
 
-        rows = await inv.query(resource_name="fs")
+        rows = await inv.query(resource_uid=await _uid(rsvc, "fs"))
         timed_out = [r for r in rows if r.status == "timeout"]
         assert len(timed_out) == 1, f"expected exactly one timeout invocation, got: {rows}"
         assert timed_out[0].capability_type == capability_type
@@ -1313,7 +1332,7 @@ async def test_upstream_crash_mid_resource_read_then_respawn(
         )
 
         # An error invocation row must have been recorded.
-        rows = await inv.query(resource_name="fs")
+        rows = await inv.query(resource_uid=await _uid(rsvc, "fs"))
         assert any(r.status == "error" for r in rows), f"no error row; rows={rows}"
     finally:
         await _safe_dispose(engine)
@@ -1363,7 +1382,7 @@ async def test_upstream_crash_mid_prompt_get_then_respawn(
             f"evict not called; evicted={spy_supervisor._evicted}"
         )
 
-        rows = await inv.query(resource_name="gh")
+        rows = await inv.query(resource_uid=await _uid(rsvc, "gh"))
         assert any(r.status == "error" for r in rows), f"no error row; rows={rows}"
     finally:
         await _safe_dispose(engine)
@@ -1434,7 +1453,7 @@ async def test_mcp_error_does_not_evict_healthy_upstream(
         assert evicted == [], f"MCPError must not evict; evicted={evicted}"
 
         # But the failed call is still recorded as an error invocation.
-        rows = await inv.query(resource_name="fs")
+        rows = await inv.query(resource_uid=await _uid(rsvc, "fs"))
         assert any(r.status == "error" for r in rows), f"no error row; rows={rows}"
     finally:
         await _safe_dispose(engine)
@@ -1504,7 +1523,7 @@ async def test_inband_iserror_result_is_recorded_as_error(
         assert evicted == [], f"in-band isError must not evict; evicted={evicted}"
 
         # The honesty fix: the row must be `error`, never `ok`.
-        rows = await inv.query(resource_name="fs")
+        rows = await inv.query(resource_uid=await _uid(rsvc, "fs"))
         statuses = [r.status for r in rows]
         assert statuses == ["error"], f"expected one error row, got {statuses}"
     finally:

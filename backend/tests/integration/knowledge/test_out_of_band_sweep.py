@@ -25,6 +25,7 @@ from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UpkeepRunRegistry
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import catalogue, fs, paths
 
@@ -39,6 +40,10 @@ class _Resources:
         self._rows = [
             Resource(
                 id=i,
+                # A uid a test can spell, and deliberately not the name: a
+                # lookup that worked because the two matched would prove
+                # nothing about addressing a collection by identity.
+                uid=f"uid-{i}",
                 kind=KIND_KNOWLEDGE,
                 name=name,
                 description=None,
@@ -50,6 +55,18 @@ class _Resources:
             )
             for i, name in enumerate(names, start=1)
         ]
+
+    async def get(self, uid):  # type: ignore[no-untyped-def]
+        for row in self._rows:
+            if row.uid == uid:
+                return row
+        raise ResourceNotFound(uid)
+
+    def uid_of(self, name: str) -> str:
+        """The uid a test knows the collection by its name — the resolution a
+        person's CLI or the web page does before anything inside the daemon
+        is handed an identity."""
+        return next(r.uid for r in self._rows if r.name == name)
 
     async def list(self, kind=None, enabled=None):  # type: ignore[no-untyped-def]
         return list(self._rows)
@@ -99,7 +116,9 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 def _worker(service: KnowledgeService, loop: _Loop) -> CurationWorker:
     async def _collections() -> list[str]:
-        return ["shopee"]
+        # Uids, as the composition root's own lister yields: the sweep claims
+        # and curates by identity, never by the directory's name.
+        return ["uid-1"]
 
     async def _enabled() -> bool:
         return True

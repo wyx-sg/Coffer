@@ -20,20 +20,28 @@ pytestmark = pytest.mark.asyncio
 
 
 class _FakeAgents:
-    """Minimal _AgentLookup: returns one agent Resource, else ResourceNotFound."""
+    """Minimal _AgentLookup: returns one agent Resource, else ResourceNotFound.
+
+    Keyed by UID, like the port it stands in for. The ``name`` it is given is
+    the label the row carries — kept so the tests still read as being about a
+    recognisable agent, and so a fake keyed the old way cannot pass by
+    accident.
+    """
 
     def __init__(self, *, name: str, config: dict) -> None:
         self._name = name
+        self.uid = f"uid-{name}"
         self._config = config
 
-    async def get(self, name: str) -> Resource:
-        if name != self._name:
-            raise ResourceNotFound("agent", name)
+    async def get(self, uid: str) -> Resource:
+        if uid != self.uid:
+            raise ResourceNotFound(uid)
         now = datetime(2026, 6, 21, tzinfo=UTC)
         return Resource(
             id=1,
+            uid=self.uid,
             kind="agent",
-            name=name,
+            name=self._name,
             description=None,
             config=self._config,
             enabled=True,
@@ -61,7 +69,7 @@ async def test_list_stores_for_claude_code(tmp_path: pathlib.Path) -> None:
         scanner=FileNativeMemoryScanner(),
     )
 
-    stores = await svc.list_stores("cc")
+    stores = await svc.list_stores("uid-cc")
     assert len(stores) == 1
     store = stores[0]
     assert store.project_label == "Proj"
@@ -93,7 +101,7 @@ async def test_list_stores_label_from_session_cwd_not_lossy_slug(tmp_path: pathl
         scanner=FileNativeMemoryScanner(),
     )
 
-    store = (await svc.list_stores("cc"))[0]
+    store = (await svc.list_stores("uid-cc"))[0]
     assert store.project_label == "account-gateway"
     assert store.project_path == "/Users/yuxing.wu/WorkEnv/account-gateway"
 
@@ -113,7 +121,7 @@ async def test_list_stores_sorted_by_count_then_label(tmp_path: pathlib.Path) ->
         scanner=FileNativeMemoryScanner(),
     )
 
-    stores = await svc.list_stores("cc")
+    stores = await svc.list_stores("uid-cc")
     # count desc, then label asc.
     assert [(s.project_label, s.item_count) for s in stores] == [
         ("alpha", 3),
@@ -133,7 +141,7 @@ async def test_list_stores_codex_without_memories_file_is_empty(tmp_path: pathli
         scanner=FileNativeMemoryScanner(),
     )
 
-    assert await svc.list_stores("cx") == []
+    assert await svc.list_stores("uid-cx") == []
 
 
 async def test_list_stores_codex_global_groups_by_cwd(tmp_path: pathlib.Path) -> None:
@@ -155,7 +163,7 @@ async def test_list_stores_codex_global_groups_by_cwd(tmp_path: pathlib.Path) ->
         scanner=FileNativeMemoryScanner(),
     )
 
-    stores = await svc.list_stores("cx")
+    stores = await svc.list_stores("uid-cx")
     # One row per distinct cwd, count desc then label; memory_dir is the shared store.
     assert [(s.project_label, s.item_count) for s in stores] == [
         ("account-gateway", 2),
@@ -176,7 +184,7 @@ async def test_list_stores_missing_projects_dir_returns_empty(tmp_path: pathlib.
         scanner=FileNativeMemoryScanner(),
     )
 
-    assert await svc.list_stores("cc") == []
+    assert await svc.list_stores("uid-cc") == []
 
 
 async def test_list_stores_unknown_agent_raises(tmp_path: pathlib.Path) -> None:
@@ -187,4 +195,4 @@ async def test_list_stores_unknown_agent_raises(tmp_path: pathlib.Path) -> None:
         scanner=FileNativeMemoryScanner(),
     )
     with pytest.raises(ResourceNotFound):
-        await svc.list_stores("ghost")
+        await svc.list_stores("uid-ghost")

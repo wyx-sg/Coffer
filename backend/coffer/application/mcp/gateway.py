@@ -41,6 +41,7 @@ from coffer.application.mcp.gateway_aggregate_lists import (
     list_tools_across,
 )
 from coffer.application.mcp.gateway_builtin import (
+    agent_actor_label,
     append_builtin_tools,
     dispatch_builtin_tool,
     dispatch_tool_search,
@@ -54,7 +55,7 @@ from coffer.application.mcp.gateway_handlers import (
 from coffer.application.mcp.gateway_instructions import build_initialize_result
 from coffer.application.mcp.gateway_notifications import forward_upstream_notification
 from coffer.application.mcp.gateway_parsing import (
-    _extract_agent,
+    _extract_agent_uid,
     _extract_cwd,
 )
 from coffer.application.mcp.gateway_recovery import DegradedTracker
@@ -108,12 +109,16 @@ class MCPGatewaySession:
         self._invocations = invocations
         self._downstream_sink = downstream_sink
         self._clock = clock or (lambda: datetime.now(tz=UTC))
-        # Per-agent scope: the session's bound agent identity, set
-        # from the shim's self-reported ``--agent`` name on the ``initialize``
-        # handshake (params._meta["coffer/agent"], see handle_initialize).
-        # None when the shim was launched without one (pre-Task-9 install, or
-        # an unnamed launch) — such a session then sees only unscoped servers.
-        self._session_agent: str | None = None
+        # Per-agent scope: the session's bound agent identity — the agent
+        # resource's **uid**, set from the shim's self-reported
+        # ``--agent-uid`` on the ``initialize`` handshake
+        # (params._meta["coffer/agent-uid"], see handle_initialize). The uid and
+        # not the name because a ``scope`` holds uids, and the two sides of that
+        # comparison have to speak one vocabulary (ADR
+        # resource-identity-is-an-immutable-uid). None when the shim reported
+        # nothing — an unidentified session, which then sees only unscoped
+        # servers.
+        self._session_agent_uid: str | None = None
         # CODE-035: called once when the session is disposed so the composition
         # root can drop this session's entry from its supervisor registry
         # (otherwise disposed-but-registered supervisors accumulate for the
@@ -178,10 +183,9 @@ class MCPGatewaySession:
         # requests appropriately (T-061: sampling capability check).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
-        # The identity scope is evaluated against (Task 9): the shim's
-        # self-reported `--agent` name, when it stamped one
-        # (params._meta["coffer/agent"]).
-        self._session_agent = _extract_agent(params)
+        # The identity scope is evaluated against: the shim's self-reported
+        # agent uid, when it stamped one (params._meta["coffer/agent-uid"]).
+        self._session_agent_uid = _extract_agent_uid(params)
         self._initialized = True
         # Tool tiering: the instructions field is the only channel into the client's
         # system prompt. On the first handshake nothing has been listed yet, so
@@ -216,7 +220,7 @@ class MCPGatewaySession:
         return self._server_request_registry.handle_response(envelope)
 
     async def _enabled_mcp_servers(self) -> list[str]:
-        return await enabled_mcp_servers(self._resources, self._session_agent)
+        return await enabled_mcp_servers(self._resources, self._session_agent_uid)
 
     async def _ensure_subscribed(self, server_name: str) -> None:
         """Attach notification + server-request handlers to the upstream connection lazily."""
@@ -305,7 +309,7 @@ class MCPGatewaySession:
                 clock=self._clock,
             )
         if self._builtin.is_builtin(name):
-            params = self._inject_session_context(name, params)
+            params = await self._inject_session_context(name, params)
             return await dispatch_builtin_tool(
                 prefixed_name=name,
                 params=params,
@@ -316,13 +320,15 @@ class MCPGatewaySession:
             )
         return await self._dispatch_handler(handle_tools_call, params)
 
-    def _inject_session_context(self, prefixed_name: str, params: dict[str, Any]) -> dict[str, Any]:
+    async def _inject_session_context(
+        self, prefixed_name: str, params: dict[str, Any]
+    ) -> dict[str, Any]:
         return inject_session_context(
             self._builtin,
             prefixed_name,
             params,
             session_cwd=self._session_cwd,
-            session_agent=self._session_agent,
+            agent_label=await agent_actor_label(self._resources, self._session_agent_uid),
         )
 
     async def _dispatch_handler(
@@ -343,7 +349,7 @@ class MCPGatewaySession:
             clock=self._clock,
             ensure_subscribed=self._ensure_subscribed,
             on_evict=self._on_upstream_evicted,
-            session_agent=self._session_agent,
+            session_agent_uid=self._session_agent_uid,
         )
 
     async def _handle_resources_read(self, params: dict[str, Any]) -> Any:

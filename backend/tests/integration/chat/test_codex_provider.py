@@ -50,7 +50,18 @@ async def _repo(tmp_path: Any) -> tuple[ConversationRepo, Any]:
     return ConversationRepo(session_maker(engine)), engine
 
 
-def _conv(agent_key: str = "codex", channel_name: str | None = None) -> Conversation:
+#: The channel a bridged conversation points at. The row stores the channel's
+#: uid (ADR resource-identity-is-an-immutable-uid); its name reaches the prompt
+#: only through the resolver the provider is handed.
+_SEATALK_UID = "3c8a17d5e2f04b9188ac6d0f5e2b7a91"
+
+
+async def _seatalk_name(uid: str) -> str | None:
+    assert uid == _SEATALK_UID
+    return "SeaTalk"
+
+
+def _conv(agent_key: str = "codex", channel_uid: str | None = None) -> Conversation:
     now = datetime.now(tz=UTC)
     return Conversation(
         id=uuid.uuid4().hex,
@@ -58,7 +69,7 @@ def _conv(agent_key: str = "codex", channel_name: str | None = None) -> Conversa
         title="t",
         created_at=now,
         updated_at=now,
-        channel_name=channel_name,
+        channel_uid=channel_uid,
     )
 
 
@@ -388,7 +399,7 @@ async def test_channel_turn_carries_the_notes_codex_used_to_miss(tmp_path: Any) 
     shared composer, so the two providers cannot drift apart again.
     """
     repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_name="SeaTalk"))
+    conv = await repo.create(_conv(channel_uid=_SEATALK_UID))
     factory, server = _make_factory()
 
     calls: list[tuple[str, str]] = []
@@ -405,6 +416,7 @@ async def test_channel_turn_carries_the_notes_codex_used_to_miss(tmp_path: Any) 
         session_factory=factory,
         list_models=_models,
         compose_memory_context=_memory,
+        resolve_channel_name=_seatalk_name,
     )
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "gpt-5.4"})
     adapter = await provider.build_adapter(conv.id)

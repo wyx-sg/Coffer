@@ -52,7 +52,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.partition import GLOBAL_PARTITION
 from coffer.domain.memory.reader import MemoryReader
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.memory import store
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
 
@@ -101,6 +101,10 @@ class PartitionSummary:
     nothing will ever match it either.
     """
 
+    #: The partition's identity — what a surface addresses it by, and what the
+    #: distil sweep and the Distil button both claim, so neither can be aimed
+    #: at a different partition by a label that moved in between.
+    uid: str
     name: str
     repository_key: str
     repository_path: str
@@ -167,20 +171,23 @@ class MemoryService:
         """
         agent_rows = await self._resources.list(kind="agent", enabled=True)
         memory_rows = await self._resources.list(kind=KIND_MEMORY)
-        known = {row.name: _placement_of(row) for row in memory_rows}
+        # Keyed by name because that is what a placement carries — a
+        # partition's name IS its directory — but holding the whole row, so the
+        # config update below addresses it by uid without a second lookup.
+        known = {row.name: row for row in memory_rows}
 
         outcome = run_aggregation(
             agents=[self._resolve_agent_source(row) for row in agent_rows],
             readers=self._readers,
-            known=list(known.values()),
+            known=[_placement_of(row) for row in memory_rows],
         )
 
         for touch in outcome.touched:
-            before = known.get(touch.placement.name)
-            if before is None:
+            row = known.get(touch.placement.name)
+            if row is None:
                 await self._register_partition(touch, actor=actor)
-            elif before != touch.placement:
-                await self._record_repository(touch.placement, actor=actor)
+            elif _placement_of(row) != touch.placement:
+                await self._record_repository(row.uid, touch.placement, actor=actor)
 
         result = outcome.result
         await self._audit.record(
@@ -218,7 +225,7 @@ class MemoryService:
             allow_lifecycle_kind=True,
         )
 
-    async def _record_repository(self, placement: Placement, *, actor: str) -> None:
+    async def _record_repository(self, uid: str, placement: Placement, *, actor: str) -> None:
         """Write a repository identity onto a partition that lacked one, or
         whose repository has moved on this disk.
 
@@ -227,7 +234,7 @@ class MemoryService:
         records a spurious ``resource_updated`` event.
         """
         await self._resources.update_config(
-            ResourceRef(KIND_MEMORY, placement.name),
+            uid,
             _config_of(placement),
             actor=actor,
             allow_lifecycle_kind=True,
@@ -237,8 +244,13 @@ class MemoryService:
     # Distil                                                             #
     # ----------------------------------------------------------------- #
 
-    async def distil(self, partition: str, *, actor: str = "system") -> DistilResult:
+    async def distil(self, uid: str, *, actor: str = "system") -> DistilResult:
         """Turn one partition's raw entries into notes, and rewrite its index.
+
+        The partition is named by its **uid** and the directory to rewrite is
+        read off the row: a pass spends a model and rewrites every note in a
+        directory, so what it is aimed at must be what cannot be edited while
+        it runs. The label can be, and is wanted here only for the path.
 
         Raises ``ResourceNotFound`` for a partition with no row, which is what
         the route answers 404 with: a directory nobody registered is not a
@@ -249,12 +261,11 @@ class MemoryService:
         Refusing a second concurrent pass over one partition (FR-041) is the
         surface's, not this method's: the record is per-daemon and lives in the
         shared upkeep-runs registry, which the HTTP layer and the worker both
-        already go through.
+        already go through — both keyed on this uid.
         """
-        ref = ResourceRef(KIND_MEMORY, partition)
-        row = await self._resources.get(ref)
+        row = await self._resources.get(uid)
         result = await distil_partition(
-            partition,
+            row.name,
             completion=self._completion,
             model_selector=self._models,
             repository_path=_placement_of(row).repository_path,
@@ -263,7 +274,7 @@ class MemoryService:
         )
         await self._audit.record(
             AuditEventType.MEMORY_DISTILLED.value,
-            ref=ref,
+            resource=row,
             actor=actor,
             details={
                 "merged": result.merged,
@@ -325,6 +336,18 @@ class MemoryService:
         """
         store.delete_partition(name)
 
+    async def move_partition(self, old_name: str, new_name: str) -> None:
+        """Move a partition's directory when its Resource is renamed.
+
+        Unlike deletion this is not made safe by the tree being derived: a
+        rename that moved nothing would leave the row naming an empty
+        directory that the next pass refills from the agents' *current*
+        memory, while every note the distil pass wrote and the retirement
+        record that keeps deleted notes deleted sat under the old name,
+        unreferenced. A move that cannot happen aborts the rename (``kind.py``).
+        """
+        store.rename_partition(old_name, new_name)
+
 
 def _placement_of(row: Resource) -> Placement:
     """One ``memory`` Resource row as the pass's own value object."""
@@ -344,6 +367,7 @@ def _config_of(placement: Placement) -> dict[str, str]:
 
 def _summary_of(row: Resource, placement: Placement) -> PartitionSummary:
     return PartitionSummary(
+        uid=row.uid,
         name=row.name,
         repository_key=placement.repository_key,
         repository_path=placement.repository_path,

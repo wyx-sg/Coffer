@@ -55,20 +55,27 @@ def _json_container_create(data: dict[str, Any], dotted_key: str) -> dict[str, A
 
 
 def _entry_fields(
-    shim_path: str, entry_style: McpEntryStyle, agent_name: str | None = None
+    shim_path: str, entry_style: McpEntryStyle, agent_uid: str | None = None
 ) -> dict[str, Any]:
     """The key/value pairs of a single stdio ``coffer`` entry for the style.
 
-    ``agent_name``, when given, threads the installing agent's own name
-    through as ``--agent <name>`` (spec agent-registry FR-015, amended) so the
-    shim can self-report its identity at the MCP handshake. The command-map
-    style carries it as a separate ``args`` list, mirroring how Claude Code /
-    Codex already render stdio server args. ``agent_name=None`` (the default)
-    omits the flag, for any caller that doesn't know the name.
+    ``agent_uid``, when given, threads the installing agent's own **uid**
+    through as ``--agent-uid <uid>`` (spec agent-registry FR-015, amended) so
+    the shim can self-report its identity at the MCP handshake. It is the uid
+    and not the name because this string outlives the edit that renames the
+    agent: the entry is written once into a file Coffer does not otherwise
+    touch, while the gateway matches what the shim reports against the uids a
+    resource's ``scope`` holds (ADR resource-identity-is-an-immutable-uid). A
+    name here would go stale on the first rename and quietly stop matching any
+    scope — the failure mode "never silently widen" exists to prevent.
+
+    The command-map style carries it as a separate ``args`` list, mirroring how
+    Claude Code / Codex already render stdio server args. ``agent_uid=None``
+    (the default) omits the flag, for any caller that doesn't know the agent.
     """
     fields: dict[str, Any] = {"command": shim_path}
-    if agent_name:
-        fields["args"] = ["--agent", agent_name]
+    if agent_uid:
+        fields["args"] = ["--agent-uid", agent_uid]
     return fields
 
 
@@ -94,17 +101,18 @@ def apply_install(
     *,
     container_key: str | None = None,
     entry_style: McpEntryStyle = McpEntryStyle.COMMAND_MAP,
-    agent_name: str | None = None,
+    agent_uid: str | None = None,
 ) -> str:
     """Return new config text with the ``coffer`` stdio entry inserted/updated.
 
     Idempotent: an existing ``coffer`` entry is replaced in place, never
-    duplicated — including an entry written before ``agent_name`` support was
-    added, which carries no ``--agent`` flag at all; re-installing rewrites it
-    with the flag, in place, so there is no separate auto-migration path.
+    duplicated — including an entry written by an older Coffer, which carries
+    either no identity flag at all or the name-shaped ``--agent`` one that
+    preceded the uid; re-installing rewrites the whole entry in place, so there
+    is no separate auto-migration path and no residue of the old spelling.
     """
     ck = container_key or default_container_key(fmt)
-    fields = _entry_fields(shim_path, entry_style, agent_name)
+    fields = _entry_fields(shim_path, entry_style, agent_uid)
 
     if fmt is ConfigFileFormat.JSON:
         data = _parse_json(text)

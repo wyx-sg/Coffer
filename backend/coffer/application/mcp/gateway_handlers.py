@@ -34,7 +34,6 @@ from coffer.domain.mcp.namespace import (
     parse_prefixed_tool,
     parse_prefixed_uri,
 )
-from coffer.domain.resource import ResourceRef
 from coffer.domain.scope import is_active
 
 if TYPE_CHECKING:
@@ -102,7 +101,7 @@ async def record_invocation(
     *,
     session_id: str,
     clock: Callable[[], datetime],
-    resource_name: str,
+    resource_uid: str,
     capability_type: CapabilityType,
     capability_key: str,
     duration_ms: int,
@@ -113,7 +112,7 @@ async def record_invocation(
         MCPInvocation(
             id=None,
             timestamp=clock(),
-            resource_name=resource_name,
+            resource_uid=resource_uid,
             capability_type=capability_type,
             capability_key=capability_key,
             duration_ms=duration_ms,
@@ -164,7 +163,7 @@ async def _invoke(
     clock: Callable[[], datetime],
     ensure_subscribed: Callable[[str], Any],
     on_evict: Callable[[str], None] | None = None,
-    session_agent: str | None = None,
+    session_agent_uid: str | None = None,
 ) -> Any:
     prefixed = params.get(spec.param_key, "")
     try:
@@ -172,7 +171,17 @@ async def _invoke(
     except InvalidPrefix as e:
         raise ToolDisabled(f"unrecognised {spec.label}: {prefixed!r}") from e
 
-    resource = await resources.get(ResourceRef("mcp_server", server_name))
+    # A LABEL is resolved here because a label is genuinely all the caller gave
+    # us: what arrived is a namespaced wire key the downstream client composed
+    # from the server's name (``<server>__<tool>``), which is the one vocabulary
+    # that side of the wire has. From the resolved row onward everything
+    # PERSISTED or COMPARED uses the identity — ``resource.uid`` for the
+    # invocation log, ``resource.scope`` for the reach gate, ``resource.id`` for
+    # the preference rows. The name survives only as the key of this session's
+    # live connection (``supervisor``/``ensure_subscribed``), which is
+    # in-process, rebuilt per session, and deliberately the same key the client
+    # addressed.
+    resource = await resources.get_by_name("mcp_server", server_name)
 
     # Activation scope (FR-012): tools/list already hides a server this
     # session's scope excludes (gateway._enabled_mcp_servers),
@@ -180,13 +189,16 @@ async def _invoke(
     # path re-checked it, so a caller that already knows (or guesses) a
     # hidden server's namespaced tool name could invoke it directly. The
     # supervisor's spawn gate has no session context, so this check lives
-    # here, at the session's invocation seam, where `_session_agent` is known.
-    if not is_active(resource.scope, session_agent):
+    # here, at the session's invocation seam, where the session's agent uid is
+    # known. Both sides of the comparison are uids: ``scope.agents`` holds agent
+    # uids and the shim reports one, so there is nothing to translate and no
+    # label that can go stale under a rename.
+    if not is_active(resource.scope, session_agent_uid):
         await record_invocation(
             invocations,
             session_id=session_id,
             clock=clock,
-            resource_name=server_name,
+            resource_uid=resource.uid,
             capability_type=spec.capability_type,
             capability_key=original,
             duration_ms=0,
@@ -205,7 +217,7 @@ async def _invoke(
             invocations,
             session_id=session_id,
             clock=clock,
-            resource_name=server_name,
+            resource_uid=resource.uid,
             capability_type=spec.capability_type,
             capability_key=original,
             duration_ms=0,
@@ -257,7 +269,7 @@ async def _invoke(
             invocations,
             session_id=session_id,
             clock=clock,
-            resource_name=server_name,
+            resource_uid=resource.uid,
             capability_type=spec.capability_type,
             capability_key=original,
             duration_ms=duration_ms,

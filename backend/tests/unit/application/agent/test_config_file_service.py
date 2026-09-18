@@ -48,8 +48,12 @@ _NOW = datetime(2026, 1, 1, tzinfo=UTC)
 # pointing at a stable config dir.
 _CLAUDE_CONFIG_DIR = pathlib.Path("/fake/home/.claude")
 
+# The agent is addressed by its uid; "cc" is only the label the row carries.
+_CLAUDE_UID = "7c1f0a9b4e2d4f3a8b6c5d0e1f2a3b4c"
+
 _CLAUDE_RESOURCE = Resource(
     id=1,
+    uid=_CLAUDE_UID,
     kind="agent",
     name="cc",
     description=None,
@@ -64,14 +68,14 @@ _CLAUDE_RESOURCE = Resource(
 
 
 class FakeAgentLookup:
-    """Returns a hard-coded Resource for 'cc'; raises for anything else."""
+    """Returns a hard-coded Resource for one uid; raises for anything else."""
 
-    async def get(self, name: str) -> Resource:
-        if name == "cc":
+    async def get(self, uid: str) -> Resource:
+        if uid == _CLAUDE_UID:
             return _CLAUDE_RESOURCE
         from coffer.domain.errors import ResourceNotFound
 
-        raise ResourceNotFound("agent", name)
+        raise ResourceNotFound(uid)
 
 
 @dataclass
@@ -210,7 +214,7 @@ async def test_list_includes_directory_entry_with_files(svc, store):
         DirEntryInfo(relpath="helper.md", size=8, modified_at=_NOW)
     ]
 
-    files = await svc.list_files("cc")
+    files = await svc.list_files(_CLAUDE_UID)
     by_key = {f.key: f for f in files}
 
     assert "subagents" in by_key
@@ -228,7 +232,7 @@ async def test_list_directory_entry_missing_dir(svc, store):
     # Remove the pre-seeded directory listing so it returns None.
     store._dirs.pop(_CLAUDE_CONFIG_DIR / "agents", None)
 
-    files = await svc.list_files("cc")
+    files = await svc.list_files(_CLAUDE_UID)
     by_key = {f.key: f for f in files}
     entry = by_key["subagents"]
     assert entry.kind == "directory"
@@ -237,7 +241,7 @@ async def test_list_directory_entry_missing_dir(svc, store):
 
 
 async def test_list_file_entry_has_file_kind(svc, store):
-    files = await svc.list_files("cc")
+    files = await svc.list_files(_CLAUDE_UID)
     by_key = {f.key: f for f in files}
     assert by_key["settings"].kind == "file"
 
@@ -251,7 +255,7 @@ async def test_read_file_returns_fingerprint_and_no_memory_block(svc, store):
     settings_path = _CLAUDE_CONFIG_DIR / "settings.json"
     store._files[settings_path] = '{"theme": "dark"}'
 
-    out = await svc.read_file("cc", "settings")
+    out = await svc.read_file(_CLAUDE_UID, "settings")
     assert out.fingerprint == store.fingerprint('{"theme": "dark"}')
     assert out.memory_block is False
 
@@ -261,13 +265,13 @@ async def test_read_file_detects_memory_block_marker(svc, store):
     content = f"# Rules\n\n{MEMORY_BLOCK_MARKER} -->\nsome block\n<!-- end -->"
     store._files[instructions_path] = content
 
-    out = await svc.read_file("cc", "instructions")
+    out = await svc.read_file(_CLAUDE_UID, "instructions")
     assert out.memory_block is True
     assert out.fingerprint == store.fingerprint(content)
 
 
 async def test_read_file_missing_gives_empty_fingerprint(svc, store):
-    out = await svc.read_file("cc", "settings")
+    out = await svc.read_file(_CLAUDE_UID, "settings")
     assert out.exists is False
     assert out.fingerprint == ""
     assert out.memory_block is False
@@ -280,7 +284,7 @@ async def test_read_file_missing_gives_empty_fingerprint(svc, store):
 
 async def test_read_file_directory_key_raises_not_allowed(svc):
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.read_file("cc", "subagents")
+        await svc.read_file(_CLAUDE_UID, "subagents")
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +299,7 @@ async def test_write_file_stale_fingerprint_raises_and_no_write(svc, store):
     before_writes = len(store._writes)
     with pytest.raises(ConfigFileStale):
         await svc.write_file(
-            "cc",
+            _CLAUDE_UID,
             "settings",
             '{"theme": "dark"}',
             expected_fingerprint="wrong-fingerprint",
@@ -310,7 +314,7 @@ async def test_write_file_matching_fingerprint_succeeds(svc, store):
     correct_fp = store.fingerprint(current_text)
 
     info = await svc.write_file(
-        "cc",
+        _CLAUDE_UID,
         "settings",
         '{"theme": "dark"}',
         expected_fingerprint=correct_fp,
@@ -321,13 +325,13 @@ async def test_write_file_matching_fingerprint_succeeds(svc, store):
 
 async def test_write_file_no_fingerprint_skips_stale_check(svc, store):
     # No expected_fingerprint → no stale check, always writes.
-    info = await svc.write_file("cc", "settings", '{"a": 1}')
+    info = await svc.write_file(_CLAUDE_UID, "settings", '{"a": 1}')
     assert info.exists is True
 
 
 async def test_write_file_directory_key_raises_not_allowed(svc):
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.write_file("cc", "subagents", "# hi")
+        await svc.write_file(_CLAUDE_UID, "subagents", "# hi")
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +340,7 @@ async def test_write_file_directory_key_raises_not_allowed(svc):
 
 
 async def test_read_child_missing_returns_empty(svc, store):
-    out = await svc.read_child("cc", "subagents", "helper.md")
+    out = await svc.read_child(_CLAUDE_UID, "subagents", "helper.md")
     assert out.exists is False
     assert out.content == ""
     assert out.fingerprint == ""
@@ -347,14 +351,14 @@ async def test_read_child_existing(svc, store):
     child_path = _CLAUDE_CONFIG_DIR / "agents" / "helper.md"
     store._files[child_path] = "# Helper"
 
-    out = await svc.read_child("cc", "subagents", "helper.md")
+    out = await svc.read_child(_CLAUDE_UID, "subagents", "helper.md")
     assert out.exists is True
     assert out.content == "# Helper"
     assert out.fingerprint == store.fingerprint("# Helper")
 
 
 async def test_write_child_happy_path_and_audit(svc, store, audit_svc):
-    info = await svc.write_child("cc", "subagents", "new.md", "# New", actor="cli")
+    info = await svc.write_child(_CLAUDE_UID, "subagents", "new.md", "# New", actor="cli")
 
     # Returns refreshed directory listing.
     assert info.kind == "directory"
@@ -376,7 +380,7 @@ async def test_delete_child_happy_path_and_audit(svc, store, audit_svc):
         DirEntryInfo(relpath="old.md", size=5, modified_at=_NOW)
     ]
 
-    await svc.delete_child("cc", "subagents", "old.md", actor="cli")
+    await svc.delete_child(_CLAUDE_UID, "subagents", "old.md", actor="cli")
 
     assert child_path not in store._files
     entries = await audit_svc.query()
@@ -392,7 +396,7 @@ async def test_write_child_stale_raises_no_write(svc, store):
     before_writes = len(store._writes)
     with pytest.raises(ConfigFileStale):
         await svc.write_child(
-            "cc", "subagents", "helper.md", "# Modified", expected_fingerprint="bad-fp"
+            _CLAUDE_UID, "subagents", "helper.md", "# Modified", expected_fingerprint="bad-fp"
         )
     assert len(store._writes) == before_writes
 
@@ -402,7 +406,9 @@ async def test_write_child_matching_fingerprint_succeeds(svc, store):
     store._files[child_path] = "# Original"
     fp = store.fingerprint("# Original")
 
-    await svc.write_child("cc", "subagents", "helper.md", "# Updated", expected_fingerprint=fp)
+    await svc.write_child(
+        _CLAUDE_UID, "subagents", "helper.md", "# Updated", expected_fingerprint=fp
+    )
     assert store._files[child_path] == "# Updated"
 
 
@@ -414,23 +420,23 @@ async def test_write_child_matching_fingerprint_succeeds(svc, store):
 
 async def test_write_child_on_file_key_raises(svc):
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.write_child("cc", "settings", "x.md", "# x")
+        await svc.write_child(_CLAUDE_UID, "settings", "x.md", "# x")
 
 
 async def test_read_child_on_file_key_raises(svc):
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.read_child("cc", "settings", "x.md")
+        await svc.read_child(_CLAUDE_UID, "settings", "x.md")
 
 
 async def test_delete_child_missing_file_raises(svc, store):
     # The agents directory exists but 'ghost.md' is not in it.
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.delete_child("cc", "subagents", "ghost.md")
+        await svc.delete_child(_CLAUDE_UID, "subagents", "ghost.md")
 
 
 async def test_delete_child_on_file_key_raises(svc):
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.delete_child("cc", "settings", "x.md")
+        await svc.delete_child(_CLAUDE_UID, "settings", "x.md")
 
 
 # ---------------------------------------------------------------------------
@@ -441,7 +447,7 @@ async def test_delete_child_on_file_key_raises(svc):
 async def test_read_child_traversal_rejected(svc, store):
     before = len(store._writes)
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.read_child("cc", "subagents", "../secret.md")
+        await svc.read_child(_CLAUDE_UID, "subagents", "../secret.md")
     # No filesystem access happened.
     assert len(store._writes) == before
 
@@ -449,26 +455,26 @@ async def test_read_child_traversal_rejected(svc, store):
 async def test_write_child_traversal_rejected(svc, store):
     before = len(store._writes)
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.write_child("cc", "subagents", "../escape.md", "# bad")
+        await svc.write_child(_CLAUDE_UID, "subagents", "../escape.md", "# bad")
     assert len(store._writes) == before
 
 
 async def test_delete_child_traversal_rejected(svc, store):
     before = len(store._deletes)
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.delete_child("cc", "subagents", "../escape.md")
+        await svc.delete_child(_CLAUDE_UID, "subagents", "../escape.md")
     assert len(store._deletes) == before
 
 
 async def test_write_child_absolute_relpath_rejected(svc):
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.write_child("cc", "subagents", "/etc/passwd.md", "# bad")
+        await svc.write_child(_CLAUDE_UID, "subagents", "/etc/passwd.md", "# bad")
 
 
 @pytest.mark.asyncio
 async def test_child_symlink_escape_rejected(svc, store) -> None:
     store.escaping_paths.add(_CLAUDE_CONFIG_DIR / "agents" / "evil.md")
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.read_child("cc", "subagents", "evil.md")
+        await svc.read_child(_CLAUDE_UID, "subagents", "evil.md")
     with pytest.raises(ConfigFileNotAllowed):
-        await svc.write_child("cc", "subagents", "evil.md", "# x", actor="api")
+        await svc.write_child(_CLAUDE_UID, "subagents", "evil.md", "# x", actor="api")

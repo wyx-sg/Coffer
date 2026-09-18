@@ -270,7 +270,7 @@ async def test_secret_value_never_in_db_or_logs(
                     "capability_key": inv.capability_key,
                     "status": inv.status,
                     "error_message": inv.error_message,
-                    "resource_name": inv.resource_name,
+                    "resource_uid": inv.resource_uid,
                     "session_id": inv.session_id,
                 }
                 for inv in invocations

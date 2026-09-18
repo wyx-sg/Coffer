@@ -33,13 +33,15 @@ from coffer.application.channel.pairing import PairingManager, claim_pairing
 from coffer.application.channel.ports import (
     AgentCatalogPort,
     ChannelBinding,
-    ChannelPeer,
-    ChannelPeerRepoPort,
-    ChannelThreadConversationRepoPort,
     ContextFetchPort,
     ModelSuggestionPort,
 )
 from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
+from coffer.application.channel.store_ports import (
+    ChannelPeer,
+    ChannelPeerRepoPort,
+    ChannelThreadConversationRepoPort,
+)
 from coffer.application.channel.turn_driver import (
     ConversationPort,
     QueuedInbound,
@@ -119,7 +121,7 @@ class InboundProcessor:
     # -- runtime registry ------------------------------------------------
 
     def bind(self, binding: ChannelBinding) -> None:
-        self._bindings[binding.name] = binding
+        self._bindings[binding.resource.name] = binding
 
     def unbind(self, name: str) -> None:
         self._bindings.pop(name, None)
@@ -181,7 +183,7 @@ class InboundProcessor:
                 # gate, so a bot in a busy group never butts in regardless of
                 # who sent it.
                 return
-            owner = await self._peers.owner_sender_id(binding.resource_id)
+            owner = await self._peers.owner_sender_id(binding.resource.id)
             if owner is None:
                 # The channel has never been paired (no DM/group has a known
                 # owner sender id yet) — a group @mention cannot bootstrap
@@ -202,13 +204,13 @@ class InboundProcessor:
                     chat_kind="group",
                 )
                 return
-            peer = await self._peers.get_by_chat(binding.resource_id, msg.chat_id)
+            peer = await self._peers.get_by_chat(binding.resource.id, msg.chat_id)
             if peer is None:
                 # First @mention from the owner in this group/thread — record
                 # a peer row for it so future turns (and /commands) resolve a
                 # conversation scoped to this chat, not the owner's DM.
                 peer = ChannelPeer(
-                    resource_id=binding.resource_id,
+                    resource_id=binding.resource.id,
                     chat_id=msg.chat_id,
                     display_name=msg.sender_display,
                     paired_at=datetime.now(tz=UTC),
@@ -216,7 +218,7 @@ class InboundProcessor:
                 )
                 await self._peers.upsert(peer)
         else:
-            peer = await self._peers.get_by_chat(binding.resource_id, msg.chat_id)
+            peer = await self._peers.get_by_chat(binding.resource.id, msg.chat_id)
             if peer is None:
                 await self._maybe_pair(binding, msg)
                 return
@@ -241,7 +243,7 @@ class InboundProcessor:
             # folded in below. The turn below still runs unchanged; `/save`
             # only ALSO makes this saveable. One slot, first file only: the
             # ingest service takes one file per call (FR-039).
-            session = self._session(binding.name, peer.chat_id, msg.thread_id)
+            session = self._session(binding.resource.name, peer.chat_id, msg.thread_id)
             session.pending_document = attachments[0]
         # A slash command is text-only; a caption starting with "/" alongside an
         # attachment is a normal message, not a command. Decide on the message's
@@ -295,7 +297,7 @@ class InboundProcessor:
                 binding,
                 peer,
                 text,
-                self._session(binding.name, peer.chat_id, msg.thread_id),
+                self._session(binding.resource.name, peer.chat_id, msg.thread_id),
                 # FR-049: a command answer is the asker's business, not the room's.
                 private_send(safe_send, target_for_command(msg, text)),
                 chat_kind=msg.chat_kind,
@@ -372,7 +374,8 @@ class InboundProcessor:
         await safe_send(
             binding,
             msg.chat_id,
-            f"✅ Paired. This chat now controls Coffer channel '{binding.name}'.\n\n{HELP_TEXT}",
+            f"✅ Paired. This chat now controls Coffer channel "
+            f"'{binding.resource.name}'.\n\n{HELP_TEXT}",
         )
 
     # -- helpers ---------------------------------------------------------------

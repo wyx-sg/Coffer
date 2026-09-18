@@ -20,7 +20,7 @@ from coffer.application.mcp.supervisor import (
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.persistence.base import Base
@@ -122,7 +122,8 @@ async def test_disabled_resource_rejected(tmp_path, monkeypatch):
     resource_svc, engine = await _make_services(
         tmp_path, register_servers=[("fs", _basic_stdio_config("x"))]
     )
-    await resource_svc.set_enabled(ResourceRef("mcp_server", "fs"), False, actor="test")
+    fs = await resource_svc.get_by_name("mcp_server", "fs")
+    await resource_svc.set_enabled(fs.uid, False, actor="test")
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
@@ -204,8 +205,9 @@ async def test_cooldown_expires_and_allows_new_attempt(tmp_path, monkeypatch):
         assert sup.health("flaky") == UpstreamHealth.COOLDOWN
 
         # Replace the resource's config with a good one
+        flaky = await resource_svc.get_by_name("mcp_server", "flaky")
         await resource_svc.update_config(
-            ResourceRef("mcp_server", "flaky"),
+            flaky.uid,
             new_config=_basic_stdio_config("x"),
             actor="test",
         )

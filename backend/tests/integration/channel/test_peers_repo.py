@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-from coffer.application.channel.ports import ChannelPeer
+from coffer.application.channel.store_ports import ChannelPeer
 
 from .conftest import ChannelEnv
 

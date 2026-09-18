@@ -1,6 +1,6 @@
 # Data Model: Channels
 
-## Resource: `channel:<name>`
+## Resource kind: `channel`
 
 Channels are rows in the existing `resources` table (kind = `channel`).
 `config_json` is validated by a discriminated Pydantic union on
@@ -12,7 +12,7 @@ a `spec.md`:
 ```
 ChannelConfig (discriminator: channel_type)
 ├── common (both types, _CommonChannelFields)
-│   ├── default_agent: str = "claude_code"  # turn-platform provider key; must name a registered agent
+│   ├── default_agent: str | None = None    # uid of the agent resource this channel drives
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating (FR-036)
 │   ├── ignore_other_mentions: bool = False # group gating (FR-036)
@@ -37,17 +37,39 @@ Validation rules:
   store) — same posture as `mcp_server`'s static-value secret rejection.
 - The kind declares `credential_ref_extractor`, so `ResourceService` probes
   every ref before the row is written; a dangling ref aborts registration.
-- `default_agent` is a turn-platform **provider key** (e.g. `claude_code`, underscore) —
-  the key the turn orchestrator resolves an agent by — not the `claude-code`
-  resource name; a hyphenated value passes registration but fails at turn time
-  with `UNKNOWN_AGENT`, leaving the bot silently dead. It is validated against
-  the live agent registry ([Built-in Agent Is Internal](../../docs/decisions/builtin-agent-is-internal-capability.md)
-  retired the old `builtin` pseudo-agent) at
-  **both** create (`validate_config`) and edit (`on_update_config`): an unknown
-  agent is rejected up front rather than failing silently on the first turn.
-  Validation is skipped only when the registry is empty, so a misconfigured
-  registry never blocks all channel writes. `default_agent_config` is still a
-  pass-through.
+- `default_agent` is the **uid of an agent resource**
+  ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+  It is a cross-resource reference, so it holds the one thing about that agent
+  the owner cannot change — not its registry name, and not the turn platform's
+  agent key. It has **no default value**: a uid is minted per vault, so nothing
+  a schema could name would stand for "the usual agent", and `None` means
+  exactly what it says — this channel is bound to no agent.
+  It is validated against the agent rows at **both** create (`validate_config`)
+  and edit (`on_update_config`): a uid naming no registered agent is rejected up
+  front rather than failing silently on the first turn. Both hooks are async,
+  which `validate_config` did not have to be while this field held an agent key
+  an in-memory registry could answer for; a uid is only answerable from the
+  resource table. Validation is skipped only when no agent is registered at all,
+  so a vault with no agents yet never blocks all channel writes.
+  `default_agent_config` is still a pass-through.
+- **A channel with no resolvable `default_agent` is deliberately dark.** The
+  runtime gate (`application/channel/wanted.py`) declines to start its adapter
+  and logs `channel.not_started` with the reason, in three cases: the channel
+  names no agent at all, its own scope excludes the agent it names, or the uid
+  names no agent registered here (the ordinary state of a channel that arrived
+  from another machine before that machine's agents did). This replaced a
+  schema default of `"claude_code"`, which was a fiction — there was never an
+  agent behind it, only a key that happened to match one on most machines. The
+  failure is loud and early rather than per-turn: the management surface reports
+  the channel as not running, and no message is ever accepted only to be refused.
+- The **agent key** the turn platform routes on survives in exactly one place:
+  the live `ChannelBinding`, onto which the runtime gate projects
+  `default_agent` (uid → agent row → `config["type"]`) and the channel's scope.
+  That projection is the single crossing between the two vocabularies. It
+  replaced `application/channel/agent_vocabulary.py`, which existed only because
+  a scope named agent RESOURCES while `default_agent` named an agent KEY and
+  three call sites compared the two directly — reading every correctly-narrowed
+  scope as excluding the channel's own agent.
 - A channel carries NO model curation. It briefly had its own `default_model`
   and `models` allowed range; both are gone, because a channel binds an agent
   and nothing more: a new conversation runs on the bound agent's own CLI

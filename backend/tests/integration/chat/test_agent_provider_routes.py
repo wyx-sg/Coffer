@@ -53,6 +53,7 @@ class _FakeAgents:
 def _agent_resource(config_dir: pathlib.Path, *, agent_type: str = "claude_code") -> Resource:
     return Resource(
         id=1,
+        uid="5d1c9b3e7a2f4086b15c8e0d3f7a2b64",
         kind="agent",
         name=agent_type,
         description=None,

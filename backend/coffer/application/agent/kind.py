@@ -10,11 +10,14 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind, Resource
 
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
-OnDeleteHook = Callable[[ResourceRef], Awaitable[None] | None]
-OnEnabledChangedHook = Callable[[ResourceRef], Awaitable[None] | None]
+# Both hooks are handed the agent ROW rather than an identifier to look it up
+# with: the caller performing the mutation already has it, and a hook that
+# needs the identity reads ``resource.uid``.
+OnDeleteHook = Callable[[Resource], Awaitable[None] | None]
+OnEnabledChangedHook = Callable[[Resource], Awaitable[None] | None]
 
 
 def make_agent_kind(
