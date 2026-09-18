@@ -87,7 +87,7 @@ def test_the_write_tool_tells_the_agent_where_reading_happens(builtin_registry) 
     model's context, and the one question a model will have on finding a write
     tool and no read tool is where the reading went (FR-050)."""
     [tool] = builtin_registry.list()
-    assert "coffer-knowledge" in tool.description
+    assert "coffer-guide" in tool.description
     assert "no read tool" in tool.description
 
 

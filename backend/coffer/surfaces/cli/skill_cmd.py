@@ -32,13 +32,15 @@ def _scope_label(skill: dict[str, Any]) -> str:
 
 @app.command("list")
 def list_cmd(
+    ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
     """List managed skills."""
+    verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/skills")
-        r.raise_for_status()
+        _cli_client.check(r, verbose=verbose)
     items = r.json()["items"]
     if output_json:
         typer.echo(_json.dumps(items, indent=2))
@@ -77,17 +79,19 @@ def import_cmd(
 
 @app.command("show")
 def show(
+    ctx: typer.Context,
     name: str = typer.Argument(...),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
     """Show one skill."""
+    verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get(f"/skills/{name}")
         if r.status_code == 404:
             typer.echo("not found", err=True)
             raise typer.Exit(4)
-        r.raise_for_status()
+        _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
@@ -106,10 +110,19 @@ def show(
 
 @app.command("rm")
 def rm(
+    ctx: typer.Context,
     name: str = typer.Argument(...),
     force: bool = typer.Option(False, "--force", "-f"),
 ) -> None:
-    """Remove a skill and tear down all its agent bindings."""
+    """Remove a skill and tear down all its agent bindings.
+
+    The refusal path matters as much as the success one: a skill Coffer
+    generates answers DELETE with 409 RESOURCE_PROTECTED, and a bare
+    ``raise_for_status()`` turned that into an httpx traceback. Routing
+    through ``_client.check`` gives this door the same rendered message and
+    exit code ``coffer resource delete skill:<name>`` already gives.
+    """
+    verbose = (ctx.obj or {}).get("verbose", False)
     if not force and not typer.confirm(f"Really remove skill:{name}?"):
         raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
@@ -118,23 +131,25 @@ def rm(
         if r.status_code == 404:
             typer.echo("not found", err=True)
             raise typer.Exit(4)
-        r.raise_for_status()
+        _cli_client.check(r, verbose=verbose)
     typer.echo(f"removed: skill:{name}")
 
 
 @app.command("unmanaged")
 def unmanaged(
+    ctx: typer.Context,
     agent: str = typer.Argument(..., help="Agent name."),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
     """List skill-shaped folders in the agent's workspace that Coffer doesn't manage."""
+    verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get(f"/agents/{agent}/unmanaged-skills")
         if r.status_code == 404:
             typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
             raise typer.Exit(4)
-        r.raise_for_status()
+        _cli_client.check(r, verbose=verbose)
     items = r.json()["items"]
     if output_json:
         typer.echo(_json.dumps(items, indent=2))
@@ -204,6 +219,7 @@ def rm_unmanaged(
 
 @app.command("verify")
 def verify(
+    ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json"),
     fix: bool = typer.Option(
         False,
@@ -215,11 +231,12 @@ def verify(
     ),
 ) -> None:
     """Report drift between bindings and on-disk symlinks."""
+    verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     if fix:
         with c:
             r = c.post("/skills/repair")
-            r.raise_for_status()
+            _cli_client.check(r, verbose=verbose)
         data = r.json()
         if output_json:
             typer.echo(_json.dumps(data, indent=2))
@@ -260,7 +277,7 @@ def verify(
         return
     with c:
         r = c.post("/skills/verify")
-        r.raise_for_status()
+        _cli_client.check(r, verbose=verbose)
     entries = r.json()["entries"]
     if output_json:
         typer.echo(_json.dumps(entries, indent=2))

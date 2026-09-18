@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0093"
+HEAD_REVISION = "0094"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -159,13 +159,13 @@ HEAD_REVISION = "0093"
 # revision here that widens on purpose, and its docstring argues why that is
 # safe for these two kinds and for no others; no DDL, table/column set
 # unchanged at head, and its downgrade writes nothing because the cleared
-# values cannot be recovered. 0089 CREATEs the four workflow execution tables —
+# values cannot be recovered. 0089 retires the generated knowledge skill. 0090 CREATEs the four workflow execution tables —
 # ``workflow_runs`` plus its cascading ``workflow_events``,
 # ``workflow_node_attempts`` and ``workflow_approvals`` (spec workflow); a
 # template needs no table of its own, so nothing else is added and the four are
-# dropped together by the same revision's downgrade. 0090 adds a nullable
+# dropped together by the same revision's downgrade. 0091 adds a nullable
 # ``owner`` to ``conversations`` so a workflow task's conversation stays out of
-# the developer's own chat list. 0091 is DATA-only too: it
+# the developer's own chat list. 0092 is DATA-only too: it
 # moves a workflow's attempt ceiling down onto its tasks and its routes, in the
 # resource's config AND in every run's frozen snapshot, because the parser now
 # refuses the root field and a snapshot left behind would strand its run.

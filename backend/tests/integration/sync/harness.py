@@ -55,6 +55,7 @@ from coffer.application.sync.service import ConvergeService
 from coffer.domain.error_base import CofferError
 from coffer.domain.resource import Kind, ResourceRef
 from coffer.domain.scope import Scope
+from coffer.domain.skill.builtin import is_builtin
 from coffer.domain.sync.backup import BackupRemote
 from coffer.domain.sync.convergence import ConvergeRun, PendingConfirmation
 from coffer.domain.sync.diff import DeletionGuard
@@ -75,6 +76,7 @@ from coffer.infrastructure.persistence.sync_remote_repo import SqlAlchemySyncRem
 from coffer.infrastructure.sync.bundle import Bundle
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
 from coffer.infrastructure.sync.git_mirror import GitMirror
+from coffer.infrastructure.sync.paths import non_converging_tree_paths
 
 BRANCH = "main"
 SNAPSHOT_PREFIX = "coffer/pre-apply/"
@@ -112,6 +114,14 @@ def vault_kinds() -> dict[str, Kind]:
     daemon runs its adapter. Testing that it travels — and that its binding
     survives the trip untouched — needs a real row and a real document.
 
+    ``skill`` additionally carries the production ``converges_row`` predicate.
+    It is the one kind with rows on both sides of the question — every
+    imported skill travels, and Coffer's own generated one does not (spec
+    vault-sync FR-093) — and the predicate is imported from the domain rather
+    than restated, because a harness that re-answered it would prove the
+    exporter honours *this file's* idea of a builtin skill instead of the
+    product's.
+
     ``memory`` is the opposite case and the only kind here that does NOT
     converge (``converges=False``, spec memory FR-016): a partition row is
     derived from the agents installed on THIS machine. Its
@@ -131,6 +141,7 @@ def vault_kinds() -> dict[str, Kind]:
             display_name="Skill",
             config_schema=SyncableConfig,
             supports_scope=True,
+            converges_row=lambda config: not is_builtin(config),
         ),
         "agent": Kind(name="agent", display_name="Agent", config_schema=SyncableConfig),
         "channel": Kind(
@@ -450,6 +461,9 @@ class VaultMachine:
             self.worktree,
             trees=[("knowledge", self.knowledge_root), ("skills", self.skills_root)],
             held_paths=self.state.held_now,
+            # Left at the production default deliberately: what a vault
+            # refuses to mirror is part of what is under test here.
+            excluded=non_converging_tree_paths(),
         )
         self.exporter = SyncExporter(
             self.resources,
@@ -474,7 +488,12 @@ class VaultMachine:
             state=self.state,
             appliers=[
                 TreeApplier("knowledge/", worktree=self.worktree, live_root=self.knowledge_root),
-                TreeApplier("skills/", worktree=self.worktree, live_root=self.skills_root),
+                TreeApplier(
+                    "skills/",
+                    worktree=self.worktree,
+                    live_root=self.skills_root,
+                    excluded=non_converging_tree_paths(),
+                ),
                 ResourceApplier(
                     self.resources,
                     worktree=self.worktree,

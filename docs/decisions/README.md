@@ -118,4 +118,5 @@ section that future readers most often want — don't skip it.>
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK | Accepted |
 | [`product-scope-is-settled`](product-scope-is-settled.md) | Product Scope Is Settled | Accepted |
 | [`fr-ids-reset-once`](fr-ids-reset-once.md) | FR Ids Reset Once, Then Are Never Reused Again | Accepted |
+| [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource | Accepted |
 | [`workflow-gates-tool-calls`](workflow-gates-tool-calls.md) | A Workflow Run's Writes Are Gated at the Gateway | Accepted — amends [Remove the Tool-Approval System](remove-tool-approval.md) |

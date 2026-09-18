@@ -41,11 +41,11 @@ backup and a second round of renames.
 Frozen, like ``knowledge_tree_0066``: a migration describes one moment in
 history and must not change behaviour because the product's live path helpers
 later did. The lane names and the root resolution below are copies, not
-imports. The one deliberate exception is
-``application.knowledge.skill_delivery.remove_shared_master``, imported inside
-the function that calls it: what the retired shared-master delivery looked like
-on disk is knowledge that belongs to the layer that built it, and FR-042
-requires this migration to take that folder with it.
+imports — including the retired shared master's folder name, which FR-042
+requires this migration to take with it. That one used to be imported from the
+knowledge layer; it is spelled out here now, because the layer stopped writing
+that folder and a one-time script must not depend on today's code to say what
+yesterday's vault looked like.
 """
 
 from __future__ import annotations
@@ -312,18 +312,22 @@ def _ensure_lanes(collection: pathlib.Path, report: TreeMigrationReport) -> path
 def _retire_shared_skill(master_root: pathlib.Path | None) -> None:
     """Drop the shared ``coffer-knowledge`` master folder (FR-042).
 
-    The knowledge skill is generated per agent now, and a stale shared master
-    left in the store would keep being delivered beside the generated one —
-    the same layer, described twice, one of the descriptions wrong. Imported
-    here rather than at module scope, and from the live layer rather than
-    copied: what that folder looked like is the knowledge layer's own fact, and
-    the only thing this migration needs from it is its name.
+    A stale shared master left in the store would keep being delivered beside
+    the generated skill — the same layer, described twice, one of the
+    descriptions wrong.
+
+    The removal is spelled out here rather than called out to the knowledge
+    layer, as it once was. What that folder looked like stopped being a live
+    fact the moment the layer stopped writing it: a migration describes the
+    vault as it was on the day it ran, and reaching into today's code for that
+    is how a one-time script acquires a dependency that has to keep compiling
+    forever.
     """
     if master_root is None:
         return
-    from coffer.application.knowledge.skill_delivery import remove_shared_master
-
-    remove_shared_master(master_root)
+    folder = master_root / "coffer-knowledge"
+    if folder.is_dir() and not folder.is_symlink():
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 def migrate(*, master_root: pathlib.Path | None = None) -> TreeMigrationReport:

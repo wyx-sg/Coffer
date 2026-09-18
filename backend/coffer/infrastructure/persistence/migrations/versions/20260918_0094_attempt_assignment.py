@@ -16,8 +16,8 @@ agent's own configuration projects" — one ladder, no magic strings.
 Nullable with no backfill: an attempt that ran before this column existed ran
 on the template's answer, which is exactly what NULL says.
 
-Revision ID: 0093
-Revises: 0092
+Revision ID: 0094
+Revises: 0093
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0093"
-down_revision = "0092"
+revision = "0094"
+down_revision = "0093"
 branch_labels = None
 depends_on = None
 

@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/TemplateRenameDialog.tsx
 // What a workflow is CALLED and what it is FOR — the two fields that are not
-// part of its shape (spec resource-framework FR-010, spec workflow FR-054).
+// part of its shape (spec resource-framework FR-011, spec workflow FR-054).
 //
 // They used to live in a Settings tab beside two run-wide numbers that have
 // since moved onto the tasks they bound. With those gone the tab held one

@@ -15,8 +15,8 @@ outside the optimistic-lock cycle exactly as ``inputs`` does.
 Nullable with no backfill: a run created before this had no description, and
 ``NULL`` says that rather than inventing one.
 
-Revision ID: 0092
-Revises: 0091
+Revision ID: 0093
+Revises: 0092
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0092"
-down_revision = "0091"
+revision = "0093"
+down_revision = "0092"
 branch_labels = None
 depends_on = None
 

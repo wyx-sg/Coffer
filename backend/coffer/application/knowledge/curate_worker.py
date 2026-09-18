@@ -47,7 +47,7 @@ DEFAULT_INTERVAL_S = 60.0
 MAX_PASSES_PER_SWEEP = 5
 
 CurateCallable = Callable[..., Awaitable[dict[str, object]]]
-DeliverCallable = Callable[[], Awaitable[int]]
+DeliverCallable = Callable[[], Awaitable[bool]]
 EnabledCheck = Callable[[], Awaitable[bool]]
 CollectionLister = Callable[[], Awaitable[list[str]]]
 

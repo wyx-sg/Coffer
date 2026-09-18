@@ -7,7 +7,22 @@ contract for humans and never delivered it to the agent.
 
 It is charged against every session's context, so it is capped and
 deliberately terse — the context it spends must stay far below what tiering
-saves. The server-capability declaration lives here too, so ``gateway.py``
+saves. That budget is why this text stopped trying to be the manual: the
+``coffer-guide`` skill carries the whole of it — every tool's behaviour, the
+read-it-yourself shape of the knowledge layer, and the catalogue of every
+document with its path — and a skill body costs a session nothing until a
+model reaches for it. So the handshake's job is narrower now: say what Coffer
+is, name its tools so they are recognisable when they appear in a tool list,
+and point at the skill for everything else.
+
+"Name its tools" means all four of them, unconditionally. The escape hatch
+``coffer__search_tools`` used to be named only in the tiering paragraph, so a
+session with nothing hidden was never told the hatch existed — and a later
+session, whose tool list had in fact been trimmed, had no earlier mention to
+fall back on. The name is therefore part of the base text; the *claim* that
+tools are hidden right now is the only conditional part.
+
+The server-capability declaration lives here too, so ``gateway.py``
 keeps the handshake to session bookkeeping and stays under its LOC ceiling.
 """
 
@@ -33,26 +48,31 @@ PROTOCOL_VERSION = "2025-06-18"
 NAMED_TOOLS: frozenset[str] = frozenset(
     {
         "write",
+        "recall",
         "diagnose",
         "search_tools",
     }
 )
 
+# Every built-in tool is NAMED here, including the escape hatch: the name is
+# what makes a tool recognisable in a tool list, and that is true in every
+# session. What is conditional is the *claim* that something is hidden right
+# now — that lives in ``_TIERED`` and is only ever true when it is.
 _BASE = (
     "Coffer is this machine's local vault: it aggregates the user's MCP servers "
-    "behind one endpoint and adds its own tools under the coffer__ prefix — "
-    "coffer__write, which records a durable fact about the user's working "
-    "environment, and coffer__diagnose, for Coffer's own logs. Coffer's knowledge "
-    "is markdown under ~/.coffer/knowledge/<collection>/topics/: read it with your "
-    "own file tools; the coffer-knowledge skill lists what is there. Check it "
-    "before asking the user something they may already have told Coffer."
+    "behind one endpoint, holds what this developer has written down, and adds "
+    "its own tools — coffer__write (file a durable fact about this environment), "
+    "coffer__recall (locate Coffer's distilled notes), coffer__diagnose (Coffer's "
+    "own logs), coffer__search_tools (describe an upstream tool you want in plain "
+    "language; whatever comes back is callable by name). Its knowledge is markdown "
+    "you read with your own file tools. The coffer-guide skill is the manual: load "
+    "it for the catalogue of what is there, with paths, before asking the "
+    "developer something they may already have written down."
 )
 
 _TIERED = (
-    " The tools listed here are the ones most used on this machine; {n} further "
-    "upstream tools are not listed. Call coffer__search_tools with a plain-language "
-    "description of what you need to find them — it searches the full catalogue, "
-    "and anything it returns is callable by name straight away."
+    " Your tool list is a budgeted slice: {n} further upstream tools are not "
+    "listed, and every one is still callable."
 )
 
 
@@ -61,7 +81,15 @@ def build_instructions(*, hidden_count: int) -> str:
 
     ``hidden_count`` is the number of upstream tools the last ``tools/list``
     left unlisted. At 0 nothing is hidden, so the tiering paragraph is omitted
-    rather than making a claim that is not true for this session.
+    rather than making a claim that is not true for this session. The base text
+    still names ``coffer__search_tools``: knowing the escape hatch exists is
+    unconditional, while "N tools are hidden" is a fact about this session.
+
+    The final slice is a backstop against a malformed handshake, not the way
+    the cap is met: truncating here would drop the tail of a sentence into the
+    client's system prompt and say nothing about it, so the text is written to
+    fit and a contract test asserts that it does, at both a 0 and an
+    implausibly large ``hidden_count``.
     """
     text = _BASE
     if hidden_count > 0:

@@ -41,7 +41,7 @@ async def _client(tmp_path):
             display_name="Fake",
             config_schema=_FakeConfig,
         ),
-        # A kind that may be renamed and one that may not, because FR-010 is
+        # A kind that may be renamed and one that may not, because FR-011 is
         # half about the refusal.
         "nameable": Kind(
             name="nameable",
@@ -422,7 +422,7 @@ def _renames(tmp_path) -> list[tuple[str, str]]:
     scenario="a resource is given a different name",
 )
 async def test_a_resource_is_given_a_different_name(tmp_path):
-    """FR-010: the name is a label, so it moves and nothing else does."""
+    """FR-011: the name is a label, so it moves and nothing else does."""
     c, engine = await _client(tmp_path)
     async with c:
         await c.post(

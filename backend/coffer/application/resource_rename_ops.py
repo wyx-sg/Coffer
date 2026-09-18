@@ -1,4 +1,4 @@
-"""Giving a resource a different name (spec resource-framework FR-010).
+"""Giving a resource a different name (spec resource-framework FR-011).
 
 Split out of ``ResourceService`` for the same reason ``resource_scope_ops`` and
 ``resource_delete_ops`` were: that class is the lifecycle's front door, and it
@@ -37,7 +37,7 @@ async def rename(
     follows it while each row keeps saying what the resource was called
     when that event happened. The rename is recorded as its own event.
 
-    The KIND decides whether the KIND-AGNOSTIC surface may do it (FR-010).
+    The KIND decides whether the KIND-AGNOSTIC surface may do it (FR-011).
     A name is a label, but it is also this framework's address, so a kind
     whose name is written out somewhere this move cannot reach — into
     another tool's config, into a folder on disk — would be left with that

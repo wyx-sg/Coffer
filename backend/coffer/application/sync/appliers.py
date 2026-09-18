@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 
 import yaml
 
@@ -41,18 +41,49 @@ class TreeApplier:
     removal is an unlink. No index to rebuild: the knowledge layer is a
     directory (ADR knowledge-is-plain-files), which is most of why bidirectional
     convergence is affordable at all.
+
+    ``excluded`` names bundle-relative directory prefixes this applier ignores
+    outright, upsert and removal alike — the derived subtrees the exporter also
+    refuses to publish (spec vault-sync FR-093). The exporter's half is not
+    enough on its own: it silences this machine, while a machine still running
+    an older build keeps publishing `skills/coffer-guide/` and would otherwise
+    overwrite a master folder this machine rendered for itself — the one
+    direction an export-side rule cannot reach. Removal is ignored for the
+    stronger reason: the folder here is written from the running build at every
+    boot, so a deletion in the tree has no standing over it and obeying one
+    would only unlink a manual that comes straight back.
     """
 
-    def __init__(self, prefix: str, *, worktree: pathlib.Path, live_root: pathlib.Path) -> None:
+    def __init__(
+        self,
+        prefix: str,
+        *,
+        worktree: pathlib.Path,
+        live_root: pathlib.Path,
+        excluded: Collection[str] = (),
+    ) -> None:
         self.prefix = prefix
         self._worktree = worktree
         self._live_root = live_root
+        self._excluded = tuple(excluded)
 
     async def upsert(self, path: str) -> None:
+        if self._ignored(path):
+            return
         await asyncio.to_thread(self._copy_in, path)
 
     async def remove(self, path: str) -> None:
+        if self._ignored(path):
+            return
         await asyncio.to_thread(self._unlink, path)
+
+    def _ignored(self, path: str) -> bool:
+        """Whether this bundle path names derived output this machine owns.
+
+        The prefixes carry their trailing ``/``, so ``skills/coffer-guide/``
+        never swallows a user's own ``skills/coffer-guidelines/``.
+        """
+        return any(path.startswith(prefix) for prefix in self._excluded)
 
     def _relative(self, path: str) -> str:
         return path[len(self.prefix) :]
@@ -106,6 +137,24 @@ class ResourceApplier:
     fix cannot reach. Removal is skipped for the opposite reason: a derived row
     here was computed from THIS machine's agents, so a deletion in the tree has
     no standing over it.
+
+    A row of a *converging* kind that the kind declines row by row
+    (``Kind.converges_row`` — Coffer's own generated skill) is ignored on
+    exactly the same terms, and the removal half is the one that had to be
+    written down. Left to itself a deletion of `resources/skill/coffer-guide
+    .yaml` would reach ``ResourceService.delete``, meet the skill kind's
+    ``validate_delete`` guard, raise ``ResourceProtected`` — and the round,
+    which catches ``CofferError`` and holds the path, would re-derive the same
+    diff on the next tick and refuse it again, every tick, forever. The fix is
+    not to soften the guard: a document about a row this machine does not
+    publish is not this machine's to apply in *either* direction, so it never
+    reaches the guard at all.
+
+    The question is asked of the arriving document's config and of the local
+    row's, and either answer is enough to ignore it. The document's, because a
+    machine that has not yet seeded its own guide has no row to consult; the
+    local row's, because a document written by a build that did not record the
+    source still must not overwrite a folder this machine generated.
     """
 
     prefix = "resources/"
@@ -133,7 +182,9 @@ class ResourceApplier:
         if self._home:
             config = expand_home(config, self._home)
 
-        if not self._resources.converges(kind):
+        ref = ResourceRef(kind, name)
+        existing = await self._find(ref)
+        if not self._converges(kind, config, existing):
             return
 
         gate = self._gates.get(kind)
@@ -146,8 +197,6 @@ class ResourceApplier:
             # ever true.
             await gate.validate(config)
 
-        ref = ResourceRef(kind, name)
-        existing = await self._find(ref)
         raw_description = doc.get("description")
         description = raw_description if isinstance(raw_description, str) else None
         if existing is None:
@@ -178,11 +227,33 @@ class ResourceApplier:
         if not self._resources.converges(kind):
             return
         ref = ResourceRef(kind, name)
-        if await self._find(ref) is None:
+        existing = await self._find(ref)
+        if existing is None:
             # Already gone here — two machines deleting the same resource is
             # agreement, not a failure.
             return
+        # A removal carries no document, so the only config to ask about is the
+        # local row's — which is the one that matters here anyway: what is
+        # being protected is the row this machine generated.
+        if not self._converges(kind, existing.config, existing):
+            return
         await self._resources.delete(ref, self._actor)
+
+    def _converges(
+        self,
+        kind: str,
+        config: Mapping[str, object],
+        existing: Resource | None,
+    ) -> bool:
+        """Whether this machine applies documents for this row at all.
+
+        Both sides have to agree: an arriving document that describes derived
+        output is not applied, and a local row that IS derived output is not
+        revised by an arriving document either.
+        """
+        if not self._resources.converges_row(kind, config):
+            return False
+        return existing is None or self._resources.converges_row(kind, existing.config)
 
     async def _find(self, ref: ResourceRef) -> Resource | None:
         try:

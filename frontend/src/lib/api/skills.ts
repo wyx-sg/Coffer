@@ -12,7 +12,13 @@ interface LocalImportSource {
   original_path: string;
 }
 
-type SkillSource = LocalImportSource;
+/** Coffer generated this skill; it carries no provenance fields, because none
+ *  of them would still be true after the next start rewrote the folder. */
+interface BuiltinSource {
+  type: "builtin";
+}
+
+type SkillSource = LocalImportSource | BuiltinSource;
 
 type LinkMode = "symlink" | "junction" | "copy_fallback";
 
@@ -30,6 +36,11 @@ export interface SkillOut {
   name: string;
   description: string;
   source: SkillSource;
+  /** True for a skill Coffer generates and owns. Its master folder is rewritten
+   *  from the running build at every start, so deleting it is refused (409
+   *  `RESOURCE_PROTECTED`) — the UI disables the delete rather than offering a
+   *  no-op. Reach (enable/disable, scope) stays the owner's to decide. */
+  builtin: boolean;
   /** The two halves of the delivery predicate: a skill reaches an agent iff
    *  `enabled` and that agent, on this machine, falls inside `scope`
    *  (null = everywhere; an axis given [] matches nothing). */

@@ -120,6 +120,29 @@ class Kind:
     # instead of a table of exceptions — the shape the retired machine-local
     # kind list had.
     converges: bool = True
+    # Optional per-ROW refinement of ``converges`` above: given a row's config,
+    # answer whether THAT row travels. Consulted only when ``converges`` is
+    # True — the flag can withhold a whole kind, this can withhold one row of a
+    # kind that otherwise travels, and neither can put back what the other
+    # held. Absent (the default) means the flag alone decides.
+    #
+    # It exists because a kind can carry both authored rows and derived ones.
+    # `skill` does: almost every skill is a bundle a person imported, and those
+    # are exactly what a second machine is supposed to receive — but Coffer's
+    # own `coffer-guide` is written by the running build from the live
+    # knowledge catalogue and this machine's own switches, re-rendered at every
+    # boot. Publishing it is publishing derived output: two machines with the
+    # same files but a different set of collections enabled render different
+    # bytes, overwrite each other every round, and never stop. The reasoning is
+    # ``memory``'s (spec memory FR-023) applied to one row instead of a kind,
+    # so it is declared the same way — on the kind, beside the flag it refines
+    # — rather than as a name the sync layer would have to recognise.
+    #
+    # A function of the CONFIG alone, like ``default_scope`` and
+    # ``audit_redactor``, so every caller can ask it with what it already has:
+    # the exporter holds a ``Resource``, while the sync applier holds only a
+    # document that has just arrived and has no row behind it yet.
+    converges_row: Callable[[dict[str, Any]], bool] | None = None
     # Whether this kind's rows may be RENAMED in place. A name is a label the
     # user chose, so in principle every kind should allow it; in practice a
     # kind may only allow it once nothing else keys off that name. `workflow`
@@ -182,6 +205,21 @@ class Kind:
         ]
         | None
     ) = None
+    # Optional pre-write guard for ``ResourceService.delete``: given the
+    # resource about to be removed, raise to refuse the deletion before
+    # anything is torn down. It sits with the other pre-write validators rather
+    # than with ``on_delete`` below deliberately — ``on_delete`` is a reaction
+    # to an already-decided delete, and a kind that refuses from inside it
+    # refuses only after the caller has been told the delete is under way.
+    #
+    # Only `skill` supplies one today: a builtin skill's master folder is
+    # rewritten by the next boot, so deleting it is a no-op dressed as a
+    # destructive action. Raising ``ResourceProtected`` turns it into an honest
+    # 409 on every surface at once — the kind's own DELETE and the
+    # kind-agnostic one — rather than one guard per route, which is the shape
+    # that lets a second route quietly miss it.
+    validate_delete: Callable[[Resource], None] | None = None
+
     # Optional kind-supplied credential-ref extractor: given a validated config
     # dict, return ``{logical_key: keychain_ref}``. ResourceService probes each
     # ref at register/update time so a missing credential fails before any DB

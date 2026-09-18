@@ -34,7 +34,8 @@ enough for the two to stay alike.
 
 - **FR-002**: The markdown files under `~/.coffer/knowledge/<collection>/` and
   the master skill store under `~/.coffer/skills/` MUST converge, mirrored as
-  regular files.
+  regular files — except a folder in them that is derived output, which is
+  FR-093.
 - **FR-003**: Outbound, a symlink MUST be skipped rather than followed — its
   target is not vault content, and a link to a file outside the vault would
   otherwise be published — and anything under a nested `.git` directory MUST be
@@ -51,7 +52,8 @@ enough for the two to stay alike.
   [memory](../memory/spec.md) FR-023). The rule MUST live on the kind rather
   than as a list in the sync layer; the exporter MUST withhold such rows and the
   applier MUST ignore such a document, so a machine on an older build cannot
-  deliver one either.
+  deliver one either. A kind that travels MAY additionally declare that one of
+  its **rows** does not, on the same terms and for the same reason (FR-093).
 - **FR-006**: A `channel` document MUST travel while its adapter does not. A
   channel is an inbound surface — a port, a tunnel, a webhook URL a platform has
   been told to call — so the document names the one machine that may answer:
@@ -92,6 +94,40 @@ enough for the two to stay alike.
   laptop that deliberately left a server dark would find it live again after the
   desktop's next round, with nothing in the history that reads like a decision
   anyone made.
+- **FR-093**: **Derived output MUST NOT converge, in either half.** A resource
+  whose bytes each machine regenerates for itself — from material that already
+  converges plus that machine's own machine-local state — MUST be withheld from
+  the tree and MUST be ignored when a document for it arrives. This is the rule
+  of FR-005 at the granularity of one **row**: a kind that otherwise converges
+  MUST be able to declare that a particular row does not, the declaration MUST
+  live on the kind rather than as a name the sync layer recognises, and the
+  exporter and the applier MUST both consult it.
+  Coffer's own generated skill `coffer-guide` is the case this exists for. Its
+  text is rendered locally from the running build, the knowledge files (which
+  converge on their own) and **which collections this machine has enabled** —
+  and `enabled` is reach, which FR-014 keeps machine-local. So two machines
+  holding identical files still render different bytes, each correct where it
+  is. Converging it had each round overwrite the other machine's master folder
+  and its resource row (whose `version_hash` is that folder's digest), the
+  overwritten machine re-render at its next boot or curation pass, and the
+  exchange repeat: a commit and an audit event per tick on both machines,
+  forever, over an artifact neither machine reads from the other. **Both halves
+  MUST be withheld**: the master folder under `skills/`, which FR-002 otherwise
+  mirrors, and the resource document, which FR-004 otherwise publishes.
+- **FR-094**: Withholding derived output MUST NOT publish its **absence**. A
+  bundle written by an earlier build already carries those paths, and an export
+  that converged them away would stage a deletion — the one change every
+  machine acts on. A machine still running that earlier build has no rule to
+  protect it and would take the deletion as leave to unlink its own live copy,
+  and the resource document's deletion would reach the row's own delete guard,
+  be refused, and be re-refused on every tick because a round re-derives its
+  diff (FR-091). So the paths MUST be left exactly where they are: not
+  published, not applied, not deleted, and never counted by the deletion guard.
+  They become inert rather than tidy, which is the cheaper of the two mistakes.
+  This is the opposite treatment from a withheld **kind** (FR-005), whose
+  documents are cleared on purpose — those stand on nothing at the other end,
+  while a withheld row's document stands on a master folder that machine wrote
+  itself and still delivers.
 
 Conversations and the audit log are excluded deliberately: they are records of
 what happened *on a machine*, and a merged history of two machines' activity
@@ -581,6 +617,19 @@ reported as a conflict.
 - **When** a round exports the vault,
 - **Then** no `resources/memory/*.yaml` document is written, and a document of
   that kind arriving from the remote is ignored rather than applied.
+
+### Scenario: a locally generated skill is neither published nor overwritten
+
+- **Given** two machines holding the same knowledge files, one with a
+  collection enabled and the other with it disabled, so each has rendered its
+  own `coffer-guide` master folder and registered its own `skill:coffer-guide`
+  row,
+- **When** both converge, and then converge again,
+- **Then** neither machine's `SKILL.md` or row has been changed by the other,
+  the remote carries neither `skills/coffer-guide/` nor
+  `resources/skill/coffer-guide.yaml`, the second round publishes and applies
+  nothing, and the knowledge files and an ordinary imported skill converge as
+  usual.
 
 ### Scenario: a working tree pointed inside the vault is refused
 

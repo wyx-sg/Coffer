@@ -218,8 +218,9 @@ no folder behind it. Being a Resource buys the collection a lifecycle, an audit
 trail and one switch — not a reach.
 
 **`enabled` is that switch, and it bites in two places.** At **delivery**: a
-disabled collection's name, description, catalogue and paths appear in no agent's
-skill file at all, while an enabled one appears in every agent's. And at
+disabled collection's name, description, catalogue and paths appear nowhere in
+the rendered `coffer-guide` skill every agent reads, while an enabled one appears
+in all of it. And at
 `coffer__write`, which refuses a write naming a collection that does not exist or
 is disabled, answering with the ones that are available.
 
@@ -376,9 +377,19 @@ table or the row still upgrades:
   under the name the code now uses. The value is inlined rather than imported
   from `AuditEventType`: a migration must mean the same thing forever.
 - The shared `coffer-knowledge` skill Resource, its agent bindings and its master
-  folder all go (FR-042). The skill is generated per agent now, and a registered
-  shared master left behind would keep being delivered beside the generated
-  copy — the same layer described twice, one of the descriptions wrong.
+  folder all go (FR-042). At that revision the skill was generated per agent, and
+  a registered shared master left behind would have kept being delivered beside
+  the generated copy — the same layer described twice, one of the descriptions
+  wrong.
+- Revision `0089` finishes that retirement from the other end. The catalogue now
+  rides Coffer's own `coffer-guide` skill, which *is* a registered Resource with
+  a master folder, so what has to go is the per-agent delivery `0085` left in
+  place: the migration sweeps each registered agent's resolved skill directory
+  and removes `skills/coffer-knowledge` when it is a symlink or a directory
+  holding the `SKILL.md`/`README.md` pair that delivery always wrote, and leaves
+  anything else at that name alone (FR-034). Nothing else can clean it up —
+  there was never a binding to reclaim from — and a manual that will never be
+  rewritten again is worse than none.
 
 `downgrade` raises, and **no compatibility shim is left behind anywhere**:
 nothing reads the old column names, the old audit value or the old tree shape
