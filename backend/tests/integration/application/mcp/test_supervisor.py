@@ -4,6 +4,7 @@ and an in-process FakeKeyring + ResourceService for kind-agnostic plumbing.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
@@ -432,3 +433,72 @@ async def test_credential_overlay_passed_through(tmp_path, monkeypatch):
     finally:
         await sup.dispose()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_evicting_a_server_does_not_wait_for_a_spawn_that_will_never_work(
+    tmp_path, monkeypatch
+):
+    """Eviction wins over a spawn in flight, instead of queueing behind it.
+
+    A delete runs the ``mcp_server`` kind's ``on_delete``, which evicts the
+    server from every supervisor holding a live connection — including the
+    process-wide one behind the capability-management routes. That supervisor
+    is exactly where a detail page's discovery is spawning, and a command that
+    cannot speak MCP takes the full retry ladder to fail. Sharing one lock
+    between the two made deleting such a server wait for a subprocess ladder
+    nobody wanted the answer to any more, which read to the user — and to the
+    browser test that found it — as a request that never came back.
+
+    So the assertion is on TIME, which is the whole defect: the numbers are a
+    generous multiple of the ladder this supervisor is configured with, so the
+    test fails only if eviction is serialised behind it.
+    """
+    _with_in_memory(monkeypatch)
+    resource_svc, engine = await _make_services(
+        tmp_path,
+        register_servers=[
+            (
+                "wedged",
+                {
+                    "transport": {
+                        "type": "stdio",
+                        # Exits immediately and says nothing — the upstream
+                        # never initialises, so every attempt on the ladder
+                        # burns its full timeout.
+                        "command": sys.executable,
+                        "args": ["-c", "pass"],
+                    },
+                },
+            )
+        ],
+    )
+    sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
+        resource_service=resource_svc,
+        credential_resolver=CredentialResolver(KeyringAdapter()),
+        retry_delays=(5.0, 5.0),
+    )
+    try:
+        spawning = asyncio.create_task(_swallow(sup.get_or_spawn("wedged")))
+        # Let the ladder get as far as holding the lock.
+        await asyncio.sleep(0.2)
+
+        started = asyncio.get_running_loop().time()
+        await asyncio.wait_for(sup.evict("wedged"), timeout=2.0)
+        waited = asyncio.get_running_loop().time() - started
+
+        assert waited < 1.0, f"evict queued behind the spawn ladder ({waited:.1f}s)"
+        spawning.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await spawning
+    finally:
+        await sup.dispose()
+        await engine.dispose()
+
+
+async def _swallow(awaitable):
+    """Run something whose failure is the point, not the subject."""
+    with suppress(Exception):
+        return await awaitable
+    return None

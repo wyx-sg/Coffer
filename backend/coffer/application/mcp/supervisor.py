@@ -98,6 +98,11 @@ class _UpstreamEntry:
     last_success_at: datetime | None = None
     last_failure_at: datetime | None = None
     spawn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    #: Bumped by every eviction. A spawn reads it before starting and again
+    #: when it finishes; a change means the connection it just built is for a
+    #: registration that no longer exists, so it is closed instead of cached.
+    #: This is what lets ``evict`` take no lock at all — see its docstring.
+    generation: int = 0
 
 
 class SubprocessSupervisor:
@@ -189,6 +194,9 @@ class SubprocessSupervisor:
             self._enforce_cooldown(entry, server_name)
 
             entry.state = UpstreamHealth.STARTING
+            # Read BEFORE the ladder: anything that evicts while we are down
+            # there is telling us the answer is no longer wanted.
+            generation = entry.generation
 
             # Look up the config
             resource = await self._resources.get_by_name("mcp_server", server_name)
@@ -215,6 +223,16 @@ class SubprocessSupervisor:
                     async with self._spawn_slots:
                         conn = await self._build_connection(resource, config)
                         await conn.spawn_and_initialize()
+                    if entry.generation != generation:
+                        # Evicted while we were starting. Caching this would
+                        # hand out a live subprocess for a server that has
+                        # since been deleted or renamed — the exact leak the
+                        # eviction was asked to prevent.
+                        with suppress(Exception):
+                            await conn.close()
+                        raise UpstreamUnavailable(
+                            f"{server_name!r} was evicted while it was starting"
+                        )
                     entry.connection = conn
                     entry.state = UpstreamHealth.HEALTHY
                     entry.consecutive_failures = 0
@@ -271,16 +289,31 @@ class SubprocessSupervisor:
         raise UpstreamUnavailable(f"unsupported transport type: {type(config.transport).__name__}")
 
     async def evict(self, server_name: str) -> None:
-        """Forcefully close a connection (e.g., after a crash detected during request())."""
+        """Drop this server's connection — after a crash, a delete, or a rename.
+
+        Deliberately takes **no lock**. ``get_or_spawn`` holds ``spawn_lock``
+        across its whole retry ladder, which for a command that cannot speak
+        MCP is every attempt and every backoff between them; queueing here
+        behind it made deleting such a server wait for a subprocess nobody
+        wanted the answer to any more. The browser saw a request that never
+        came back.
+
+        Waiting was never what eviction needed. The caller is saying this
+        registration is finished, and a spawn still in flight for it is not a
+        thing to be patient with — it is a thing to invalidate. So the
+        generation counter goes up, which the spawner rechecks the moment it
+        has a connection; whichever of the two finishes second cleans up after
+        itself, and neither waits for the other.
+        """
         entry = self._entries.get(server_name)
         if entry is None:
             return
-        async with entry.spawn_lock:
-            if entry.connection is not None:
-                with suppress(Exception):
-                    await entry.connection.close()
-                entry.connection = None
-            entry.state = UpstreamHealth.UNHEALTHY
+        entry.generation += 1
+        conn, entry.connection = entry.connection, None
+        entry.state = UpstreamHealth.UNHEALTHY
+        if conn is not None:
+            with suppress(Exception):
+                await conn.close()
 
     async def dispose(self) -> None:
         """Close all connections owned by this supervisor. Called on session end.

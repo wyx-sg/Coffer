@@ -53,6 +53,8 @@ async function disableTool(
   toolName: string,
 ): Promise<void> {
   const { port, token } = readDaemonToken();
+  const uid = await resolveResourceUid("mcp_server", serverName);
+  if (uid === null) throw new Error(`no mcp_server named ${serverName}`);
   // The capability key travels in the BODY, not the path. A path-shaped
   // variant used to exist alongside this one and was deleted as legacy; this
   // helper was its last caller anywhere, and it lived in the one tier
