@@ -569,6 +569,13 @@ export interface components {
             /** @description False when another machine advances this run (FR-012). */
             owned_here: boolean;
             current_stage_key?: string | null;
+            /**
+             * @description What the developer CALLED that stage, read from the run's own
+             *     frozen snapshot. A key is an identity the engine reads no meaning
+             *     from and the developer never typed (FR-003, FR-060). Null when the
+             *     snapshot no longer parses or no longer has that stage.
+             */
+            current_stage_name?: string | null;
             current_node_key?: string | null;
             tokens_spent?: number;
             token_budget?: number | null;

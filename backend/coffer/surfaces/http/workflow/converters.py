@@ -27,6 +27,7 @@ from coffer.domain.workflow.events import ActorKind, EventActor
 from coffer.domain.workflow.links import classify_link
 from coffer.domain.workflow.run import RunInput as RunInputValue
 from coffer.domain.workflow.run import RunInputKind
+from coffer.domain.workflow.template import WorkflowTemplate
 from coffer.surfaces.http.workflow.schemas import (
     ApprovalOut,
     ArtifactOut,
@@ -57,21 +58,42 @@ def event_actor(actor: str) -> EventActor:
     )
 
 
-def token_budget_of(run: RunRow) -> int | None:
-    """The budget the run froze, read from its own snapshot (FR-010, FR-018).
+def _frozen(run: RunRow) -> WorkflowTemplate | None:
+    """The template this run froze (FR-010), or ``None`` if it no longer parses.
 
-    A snapshot that no longer parses answers ``None`` rather than failing the
-    read: refusing to show a run over it would hide the very run whose template
-    is broken.
+    ``None`` rather than raising: refusing to show a run over a snapshot this
+    build cannot read would hide the very run whose template is broken.
     """
     try:
-        return parse_snapshot(run.template_snapshot).token_budget
+        return parse_snapshot(run.template_snapshot)
     except (TemplateInvalid, ValueError, TypeError):
         return None
 
 
+def token_budget_of(run: RunRow) -> int | None:
+    """The budget the run froze, read from its own snapshot (FR-010, FR-018)."""
+    template = _frozen(run)
+    return None if template is None else template.token_budget
+
+
+def _stage_name(template: WorkflowTemplate | None, stage_key: str | None) -> str | None:
+    """What the developer CALLED the stage a run is at.
+
+    A key is an identity the engine reads no meaning from and the developer
+    never typed (FR-003, FR-060), so a list that printed one would be showing
+    them a name they did not choose. Read from the run's own frozen snapshot,
+    which is the only place that still knows what the stage was called when
+    this run started.
+    """
+    if template is None or stage_key is None:
+        return None
+    stage = template.stage(stage_key)
+    return None if stage is None else stage.name
+
+
 def run_out(run: RunRow, *, owned_here: bool) -> RunOut:
     """One run row on the wire. ``owned_here`` comes from the run service."""
+    frozen = _frozen(run)
     return RunOut(
         id=run.id,
         title=run.title,
@@ -85,9 +107,10 @@ def run_out(run: RunRow, *, owned_here: bool) -> RunOut:
         machine_id=run.machine_id,
         owned_here=owned_here,
         current_stage_key=run.current_stage_key,
+        current_stage_name=_stage_name(frozen, run.current_stage_key),
         current_node_key=run.current_node_key,
         tokens_spent=run.tokens_spent,
-        token_budget=token_budget_of(run),
+        token_budget=None if frozen is None else frozen.token_budget,
         created_at=run.created_at,
         updated_at=run.updated_at,
     )

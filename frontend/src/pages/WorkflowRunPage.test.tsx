@@ -9,7 +9,7 @@
 //   conversation of the task it belongs to. The test below names them one by
 //   one, because "no controls" is only enforceable as a list.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -143,14 +143,24 @@ describe("WorkflowRunPage", () => {
   });
   afterEach(() => vi.clearAllMocks());
 
-  test("renders the stages in order, each node's status and attempt, and marks an unplanned task", async () => {
+  test("lists every stage and opens on the one the run is at", async () => {
     render(wrap());
-    expect(await screen.findByText("Design")).toBeInTheDocument();
+    // Every stage in the rail, the same picture the template editor draws.
+    expect(await screen.findByTestId("stage-design")).toBeInTheDocument();
+    expect(screen.getByTestId("stage-build")).toBeInTheDocument();
+
+    // Opened on where the run actually is, with that stage's tasks beside it.
     const node = screen.getByTestId("node-write_td");
     expect(within(node).getByText("Running")).toBeInTheDocument();
     expect(within(node).getByText("Attempt 2")).toBeInTheDocument();
-    // An ad-hoc task renders in its stage like any node, marked unplanned.
-    const adhoc = screen.getByTestId("node-adhoc:bump-deps");
+    expect(screen.queryByTestId("node-adhoc:bump-deps")).not.toBeInTheDocument();
+  });
+
+  test("an unplanned task renders in its stage like any other node", async () => {
+    render(wrap());
+    fireEvent.click(await screen.findByTestId("stage-build"));
+
+    const adhoc = await screen.findByTestId("node-adhoc:bump-deps");
     expect(within(adhoc).getByText("Bump the dependencies")).toBeInTheDocument();
     expect(within(adhoc).getByText("Unplanned")).toBeInTheDocument();
   });
@@ -173,7 +183,7 @@ describe("WorkflowRunPage", () => {
       ],
     });
     render(wrap());
-    await screen.findByText("Design");
+    await screen.findByTestId("stage-design");
 
     for (const label of FORBIDDEN) {
       expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
@@ -190,7 +200,8 @@ describe("WorkflowRunPage", () => {
     const link = within(node).getByRole("link");
     expect(link).toHaveAttribute("href", "/runs/run-1/nodes/write_td");
     // An ad-hoc task's key is URL-encoded rather than splitting the path.
-    const adhoc = screen.getByTestId("node-adhoc:bump-deps");
+    fireEvent.click(screen.getByTestId("stage-build"));
+    const adhoc = await screen.findByTestId("node-adhoc:bump-deps");
     expect(within(adhoc).getByRole("link")).toHaveAttribute(
       "href",
       "/runs/run-1/nodes/adhoc%3Abump-deps",

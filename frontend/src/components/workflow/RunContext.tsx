@@ -14,10 +14,9 @@
 // delivery. Promotion copies files out and leaves the run untouched.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderUp, Package, Plus } from "lucide-react";
+import { FolderUp, Plus } from "lucide-react";
 
 import { DataTable } from "@/components/DataTable";
-import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -109,38 +108,35 @@ export function RunContext({ runId, ownedHere, machine, enabled = true }: Props)
         </div>
       </div>
 
-      {!isLoading && rows.length === 0 ? (
-        <EmptyState
-          icon={Package}
-          title={t("workflow.context.emptyTitle")}
-          description={t("workflow.context.emptyBody")}
-          action={ownedHere ? mountButton : undefined}
-        />
-      ) : (
-        <DataTable
-          rows={rows}
-          isLoading={isLoading}
-          columns={columns}
-          rowKey={(row) => row.id}
-          search={{
-            accessor: (row) => `${row.name} ${row.where ?? ""} ${row.kind}`,
-            placeholder: t("workflow.context.searchPlaceholder"),
-          }}
-          filters={[
-            {
-              key: "origin",
-              label: t("workflow.context.origin.label"),
-              allLabel: t("workflow.context.origin.all"),
-              options: [
-                { value: "mounted", label: t("workflow.context.origin.added") },
-                { value: "produced", label: t("workflow.context.origin.produced") },
-              ],
-              accessor: (row) => row.origin,
-            },
-          ]}
-          emptyMessage={t("workflow.context.noMatches")}
-        />
-      )}
+      {/* The TABLE, empty or not. A card in its place made an empty run look
+          like a different page from a full one — the columns are what say
+          what a run can be made of, and they are worth seeing before there is
+          anything in them. */}
+      <DataTable
+        rows={rows}
+        isLoading={isLoading}
+        columns={columns}
+        rowKey={(row) => row.id}
+        search={{
+          accessor: (row) => `${row.name} ${row.where ?? ""} ${row.kind}`,
+          placeholder: t("workflow.context.searchPlaceholder"),
+        }}
+        filters={[
+          {
+            key: "origin",
+            label: t("workflow.context.origin.label"),
+            allLabel: t("workflow.context.origin.all"),
+            options: [
+              { value: "mounted", label: t("workflow.context.origin.added") },
+              { value: "produced", label: t("workflow.context.origin.produced") },
+            ],
+            accessor: (row) => row.origin,
+          },
+        ]}
+        emptyMessage={
+          rows.length === 0 ? t("workflow.context.emptyBody") : t("workflow.context.noMatches")
+        }
+      />
 
       <RunInputDialog runId={runId} open={mounting} onOpenChange={setMounting} />
       <PromoteArtifactsDialog runId={runId} open={promoting} onOpenChange={setPromoting} />

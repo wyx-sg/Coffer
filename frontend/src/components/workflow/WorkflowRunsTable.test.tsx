@@ -44,6 +44,7 @@ function run(overrides: Partial<Run> = {}): Run {
     machine_id: "m-1",
     owned_here: true,
     current_stage_key: "design",
+    current_stage_name: "Tech Design",
     current_node_key: "write_td",
     created_at: "2026-09-17T09:00:00Z",
     updated_at: "2026-09-17T10:00:00Z",
@@ -59,8 +60,20 @@ describe("WorkflowRunsTable", () => {
     expect(screen.getByText("Ship the delivery engine")).toBeInTheDocument();
     expect(screen.getByText("workflow:delivery")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
-    // Position is ONE fact, read as stage → node.
-    expect(screen.getByText("design → write_td")).toBeInTheDocument();
+    // Where it is, is ONE stage — read down the column, not reassembled per
+    // row — and it is what the developer called it, never the key.
+    expect(screen.getByText("Tech Design")).toBeInTheDocument();
+    expect(screen.queryByText(/design → write_td/)).not.toBeInTheDocument();
+    expect(screen.queryByText("write_td")).not.toBeInTheDocument();
+  });
+
+  test("a run whose frozen template no longer names its stage falls back to the key", () => {
+    // The snapshot is the only place that still knows what the stage was
+    // called; a run whose one is unreadable still has to say where it is.
+    render(
+      wrap(<WorkflowRunsTable runs={[run({ current_stage_name: null })]} onDelete={vi.fn()} />),
+    );
+    expect(screen.getByText("design")).toBeInTheDocument();
   });
 
   test("a run owned here and one owned elsewhere are told apart by name", async () => {

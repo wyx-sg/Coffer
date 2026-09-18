@@ -962,6 +962,14 @@ components:
           type: boolean
           description: False when another machine advances this run (FR-012).
         current_stage_key: { type: string, nullable: true }
+        current_stage_name:
+          type: string
+          nullable: true
+          description: |
+            What the developer CALLED that stage, read from the run's own
+            frozen snapshot. A key is an identity the engine reads no meaning
+            from and the developer never typed (FR-003, FR-060). Null when the
+            snapshot no longer parses or no longer has that stage.
         current_node_key: { type: string, nullable: true }
         tokens_spent: { type: integer }
         token_budget: { type: integer, nullable: true }

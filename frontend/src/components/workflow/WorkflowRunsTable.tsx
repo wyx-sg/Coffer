@@ -2,9 +2,14 @@
 // The run list: what is being delivered, from which template, where it got to,
 // when it last moved, and which machine is advancing it.
 //
-// "Where it is" is one column reading `stage → node`, not two: a run's
-// position is one fact, and splitting it across two headers made a reader
-// reassemble it on every row.
+// "Where it is" is ONE STAGE and not a path. A list is read by scanning down a
+// column, and `stage → node` made every row two facts wide for a question —
+// which of these is where — that only needs one. The task is on the run's own
+// page, one click away, next to the conversation that is doing it.
+//
+// The stage's NAME, never its key: a key is an identity the engine reads no
+// meaning from and the developer never typed (FR-003, FR-060), so a list that
+// printed one would be showing them a name they did not choose.
 //
 // The owner column is not decoration. A run belongs to one machine (FR-012)
 // and only that machine's daemon advances it; everywhere else the run is
@@ -56,15 +61,11 @@ export function WorkflowRunsTable({ runs, isLoading = false, onDelete }: Props) 
       key: "position",
       header: t("workflow.cols.position"),
       className: "whitespace-nowrap",
-      cell: (r) =>
-        r.current_stage_key ? (
-          <span className="text-muted-foreground">
-            {r.current_stage_key}
-            {r.current_node_key ? ` → ${r.current_node_key}` : ""}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">{t("common.emptyValue")}</span>
-        ),
+      cell: (r) => (
+        <span className="text-muted-foreground">
+          {r.current_stage_name || r.current_stage_key || t("common.emptyValue")}
+        </span>
+      ),
     },
     {
       key: "moved",

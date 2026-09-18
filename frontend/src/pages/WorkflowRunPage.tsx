@@ -18,11 +18,13 @@
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Workflow } from "lucide-react";
+import { Trash2, Workflow } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdhocTaskDialog } from "@/components/workflow/AdhocTaskDialog";
@@ -31,7 +33,7 @@ import { RunStages } from "@/components/workflow/RunStages";
 import { RunStatusBadge } from "@/components/workflow/WorkflowStatusBadge";
 import { translateApiError } from "@/lib/api/errors";
 import { useWorkflowRun } from "@/lib/hooks/useWorkflowRun";
-import { useMachineLabel } from "@/lib/hooks/useWorkflowRuns";
+import { useDeleteRun, useMachineLabel } from "@/lib/hooks/useWorkflowRuns";
 
 const TABS = ["flow", "context"] as const;
 type RunTab = (typeof TABS)[number];
@@ -47,7 +49,9 @@ export function WorkflowRunPage() {
   const [params, setParams] = useSearchParams();
   const { data: detail, isPending, error } = useWorkflowRun(runId);
   const machineLabel = useMachineLabel();
+  const del = useDeleteRun();
   const [adhocStage, setAdhocStage] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const requested = params.get("tab");
   const tab: RunTab = isRunTab(requested) ? requested : "flow";
@@ -107,6 +111,35 @@ export function WorkflowRunPage() {
             ) : null}
           </div>
         }
+        // Delete and nothing else. A run is operational state driven by
+        // commands and rebuilt from its event log (FR-014) — there is no edit
+        // of a run's row anywhere, and the title it was created with is the
+        // title every one of its events was attributed under.
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={() => setDeleting(true)}
+          >
+            <Trash2 className="mr-1 size-3.5" aria-hidden />
+            {t("common.delete")}
+          </Button>
+        }
+      />
+
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={t("workflow.deleteTitle")}
+        description={t("workflow.deleteConfirm", { title: run.title })}
+        confirmLabel={t("common.delete")}
+        pending={del.isPending}
+        error={del.error}
+        onConfirm={async () => {
+          await del.mutateAsync(run.id);
+          navigate("/runs");
+        }}
       />
 
       <Tabs value={tab} onValueChange={setTab}>

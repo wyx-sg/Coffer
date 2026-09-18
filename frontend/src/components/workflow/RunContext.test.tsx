@@ -245,11 +245,15 @@ describe("RunContext", () => {
     ).toBeInTheDocument();
   });
 
-  test("says so when the run holds nothing at all rather than showing an empty table", async () => {
+  test("shows the table even when the run holds nothing at all", async () => {
     listInputs.mockResolvedValue({ items: [] });
     listArtifacts.mockResolvedValue({ catalogue: "", items: [] });
     render(wrap());
-    expect(await screen.findByText("Nothing here yet")).toBeInTheDocument();
+    // The columns are what say what a run can be MADE OF, and they are worth
+    // seeing before there is anything in them — a card in their place made an
+    // empty run look like a different page from a full one.
+    expect(await screen.findByText(/A run with nothing mounted/)).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
   });
 
   test("a run another machine advances can be read but not added to", async () => {

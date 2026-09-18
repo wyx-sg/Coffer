@@ -28,6 +28,7 @@ export type RunInputKind = RunInput["kind"];
 export type RunInputIn = Schemas["RunInputIn"];
 export type InputList = Schemas["InputListOut"];
 export type Node = Schemas["NodeOut"];
+export type RunStage = Schemas["StageOut"];
 export type NodeStatus = Node["status"];
 export type NodeAttempt = Schemas["NodeAttemptOut"];
 export type AdhocTask = Schemas["AdhocTaskIn"];

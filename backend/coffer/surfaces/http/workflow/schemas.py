@@ -192,6 +192,11 @@ class RunOut(BaseModel):
     #: False when another machine advances this run (FR-012).
     owned_here: bool
     current_stage_key: str | None = None
+    #: What the developer CALLED that stage, read from the run's own frozen
+    #: snapshot. A key is an identity the engine reads no meaning from and the
+    #: developer never typed (FR-003, FR-060); null when the snapshot no longer
+    #: parses or no longer has that stage.
+    current_stage_name: str | None = None
     current_node_key: str | None = None
     tokens_spent: int = 0
     token_budget: int | None = None
