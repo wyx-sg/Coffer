@@ -48,13 +48,21 @@ resource's **reach**, and reach is machine-local.
    scope == {agents: []}                  → dormant (an empty list matches nothing)
    ```
 
+   [The list holds agent **uids**, not names, since
+   [Resource Identity Is an Immutable `uid`](./resource-identity-is-an-immutable-uid.md):
+   a scope is a reference to another resource, and a name is a label its owner
+   may change. While it held names, renaming an agent silently emptied every
+   scope naming it. Migration `0096` rewrote the stored lists. Nothing else in
+   this item changes — read `"claude-code"` above as that agent's uid.]
+
    - `None` is unrestricted; a list restricts to it.
    - `is_active(scope, agent)` → `True` when the scope admits that agent. An
      unidentified session (`agent=None` — a hand-configured shim reporting no
      `--agent`) matches only an unrestricted scope, so it sees strictly less,
      never more.
-   - Unknown names are legal and simply never match — a resource can be scoped
-     to an agent before that agent has appeared.
+   - Unknown entries are legal and simply never match — a resource can be scoped
+     to an agent before that agent has appeared, or on a machine that does not
+     have it.
    - A kind that declares no scope rejects a non-null value at validation (422).
      Four kinds declare scope — `mcp_server`, `skill`, `provider`, `channel` —
      and three declare none: `agent`, `knowledge` and `memory` (item 7). A kind
@@ -144,6 +152,14 @@ resource's **reach**, and reach is machine-local.
    `coffer-mcp-shim --agent <name>` into the agent's config; the shim reports
    the name at handshake alongside the existing cwd `_meta` injection. Sessions
    without an identity (hand-configured shims) see only unscoped servers.
+   [Since [Resource Identity Is an Immutable `uid`](./resource-identity-is-an-immutable-uid.md)
+   the flag is `--agent-uid <uid>` and the handshake key is
+   `coffer/agent-uid`, for the reason that makes this item work at all: the
+   entry is written once into a file Coffer does not revisit, so a label in it
+   would go stale on the first rename. An older shim still sending the
+   name-based key is read as *unidentified* — there is deliberately no name
+   fallback, so a stale label can never be matched against a scope. Everything
+   else in this item, the trust boundary included, is unchanged.]
    **Trust boundary:** identity is self-reported by the shim process, not
    cryptographically verified — acceptable in the single-user, loopback-only
    posture. The spec states this boundary explicitly rather than implying
@@ -205,9 +221,11 @@ resource's **reach**, and reach is machine-local.
    where reach decides what is exposed, delivered, written into a config file
    or allowed to drive an agent — are untouched.
 
-   Both kinds remain Resources: `<kind>:<name>` identity, the lifecycle
+   Both kinds remain Resources: identity, the lifecycle
    surface, the audit trail and the enable switch are all still worth having
-   without a scope. Chat history, audit logs, runtime state and machine-local
+   without a scope. [That identity was `<kind>:<name>` when this was written;
+   it is now an immutable `uid` —
+   [Resource Identity Is an Immutable `uid`](./resource-identity-is-an-immutable-uid.md).] Chat history, audit logs, runtime state and machine-local
    settings stay machine-local (restated as a boundary, not a new decision).
 
 8. **A channel scopes, and its scope is inverted — added 2026-09-13.** This ADR
@@ -386,3 +404,14 @@ resource's **reach**, and reach is machine-local.
   widens reach on purpose. The decision itself stands unchanged for
   `mcp_server`, `skill`, `provider` and `channel`, where reach decides what is
   exposed, delivered, written into a config file or allowed to drive an agent.
+- **2026-09-18, later the same day** — The scope's allow-list stops holding
+  agent **names** and holds agent **uids**
+  ([Resource Identity Is an Immutable `uid`](./resource-identity-is-an-immutable-uid.md),
+  migration `0096`). Nothing about the decision changes: one nullable
+  allow-list, `is_active(scope, agent)` the only predicate, machine-local,
+  per-kind enforcement seams. What changes is what the list points at, and it
+  closes two holes this ADR had lived with — renaming an agent silently emptied
+  every scope that named it, and a channel's `default_agent` (item 8) was
+  compared against a scope written in the agent's *other* name, which is why
+  `application/channel/agent_vocabulary.py` existed. That module is deleted:
+  one vocabulary, and it is the one that cannot change underneath a reference.

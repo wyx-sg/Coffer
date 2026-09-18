@@ -1,8 +1,15 @@
-"""HTTP coverage for GET /api/v1/agents/{name}/native-memory and .../files.
+"""HTTP coverage for GET /api/v1/agents/{uid}/native-memory and .../files.
 
 Boots the real app, registers an agent whose config_dir is a temp tree carrying
 the agent's own native memory, and asserts the read-only listing plus the
 read-only browse of one store (its tree and one of its files).
+
+The agent is addressed by the immutable ``uid`` the registration minted (ADR
+resource-identity-is-an-immutable-uid), never by its label, so every test takes
+the uid off the ``POST /api/v1/agents`` response it already makes. The ``dir``
+and ``path`` query parameters are untouched by that: they name a directory and a
+file on disk, which the store listing itself handed back — they were never
+resource identities.
 """
 
 from __future__ import annotations
@@ -16,6 +23,11 @@ from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
 TOKEN = "test-token-native-mem"
+
+#: A well-formed uid that no resource in these tests was ever minted with. It is
+#: uid-shaped on purpose: the route must 404 because nothing answers to this
+#: identity, not because the string could not be an identity in the first place.
+ABSENT_UID = "8c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f"
 
 
 def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
@@ -31,7 +43,12 @@ def _client(app) -> TestClient:
     return TestClient(app, headers={"X-Coffer-Token": TOKEN})
 
 
-def _register_claude(c: TestClient, config_dir: pathlib.Path) -> None:
+def _register_claude(c: TestClient, config_dir: pathlib.Path) -> str:
+    """Register a claude_code agent labelled ``cc`` and return its uid.
+
+    The uid — not the label — is what the native-memory routes are addressed
+    by, so it is what this hands back.
+    """
     # Registration requires the config dir to already exist.
     config_dir.mkdir(parents=True, exist_ok=True)
     r = c.post(
@@ -39,6 +56,7 @@ def _register_claude(c: TestClient, config_dir: pathlib.Path) -> None:
         json={"type": "claude_code", "name": "cc", "config_dir": str(config_dir)},
     )
     assert r.status_code == 201, r.text
+    return r.json()["uid"]
 
 
 @pytest.mark.acceptance(
@@ -54,9 +72,9 @@ def test_list_native_memory_returns_store(tmp_path, monkeypatch):
 
     app = _app(tmp_path, monkeypatch, 59800)
     with _client(app) as c:
-        _register_claude(c, config_dir)
+        uid = _register_claude(c, config_dir)
 
-        r = c.get("/api/v1/agents/cc/native-memory")
+        r = c.get(f"/api/v1/agents/{uid}/native-memory")
         assert r.status_code == 200, r.text
         body = r.json()
         assert len(body["items"]) == 1
@@ -95,8 +113,9 @@ def test_list_native_memory_codex_global_by_project(tmp_path, monkeypatch):
             json={"type": "codex", "name": "cx", "config_dir": str(config_dir)},
         )
         assert r.status_code == 201, r.text
+        uid = r.json()["uid"]
 
-        r = c.get("/api/v1/agents/cx/native-memory")
+        r = c.get(f"/api/v1/agents/{uid}/native-memory")
         assert r.status_code == 200, r.text
         items = r.json()["items"]
         # One row per distinct routed cwd, count desc; the shared global store.
@@ -135,8 +154,9 @@ def test_codex_store_tree_holds_only_the_memory_document(tmp_path, monkeypatch):
             json={"type": "codex", "name": "cx", "config_dir": str(config_dir)},
         )
         assert r.status_code == 201, r.text
+        uid = r.json()["uid"]
 
-        r = c.get("/api/v1/agents/cx/native-memory/files", params={"dir": str(memories)})
+        r = c.get(f"/api/v1/agents/{uid}/native-memory/files", params={"dir": str(memories)})
         assert r.status_code == 200, r.text
 
     assert [c["name"] for c in r.json()["root"]["children"]] == ["MEMORY.md"]
@@ -146,25 +166,32 @@ def test_list_native_memory_empty_when_no_projects_dir(tmp_path, monkeypatch):
     config_dir = tmp_path / "cc-config"
     app = _app(tmp_path, monkeypatch, 59810)
     with _client(app) as c:
-        _register_claude(c, config_dir)
-        r = c.get("/api/v1/agents/cc/native-memory")
+        uid = _register_claude(c, config_dir)
+        r = c.get(f"/api/v1/agents/{uid}/native-memory")
         assert r.status_code == 200, r.text
         assert r.json()["items"] == []
 
 
 def test_list_native_memory_unknown_agent_404(tmp_path, monkeypatch):
+    """A uid no agent answers to is 404, not an empty list of stores.
+
+    Nothing is registered here, so the service's agent lookup is what answers —
+    the distinction the empty-list test above would otherwise blur.
+    """
     app = _app(tmp_path, monkeypatch, 59820)
     with _client(app) as c:
-        r = c.get("/api/v1/agents/ghost/native-memory")
+        r = c.get(f"/api/v1/agents/{ABSENT_UID}/native-memory")
         assert r.status_code == 404, r.text
         assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_list_native_memory_requires_token(tmp_path, monkeypatch):
+    """The token is refused before the uid is looked up, so no agent is
+    registered here: 401 must not depend on the uid naming anything."""
     app = _app(tmp_path, monkeypatch, 59840)
     set_active_token(TOKEN)
     with TestClient(app) as c:
-        assert c.get("/api/v1/agents/cc/native-memory").status_code == 401
+        assert c.get(f"/api/v1/agents/{ABSENT_UID}/native-memory").status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -183,9 +210,11 @@ def test_store_files_tree_and_content(tmp_path, monkeypatch):
 
     app = _app(tmp_path, monkeypatch, 59850)
     with _client(app) as c:
-        _register_claude(c, config_dir)
+        uid = _register_claude(c, config_dir)
 
-        r = c.get("/api/v1/agents/cc/native-memory/files", params={"dir": str(mem)})
+        # ``dir`` is the memory_dir the listing gave — a path on disk, not an
+        # identity, so it is spelled out in full while the agent is a uid.
+        r = c.get(f"/api/v1/agents/{uid}/native-memory/files", params={"dir": str(mem)})
         assert r.status_code == 200, r.text
         root = r.json()["root"]
         assert root["path"] == ""
@@ -197,7 +226,7 @@ def test_store_files_tree_and_content(tmp_path, monkeypatch):
         assert [n["path"] for n in root["children"][0]["children"]] == ["notes/a.md"]
 
         r = c.get(
-            "/api/v1/agents/cc/native-memory/files/content",
+            f"/api/v1/agents/{uid}/native-memory/files/content",
             params={"dir": str(mem), "path": "notes/a.md"},
         )
         assert r.status_code == 200, r.text
@@ -220,11 +249,11 @@ def test_store_files_refuses_a_dir_that_is_not_a_store(tmp_path, monkeypatch):
 
     app = _app(tmp_path, monkeypatch, 59860)
     with _client(app) as c:
-        _register_claude(c, config_dir)
+        uid = _register_claude(c, config_dir)
 
         # The project dir is inside the config dir but is not a memory store.
         r = c.get(
-            "/api/v1/agents/cc/native-memory/files",
+            f"/api/v1/agents/{uid}/native-memory/files",
             params={"dir": str(config_dir / "projects" / "-X")},
         )
         assert r.status_code == 404
@@ -232,7 +261,7 @@ def test_store_files_refuses_a_dir_that_is_not_a_store(tmp_path, monkeypatch):
 
         # …and a path escaping the store is the same answer as one that is gone.
         escape = c.get(
-            "/api/v1/agents/cc/native-memory/files/content",
+            f"/api/v1/agents/{uid}/native-memory/files/content",
             params={"dir": str(mem), "path": "../secret.jsonl"},
         )
         assert escape.status_code == 404
@@ -247,11 +276,11 @@ def test_store_files_emit_no_audit_event(tmp_path, monkeypatch):
 
     app = _app(tmp_path, monkeypatch, 59870)
     with _client(app) as c:
-        _register_claude(c, config_dir)
+        uid = _register_claude(c, config_dir)
         before = len(c.get("/api/v1/audit").json()["entries"])
-        c.get("/api/v1/agents/cc/native-memory/files", params={"dir": str(mem)})
+        c.get(f"/api/v1/agents/{uid}/native-memory/files", params={"dir": str(mem)})
         c.get(
-            "/api/v1/agents/cc/native-memory/files/content",
+            f"/api/v1/agents/{uid}/native-memory/files/content",
             params={"dir": str(mem), "path": "MEMORY.md"},
         )
         assert len(c.get("/api/v1/audit").json()["entries"]) == before

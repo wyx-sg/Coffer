@@ -26,10 +26,11 @@ from coffer.application.provider.internal_default_ops import (
     set_internal_default as _set_internal_default_op,
 )
 from coffer.application.provider.ports import EngineNotifyPort
-from coffer.application.provider.projection_ops import deproject_connection, project_connection
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
-from coffer.application.provider.rename_ops import rename as _rename_op
 from coffer.application.provider.results import ActivateResult, DeactivateResult
+from coffer.application.provider.switch_ops import AGENT_FOR_WIRE
+from coffer.application.provider.switch_ops import activate as _activate_op
+from coffer.application.provider.switch_ops import deactivate as _deactivate_op
 from coffer.application.provider.targets import projection_targets
 from coffer.application.provider.transcribe_default_ops import (
     set_transcribe_default as _set_transcribe_default_op,
@@ -40,11 +41,11 @@ from coffer.application.provider.transcribe_default_ops import (
 from coffer.application.provider.update_ops import update as _update_op
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
-from coffer.domain.audit import AuditEventType
 from coffer.domain.credential_errors import CredentialMissing
+from coffer.domain.errors import ResourceNotFound
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig, ResolvedConnection
 from coffer.domain.provider.errors import NoActiveProvider, ProviderCredentialSourceInvalid
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 
 KIND = "provider"
 
@@ -52,15 +53,6 @@ KIND = "provider"
 # AFTER ``ProviderService.list`` would resolve ``list`` to that method (class-scope
 # shadowing under PEP 563), so name the type here where ``list`` is the builtin.
 _CuratedModels = list[CuratedModel]
-
-# Maps a back-compat wire (the ``use-builtin/{wire}`` route, the legacy
-# ``--wire`` key helper) to the agent it stands for. Activation, de-projection
-# and key resolution are now keyed by AGENT type; this is the only place the old
-# wire vocabulary is translated.
-_AGENT_FOR_WIRE: dict[Protocol, AgentType] = {
-    Protocol.ANTHROPIC: AgentType.CLAUDE_CODE,
-    Protocol.OPENAI: AgentType.CODEX,
-}
 
 
 class _CredentialStore(_Protocol):
@@ -114,19 +106,20 @@ class ProviderService:
         """
         return f"provider/{uuid4().hex}/key"
 
-    def _ref(self, name: str) -> ResourceRef:
-        return ResourceRef(KIND, name)
-
     @staticmethod
     def _cfg(resource: Resource) -> ProviderConfig:
         return ProviderConfig.model_validate(resource.config)
 
     @classmethod
-    def _compat(cls, resource: Resource) -> list[AgentType]:
+    def _compat(cls, resource: Resource, agents: list[Resource]) -> list[AgentType]:
         """The agent types this connection projects into — its framework-level
         scope, hydrated at the projection seam (ADR per-agent-resource-scope).
-        A disabled or keyless connection projects into nothing."""
-        return projection_targets(resource, cls._cfg(resource))
+        A disabled or keyless connection projects into nothing.
+
+        ``agents`` is the registry the scope's uids are resolved against; every
+        caller here has already listed it for the projection itself, so this
+        adds no read."""
+        return projection_targets(resource, cls._cfg(resource), agents)
 
     # --- CRUD ----------------------------------------------------------------
 
@@ -143,12 +136,13 @@ class ProviderService:
         actor: str = "api",
     ) -> Resource:
         """Create a connection. For anthropic/openai/unknown supply EXACTLY one
-        of ``secret_value`` (stored to the vault under ``provider/<name>/key``)
-        or ``credential_ref`` (reuse an existing vault entry). An ``ollama``
+        of ``secret_value`` (stored to the vault at a freshly minted opaque ref
+        — see :meth:`_mint_ref`) or ``credential_ref`` (reuse an existing vault
+        entry). An ``ollama``
         connection has no key — supply neither. WHICH agents the connection
-        projects into is its per-agent scope, pre-filled from the wire by the
-        kind and edited afterwards through the framework's scope surface
-        (``PUT /resources/provider/<name>/scope``). The model lives apart from
+        projects into is its per-agent scope, started off by the kind (dormant
+        for a keyless wire, unscoped otherwise) and edited afterwards through
+        the framework's scope surface. The model lives apart from
         the connection (spec provider-switching E3) and is chosen at the point of use;
         ``models`` only curates WHICH of the endpoint's models that choice is
         offered (``None``/empty ⇒ all of them)."""
@@ -187,12 +181,25 @@ class ProviderService:
     async def list(self) -> list[Resource]:
         return await self._resources.list(kind=KIND)
 
-    async def get(self, name: str) -> Resource:
-        return await self._resources.get(self._ref(name))
+    async def get(self, uid: str) -> Resource:
+        """One connection, by the identity every caller inside the daemon holds.
+
+        A surface that started from a name the user typed resolves it once
+        (``ResourceService.get_by_name``) and passes the uid in; nothing here
+        takes a label. The kind is re-checked because a uid is opaque: a uid
+        belonging to a skill would otherwise be handed to this service as a
+        connection and fail somewhere further in, where the error no longer says
+        what the caller actually got wrong. ``ResourceRef(KIND, name)`` used to
+        carry that guarantee in its shape.
+        """
+        resource = await self._resources.get(uid)
+        if resource.kind != KIND:
+            raise ResourceNotFound(uid)
+        return resource
 
     async def update(
         self,
-        name: str,
+        uid: str,
         *,
         protocol: Protocol | None = None,
         base_url: str | None = None,
@@ -204,7 +211,7 @@ class ProviderService:
         """Partial update; see ``update_ops`` for what may move and what may not."""
         return await _update_op(
             self,
-            name,
+            uid,
             protocol=protocol,
             base_url=base_url,
             secret_value=secret_value,
@@ -213,7 +220,7 @@ class ProviderService:
             actor=actor,
         )
 
-    async def delete(self, name: str, *, actor: str = "api") -> None:
+    async def delete(self, uid: str, *, actor: str = "api") -> None:
         """Delete a profile.
 
         The credential goes with it when nothing else cites it — but that is
@@ -223,16 +230,23 @@ class ProviderService:
         asking whether the ref matched ``provider/<name>/key``, which only ever
         worked for refs whose shape spelled the name out.
         """
-        await self._resources.delete(self._ref(name), actor)
+        await self.get(uid)  # 404 (and the kind check) before anything is removed
+        await self._resources.delete(uid, actor)
 
-    async def rename(self, name: str, new_name: str, *, actor: str = "api") -> Resource:
-        """Rename a connection; see ``rename_ops`` for the order of operations."""
-        return await _rename_op(self, name, new_name, actor=actor)
+    # There is deliberately no ``rename`` here. This kind had the only one in
+    # Coffer, and it existed because the connection's NAME was written into
+    # another tool's config file — Claude Code's ``apiKeyHelper`` shelled out
+    # to ``--connection <name>``, so moving the label meant re-projecting or
+    # leaving the agent calling something that no longer resolved. The helper
+    # carries the uid now (``anthropic_api_key_helper``), so a rename writes one
+    # column and nothing else: ``ResourceService.rename`` does that for every
+    # kind, validating the name and refusing a collision in the one place those
+    # rules live.
 
     # --- switch + key resolution --------------------------------------------
 
-    async def activate(self, name: str, *, actor: str = "api") -> ActivateResult:
-        """Make ``name`` the active connection for each agent its scope reaches
+    async def activate(self, uid: str, *, actor: str = "api") -> ActivateResult:
+        """Make this the active connection for each agent its scope reaches
         and project it into every enabled agent of those types.
 
         Projection happens BEFORE the ``is_active`` flip so a native-config write
@@ -240,53 +254,10 @@ class ProviderService:
         registry untouched. The invariant is at most one active connection PER
         AGENT TYPE: activating this one takes over the agents it covers from any
         previously-active connection, and de-projects that connection from the
-        agents this one does NOT cover so no stale config is left behind.
+        agents this one does NOT cover so no stale config is left behind. A thin
+        delegate; the order of operations lives in ``switch_ops``.
         """
-        resource = await self.get(name)
-        cfg = self._cfg(resource)
-        targets = self._compat(resource)
-        agents = await self._agents.list()
-
-        # 1) Project first. ollama (no targets) is internal-only — projects to
-        #    no agent. ``skipped`` lists in-scope agents with no registered one.
-        projected = await project_connection(self, name, cfg, targets, agents, actor=actor)
-        covered = {at for at in targets if self._projector.agents_of_type(agents, at)}
-        skipped = [at.value for at in targets if at not in covered]
-
-        # 2) Flip activation: take over from any overlapping active connection,
-        #    de-projecting it from the agents this one will not cover. The
-        #    single-process daemon serialises the clear-then-set (provider
-        #    switching / FR-011).
-        mine = set(targets)
-        previous: str | None = None
-        for r in await self.list():
-            if r.name == name:
-                continue
-            rc = self._cfg(r)
-            other = set(self._compat(r))
-            if not rc.is_active or not (other & mine):
-                continue
-            for at in other - mine:
-                await deproject_connection(self, agents, at, actor=actor, connection=r.name)
-            await self._set_active(r, active=False, actor=actor)
-            previous = r.name
-        if not cfg.is_active:
-            await self._set_active(resource, active=True, actor=actor)
-
-        await self._audit.record(
-            AuditEventType.PROVIDER_SWITCHED.value,
-            ref=self._ref(name),
-            actor=actor,
-            details={
-                "from": previous,
-                "to": name,
-                "protocol": cfg.protocol.value,
-                "agents": projected,
-            },
-        )
-        return ActivateResult(
-            activated=name, protocol=cfg.protocol.value, projected=projected, skipped=skipped
-        )
+        return await _activate_op(self, uid, actor=actor)
 
     async def deactivate(self, wire: Protocol, *, actor: str = "api") -> DeactivateResult:
         """Switch the agent behind ``wire`` (anthropic→Claude Code, openai→Codex)
@@ -294,45 +265,31 @@ class ProviderService:
         connection's ``is_active``. A connection reaching multiple agents
         is reverted as a unit (the single ``is_active`` flag is all-or-nothing).
         Idempotent; de-projects before the flip, mirroring :meth:`activate`."""
-        agent_type = _AGENT_FOR_WIRE.get(wire)
-        agents = await self._agents.list()
-        deprojected: list[str] = []
-        previous: str | None = None
-        if agent_type is not None:
-            deprojected = await deproject_connection(self, agents, agent_type, actor=actor)
-            for r in await self.list():
-                rc = self._cfg(r)
-                compat = self._compat(r)
-                if not rc.is_active or agent_type not in compat:
-                    continue
-                for at in compat:
-                    if at is not agent_type:
-                        await deproject_connection(self, agents, at, actor=actor, connection=r.name)
-                await self._set_active(r, active=False, actor=actor)
-                previous = r.name
+        return await _deactivate_op(self, wire, actor=actor)
 
-        if previous is not None or deprojected:
-            details = {"from": previous, "to": None, "protocol": wire.value, "agents": deprojected}
-            ref = self._ref(previous) if previous else self._ref(wire.value)
-            await self._audit.record(
-                AuditEventType.PROVIDER_SWITCHED.value, ref=ref, actor=actor, details=details
-            )
-        return DeactivateResult(protocol=wire.value, deprojected=deprojected, previous=previous)
+    async def resolve_connection_key(self, uid: str) -> str:
+        """The decrypted key of ONE specific connection — what Claude Code's
+        projected ``apiKeyHelper`` (``coffer provider key --connection-uid
+        <uid>``) fetches, so the agent always reads exactly the activated
+        connection's key.
 
-    async def resolve_connection_key(self, name: str) -> str:
-        """The decrypted key of a SPECIFIC connection by name — what Claude
-        Code's projected ``apiKeyHelper`` (``--connection <name>``) fetches, so
-        the agent always reads exactly the activated connection's key. Raises
-        ``NoActiveProvider`` for a keyless (ollama) connection."""
-        return await self._key_of(self._cfg(await self.get(name)), label=name)
+        By uid because that helper line is written once into a file Coffer does
+        not own and then read on every turn, for as long as the connection
+        lives: a name in it would stop resolving the moment the user renamed
+        the connection. Raises ``NoActiveProvider`` for a keyless (ollama)
+        connection.
+        """
+        resource = await self.get(uid)
+        return await self._key_of(self._cfg(resource), label=resource.name)
 
     async def resolve_active_key_for_agent(self, agent_type: AgentType) -> str:
         """The decrypted key of the connection currently active AND reaching
         ``agent_type`` (its scope, ∩ ``enabled``) — Codex's
         ``COFFER_PROVIDER_KEY`` injection. Raises ``NoActiveProvider`` if none."""
+        agents = await self._agents.list()
         for r in await self.list():
             rc = self._cfg(r)
-            if rc.is_active and agent_type in self._compat(r):
+            if rc.is_active and agent_type in self._compat(r, agents):
                 return await self._key_of(rc, label=agent_type.value)
         raise NoActiveProvider(agent_type.value)
 
@@ -340,7 +297,7 @@ class ProviderService:
         """Back-compat: the active key for a wire's agent (legacy ``--wire`` key
         helper / ``/active-key/{wire}``). Resolves by the connection active for
         the agent the wire stands for."""
-        agent_type = _AGENT_FOR_WIRE.get(wire)
+        agent_type = AGENT_FOR_WIRE.get(wire)
         if agent_type is None:
             raise NoActiveProvider(wire.value)
         return await self.resolve_active_key_for_agent(agent_type)
@@ -354,8 +311,8 @@ class ProviderService:
             raise CredentialMissing(ref)
         return value
 
-    async def set_internal_default(self, name: str, *, actor: str = "api") -> Resource:
-        """Make ``name`` the global internal-engine default — the connection
+    async def set_internal_default(self, uid: str, *, actor: str = "api") -> Resource:
+        """Make this the global internal-engine default — the connection
         Coffer's own LLM engine uses.
 
         A thin delegate: the flag's single-global invariant and the fate of the
@@ -363,7 +320,7 @@ class ProviderService:
         ``internal_default_ops``, so BOTH callers — the HTTP route and
         ``coffer provider internal-default`` — get them.
         """
-        return await _set_internal_default_op(self, name, actor=actor)
+        return await _set_internal_default_op(self, uid, actor=actor)
 
     async def internal_default_connection(self, model: str) -> ResolvedConnection | None:
         """The connection marked ``internal_default``, paired with ``model``.
@@ -372,15 +329,15 @@ class ProviderService:
         """
         return await _internal_default_connection_op(self, model)
 
-    async def set_transcribe_default(self, name: str, *, actor: str = "api") -> Resource:
-        """Make ``name`` the global speech-to-text connection.
+    async def set_transcribe_default(self, uid: str, *, actor: str = "api") -> Resource:
+        """Make this the global speech-to-text connection.
 
         The twin of :meth:`set_internal_default`, delegating for the same
         reason: the single-global invariant and the fate of the transcription
         model when the connection moves belong to both callers, the HTTP route
         and ``coffer provider transcribe-default``.
         """
-        return await _set_transcribe_default_op(self, name, actor=actor)
+        return await _set_transcribe_default_op(self, uid, actor=actor)
 
     async def transcribe_connection(self, model: str) -> ResolvedConnection | None:
         """The connection marked ``transcribe_default``, paired with ``model``.
@@ -394,4 +351,4 @@ class ProviderService:
     async def _set_active(self, resource: Resource, *, active: bool, actor: str) -> None:
         config = dict(resource.config)
         config["is_active"] = active
-        await self._resources.update_config(self._ref(resource.name), config, actor)
+        await self._resources.update_config(resource.uid, config, actor)

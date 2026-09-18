@@ -29,8 +29,9 @@ from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
 )
-from coffer.application.channel.ports import ChannelBinding, ChannelPeer
+from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.selection_cards import effort_card
+from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.errors import CofferError
 
 if TYPE_CHECKING:
@@ -77,7 +78,7 @@ async def cmd_effort(
     # conversation is actually on, so the answer describes the choice the user
     # would be making rather than the agent in the abstract.
     cfg = await commands._conversations.get_agent_config(conversation_id)
-    row = await commands._threads.get(binding.resource_id, peer.chat_id, thread_id)
+    row = await commands._threads.get(binding.resource.id, peer.chat_id, thread_id)
     key = effective_agent(binding, row.preferred_agent if row is not None else None)
     levels = await commands._model_suggestions.efforts(key, cfg.model)
     # Deferred to break the module cycle: ``card_delivery`` calls

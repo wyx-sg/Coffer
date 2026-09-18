@@ -21,8 +21,9 @@ from coffer.application.mcp.gateway_tool_search import (
     tool_search_descriptor,
 )
 from coffer.application.mcp.ports import MCPInvocationRepoPort
-from coffer.domain.errors import UpstreamUnavailable
-from coffer.domain.mcp.capability import MCPInvocation
+from coffer.application.resource_service import ResourceService
+from coffer.domain.errors import ResourceNotFound, UpstreamUnavailable
+from coffer.domain.mcp.capability import BUILTIN_SERVER_UID, MCPInvocation
 
 _logger = logging.getLogger(__name__)
 
@@ -39,8 +40,9 @@ async def dispatch_builtin_tool(
     """Invoke a `coffer__*` built-in tool and record it in mcp_invocations.
 
     Built-in tools share the same invocation log surface as upstream tools,
-    so retention + audit work uniformly. `resource_name` is the sentinel
-    `"coffer"`.
+    so retention + audit work uniformly. There is no ``mcp_server`` row behind a
+    built-in and therefore no uid to record, so the row carries the reserved
+    ``BUILTIN_SERVER_UID`` sentinel instead.
     """
     bare_name = prefixed_name[len(COFFER_TOOL_PREFIX) :]
     tool = builtin.get(prefixed_name)
@@ -130,7 +132,7 @@ async def _log(
             MCPInvocation(
                 id=None,
                 timestamp=started,
-                resource_name="coffer",
+                resource_uid=BUILTIN_SERVER_UID,
                 capability_type="tool",
                 capability_key=bare_name,
                 duration_ms=duration_ms,
@@ -149,10 +151,52 @@ async def _log(
 #: argument by accident.
 SESSION_CONTEXT_PROPERTIES = ("cwd",)
 
-#: The argument that carries the session's agent identity into every built-in
-#: call. It is not part of any tool's public schema: the value is the
-#: gateway's to set, and a client that names one is asking to be someone else.
+#: The argument that tells a built-in tool WHO is calling it. It is not part of
+#: any tool's public schema: the value is the gateway's to set, and a client that
+#: names one is asking to be someone else.
+#:
+#: Its value is the agent's **name**, and deliberately not its uid. This is a
+#: LABEL, not an identity — the same category as ``audit_log.resource_name``,
+#: which records what a thing was called at the time. Its one consumer writes it
+#: into the actor column of an audit entry, and an actor column exists to be read
+#: by a person; a 32-character hex string there would make the log unreadable by
+#: the only audience it has.
+#:
+#: The uid has its own, separate job in this session — gating what the agent can
+#: see, via ``is_active(resource.scope, session_agent_uid)`` — and that job is
+#: untouched. Letting one value serve both would be the "one field answering two
+#: questions" shape that ADR resource-identity-is-an-immutable-uid exists to
+#: remove: a label must follow a rename, an identity must not.
 AGENT_ARGUMENT = "agent"
+
+
+async def agent_actor_label(
+    resources: ResourceService,
+    session_agent_uid: str | None,
+) -> str | None:
+    """Resolve the session's agent uid to the NAME a built-in call is labelled with.
+
+    ``None`` — inject nothing — whenever the uid cannot be turned into an agent's
+    current name: no identity was reported, the agent has since been deleted, or
+    the uid belongs to something that is not an agent. The consumer then records
+    an unattributed write, which is honest and readable, where a bare uid would
+    be neither: nothing downstream could resolve it later, because the row it
+    named is exactly the row that is gone.
+
+    Resolved per call rather than once at the handshake, and not cached. The
+    label is meant to say what the agent was called when the write happened, and
+    a session outlives a rename; one indexed lookup by uid against local SQLite
+    costs nothing beside the tool call it is labelling. There is no row already
+    in hand to reuse either — scope gating compares uid strings and never loads
+    an agent row.
+    """
+    if not session_agent_uid:
+        return None
+    try:
+        agent = await resources.get(session_agent_uid)
+    except ResourceNotFound:
+        return None
+    return agent.name if agent.kind == "agent" else None
 
 
 def inject_session_context(
@@ -161,16 +205,18 @@ def inject_session_context(
     params: dict[str, Any],
     *,
     session_cwd: str | None,
-    session_agent: str | None,
+    agent_label: str | None,
 ) -> dict[str, Any]:
     """Thread what the session knows about its caller into a built-in call.
 
-    Two arguments, two rules. ``agent`` is the caller's identity and the basis
-    of per-agent scope (spec mcp-gateway FR-012/FR-013), so it is ALWAYS the
-    session's: whatever the client sent under that name is dropped, the
-    handshake's identity is written in its place, and when the session never
-    reported one the argument is absent — the tool then treats the caller as
-    unidentified rather than as whoever it claimed to be. ``cwd`` is context a
+    Two arguments, two rules. ``agent`` names the caller (spec mcp-gateway
+    FR-013), so it is ALWAYS the session's: whatever the client sent under that
+    name is dropped — unconditionally, including when this session has no label
+    of its own to put there — and the label resolved from the handshake identity
+    is written in its place. With no label the argument is simply absent, and the
+    tool treats the caller as unidentified rather than as whoever it claimed to
+    be. See ``AGENT_ARGUMENT`` for why the label is the agent's name and not the
+    uid the scope gate compares. ``cwd`` is context a
     tool opts into by declaring the property in its input schema; a
     client-supplied value is respected and a value the session never learned
     is NOT invented, because the daemon's own cwd would scope an agent's work
@@ -184,8 +230,8 @@ def inject_session_context(
         return params
     args = dict(params.get("arguments") or {})
     args.pop(AGENT_ARGUMENT, None)
-    if session_agent:
-        args[AGENT_ARGUMENT] = session_agent
+    if agent_label:
+        args[AGENT_ARGUMENT] = agent_label
     props = tool.input_schema.get("properties", {})
     if isinstance(props, dict):
         session_values = {"cwd": session_cwd}

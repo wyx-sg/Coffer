@@ -23,6 +23,8 @@ from coffer.domain.scope import Scope
 
 _NOW = datetime(2026, 9, 10, tzinfo=UTC)
 _BASE_URL = "https://gateway.example/v1"
+_AGENT_UID = "8f1c2d3e4a5b6c7d8e9f0a1b2c3d4e5f"
+_CONNECTION_UID = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"
 
 
 def _resource(
@@ -30,11 +32,13 @@ def _resource(
     name: str,
     config: dict[str, Any],
     *,
+    uid: str,
     enabled: bool = True,
     scope: Scope | None = None,
 ) -> Resource:
     return Resource(
         id=1,
+        uid=uid,
         kind=kind,
         name=name,
         description=None,
@@ -51,6 +55,7 @@ def _agent(config_dir: pathlib.Path, *, enabled: bool = True) -> Resource:
         "agent",
         "claude-code",
         {"type": "claude_code", "config_dir": str(config_dir)},
+        uid=_AGENT_UID,
         enabled=enabled,
     )
 
@@ -65,10 +70,12 @@ def _connection(*, is_active: bool = True) -> Resource:
             "credential_ref": "agnes-key",
             "is_active": is_active,
         },
+        uid=_CONNECTION_UID,
         # The shape that surfaced this: an openai endpoint routed to Claude
         # Code. That routing is the resource's per-agent scope now
-        # (ADR per-agent-resource-scope), not a config field.
-        scope=Scope(agents=["claude_code"]),
+        # (ADR per-agent-resource-scope), not a config field — and it names the
+        # agent by uid, so the reach is only computable against the registry.
+        scope=Scope(agents=[_AGENT_UID]),
     )
 
 
@@ -103,7 +110,7 @@ def _projected_settings() -> str:
         base_url=_BASE_URL,
         model=None,
         fast_model=None,
-        api_key_helper=anthropic_api_key_helper("agnes"),
+        api_key_helper=anthropic_api_key_helper(_CONNECTION_UID),
     )
 
 
@@ -156,7 +163,8 @@ async def test_no_registered_agent_of_that_type_means_another_machine(
 ) -> None:
     """The flag rides the synced row. With no Claude Code registered here it
     describes some other machine's agents, and clearing it would undo a switch
-    the user made there."""
+    the user made there — the scope's uid names an agent this machine does not
+    have, which the scope layer says simply never matches."""
     heal, calls = _heal(_Store(), [], [_connection()])
 
     assert await heal.heal() == []

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -16,56 +15,29 @@ from typing import TYPE_CHECKING
 import httpx
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.callback_probe import CallbackTestResult, probe_seatalk_callback
+from coffer.application.channel.callback_ops import (
+    CallbackInfo,
+    MaterializeFn,
+    callback_info,
+    test_callback,
+)
+from coffer.application.channel.callback_probe import CallbackTestResult
 from coffer.application.channel.pairing import PairingManager, start_link
-from coffer.application.channel.ports import (
+from coffer.application.channel.ports import EventIngestAdapter
+from coffer.application.channel.store_ports import (
     ChannelPeer,
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
-    EventIngestAdapter,
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.channel.errors import ChannelNotPaired, ChannelNotRunning
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
     from coffer.application.channel.runtime import ChannelRuntime
     from coffer.application.resource_service import ResourceService
 
-MaterializeFn = Callable[[dict[str, str]], Awaitable[dict[str, str]]]
-
 _logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class CallbackInfo:
-    """How this SeaTalk channel receives events, and whether that is working.
-
-    spec channels/seatalk FR-004: the block covers both delivery methods, and every field that
-    belongs
-    to the other one reports its absent value rather than a plausible-looking
-    lie. On websocket delivery there is no port, no path, no public URL, no
-    listener and no tunnel — ``websocket_state`` carries the whole truth instead.
-    """
-
-    port: int
-    path: str
-    listener_running: bool
-    # "webhook" | "websocket" — which of the two transports this channel uses.
-    delivery: str = "webhook"
-    public_base_url: str | None = None
-    public_callback_url: str | None = None
-    # Whether Coffer manages a cloudflared tunnel for this channel (a token is
-    # configured) and whether that tunnel process is currently alive.
-    tunnel_managed: bool = False
-    tunnel_running: bool = False
-    # connecting | connected | kicked | sdk_missing | error — None on webhook
-    # delivery, and on a websocket channel that is not running at all.
-    websocket_state: str | None = None
-    # The last thing that went wrong on the connection, verbatim, because the
-    # two failures that matter (no SDK, another process holds the connection)
-    # are only actionable if the owner can read them.
-    websocket_error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +56,10 @@ class ChannelDiagnostic:
 
 @dataclass(frozen=True)
 class ChannelStatus:
+    #: The channel's identity — what a surface addresses it by and builds links
+    #: from. Beside the name rather than instead of it: this object is rendered
+    #: on a page a person reads, and the two answer different questions.
+    uid: str
     name: str
     channel_type: str
     enabled: bool
@@ -137,10 +113,22 @@ class ChannelService:
         self._http = http_client
         self._ingest_tasks: set[asyncio.Task[None]] = set()
 
-    async def _channel(self, name: str) -> Resource:
-        return await self._resources.get(ResourceRef(kind="channel", name=name))
+    async def _channel(self, channel_uid: str) -> Resource:
+        """The channel row, by its identity.
 
-    async def issue_pairing_code(self, name: str, *, actor: str) -> tuple[str, datetime, str]:
+        Every method here addresses a channel by ``uid`` (ADR
+        resource-identity-is-an-immutable-uid). A name reaches Coffer only where
+        a person typed one — the CLI resolves it and the web UI never had it —
+        and a service that accepted both would be the round trip this change
+        exists to delete: the route resolving uid → name so that the service can
+        resolve name → row. Whatever needs the label past this line reads it off
+        the row.
+        """
+        return await self._resources.get(channel_uid)
+
+    async def issue_pairing_code(
+        self, channel_uid: str, *, actor: str
+    ) -> tuple[str, datetime, str]:
         """Generate a pairing code for the channel (replacing any pending one).
 
         Returns the code, its expiry, and — where the platform has a
@@ -149,11 +137,15 @@ class ChannelService:
         transcribing eight characters on a phone. The link is "" when there is
         none; the typed code always works.
         """
-        resource = await self._channel(name)
+        resource = await self._channel(channel_uid)
+        # The pending-code map and the running-adapter map are both keyed by the
+        # channel's NAME: they are in-memory state the runtime rebuilds from the
+        # resource table on every tick, so a rename simply re-keys them.
+        name = resource.name
         code, expires_at = self._pairing.issue(name)
         await self._audit.record(
             AuditEventType.CHANNEL_PAIRING_ISSUED.value,
-            ref=resource.ref,
+            resource=resource,
             actor=actor,
             details={"expires_at": expires_at.isoformat()},
         )
@@ -165,7 +157,7 @@ class ChannelService:
         return start_link(getattr(username, "username", None) or "", code)
 
     def _diagnostics(
-        self, name: str, resource: Resource, *, runs_on: str | None, runs_here: bool
+        self, resource: Resource, *, runs_on: str | None, runs_here: bool
     ) -> tuple[ChannelDiagnostic, ...]:
         """Everything about this channel that reads as configured and is not.
 
@@ -199,16 +191,14 @@ class ChannelService:
                     ),
                 )
             )
-        return (*findings, *self._privacy_mode_diagnostics(name, resource))
+        return (*findings, *self._privacy_mode_diagnostics(resource))
 
-    def _privacy_mode_diagnostics(
-        self, name: str, resource: Resource
-    ) -> tuple[ChannelDiagnostic, ...]:
+    def _privacy_mode_diagnostics(self, resource: Resource) -> tuple[ChannelDiagnostic, ...]:
         """spec channels/telegram FR-004: a Telegram bot runs with privacy mode ON by default, which
         withholds ordinary group messages from it entirely. A channel told to
         act on unaddressed group messages under that setting looks correct in
         Coffer and does nothing in the chat."""
-        adapter = self._runtime.adapter(name)
+        adapter = self._runtime.adapter(resource.name)
         identity = getattr(adapter, "identity", None)
         if identity is None or getattr(identity, "reads_all_group_messages", None) is not False:
             # No adapter running, not a transport that reports this, or the
@@ -227,8 +217,9 @@ class ChannelService:
             ),
         )
 
-    async def status(self, name: str) -> ChannelStatus:
-        resource = await self._channel(name)
+    async def status(self, channel_uid: str) -> ChannelStatus:
+        resource = await self._channel(channel_uid)
+        name = resource.name
         peer = await self._peers.owner_peer(resource.id)
         # The DM's own thread row (``thread_id=""``) is where the conversation
         # pointer actually lives. ``channel_peers`` carried a column of the
@@ -238,7 +229,7 @@ class ChannelService:
         channel_type = str(resource.config.get("channel_type", ""))
         callback: CallbackInfo | None = None
         if channel_type == "seatalk":
-            callback = self._callback_info(name, resource)
+            callback = callback_info(resource, runtime=self._runtime)
         raw_binding = resource.config.get("runs_on")
         runs_on = raw_binding if isinstance(raw_binding, str) and raw_binding else None
         # Asked of the runtime rather than resolved here: the runtime is what
@@ -247,7 +238,8 @@ class ChannelService:
         local = await self._runtime.local_machine_id()
         runs_here = local is None or runs_on == local
         return ChannelStatus(
-            diagnostics=self._diagnostics(name, resource, runs_on=runs_on, runs_here=runs_here),
+            diagnostics=self._diagnostics(resource, runs_on=runs_on, runs_here=runs_here),
+            uid=resource.uid,
             name=name,
             channel_type=channel_type,
             enabled=resource.enabled,
@@ -263,90 +255,28 @@ class ChannelService:
             runs_here=runs_here,
         )
 
-    def _callback_info(self, name: str, resource: Resource) -> CallbackInfo:
-        """The inbound-transport block for a SeaTalk channel (spec channels/seatalk FR-004)."""
-        if str(resource.config.get("delivery") or "webhook") == "websocket":
-            state = self._runtime.websocket_state(name)
-            return CallbackInfo(
-                # Nothing listens, nothing is tunnelled and no URL exists on this
-                # path; reporting the listener's port here would invite the owner
-                # to go looking for ingress that is not part of the design.
-                port=0,
-                path="",
-                listener_running=False,
-                delivery="websocket",
-                websocket_state=state[0] if state is not None else None,
-                websocket_error=state[1] if state is not None else None,
-            )
-        path = f"/seatalk/{name}"
-        base = resource.config.get("public_base_url")
-        base = base if isinstance(base, str) and base else None
-        token_ref = resource.config.get("tunnel_token_ref")
-        tunnel_managed = bool(isinstance(token_ref, str) and token_ref)
-        return CallbackInfo(
-            port=self._runtime.listener_port,
-            path=path,
-            listener_running=self._runtime.listener_running,
-            delivery="webhook",
-            public_base_url=base,
-            public_callback_url=f"{base}{path}" if base else None,
-            tunnel_managed=tunnel_managed,
-            tunnel_running=self._runtime.tunnel_running(name),
-        )
+    async def test_callback(self, channel_uid: str) -> CallbackTestResult:
+        """Probe this channel's public callback URL (``callback_ops``)."""
+        resource = await self._channel(channel_uid)
+        return await test_callback(resource, materialize=self._materialize, http=self._http)
 
-    async def test_callback(self, name: str) -> CallbackTestResult:
-        """Probe the channel's public callback URL end to end (SeaTalk only).
-
-        Confirms public URL → tunnel → loopback listener → signature → handshake.
-        Does not confirm the signing secret matches SeaTalk's (we sign and
-        verify with the same stored secret) — that only shows on a real event.
-        """
-        resource = await self._channel(name)
-        config = resource.config
-        if str(config.get("channel_type", "")) != "seatalk":
-            return CallbackTestResult(
-                ok=False, detail="callback test applies to SeaTalk channels only"
-            )
-        if str(config.get("delivery") or "webhook") == "websocket":
-            # There is nothing to probe: the bot dials out, so no public URL, no
-            # listener and no tunnel exist on this path. The channel's websocket
-            # state is the health answer here.
-            return CallbackTestResult(
-                ok=False,
-                detail=(
-                    "this channel receives events over WebSocket, so there is no public "
-                    "callback URL to probe — check the connection state instead"
-                ),
-            )
-        base = config.get("public_base_url")
-        if not (isinstance(base, str) and base):
-            return CallbackTestResult(
-                ok=False, detail="set the channel's public callback URL (base URL) first"
-            )
-        signing_ref = str(config.get("signing_secret_ref", ""))
-        if self._materialize is None or self._http is None or not signing_ref:
-            return CallbackTestResult(ok=False, detail="callback testing is not available")
-        try:
-            signing_secret = (await self._materialize({"s": signing_ref}))["s"]
-        except Exception:
-            _logger.exception("channel.callback_test.secret_failed", extra={"channel": name})
-            return CallbackTestResult(
-                ok=False, detail="could not load the channel's signing secret"
-            )
-        return await probe_seatalk_callback(
-            client=self._http,
-            url=f"{base}/seatalk/{name}",
-            signing_secret=signing_secret,
-        )
-
-    async def ingest_event(self, name: str, envelope: dict[str, object]) -> None:
+    async def ingest_event(self, channel_uid: str, envelope: dict[str, object]) -> None:
         """Accept a verified platform event forwarded by the callback listener.
+
+        Addressed by uid, unlike every other method here, and for a reason none
+        of them shares: its caller is not a person. Both inbound transports
+        identify the channel to the daemon by the key their supervisor was
+        started with — the last segment of the public callback path, or the
+        websocket connection's own key — and both of those are the channel's uid
+        (``runtime_supervision``). A name here would be a second spelling that
+        only the plumbing ever writes.
 
         Processing is scheduled in the background: the listener must answer
         the platform within seconds, and a command/pairing reply can involve
         rate-limited outbound API calls.
         """
-        await self._channel(name)  # unknown name -> 404 before the 409
+        resource = await self._channel(channel_uid)  # unknown uid -> 404
+        name = resource.name
         adapter = self._runtime.adapter(name)
         if adapter is None or not isinstance(adapter, EventIngestAdapter):
             raise ChannelNotRunning(name)
@@ -359,7 +289,9 @@ class ChannelService:
         if not task.cancelled() and task.exception() is not None:
             _logger.error("channel.ingest.failed", exc_info=task.exception())
 
-    async def notify(self, name: str, text: str, *, actor: str, chat_id: str | None = None) -> None:
+    async def notify(
+        self, channel_uid: str, text: str, *, actor: str, chat_id: str | None = None
+    ) -> None:
         """Push text to one of the channel's paired chats, outside any conversation.
 
         ``chat_id`` names the chat. Omitted, it is the channel's owner chat —
@@ -370,7 +302,10 @@ class ChannelService:
         private notifications into group chats. A chat that is not paired to
         this channel is refused rather than messaged.
         """
-        resource = await self._channel(name)
+        resource = await self._channel(channel_uid)
+        # The two refusals below name the channel the way its owner does: they
+        # are read by a person, and a uid in an error message is a dead end.
+        name = resource.name
         if chat_id is None:
             peer = await self._peers.owner_peer(resource.id)
         else:

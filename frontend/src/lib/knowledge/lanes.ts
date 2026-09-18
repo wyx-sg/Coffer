@@ -16,9 +16,17 @@ export function isKnowledgeLane(value: string | null | undefined): value is Know
   return value === "sources" || value === "topics";
 }
 
-/** The root of one lane, relative to the knowledge root (`shopee/sources`). */
+/**
+ * The root of one lane, relative to the knowledge root (`shopee/sources`).
+ *
+ * `""` for a collection whose name is not known yet — the detail page is
+ * addressed by uid and resolves the name from the resource read, so there is a
+ * moment before it has one. An empty path is what the tree's query treats as
+ * "nothing to ask for"; building `"/sources"` instead would fire a request for
+ * a directory that cannot exist.
+ */
 export function lanePath(collection: string, lane: KnowledgeLane): string {
-  return `${collection}/${lane}`;
+  return collection === "" ? "" : `${collection}/${lane}`;
 }
 
 /**

@@ -121,13 +121,28 @@ def memory_cli_daemon(tmp_path, monkeypatch):
     fake_client.__exit__(None, None, None)
 
 
-def _register_cc_via_http() -> None:
+def _register_cc_via_http() -> str:
     """Register the agent directly through the fake client (sidesteps any
-    ``coffer agent`` CLI verb naming this suite does not need to pin down)."""
+    ``coffer agent`` CLI verb naming this suite does not need to pin down).
+
+    Returns its uid, which ``coffer memory context`` takes — that command is
+    the one here whose caller is a machine rather than a person, so it is the
+    one that does not resolve a name (see ``memory_cmd``'s docstring)."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/agents", json={"type": "claude_code", "name": "cc"})
         assert r.status_code == 201, r.text
+    return str(r.json()["uid"])
+
+
+def _agent_uid(name: str) -> str:
+    """The uid of an already-registered agent, by label — the same single
+    lookup ``surfaces/cli/_resolve.py`` makes on a person's behalf."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/resources", params={"kind": "agent", "name": name})
+        assert r.status_code == 200, r.text
+    return str(r.json()["resources"][0]["uid"])
 
 
 def _seed_repository(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -146,6 +161,8 @@ def _seed_repository(tmp_path: pathlib.Path) -> pathlib.Path:
 def _distilled_partition(tmp_path: pathlib.Path) -> str:
     """Register, seed, ``sync`` and ``distil`` — the state most tests start in."""
     _register_cc_via_http()
+    # Every command below still names the partition by its LABEL: the CLI
+    # resolves it to a uid itself, which is the whole point of `_resolve`.
     _seed_repository(tmp_path)
     synced = _runner.invoke(cli_app, ["memory", "sync", "--json"])
     assert synced.exit_code == 0, synced.output
@@ -316,7 +333,15 @@ def test_delivery_install_status_and_remove_round_trip(memory_cli_daemon):
 
     status = _runner.invoke(cli_app, ["memory", "delivery", "--json"])
     data = json.loads(_extract_json(status.output))["delivery"]
-    assert any(d["agent"] == "cc" and d["installed"] for d in data)
+    # The row carries both: the label a person reads, and the identity a script
+    # would act on.
+    row = next(d for d in data if d["agent_name"] == "cc")
+    assert row["installed"] is True
+    assert row["agent_uid"]
+
+    narrowed = _runner.invoke(cli_app, ["memory", "delivery", "--agent", "cc", "--json"])
+    assert narrowed.exit_code == 0, narrowed.output
+    assert len(json.loads(_extract_json(narrowed.output))["delivery"]) == 1
 
     removed = _runner.invoke(cli_app, ["memory", "delivery-remove", "cc"])
     assert removed.exit_code == 0, removed.output
@@ -332,7 +357,9 @@ def test_delivery_install_status_and_remove_round_trip(memory_cli_daemon):
 
 def test_context_prints_nothing_and_exits_zero_when_no_daemon_is_running(monkeypatch):
     monkeypatch.setattr(memory_cmd, "live_daemon", lambda: None)
-    result = _runner.invoke(cli_app, ["memory", "context", "--agent", "cc", "--cwd", "/tmp"])
+    result = _runner.invoke(
+        cli_app, ["memory", "context", "--agent-uid", "some-uid", "--cwd", "/tmp"]
+    )
     assert result.exit_code == 0
     assert result.output == ""
 
@@ -347,7 +374,9 @@ def test_context_prints_nothing_and_exits_zero_on_a_network_failure(monkeypatch)
         raise httpx.ConnectError("refused")
 
     monkeypatch.setattr(memory_cmd.httpx, "post", _raise)
-    result = _runner.invoke(cli_app, ["memory", "context", "--agent", "cc", "--cwd", "/tmp"])
+    result = _runner.invoke(
+        cli_app, ["memory", "context", "--agent-uid", "some-uid", "--cwd", "/tmp"]
+    )
     assert result.exit_code == 0
     assert result.output == ""
 
@@ -362,7 +391,9 @@ def test_context_prints_nothing_on_a_non_200_response(monkeypatch):
         "post",
         lambda *a, **kw: httpx.Response(500, request=httpx.Request("POST", "http://x")),
     )
-    result = _runner.invoke(cli_app, ["memory", "context", "--agent", "cc", "--cwd", "/tmp"])
+    result = _runner.invoke(
+        cli_app, ["memory", "context", "--agent-uid", "some-uid", "--cwd", "/tmp"]
+    )
     assert result.exit_code == 0
     assert result.output == ""
 
@@ -391,12 +422,14 @@ def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, mo
     tmp_path = memory_cli_daemon
     partition = _distilled_partition(tmp_path)
     _route_context_at_the_test_app(monkeypatch)
+    cc_uid = _agent_uid("cc")
 
     before = _runner.invoke(cli_app, ["audit", "list", "--json"])
     assert "memory_delivery_fired" not in before.output
 
     result = _runner.invoke(
-        cli_app, ["memory", "context", "--agent", "cc", "--cwd", str(tmp_path / "coffer")]
+        cli_app,
+        ["memory", "context", "--agent-uid", cc_uid, "--cwd", str(tmp_path / "coffer")],
     )
     assert result.exit_code == 0, result.output
     assert "## Coffer memory" in result.output
@@ -412,10 +445,10 @@ def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, mo
 def test_context_of_a_partition_with_nothing_in_it_prints_nothing(memory_cli_daemon, monkeypatch):
     """An empty ``## Coffer memory`` header is worse than none, and this is the
     command a session-start hook runs on a vault that has never synced."""
-    _register_cc_via_http()
+    cc_uid = _register_cc_via_http()
     _route_context_at_the_test_app(monkeypatch)
 
-    result = _runner.invoke(cli_app, ["memory", "context", "--agent", "cc", "--cwd", "/tmp"])
+    result = _runner.invoke(cli_app, ["memory", "context", "--agent-uid", cc_uid, "--cwd", "/tmp"])
 
     assert result.exit_code == 0, result.output
     assert result.output == ""
@@ -423,7 +456,7 @@ def test_context_of_a_partition_with_nothing_in_it_prints_nothing(memory_cli_dae
 
 # ----- `ls` / `read`: the partition's own directory from the terminal -------
 #
-# The REST half has existed since FR-037 (GET /memory/partitions/{name}/files
+# The REST half has existed since FR-037 (GET /memory/partitions/{uid}/files
 # and .../files/content) but `coffer memory` could reach notes and partitions
 # and not the files they are stored in, which is the one thing FR-036 names
 # that the group did not do. The verbs are `ls` and `read` so that browsing

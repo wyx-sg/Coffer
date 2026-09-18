@@ -9,7 +9,7 @@ import pytest
 
 from coffer.infrastructure.channel.telegram_profile import BotIdentity
 
-from .conftest import ChannelEnv, FakeChannelAdapter, inbound
+from .conftest import ChannelEnv, FakeChannelAdapter, Resource, inbound
 
 
 class _TelegramLike(FakeChannelAdapter):
@@ -20,7 +20,7 @@ class _TelegramLike(FakeChannelAdapter):
         self.identity = identity
 
 
-async def _running(env: ChannelEnv, adapter: FakeChannelAdapter, **config: object) -> str:
+async def _running(env: ChannelEnv, adapter: FakeChannelAdapter, **config: object) -> Resource:
     resource = await env.register_channel(
         "tg", config={"channel_type": "telegram", "bot_token_ref": "channel/tg/bot-token", **config}
     )
@@ -28,7 +28,7 @@ async def _running(env: ChannelEnv, adapter: FakeChannelAdapter, **config: objec
     # The diagnostic reads the LIVE adapter, so the channel has to look started.
     # Registering it directly keeps the test off the reconciler's timing.
     env.runtime._running[resource.name] = SimpleNamespace(adapter=adapter)
-    return resource.name
+    return resource
 
 
 @pytest.mark.acceptance(
@@ -39,9 +39,9 @@ async def test_privacy_mode_is_reported_when_it_contradicts_the_configuration(
     env: ChannelEnv,
 ) -> None:
     adapter = _TelegramLike(BotIdentity(bot_id=1, username="b", reads_all_group_messages=False))
-    name = await _running(env, adapter, require_mention=False)
+    channel = await _running(env, adapter, require_mention=False)
 
-    status = await env.service.status(name)
+    status = await env.service.status(channel.uid)
 
     assert [d.code for d in status.diagnostics] == ["telegram_privacy_mode"]
     # A finding the user cannot act on is noise; this one names the fix.
@@ -54,31 +54,31 @@ async def test_privacy_mode_is_not_reported_when_the_bot_only_acts_when_addresse
     # Privacy mode still delivers @mentions and replies, which is all this
     # configuration needs — nothing is contradicted.
     adapter = _TelegramLike(BotIdentity(bot_id=1, username="b", reads_all_group_messages=False))
-    name = await _running(env, adapter, require_mention=True)
+    channel = await _running(env, adapter, require_mention=True)
 
-    assert (await env.service.status(name)).diagnostics == ()
+    assert (await env.service.status(channel.uid)).diagnostics == ()
 
 
 async def test_a_bot_that_can_read_group_messages_is_healthy(env: ChannelEnv) -> None:
     adapter = _TelegramLike(BotIdentity(bot_id=1, username="b", reads_all_group_messages=True))
-    name = await _running(env, adapter, require_mention=False)
+    channel = await _running(env, adapter, require_mention=False)
 
-    assert (await env.service.status(name)).diagnostics == ()
+    assert (await env.service.status(channel.uid)).diagnostics == ()
 
 
 async def test_an_unknown_privacy_state_is_never_a_finding(env: ChannelEnv) -> None:
     # getMe failed, or an older Bot API server omitted the field. Reporting a
     # problem Coffer cannot actually see would be worse than saying nothing.
     adapter = _TelegramLike(BotIdentity(bot_id=1, username="b"))
-    name = await _running(env, adapter, require_mention=False)
+    channel = await _running(env, adapter, require_mention=False)
 
-    assert (await env.service.status(name)).diagnostics == ()
+    assert (await env.service.status(channel.uid)).diagnostics == ()
 
 
 async def test_a_transport_without_an_identity_reports_nothing(env: ChannelEnv) -> None:
-    name = await _running(env, FakeChannelAdapter(), require_mention=False)
+    channel = await _running(env, FakeChannelAdapter(), require_mention=False)
 
-    assert (await env.service.status(name)).diagnostics == ()
+    assert (await env.service.status(channel.uid)).diagnostics == ()
 
 
 # -- the pairing link (FR-051) ------------------------------------------------
@@ -87,20 +87,20 @@ async def test_a_transport_without_an_identity_reports_nothing(env: ChannelEnv) 
 @pytest.mark.acceptance(spec="channels", scenario="pairing by link claims the code")
 async def test_a_pairing_code_comes_with_a_link_that_carries_it(env: ChannelEnv) -> None:
     adapter = _TelegramLike(BotIdentity(bot_id=1, username="cofferbot"))
-    name = await _running(env, adapter)
+    channel = await _running(env, adapter)
 
-    code, _expires, pair_url = await env.service.issue_pairing_code(name, actor="test")
+    code, _expires, pair_url = await env.service.issue_pairing_code(channel.uid, actor="test")
 
     assert pair_url == f"https://t.me/cofferbot?start={code}"
     # Opening the link sends "/start <CODE>", which claims it exactly as typing
     # the code does — same single-use, TTL-bounded gate.
-    assert env.pairing.try_claim(name, f"/start {code}") is True
+    assert env.pairing.try_claim(channel.name, f"/start {code}") is True
 
 
 async def test_a_channel_with_no_known_username_still_issues_a_code(env: ChannelEnv) -> None:
-    name = await _running(env, FakeChannelAdapter())
+    channel = await _running(env, FakeChannelAdapter())
 
-    code, _expires, pair_url = await env.service.issue_pairing_code(name, actor="test")
+    code, _expires, pair_url = await env.service.issue_pairing_code(channel.uid, actor="test")
 
     assert len(code) == 8
     assert pair_url == ""  # the typed code is the only way in

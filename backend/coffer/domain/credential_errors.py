@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from coffer.domain.error_base import CofferError
+from coffer.domain.resource import Resource
 
 
 class CredentialMissing(CofferError):  # noqa: N818
@@ -16,21 +17,31 @@ class CredentialMissing(CofferError):  # noqa: N818
 class CredentialInUse(CofferError):  # noqa: N818
     """A credential cannot be deleted while a resource config still references it.
 
-    Carries the human-readable refs of the citing resources (e.g.
-    ``channel:my-bot``, ``mcp_server:github``) so the surface can tell the user
-    which resources to detach before the credential can be removed.
+    Built from the citing resources themselves, not from identifiers. The
+    refusal is only useful if the user can act on it, and acting means finding
+    the thing that still cites the credential — so the message says what each
+    one is and what it is called: ``channel 'my-bot'``, ``mcp_server 'github'``.
+
+    It deliberately does NOT name uids. A uid is the identity the system holds
+    onto across a rename (ADR resource-identity-is-an-immutable-uid); it is not
+    what the user sees on the page they have to go to next, and a refusal
+    spelling out two opaque hex strings would be a worse answer than one
+    spelling out two names.
     """
 
     code = "CREDENTIAL_IN_USE"
 
-    def __init__(self, ref: str, references: list[str]) -> None:
-        joined = ", ".join(references)
+    def __init__(self, ref: str, citations: list[Resource]) -> None:
+        # The label as it stands right now, read off the row at refusal time.
+        # Nothing stores this string; it is composed for this one message.
+        self.references = [f"{r.kind} {r.name!r}" for r in citations]
+        joined = ", ".join(self.references)
         super().__init__(
-            f"credential {ref!r} is referenced by: {joined}; "
+            f"credential {ref!r} is still used by: {joined}; "
             "detach or delete those resources before deleting the credential"
         )
         self.ref = ref
-        self.references = references
+        self.citations = citations
 
 
 class CredentialLocked(CofferError):  # noqa: N818

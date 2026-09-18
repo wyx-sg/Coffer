@@ -27,10 +27,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.channel.inbound import ChannelBinding, InboundProcessor
 from coffer.application.channel.pairing import PairingManager
-from coffer.application.channel.ports import (
-    AdapterCallbacks,
-    ChannelAdapter,
-)
+from coffer.application.channel.ports import AdapterCallbacks, ChannelAdapter
 from coffer.application.channel.runtime_supervision import (
     FAILURE_RETRY_SECONDS,
     Desired,
@@ -44,8 +41,9 @@ from coffer.application.channel.supervision_ports import (
     TunnelControllerPort,
     WebSocketControllerPort,
 )
-from coffer.application.channel.wanted import Gate
+from coffer.application.channel.wanted import Gate, Routing
 from coffer.domain.channel.config import parse_channel_config
+from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -115,10 +113,10 @@ class ChannelRuntime:
     def listener_running(self) -> bool:
         return self._listener is not None and self._listener.running()
 
-    def tunnel_running(self, name: str) -> bool:
-        return self._tunnel is not None and self._tunnel.running(name)
+    def tunnel_running(self, channel_uid: str) -> bool:
+        return self._tunnel is not None and self._tunnel.running(channel_uid)
 
-    def websocket_state(self, name: str) -> tuple[str, str | None] | None:
+    def websocket_state(self, channel_uid: str) -> tuple[str, str | None] | None:
         """``(state, last error)`` of this channel's SeaTalk WebSocket, or None.
 
         None covers every case where the question does not apply: a webhook
@@ -127,7 +125,7 @@ class ChannelRuntime:
         """
         if self._websockets is None:
             return None
-        return self._websockets.state(name)
+        return self._websockets.state(channel_uid)
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -161,16 +159,22 @@ class ChannelRuntime:
         self._websocket_latch.forget()
         self._processor.shutdown()
 
-    async def evict(self, name: str) -> None:
-        """Resource deleted: stop the adapter and drop pairing state now."""
+    async def evict(self, resource: Resource) -> None:
+        """Resource deleted: stop the adapter and drop pairing state now.
+
+        Takes the row, which is what the kind's ``on_delete`` hook is handed:
+        the adapter and the pairing codes are keyed by the channel's name, the
+        supervised children by its uid, and both answers have to be the row's
+        own rather than derived from each other."""
+        name = resource.name
         await self._stop_adapter(name)
         self._pairing.clear(name)
         if self._tunnel is not None:
             with contextlib.suppress(Exception):
-                await self._tunnel.ensure_stopped(name)
+                await self._tunnel.ensure_stopped(resource.uid)
         if self._websockets is not None:
             with contextlib.suppress(Exception):
-                await self._websockets.ensure_stopped(name)
+                await self._websockets.ensure_stopped(resource.uid)
         desired = await self._enabled_channels()
         # The eviction hook can run while the row is still visible (it fires
         # before/inside the delete), so the table would otherwise tell the
@@ -193,13 +197,13 @@ class ChannelRuntime:
                 if entry is None:
                     continue
                 resource = desired.get(name)
-                if resource is None or self._binding_hash(name, resource[1]) != entry.config_hash:
+                if resource is None or self._binding_hash(name, resource) != entry.config_hash:
                     await self._stop_adapter(name)
-            for name, (resource_id, config) in desired.items():
+            for name, resource in desired.items():
                 if self._stop.is_set():
                     return
                 if name not in self._running and self._may_retry(name):
-                    await self._start_adapter(name, resource_id, config)
+                    await self._start_adapter(name, resource, self._gate.routing[name])
             await self._reconcile_listener(desired)
             await self._reconcile_tunnels(desired)
             await self._reconcile_websockets(desired)
@@ -225,8 +229,15 @@ class ChannelRuntime:
         failed = self._failed_at.get(name)
         return failed is None or (time.monotonic() - failed) >= FAILURE_RETRY_SECONDS
 
-    async def _start_adapter(self, name: str, resource_id: int, config: dict[str, object]) -> None:
+    async def _start_adapter(self, name: str, resource: Resource, routing: Routing) -> None:
+        """Start one channel's adapter and bind it.
+
+        ``routing`` is handed in rather than looked up: the gate decided this
+        channel was startable and what it routes to in the same pass, so the
+        two arrive together and there is no window in which one is a tick older
+        than the other."""
         adapter: ChannelAdapter | None = None
+        config = resource.config
         try:
             parsed = parse_channel_config(config)
             adapter = await self._factory(name, config)
@@ -260,19 +271,23 @@ class ChannelRuntime:
         self._failed_at.pop(name, None)
         self._processor.bind(
             ChannelBinding(
-                name=name,
-                resource_id=resource_id,
+                resource=resource,
                 channel_type=parsed.channel_type,
-                default_agent=parsed.default_agent,
+                # The parsed config's ``default_agent`` is an agent UID; what
+                # the turn platform routes on is the key the gate resolved it
+                # to (``wanted.Routing``). Reading the uid straight off the
+                # parsed config here is exactly the mistake the single crossing
+                # exists to make impossible.
+                default_agent=routing.default_agent,
                 default_agent_config=parsed.default_agent_config,
                 adapter=adapter,
                 require_mention=parsed.require_mention,
                 ignore_other_mentions=parsed.ignore_other_mentions,
-                agent_scope=self._gate.scopes.get(name),
+                agent_scope=routing.agent_scope,
             )
         )
         self._running[name] = _Running(
-            adapter=adapter, config_hash=self._binding_hash(name, config)
+            adapter=adapter, config_hash=self._binding_hash(name, resource)
         )
         _logger.info("channel.adapter.started", extra={"channel": name})
 
@@ -301,15 +316,16 @@ class ChannelRuntime:
             self._websockets, self._materialize, desired, self._websocket_latch
         )
 
-    def _binding_hash(self, name: str, config: dict[str, object]) -> str:
+    def _binding_hash(self, name: str, resource: Resource) -> str:
         """What a running channel is compared against to decide whether to
-        rebuild it. Scope is part of it, not just config: the scope rides the
-        binding, so a scope edit must rebind the channel the same way a config
-        edit does — otherwise `/agent` would keep offering the old set until
-        the daemon restarted."""
-        scope = self._gate.scopes.get(name)
+        rebuild it. The routing is part of it, not just config: the routing
+        rides the binding, so a scope edit must rebind the channel the same way
+        a config edit does — otherwise `/agent` would keep offering the old set
+        until the daemon restarted. Renaming the AGENT a channel drives now
+        changes neither (the row holds its uid), which is the point."""
+        routing = self._gate.routing.get(name)
         return json.dumps(
-            {"config": config, "scope": scope.to_json() if scope is not None else None},
+            {"config": resource.config, "routing": routing.to_json() if routing else None},
             sort_keys=True,
             default=str,
         )

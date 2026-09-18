@@ -3,6 +3,12 @@
 Responsibility: enable/disable/list individual tool, resource, and prompt
 capabilities exposed by a registered MCP server.  Split from ``mcp.py`` to
 satisfy the project 400-line backend Python file-size limit.
+
+Like the rest of ``coffer mcp``, these take the server's NAME and resolve it to
+a uid once per command (ADR resource-identity-is-an-immutable-uid). The two
+helpers below each own one command's worth of HTTP, so each resolves exactly
+once — the ``with c:`` block they open is the command's whole conversation with
+the daemon.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 _console = Console()
 
@@ -31,10 +38,8 @@ prompt_app = typer.Typer(help="Manage prompt preferences")
 def _capabilities_for(name: str, *, verbose: bool = False) -> dict[str, list[dict[str, Any]]]:
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/resources/mcp_server/{name}/capabilities")
-        if r.status_code == 404:
-            typer.echo(f"mcp_server:{name} not found", err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+        r = c.get(f"/resources/mcp_server/{uid}/capabilities")
         _cli_client.check(r, verbose=verbose)
     return r.json()  # type: ignore[no-any-return]
 
@@ -59,12 +64,16 @@ def _toggle(name: str, type_: str, key: str, *, enable: bool, verbose: bool = Fa
     c, _info = _cli_client.client_or_exit()
     op = "enable" if enable else "disable"
     with c:
+        # An unknown SERVER is caught here, by the resolve, and reported as
+        # such. The 404 below can therefore only mean the server exists but has
+        # no such capability — which is why the two are no longer one message.
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
         # CODE-038: send the capability key in the request body, not the URL
         # path. Resource keys are URIs containing '/' (e.g. file:///etc/hosts);
         # embedding them in the path never matches the single-segment legacy
         # route and always 404s. The body route handles arbitrary keys.
         r = c.post(
-            f"/resources/mcp_server/{name}/capabilities/{type_}/{op}",
+            f"/resources/mcp_server/{uid}/capabilities/{type_}/{op}",
             json={"capability_key": key},
         )
         if r.status_code == 404:

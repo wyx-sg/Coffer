@@ -18,7 +18,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 
 import { resourceKey } from "@/lib/api/queryKeys";
-import { WORKFLOW_TEMPLATE_KIND, type TemplateConfig } from "@/lib/api/workflow";
+import type { TemplateConfig } from "@/lib/api/workflow";
 import { useTemplateEditor } from "@/lib/hooks/useTemplateEditor";
 
 const patch = vi.fn();
@@ -39,8 +39,8 @@ describe("useTemplateEditor", () => {
   test("a second edit issued before the first returns builds on it", async () => {
     patch.mockResolvedValue(undefined);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    qc.setQueryData(resourceKey(WORKFLOW_TEMPLATE_KIND, "delivery"), {
-      ref: "workflow:delivery",
+    qc.setQueryData(resourceKey("wf1"), {
+      uid: "wf1",
       kind: "workflow",
       name: "delivery",
       description: null,
@@ -50,7 +50,7 @@ describe("useTemplateEditor", () => {
 
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(QueryClientProvider, { client: qc }, children);
-    const { result } = renderHook(() => useTemplateEditor("delivery"), { wrapper });
+    const { result } = renderHook(() => useTemplateEditor("wf1"), { wrapper });
 
     const append = (key: string) => (config: TemplateConfig) => ({
       ...config,
@@ -63,7 +63,7 @@ describe("useTemplateEditor", () => {
     await Promise.all([first, second]);
 
     await waitFor(() => expect(patch).toHaveBeenCalledTimes(2));
-    const written = patch.mock.calls[1][2] as { config: TemplateConfig };
+    const written = patch.mock.calls[1][1] as { config: TemplateConfig };
     // Three, not two: the second edit saw the stage the first one wrote.
     expect(written.config.stages.map((s) => s.key)).toEqual(["a", "b", "c"]);
   });

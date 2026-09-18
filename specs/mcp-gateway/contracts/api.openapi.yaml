@@ -7,7 +7,7 @@ info:
     curation, upstream discovery and health, and the invocation log.
 
     The kind-agnostic routes an `mcp_server` is otherwise managed through —
-    `/resources`, `/resources/{kind}/{name}` and its enable / disable / scope
+    `/resources`, `/resources/{uid}` and its enable / disable / scope
     operations — are spec resource-framework's contract, as are `/audit`,
     `/retention/*` and `/upkeep/runs`.
 
@@ -45,11 +45,12 @@ tags:
     description: MCP-server-specific operations
 
 paths:
-  /resources/mcp_server/{name}/capabilities:
+  /resources/mcp_server/{uid}/capabilities:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The MCP server resource's immutable identity.
         schema: { type: string }
     get:
       tags: [mcp]
@@ -65,11 +66,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/UpstreamUnavailable" }
 
-  /resources/mcp_server/{name}/capabilities/{capability_type}/enable:
+  /resources/mcp_server/{uid}/capabilities/{capability_type}/enable:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The MCP server resource's immutable identity.
         schema: { type: string }
       - in: path
         name: capability_type
@@ -81,7 +83,7 @@ paths:
       tags: [mcp]
       operationId: enableMcpCapability
       summary: |
-        Enable a capability for the named MCP server. The capability_key is
+        Enable a capability for the MCP server this uid names. The capability_key is
         carried in the request body (not the URL) so that keys containing '/'
         (resource URIs such as `file:///path`) route correctly.
       requestBody:
@@ -95,11 +97,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /resources/mcp_server/{name}/capabilities/{capability_type}/disable:
+  /resources/mcp_server/{uid}/capabilities/{capability_type}/disable:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The MCP server resource's immutable identity.
         schema: { type: string }
       - in: path
         name: capability_type
@@ -121,11 +124,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /resources/mcp_server/{name}/refresh:
+  /resources/mcp_server/{uid}/refresh:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The MCP server resource's immutable identity.
         schema: { type: string }
     post:
       tags: [mcp]
@@ -141,11 +145,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/UpstreamUnavailable" }
 
-  /resources/mcp_server/{name}/test:
+  /resources/mcp_server/{uid}/test:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The MCP server resource's immutable identity.
         schema: { type: string }
     post:
       tags: [mcp]
@@ -167,9 +172,18 @@ paths:
       summary: Every server's invocations on one timeline, newest-first.
       parameters:
         - in: query
-          name: name
+          name: uid
           required: false
-          description: Narrow to one upstream server.
+          description: >-
+            Narrow to one upstream server, by the uid its rows were written
+            under. Filtering by name was removed with the identity change: the
+            log stores the uid, so a name filter would have to be resolved
+            against today's labels — which would hide every row belonging to a
+            server whose name has since changed, and silently hand a reused
+            name the previous holder's history. The two reserved forms are
+            filterable too: `coffer` for Coffer's own built-in tools, and
+            `deleted:<name>` for rows whose server was already gone when the
+            log was re-keyed.
           schema: { type: string }
         - in: query
           name: since
@@ -193,11 +207,12 @@ paths:
               schema: { $ref: "#/components/schemas/InvocationListOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /resources/mcp_server/{name}/invocations:
+  /resources/mcp_server/{uid}/invocations:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The MCP server resource's immutable identity.
         schema: { type: string }
       - in: query
         name: since
@@ -225,15 +240,16 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /resources/mcp_server/{name}/status:
+  /resources/mcp_server/{uid}/status:
     get:
       tags: [mcp]
       operationId: getMcpServerStatus
       summary: Cheap per-server status from persisted state — no spawn.
       parameters:
         - in: path
-          name: name
+          name: uid
           required: true
+          description: The MCP server resource's immutable identity.
           schema: { type: string }
       responses:
         "200":
@@ -298,7 +314,7 @@ components:
               example: RESOURCE_NOT_FOUND
             message:
               type: string
-              example: "resource not found: mcp_server:filesystem"
+              example: "resource not found: no mcp_server named 'filesystem'"
             details:
               type: object
               additionalProperties: true
@@ -419,7 +435,12 @@ components:
       type: object
       required: [server_name, tools, resources, prompts, fetched_at]
       properties:
-        server_name: { type: string }
+        server_name:
+          type: string
+          description: >-
+            The server's label, for the page heading. It is resolved from the
+            uid in the path, not the path segment echoed back — a capabilities
+            page headed by a UUID would be unreadable.
         tools:
           type: array
           items: { $ref: "#/components/schemas/MCPToolView" }
@@ -454,6 +475,7 @@ components:
       required:
         [
           timestamp,
+          resource_uid,
           resource_name,
           capability_type,
           capability_key,
@@ -462,9 +484,29 @@ components:
         ]
       properties:
         timestamp: { type: string, format: date-time }
+        resource_uid:
+          type: string
+          description: >-
+            Which upstream server the call went to — the value actually
+            recorded in the log, and what to filter or link by. Two forms are
+            not resource uids and resolve to nothing: `coffer`, the sentinel
+            Coffer's own built-in tools log under, and `deleted:<name>`, the
+            marker given to rows whose server was already gone when the log was
+            re-keyed from names to uids.
         resource_name:
           type: string
-          description: Which upstream server the call went to.
+          nullable: true
+          description: >-
+            The same server's label, resolved at read time, so the timeline is
+            readable without a client holding the whole resource list. Null
+            when `resource_uid` resolves to no resource — a deleted server, or
+            the built-in sentinel — which is where a client falls back to
+            showing the uid's own text. Note the consequence of resolving
+            rather than storing: a renamed server's past rows all read under
+            its CURRENT name. That is the deliberate trade. The log is keyed by
+            identity, so one server's history stays one history across a
+            rename; the label is presentation, and presenting the name the user
+            uses today beats presenting one they have already stopped using.
         capability_type:
           type: string
           enum: [tool, resource, prompt]

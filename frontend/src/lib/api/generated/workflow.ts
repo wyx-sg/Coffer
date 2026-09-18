@@ -552,8 +552,12 @@ export interface components {
          *     (FR-050) — neither is asked for here.
          */
         RunCreateIn: {
-            /** @description The template resource's name. */
-            template: string;
+            /**
+             * @description The template resource's **uid**. The picker that fills this has it
+             *     already, and a run created from a label would be created from
+             *     whatever that label pointed at when the request landed.
+             */
+            template_uid: string;
             title: string;
             /** @description The run's default agent; a node may name another. */
             agent?: string | null;
@@ -607,6 +611,13 @@ export interface components {
              *     neither is folded from the events (FR-070).
              */
             description?: string | null;
+            /**
+             * @description The template's LABEL as it read when the run was created —
+             *     provenance for a person to recognise, rendered raw. Frozen, and
+             *     allowed to go stale: the snapshot beside it is what the run
+             *     executes (FR-010), so renaming or deleting the template leaves
+             *     this saying what the run was started from.
+             */
             template_ref: string;
             /** @enum {string} */
             status: "draft" | "running" | "paused" | "completed" | "aborted" | "failed";

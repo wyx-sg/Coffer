@@ -75,7 +75,7 @@ info:
 
     ## Curation
 
-    `POST /collections/{name}/curate` runs one bounded agentic pass over a
+    `POST /collections/{uid}/curate` runs one bounded agentic pass over a
     collection, driven by Coffer's internal model connection. It reads one
     source and at most five candidate topic documents, and writes only
     `topics/` — its tool surface is `list_topics`, `read_topic`, `write_topic`
@@ -108,10 +108,10 @@ info:
 
     ## Why deleting a collection is not here
 
-    There is deliberately **no** `DELETE /api/v1/knowledge/collections/{name}`.
+    There is deliberately **no** `DELETE /api/v1/knowledge/collections/{uid}`.
     A collection's lifecycle is a Resource's lifecycle, so deletion goes
     through the kind-agnostic resource route,
-    `DELETE /api/v1/resources/knowledge/{name}` (FR-039). That way
+    `DELETE /api/v1/resources/{uid}` (FR-039). That way
     unregistering a collection runs the same lifecycle, audit and cascade as
     unregistering any other resource, instead of a second path that would have
     to be kept in step with it. Creation gets its own route only because it
@@ -432,7 +432,7 @@ paths:
 
   # --- curation -------------------------------------------------------------
 
-  /api/v1/knowledge/collections/{name}/curate:
+  /api/v1/knowledge/collections/{uid}/curate:
     post:
       summary: Run one curation pass over one collection
       description: |
@@ -472,7 +472,7 @@ paths:
       operationId: curateKnowledgeCollection
       tags: [knowledge]
       parameters:
-        - $ref: "#/components/parameters/CollectionName"
+        - $ref: "#/components/parameters/CollectionUid"
         - $ref: "#/components/parameters/ActorHeader"
       requestBody:
         required: false
@@ -502,17 +502,20 @@ components:
       name: X-Coffer-Token
 
   parameters:
-    CollectionName:
+    CollectionUid:
       in: path
-      name: name
+      name: uid
       required: true
       description: |
-        The collection's name — which is also the Resource name and the
-        top-level directory name under `~/.coffer/knowledge/`.
+        The collection Resource's immutable uid. Not the collection's name:
+        that name is also the top-level directory under
+        `~/.coffer/knowledge/`, and renaming a collection moves the directory
+        with it — so a name is precisely the thing that does not stay put. The
+        uid does, and a pass started before a rename is a pass over the same
+        collection after it.
       schema: { type: string }
       examples:
-        shopee: { value: shopee }
-        coffer: { value: coffer }
+        shopee: { value: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920 }
     TreePath:
       in: query
       name: path
@@ -580,7 +583,7 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     CollectionNotFound:
       description: |
-        No such collection (`KNOWLEDGE_COLLECTION_NOT_FOUND`). An unknown name
+        No such collection (`KNOWLEDGE_COLLECTION_NOT_FOUND`). An unknown uid
         is always an error — nothing is conjured into existence by being asked
         for (FR-008).
       content:
@@ -636,11 +639,24 @@ components:
     CollectionOut:
       type: object
       description: One collection, as the collection list sees it.
-      required: [name, description, source_count, topic_count]
+      required: [uid, name, description, source_count, topic_count]
       properties:
+        uid:
+          type: string
+          description: |
+            The collection Resource's immutable identity, and what every route
+            addressing this collection takes. A client that has a collection
+            from this list never has to look one up by name to act on it.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
         name:
           type: string
-          description: The directory name under the knowledge root, and the Resource name.
+          description: |
+            A mutable label, unique among collections, which is also the
+            directory name under the knowledge root — a rename moves the
+            directory. Use it to display the collection and to build the
+            `path` and `collection` arguments of the file routes, which are
+            filesystem paths; use `uid` for anything that has to keep pointing
+            at this collection.
         description:
           type: string
           description: |
@@ -658,6 +674,7 @@ components:
             the sources because the two answer different questions: how much a
             person has contributed, and how much of it an agent can read today.
       example:
+        uid: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
         name: shopee
         description: Internal systems at Shopee — services, data plane, the chains between them.
         source_count: 61

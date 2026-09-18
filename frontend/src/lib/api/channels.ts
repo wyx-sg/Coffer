@@ -2,6 +2,9 @@
 // (mirrors chat.ts: channel CRUD rides the generic /resources endpoints; these
 // are the channel-specific operations — pairing, status, notify, callback test).
 //
+// Each takes the channel's `uid`, like every other route that addresses a
+// resource. What a person reads on those surfaces is still `ResourceOut.name`.
+//
 // Wire types are the channels contract's generated schemas
 // (`specs/channels/contracts/api.openapi.yaml` → `generated/channels.ts`),
 // re-exported under the names the hooks and pages already import. Transport is
@@ -88,24 +91,24 @@ export interface CallbackTestResult {
 // ---------------------------------------------------------------------------
 
 /** Issue a single-use pairing code (replaces any previous pending code). */
-export function issuePairingCode(name: string): Promise<PairingCode> {
-  return call<PairingCode>(`/channels/${enc(name)}/pairing-code`, { method: "POST" });
+export function issuePairingCode(uid: string): Promise<PairingCode> {
+  return call<PairingCode>(`/channels/${enc(uid)}/pairing-code`, { method: "POST" });
 }
 
 /** Runtime, pairing, and callback status of a channel. */
-export function getChannelStatus(name: string): Promise<ChannelStatus> {
-  return call<ChannelStatus>(`/channels/${enc(name)}/status`);
+export function getChannelStatus(uid: string): Promise<ChannelStatus> {
+  return call<ChannelStatus>(`/channels/${enc(uid)}/status`);
 }
 
 /** Push a text message to the channel's paired peer. */
-export function notifyChannel(name: string, text: string): Promise<NotifyOut> {
-  return call<NotifyOut>(`/channels/${enc(name)}/notify`, { method: "POST", body: { text } });
+export function notifyChannel(uid: string, text: string): Promise<NotifyOut> {
+  return call<NotifyOut>(`/channels/${enc(uid)}/notify`, { method: "POST", body: { text } });
 }
 
 /**
  * Probe the channel's public callback URL end to end (SeaTalk webhook delivery
  * only — a websocket channel has no public URL and the daemon rejects it).
  */
-export function testChannelCallback(name: string): Promise<CallbackTestResult> {
-  return call<CallbackTestResult>(`/channels/${enc(name)}/callback-test`, { method: "POST" });
+export function testChannelCallback(uid: string): Promise<CallbackTestResult> {
+  return call<CallbackTestResult>(`/channels/${enc(uid)}/callback-test`, { method: "POST" });
 }

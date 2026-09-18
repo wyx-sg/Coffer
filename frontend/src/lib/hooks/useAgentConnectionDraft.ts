@@ -65,9 +65,15 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   );
   const active = useMemo(() => compatible.find((p) => p.is_active) ?? null, [compatible]);
 
-  // The APPLIED (currently projected) state: the active connection and the model(s)
-  // bound to it. Built-in login = no active connection, no model override.
-  const appliedConn = active?.name ?? BUILTIN;
+  // The APPLIED (currently projected) state: the active connection and the
+  // model(s) bound to it. Built-in login = no active connection, no model
+  // override.
+  //
+  // The connection is tracked by UID throughout — it is what `activate` takes,
+  // and what the picker's option values are — while the picker's LABELS are
+  // `Provider.name`. A draft holding the name would stop matching any
+  // connection the moment one was renamed under it.
+  const appliedConn = active?.uid ?? BUILTIN;
   const appliedModel = active === null ? "" : (agent.model ?? "");
   const appliedFast = active === null ? "" : (agent.fast_model ?? "");
 
@@ -90,7 +96,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   }, [appliedConn, appliedModel, appliedFast]);
 
   const draftConnObj = useMemo(
-    () => compatible.find((p) => p.name === draftConn) ?? null,
+    () => compatible.find((p) => p.uid === draftConn) ?? null,
     [compatible, draftConn],
   );
 
@@ -128,14 +134,14 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     );
   };
 
-  const pickConnection = (name: string) => {
-    setDraftConn(name);
+  const pickConnection = (uid: string) => {
+    setDraftConn(uid);
     setDraftModel("");
     setDraftFast("");
     setFetched([]);
     test.reset();
-    if (name === BUILTIN) return;
-    const conn = compatible.find((p) => p.name === name);
+    if (uid === BUILTIN) return;
+    const conn = compatible.find((p) => p.uid === uid);
     if (!conn) return;
     // Stage (do NOT apply) a default model so the user has something to test:
     // default both slots to the first model. A curated connection answers that
@@ -190,7 +196,7 @@ export function useAgentConnectionDraft(agent: AgentOut) {
     }
     const body: AgentPatch = { model: draftModel };
     if (wire === "anthropic" && draftFast) body.fast_model = draftFast;
-    patchAgent.mutate({ name: agent.name, body }, { onSuccess: () => activate.mutate(draftConn) });
+    patchAgent.mutate({ uid: agent.uid, body }, { onSuccess: () => activate.mutate(draftConn) });
   };
 
   const draftIsBuiltin = draftConn === BUILTIN;

@@ -38,12 +38,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/skills/{name}": {
+    "/skills/{uid}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -57,12 +58,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/skills/{name}/files": {
+    "/skills/{uid}/files": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -76,12 +78,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/skills/{name}/files/content": {
+    "/skills/{uid}/files/content": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -137,13 +140,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/unmanaged-skills": {
+    "/agents/{uid}/unmanaged-skills": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Agent name (kind `agent`, spec agent-registry). */
-                name: string;
+                /** @description The agent Resource's immutable uid (kind `agent`, spec agent-registry) whose workspace to scan. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -165,12 +168,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/unmanaged-skills/{skill}": {
+    "/agents/{uid}/unmanaged-skills/{skill}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
+                uid: string;
                 /** @description Unmanaged skill folder name as reported by the scan. */
                 skill: string;
             };
@@ -190,12 +194,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/unmanaged-skills/{skill}/adopt": {
+    "/agents/{uid}/unmanaged-skills/{skill}/adopt": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
+                uid: string;
                 skill: string;
             };
             cookie?: never;
@@ -266,6 +271,12 @@ export interface components {
             type: "builtin";
         };
         SkillOut: {
+            /**
+             * @description The skill Resource's immutable identity, and what every route addressing this skill takes.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
+            /** @description A mutable label, unique among skills, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. It is also the skill's master folder name and the name of every link delivered into an agent's workspace, so a rename moves those with it — `master_path` on the response after a rename is the new one. */
             name: string;
             description: string;
             source: components["schemas"]["SkillSource"];
@@ -283,17 +294,24 @@ export interface components {
             updated_at: string;
             bindings: components["schemas"]["SkillBindingOut"][];
         };
-        /** @description Which agents this skill is delivered to, on THIS machine. `agents: null` means every agent; `[]` matches nothing, i.e. dormant. Shape is shared with every other kind — it is the resource framework's scope, not a skill-specific one — so it MUST stay identical to `ScopeOut` in `specs/mcp-gateway/contracts/api.openapi.yaml` and to `ScopeOut` in `backend/coffer/surfaces/http/schemas.py`. It was previously declared here as a bare `string[]`, which is the agent list one level down; the wire has always carried the object. */
+        /** @description Which agents this skill is delivered to, on THIS machine. `agents: null` means every agent; `[]` matches nothing, i.e. dormant. Shape is shared with every other kind — it is the resource framework's scope, not a skill-specific one — so it MUST stay identical to `ScopeOut` in `specs/resource-framework/contracts/api.openapi.yaml` and to `ScopeOut` in `backend/coffer/surfaces/http/schemas.py`. It was previously declared here as a bare `string[]`, which is the agent list one level down; the wire has always carried the object. */
         ScopeOut: {
             /**
+             * @description Agent resource UIDS, not names. A scope is a reference to another resource and a name is a label its owner may change; while this held names, renaming an agent silently emptied every scope naming it — which for a skill means it stops being delivered to the agent the user picked, with nothing said.
              * @example [
-             *       "claude-code"
+             *       "9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
              *     ]
              */
             agents: string[] | null;
         } | null;
         /** @description Internal delivery bookkeeping, not a user-facing toggle: a row means this agent currently holds a delivered copy of the skill. Delivery is decided by the skill's own enabled flag and scope. */
         SkillBindingOut: {
+            /**
+             * @description Which agent holds the copy. A uid because a binding is a STORED pointer at another resource — the row is a foreign key into `resources` and outlives any number of renames on either side — so the wire form of that pointer has to be the identity, not a label that was merely current when the row was written.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            agent_uid: string;
+            /** @description The same agent's label, resolved at read time. Carried beside the uid and not instead of it: the bindings list is rendered as a line of agent names under a skill, and a row of UUIDs tells the reader nothing. Both, because this one object answers a machine's question and a person's at once. */
             agent_name: string;
             /** Format: date-time */
             last_linked_at?: string | null;
@@ -301,6 +319,7 @@ export interface components {
             /** @enum {string|null} */
             link_mode?: "symlink" | "junction" | "copy_fallback" | null;
         };
+        /** @description One disagreement between what Coffer believes it delivered and what is on disk. Reported by NAME, not by uid, and deliberately so: an entry is a finding about a path in a workspace, and two of the five kinds (`missing_master`, `orphan_master`) describe precisely the case where no resource stands behind the name — there is no uid to report. The report is read and acted on as a whole through `POST /skills/repair`, never used to address one resource. */
         DriftEntry: {
             skill_name: string;
             agent_name: string;
@@ -366,8 +385,14 @@ export interface components {
              */
             location: "skills" | "agents_dir";
         };
+        /** @description The skill resource adoption just created, named both ways: the uid to navigate to it with, the name to say which folder became it. */
         SkillRefOut: {
-            /** @description Name of the adopted skill resource. */
+            /**
+             * @description The new skill Resource's immutable identity — what the caller follows to `GET /skills/{uid}`.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
+            /** @description The adopted skill's label, which is the folder name it was adopted under. */
             name: string;
         };
         SkillFileContentOut: {
@@ -507,7 +532,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -531,7 +557,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -553,7 +580,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -581,7 +609,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -607,7 +636,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -680,8 +710,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Agent name (kind `agent`, spec agent-registry). */
-                name: string;
+                /** @description The agent Resource's immutable uid (kind `agent`, spec agent-registry) whose workspace to scan. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -710,7 +740,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
+                uid: string;
                 /** @description Unmanaged skill folder name as reported by the scan. */
                 skill: string;
             };
@@ -734,7 +765,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
+                uid: string;
                 skill: string;
             };
             cookie?: never;

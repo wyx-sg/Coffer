@@ -32,7 +32,7 @@ async def _run(repos: Repos, **overrides: object) -> str:
         "workdir": "/repo",
         "machine_id": "machine-a",
         "template_snapshot": SNAPSHOT,
-        "template_ref": "workflow:delivery",
+        "template_ref": "delivery",
     }
     kwargs.update(overrides)
     await repos.runs.create_run(**kwargs)  # type: ignore[arg-type]
@@ -53,7 +53,7 @@ async def test_run_round_trips_with_its_frozen_snapshot(repos: Repos) -> None:
     assert row.title == "Ship the thing"
     assert row.workdir == "/repo"
     assert row.machine_id == "machine-a"
-    assert row.template_ref == "workflow:delivery"
+    assert row.template_ref == "delivery"
     # The snapshot is the thing the engine executes, so it must survive the
     # round trip structurally, not as a string that happens to look like JSON.
     assert row.template_snapshot["stages"][0]["nodes"][0]["key"] == "draft_td"

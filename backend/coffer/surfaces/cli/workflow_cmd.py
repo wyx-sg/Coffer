@@ -38,6 +38,7 @@ from coffer.surfaces.cli import (
     workflow_inputs_cmd,
     workflow_template_cmd,
 )
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Run and steer Coffer's delivery workflows")
 run_app = typer.Typer(help="Workflow runs")
@@ -135,11 +136,15 @@ def create_run(
     afterwards with `coffer workflow run inputs add` — which can also unmount
     it, which a flag on this command could never do.
     """
-    body: dict[str, Any] = {"template": template, "title": title}
-    if agent:
-        body["agent"] = agent
     c, _info = _cli_client.client_or_exit()
     with c:
+        # The route takes the template's uid; a person types its name.
+        body: dict[str, Any] = {
+            "template_uid": resolve_uid(c, "workflow", template, verbose=_verbose(ctx)),
+            "title": title,
+        }
+        if agent:
+            body["agent"] = agent
         r = c.post("/workflow/runs", json=body)
         _cli_client.check(r, verbose=_verbose(ctx))
         payload = r.json()

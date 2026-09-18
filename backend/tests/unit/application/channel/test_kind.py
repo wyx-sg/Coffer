@@ -9,19 +9,24 @@ import pytest
 
 from coffer.application.channel.kind import make_channel_kind
 from coffer.domain.channel.config import ChannelConfigModel
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.errors import ConfigValidationError
+from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 
 _NOW = datetime(2026, 9, 13, tzinfo=UTC)
 
-#: The registry as both checks read it: agent RESOURCE names on the left, the
-#: agent KEYS a ``default_agent`` is written in on the right. Neither side is
-#: the other, which is the whole reason the map is injected.
-_TYPES = {"claude-code": "claude_code", "codex": "codex"}
+#: The registry as the kind reads it: agent UIDS on the left, the labels a
+#: refusal is written in on the right. Both a scope and a ``default_agent``
+#: name the LEFT column now, so the map decides nothing — it is here so a
+#: rejection says "codex" instead of a UUID, and so "is anything registered
+#: under this uid at all" has an answer.
+_CLAUDE = "uid-of-claude-code"
+_CODEX = "uid-of-codex"
+_AGENTS = {_CLAUDE: "claude-code", _CODEX: "codex"}
 
 
-async def _agent_types() -> dict[str, str]:
-    return _TYPES
+async def _agent_names() -> dict[str, str]:
+    return _AGENTS
 
 
 def test_kind_named_channel_with_config_schema():
@@ -38,7 +43,7 @@ def test_generic_create_allowed_defaults_true():
 def test_on_delete_defaults_none_and_is_passed_through():
     assert make_channel_kind().on_delete is None
 
-    async def evict(ref: ResourceRef) -> None:  # pragma: no cover - never awaited
+    async def evict(resource: Resource) -> None:  # pragma: no cover - never awaited
         pass
 
     assert make_channel_kind(on_delete=evict).on_delete is evict
@@ -83,86 +88,112 @@ def test_extractor_skips_missing_empty_and_non_string_values():
     assert extractor({}) == {}
 
 
-# -- default_agent validation -------------------------------------------------
+# -- default_agent validation at REGISTRATION ---------------------------------
+# Every check this kind makes is about ANOTHER resource — does this uid name a
+# registered agent, does this channel's scope admit it — and only the resource
+# table can answer that, from a coroutine. So ``validate_config`` is async here,
+# which it did not have to be while ``default_agent`` held an agent key an
+# in-memory registry could answer for.
 
 
-def _validate(config: dict, agent_keys=lambda: ["claude_code", "codex"]):
-    validator = make_channel_kind(agent_keys=agent_keys).validate_config
+def _create_validate(config: dict, agent_names=_agent_names, local_machine_id=None):
+    validator = make_channel_kind(
+        agent_names=agent_names, local_machine_id=local_machine_id
+    ).validate_config
     assert validator is not None
-    validator(config)
+    result = validator(config)
+    assert result is not None  # async: ResourceService awaits it
+    asyncio.run(result)
 
 
-def test_validate_accepts_registered_default_agent():
-    _validate({"channel_type": "telegram", "default_agent": "claude_code"})
+def test_create_accepts_a_registered_default_agent():
+    _create_validate({"channel_type": "telegram", "default_agent": _CODEX})
 
 
-def test_validate_rejects_unregistered_default_agent():
-    with pytest.raises(ValueError, match="builtin"):
-        _validate({"channel_type": "telegram", "default_agent": "builtin"})
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel bound to an agent that does not exist is refused"
+)
+def test_create_rejects_a_default_agent_naming_no_registered_agent():
+    # Without this a channel can be CREATED bound to an agent that does not
+    # exist, and the only symptom is a bot that never answers.
+    with pytest.raises(ValueError, match="not a registered agent"):
+        _create_validate({"channel_type": "telegram", "default_agent": "uid-of-nothing"})
 
 
-def test_validate_skips_when_no_agent_keys_injected():
-    # No agent_keys provider → backward-compatible, no agent validation.
-    validator = make_channel_kind().validate_config
-    assert validator is not None
-    validator({"channel_type": "telegram", "default_agent": "builtin"})
+def test_create_accepts_a_channel_that_names_no_agent_yet():
+    _create_validate({"channel_type": "telegram"})
 
 
-def test_validate_skips_when_registry_empty():
-    # An empty registry can't validate; never block all channel writes.
-    _validate({"channel_type": "telegram", "default_agent": "builtin"}, agent_keys=list)
+def test_create_skips_a_channel_bound_to_another_machine():
+    # Its agents are that machine's business; refusing the document here would
+    # hold it out of the vault for a fault on nobody's machine.
+    _create_validate(
+        {"channel_type": "telegram", "default_agent": "uid-of-nothing", "runs_on": "other"},
+        local_machine_id="mine",
+    )
 
 
-def test_validate_skips_when_default_agent_absent():
-    _validate({"channel_type": "telegram"})
+def test_create_skips_when_registry_empty():
+    async def _none() -> dict[str, str]:
+        return {}
+
+    _create_validate({"channel_type": "telegram", "default_agent": "uid-of-nothing"}, _none)
 
 
 # -- default_agent validation on UPDATE ---------------------------------------
-# validate_config runs at registration only (it also probes workspace dirs on
-# disk). An edit that re-binds the channel to an unknown agent must still be
-# rejected up front — otherwise the bot goes silently dead at turn time — so the
-# channel Kind also wires an on_update_config hook that validates default_agent.
 
 
-def _update_validate(config: dict, agent_keys=lambda: ["claude_code", "codex"], scope=None):
-    async def _scope_of(_ref):
-        return scope
-
-    hook = make_channel_kind(
-        agent_keys=agent_keys, scope_of=_scope_of, agent_types=_agent_types
-    ).on_update_config
+def _update_validate(config: dict, agent_names=_agent_names, scope=None):
+    hook = make_channel_kind(agent_names=agent_names).on_update_config
     assert hook is not None
-    ref = ResourceRef(kind="channel", name="st")
-    # Async because it reads the channel's scope off the row; ResourceService
-    # awaits an awaitable hook result.
-    asyncio.run(hook(ref, {"channel_type": "telegram"}, config))
+    resource = _channel({"channel_type": "telegram"}, scope=scope)
+    # Async because it reads the registry for the labels a refusal needs;
+    # ResourceService awaits an awaitable hook result.
+    asyncio.run(hook(resource, config))
 
 
 def test_update_accepts_registered_default_agent():
-    _update_validate({"channel_type": "telegram", "default_agent": "codex"})
+    _update_validate({"channel_type": "telegram", "default_agent": _CODEX})
 
 
 def test_update_rejects_unregistered_default_agent():
-    from coffer.domain.errors import ConfigValidationError
-
-    with pytest.raises(ConfigValidationError, match="builtin"):
-        _update_validate({"channel_type": "telegram", "default_agent": "builtin"})
+    with pytest.raises(ConfigValidationError, match="not a registered agent"):
+        _update_validate({"channel_type": "telegram", "default_agent": "uid-of-nothing"})
 
 
-def test_update_skips_when_no_agent_keys_injected():
-    # No agent_keys provider → no update hook wired (backward-compatible).
-    assert make_channel_kind().on_update_config is None
+def test_the_unregistered_refusal_lists_the_agents_by_label():
+    # The uid it refused is unprintable to a person; the ones it knows are not.
+    with pytest.raises(ConfigValidationError, match="claude-code, codex"):
+        _update_validate({"channel_type": "telegram", "default_agent": "uid-of-nothing"})
+
+
+def test_the_update_hook_is_always_wired():
+    # Not "absent rather than wrong" any more. Both sides of every comparison
+    # are agent uids, so the check needs nothing injected to be correct — the
+    # registry is consulted only to write the refusal.
+    assert make_channel_kind().on_update_config is not None
 
 
 def test_update_skips_when_registry_empty():
-    _update_validate({"channel_type": "telegram", "default_agent": "builtin"}, agent_keys=list)
+    # An empty registry can't say what is registered; never block all channel
+    # writes over it.
+    async def _none() -> dict[str, str]:
+        return {}
+
+    _update_validate({"channel_type": "telegram", "default_agent": "uid-of-nothing"}, _none)
+
+
+def test_update_skips_when_default_agent_absent():
+    # A channel bound to no agent: nothing to check, and the runtime is what
+    # refuses to start it.
+    _update_validate({"channel_type": "telegram"})
 
 
 # -- per-agent scope (ADR per-agent-resource-scope) ----------------------------------------------
 # Read the other way round from every other kind: a channel is an inbound
 # surface no agent consumes, so its scope names the agents the channel may
-# DRIVE. ``default_agent`` is held inside it at create and at edit; the
-# `/agent` narrowing is covered in test_agent_routing.py.
+# DRIVE. ``default_agent`` is held inside it on every write path; the `/agent`
+# narrowing is covered in test_agent_routing.py.
 
 
 def test_channel_kind_declares_scope():
@@ -180,24 +211,22 @@ def test_channel_kind_has_no_starting_scope():
     scenario="a channel may only route to the agents in its scope",
 )
 def test_update_rejects_default_agent_outside_scope():
-    from coffer.domain.errors import ConfigValidationError
-
     with pytest.raises(ConfigValidationError, match="outside this channel's scope"):
         _update_validate(
-            {"channel_type": "telegram", "default_agent": "claude_code"},
-            scope=Scope(agents=["codex"]),
+            {"channel_type": "telegram", "default_agent": _CLAUDE},
+            scope=Scope(agents=[_CODEX]),
         )
 
 
 def test_update_accepts_default_agent_inside_scope():
     _update_validate(
-        {"channel_type": "telegram", "default_agent": "codex"}, scope=Scope(agents=["codex"])
+        {"channel_type": "telegram", "default_agent": _CODEX}, scope=Scope(agents=[_CODEX])
     )
 
 
 def test_update_unscoped_channel_admits_every_registered_agent():
     # scope None is the pre-scope behaviour and must stay untouched.
-    _update_validate({"channel_type": "telegram", "default_agent": "claude_code"}, scope=None)
+    _update_validate({"channel_type": "telegram", "default_agent": _CLAUDE}, scope=None)
 
 
 @pytest.mark.acceptance(
@@ -208,15 +237,7 @@ def test_update_on_a_dormant_channel_is_allowed():
     # ``scope == []`` means the channel is OFF, the same as for every other
     # kind — it must not also mean frozen, or a channel the owner deliberately
     # switched off could never have its bot token corrected.
-    _update_validate(
-        {"channel_type": "telegram", "default_agent": "claude_code"}, scope=Scope(agents=[])
-    )
-
-
-def test_create_time_validation_needs_no_scope_reader():
-    # A brand-new channel has no scope yet, so ``validate_config`` (sync, and
-    # given only the config) is complete as it stands.
-    _validate({"channel_type": "telegram", "default_agent": "claude_code"})
+    _update_validate({"channel_type": "telegram", "default_agent": _CLAUDE}, scope=Scope(agents=[]))
 
 
 # -- the same invariant on the SCOPE write path (``validate_scope_for``) -------
@@ -226,31 +247,37 @@ def test_create_time_validation_needs_no_scope_reader():
 # all, whichever path the write arrives on.
 
 
-def _validate_scope(scope, config=None):
-    hook = make_channel_kind(agent_types=_agent_types).validate_scope_for
-    assert hook is not None
-    resource = Resource(
+def _channel(config: dict, *, scope: Scope | None = None) -> Resource:
+    return Resource(
         id=1,
+        uid="uid-of-the-channel",
         kind="channel",
         name="tg",
         description=None,
-        config=config if config is not None else {"channel_type": "telegram"},
+        config=config,
         enabled=True,
         created_at=_NOW,
         updated_at=_NOW,
+        scope=scope,
     )
-    # Async because it reads the registry's name→key map; ResourceService
-    # awaits an awaitable hook result.
+
+
+def _validate_scope(scope, config=None, agent_names=_agent_names):
+    hook = make_channel_kind(agent_names=agent_names).validate_scope_for
+    assert hook is not None
+    resource = _channel(config if config is not None else {"channel_type": "telegram"})
+    # Async because the labels for a refusal are read off the registry;
+    # ResourceService awaits an awaitable hook result.
     asyncio.run(hook(resource, scope))
 
 
-def test_scope_hook_is_wired_with_the_registry_it_compares_against():
-    # A scope names agent RESOURCES, a ``default_agent`` names an agent KEY:
-    # with no map between them there is no check to run, only a comparison of
-    # two vocabularies that reads every correct answer as wrong. Absent rather
-    # than wrong — the same convention ``on_update_config`` follows.
-    assert make_channel_kind(agent_types=_agent_types).validate_scope_for is not None
-    assert make_channel_kind().validate_scope_for is None
+def test_the_scope_hook_is_always_wired():
+    # It used to be absent whenever its name→key map was not injected, because
+    # without the map it compared two vocabularies and read every correct
+    # answer as wrong. A uid compares to a uid with nothing injected, so the
+    # invariant now holds on every runtime — including one a test builds.
+    assert make_channel_kind().validate_scope_for is not None
+    assert make_channel_kind(agent_names=_agent_names).validate_scope_for is not None
 
 
 @pytest.mark.acceptance(
@@ -258,48 +285,49 @@ def test_scope_hook_is_wired_with_the_registry_it_compares_against():
     scenario="reject narrowing a channel's scope past its default agent",
 )
 def test_scope_narrowed_past_the_default_agent_is_rejected():
-    with pytest.raises(ValueError, match="claude_code"):
-        _validate_scope(Scope(agents=["codex"]))
-
-
-def test_scope_rejection_names_the_proposed_scope_too():
-    # Both sides, so the owner can see the two ways out of it.
-    with pytest.raises(ValueError, match="codex"):
+    with pytest.raises(ValueError, match="unable to drive anything"):
         _validate_scope(
-            Scope(agents=["codex"]), {"channel_type": "telegram", "default_agent": "claude_code"}
+            Scope(agents=[_CODEX]), {"channel_type": "telegram", "default_agent": _CLAUDE}
+        )
+
+
+def test_the_refusal_names_both_sides_in_labels():
+    # Both sides, so the owner can see the two ways out of it — and both as
+    # labels, because one list of uids is not a sentence anybody can act on.
+    with pytest.raises(ValueError, match=r"may drive: codex.*default_agent 'claude-code'"):
+        _validate_scope(
+            Scope(agents=[_CODEX]), {"channel_type": "telegram", "default_agent": _CLAUDE}
+        )
+
+
+def test_a_scope_entry_naming_no_registered_agent_prints_as_itself():
+    # There is no label to print for a uid the registry does not know, and the
+    # uid IS the whole of what the row says. Printing it bare beats inventing.
+    with pytest.raises(ValueError, match="uid-of-a-deleted-agent"):
+        _validate_scope(
+            Scope(agents=["uid-of-a-deleted-agent"]),
+            {"channel_type": "telegram", "default_agent": _CLAUDE},
         )
 
 
 def test_scope_containing_the_default_agent_is_accepted():
-    # Named as the reach control names them — the agent resources, not the keys.
-    _validate_scope(Scope(agents=["claude-code", "codex"]))
+    _validate_scope(
+        Scope(agents=[_CLAUDE, _CODEX]), {"channel_type": "telegram", "default_agent": _CLAUDE}
+    )
 
 
-def test_a_scope_naming_the_agent_key_instead_of_the_resource_is_refused():
-    # The mirror of the case above: `claude_code` is not a resource this vault
-    # holds, so a scope naming it narrows the channel to nothing.
-    with pytest.raises(ValueError, match="claude_code"):
-        _validate_scope(Scope(agents=["claude_code"]))
+def test_the_invariant_holds_with_no_registry_wired():
+    # The check itself needs nothing injected: uid against uid. Only the
+    # wording of the refusal degrades, to the uids themselves.
+    hook = make_channel_kind().validate_scope_for
+    assert hook is not None
+    resource = _channel({"channel_type": "telegram", "default_agent": _CLAUDE})
+    with pytest.raises(ValueError, match=_CLAUDE):
+        asyncio.run(hook(resource, Scope(agents=[_CODEX])))
 
 
-def test_the_refusal_says_what_the_scope_drives_not_only_what_it_names():
-    # Printing only the names produced the one message nobody can act on —
-    # "scope (may drive: claude_code) excludes ... 'claude_code'", the same
-    # string on both sides of an exclusion. What the name RESOLVES to is the
-    # half that explains it.
-    with pytest.raises(ValueError, match="no registered agent"):
-        _validate_scope(Scope(agents=["claude_code"]))
-
-
-def test_a_genuine_narrowing_is_refused_in_both_vocabularies():
-    # And when the names do resolve, the message shows the resolution rather
-    # than leaving the reader to guess why two different words collide.
-    with pytest.raises(ValueError, match=r"codex → codex"):
-        _validate_scope(Scope(agents=["codex"]))
-
-
-def test_a_channel_with_an_explicit_default_agent_is_read_from_its_config():
-    _validate_scope(Scope(agents=["codex"]), {"channel_type": "telegram", "default_agent": "codex"})
+def test_a_channel_naming_no_agent_has_nothing_for_a_scope_to_exclude():
+    _validate_scope(Scope(agents=[_CODEX]), {"channel_type": "telegram"})
 
 
 @pytest.mark.acceptance(
@@ -307,8 +335,8 @@ def test_a_channel_with_an_explicit_default_agent_is_read_from_its_config():
     scenario="a channel scoped to no agent is dormant",
 )
 def test_the_dormant_scope_is_always_accepted():
-    _validate_scope(Scope(agents=[]))
+    _validate_scope(Scope(agents=[]), {"channel_type": "telegram", "default_agent": _CLAUDE})
 
 
 def test_clearing_the_scope_is_always_accepted():
-    _validate_scope(None)
+    _validate_scope(None, {"channel_type": "telegram", "default_agent": _CLAUDE})

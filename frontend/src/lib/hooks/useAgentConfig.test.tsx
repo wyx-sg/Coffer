@@ -4,6 +4,11 @@
 // AgentDetailPage drives. Like useAgents.test.tsx these call raw `fetch`
 // against `${getCofferBaseUrl()}/agents/*`, so we stub `globalThis.fetch` and
 // assert URL shaping, method, body, gating, and cache invalidation.
+//
+// Every one of those routes is addressed by the agent's `uid`, so the fixtures
+// carry a uid (`u-cur`) that deliberately differs from the label (`cur`): the
+// URL and the query key must spell the uid, and only the rendered record ever
+// spells the name.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
@@ -43,9 +48,10 @@ function jsonResponse(status: number, body: unknown): Response {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("useAgent", () => {
-  test("GETs the named agent and is gated on a non-empty name", async () => {
+  test("GETs the agent the uid names and is gated on a non-empty uid", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
+        uid: "u-cur",
         name: "cur",
         type: "codex",
         config_dir: "/home/u/.codex",
@@ -56,22 +62,23 @@ describe("useAgent", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    // Empty name → query disabled, no fetch.
+    // Empty uid → query disabled, no fetch.
     const disabled = renderHook(() => useAgent(""), { wrapper: wrapperFor(makeClient()) });
     expect(disabled.result.current.fetchStatus).toBe("idle");
     expect(fetchMock).not.toHaveBeenCalled();
 
-    const { result } = renderHook(() => useAgent("cur"), { wrapper: wrapperFor(makeClient()) });
+    const { result } = renderHook(() => useAgent("u-cur"), { wrapper: wrapperFor(makeClient()) });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.name).toBe("cur");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur$/);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur$/);
   });
 });
 
 describe("usePatchAgent", () => {
-  test("PATCHes the named agent with the body", async () => {
+  test("PATCHes the agent the uid names with the body", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
+        uid: "u-cur",
         name: "cur",
         type: "codex",
         config_dir: "/new/dir",
@@ -83,17 +90,17 @@ describe("usePatchAgent", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => usePatchAgent(), { wrapper: wrapperFor(makeClient()) });
-    await result.current.mutateAsync({ name: "cur", body: { config_dir: "/new/dir" } });
+    await result.current.mutateAsync({ uid: "u-cur", body: { config_dir: "/new/dir" } });
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur$/);
     expect((init as RequestInit).method).toBe("PATCH");
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ config_dir: "/new/dir" });
   });
 });
 
 describe("useAgentConfigFiles", () => {
-  test("GETs the config-files list and is gated on a name", async () => {
+  test("GETs the config-files list and is gated on a uid", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
         items: [
@@ -114,17 +121,17 @@ describe("useAgentConfigFiles", () => {
     const off = renderHook(() => useAgentConfigFiles(""), { wrapper: wrapperFor(makeClient()) });
     expect(off.result.current.fetchStatus).toBe("idle");
 
-    const { result } = renderHook(() => useAgentConfigFiles("cur"), {
+    const { result } = renderHook(() => useAgentConfigFiles("u-cur"), {
       wrapper: wrapperFor(makeClient()),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0].key).toBe("settings");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur\/config-files$/);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/config-files$/);
   });
 });
 
 describe("useAgentConfigFile", () => {
-  test("GETs one config file and stays idle until both name and key are present", async () => {
+  test("GETs one config file and stays idle until both uid and key are present", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
         key: "settings",
@@ -136,23 +143,23 @@ describe("useAgentConfigFile", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     // null key → disabled.
-    const off = renderHook(() => useAgentConfigFile("cur", null), {
+    const off = renderHook(() => useAgentConfigFile("u-cur", null), {
       wrapper: wrapperFor(makeClient()),
     });
     expect(off.result.current.fetchStatus).toBe("idle");
     expect(fetchMock).not.toHaveBeenCalled();
 
-    const { result } = renderHook(() => useAgentConfigFile("cur", "settings"), {
+    const { result } = renderHook(() => useAgentConfigFile("u-cur", "settings"), {
       wrapper: wrapperFor(makeClient()),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.content).toBe("{}");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur\/config-files\/settings$/);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/config-files\/settings$/);
   });
 });
 
 describe("useAgentMcpStatus", () => {
-  test("GETs the mcp-install status and is gated on a name", async () => {
+  test("GETs the mcp-install status and is gated on a uid", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, { installed: false, command: null }),
     );
@@ -161,12 +168,12 @@ describe("useAgentMcpStatus", () => {
     const off = renderHook(() => useAgentMcpStatus(""), { wrapper: wrapperFor(makeClient()) });
     expect(off.result.current.fetchStatus).toBe("idle");
 
-    const { result } = renderHook(() => useAgentMcpStatus("cur"), {
+    const { result } = renderHook(() => useAgentMcpStatus("u-cur"), {
       wrapper: wrapperFor(makeClient()),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.installed).toBe(false);
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur\/mcp-install$/);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/mcp-install$/);
   });
 });
 
@@ -179,14 +186,14 @@ describe("useAgentMcpInstall", () => {
 
     const qc = makeClient();
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-    const { result } = renderHook(() => useAgentMcpInstall("cur"), { wrapper: wrapperFor(qc) });
+    const { result } = renderHook(() => useAgentMcpInstall("u-cur"), { wrapper: wrapperFor(qc) });
     await result.current.mutateAsync(true);
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur\/mcp-install$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur\/mcp-install$/);
     expect((init as RequestInit).method).toBe("POST");
     expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ["agents", "cur", "mcp-install"],
+      queryKey: ["agents", "u-cur", "mcp-install"],
     });
   });
 
@@ -196,13 +203,13 @@ describe("useAgentMcpInstall", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useAgentMcpInstall("cur"), {
+    const { result } = renderHook(() => useAgentMcpInstall("u-cur"), {
       wrapper: wrapperFor(makeClient()),
     });
     await result.current.mutateAsync(false);
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur\/mcp-install$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur\/mcp-install$/);
     expect((init as RequestInit).method).toBe("DELETE");
   });
 });

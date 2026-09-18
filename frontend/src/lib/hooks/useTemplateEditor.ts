@@ -30,7 +30,7 @@ import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { resourceKey } from "@/lib/api/queryKeys";
-import { WORKFLOW_TEMPLATE_KIND, type TemplateConfig } from "@/lib/api/workflow";
+import type { TemplateConfig } from "@/lib/api/workflow";
 import { useSaveWorkflowTemplate, type WorkflowTemplate } from "@/lib/hooks/useWorkflowTemplates";
 
 export interface TemplateEditor {
@@ -46,7 +46,7 @@ export interface TemplateEditor {
   reset: () => void;
 }
 
-export function useTemplateEditor(name: string): TemplateEditor {
+export function useTemplateEditor(uid: string): TemplateEditor {
   const qc = useQueryClient();
   const save = useSaveWorkflowTemplate();
   const { mutateAsync, reset } = save;
@@ -59,15 +59,13 @@ export function useTemplateEditor(name: string): TemplateEditor {
     (edit: (config: TemplateConfig) => TemplateConfig) => {
       const next = queue.current.then(
         async () => {
-          const stored = qc.getQueryData<WorkflowTemplate>(
-            resourceKey(WORKFLOW_TEMPLATE_KIND, name),
-          );
+          const stored = qc.getQueryData<WorkflowTemplate>(resourceKey(uid));
           if (stored === undefined) return;
           const config = edit(stored.config);
           // The description lives on the resource as well as in the config,
           // and the two have to agree: a template whose list row says one
           // thing and whose config says another has two descriptions.
-          await mutateAsync({ name, description: config.description ?? null, config });
+          await mutateAsync({ uid, description: config.description ?? null, config });
         },
         // The previous edit failed; this one still gets its turn.
         async () => {},
@@ -75,7 +73,7 @@ export function useTemplateEditor(name: string): TemplateEditor {
       queue.current = next.catch(() => {});
       return next;
     },
-    [qc, mutateAsync, name],
+    [qc, mutateAsync, uid],
   );
 
   return { apply, isSaving: save.isPending, error: save.error, reset };

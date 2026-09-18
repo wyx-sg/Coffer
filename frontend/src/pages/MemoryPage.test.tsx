@@ -7,7 +7,7 @@
 // per-agent delivery now lives on the agent's own detail page (it writes that
 // agent's settings file), and the audit log is the Activity page's Changes
 // tab, which reads the whole vault's trail rather than one kind's slice.
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -28,7 +28,7 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "claude_code" }] })),
+  useAgents: vi.fn(() => ({ data: [{ uid: "u-cc", name: "claude_code" }] })),
 }));
 vi.mock("@/lib/hooks/useResourceMutations", () => {
   const stub = () => ({ mutate: vi.fn(), isPending: false });
@@ -36,7 +36,9 @@ vi.mock("@/lib/hooks/useResourceMutations", () => {
 });
 
 const { useMemoryPartitions } = await import("@/lib/hooks/useMemory");
+const { useResources } = await import("@/lib/hooks/useResources");
 const partitionsMock = vi.mocked(useMemoryPartitions);
+const resourcesMock = vi.mocked(useResources);
 
 function stubPartitions(partitions: PartitionOut[]) {
   partitionsMock.mockReturnValue({
@@ -60,6 +62,7 @@ function renderPage() {
 }
 
 const COFFER: PartitionOut = {
+  uid: "mp-be27",
   name: "coffer",
   repository_path: "/Users/dev/coffer",
   repository_key: "remote:github.com/wyx-sg/coffer",
@@ -69,6 +72,7 @@ const COFFER: PartitionOut = {
 
 /** A partition whose repository has been deleted from disk (FR-016). */
 const GONE: PartitionOut = {
+  uid: "mp-0d5c",
   name: "old-api",
   repository_path: "/Users/dev/old-api",
   repository_key: "path:/Users/dev/old-api",
@@ -77,6 +81,12 @@ const GONE: PartitionOut = {
 };
 
 describe("MemoryPage", () => {
+  // One test replaces the resource list wholesale; put the inert default back
+  // afterwards so the order tests run in cannot change what they assert.
+  afterEach(() => {
+    resourcesMock.mockReturnValue({ data: [] } as unknown as ReturnType<typeof useResources>);
+  });
+
   test("an empty vault gets the welcome every other first-run surface gives", () => {
     // Skills, knowledge, agents, channels and providers all greet a developer
     // who has nothing yet; Memory showing a bare table instead made it the one
@@ -135,6 +145,27 @@ describe("MemoryPage", () => {
     const table = screen.getByRole("table");
     expect(within(table).getByText("old-api")).toBeInTheDocument();
     expect(within(table).getByTestId("partition-unresolvable-badge")).toBeInTheDocument();
+  });
+
+  test("the reach merge is keyed on the uid, not on the partition's label", () => {
+    // The page reads the partitions off disk and their `enabled` flag off
+    // `GET /resources?kind=memory`, and joins the two. On the NAME the join
+    // would hold only for as long as nothing was renamed between the two
+    // requests — so the fixture gives the resource a STALE label under the
+    // right uid, and a decoy carrying the label the partition currently has.
+    resourcesMock.mockReturnValue({
+      data: [
+        { uid: COFFER.uid, kind: "memory", name: "coffer-old-label", enabled: false, scope: null },
+        { uid: "mp-decoy", kind: "memory", name: "coffer", enabled: true, scope: null },
+      ],
+    } as unknown as ReturnType<typeof useResources>);
+    stubPartitions([COFFER]);
+    renderPage();
+
+    const row = within(screen.getByText("coffer").closest("tr") as HTMLElement);
+    expect(within(row.getByTestId("scope-control")).getByRole("button")).toHaveTextContent(
+      /^disabled$/i,
+    );
   });
 
   test("no audit-log section — the Activity page holds the vault's whole trail", () => {

@@ -29,6 +29,7 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 const SAMPLE_SKILL = {
+  uid: "sk-5d20",
   name: "hello",
   description: "test",
   source: { type: "local_import", original_path: "/tmp/hello" },
@@ -94,15 +95,15 @@ describe("useImportSkill", () => {
 describe("useRemoveSkill", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("DELETEs the named skill", async () => {
+  test("DELETEs the skill addressed by its uid, not its name", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useRemoveSkill(), {
       wrapper: wrapper(),
     });
-    await result.current.mutateAsync("hello");
+    await result.current.mutateAsync(SAMPLE_SKILL.uid);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/skills\/hello$/);
+    expect(String(url)).toMatch(/\/skills\/sk-5d20$/);
     expect((init as RequestInit).method).toBe("DELETE");
   });
 });

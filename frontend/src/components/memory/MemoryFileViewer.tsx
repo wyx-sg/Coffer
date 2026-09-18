@@ -26,9 +26,9 @@ function isMarkdown(path: string): boolean {
   return /\.mdx?$/i.test(path);
 }
 
-export function MemoryFileViewer({ name, path }: { name: string; path: string }) {
+export function MemoryFileViewer({ uid, path }: { uid: string; path: string }) {
   const { t } = useTranslation();
-  const content = usePartitionFileContent(name, path);
+  const content = usePartitionFileContent(uid, path);
 
   if (content.isPending) {
     return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;

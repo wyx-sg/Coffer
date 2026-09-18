@@ -272,3 +272,35 @@ def remove_collection_dir(name: str) -> None:
     directory = paths.collection_dir(name)
     if directory.is_dir():
         shutil.rmtree(directory)
+
+
+def rename_collection_dir(old: str, new: str) -> None:
+    """Move a collection's directory when its Resource is renamed.
+
+    A collection's name IS its directory, so a rename of the label has to move
+    the folder with it; this is the whole of what the ``knowledge`` kind's
+    ``on_rename`` hook does.
+
+    **A target that already exists is refused, never merged or replaced.** The
+    framework has already checked that no ``knowledge`` *row* holds the new
+    name, but a directory can sit there with no row behind it — a folder
+    somebody made by hand under ``~/.coffer/knowledge/``, or one a failed
+    cleanup left behind — and the check has to be explicit, because
+    ``rename(2)`` would not make it for us: it fails on a non-empty target but
+    quietly succeeds over an *empty* directory. Neither outcome is one to pick
+    by accident. Merging adopts files into the corpus that nobody registered
+    and that curation would then rewrite; replacing destroys them.
+    ``create_collection`` already refuses exactly this situation with
+    ``CollectionExists``, and this is the same rule on the other write path.
+
+    A missing SOURCE is tolerated instead, and the asymmetry is deliberate: a
+    row whose directory is gone is already broken, and refusing to rename it
+    would take away the one thing about it the user can still fix.
+    """
+    target = paths.collection_dir(new)
+    if target.exists() or target.is_symlink():
+        raise FileExistsError(str(target))
+    source = paths.collection_dir(old)
+    if not source.is_dir():
+        return
+    source.rename(target)

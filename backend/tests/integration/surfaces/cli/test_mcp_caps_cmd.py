@@ -28,8 +28,9 @@ _runner = CliRunner()
 # ---------------------------------------------------------------------------
 # _capabilities_for 404 branch (shared by tool/resource/prompt list)
 #
-# The real /capabilities route never 404s (it just queries discovery), so the
-# CLI's 404 handler is exercised with a stub route that returns 404.
+# The stub resolves the name to a uid, then 404s on /capabilities — so this
+# exercises the route-level 404 branch rather than the "no such server" one
+# the lookup now answers first.
 # ---------------------------------------------------------------------------
 
 
@@ -41,10 +42,14 @@ def _patch_caps_404(monkeypatch: Any) -> None:
     from coffer.surfaces.http import errors as _err
     from coffer.surfaces.http.auth import set_active_token as _set_token
 
-    router = APIRouter(prefix="/api/v1/resources/mcp_server")
+    router = APIRouter(prefix="/api/v1")
 
-    @router.get("/{name}/capabilities")
-    async def _caps(name: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+    @router.get("/resources")
+    async def _resolve(kind: str, name: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+        return {"resources": [{"uid": "uid-ghost", "kind": kind, "name": name}]}
+
+    @router.get("/resources/mcp_server/{uid}/capabilities")
+    async def _caps(uid: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
         raise HTTPException(status_code=404, detail="not found")
 
     from datetime import UTC
@@ -166,10 +171,9 @@ def test_prompt_list_table(mcp_daemon: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _seed_prompt_pref(key: str) -> None:
+def _seed_prompt_pref(uid: str, key: str) -> None:
     from datetime import UTC, datetime
 
-    from coffer.domain.resource import ResourceRef
     from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
     from coffer.infrastructure.persistence.engine import (
         create_async_engine_with_pragmas,
@@ -181,7 +185,7 @@ def _seed_prompt_pref(key: str) -> None:
 
     async def _seed() -> None:
         sm = session_maker(engine)
-        resource = await SqlAlchemyResourceRepo(sm).find(ResourceRef("mcp_server", "fs"))
+        resource = await SqlAlchemyResourceRepo(sm).find(uid)
         assert resource is not None
         now = datetime.now(tz=UTC)
         await MCPCapabilityPreferenceRepo(sm).insert(resource.id, "prompt", key, True, now, now)
@@ -193,8 +197,7 @@ def _seed_prompt_pref(key: str) -> None:
 
 
 def test_prompt_disable_then_enable(mcp_daemon: Any) -> None:
-    _register_server()
-    _seed_prompt_pref("summarize")
+    _seed_prompt_pref(_register_server(), "summarize")
 
     disabled = _runner.invoke(app, ["mcp", "prompt", "disable", "fs", "summarize"])
     assert disabled.exit_code == 0, disabled.output

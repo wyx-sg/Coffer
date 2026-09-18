@@ -35,7 +35,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
 from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import (
     AdoptSecretUnresolved,
     McpEntryProtected,
@@ -60,9 +60,15 @@ _CLAUDE_SETTINGS = spec_for(AgentType.CLAUDE_CODE, "settings", _CLAUDE_CONFIG_DI
 _CODEX_CONFIG = spec_for(AgentType.CODEX, "config", _CODEX_CONFIG_DIR).path
 
 
-def _agent_resource(name: str, agent_type: str, config_dir: pathlib.Path) -> Resource:
+# The agents are addressed by uid; "cc"/"cx" survive only as their labels.
+_CC_UID = "0b1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f"
+_CX_UID = "5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c"
+
+
+def _agent_resource(uid: str, name: str, agent_type: str, config_dir: pathlib.Path) -> Resource:
     return Resource(
         id=1,
+        uid=uid,
         kind="agent",
         name=name,
         description=None,
@@ -74,14 +80,14 @@ def _agent_resource(name: str, agent_type: str, config_dir: pathlib.Path) -> Res
 
 
 class FakeAgentLookup:
-    """'cc' → claude_code agent, 'cx' → codex agent; anything else → 404."""
+    """One uid → the claude_code agent, one → the codex one; else 404."""
 
-    async def get(self, name: str) -> Resource:
-        if name == "cc":
-            return _agent_resource("cc", "claude_code", _CLAUDE_CONFIG_DIR)
-        if name == "cx":
-            return _agent_resource("cx", "codex", _CODEX_CONFIG_DIR)
-        raise ResourceNotFound("agent", name)
+    async def get(self, uid: str) -> Resource:
+        if uid == _CC_UID:
+            return _agent_resource(uid, "cc", "claude_code", _CLAUDE_CONFIG_DIR)
+        if uid == _CX_UID:
+            return _agent_resource(uid, "cx", "codex", _CODEX_CONFIG_DIR)
+        raise ResourceNotFound(uid)
 
 
 @dataclass
@@ -131,7 +137,7 @@ class FakeResourceService:
 
     resources: list[Resource] = field(default_factory=list)
     register_calls: list[tuple[str, str, dict, str]] = field(default_factory=list)
-    delete_calls: list[tuple[ResourceRef, str]] = field(default_factory=list)
+    delete_calls: list[tuple[str, str]] = field(default_factory=list)
     sequence: list[str] = field(default_factory=list)
     raise_on_register: Exception | None = None
     raise_on_get: Exception | None = None
@@ -155,6 +161,7 @@ class FakeResourceService:
         self.register_calls.append((kind, name, config, actor))
         r = Resource(
             id=len(self.resources) + 100,
+            uid=f"mcp-uid-{len(self.resources) + 100}",
             kind=kind,
             name=name,
             description=description,
@@ -166,22 +173,20 @@ class FakeResourceService:
         self.resources.append(r)
         return r
 
-    async def get(self, ref: ResourceRef) -> Resource:
+    async def get(self, uid: str) -> Resource:
         if self.raise_on_get is not None:
             raise self.raise_on_get
         for r in self.resources:
-            if r.kind == ref.kind and r.name == ref.name:
+            if r.uid == uid:
                 return r
-        raise ResourceNotFound(ref.kind, ref.name)
+        raise ResourceNotFound(uid)
 
     async def list(self, kind: str | None = None, enabled: bool | None = None) -> list[Resource]:
         return [r for r in self.resources if kind is None or r.kind == kind]
 
-    async def delete(self, ref: ResourceRef, actor: str) -> None:
-        self.delete_calls.append((ref, actor))
-        self.resources = [
-            r for r in self.resources if not (r.kind == ref.kind and r.name == ref.name)
-        ]
+    async def delete(self, uid: str, actor: str) -> None:
+        self.delete_calls.append((uid, actor))
+        self.resources = [r for r in self.resources if r.uid != uid]
 
 
 class FakeKeyring:
@@ -291,7 +296,7 @@ async def test_list_merges_sources_and_marks_coffer(svc, store):
     store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
     store._files[_CLAUDE_SETTINGS] = _CLAUDE_SETTINGS_JSON
 
-    view = await svc.list_entries("cc")
+    view = await svc.list_entries(_CC_UID)
 
     assert view.parse_errors == []
     by_name = {e.name: e for e in view.items}
@@ -313,7 +318,7 @@ async def test_list_reports_parse_error_state(svc, store):
     store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
     store._files[_CLAUDE_SETTINGS] = "{not valid json"
 
-    view = await svc.list_entries("cc")
+    view = await svc.list_entries(_CC_UID)
 
     assert len(view.parse_errors) == 1
     err = view.parse_errors[0]
@@ -341,6 +346,7 @@ async def test_list_annotates_matches_resource(svc, store, rs):
     rs.resources.append(
         Resource(
             id=7,
+            uid="e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7",
             kind="mcp_server",
             name="alpha-registered",
             description=None,
@@ -357,7 +363,7 @@ async def test_list_annotates_matches_resource(svc, store, rs):
         )
     )
 
-    view = await svc.list_entries("cc")
+    view = await svc.list_entries(_CC_UID)
     by_name = {e.name: e for e in view.items}
 
     assert by_name["same"].matches_resource == "alpha-registered"
@@ -378,10 +384,10 @@ async def test_remove_requires_source_when_ambiguous(svc, store):
     store._files[_CLAUDE_SETTINGS] = dup_settings
 
     with pytest.raises(McpEntrySourceAmbiguous):
-        await svc.remove_entry("cc", "dup")
+        await svc.remove_entry(_CC_UID, "dup")
     assert store._writes == []  # nothing touched
 
-    await svc.remove_entry("cc", "dup", source="settings")
+    await svc.remove_entry(_CC_UID, "dup", source="settings")
 
     # settings rewritten without the entry; global untouched.
     assert "dup" not in store._files[_CLAUDE_SETTINGS]
@@ -413,7 +419,7 @@ async def test_remove_reads_the_file_again_just_before_writing(svc, store):
         return text
 
     store.read_text = read_then_drop_b  # type: ignore[method-assign]
-    await svc.remove_entry("cc", "a", source="global")
+    await svc.remove_entry(_CC_UID, "a", source="global")
     store.read_text = original_read  # type: ignore[method-assign]
 
     # "a" is gone because we removed it, and "b" stays gone because the write
@@ -426,7 +432,7 @@ async def test_remove_reads_the_file_again_just_before_writing(svc, store):
 async def test_remove_audits_with_source(svc, store, audit_svc):
     store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
 
-    await svc.remove_entry("cc", "alpha", actor="cli")
+    await svc.remove_entry(_CC_UID, "alpha", actor="cli")
 
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_MCP_ENTRY_REMOVED.value)
     assert len(entries) == 1
@@ -442,7 +448,7 @@ async def test_remove_coffer_protected(svc, store):
     store._files[_CLAUDE_GLOBAL] = _CLAUDE_GLOBAL_JSON
 
     with pytest.raises(McpEntryProtected):
-        await svc.remove_entry("cc", "coffer")
+        await svc.remove_entry(_CC_UID, "coffer")
     assert store._writes == []
 
 
@@ -455,7 +461,7 @@ async def test_adopt_happy_path_order(svc, store, rs, keyring, audit_svc):
     store._files[_CODEX_CONFIG] = _CODEX_TOML
     secrets = {"JIRA_API_TOKEN": "mcp/jira/JIRA_API_TOKEN"}
 
-    resource = await svc.adopt("cx", "jira", secrets=secrets, actor="cli")
+    resource = await svc.adopt(_CX_UID, "jira", secrets=secrets, actor="cli")
 
     # Register happened BEFORE the config-file write (shared sequence log).
     assert store.sequence == ["register", "write"]
@@ -487,7 +493,7 @@ async def test_adopt_new_name_used_for_resource(svc, store, rs):
     store._files[_CODEX_CONFIG] = _CODEX_TOML
 
     resource = await svc.adopt(
-        "cx",
+        _CX_UID,
         "jira",
         new_name="jira-prod",
         secrets={"JIRA_API_TOKEN": "mcp/jira-prod/JIRA_API_TOKEN"},
@@ -506,7 +512,7 @@ async def test_adopt_unresolved_secret_rejected(svc, store, rs, keyring):
     store._files[_CODEX_CONFIG] = _CODEX_TOML
 
     with pytest.raises(AdoptSecretUnresolved) as exc:
-        await svc.adopt("cx", "jira")
+        await svc.adopt(_CX_UID, "jira")
 
     assert exc.value.keys == ["JIRA_API_TOKEN"]
     assert rs.register_calls == []
@@ -525,7 +531,7 @@ async def test_adopt_name_conflict_bubbles(svc, store, rs):
     rs.raise_on_register = ResourceAlreadyExists("mcp_server", "jira")
 
     with pytest.raises(ResourceAlreadyExists):
-        await svc.adopt("cx", "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
 
     assert store._files[_CODEX_CONFIG] == _CODEX_TOML  # file unchanged
     assert store._writes == []
@@ -542,10 +548,10 @@ async def test_adopt_rollback_on_write_failure(svc, store, rs):
     store.raise_on_write = OSError("disk full")
 
     with pytest.raises(OSError, match="disk full"):
-        await svc.adopt("cx", "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
 
     # Registered resource was rolled back.
-    assert rs.delete_calls == [(ResourceRef("mcp_server", "jira"), "api")]
+    assert rs.delete_calls == [("mcp-uid-100", "api")]
     assert rs.resources == []
     # File unchanged (write raised before mutating).
     assert store._files[_CODEX_CONFIG] == _CODEX_TOML
@@ -566,7 +572,7 @@ async def test_adopt_bogus_mapping_key_ignored(svc, store, rs, keyring):
         "DOES_NOT_EXIST_TOKEN": "mcp/jira/ghost",  # bogus — not in env or headers
     }
 
-    await svc.adopt("cx", "jira", secrets=secrets)
+    await svc.adopt(_CX_UID, "jira", secrets=secrets)
 
     # Keyring must NOT have been called for the bogus key.
     keyring_refs = [ref for ref, _ in keyring.set_calls]
@@ -601,7 +607,7 @@ async def test_adopt_gas_without_secret_mapping_raises(svc, store):
     store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_GAS
 
     with pytest.raises(AdoptSecretUnresolved) as exc:
-        await svc.adopt("cx", "gas")
+        await svc.adopt(_CX_UID, "gas")
 
     assert exc.value.keys == ["Authorization"]
 
@@ -611,7 +617,7 @@ async def test_adopt_gas_with_secret_mapping_happy_path(svc, store, rs, keyring)
     and produces a transport with empty headers + correct credential_refs."""
     store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_GAS
 
-    resource = await svc.adopt("cx", "gas", secrets={"Authorization": "mcp/gas/auth"})
+    resource = await svc.adopt(_CX_UID, "gas", secrets={"Authorization": "mcp/gas/auth"})
 
     # Keychain received the raw value.
     assert keyring.set_calls == [("mcp/gas/auth", "Bearer abc")]
@@ -645,10 +651,10 @@ async def test_adopt_rollback_on_verify_failure(svc, store, rs):
     rs.raise_on_get = RuntimeError("verify failed")
 
     with pytest.raises(RuntimeError, match="verify failed"):
-        await svc.adopt("cx", "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
+        await svc.adopt(_CX_UID, "jira", secrets={"JIRA_API_TOKEN": "mcp/jira/T"})
 
     # Resource rolled back.
-    assert rs.delete_calls == [(ResourceRef("mcp_server", "jira"), "api")]
+    assert rs.delete_calls == [("mcp-uid-100", "api")]
     assert rs.resources == []
     # File untouched.
     assert store._files[_CODEX_CONFIG] == _CODEX_TOML

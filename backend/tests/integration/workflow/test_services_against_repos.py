@@ -18,7 +18,7 @@ import pytest
 from coffer.application.workflow.node_service import WorkflowNodeService
 from coffer.application.workflow.run_service import WorkflowRunService
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workflow.errors import WorkflowVersionConflict
 from coffer.domain.workflow.run import (
     FailureReason,
@@ -55,17 +55,23 @@ TEMPLATE: dict[str, Any] = {
 }
 
 
+#: The one template these tests run against, addressed the way the service
+#: addresses every resource — by uid, never by the label beside it.
+TEMPLATE_UID = "wfuid-delivery"
+
+
 class _Templates:
-    async def get(self, ref: ResourceRef) -> Resource:
-        if ref.name != "delivery":
-            raise ResourceNotFound(ref.kind, ref.name)
+    async def get(self, uid: str) -> Resource:
+        if uid != TEMPLATE_UID:
+            raise ResourceNotFound(uid)
         from datetime import UTC, datetime
 
         now = datetime.now(UTC)
         return Resource(
             id=1,
-            kind=ref.kind,
-            name=ref.name,
+            uid=uid,
+            kind="workflow",
+            name="delivery",
             description=None,
             config=TEMPLATE,
             enabled=True,
@@ -148,8 +154,8 @@ class _Audit:
         event_type: str,
         *,
         actor: str,
-        resource_kind: str | None = None,
-        resource_name: str | None = None,
+        subject_kind: str | None = None,
+        subject_name: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None:
         self.types.append(event_type)
@@ -193,7 +199,7 @@ def wired(repos: Repos) -> Wired:
     spec="workflow", scenario="a run advances from one node to the next without prompting"
 )
 async def test_a_run_is_created_started_and_advanced_on_real_rows(wired: Wired) -> None:
-    run = await wired.runs.create_run(template="delivery", title="Ship it")
+    run = await wired.runs.create_run(template_uid=TEMPLATE_UID, title="Ship it")
     assert run.status == RunStatus.DRAFT.value
     assert paths.artifacts_dir(run.id).is_dir()
 
@@ -223,7 +229,7 @@ async def test_the_version_race_is_settled_by_the_database(wired: Wired) -> None
     what refuses the loser is the UPDATE's own WHERE clause, which is exactly
     the guarantee a fake cannot give.
     """
-    run = await wired.runs.create_run(template="delivery", title="Ship it")
+    run = await wired.runs.create_run(template_uid=TEMPLATE_UID, title="Ship it")
     started = await wired.runs.signal(run.id, RunSignal.START, version=run.version)
     version = started.run.version
 
@@ -247,7 +253,7 @@ async def test_a_restart_rebuilds_the_position_and_reports_the_interrupted_node(
     wired: Wired,
 ) -> None:
     """FR-014 + FR-027, against rows that survive the service that wrote them."""
-    run = await wired.runs.create_run(template="delivery", title="Ship it")
+    run = await wired.runs.create_run(template_uid=TEMPLATE_UID, title="Ship it")
     started = await wired.runs.signal(run.id, RunSignal.START, version=run.version)
     await wired.nodes.act(run.id, "draft_td", NodeAction.START, version=started.run.version)
     attempt = await wired.repos.attempts.latest_attempt(run.id, "draft_td")
@@ -273,7 +279,7 @@ async def test_a_restart_rebuilds_the_position_and_reports_the_interrupted_node(
 async def test_deleting_a_run_cascades_its_rows_and_removes_its_directory(
     wired: Wired,
 ) -> None:
-    run = await wired.runs.create_run(template="delivery", title="Ship it")
+    run = await wired.runs.create_run(template_uid=TEMPLATE_UID, title="Ship it")
     started = await wired.runs.signal(run.id, RunSignal.START, version=run.version)
     await wired.nodes.act(run.id, "draft_td", NodeAction.START, version=started.run.version)
     artifact_store.write_artifact(run.id, "draft_td", 1, "td.md", "# design")
@@ -288,7 +294,7 @@ async def test_deleting_a_run_cascades_its_rows_and_removes_its_directory(
 
 async def test_an_adhoc_task_survives_the_round_trip(wired: Wired) -> None:
     """FR-028: its key, its stage and its instructions come back off the rows."""
-    run = await wired.runs.create_run(template="delivery", title="Ship it")
+    run = await wired.runs.create_run(template_uid=TEMPLATE_UID, title="Ship it")
     started = await wired.runs.signal(run.id, RunSignal.START, version=run.version)
 
     await wired.nodes.add_adhoc_task(

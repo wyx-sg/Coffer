@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from coffer.application.channel.ports import ChannelPeer
+from coffer.application.channel.store_ports import ChannelPeer
 from coffer.domain.channel.errors import ChannelNotPaired
 from coffer.domain.errors import CredentialMissing, ResourceNotFound
 
@@ -36,9 +36,12 @@ async def test_register_telegram_channel_is_listed_with_config_and_audited(
     assert listed[0].enabled is True
     assert listed[0].config["channel_type"] == "telegram"
     assert listed[0].config["bot_token_ref"] == "channel/tg/bot-token"
-    assert listed[0].config["default_agent"] == "claude_code"
+    # No agent named at create: ``default_agent`` is a reference to an agent
+    # resource and there is no constant that could stand for one, so a channel
+    # registered without one is bound to nobody until the owner picks.
+    assert listed[0].config["default_agent"] is None
 
-    entries = await env.audit_entries("resource_created", name="tg")
+    entries = await env.audit_entries("resource_created", created)
     assert len(entries) == 1
     assert entries[0].details["config"]["bot_token_ref"] == "channel/tg/bot-token"
 
@@ -53,14 +56,14 @@ async def test_register_with_dangling_credential_ref_persists_nothing(env: Chann
             actor="cli",
         )
     assert await env.resources.list(kind="channel") == []
-    assert await env.audit_entries("resource_created", name="tg") == []
+    assert await env.audit_entries("resource_created") == []
 
 
 @pytest.mark.acceptance(spec="channels", scenario="issue a pairing code")
 async def test_issue_pairing_code_returns_code_with_expiry_and_audits(env: ChannelEnv) -> None:
-    await env.register_channel("tg")
+    resource = await env.register_channel("tg")
 
-    code, expires_at, pair_url = await env.service.issue_pairing_code("tg", actor="cli")
+    code, expires_at, pair_url = await env.service.issue_pairing_code(resource.uid, actor="cli")
     # No adapter is running, so there is no bot username to build a link from —
     # the typed code is the only way in and must still be issued.
     assert pair_url == ""
@@ -70,14 +73,14 @@ async def test_issue_pairing_code_returns_code_with_expiry_and_audits(env: Chann
     assert expires_at > datetime.now(tz=UTC)
     assert env.pairing.pending("tg") is True
 
-    entries = await env.audit_entries("channel_pairing_issued", name="tg")
+    entries = await env.audit_entries("channel_pairing_issued", resource)
     assert len(entries) == 1
     assert entries[0].details["expires_at"] == expires_at.isoformat()
 
 
 async def test_issue_pairing_code_for_unknown_channel_raises(env: ChannelEnv) -> None:
     with pytest.raises(ResourceNotFound):
-        await env.service.issue_pairing_code("ghost", actor="cli")
+        await env.service.issue_pairing_code("uid-of-a-ghost", actor="cli")
 
 
 @pytest.mark.acceptance(spec="channels", scenario="notify delivers to the paired owner")
@@ -89,7 +92,7 @@ async def test_notify_sends_via_running_adapter(env: ChannelEnv) -> None:
     assert adapter.started is True
     await env.pair(resource, chat_id="owner")
 
-    await env.service.notify("tg", "backup finished", actor="cli")
+    await env.service.notify(resource.uid, "backup finished", actor="cli")
 
     assert adapter.sent == [("owner", "backup finished")]
 
@@ -125,7 +128,7 @@ async def test_notify_goes_to_the_owner_dm_not_to_a_group(env: ChannelEnv) -> No
         )
     )
 
-    await env.service.notify("tg", "your backup failed", actor="cli")
+    await env.service.notify(resource.uid, "your backup failed", actor="cli")
 
     assert adapter.sent == [("owner-dm", "your backup failed")]
 
@@ -144,7 +147,7 @@ async def test_notify_can_name_a_paired_chat_explicitly(env: ChannelEnv) -> None
         )
     )
 
-    await env.service.notify("tg", "deploy done", actor="cli", chat_id="team-group")
+    await env.service.notify(resource.uid, "deploy done", actor="cli", chat_id="team-group")
 
     assert adapter.sent == [("team-group", "deploy done")]
 
@@ -158,18 +161,18 @@ async def test_notify_refuses_a_chat_this_channel_is_not_paired_to(env: ChannelE
     await env.pair(resource, chat_id="owner-dm")
 
     with pytest.raises(ChannelNotPaired):
-        await env.service.notify("tg", "psst", actor="cli", chat_id="someone-else")
+        await env.service.notify(resource.uid, "psst", actor="cli", chat_id="someone-else")
 
     assert adapter.sent == []
 
 
 @pytest.mark.acceptance(spec="channels", scenario="notify on an unpaired channel fails cleanly")
 async def test_notify_without_paired_peer_fails_and_sends_nothing(env: ChannelEnv) -> None:
-    await env.register_channel("tg")
+    resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
     assert len(env.created_adapters) == 1
 
     with pytest.raises(ChannelNotPaired):
-        await env.service.notify("tg", "hello?", actor="cli")
+        await env.service.notify(resource.uid, "hello?", actor="cli")
 
     assert env.created_adapters[0].sent == []

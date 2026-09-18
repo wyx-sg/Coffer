@@ -937,16 +937,19 @@ components:
 
     RunCreateIn:
       type: object
-      required: [template, title]
+      required: [template_uid, title]
       description: |
         A template and a title, and nothing else (FR-011). The working
         directory is Coffer's own, one per run (FR-053), and the inputs are
         mounted through `/runs/{run_id}/inputs` at any point in the run's life
         (FR-050) — neither is asked for here.
       properties:
-        template:
+        template_uid:
           type: string
-          description: The template resource's name.
+          description: |
+            The template resource's **uid**. The picker that fills this has it
+            already, and a run created from a label would be created from
+            whatever that label pointed at when the request landed.
         title:
           type: string
         agent:
@@ -1029,7 +1032,14 @@ components:
           description: |
             What the developer says this delivery is. A label like the title —
             neither is folded from the events (FR-070).
-        template_ref: { type: string }
+        template_ref:
+          type: string
+          description: |
+            The template's LABEL as it read when the run was created —
+            provenance for a person to recognise, rendered raw. Frozen, and
+            allowed to go stale: the snapshot beside it is what the run
+            executes (FR-010), so renaming or deleting the template leaves
+            this saying what the run was started from.
         status:
           type: string
           enum: [draft, running, paused, completed, aborted, failed]

@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from coffer.domain.provider.config import (
     Protocol,
     ProviderConfig,
-    default_scope_for_protocol,
+    starts_dormant,
 )
 from coffer.domain.provider.modality import Modality
 
@@ -80,24 +80,29 @@ def test_cloud_protocol_requires_credential() -> None:
         )
 
 
-def test_default_scope_by_protocol() -> None:
-    """The scope a connection is CREATED with, by wire.
+def test_only_a_keyless_wire_starts_dormant() -> None:
+    """All the wire still says about scope, and all it CAN say.
 
-    This is the value the ``provider`` Kind pre-fills at registration
-    (ADR per-agent-resource-scope): it replaces the ``compatible_agents``
-    field the config used to carry, and it is a starting point only — the
-    user re-targets a connection through the framework's scope surface.
+    The ``provider`` Kind asks this at registration (ADR per-agent-resource-scope)
+    to decide between a dormant connection and an unscoped one. It cannot ask
+    for a starting agent LIST any more: a scope holds agent uids
+    (ADR resource-identity-is-an-immutable-uid), and this module — a pure
+    function of the config, which is all ``Kind.default_scope`` is handed —
+    knows none. That is what retired the table of ``claude_code`` / ``codex``
+    strings this domain module used to spell out.
     """
-    # A credentialed endpoint starts open to every agent; the protocol decides
-    # introspection and key handling, not who may be driven by it.
-    assert default_scope_for_protocol("anthropic") == ["claude_code", "codex"]
-    assert default_scope_for_protocol("openai") == ["claude_code", "codex"]
+    # ollama is internal-only: no key, so a scope of "every agent" would
+    # advertise a reach it can never have. It starts scoped to nobody.
+    assert starts_dormant("ollama") is True
+    # Every credentialed wire starts UNSCOPED instead — the widest set, and
+    # unlike the explicit list it replaces it keeps covering an agent the user
+    # registers tomorrow.
+    assert starts_dormant("anthropic") is False
+    assert starts_dormant("openai") is False
     # unknown starts open too; the user narrows it.
-    assert default_scope_for_protocol("unknown") == ["claude_code", "codex"]
-    # ollama is internal-only: it starts scoped to no agent at all.
-    assert default_scope_for_protocol("ollama") == []
+    assert starts_dormant("unknown") is False
     # An unrecognised wire is treated like ``unknown`` rather than crashing.
-    assert default_scope_for_protocol("martian") == ["claude_code", "codex"]
+    assert starts_dormant("martian") is False
 
 
 def test_compatible_agents_is_no_longer_a_config_field() -> None:

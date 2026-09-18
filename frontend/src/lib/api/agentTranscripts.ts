@@ -1,5 +1,5 @@
 // frontend/src/lib/api/agentTranscripts.ts — the read-only conversation surfaces
-// for /api/v1/agents/{name}/transcripts: the browse list, and the single-session
+// for /api/v1/agents/{uid}/transcripts: the browse list, and the single-session
 // read behind one conversation's page. Split from agents.ts for file-size. Wire
 // types from the agent-registry contract; transport via the shared `call`
 // (.agents/frontend.md §4).
@@ -83,7 +83,7 @@ export interface TranscriptSessionDetail {
 // ---------------------------------------------------------------------------
 
 export function listTranscripts(
-  agentName: string,
+  agentUid: string,
   opts: TranscriptListParams = {},
 ): Promise<TranscriptSessionListResponse> {
   const sp = new URLSearchParams();
@@ -94,7 +94,7 @@ export function listTranscripts(
   if (opts.sort) sp.set("sort", opts.sort);
   if (opts.order) sp.set("order", opts.order);
   return call<TranscriptSessionListResponse>(
-    `/agents/${enc(agentName)}/transcripts?${sp.toString()}`,
+    `/agents/${enc(agentUid)}/transcripts?${sp.toString()}`,
   );
 }
 
@@ -106,7 +106,7 @@ export function listTranscripts(
  * the point rather than a convenience.
  */
 export function readTranscriptSession(
-  agentName: string,
+  agentUid: string,
   sourcePath: string,
   opts: { limit?: number; offset?: number } = {},
 ): Promise<TranscriptSessionDetail> {
@@ -114,6 +114,6 @@ export function readTranscriptSession(
   sp.set("limit", String(opts.limit ?? 200));
   sp.set("offset", String(opts.offset ?? 0));
   return call<TranscriptSessionDetail>(
-    `/agents/${enc(agentName)}/transcripts/session?${sp.toString()}`,
+    `/agents/${enc(agentUid)}/transcripts/session?${sp.toString()}`,
   );
 }

@@ -69,8 +69,10 @@ export function SpeechToTextSettings() {
         <div className="grid gap-1.5">
           <Label>{t("settings.transcribe.connection")}</Label>
           <Select
-            value={selected?.name ?? ""}
-            onValueChange={(name) => setTranscribeDefault.mutate(name)}
+            // The VALUE is the connection's uid — what the route takes — and the
+            // LABEL is its name.
+            value={selected?.uid ?? ""}
+            onValueChange={(uid) => setTranscribeDefault.mutate(uid)}
             disabled={providers.length === 0 || setTranscribeDefault.isPending}
           >
             <SelectTrigger aria-label={t("settings.transcribe.connection")}>
@@ -78,7 +80,7 @@ export function SpeechToTextSettings() {
             </SelectTrigger>
             <SelectContent>
               {providers.map((p) => (
-                <SelectItem key={p.name} value={p.name}>
+                <SelectItem key={p.uid} value={p.uid}>
                   {p.name}
                 </SelectItem>
               ))}

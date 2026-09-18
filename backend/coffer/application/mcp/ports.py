@@ -96,7 +96,7 @@ class MCPInvocationRepoPort(Protocol):
     async def query(
         self,
         *,
-        resource_name: str | None = None,
+        resource_uid: str | None = None,
         status: Any | None = None,
         since: datetime | None = None,
         limit: int = 50,
@@ -105,4 +105,15 @@ class MCPInvocationRepoPort(Protocol):
         self,
         *,
         since: datetime,
-    ) -> dict[tuple[str, str], int]: ...
+    ) -> dict[tuple[str, str], int]:
+        """Tool counts keyed by ``(server NAME, tool name)``.
+
+        Deliberately the name and not the uid, although the rows are stored by
+        uid: the only consumer is the tiering policy, which ranks the namespaced
+        wire names (``<server>__<tool>``) an aggregated ``tools/list`` carries,
+        and those are namespaced by the label. Resolving uid → name once inside
+        the repo keeps that translation at the single seam where the storage
+        vocabulary ends, instead of handing a uid-keyed map to a pure policy
+        that would then need a resource lookup to use it.
+        """
+        ...

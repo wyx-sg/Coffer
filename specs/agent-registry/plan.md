@@ -10,7 +10,7 @@ The `agent` Resource kind is a registry of locally-installed AI agents. Two type
 On top of the registry the feature carries the agent's whole workspace:
 
 1. **Config files** — each agent type exposes a curated allowlist of its own config files (Claude Code: `settings.json`, `settings.local.json`, `~/.claude.json`, `CLAUDE.md`, the `agents/` directory entry; Codex: `config.toml`, `AGENTS.md`, `hooks.json`). Every surface — the in-app editor, REST and CLI — can read and write them: a save validates per format, writes atomically, and keeps a `.bak`. The same atomic-write + `.bak` machinery backs the Coffer-MCP install/uninstall.
-2. **One-click Coffer-MCP install** — write/remove a `coffer` stdio MCP-server entry (pointing at `coffer-mcp-shim`, carrying `--agent <name>`) in the agent's MCP config, with status/idempotency.
+2. **One-click Coffer-MCP install** — write/remove a `coffer` stdio MCP-server entry (pointing at `coffer-mcp-shim`, carrying `--agent-uid <uid>`) in the agent's MCP config, with status/idempotency.
 3. **The agent's own MCP entries** — list what the agent itself has configured, remove one, or adopt it into Coffer's gateway with its secrets routed into the vault.
 4. **Plugins** — list them with their marketplace and enabled state, toggle one, uninstall one (by config edit for Codex, by the agent's own CLI for Claude Code).
 5. **Read-only views of the agent's own stores** — its native memory and its session transcripts.
@@ -122,12 +122,12 @@ backend/coffer/infrastructure/agent/
   model_discovery.py / claude_binary_models.py / claude_effort.py / codex_rpc_models.py
 
 backend/coffer/surfaces/http/
-  agent_routes.py                # GET/POST /agents, GET/PATCH/DELETE /agents/{name}, GET /agents/candidates
-  agent_config_routes.py         # /agents/{name}/config-files[/{key}[/files/{relpath}]], /mcp-install
-  agent_workspace_routes.py      # /agents/{name}/mcp-entries*, /agents/{name}/plugins*
-  agent_native_memory_routes.py  # /agents/{name}/native-memory[/files[/content]]
-  agent_transcript_routes.py     # /agents/{name}/transcripts[/session]
-  agent_unmanaged_skill_routes.py # /agents/{name}/unmanaged-skills* (spec skill-manager's facet)
+  agent_routes.py                # GET/POST /agents, GET/PATCH/DELETE /agents/{uid}, GET /agents/candidates
+  agent_config_routes.py         # /agents/{uid}/config-files[/{key}[/files/{relpath}]], /mcp-install
+  agent_workspace_routes.py      # /agents/{uid}/mcp-entries*, /agents/{uid}/plugins*
+  agent_native_memory_routes.py  # /agents/{uid}/native-memory[/files[/content]]
+  agent_transcript_routes.py     # /agents/{uid}/transcripts[/session]
+  agent_unmanaged_skill_routes.py # /agents/{uid}/unmanaged-skills* (spec skill-manager's facet)
   agent_skill_wiring.py          # the agent + skill kind wiring (called from kind_wiring.py)
 
 backend/coffer/surfaces/cli/

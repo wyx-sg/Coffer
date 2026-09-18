@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -31,6 +31,10 @@ def _resource(name: str, *, kind: str = "mcp_server") -> Resource:
     now = datetime.now(tz=UTC)
     return Resource(
         id=0,
+        # The uid is the identity, but it is deliberately NOT what the list is
+        # ordered by: a reader scans the name column, and an opaque identity
+        # sorts into an order nobody can predict.
+        uid=f"uid-{kind}-{name}",
         kind=kind,
         name=name,
         description=None,
@@ -67,7 +71,9 @@ async def test_order_survives_a_write_to_one_row(tmp_path) -> None:
             await repo.create(_resource(name))
         before = [r.name for r in await repo.list(kind="mcp_server")]
 
-        await repo.set_enabled(ResourceRef("mcp_server", "zulu"), False)
+        zulu = await repo.find_by_name("mcp_server", "zulu")
+        assert zulu is not None
+        await repo.set_enabled(zulu.uid, False)
         after = [r.name for r in await repo.list(kind="mcp_server")]
 
         assert after == before

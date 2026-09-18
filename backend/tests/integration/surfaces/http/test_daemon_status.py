@@ -108,13 +108,15 @@ async def test_status_includes_upstream_summary(tmp_path, monkeypatch):
         )
         assert r2.status_code == 201, r2.text
 
-        # Write health rows directly through the health repo
+        # Write health rows directly through the health repo, keyed on each
+        # server's uid — which is what /daemon/status intersects the registered
+        # resources on. Keying them on the names would count zero of the two.
         from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 
         health_repo = get_health_repo_optional()
         assert health_repo is not None
-        await health_repo.upsert("srv-healthy", "healthy", datetime.now(tz=UTC))
-        await health_repo.upsert("srv-failing", "failing", datetime.now(tz=UTC))
+        await health_repo.upsert(r1.json()["uid"], "healthy", datetime.now(tz=UTC))
+        await health_repo.upsert(r2.json()["uid"], "failing", datetime.now(tz=UTC))
 
         r = await c.get("/api/v1/daemon/status")
     assert r.status_code == 200

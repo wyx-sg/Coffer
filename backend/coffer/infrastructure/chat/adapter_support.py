@@ -61,15 +61,22 @@ def last_user_text(history: Sequence[Message]) -> str:
     return ""
 
 
-def channel_system_context(channel_name: str) -> str:
+def channel_system_context(channel_name: str | None) -> str:
     """A system-prompt append telling a channel-driven agent where it is.
 
     Without it the agent has no idea it is bridged to a phone chat: it dumps
     terminal-sized replies, waits on OS permission dialogs nobody can click, and
     reinvents ways to reach the user. Kept short — it rides on every channel turn.
+
+    ``channel_name`` is a label resolved from the conversation's stored channel
+    uid, so it can come back ``None`` — the channel was deleted while a thread
+    still pointed at it. The name is only colour here; every instruction below
+    it holds regardless. So an unresolvable name drops the name and keeps the
+    append, rather than leaving a channel turn with no channel context at all.
     """
+    where = f"the {channel_name} chat channel" if channel_name else "a chat channel"
     return (
-        f"You are talking with the user over the {channel_name} chat channel — "
+        f"You are talking with the user over {where} — "
         "most likely on their phone, not at a terminal. Keep replies short and "
         "easy to read on a small screen: lead with the answer, and skip large "
         "tables or long code dumps unless asked. You cannot click permission or "
@@ -138,16 +145,24 @@ __all__ = [
 ModelLister = Callable[[str], Awaitable[Sequence[str]]]
 #: (agent_key, cwd) -> the memory digest for this turn, or None (spec memory FR-024).
 MemoryContextComposer = Callable[[str, str], Awaitable[str | None]]
+#: channel uid -> the channel's current name, or None when no channel carries
+#: that uid any more. A conversation stores the uid of the channel it is bridged
+#: to (ADR resource-identity-is-an-immutable-uid); the system prompt wants the
+#: label a human would use. This callable is the one place the two meet — a
+#: narrow seam rather than a ``ResourceService`` dependency, so this layer keeps
+#: reading one field out of the registry instead of importing it.
+ChannelNameResolver = Callable[[str], Awaitable[str | None]]
 
 
 async def compose_system_context(
     *,
     agent_key: str,
-    channel_name: str,
+    channel_uid: str,
     cwd: str,
     model: str | None,
     list_models: ModelLister | None,
     compose_memory: MemoryContextComposer | None,
+    resolve_channel_name: ChannelNameResolver | None = None,
 ) -> str:
     """The appends every provider owes its agent, joined into one.
 
@@ -166,9 +181,23 @@ async def compose_system_context(
     Shared rather than written twice because both providers owe the same
     thing: Codex went without any of it until this was extracted, which is
     exactly the drift a second copy invites.
+
+    ``channel_uid`` is what the conversation stores, and ``resolve_channel_name``
+    turns it into the label the prompt reads. They are kept apart on purpose:
+    the uid answers "is this a channel turn, and which channel", which has to
+    stay true across a rename, and the name answers "what does the user call
+    it", which is only ever read here and now.
     """
     parts: list[str] = []
-    if channel_name:
+    # Whether this is a channel turn is decided by the stored uid, never by
+    # whether its label could be resolved. A deleted channel would otherwise
+    # silently downgrade a phone-chat turn to a terminal one — dropping the
+    # "keep it short, you cannot click dialogs" contract and the memory digest
+    # with it — for the one reason least related to where the user is sitting.
+    if channel_uid:
+        channel_name = (
+            await resolve_channel_name(channel_uid) if resolve_channel_name is not None else None
+        )
         parts.append(channel_system_context(channel_name))
         if compose_memory is not None:
             memory = await compose_memory(agent_key, cwd)

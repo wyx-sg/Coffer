@@ -27,11 +27,11 @@ export type { ResourceScope, Scope };
  * answer — the list payloads (`ResourceOut.scope`, `SkillOut.scope`) carry it,
  * so a table rendering one ScopeControl per row must not pay one GET per row.
  */
-export function useResourceScope(kind: string, name: string, enabled = true) {
+export function useResourceScope(uid: string, enabled = true) {
   return useQuery({
-    queryKey: resourceScopeKey(kind, name),
-    queryFn: () => scopeApi.get(kind, name),
-    enabled: enabled && name.length > 0,
+    queryKey: resourceScopeKey(uid),
+    queryFn: () => scopeApi.get(uid),
+    enabled: enabled && uid.length > 0,
   });
 }
 
@@ -40,15 +40,19 @@ export function useResourceScope(kind: string, name: string, enabled = true) {
  * active for every agent). A scope change flips what the gateway exposes and
  * what skill delivery reconciles, so the agent-facing lists are invalidated
  * alongside the scope itself.
+ *
+ * The write takes the uid alone. `kind` is here only to pick the kind's own
+ * list key to refresh afterwards — the same reason `useResourceMutations`
+ * carries it.
  */
-export function useUpdateResourceScope(kind: string, name: string) {
+export function useUpdateResourceScope(kind: string, uid: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (scope: Scope | null) => scopeApi.put(kind, name, scope),
+    mutationFn: (scope: Scope | null) => scopeApi.put(uid, scope),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: resourceScopeKey(kind, name) });
+      void qc.invalidateQueries({ queryKey: resourceScopeKey(uid) });
       void qc.invalidateQueries({ queryKey: agentsKey });
       // The list payloads carry `scope`, and the list tables now render the
       // control from that field rather than from this query — so a write here

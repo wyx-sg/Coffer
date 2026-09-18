@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from coffer.domain.provider.config import ProviderConfig, default_scope_for_protocol
+from coffer.domain.provider.config import ProviderConfig, starts_dormant
 from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
 
@@ -23,17 +23,27 @@ def _provider_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]
     return {}
 
 
-def _provider_default_scope(config: dict[str, Any]) -> Scope:
-    """The scope a brand-new connection starts with: the wire's own default.
+def _provider_default_scope(config: dict[str, Any]) -> Scope | None:
+    """The scope a brand-new connection starts with: dormant, or unscoped.
 
-    Without this the framework would create the row unscoped, i.e. reaching
-    EVERY agent — a widening, not a preservation, of the behaviour the
-    connection's own ``compatible_agents`` used to give it (an ollama
-    connection reaches no agent at all). The wire is already known at create
-    time, so the pre-fill is exact rather than a guess.
+    The hook is a pure function of the CONFIG — the framework calls it inside
+    ``register`` with nothing but the validated dict — so it cannot name an
+    agent at all now that a scope holds agent uids
+    (ADR resource-identity-is-an-immutable-uid). It does not need to:
+
+    - a keyless (``ollama``) connection starts ``Scope(agents=[])``, dormant,
+      because the framework's own default for an unset scope — every agent —
+      would advertise a reach a connection with no key can never have; and
+    - every other wire starts ``None``, unscoped. That is not a widening of the
+      explicit ``[claude_code, codex]`` list it replaces: that list named every
+      agent type Coffer supports, which is what "unscoped" means, and unlike
+      the list it goes on covering an agent the user registers tomorrow instead
+      of quietly excluding it.
     """
     protocol = config.get("protocol")
-    return Scope(agents=default_scope_for_protocol(str(protocol) if protocol is not None else ""))
+    if starts_dormant(str(protocol) if protocol is not None else ""):
+        return Scope(agents=[])
+    return None
 
 
 def make_provider_kind() -> Kind:

@@ -4,6 +4,12 @@ MCP entries, plugins, and directory config-file children. Kept out of
 ``agent_cmd.py`` to respect the 400-line backend file cap;
 ``agent_cmd`` calls :func:`attach` to register everything on its existing
 typers, so the user-facing tree stays ``coffer agent mcp/config/plugin/...``.
+
+Like every other command here these take the agent's NAME and resolve it to a
+uid through ``_resolve`` (ADR resource-identity-is-an-immutable-uid). The
+``entry``, ``plugin_id`` and ``relpath`` arguments beside it stay as they are:
+none of them names a Coffer resource — they name something inside the agent's
+own config files, which Coffer did not mint and does not identify.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 plugin_app = typer.Typer(help="View and manage an agent's installed plugins")
 _console = Console()
@@ -54,7 +61,8 @@ def mcp_entries(
     """List the MCP server entries in the agent's own config files."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}/mcp-entries")
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.get(f"/agents/{uid}/mcp-entries")
         _not_found_exit(r)
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
@@ -87,15 +95,16 @@ def mcp_remove_entry(
     force: bool = typer.Option(False, "--force", "-f"),
 ) -> None:
     """Remove one MCP entry from the agent's config file (a .bak is kept)."""
-    if not force and not typer.confirm(f"Really remove MCP entry {entry!r} from agent:{name}?"):
+    if not force and not typer.confirm(f"Really remove MCP entry {entry!r} from agent {name}?"):
         raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
     with c:
         params = {"source": source} if source is not None else None
-        r = c.delete(f"/agents/{name}/mcp-entries/{entry}", params=params)
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.delete(f"/agents/{uid}/mcp-entries/{entry}", params=params)
         _not_found_exit(r)
         _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"removed: mcp entry {entry} from agent:{name}")
+    typer.echo(f"removed: mcp entry {entry} from agent {name}")
 
 
 def mcp_adopt(
@@ -131,7 +140,8 @@ def mcp_adopt(
         body["secrets"] = secrets
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/agents/{name}/mcp-entries/{entry}/adopt", json=body)
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.post(f"/agents/{uid}/mcp-entries/{entry}/adopt", json=body)
         _not_found_exit(r)
         envelope = r.json().get("error", {}) if r.status_code >= 400 else {}
         if r.status_code == 422 and envelope.get("code") == "ADOPT_SECRET_UNRESOLVED":
@@ -146,7 +156,7 @@ def mcp_adopt(
             raise typer.Exit(5)
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
-    typer.echo(f"adopted: {data['kind']}:{data['name']}")
+    typer.echo(f"adopted: {data['kind']} {data['name']}")
 
 
 # --- coffer agent plugin ... --------------------------------------------------
@@ -161,7 +171,8 @@ def plugin_list(
     """List the agent's installed plugins and known marketplaces."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}/plugins")
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.get(f"/agents/{uid}/plugins")
         _not_found_exit(r)
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
@@ -189,10 +200,11 @@ def plugin_list(
 def _plugin_set_enabled(ctx: typer.Context, name: str, plugin_id: str, enabled: bool) -> None:
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.patch(f"/agents/{name}/plugins/{plugin_id}", json={"enabled": enabled})
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.patch(f"/agents/{uid}/plugins/{plugin_id}", json={"enabled": enabled})
         _not_found_exit(r)
         _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"{'enabled' if enabled else 'disabled'}: plugin {plugin_id} (agent:{name})")
+    typer.echo(f"{'enabled' if enabled else 'disabled'}: plugin {plugin_id} (agent {name})")
 
 
 @plugin_app.command("enable")
@@ -223,14 +235,15 @@ def plugin_uninstall(
     force: bool = typer.Option(False, "--force", "-f"),
 ) -> None:
     """Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CLI)."""
-    if not force and not typer.confirm(f"Really uninstall plugin {plugin_id!r} from agent:{name}?"):
+    if not force and not typer.confirm(f"Really uninstall plugin {plugin_id!r} from agent {name}?"):
         raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/agents/{name}/plugins/{plugin_id}")
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.delete(f"/agents/{uid}/plugins/{plugin_id}")
         _not_found_exit(r)
         _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"uninstalled: plugin {plugin_id} from agent:{name}")
+    typer.echo(f"uninstalled: plugin {plugin_id} from agent {name}")
 
 
 # --- coffer agent config files / write / rm -----------------------------------
@@ -245,7 +258,8 @@ def config_files(
     """List the child files of a directory-type config entry."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}/config-files")
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.get(f"/agents/{uid}/config-files")
         _not_found_exit(r)
         _cli_client.check(r, verbose=_verbose(ctx))
     entry = next((i for i in r.json()["items"] if i["key"] == key), None)
@@ -289,7 +303,8 @@ def config_write(
         content = sys.stdin.read()
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.put(f"/agents/{name}/config-files/{key}/files/{relpath}", json={"content": content})
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.put(f"/agents/{uid}/config-files/{key}/files/{relpath}", json={"content": content})
         _not_found_exit(r)
         if r.status_code == 422:
             typer.echo(r.json().get("error", {}).get("message", "invalid content"), err=True)
@@ -306,11 +321,12 @@ def config_rm(
     force: bool = typer.Option(False, "--force", "-f"),
 ) -> None:
     """Delete a child file of a directory-type config entry."""
-    if not force and not typer.confirm(f"Really delete {key}/{relpath} of agent:{name}?"):
+    if not force and not typer.confirm(f"Really delete {key}/{relpath} of agent {name}?"):
         raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/agents/{name}/config-files/{key}/files/{relpath}")
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.delete(f"/agents/{uid}/config-files/{key}/files/{relpath}")
         _not_found_exit(r)
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(f"removed: {key}/{relpath}")

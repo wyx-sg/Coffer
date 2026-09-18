@@ -1,8 +1,22 @@
-"""End-to-end HTTP coverage for /api/v1/agents/* (spec agent-registry)."""
+"""End-to-end HTTP coverage for /api/v1/agents/* (spec agent-registry).
+
+Every per-agent route is addressed by the agent's ``uid`` — the immutable
+identity minted server-side at registration — and never by its name
+(ADR resource-identity-is-an-immutable-uid). Only the collection routes
+(``GET``/``POST /api/v1/agents``, ``GET /api/v1/agents/candidates``) take no
+identity at all.
+
+These tests take the uid straight off the ``POST /api/v1/agents`` response they
+already make, which is also the flow a real client follows: create, keep the
+uid, address everything by it. The name still travels in the payload, as the
+label a person reads, so a test that cares about the label asserts on the body
+rather than on the URL.
+"""
 
 from __future__ import annotations
 
 import pathlib
+import uuid
 
 import pytest
 from starlette.testclient import TestClient
@@ -32,6 +46,18 @@ def _post_codex(c: TestClient, name: str, config_dir: pathlib.Path):
         "/api/v1/agents",
         json={"type": "codex", "name": name, "config_dir": str(config_dir)},
     )
+
+
+def _codex_uid(c: TestClient, name: str, config_dir: pathlib.Path) -> str:
+    """Register one codex agent and return the uid every route addresses it by.
+
+    The uid is read off the creation response rather than looked up afterwards:
+    the server mints it, the client keeps it, and no second request is needed
+    to learn it.
+    """
+    r = _post_codex(c, name, config_dir)
+    assert r.status_code == 201, r.text
+    return r.json()["uid"]
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +93,12 @@ def test_agent_register_post(tmp_path, monkeypatch):
         body = r.json()
         assert body["name"] == "cur"
         assert body["type"] == "codex"
+        # The identity comes back with the creation, minted server-side —
+        # `AgentCreate` has no uid field, so a client cannot choose one. It is
+        # distinct from the label by construction: everything addresses the
+        # agent by this string, and nothing addresses it by "cur".
+        assert body["uid"]
+        assert body["uid"] != body["name"]
         assert "auto_detected" not in body
 
 
@@ -89,7 +121,7 @@ def test_agent_register_without_name_defaults_to_type(tmp_path, monkeypatch):
 
 
 def test_agent_get_one(tmp_path, monkeypatch):
-    """GET /agents/{name} returns the persisted config_dir."""
+    """GET /agents/{uid} returns the persisted config_dir."""
     app = _app(tmp_path, monkeypatch, 59602)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
@@ -99,8 +131,13 @@ def test_agent_get_one(tmp_path, monkeypatch):
             json={"type": "codex", "name": "cur", "config_dir": str(config_dir)},
         )
         assert r.status_code == 201, r.text
-        r = c.get("/api/v1/agents/cur")
+        uid = r.json()["uid"]
+        r = c.get(f"/api/v1/agents/{uid}")
         assert r.status_code == 200
+        # Both halves of AgentOut's identity contract: the uid the caller
+        # addressed, echoed back unchanged, and the label beside it.
+        assert r.json()["uid"] == uid
+        assert r.json()["name"] == "cur"
         assert r.json()["config_dir"] == str(config_dir)
         assert "skill_dir" not in r.json()
         assert "skill_dir_override" not in r.json()
@@ -113,8 +150,8 @@ def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        assert _post_codex(c, "cur", config_dir).status_code == 201
-        r = c.get("/api/v1/agents/cur")
+        uid = _codex_uid(c, "cur", config_dir)
+        r = c.get(f"/api/v1/agents/{uid}")
         assert r.status_code == 200, r.text
         assert "capabilities" not in r.json()
 
@@ -124,15 +161,22 @@ def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
 
 
 def test_agent_list_after_register(tmp_path, monkeypatch):
-    """A freshly registered agent appears in the list."""
+    """A freshly registered agent appears in the list, uid and all.
+
+    The list is where a UI gets the uids it will address rows by, so the
+    listed entry has to carry the same uid the creation handed back — not a
+    name the UI would then have to resolve.
+    """
     app = _app(tmp_path, monkeypatch, 59603)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        _post_codex(c, "cur", config_dir)
+        uid = _codex_uid(c, "cur", config_dir)
         r = c.get("/api/v1/agents")
         assert r.status_code == 200
-        assert any(a["name"] == "cur" for a in r.json()["items"])
+        listed = [a for a in r.json()["items"] if a["uid"] == uid]
+        assert len(listed) == 1, r.text
+        assert listed[0]["name"] == "cur"
 
 
 def test_agent_patch_config_dir(tmp_path, monkeypatch):
@@ -143,14 +187,16 @@ def test_agent_patch_config_dir(tmp_path, monkeypatch):
     new_dir = tmp_path / "cfg2"
     new_dir.mkdir()
     with _client(app) as c:
-        _post_codex(c, "cur", config_dir)
+        uid = _codex_uid(c, "cur", config_dir)
         r = c.patch(
-            "/api/v1/agents/cur",
+            f"/api/v1/agents/{uid}",
             json={"config_dir": str(new_dir)},
         )
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["config_dir"] == str(new_dir)
+        # An edit changes what the resource IS, never which resource it is.
+        assert body["uid"] == uid
         assert "enabled" not in body
 
 
@@ -160,20 +206,20 @@ def test_agent_patch_model_binding(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        _post_codex(c, "cur", config_dir)
-        ok = c.patch("/api/v1/agents/cur", json={"model": "gpt-5", "wire_api": "responses"})
+        uid = _codex_uid(c, "cur", config_dir)
+        ok = c.patch(f"/api/v1/agents/{uid}", json={"model": "gpt-5", "wire_api": "responses"})
         assert ok.status_code == 200, ok.text
         assert ok.json()["model"] == "gpt-5"
         assert ok.json()["wire_api"] == "responses"
-        bad = c.patch("/api/v1/agents/cur", json={"wire_api": "garbage"})
+        bad = c.patch(f"/api/v1/agents/{uid}", json={"wire_api": "garbage"})
         assert bad.status_code != 200  # validated, not silently persisted
         # "chat" is refused like any other unknown value. It used to be the
         # other half of this setting; Codex 0.139.0 will not load a config.toml
         # carrying it, so accepting it here would hand the user a CLI that does
         # not start and no way to see why.
-        dead = c.patch("/api/v1/agents/cur", json={"wire_api": "chat"})
+        dead = c.patch(f"/api/v1/agents/{uid}", json={"wire_api": "chat"})
         assert dead.status_code != 200, dead.text
-        assert c.get("/api/v1/agents/cur").json()["wire_api"] == "responses"
+        assert c.get(f"/api/v1/agents/{uid}").json()["wire_api"] == "responses"
 
 
 def test_agent_candidates_get(tmp_path, monkeypatch):
@@ -191,10 +237,13 @@ def test_agent_delete_then_404(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
     with _client(app) as c:
-        _post_codex(c, "cur", config_dir)
-        r = c.delete("/api/v1/agents/cur")
+        uid = _codex_uid(c, "cur", config_dir)
+        r = c.delete(f"/api/v1/agents/{uid}")
         assert r.status_code == 204
-        r = c.get("/api/v1/agents/cur")
+        # The uid is retired with the row: it addressed a resource a moment ago
+        # and now addresses nothing, which is the only correct answer — a uid is
+        # never reissued, so this 404 can never turn back into a 200.
+        r = c.get(f"/api/v1/agents/{uid}")
         assert r.status_code == 404
 
 
@@ -220,19 +269,65 @@ def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
             },
         )
         assert r.status_code == 201, r.text
+        uid = r.json()["uid"]
         assert r.json()["config_dir"] == str(config_dir)
 
         # PATCH only the description — config_dir is absent from the body.
-        r = c.patch("/api/v1/agents/cur", json={"description": "after"})
+        r = c.patch(f"/api/v1/agents/{uid}", json={"description": "after"})
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["description"] == "after"
         # The custom config_dir must survive a description-only PATCH.
         assert body["config_dir"] == str(config_dir)
+        # And so must the identity: an edit is an edit, not a re-creation.
+        assert body["uid"] == uid
 
         # And it must still be persisted on a fresh read.
-        r = c.get("/api/v1/agents/cur")
+        r = c.get(f"/api/v1/agents/{uid}")
         assert r.json()["config_dir"] == str(config_dir)
+
+
+def test_uid_survives_a_rename_and_no_name_addresses_the_agent(tmp_path, monkeypatch):
+    """The identity stays put when the label moves — the point of the change.
+
+    Renaming is now an ordinary field on the kind-agnostic
+    ``PATCH /api/v1/resources/{uid}``; there is no per-kind rename route left
+    to call, and an agent never had one. So the rename goes through the
+    framework route while the agent surface is read back at the *same* address
+    as before. Before the uid existed, a rename was a delete plus a create, and
+    everything keyed on the resource — paired chats, capability preferences,
+    the audit trail — went with it
+    (ADR resource-identity-is-an-immutable-uid).
+    """
+    app = _app(tmp_path, monkeypatch, 59611)
+    config_dir = tmp_path / "cfg"
+    config_dir.mkdir()
+    with _client(app) as c:
+        uid = _codex_uid(c, "before", config_dir)
+
+        r = c.patch(f"/api/v1/resources/{uid}", json={"name": "after"})
+        assert r.status_code == 200, r.text
+        assert r.json()["uid"] == uid
+        assert r.json()["name"] == "after"
+
+        # Same address, new label, everything else untouched.
+        r = c.get(f"/api/v1/agents/{uid}")
+        assert r.status_code == 200, r.text
+        assert r.json()["uid"] == uid
+        assert r.json()["name"] == "after"
+        assert r.json()["config_dir"] == str(config_dir)
+
+        # Neither name is an address — not the one it just lost, nor the one it
+        # just gained. A name-shaped path segment is simply a uid nothing
+        # answers to.
+        assert c.get("/api/v1/agents/before").status_code == 404
+        assert c.get("/api/v1/agents/after").status_code == 404
+
+        # The one route that goes from a label to a resource answers with the
+        # very uid the caller has been holding all along.
+        found = c.get("/api/v1/resources", params={"kind": "agent", "name": "after"})
+        assert found.status_code == 200, found.text
+        assert [res["uid"] for res in found.json()["resources"]] == [uid]
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="discover installed agents as candidates")
@@ -285,14 +380,22 @@ def test_candidates_offers_exactly_the_manifest_types(tmp_path, monkeypatch):
 
 
 def test_error_404_not_found(tmp_path, monkeypatch):
-    """GET an unknown agent name yields a 404 error envelope."""
+    """GET a uid no agent answers to yields a 404 error envelope.
+
+    Both spellings of "not here" are covered, because the route makes no
+    distinction between them: a well-formed uid that was never minted, and a
+    name-shaped segment that is not a uid at all. The path parameter is a plain
+    string looked up as an identity, so an unparseable one is not a 422 — it is
+    simply an identity nothing holds.
+    """
     app = _app(tmp_path, monkeypatch, 59630)
     with _client(app) as c:
-        r = c.get("/api/v1/agents/ghost")
-        assert r.status_code == 404
-        body = r.json()
-        assert "error" in body
-        assert body["error"]["code"] == "RESOURCE_NOT_FOUND"
+        for absent in (uuid.uuid4().hex, "ghost"):
+            r = c.get(f"/api/v1/agents/{absent}")
+            assert r.status_code == 404, f"{absent}: {r.text}"
+            body = r.json()
+            assert "error" in body
+            assert body["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_error_409_duplicate_name(tmp_path, monkeypatch):

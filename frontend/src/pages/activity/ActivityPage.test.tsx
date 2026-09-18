@@ -38,8 +38,12 @@ const AUDIT_ENTRY = {
   details: { some_key: "some_value" },
 };
 
+// The invocation log is keyed by the server's uid and carries its label
+// resolved at read time — the MCP calls tab shows the LABEL, so the two are
+// different strings here.
 const INVOCATION = {
   timestamp: ago(20_000),
+  resource_uid: "u-github",
   resource_name: "github",
   capability_type: "tool",
   capability_key: "search_issues",
@@ -254,6 +258,8 @@ acceptance("web-ui", "activity gives each record its own tab", async () => {
   expect(await screen.findByText("search_issues")).toBeInTheDocument();
   expect(headers()).toEqual(["Time", "Server", "Type", "Key", "Duration", "Status"]);
   expect(screen.getByText("github")).toBeInTheDocument();
+  // The reader is shown the server's name; its uid stays in the log's keys.
+  expect(screen.queryByText("u-github")).not.toBeInTheDocument();
   expect(screen.getByText("42 ms")).toBeInTheDocument();
   // Switching tab switches the record: the change is no longer on screen.
   expect(screen.queryByText("Registered filesystem")).not.toBeInTheDocument();

@@ -57,6 +57,21 @@ def _anthropic_body(name: str = "acme", **over) -> dict:
     return body
 
 
+def _create(c: TestClient, **over) -> str:
+    """Create the connection and return its **uid** — how every route below
+    addresses it (ADR resource-identity-is-an-immutable-uid).
+
+    The name goes on the wire once, at creation, and is never a path segment
+    again: ``provider`` lost its rename route precisely because what Coffer
+    writes into an agent's native config cites the uid, so the label is free to
+    move and nothing addressed by it may exist. The refusal these tests are
+    about still NAMES the connection, and that is asserted where it is raised.
+    """
+    r = c.post("/api/v1/providers", json=_anthropic_body(**over))
+    assert r.status_code == 201, r.text
+    return str(r.json()["uid"])
+
+
 @pytest.mark.acceptance(
     spec="provider-switching",
     scenario="correcting a mis-probed wire is refused while the connection is live",
@@ -77,20 +92,23 @@ def test_patch_refuses_to_move_the_wire_of_a_live_connection(tmp_path, monkeypat
             json={"type": "claude_code", "name": "cc", "config_dir": str(cfg)},
         )
         assert r.status_code == 201, r.text
-        c.post("/api/v1/providers", json=_anthropic_body())
-        assert c.post("/api/v1/providers/acme/activate").status_code == 200
+        uid = _create(c)
+        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
         projected = (cfg / "settings.json").read_text()
         assert json.loads(projected)["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
 
-        bad = c.patch("/api/v1/providers/acme", json={"protocol": "openai"})
+        bad = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"})
         assert bad.status_code == 409, bad.text
         envelope = bad.json()["error"]
         assert envelope["code"] == "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE"
+        # Addressed by uid, refused by name: the message is for a person, and a
+        # uid in it would be a dead end. This is the same assertion as before —
+        # only now it is the one place in the exchange the label appears.
         assert "acme" in envelope["message"]
         assert "use-builtin" in envelope["message"]
 
         # Nothing moved: not the stored wire, not the file the agent reads.
-        assert c.get("/api/v1/providers/acme").json()["protocol"] == "anthropic"
+        assert c.get(f"/api/v1/providers/{uid}").json()["protocol"] == "anthropic"
         assert (cfg / "settings.json").read_text() == projected
 
 
@@ -99,9 +117,9 @@ def test_patch_still_edits_other_fields_of_a_live_connection(tmp_path, monkeypat
     moves, or correcting a typo'd base URL would need a de-projection too."""
     app = _app(tmp_path, monkeypatch, 59820)
     with _client(app) as c:
-        c.post("/api/v1/providers", json=_anthropic_body())
-        assert c.post("/api/v1/providers/acme/activate").status_code == 200
-        r = c.patch("/api/v1/providers/acme", json={"base_url": "https://gw/anthropic/v2"})
+        uid = _create(c)
+        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        r = c.patch(f"/api/v1/providers/{uid}", json={"base_url": "https://gw/anthropic/v2"})
         assert r.status_code == 200, r.text
         assert r.json()["base_url"] == "https://gw/anthropic/v2"
 
@@ -118,10 +136,10 @@ def test_patch_accepts_the_current_wire_resent_on_a_live_connection(tmp_path, mo
     """
     app = _app(tmp_path, monkeypatch, 59830)
     with _client(app) as c:
-        c.post("/api/v1/providers", json=_anthropic_body())
-        assert c.post("/api/v1/providers/acme/activate").status_code == 200
+        uid = _create(c)
+        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
         r = c.patch(
-            "/api/v1/providers/acme",
+            f"/api/v1/providers/{uid}",
             json={"protocol": "anthropic", "base_url": "https://gw/anthropic/v3"},
         )
         assert r.status_code == 200, r.text
@@ -134,9 +152,9 @@ def test_patch_moves_the_wire_of_a_connection_that_is_not_live(tmp_path, monkeyp
     place, key and all, on a connection that projects into nothing."""
     app = _app(tmp_path, monkeypatch, 59840)
     with _client(app) as c:
-        c.post("/api/v1/providers", json=_anthropic_body())
-        ref = c.get("/api/v1/providers/acme").json()["credential_ref"]
-        r = c.patch("/api/v1/providers/acme", json={"protocol": "openai"})
+        uid = _create(c)
+        ref = c.get(f"/api/v1/providers/{uid}").json()["credential_ref"]
+        r = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"})
         assert r.status_code == 200, r.text
         assert r.json()["protocol"] == "openai"
         # The key stayed exactly where it was — that is what "in place" buys.
@@ -162,12 +180,14 @@ def test_the_wire_moves_again_once_the_agents_are_back_on_their_own_login(tmp_pa
             "/api/v1/agents",
             json={"type": "claude_code", "name": "cc", "config_dir": str(cfg)},
         )
-        c.post("/api/v1/providers", json=_anthropic_body())
-        c.post("/api/v1/providers/acme/activate")
-        assert c.patch("/api/v1/providers/acme", json={"protocol": "openai"}).status_code == 409
+        uid = _create(c)
+        c.post(f"/api/v1/providers/{uid}/activate")
+        assert c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"}).status_code == 409
 
+        # ``use-builtin`` still takes the WIRE, not a connection: it puts that
+        # wire's agents back on their own login whichever connection was on it.
         assert c.post("/api/v1/providers/use-builtin/anthropic").status_code == 200
-        ok = c.patch("/api/v1/providers/acme", json={"protocol": "openai"})
+        ok = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"})
         assert ok.status_code == 200, ok.text
         assert ok.json()["protocol"] == "openai"
         # And the config it had written is gone, so nothing was stranded.
@@ -184,8 +204,8 @@ def test_the_guard_covers_every_wire_not_just_the_two_that_reach_an_agent(
     rule is the same for every value, including ``unknown``."""
     app = _app(tmp_path, monkeypatch, 59860 + 10 * ["ollama", "unknown"].index(wire))
     with _client(app) as c:
-        c.post("/api/v1/providers", json=_anthropic_body())
-        assert c.post("/api/v1/providers/acme/activate").status_code == 200
-        bad = c.patch("/api/v1/providers/acme", json={"protocol": wire})
+        uid = _create(c)
+        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        bad = c.patch(f"/api/v1/providers/{uid}", json={"protocol": wire})
         assert bad.status_code == 409, bad.text
         assert bad.json()["error"]["code"] == "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE"

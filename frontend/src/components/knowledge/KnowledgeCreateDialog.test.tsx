@@ -46,6 +46,9 @@ describe("KnowledgeCreateDialog", () => {
 
   test("submitting sends the trimmed name and closes on success", async () => {
     createCollectionMock.mockResolvedValue({
+      // The daemon mints the collection's identity; the dialog only ever sends
+      // the name it was typed under.
+      uid: "kn-9b04",
       name: "team-notes",
       description: "what we know",
       source_count: 0,

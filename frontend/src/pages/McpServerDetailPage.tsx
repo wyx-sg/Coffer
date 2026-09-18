@@ -24,7 +24,7 @@ type TestResult = components["schemas"]["McpTestResultOut"];
 
 export function McpServerDetailPage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const navigate = useNavigate();
   // When navigated here from an agent's MCP servers tab, location.state carries
   // a return target, so "← back" leads to that agent rather than the list.
@@ -33,17 +33,17 @@ export function McpServerDetailPage() {
     ? { to: backState.backTo, label: t("common.backTo", { label: backState.backLabel ?? "" }) }
     : { to: "/mcp-servers", label: t("mcp.server.backToResources") };
   const qc = useQueryClient();
-  const { data: resource, isPending, error } = useResource("mcp_server", name);
+  const { data: resource, isPending, error } = useResource(uid);
   const {
     isPending: capsPending,
     data: capabilities,
     error: capsError,
-  } = useMcpCapabilities(name, !isPending && !error);
-  const { data: serverStatus } = useMcpServerStatus(name);
+  } = useMcpCapabilities(uid, !isPending && !error);
+  const { data: serverStatus } = useMcpServerStatus(uid);
   const del = useDeleteResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const runTest = useTestMcpServer(name);
+  const runTest = useTestMcpServer(uid);
 
   // Derive the test outcome straight from the mutation rather than mirroring
   // it into separate state: a transport failure becomes a failing result.
@@ -62,7 +62,7 @@ export function McpServerDetailPage() {
   // useDeleteResource already refreshes the resources cache; the page only
   // has to leave once the server is gone.
   const handleDelete = () => {
-    del.mutate({ kind: "mcp_server", name }, { onSuccess: () => navigate("/mcp-servers") });
+    del.mutate({ kind: "mcp_server", uid }, { onSuccess: () => navigate("/mcp-servers") });
   };
 
   if (isPending) {
@@ -121,13 +121,13 @@ export function McpServerDetailPage() {
       ) : null}
 
       <McpServerDetailTabs
-        serverName={name}
+        serverUid={uid}
         capabilities={capabilities}
         capsError={capsError}
         config={resource.config}
         isCapsPending={capsPending}
         onRefresh={() => {
-          void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(name) });
+          void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(uid) });
         }}
       />
 
@@ -137,7 +137,7 @@ export function McpServerDetailPage() {
           setDeleteOpen(o);
           if (!o) del.reset();
         }}
-        title={t("mcp.server.deleteConfirmTitle", { name })}
+        title={t("mcp.server.deleteConfirmTitle", { name: resource.name })}
         description={t("mcp.server.deleteConfirmBody")}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}

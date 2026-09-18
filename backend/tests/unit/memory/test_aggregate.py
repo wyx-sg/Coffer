@@ -37,7 +37,6 @@ from coffer.application.memory.aggregate import Placement, SourceFailure, run_ag
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER, Note, Origin
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.memory import paths, source_state, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
 from tests.unit.memory.conftest import (
@@ -171,7 +170,7 @@ async def test_a_dated_scratch_directory_creates_no_partition_of_its_own(
 
     assert result.partitions == ("global",)
     assert "some-topic" not in store.list_partitions()
-    assert [r[1] for r in resources.rows if r[0] == KIND_MEMORY] == ["global"]
+    assert [r.name for r in await resources.list(kind=KIND_MEMORY)] == ["global"]
     # Held for the distil pass to judge on its merits, not thrown away.
     assert len(list_raw_entries("global")) == 1
 
@@ -544,7 +543,7 @@ async def test_a_new_partition_is_registered_with_its_repository_and_no_scope(
 
     await _aggregate(resources, {"codex": reader})
 
-    row = await resources.get(ResourceRef(KIND_MEMORY, "coffer"))
+    row = resources.by_name(KIND_MEMORY, "coffer")
     assert row.config["repository_path"] == str(root)
     assert row.config["repository_key"] == "remote:github.com/owner/coffer"
     assert row.scope is None
@@ -581,14 +580,14 @@ async def test_a_partition_two_agents_filled_is_one_row_serving_both(
     readers = {"codex": codex, "claude_code": claude}
     await _aggregate(resources, readers)
 
-    ref = ResourceRef(KIND_MEMORY, "coffer")
-    assert (await resources.get(ref)).scope is None
+    uid = resources.uid_of(KIND_MEMORY, "coffer")
+    assert (await resources.get(uid)).scope is None
     assert {e.agent for e in list_raw_entries("coffer")} == {"codex", "claude-code"}
 
     codex.set_digest("/cx", "/cx/memories/MEMORY.md", "d2")
     await _aggregate(resources, readers)
 
-    row = await resources.get(ref)
+    row = await resources.get(uid)
     assert row.scope is None
     assert row.config["repository_path"] == str(root)
 
@@ -661,7 +660,7 @@ async def test_a_disabled_partition_is_not_served_and_an_enabled_one_is_served_t
         store.write_note(
             Note(slug="n", title="N", description="d", type=TYPE_PROJECT, body="b", partition=name)
         )
-    resources.rows[(KIND_MEMORY, "retired-project")].enabled = False
+    resources.by_name(KIND_MEMORY, "retired-project").enabled = False
     service = memory_service(resources, {})  # type: ignore[arg-type]
 
     assert await service.enabled_partitions() == ["coffer"]

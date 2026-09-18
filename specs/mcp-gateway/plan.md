@@ -122,7 +122,7 @@ backend/coffer/
 │   │   └── mcp/
 │   │       ├── capability_routes.py      # capability list / enable / disable / refresh
 │   │       ├── capability_views.py       # the view models behind them
-│   │       ├── server_test_routes.py     # POST /{name}/test
+│   │       ├── server_test_routes.py     # POST /{uid}/test
 │   │       ├── invocation_routes.py      # invocation log query
 │   │       └── protocol_routes.py        # /mcp endpoint (JSON-RPC over HTTP/SSE)
 │   ├── cli/

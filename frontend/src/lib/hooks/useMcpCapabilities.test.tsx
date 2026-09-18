@@ -40,7 +40,7 @@ describe("useMcpCapabilities", () => {
       GET: vi.fn().mockResolvedValue({ data: sampleCapabilities, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpCapabilities("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpCapabilities("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.tools).toHaveLength(1);
     expect(result.current.data?.tools?.[0].original_name).toBe("read_file");
@@ -54,22 +54,25 @@ describe("useMcpCapabilities", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpCapabilities("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpCapabilities("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("upstream down");
   });
 
-  test("passes the server name in the path params", async () => {
+  test("passes the server uid in the path params", async () => {
     const getMock = vi.fn().mockResolvedValue({ data: sampleCapabilities, error: undefined });
     getApiClientMock.mockReturnValue({ GET: getMock } as unknown as ReturnType<
       typeof getApiClient
     >);
 
-    const { result } = renderHook(() => useMcpCapabilities("github"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpCapabilities("u-github"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    // The gateway route is addressed by the server's uid, never by the label
+    // the user sees — the uid deliberately does not spell "github", so a hook
+    // that slipped back to passing a name could not make this pass.
     expect(getMock).toHaveBeenCalledWith(
-      "/resources/mcp_server/{name}/capabilities",
-      expect.objectContaining({ params: { path: { name: "github" } } }),
+      "/resources/mcp_server/{uid}/capabilities",
+      expect.objectContaining({ params: { path: { uid: "u-github" } } }),
     );
   });
 
@@ -79,7 +82,7 @@ describe("useMcpCapabilities", () => {
       typeof getApiClient
     >);
 
-    renderHook(() => useMcpCapabilities("fs", false), { wrapper: wrapper() });
+    renderHook(() => useMcpCapabilities("u-filesystem", false), { wrapper: wrapper() });
     expect(getMock).not.toHaveBeenCalled();
   });
 
@@ -96,7 +99,7 @@ describe("useMcpCapabilities", () => {
       ),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpCapabilities("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpCapabilities("u-filesystem"), { wrapper: wrapper() });
     // While the GET promise is unresolved, react-query reports isPending=true
     // (alias for isLoading in v5). This pins the loading branch so a
     // refactor that drops the `enabled` gate is caught.
@@ -112,7 +115,7 @@ describe("useMcpCapabilities", () => {
       GET: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpCapabilities("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpCapabilities("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("empty capability response");
   });
@@ -125,7 +128,7 @@ describe("useMcpCapabilities", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpCapabilities("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpCapabilities("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     // The hook coerces missing code/message via `??` — assert the
     // default-branch message lands rather than the user-facing copy.

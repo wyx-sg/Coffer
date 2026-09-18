@@ -8,36 +8,35 @@ import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
 import type { ChannelDelivery } from "@/lib/api/channels";
 
-import { channelSecretRef, type ChannelPlan } from "./schema";
-
-// The resource kind for channels. Inlined (not imported from useChannels) so
-// this module stays free of a hook → editChannel → hook import cycle.
-const CHANNEL_KIND = "channel";
+import { channelSecretRef, type ChannelEditPlan } from "./schema";
 
 async function writeSecret(ref: string, value: string): Promise<void> {
   const { error } = await getApiClient().POST("/credentials", { body: { ref, value } });
   if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
 }
 
-async function patchConfig(name: string, config: Record<string, unknown>): Promise<void> {
-  const { error } = await getApiClient().PATCH("/resources/{kind}/{name}", {
-    params: { path: { kind: CHANNEL_KIND, name } },
+async function patchConfig(uid: string, config: Record<string, unknown>): Promise<void> {
+  const { error } = await getApiClient().PATCH("/resources/{uid}", {
+    params: { path: { uid } },
     body: { config },
   });
   if (error) throwApiError(error, "INTERNAL_ERROR", "update failed");
 }
 
 /**
- * Rotate the changed secrets, then PATCH the config. Returns the name.
- * Secrets-first matches registration: a config that references a ref whose
- * value just changed must see the new value, never a stale one.
+ * Rotate the changed secrets, then PATCH the config. Returns the uid it wrote
+ * and the name to say it wrote — the caller needs both, and they are no longer
+ * the same string. Secrets-first matches registration: a config that references
+ * a ref whose value just changed must see the new value, never a stale one.
  */
-export async function applyChannelEdit(plan: ChannelPlan): Promise<string> {
+export async function applyChannelEdit(
+  plan: ChannelEditPlan,
+): Promise<{ uid: string; name: string }> {
   for (const s of plan.secrets) {
     await writeSecret(s.ref, s.value);
   }
-  await patchConfig(plan.name, plan.config);
-  return plan.name;
+  await patchConfig(plan.uid, plan.config);
+  return { uid: plan.uid, name: plan.name };
 }
 
 /** Mutable edit-form inputs by channel type (secrets blank = "leave as-is"). */
@@ -61,6 +60,10 @@ interface ChannelEditValues {
 }
 
 export interface ChannelEditInput {
+  /** The channel's identity — what the PATCH is addressed to. */
+  uid: string;
+  /** Its label. Used only to name the channel in the toast — never to address
+   *  it, and (since refs became opaque) never to mint one either. */
   name: string;
   /** The channel's current resource config (the source of truth for refs). */
   config: Record<string, unknown>;
@@ -76,7 +79,7 @@ export interface ChannelEditInput {
  * Pure (no network), mirroring planChannel: the config is fully assembled
  * before any side effect runs. A blank secret value writes no credential.
  */
-export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
+export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   const { config, values } = input;
   const secrets: { ref: string; value: string }[] = [];
   const nextConfig: Record<string, unknown> = {
@@ -103,19 +106,22 @@ export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
       delete nextConfig.signing_secret_ref;
       delete nextConfig.public_base_url;
       delete nextConfig.tunnel_token_ref;
-      return { name: input.name, config: nextConfig, secrets };
+      return { uid: input.uid, name: input.name, config: nextConfig, secrets };
     }
     if (values.public_base_url !== undefined) {
       // Blank clears the stored URL (backend normalizes "" → null).
       nextConfig.public_base_url = values.public_base_url.trim() || null;
     }
     if (values.signing_secret) {
-      // Reuse the channel's ref, or mint the canonical one — the latter is the
-      // switch back to webhook, where the reference was dropped.
+      // Reuse the channel's ref, or mint a fresh one — the latter is the
+      // switch back to webhook, where the reference was dropped. Reuse is not
+      // an optimisation: minting a second address for a secret that already
+      // has one moves it, and a move crosses the sync remote as a delete plus
+      // an add of something nothing recognises.
       const ref =
         typeof config.signing_secret_ref === "string" && config.signing_secret_ref
           ? config.signing_secret_ref
-          : channelSecretRef(input.name, "signing-secret");
+          : channelSecretRef("signing-secret");
       nextConfig.signing_secret_ref = ref;
       secrets.push({ ref, value: values.signing_secret });
     }
@@ -125,11 +131,11 @@ export function planChannelEdit(input: ChannelEditInput): ChannelPlan {
       const ref =
         typeof config.tunnel_token_ref === "string" && config.tunnel_token_ref
           ? config.tunnel_token_ref
-          : channelSecretRef(input.name, "tunnel-token");
+          : channelSecretRef("tunnel-token");
       nextConfig.tunnel_token_ref = ref;
       secrets.push({ ref, value: values.tunnel_token.trim() });
     }
   }
 
-  return { name: input.name, config: nextConfig, secrets };
+  return { uid: input.uid, name: input.name, config: nextConfig, secrets };
 }

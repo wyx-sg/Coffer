@@ -15,6 +15,20 @@ from pydantic import BaseModel
 
 CapabilityType = Literal["tool", "resource", "prompt"]
 
+#: The value :class:`MCPInvocation.resource_uid` carries for one of Coffer's own
+#: ``coffer__*`` built-in tools. Built-ins share the invocation log with upstream
+#: servers so retention and the activity surfaces work uniformly, but there is no
+#: ``mcp_server`` row behind them and therefore no uid to record. A real uid is a
+#: 32-character ``uuid4().hex``, so this literal can never collide with one.
+BUILTIN_SERVER_UID = "coffer"
+
+#: The prefix migration 0097 gave an invocation whose server had already been
+#: deleted when the log was re-keyed from names to uids. The identity of such a
+#: row was never recorded and cannot be recovered, so the label it *did* carry is
+#: preserved behind a marker that is visibly not a uid — the history survives, the
+#: row joins to no resource, and nothing mistakes the leftover for an identity.
+DELETED_SERVER_UID_PREFIX = "deleted:"
+
 
 class MCPTool(BaseModel):
     name: str
@@ -60,7 +74,15 @@ class MCPInvocation:
 
     id: int | None
     timestamp: datetime
-    resource_name: str
+    #: WHICH server was invoked, by its immutable identity rather than by the
+    #: label it happened to carry at the time (ADR resource-identity-is-an-immutable-uid).
+    #: The log outlives a rename, so a name here would have split one server's
+    #: history in two at the moment the user relabelled it — and joined two
+    #: unrelated servers' histories together if a later registration reused the
+    #: freed name. Two reserved non-uid values exist and are documented at the
+    #: top of this module: ``BUILTIN_SERVER_UID`` and the
+    #: ``DELETED_SERVER_UID_PREFIX`` form.
+    resource_uid: str
     capability_type: CapabilityType
     capability_key: str
     duration_ms: int

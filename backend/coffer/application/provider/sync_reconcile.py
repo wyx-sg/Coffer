@@ -59,7 +59,9 @@ class ProviderProjectionReconcile:
                 agents.append(row)
             else:
                 errors.append(f"agent {row.name}: config dir missing on this machine; skipped")
-        active: dict[AgentType, tuple[str, ProviderConfig]] = {}
+        # Keyed by type, holding the whole connection row: the projector needs
+        # its uid (the ``apiKeyHelper`` resolves that) as well as its name.
+        active: dict[AgentType, tuple[Resource, ProviderConfig]] = {}
         # Sorted by name so the winner under a (transient) double-active state
         # is DETERMINISTIC: first name wins.
         for row in sorted(await self._providers.list(), key=lambda r: r.name):
@@ -72,14 +74,14 @@ class ProviderProjectionReconcile:
                 continue
             # The agents this connection reaches: its framework scope, minus a
             # disabled or keyless connection, which reaches none (ADR per-agent-resource-scope).
-            for agent_type in projection_targets(row, cfg):
-                held = active.setdefault(agent_type, (row.name, cfg))
-                if held[0] != row.name:
+            for agent_type in projection_targets(row, cfg, agents):
+                held = active.setdefault(agent_type, (row, cfg))
+                if held[0].uid != row.uid:
                     # An import can transiently merge two activations;
                     # surface it — re-activate one connection to settle.
                     errors.append(
                         f"{agent_type.value}: multiple active connections "
-                        f"({held[0]}, {row.name}); projecting {held[0]}"
+                        f"({held[0].name}, {row.name}); projecting {held[0].name}"
                     )
         for agent_type in AgentType:
             if not self._projector.agents_of_type(agents, agent_type):
@@ -87,8 +89,8 @@ class ProviderProjectionReconcile:
             try:
                 entry = active.get(agent_type)
                 if entry is not None:
-                    name, cfg = entry
-                    self._projector.project_type(name, cfg, agents, agent_type)
+                    connection, cfg = entry
+                    self._projector.project_type(connection, cfg, agents, agent_type)
                 else:
                     # No active connection for this type: converge on built-in
                     # (removes only Coffer-managed keys; no-op when absent).

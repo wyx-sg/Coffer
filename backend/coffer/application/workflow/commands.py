@@ -195,7 +195,7 @@ class RunCommands:
     async def require_run(self, run_id: str) -> RunRow:
         run = await self._runs.get_run(run_id)
         if run is None:
-            raise ResourceNotFound(KIND_RUN, run_id)
+            raise ResourceNotFound.named(KIND_RUN, run_id)
         return run
 
     def guard(self, run: RunRow, attempted: str, version: int | None) -> RunStatus:

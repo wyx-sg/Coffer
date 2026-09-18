@@ -28,6 +28,9 @@ import type { AdoptMcpEntryBody, McpEntryOut } from "@/lib/api/agents";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useAdoptMcpEntry } from "@/lib/hooks/useAgents";
 
+/** Where an adopted entry's secrets are stored — the agent's NAME, for the
+ *  reason spelled out in AgentMcpServersBulkActions: a credential ref is an
+ *  address a person reads, minted once, and never looked up by name. */
 function defaultSecretRefs(agentName: string, entry: McpEntryOut): Record<string, string> {
   return Object.fromEntries(
     entry.secret_keys.map((key) => [key, `mcp/${agentName}/${entry.name}/${key}`]),
@@ -35,11 +38,15 @@ function defaultSecretRefs(agentName: string, entry: McpEntryOut): Record<string
 }
 
 export function AgentAdoptMcpDialog({
+  agentUid,
   agentName,
   entry,
   open,
   onOpenChange,
 }: {
+  /** The agent being adopted from — what the adopt request is addressed to. */
+  agentUid: string;
+  /** Its label, which the minted credential refs spell. */
   agentName: string;
   entry: McpEntryOut;
   open: boolean;
@@ -47,7 +54,7 @@ export function AgentAdoptMcpDialog({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const adopt = useAdoptMcpEntry(agentName);
+  const adopt = useAdoptMcpEntry(agentUid);
 
   const [secrets, setSecrets] = useState<Record<string, string>>(() =>
     defaultSecretRefs(agentName, entry),

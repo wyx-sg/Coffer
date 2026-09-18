@@ -1,70 +1,72 @@
-"""Giving a resource a different name (spec resource-framework FR-011).
+"""Rename path for ``ResourceService.rename``.
 
-Split out of ``ResourceService`` for the same reason ``resource_scope_ops`` and
-``resource_delete_ops`` were: that class is the lifecycle's front door, and it
-stays under its line ceiling by keeping each operation's reasoning in its own
-module rather than growing a longer method for each.
+Extracted to keep ``resource_service.py`` under the file-size limit, beside
+``resource_scope_ops.py`` and ``resource_delete_ops.py``: a free function that
+takes the ``ResourceService`` instance and reaches into its (private)
+attributes, conceptually private to the service.
 
-The reasoning here is one rule with two halves — which kinds may be renamed
-through the kind-agnostic surface at all, and what a rename must leave alone.
+A rename is one column. What lives here is not the write but everything that
+has to be true around it — the two name rules, the collision check, and the one
+hook a kind gets when its name is also a directory.
 """
 
 from __future__ import annotations
 
+import dataclasses
+import inspect
 from typing import TYPE_CHECKING
 
+from coffer.application.resource_kind_ops import check_name
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ConfigValidationError, RenameNotSupported
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.errors import ResourceAlreadyExists
+from coffer.domain.resource import Kind, Resource
 
-if TYPE_CHECKING:  # pragma: no cover - a cycle at runtime, types only
+if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
+
+
+async def _fire(kind_def: Kind, resource: Resource, new_name: str) -> None:
+    if kind_def.on_rename is None:
+        return
+    result = kind_def.on_rename(resource, new_name)
+    if inspect.isawaitable(result):
+        await result
 
 
 async def rename(
     service: ResourceService,
-    ref: ResourceRef,
+    uid: str,
     new_name: str,
     actor: str,
-    *,
-    allow_lifecycle_kind: bool = False,
 ) -> Resource:
-    """Move a resource to ``new_name``.
-
-    Its own operation rather than an ``update_config`` on the name because
-    a name is not config — but all it does is move the row. The audit trail
-    needs no repointing: rows carry the resource's stable id, so history
-    follows it while each row keeps saying what the resource was called
-    when that event happened. The rename is recorded as its own event.
-
-    The KIND decides whether the KIND-AGNOSTIC surface may do it (FR-011).
-    A name is a label, but it is also this framework's address, so a kind
-    whose name is written out somewhere this move cannot reach — into
-    another tool's config, into a folder on disk — would be left with that
-    reference pointing at nothing. Those kinds declare no rename here and
-    rename through their own service, which passes
-    ``allow_lifecycle_kind`` and then repairs what it knows about. Exactly
-    the seam ``update_config`` already draws for the same reason.
-    """
-    kind_def = service._require_kind(ref.kind)
-    if not kind_def.supports_rename and not allow_lifecycle_kind:
-        raise RenameNotSupported(ref.kind)
-    # Same CODE-030 name check ``register`` applies, BEFORE any DB write.
-    if kind_def.validate_name is not None:
-        try:
-            kind_def.validate_name(new_name)
-        except ValueError as e:
-            raise ConfigValidationError(str(e)) from e
-    before = await service.get(ref)  # 404 for an absent resource, before anything moves
-    if before.name == new_name:
-        # The name it already has renames nothing and records nothing — a
-        # dialog submitted with that field untouched has not renamed.
+    """Change a resource's LABEL; see ``ResourceService.rename`` for the contract."""
+    before = await service.get(uid)  # 404 for an absent resource, before anything moves
+    if new_name == before.name:
+        # Idempotent, and silent: a client re-sending the same PATCH should not
+        # litter the trail with renames that renamed nothing.
         return before
-    renamed = await service._repo.rename(ref, new_name)
+    kind_def = service._require_kind(before.kind)
+    check_name(kind_def, new_name)
+    # Checked explicitly, before any write, so a collision is a clean 409 that
+    # has moved nothing — neither the row nor a kind's directory. The
+    # (kind, name) unique constraint still backs this up for a racing writer;
+    # ``ResourceRepo.rename`` translates it into the same error.
+    if await service._repo.find_by_name(before.kind, new_name) is not None:
+        raise ResourceAlreadyExists(before.kind, new_name)
+    await _fire(kind_def, before, new_name)
+    try:
+        renamed = await service._repo.rename(uid, new_name)
+    except ResourceAlreadyExists:
+        # The racing writer the pre-check cannot exclude. The hook has already
+        # moved the kind's directory, so ask it to move it back before the
+        # failure propagates — otherwise the row keeps its old name while its
+        # directory sits under the new one.
+        await _fire(kind_def, dataclasses.replace(before, name=new_name), before.name)
+        raise
     await service._audit.record(
         AuditEventType.RESOURCE_RENAMED.value,
-        ref=ResourceRef(ref.kind, new_name),
+        resource=renamed,
         actor=actor,
-        details={"from": ref.name, "to": new_name},
+        details={"from": before.name, "to": new_name},
     )
     return renamed

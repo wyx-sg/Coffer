@@ -1,6 +1,10 @@
 // frontend/src/pages/AgentDetailPage.test.tsx
+//
+// The page is reached as `/agents/:uid`, so the fixture agent's uid (`u-cur`)
+// is deliberately not its name (`cur`): the heading reads the name, and every
+// request the page and its dialogs make is addressed to the uid.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { AgentDetailPage } from "./AgentDetailPage";
@@ -20,10 +24,25 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
   useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false, error: null })),
 }));
+// The edit form renames through the kind-agnostic resource PATCH, so that
+// module is stubbed too. All four writes are declared, not just the rename:
+// a factory that omitted one would fail any render that reached for it.
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDisableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDeleteResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useRenameResource: vi.fn(() => ({
+    mutateAsync: vi.fn().mockResolvedValue({}),
+    isPending: false,
+    error: null,
+  })),
+}));
 const hooks = await import("@/lib/hooks/useAgents");
 const useAgentMock = vi.mocked(hooks.useAgent);
+const resourceHooks = await import("@/lib/hooks/useResourceMutations");
 
 const AGENT = {
+  uid: "u-cur",
   name: "cur",
   type: "codex" as const,
   config_dir: "/home/u/.codex",
@@ -41,13 +60,13 @@ function mockAgentLoaded() {
   } as unknown as ReturnType<typeof hooks.useAgent>);
 }
 
-function renderAt(path = "/agents/cur") {
+function renderAt(path = "/agents/u-cur") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route path="/agents/:name" element={<AgentDetailPage />} />
+          <Route path="/agents/:uid" element={<AgentDetailPage />} />
           <Route path="/agents" element={<div>agents list</div>} />
         </Routes>
       </MemoryRouter>
@@ -77,7 +96,7 @@ describe("AgentDetailPage header and tab routing", () => {
 
   test("?tab= opens that tab and clicking a tab writes it to the URL", () => {
     mockAgentLoaded();
-    renderAt("/agents/cur?tab=plugins");
+    renderAt("/agents/u-cur?tab=plugins");
     expect(screen.getByRole("tab", { name: /^plugins$/i })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -92,7 +111,7 @@ describe("AgentDetailPage header and tab routing", () => {
 
   test("an unknown ?tab= falls back to the overview", () => {
     mockAgentLoaded();
-    renderAt("/agents/cur?tab=nope");
+    renderAt("/agents/u-cur?tab=nope");
     expect(screen.getByRole("tab", { name: /overview/i })).toHaveAttribute("aria-selected", "true");
   });
 });
@@ -154,13 +173,94 @@ describe("AgentDetailPage", () => {
     expect(screen.getByRole("heading", { name: /edit agent/i })).toBeInTheDocument();
   });
 
+  test("the edit form renames first, then PATCHes the agent's own fields", async () => {
+    // The name is a LABEL now, so the form lets the user change it — and a
+    // rename is the kind-agnostic `PATCH /resources/{uid}` every kind renames
+    // through, not the agent kind's own PATCH. Both are addressed to the uid,
+    // and the rename goes first: it is the one write that can be refused for a
+    // reason the user has to fix, and a refusal must leave the rest unapplied.
+    mockAgentLoaded();
+    const order: string[] = [];
+    const renameAsync = vi.fn(async () => {
+      order.push("rename");
+    });
+    const patchAsync = vi.fn(async () => {
+      order.push("patch");
+    });
+    vi.mocked(resourceHooks.useRenameResource).mockReturnValue({
+      mutateAsync: renameAsync,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof resourceHooks.useRenameResource>);
+    vi.mocked(hooks.usePatchAgent).mockReturnValue({
+      mutateAsync: patchAsync,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.usePatchAgent>);
+
+    renderAt();
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "renamed" } });
+    fireEvent.change(within(dialog).getByLabelText("Description"), {
+      target: { value: "the one I use" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    expect(renameAsync).toHaveBeenCalledWith({ kind: "agent", uid: "u-cur", name: "renamed" });
+    // The second write only goes out once the rename has resolved, so it is
+    // awaited rather than asserted on the same tick.
+    await waitFor(() =>
+      expect(patchAsync).toHaveBeenCalledWith({
+        uid: "u-cur",
+        body: { description: "the one I use" },
+      }),
+    );
+    expect(order).toEqual(["rename", "patch"]);
+  });
+
+  test("an unchanged name is not sent as a rename", async () => {
+    // Every save would otherwise carry a rename to the name the agent already
+    // has — a write with nothing to write, and a 409 waiting to happen the day
+    // the daemon starts treating "taken by me" as taken.
+    mockAgentLoaded();
+    const renameAsync = vi.fn().mockResolvedValue({});
+    const patchAsync = vi.fn().mockResolvedValue({});
+    vi.mocked(resourceHooks.useRenameResource).mockReturnValue({
+      mutateAsync: renameAsync,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof resourceHooks.useRenameResource>);
+    vi.mocked(hooks.usePatchAgent).mockReturnValue({
+      mutateAsync: patchAsync,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof hooks.usePatchAgent>);
+
+    renderAt();
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Description"), {
+      target: { value: "only this changed" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(patchAsync).toHaveBeenCalledWith({
+        uid: "u-cur",
+        body: { description: "only this changed" },
+      }),
+    );
+    expect(renameAsync).not.toHaveBeenCalled();
+  });
+
   test("?tab= opens that tab, so returning from a row's page keeps your place", () => {
     // Memory and Conversations rows open their own detail pages; the back link
     // on those pages carries ?tab= so the reader lands where they left rather
     // than on Overview.
     mockAgentLoaded();
 
-    renderAt("/agents/cur?tab=conversations");
+    renderAt("/agents/u-cur?tab=conversations");
 
     expect(screen.getByRole("tab", { name: /conversations/i })).toHaveAttribute(
       "data-state",

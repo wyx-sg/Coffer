@@ -41,10 +41,10 @@ def spec_doc() -> dict[str, Any]:
 @pytest.mark.parametrize(
     "path,method",
     [
-        ("/api/v1/channels/{name}/pairing-code", "post"),
-        ("/api/v1/channels/{name}/status", "get"),
-        ("/api/v1/channels/{name}/notify", "post"),
-        ("/api/v1/channels/{name}/events", "post"),
+        ("/api/v1/channels/{uid}/pairing-code", "post"),
+        ("/api/v1/channels/{uid}/status", "get"),
+        ("/api/v1/channels/{uid}/notify", "post"),
+        ("/api/v1/channels/{uid}/events", "post"),
     ],
 )
 def test_channel_path_and_method_exists(

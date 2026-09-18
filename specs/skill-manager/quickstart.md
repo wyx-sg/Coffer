@@ -41,18 +41,18 @@ so a skill uses the same commands every scoped kind does — unscoped means ever
 agent:
 
 ```bash
-coffer scope show skill:my-skill
-coffer scope set skill:my-skill --agents codex        # only codex
-coffer scope set skill:my-skill --no-agents           # dormant: no agent
-coffer scope clear skill:my-skill                     # back to every agent
+coffer scope show skill my-skill
+coffer scope set skill my-skill --agents codex        # only codex
+coffer scope set skill my-skill --no-agents           # dormant: no agent
+coffer scope clear skill my-skill                     # back to every agent
 ```
 
 Disabling the skill itself takes it away from every agent at once, and
 re-enabling gives it back to whatever its scope grants:
 
 ```bash
-coffer resource disable skill:my-skill
-coffer resource enable skill:my-skill
+coffer resource disable skill my-skill
+coffer resource enable skill my-skill
 coffer skill list --json | jq '.items[] | select(.name=="my-skill") | {enabled, scope, bindings}'
 ```
 
@@ -142,10 +142,17 @@ for the file and its containing folder, for anything bigger than a small edit.
 The same reads and the same write are available over the REST API, and each
 entry carries its absolute on-disk path.
 
+The routes address a skill by its immutable `uid`, not by its name, so look the
+uid up once — the CLI is what takes names:
+
+```bash
+SKILL_UID=$(coffer skill list --json | jq -r '.[] | select(.name=="my-skill") | .uid')
+```
+
 List the master folder as a recursive tree:
 
 ```bash
-curl -s http://127.0.0.1:8000/api/v1/skills/my-skill/files \
+curl -s "http://127.0.0.1:8000/api/v1/skills/$SKILL_UID/files" \
   -H "X-Coffer-Token: $COFFER_TOKEN" | jq
 ```
 
@@ -192,7 +199,7 @@ Read one file's contents (the `path` query parameter is relative to the
 master folder root):
 
 ```bash
-curl -s "http://127.0.0.1:8000/api/v1/skills/my-skill/files/content?path=SKILL.md" \
+curl -s "http://127.0.0.1:8000/api/v1/skills/$SKILL_UID/files/content?path=SKILL.md" \
   -H "X-Coffer-Token: $COFFER_TOKEN" | jq
 ```
 

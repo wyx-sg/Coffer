@@ -129,8 +129,8 @@ Two things deliberately stay put, and both are the same idea: what a machine *do
 **Reach does not sync.** A resource's on/off switch and its agent scope — the reach button in the web UI, the one labelled with where the resource currently reaches, whose panel offers Disabled, Every agent and Only selected agents; and `coffer resource enable|disable` / `coffer scope set` on the command line — are set on the machine they apply to. Every machine sets its own, and a converge round never reads or writes either one. So "this work MCP server belongs on the desktop, not the laptop" is said at the laptop:
 
 ```bash
-coffer resource disable mcp_server:work-jira      # on the laptop
-coffer scope set mcp_server:work-jira --agents claude-code
+coffer resource disable mcp_server work-jira      # on the laptop
+coffer scope set mcp_server work-jira --agents claude-code
 ```
 
 The server itself still converges to both machines — it is registered and visible everywhere, and a change to its configuration reaches both — it simply does not **activate** on the laptop, and the gateway exposes none of its tools to any session there. The desktop is untouched, and stays untouched, because nothing about reach is ever published.

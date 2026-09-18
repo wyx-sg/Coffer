@@ -3,7 +3,7 @@
 Every agent-workspace operation exists on BOTH REST and CLI (spec agent-registry FR-044/FR-046);
 this is the CLI half of
 
-  ``GET /agents/{name}/native-memory`` → ``coffer agent native-memory <name>``
+  ``GET /agents/{uid}/native-memory`` → ``coffer agent native-memory <name>``
   ``GET .../native-memory/files``      → ``coffer agent native-memory-files``
 
 Read-only, like the routes: it lists the stores, prints one store's files or one
@@ -25,6 +25,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 _console = Console()
 
@@ -41,10 +42,8 @@ def native_memory(
     """List the agent's OWN native per-project memory stores (read-only)."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}/native-memory")
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.get(f"/agents/{uid}/native-memory")
         _cli_client.check(r, verbose=_verbose(ctx))
     items = r.json()["items"]
     if output_json:
@@ -73,16 +72,16 @@ def native_memory_files(
     """Show one native-memory store: its files, or one file's contents."""
     c, _info = _cli_client.client_or_exit()
     with c:
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
         if path is None:
-            r = c.get(f"/agents/{name}/native-memory/files", params={"dir": memory_dir})
+            r = c.get(f"/agents/{uid}/native-memory/files", params={"dir": memory_dir})
         else:
             r = c.get(
-                f"/agents/{name}/native-memory/files/content",
+                f"/agents/{uid}/native-memory/files/content",
                 params={"dir": memory_dir, "path": path},
             )
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        # A 404 here is about the ``dir``/``path``, not the agent: that was
+        # already resolved above.
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     if output_json:

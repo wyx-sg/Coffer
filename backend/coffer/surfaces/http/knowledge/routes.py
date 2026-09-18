@@ -24,6 +24,17 @@ the person who owns the vault, so there is nothing for a caller identity to
 narrow. ``enabled`` is the whole of the gate, and it is the registry's, applied
 the same way on every surface.
 
+**A collection is addressed by uid; a file is addressed by path.** ``curate``
+names the collection Resource's immutable uid, because a pass takes minutes and
+must keep meaning the same collection across a rename (ADR
+resource-identity-is-an-immutable-uid). The file routes below are the deliberate
+exception: their ``path`` and ``collection`` arguments are *filesystem* paths,
+whose first segment is the collection's directory — and a directory is named by
+the label, not by an identity. Converting them would mean asking a caller for a
+uid and then translating it straight back into the name the disk actually uses,
+which is the extra vocabulary this change exists to remove. Each of them says so
+where it takes the argument.
+
 Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``
 — including ``UploadTooLarge`` (FR-019), which ``IngestService`` itself raises
 before doing any conversion or write. ``UnsupportedDocument`` is the one
@@ -112,6 +123,11 @@ async def read_tree(
     # The lane is part of the path — ``shopee/sources`` or ``shopee/topics``.
     # The page asks twice, once per tree (FR-040), rather than this route
     # inventing a lane parameter the path already carries.
+    #
+    # A path, so its first segment is the collection's directory NAME and stays
+    # one: this addresses a place on disk, and the disk knows the label. A uid
+    # here would have to be translated back into that same name before anything
+    # could be opened.
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> TreeOut:
@@ -127,6 +143,8 @@ async def read_tree(
 
 @router.get("/file", response_model=FileOut)
 async def read_file(
+    # A filesystem path, name-led like ``tree``'s above — see the module
+    # docstring on why the file family is not addressed by uid.
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> FileOut:
@@ -168,6 +186,7 @@ async def write_file(
 
 @router.delete("/file", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_file(
+    # A filesystem path, name-led like ``tree``'s above.
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
@@ -179,13 +198,19 @@ async def delete_file(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/collections/{name}/curate", response_model=CurationOut)
+@router.post("/collections/{uid}/curate", response_model=CurationOut)
 async def curate(
-    name: str,
+    uid: str,
     body: CurationRequest | None = None,
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> CurationOut:
+    # The collection is named by its uid, and the pass resolves the row itself
+    # — so this route does no lookup of its own and there is no window in which
+    # the label it read and the label the pass reads disagree. An unknown uid
+    # reaches the client as the same 404 every other route on this family gives,
+    # raised where the row is actually needed.
+    #
     # Two different guards, in this order on purpose.
     #
     # The registry claim is first, and it is about THIS collection: a pass
@@ -194,29 +219,39 @@ async def curate(
     # rather than queued behind it (FR-030) — the caller asked to start a pass,
     # and no pass is going to start. Claiming before the lock is what makes
     # that refusal immediate instead of a request that blocks until the first
-    # pass finishes and then runs anyway.
+    # pass finishes and then runs anyway. The claim is keyed on the **uid**,
+    # which is what the background sweep claims too (``curate_worker``): two
+    # writers over one directory only collide if both name it the same way, and
+    # a label either of them read moments earlier is exactly what can differ.
     #
     # The vault-write lock is second, and it is about the whole vault: a pass
     # and a converge round both rewrite vault content, and an export caught
     # half-way through a rewrite is a torn snapshot git reads as a deliberate
     # change (FR-031, spec vault-sync "## Unattended rewriters").
-    with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, name):
+    with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, uid):
         async with vault_write_lock():
             result = await get_curation_runner()(
                 svc,
-                name,
+                uid,
                 # Omitted, the pass picks the oldest pending source itself
                 # (FR-022). One source per pass either way: a trigger is never
                 # a corpus-wide rewrite (FR-025).
                 source_relpath=body.source if body is not None else None,
                 actor=actor,
             )
-    return CurationOut(**{"collection": name, **result})
+    # ``result`` already carries ``collection`` — as the collection's NAME, put
+    # there by the pass, which resolved the row anyway. It is rendered to a
+    # person, so the label is the right thing to report; the uid the caller
+    # sent back is the one they already hold.
+    return CurationOut(**result)
 
 
 @router.post("/upload", response_model=IngestedDocumentOut, status_code=status.HTTP_201_CREATED)
 async def upload(
     file: UploadFile = File(...),  # noqa: B008
+    #: The collection's directory NAME, not its uid: this value is a path
+    #: segment ``IngestService`` joins under the knowledge root, exactly like
+    #: ``FileWrite.collection``.
     collection: str = Form(...),
     #: A subdirectory inside the collection's ``sources/``, never the lane
     #: itself: an upload is a source like any other and cannot be aimed at

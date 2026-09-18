@@ -10,6 +10,17 @@ fail a session — no detect-or-spawn, a short timeout, and any failure at all
 nothing and exiting 0. FR-033 exists precisely because the previous injection
 layer had no such safety net and nothing said so for two months; this command
 must not repeat that by crashing a real session over its own plumbing.
+
+Every command here takes **names** — a partition's, an agent's — because that
+is what a person knows; each resolves once through ``_resolve`` to the uid the
+routes address resources by, and nobody is asked to type one (ADR
+resource-identity-is-an-immutable-uid).
+
+``context`` is again the exception, and deliberately so: it takes
+``--agent-uid``. Its caller is not a person but the hook entry Coffer wrote
+into that agent's own settings file, months ago, and never rewrites. A uid
+there is precisely what stops a rename from silently turning every session's
+fire into an unattributable one — so there is no ``--agent`` and no fallback.
 """
 
 from __future__ import annotations
@@ -25,6 +36,13 @@ from rich.table import Table
 
 from coffer.infrastructure.daemon.bootstrap import live_daemon
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import memory_delivery_cmd as _delivery
+from coffer.surfaces.cli._resolve import resolve_uid
+
+#: The registry kind the partition-addressing commands resolve a name against.
+#: Spelled here rather than imported from ``application.memory.service`` so a
+#: CLI module keeps depending on the daemon's HTTP surface and nothing deeper.
+_KIND_MEMORY = "memory"
 
 app = typer.Typer(help="Browse and manage Coffer's memory layer")
 _console = Console()
@@ -90,11 +108,12 @@ def list_notes(
     """
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/memory/partitions/{partition}/notes")
+        uid = resolve_uid(c, _KIND_MEMORY, partition, verbose=_verbose(ctx))
+        r = c.get(f"/memory/partitions/{uid}/notes")
         _cli_client.check(r, verbose=_verbose(ctx))
 
     def render(data: dict[str, Any]) -> None:
-        table = Table(title=f"memory:{partition}")
+        table = Table(title=f"memory {partition}")
         for col in ("slug", "title", "type", "description"):
             table.add_column(col)
         for n in data["notes"]:
@@ -119,7 +138,11 @@ def show_note(
     """
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/memory/partitions/{partition}/notes/{slug}")
+        uid = resolve_uid(c, _KIND_MEMORY, partition, verbose=_verbose(ctx))
+        # ``slug`` is NOT resolved: it is the note's own file name under
+        # ``notes/``, and a note is not a Resource — there is no identity below
+        # the partition for it to have.
+        r = c.get(f"/memory/partitions/{uid}/notes/{slug}")
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     if output_json:
@@ -152,11 +175,12 @@ def list_retired(
     """
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/memory/partitions/{partition}/retired")
+        uid = resolve_uid(c, _KIND_MEMORY, partition, verbose=_verbose(ctx))
+        r = c.get(f"/memory/partitions/{uid}/retired")
         _cli_client.check(r, verbose=_verbose(ctx))
 
     def render(data: dict[str, Any]) -> None:
-        table = Table(title=f"memory:{partition} — retired")
+        table = Table(title=f"memory {partition} — retired")
         for col in ("slug", "title", "replaced by", "reason"):
             table.add_column(col)
         for rec in data["retired"]:
@@ -182,11 +206,12 @@ def list_files(
     """
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/memory/partitions/{partition}/files")
+        uid = resolve_uid(c, _KIND_MEMORY, partition, verbose=_verbose(ctx))
+        r = c.get(f"/memory/partitions/{uid}/files")
         _cli_client.check(r, verbose=_verbose(ctx))
 
     def render(data: dict[str, Any]) -> None:
-        table = Table(title=f"memory:{partition}")
+        table = Table(title=f"memory {partition}")
         table.add_column("path")
         table.add_column("type")
         table.add_column("size", justify="right")
@@ -231,7 +256,10 @@ def read_file(
     """
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/memory/partitions/{partition}/files/content", params={"path": path})
+        uid = resolve_uid(c, _KIND_MEMORY, partition, verbose=_verbose(ctx))
+        # ``path`` stays as typed — it is a filesystem path inside the
+        # partition's own directory, not a reference to anything registered.
+        r = c.get(f"/memory/partitions/{uid}/files/content", params={"path": path})
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     if output_json:
@@ -268,14 +296,17 @@ def distil(
     """
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/memory/partitions/{partition}/distil")
+        uid = resolve_uid(c, _KIND_MEMORY, partition, verbose=_verbose(ctx))
+        r = c.post(f"/memory/partitions/{uid}/distil")
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(_json.dumps(r.json(), indent=2))
 
 
 @app.command("context")
 def context(
-    agent: str = typer.Option(..., "--agent", help="Which agent's hook is firing"),
+    agent_uid: str = typer.Option(
+        ..., "--agent-uid", help="The uid of the agent whose hook is firing"
+    ),
     cwd: str = typer.Option(..., "--cwd", help="The session's working directory"),
     ceiling_tokens: int = typer.Option(0, "--ceiling-tokens", help="0 = the server's default"),
 ) -> None:
@@ -285,16 +316,29 @@ def context(
     (``domain.memory.delivery.hook_command``) — see the module docstring for
     why every failure here is silent rather than raised.
 
-    ``--agent`` says who fired, and only that: the payload is the same for
-    every agent, and the name travels so the daemon can record the fire
-    against it (FR-033). It is still required, because an unattributed fire is
-    a hook nobody can tell is working.
+    ``--agent-uid`` says who fired, and only that: the payload is the same for
+    every agent, and the uid travels so the daemon can record the fire against
+    it (FR-033). It is still required, because an unattributed fire is a hook
+    nobody can tell is working.
+
+    It is the **one** command in this group that does not take a name, because
+    it is the one whose caller is not a person. The value arrives from a string
+    Coffer wrote into the agent's settings file at install time and never
+    revisits; a name there would keep pointing at a label the user is free to
+    change, and the fire would then be attributed to nothing. There is
+    deliberately no ``--agent`` alias to fall back to — two spellings would put
+    the rename hazard straight back (ADR
+    resource-identity-is-an-immutable-uid).
     """
     try:
         info = live_daemon()
         if info is None:
             return
-        payload: dict[str, object] = {"agent": agent, "cwd": cwd, "record_fired": True}
+        payload: dict[str, object] = {
+            "agent_uid": agent_uid,
+            "cwd": cwd,
+            "record_fired": True,
+        }
         if ceiling_tokens > 0:
             payload["ceiling_tokens"] = ceiling_tokens
         resp = httpx.post(
@@ -312,51 +356,12 @@ def context(
         return
 
 
-@app.command("delivery")
-def delivery_status(
-    ctx: typer.Context,
-    agent: str = typer.Option("", "--agent", help="Restrict to one agent"),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Show per-agent delivery installation state (FR-032).
+# --- delivery commands (memory_delivery_cmd.py, to respect the size cap) ---
+#
+# Split along the seam that was already there: every command above reads or
+# rewrites Coffer's own memory tree, while those three write into an AGENT's
+# settings file. The commands themselves are unmoved — ``coffer memory
+# delivery``, ``delivery-install``, ``delivery-remove`` — because they are
+# registered on this same typer.
 
-    Installed or not, and nothing else. Whether the hook has ever *fired* is an
-    event, not a property of an agent, so it is read on the audit surface:
-    ``coffer audit list --event-type memory_delivery_fired``.
-    """
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/memory/delivery", params={"agent": agent} if agent else None)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    table = Table(title="Memory delivery")
-    table.add_column("agent")
-    table.add_column("installed")
-    table.add_column("event")
-    table.add_column("command")
-    for d in data["delivery"]:
-        table.add_row(d["agent"], str(d["installed"]), d["event"], d["command"])
-    _console.print(table)
-
-
-@app.command("delivery-install")
-def delivery_install(ctx: typer.Context, agent: str = typer.Argument(...)) -> None:
-    """Install Coffer's session-start hook for an agent (FR-032)."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(f"/memory/delivery/{agent}/install")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(_json.dumps(r.json(), indent=2))
-
-
-@app.command("delivery-remove")
-def delivery_remove(ctx: typer.Context, agent: str = typer.Argument(...)) -> None:
-    """Remove Coffer's session-start hook for an agent."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.delete(f"/memory/delivery/{agent}")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(_json.dumps(r.json(), indent=2))
+_delivery.attach(app)

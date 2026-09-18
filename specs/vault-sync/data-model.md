@@ -151,7 +151,7 @@ An existing repository there is adopted with its history intact.
 manifest.json                  tree schema version
 knowledge/                     mirror of ~/.coffer/knowledge
 skills/                        mirror of ~/.coffer/skills (master skill store)
-resources/<kind>/<name>.yaml   one deterministic file per config resource
+resources/<kind>/<uid>.yaml    one deterministic file per config resource
 state/<area>/...yaml           module-owned shared state docs
 credentials/<ref>.enc          Fernet ciphertext, base64 text; never the key
 machines/<machine_id>.yaml     one descriptor per machine
@@ -170,9 +170,16 @@ it" distinguishable in the diff git sees.
 | --- | --- | --- |
 | `schema_version` | int | bumped on incompatible tree layout changes |
 
-Current version: **1**. The tree is a new format with its own lineage; neither
+Current version: **2**. The tree is a new format with its own lineage; neither
 the withdrawn git workspace's version (which had reached 3) nor the export
 bundle's carries over.
+
+Version 2 moved resource documents from `<name>.yaml` to `<uid>.yaml`. The bump
+is not cosmetic: a build on version 1 reading a version 2 tree would see every
+resource path change at once and apply it as "deleted everything, created
+everything" — which is the exact loss the uid layout exists to prevent, so the
+older build must be stopped before it reads rather than allowed to converge
+half-understood.
 
 `schema_version` is checked before a round applies anything: a tree newer than
 the running build fails closed with `SYNC_BUNDLE_TOO_NEW`, mirroring the DB
@@ -182,24 +189,33 @@ one thing that always changed, and determinism is what lets a round with nothing
 to say produce no commit at all. Applying a diff ignores `manifest.json` in both
 directions.
 
-### Resource serialization (`resources/<kind>/<name>.yaml`)
+### Resource serialization (`resources/<kind>/<uid>.yaml`)
 
 Deterministic projection of a `Resource`:
 
 ```yaml
+uid: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
 kind: mcp_server
 name: confluence
 description: "..."
 config: { ... }          # the validated, json-mode config; keys sorted
 ```
 
-- `created_at` / `updated_at` / the local `id` are **excluded** — machine-local,
-  and they would make every round produce a commit.
+The `uid` is the document's identity and its filename. The `name` travels
+**inside** the document, which is the whole of what makes a rename a
+modification of one file instead of a deletion beside an addition
+([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+
+- `created_at` / `updated_at` / the local integer `id` are **excluded** —
+  machine-local, and they would make every round produce a commit. The `uid` is
+  the opposite of machine-local and is the one identifier that DOES travel.
 - `enabled` and `scope` are **excluded** for a stronger reason than churn: they
   are one thing, the resource's reach, and reach is machine-local (FR-014).
-  A document written by an older build still carries
-  them; they are parsed and discarded, never rejected, so one machine that has
-  not upgraded cannot stall convergence for the rest.
+  They are **rejected** like any other unknown key. They used to be parsed and
+  discarded so that a machine which had not upgraded could not stall
+  convergence for the rest — but the version 2 bump retires that argument
+  rather than softening it: a build old enough to write them cannot reach this
+  parser at all, because it refuses the whole tree first.
 - A `channel` gets an ordinary document like every other kind. It once got none
   at all; it travels now because its config names the one machine whose daemon
   runs its adapter (`runs_on`, spec channels FR-026), so the document can move
@@ -209,10 +225,14 @@ config: { ... }          # the validated, json-mode config; keys sorted
 - String values under this machine's home are normalized to `${HOME}/...` and
   expanded against the applying machine's home (see below).
 
-Applying an addition or a modification upserts by `<kind>:<name>` through the
-kind-agnostic `ResourceService`, with the kind's import gate run; applying a
-deletion deletes the resource, which releases the credentials no remaining
-resource cites. After the whole diff is applied, each kind's post-import hook
+Applying an addition or a modification upserts by **`uid`** through the
+kind-agnostic `ResourceService`, with the kind's import gate run: a resource
+this vault does not hold is created *at the uid the document carries*, so both
+machines keep one identity for one resource, and a document whose `name`
+differs from the local row's is applied as a **rename** of that row — which is
+what fires the kind's own `on_rename` and moves a directory named after it.
+Applying a deletion deletes the resource, which releases the credentials no
+remaining resource cites. After the whole diff is applied, each kind's post-import hook
 re-applies its machine-local side effects — native config projections, shims,
 skill deliveries — from current state.
 
@@ -224,7 +244,7 @@ one:
 | | before | after |
 | --- | --- | --- |
 | unrestricted | `null` | `null` |
-| agents only | `{"agents": ["claude-code"], "machines": null}` | `{"agents": ["claude-code"]}` |
+| agents only | `{"agents": ["claude-code"], "machines": null}` | `{"agents": ["claude-code"]}` (later rewritten to agent uids by migration 0096) |
 | dormant | `{"agents": [], "machines": null}` | `{"agents": []}` |
 | named machines, this one among them | `{"agents": A, "machines": [… this id …]}` | `{"agents": A}` |
 | named machines, this one not among them | `{"agents": A, "machines": [… other ids …]}` | `{"agents": []}` |

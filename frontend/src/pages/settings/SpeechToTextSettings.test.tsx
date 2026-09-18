@@ -37,22 +37,39 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
   useListProviderModels: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
-const makeProvider = (overrides?: Partial<Provider>): Provider => ({
-  name: "acme",
-  protocol: "openai",
-  base_url: "https://gw/openai",
-  credential_ref: "provider/acme/key",
-  compatible_agents: ["codex"],
-  is_active: false,
-  internal_default: false,
-  transcribe_default: false,
-  models: [],
-  enabled: true,
-  description: null,
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-  ...overrides,
-});
+/** An opaque uid per fixture NAME. The connection dropdown carries the uid as
+ *  each option's VALUE and the name as its LABEL, and the mutation takes the
+ *  uid — so the two must be different strings, or an assertion on one of them
+ *  would pass against the other. */
+const UIDS: Record<string, string> = {
+  acme: "cn-31f0",
+  a: "cn-7ba2",
+  b: "cn-c94d",
+  A: "cn-1d6e",
+  B: "cn-8402",
+};
+const uidFor = (name: string) => UIDS[name] ?? "cn-unlisted";
+
+const makeProvider = (overrides?: Partial<Provider>): Provider => {
+  const name = overrides?.name ?? "acme";
+  return {
+    uid: uidFor(name),
+    name,
+    protocol: "openai",
+    base_url: "https://gw/openai",
+    credential_ref: "provider/acme/key",
+    compatible_agents: ["codex"],
+    is_active: false,
+    internal_default: false,
+    transcribe_default: false,
+    models: [],
+    enabled: true,
+    description: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+};
 
 // Radix Select: open via keyboard (jsdom has no pointer layout) then read/click
 // the rendered options.
@@ -105,9 +122,11 @@ describe("SpeechToTextSettings", () => {
     render(<SpeechToTextSettings />);
 
     openSelect(/transcription provider/i);
+    // The option READS as the connection's name and CARRIES its uid, which is
+    // what the flag is written against.
     fireEvent.click(screen.getByRole("option", { name: "b" }));
 
-    expect(setConnection).toHaveBeenCalledWith("b");
+    expect(setConnection).toHaveBeenCalledWith(uidFor("b"));
   });
 
   test("the model dropdown offers the connection's speech models, not its chat ones", () => {

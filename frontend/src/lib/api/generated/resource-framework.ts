@@ -29,13 +29,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/{kind}/{name}": {
+    "/resources/{uid}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -48,13 +48,13 @@ export interface paths {
         patch: operations["updateResource"];
         trace?: never;
     };
-    "/resources/{kind}/{name}/enable": {
+    "/resources/{uid}/enable": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -67,13 +67,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/{kind}/{name}/disable": {
+    "/resources/{uid}/disable": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -86,13 +86,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/{kind}/{name}/scope": {
+    "/resources/{uid}/scope": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -203,7 +203,7 @@ export interface paths {
         /**
          * What this daemon is rewriting right now
          * @description Every *upkeep pass* in flight: memory's `distil` over a partition,
-         *     knowledge's `tidy` over a collection. Both take minutes, both rewrite
+         *     knowledge's `curate` over a collection. Both take minutes, both rewrite
          *     files with a model in the loop, and both can be started from a button,
          *     the CLI or a timer — so whether one is running is a fact about the
          *     daemon, not about whichever surface started it.
@@ -220,8 +220,8 @@ export interface paths {
          *     list comes back empty. That is the truth, not a lost record.
          *
          *     Starting a pass is the kind's own route
-         *     (`POST /memory/partitions/{name}/distil`,
-         *     `POST /knowledge/collections/{name}/tidy`); each refuses a second
+         *     (`POST /memory/partitions/{uid}/distil`,
+         *     `POST /knowledge/collections/{uid}/curate`); each refuses a second
          *     concurrent pass over the same target with `UPKEEP_ALREADY_RUNNING`.
          *     Whether a pass runs on a timer at all is spec internal-engine's.
          */
@@ -249,16 +249,12 @@ export interface components {
                 };
             };
         };
-        /**
-         * @description <kind>:<name>
-         * @example mcp_server:filesystem
-         */
-        ResourceRef: string;
         /** @description Which agents a resource is active for, on THIS machine. null means every agent; [] matches nothing, i.e. dormant. Scope is machine-local — it is set on the machine it applies to and is never synced to the others. Unknown properties are rejected (422) rather than ignored: a client still sending the withdrawn `machines` axis means "only there", and silently keeping what is left would store "every agent" — widening the restriction the request was written to make. */
         ScopeOut: {
             /**
+             * @description Agent resource UIDS, not names. A scope is a reference to another resource and a name is a label its owner may change; while this held names, renaming an agent silently emptied every scope naming it.
              * @example [
-             *       "claude-code"
+             *       "9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
              *     ]
              */
             agents: string[] | null;
@@ -274,8 +270,13 @@ export interface components {
             scope?: components["schemas"]["ScopeOut"];
         };
         ResourceOut: {
-            ref: components["schemas"]["ResourceRef"];
+            /**
+             * @description The resource's identity: immutable, opaque, and the same value on every machine holding it. Every route that addresses a resource takes this.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
             kind: string;
+            /** @description A mutable label, unique within its kind. Editable through PATCH. */
             name: string;
             description?: string | null;
             config: {
@@ -300,10 +301,7 @@ export interface components {
             };
         };
         ResourceUpdate: {
-            /**
-             * @description A new name (FR-011). Absent leaves it alone. A kind that declares
-             *     no rename refuses it with 409 rather than ignoring it.
-             */
+            /** @description Renaming is a field, not an operation — the same level as editing a description, for every kind. Absent leaves the label alone; a label another resource of this kind already holds answers 409. */
             name?: string;
             description?: string | null;
             config?: {
@@ -435,6 +433,8 @@ export interface operations {
         parameters: {
             query?: {
                 kind?: string;
+                /** @description Filter by exact label. The ONE place a name may be used to find a resource: it is how a surface that started from what a human typed — the CLI — turns that into the uid every other route takes. */
+                name?: string;
             };
             header?: never;
             path?: never;
@@ -487,8 +487,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -512,8 +512,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -535,8 +535,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -566,8 +566,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -591,8 +591,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -616,8 +616,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -641,8 +641,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                kind: string;
-                name: string;
+                /** @description The resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -670,7 +670,8 @@ export interface operations {
         parameters: {
             query?: {
                 kind?: string;
-                name?: string;
+                /** @description One resource's whole trail, including rows written while it carried a different name. Filtering by name was removed with the identity change: a label cannot tell a renamed resource from a deleted one whose name was later reused. */
+                resource_uid?: string;
                 event_type?: string;
                 since?: string;
                 limit?: number;

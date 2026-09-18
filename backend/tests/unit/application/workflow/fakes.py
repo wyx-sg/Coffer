@@ -19,7 +19,7 @@ from uuid import uuid4
 from coffer.application.workflow.ports import RunProjectionValue
 from coffer.application.workflow.transcripts import TaskTranscript, TranscriptMessage
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 
 NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 
@@ -625,8 +625,8 @@ class FakeAudit:
         event_type: str,
         *,
         actor: str,
-        resource_kind: str | None = None,
-        resource_name: str | None = None,
+        subject_kind: str | None = None,
+        subject_name: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None:
         self.records.append(
@@ -634,8 +634,8 @@ class FakeAudit:
                 event_type,
                 {
                     "actor": actor,
-                    "resource_kind": resource_kind,
-                    "resource_name": resource_name,
+                    "subject_kind": subject_kind,
+                    "subject_name": subject_name,
                     "detail": detail or {},
                 },
             )
@@ -654,7 +654,13 @@ class FakeMachine:
 
 
 class FakeTemplates:
-    """``ResourceService.get``'s shape, over a dict of configs."""
+    """``ResourceService.get``'s shape, over a dict of configs keyed by NAME.
+
+    The real service is addressed by uid, so this is too — but a test that had
+    to invent a uid for every fixture would read about identity rather than
+    about runs. ``uid_of`` derives a stable one from the name, which keeps the
+    fixtures legible while the code under test still only ever holds a uid.
+    """
 
     def __init__(self, configs: dict[str, dict[str, Any]]) -> None:
         self.configs = configs
@@ -666,17 +672,24 @@ class FakeTemplates:
     def disable(self, name: str) -> None:
         self.disabled.add(name)
 
-    async def get(self, ref: ResourceRef) -> Resource:
-        config = self.configs.get(ref.name)
+    @staticmethod
+    def uid_of(name: str) -> str:
+        """The uid this fake gives the template called ``name``."""
+        return f"wfuid-{name}"
+
+    async def get(self, uid: str) -> Resource:
+        name = uid.removeprefix("wfuid-")
+        config = self.configs.get(name) if uid.startswith("wfuid-") else None
         if config is None:
-            raise ResourceNotFound(ref.kind, ref.name)
+            raise ResourceNotFound(uid)
         return Resource(
             id=1,
-            kind=ref.kind,
-            name=ref.name,
+            uid=uid,
+            kind="workflow",
+            name=name,
             description=None,
             config=config,
-            enabled=ref.name not in self.disabled,
+            enabled=name not in self.disabled,
             created_at=NOW,
             updated_at=NOW,
         )

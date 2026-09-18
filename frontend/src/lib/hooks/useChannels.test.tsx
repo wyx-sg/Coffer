@@ -1,4 +1,10 @@
 // frontend/src/lib/hooks/useChannels.test.tsx
+//
+// Every hook here that names one channel takes its `uid`: the status, pairing
+// and notify routes are `/channels/{uid}/…`, and a rebind is a PATCH of
+// `/resources/{uid}`. The name travels beside it only where a person reads it
+// (the rebind toast), which is why `useRebindChannel` takes both and the
+// fixtures below spell the two differently.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -35,6 +41,9 @@ vi.mock("@/components/ui/toast", async (importOriginal) => {
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
+/** The channel every case below is about: addressed by uid, read as "tg". */
+const TG = { uid: "u-3d9a1f77", name: "tg" };
+
 function makeWrapper() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -63,7 +72,7 @@ describe("useChannels hooks", () => {
     const api = mockApiClient({
       GET: vi.fn().mockResolvedValue({
         data: {
-          resources: [{ kind: "channel", name: "tg", config: { channel_type: "telegram" } }],
+          resources: [{ ...TG, kind: "channel", config: { channel_type: "telegram" } }],
         },
         error: undefined,
       }),
@@ -74,15 +83,16 @@ describe("useChannels hooks", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(1);
-    expect(result.current.data?.[0].name).toBe("tg");
+    expect(result.current.data?.[0].name).toBe(TG.name);
+    expect(result.current.data?.[0].uid).toBe(TG.uid);
     expect(api.GET).toHaveBeenCalledWith("/resources", {
       params: { query: { kind: "channel" } },
     });
   });
 
-  test("useChannelStatus fetches /channels/{name}/status", async () => {
+  test("useChannelStatus fetches /channels/{uid}/status", async () => {
     const status: ChannelStatus = {
-      name: "tg",
+      ...TG,
       channel_type: "telegram",
       enabled: true,
       running: true,
@@ -94,23 +104,23 @@ describe("useChannels hooks", () => {
     };
     const fetchMock = stubFetch(status);
 
-    const { result } = renderHook(() => useChannelStatus("tg"), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useChannelStatus(TG.uid), { wrapper: makeWrapper() });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.running).toBe(true);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("/channels/tg/status");
+    expect(String(fetchMock.mock.calls[0][0])).toContain(`/channels/${TG.uid}/status`);
   });
 
   test("useIssuePairingCode POSTs and returns the code", async () => {
     const code: PairingCode = { code: "ABCD2345", expires_at: "2026-06-12T13:00:00Z" };
     const fetchMock = stubFetch(code);
 
-    const { result } = renderHook(() => useIssuePairingCode("tg"), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useIssuePairingCode(TG.uid), { wrapper: makeWrapper() });
     act(() => result.current.mutate());
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.code).toBe("ABCD2345");
-    expect(String(fetchMock.mock.calls[0][0])).toContain("/channels/tg/pairing-code");
+    expect(String(fetchMock.mock.calls[0][0])).toContain(`/channels/${TG.uid}/pairing-code`);
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST" });
   });
 
@@ -122,7 +132,9 @@ describe("useChannels hooks", () => {
     const api = mockApiClient();
     getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useRebindChannel("tg"), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useRebindChannel(TG.uid, TG.name), {
+      wrapper: makeWrapper(),
+    });
     act(() =>
       result.current.mutate({
         config: { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" },
@@ -132,8 +144,8 @@ describe("useChannels hooks", () => {
     );
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(api.PATCH).toHaveBeenCalledWith("/resources/{kind}/{name}", {
-      params: { path: { kind: "channel", name: "tg" } },
+    expect(api.PATCH).toHaveBeenCalledWith("/resources/{uid}", {
+      params: { path: { uid: TG.uid } },
       body: {
         config: {
           channel_type: "telegram",
@@ -149,7 +161,7 @@ describe("useChannels hooks", () => {
     // so the toast carries the real failure reason rather than being silent.
     stubFetch({ error: { code: "ADAPTER_OFFLINE", message: "adapter offline" } }, false, 500);
 
-    const { result } = renderHook(() => useIssuePairingCode("tg"), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useIssuePairingCode(TG.uid), { wrapper: makeWrapper() });
     act(() => result.current.mutate());
 
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -161,8 +173,28 @@ describe("useChannels hooks", () => {
 describe("useCreateChannel", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  test("registers the channel and refreshes the resources cache", async () => {
-    const api = mockApiClient();
+  /** The api client with `POST /resources` answering as the daemon does: the
+   *  row it created, uid and all. The create resolves with that resource — the
+   *  caller needs the uid for the link and the name for the toast, and they
+   *  are no longer the same string. */
+  function registeringApi() {
+    return mockApiClient({
+      POST: vi.fn(async (path: string, init?: unknown) =>
+        path === "/resources"
+          ? { data: { uid: TG.uid, ...(init as { body: Record<string, unknown> }).body } }
+          : { data: undefined, error: undefined },
+      ) as ReturnType<typeof mockApiClient>["POST"],
+    });
+  }
+
+  const plan = {
+    name: TG.name,
+    secrets: [{ ref: "channel/tg/bot-token", value: "123:abc" }],
+    config: { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" },
+  };
+
+  test("registers the channel, resolves with the resource, refreshes the cache", async () => {
+    const api = registeringApi();
     getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
     const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
@@ -172,20 +204,44 @@ describe("useCreateChannel", () => {
       ),
     });
 
+    let created: { uid: string; name: string } | undefined;
     await act(async () => {
-      await result.current.mutateAsync({
-        name: "tg",
-        secrets: [{ ref: "channel/tg/bot-token", value: "123:abc" }],
-        config: { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" },
-      });
+      created = await result.current.mutateAsync(plan);
     });
 
+    // The free-name check first — a scan of the list, because a resource has no
+    // by-name lookup route any more — then the secret, then the resource.
+    expect(api.GET).toHaveBeenCalledWith("/resources", {
+      params: { query: { kind: "channel" } },
+    });
     expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
+    expect(created).toMatchObject({ uid: TG.uid, name: TG.name });
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: resourcesKey }),
       ),
     );
+  });
+
+  test("a name another channel already holds fails BEFORE any secret is written", async () => {
+    // Writing first would overwrite the live channel's secret and then roll it
+    // back — deleting it — leaving the existing channel dead on its next
+    // restart. The label is checked against the list the scan returns; the uid
+    // of whatever holds it is beside the point.
+    const api = registeringApi();
+    api.GET.mockResolvedValue({
+      data: { resources: [{ uid: "u-someone-else", kind: "channel", name: TG.name }] },
+      error: undefined,
+    });
+    getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
+    const { result } = renderHook(() => useCreateChannel(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      await result.current.mutateAsync(plan).catch(() => undefined);
+    });
+
+    expect(api.POST).not.toHaveBeenCalled();
+    await waitFor(() => expect(errorToast).toHaveBeenCalled());
   });
 
   test("toasts when registration fails", async () => {
@@ -201,7 +257,7 @@ describe("useCreateChannel", () => {
 
     await act(async () => {
       await result.current
-        .mutateAsync({ name: "tg", secrets: [], config: { channel_type: "telegram" } })
+        .mutateAsync({ name: TG.name, secrets: [], config: { channel_type: "telegram" } })
         .catch(() => undefined);
     });
 

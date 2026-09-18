@@ -7,7 +7,12 @@
 // contract, and this file must not grow one: a second write path would be a
 // second contract for the same data (FR-056).
 //
-// None of the three mutations toasts its failure. Each caller renders it where
+// Every one of those requests is addressed by the template's `uid`, and so is
+// every cache key. The name is a label the developer edits from this very
+// surface, so addressing by it would mean the editor's own rename invalidated
+// the address it was reading through (ADR resource-identity-is-an-immutable-uid).
+//
+// None of the four mutations toasts its failure. Each caller renders it where
 // it belongs instead — the editor against the field the refusal names
 // (FR-055), the create dialog and the delete confirmation inline — and a toast
 // would surface the same refusal twice, the second time without the field.
@@ -22,6 +27,9 @@ import { useResources } from "@/lib/hooks/useResources";
 
 /** One registered template, as the list and the editor read it. */
 export interface WorkflowTemplate {
+  /** The resource's identity. Every route and every query key below is built
+   *  from this; `name` beside it is only what a person reads. */
+  uid: string;
   name: string;
   description: string | null;
   enabled: boolean;
@@ -29,12 +37,14 @@ export interface WorkflowTemplate {
 }
 
 function asTemplate(resource: {
+  uid: string;
   name: string;
   description?: string | null;
   enabled: boolean;
   config: Record<string, unknown>;
 }): WorkflowTemplate {
   return {
+    uid: resource.uid,
     name: resource.name,
     description: resource.description ?? null,
     enabled: resource.enabled,
@@ -51,13 +61,13 @@ export function useWorkflowTemplates() {
 }
 
 /** One template, for the editor. */
-export function useWorkflowTemplate(name: string) {
+export function useWorkflowTemplate(uid: string) {
   return useQuery({
-    queryKey: resourceKey(WORKFLOW_TEMPLATE_KIND, name),
-    enabled: name.length > 0,
+    queryKey: resourceKey(uid),
+    enabled: uid.length > 0,
     queryFn: async (): Promise<WorkflowTemplate> => {
-      const { data, error } = await getApiClient().GET("/resources/{kind}/{name}", {
-        params: { path: { kind: WORKFLOW_TEMPLATE_KIND, name } },
+      const { data, error } = await getApiClient().GET("/resources/{uid}", {
+        params: { path: { uid } },
       });
       if (error) throwApiError(error, "RESOURCE_NOT_FOUND", "template not found");
       if (!data) throw new ApiError("RESOURCE_NOT_FOUND", "empty template response");
@@ -68,10 +78,9 @@ export function useWorkflowTemplate(name: string) {
 
 function useInvalidateTemplates() {
   const qc = useQueryClient();
-  return (name?: string) => {
+  return (uid?: string) => {
     void qc.invalidateQueries({ queryKey: resourcesKey });
-    if (name !== undefined)
-      void qc.invalidateQueries({ queryKey: resourceKey(WORKFLOW_TEMPLATE_KIND, name) });
+    if (uid !== undefined) void qc.invalidateQueries({ queryKey: resourceKey(uid) });
   };
 }
 
@@ -81,38 +90,49 @@ interface CreateInput {
   config: TemplateConfig;
 }
 
-/** Register a new template. */
+/** Register a new template, answering with the resource that was created.
+ *
+ *  It POSTs through the client rather than through `resourcesApi.create`,
+ *  which discards the response body: the caller opens the editor on what it
+ *  just made, and the editor's URL is the new template's uid — which only the
+ *  daemon knows. */
 export function useCreateWorkflowTemplate() {
   const invalidate = useInvalidateTemplates();
   return useMutation({
-    mutationFn: ({ name, description, config }: CreateInput) =>
-      resourcesApi.create({
-        kind: WORKFLOW_TEMPLATE_KIND,
-        name,
-        description,
-        config: config as unknown as Record<string, unknown>,
-      }),
-    onSuccess: (_data, { name }) => invalidate(name),
+    mutationFn: async ({ name, description, config }: CreateInput): Promise<WorkflowTemplate> => {
+      const { data, error } = await getApiClient().POST("/resources", {
+        body: {
+          kind: WORKFLOW_TEMPLATE_KIND,
+          name,
+          description,
+          config: config as unknown as Record<string, unknown>,
+        },
+      });
+      if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");
+      if (!data) throw new ApiError("INTERNAL_ERROR", "empty register response");
+      return asTemplate(data);
+    },
+    onSuccess: (created) => invalidate(created.uid),
   });
 }
 
 interface SaveInput {
-  name: string;
+  uid: string;
   description: string | null;
   config: TemplateConfig;
 }
 
-/** Save an edited template through `PATCH /resources/workflow/{name}`. */
+/** Save an edited template through `PATCH /resources/{uid}`. */
 export function useSaveWorkflowTemplate() {
   const qc = useQueryClient();
   const invalidate = useInvalidateTemplates();
   return useMutation({
-    mutationFn: ({ name, description, config }: SaveInput) =>
-      resourcesApi.update(WORKFLOW_TEMPLATE_KIND, name, {
+    mutationFn: ({ uid, description, config }: SaveInput) =>
+      resourcesApi.update(uid, {
         description,
         config: config as unknown as Record<string, unknown>,
       }),
-    onSuccess: (_data, { name, description, config }) => {
+    onSuccess: (_data, { uid, description, config }) => {
       // Write what was just stored into the cache BEFORE invalidating.
       //
       // The editor has no draft: each edit is applied to whatever the cache
@@ -122,43 +142,41 @@ export function useSaveWorkflowTemplate() {
       // it and would undo the first. Reordering two stages quickly did
       // exactly that. The refetch still runs and still wins; this only makes
       // the gap hold the right answer.
-      qc.setQueryData<WorkflowTemplate>(resourceKey(WORKFLOW_TEMPLATE_KIND, name), (current) =>
+      qc.setQueryData<WorkflowTemplate>(resourceKey(uid), (current) =>
         current === undefined ? current : { ...current, description, config },
       );
-      invalidate(name);
+      invalidate(uid);
     },
   });
 }
 
 interface RenameInput extends SaveInput {
-  /** The new name. Equal to `name` means only the description changed. */
-  newName: string;
+  /** The new label. */
+  name: string;
 }
 
-/** Rename a workflow and rewrite its description in one PATCH.
+/** Rewrite what a workflow is called and what it is for, in one PATCH.
  *
  *  The description is written into the config as well as onto the resource,
  *  because the page reads the config's (it is the one the editor maintains).
  *  The daemon applies the config first and the name last, so a refused config
- *  leaves the workflow where the caller can retry against it. */
+ *  leaves the workflow where the caller can retry against it.
+ *
+ *  Only ONE key to invalidate, unlike the two this used to need: the template
+ *  is addressed by its uid, and a rename does not move it. */
 export function useRenameWorkflowTemplate() {
   const invalidate = useInvalidateTemplates();
   const mutation = useMutation({
-    mutationFn: ({ name, newName, description, config }: RenameInput) =>
-      resourcesApi.update(WORKFLOW_TEMPLATE_KIND, name, {
-        name: newName,
+    mutationFn: ({ uid, name, description, config }: RenameInput) =>
+      resourcesApi.update(uid, {
+        name,
         description,
         config: { ...config, description: description || undefined } as unknown as Record<
           string,
           unknown
         >,
       }),
-    // Both names: the old key must stop serving a workflow that is no longer
-    // there, and the new one has nothing cached yet.
-    onSuccess: (_data, { name, newName }) => {
-      invalidate(name);
-      if (newName !== name) invalidate(newName);
-    },
+    onSuccess: (_data, { uid }) => invalidate(uid),
   });
   return mutation;
 }
@@ -168,7 +186,7 @@ export function useRenameWorkflowTemplate() {
 export function useDeleteWorkflowTemplate() {
   const invalidate = useInvalidateTemplates();
   return useMutation({
-    mutationFn: (name: string) => resourcesApi.remove(WORKFLOW_TEMPLATE_KIND, name),
+    mutationFn: (uid: string) => resourcesApi.remove(uid),
     onSuccess: () => invalidate(),
   });
 }

@@ -117,6 +117,11 @@ def list_collections() -> tuple[CollectionEntry, ...]:
     found = [d for d in sorted(root.iterdir()) if d.is_dir() and visible(d)]
     return tuple(
         CollectionEntry(
+            # Empty here by construction: this walks the DIRECTORY, which knows
+            # names and counts and nothing about identity. The application layer
+            # joins the registry in and fills it, and its enabled-rows filter is
+            # what keeps an unclaimed folder out of the list a caller gets.
+            uid="",
             name=d.name,
             description=readme_description(d.name),
             source_count=count_files(paths.sources_dir(d.name)),

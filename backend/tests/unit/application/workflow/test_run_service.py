@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.application.workflow.kind import KIND_WORKFLOW
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.workflow.errors import (
     IllegalTransition,
@@ -34,7 +33,7 @@ async def test_create_freezes_the_template_and_opens_no_conversation(engine: Eng
     run = await engine.create()
 
     assert run.template_snapshot == TEMPLATE
-    assert run.template_ref == f"{KIND_WORKFLOW}:delivery"
+    assert run.template_ref == "delivery"
     assert run.status == RunStatus.DRAFT.value
     assert run.version == 1
     assert run.machine_id == "machine-a"

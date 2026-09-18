@@ -23,7 +23,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.channel.commands import ChannelCommands, SafeSend
-from coffer.application.channel.ports import ChannelBinding, ChannelPeerRepoPort
+from coffer.application.channel.ports import ChannelBinding
+from coffer.application.channel.store_ports import ChannelPeerRepoPort
 from coffer.application.channel.turn_driver import SessionAccessor
 from coffer.domain.channel.envelopes import InboundCallback, InboundLifecycle, InboundStop
 
@@ -69,7 +70,7 @@ class InboundEvents:
             # sender_id) and route the refusal back into the group/thread, not a
             # DM. A tap never bootstraps a group peer row — only the owner's
             # first @mention does — so an unrecorded group is ignored silently.
-            owner = await self.peers.owner_sender_id(binding.resource_id)
+            owner = await self.peers.owner_sender_id(binding.resource.id)
             if owner is None:
                 return
             if not cb.sender_id or cb.sender_id != owner:
@@ -81,11 +82,11 @@ class InboundEvents:
                     chat_kind="group",
                 )
                 return
-            peer = await self.peers.get_by_chat(binding.resource_id, cb.chat_id)
+            peer = await self.peers.get_by_chat(binding.resource.id, cb.chat_id)
             if peer is None:
                 return
         else:
-            peer = await self.peers.get_by_chat(binding.resource_id, cb.chat_id)
+            peer = await self.peers.get_by_chat(binding.resource.id, cb.chat_id)
             if peer is None:
                 return
             if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
@@ -95,7 +96,7 @@ class InboundEvents:
             peer,
             cb.data,
             self.safe_send,
-            session=self.session(binding.name, cb.chat_id, cb.thread_id),
+            session=self.session(binding.resource.name, cb.chat_id, cb.thread_id),
             chat_kind=cb.chat_kind,
             thread_id=cb.thread_id,
             card_message_id=cb.platform_message_id,
@@ -111,7 +112,7 @@ class InboundEvents:
         paired, so there is nothing to tear down or warn about), are both
         ignored in silence.
         """
-        peer = await self.peers.get_by_chat(binding.resource_id, event.chat_id)
+        peer = await self.peers.get_by_chat(binding.resource.id, event.chat_id)
         if peer is None:
             return
         if event.kind == "removed_from_group":
@@ -126,11 +127,11 @@ class InboundEvents:
         # way ``unbind`` stops a whole channel's. Deliberately silent on the
         # platform: a goodbye message would just be a failed send into a group
         # the bot has already left. The owner sees it in the daemon log.
-        self.stop_chat_sessions(binding.name, event.chat_id)
+        self.stop_chat_sessions(binding.resource.name, event.chat_id)
         _logger.warning(
             "channel.group.removed",
             extra={
-                "channel": binding.name,
+                "channel": binding.resource.name,
                 "group_chat_id": event.chat_id,
                 "removed_by": event.actor_display,
             },
@@ -147,7 +148,7 @@ class InboundEvents:
         _logger.warning(
             "channel.group.became_external",
             extra={
-                "channel": binding.name,
+                "channel": binding.resource.name,
                 "group_chat_id": event.chat_id,
                 "changed_by": event.actor_display,
             },
@@ -163,7 +164,7 @@ class InboundEvents:
         that was never paired is ignored in silence rather than answered, which
         would confirm to a stranger that this channel exists.
         """
-        peer = await self.peers.get_by_chat(binding.resource_id, event.chat_id)
+        peer = await self.peers.get_by_chat(binding.resource.id, event.chat_id)
         if peer is None:
             return
         await self.commands.interrupt(

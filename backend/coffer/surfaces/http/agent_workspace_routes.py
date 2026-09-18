@@ -1,4 +1,4 @@
-"""/api/v1/agents/{name}/mcp-entries and /plugins routes (spec agent-registry agent workspace).
+"""/api/v1/agents/{uid}/mcp-entries and /plugins routes (spec agent-registry agent workspace).
 
 MCP entries + plugins in the agent's OWN config files, derived at read time —
 nothing is stored. Env/header VALUES never cross HTTP: listings expose key
@@ -74,6 +74,15 @@ class McpEntryAdopt(BaseModel):
 
 
 class AdoptedOut(BaseModel):
+    """The resource adoption just created.
+
+    ``uid`` is here because this is the only moment the caller learns the new
+    resource exists, and it is the only value that will still address it after
+    the user renames it — a client that wants to open what it just adopted has
+    to hold this, not the label beside it.
+    """
+
+    uid: str
     kind: str
     name: str
 
@@ -161,12 +170,12 @@ def _marketplace_out(m: MarketplaceInfo) -> MarketplaceOut:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{name}/mcp-entries", response_model=McpEntriesOut)
+@router.get("/{uid}/mcp-entries", response_model=McpEntriesOut)
 async def list_mcp_entries(
-    name: str,
+    uid: str,
     svc: Any = Depends(get_agent_mcp_entry_service),  # noqa: B008
 ) -> McpEntriesOut:
-    view = await svc.list_entries(name)
+    view = await svc.list_entries(uid)
     return McpEntriesOut(
         items=[_entry_out(e) for e in view.items],
         parse_errors=[_parse_error_out(p) for p in view.parse_errors],
@@ -174,27 +183,27 @@ async def list_mcp_entries(
 
 
 @router.delete(
-    "/{name}/mcp-entries/{entry}",
+    "/{uid}/mcp-entries/{entry}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def delete_mcp_entry(
-    name: str,
+    uid: str,
     entry: str,
     source: str | None = None,
     svc: Any = Depends(get_agent_mcp_entry_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> None:
-    await svc.remove_entry(name, entry, source=source, actor=actor)
+    await svc.remove_entry(uid, entry, source=source, actor=actor)
 
 
 @router.post(
-    "/{name}/mcp-entries/{entry}/adopt",
+    "/{uid}/mcp-entries/{entry}/adopt",
     status_code=status.HTTP_201_CREATED,
     response_model=AdoptedOut,
 )
 async def adopt_mcp_entry(
-    name: str,
+    uid: str,
     entry: str,
     body: McpEntryAdopt,
     svc: Any = Depends(get_agent_mcp_entry_service),  # noqa: B008
@@ -203,7 +212,7 @@ async def adopt_mcp_entry(
 ) -> Any:
     try:
         resource = await svc.adopt(
-            name,
+            uid,
             entry,
             source=body.source,
             new_name=body.new_name,
@@ -213,10 +222,10 @@ async def adopt_mcp_entry(
     except ResourceAlreadyExists as e:
         # Spec FR-021: the conflict response carries a suggested alternative
         # name. Derived from the agent's type so it stays stable + readable.
-        agent = await agent_svc.get(name)
+        agent = await agent_svc.get(uid)
         agent_type = AgentConfig.model_validate(agent.config).type.value
         return error_response(e.code, str(e), details={"suggested_name": f"{entry}-{agent_type}"})
-    return AdoptedOut(kind=resource.kind, name=resource.name)
+    return AdoptedOut(uid=resource.uid, kind=resource.kind, name=resource.name)
 
 
 # ---------------------------------------------------------------------------
@@ -224,12 +233,12 @@ async def adopt_mcp_entry(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{name}/plugins", response_model=PluginsOut_)
+@router.get("/{uid}/plugins", response_model=PluginsOut_)
 async def list_plugins(
-    name: str,
+    uid: str,
     svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
 ) -> PluginsOut_:
-    out = await svc.list_plugins(name)
+    out = await svc.list_plugins(uid)
     return PluginsOut_(
         items=[_plugin_out(p) for p in out.items],
         marketplaces=[_marketplace_out(m) for m in out.marketplaces],
@@ -239,29 +248,29 @@ async def list_plugins(
 
 
 @router.patch(
-    "/{name}/plugins/{plugin_id}",
+    "/{uid}/plugins/{plugin_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def patch_plugin(
-    name: str,
+    uid: str,
     plugin_id: str,
     body: PluginPatch,
     svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> None:
-    await svc.set_enabled(name, plugin_id, body.enabled, actor=actor)
+    await svc.set_enabled(uid, plugin_id, body.enabled, actor=actor)
 
 
 @router.delete(
-    "/{name}/plugins/{plugin_id}",
+    "/{uid}/plugins/{plugin_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def delete_plugin(
-    name: str,
+    uid: str,
     plugin_id: str,
     svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> None:
-    await svc.uninstall(name, plugin_id, actor=actor)
+    await svc.uninstall(uid, plugin_id, actor=actor)

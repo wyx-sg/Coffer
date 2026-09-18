@@ -57,9 +57,9 @@ The credential ref is not editable — it is the vault address this connection o
 Reach is not a field on the connection. It is the framework's per-agent **scope**, the same control every scoped kind uses:
 
 ```bash
-coffer scope show provider:my-gateway
-coffer scope set provider:my-gateway --agents claude_code
-coffer scope set provider:my-gateway --no-agents      # dormant: reaches nothing
+coffer scope show provider my-gateway
+coffer scope set provider my-gateway --agents claude-code
+coffer scope set provider my-gateway --no-agents      # dormant: reaches nothing
 ```
 
 That is how an OpenAI-compatible gateway is pointed at **Claude Code**: the projection writer is chosen by the **agent type**, not by the protocol, so a connection reaching `claude_code` writes Claude's `settings.json` in the anthropic shape whatever its own wire says. Coffer translates nothing between protocols — the endpoint really has to speak what the agent sends.

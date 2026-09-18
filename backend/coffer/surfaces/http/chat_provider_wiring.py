@@ -17,7 +17,11 @@ from coffer.application.engine.resolve import resolve_transcribe_connection
 from coffer.domain.agent.types import AgentType
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
-from coffer.infrastructure.chat.adapter_support import ConversationEnv, MemoryContextComposer
+from coffer.infrastructure.chat.adapter_support import (
+    ChannelNameResolver,
+    ConversationEnv,
+    MemoryContextComposer,
+)
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
@@ -36,6 +40,7 @@ def build_agent_provider_registry(
     conv_repo: ConversationRepo,
     credential_resolver: Callable[[str], str] | None = None,
     compose_memory_context: MemoryContextComposer | None = None,
+    resolve_channel_name: ChannelNameResolver | None = None,
     conversation_env: ConversationEnv | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
@@ -47,6 +52,15 @@ def build_agent_provider_registry(
     the agent untouched and nothing leaves the machine. That is the default,
     and there is no fallback to the engine's own connection (spec
     internal-engine FR-025).
+
+    ``resolve_channel_name`` turns the channel UID a conversation stores into
+    the channel's current name, for the one place the name belongs: the
+    system-prompt line telling the model which channel this turn came from. The
+    row holds the identity so a renamed channel keeps its conversations; the
+    label is resolved here, at read time, so the model is told what the channel
+    is called NOW rather than what it was called when the thread started.
+    ``None`` means the append still happens — the turn really did arrive over a
+    channel — without naming it.
 
     ``compose_memory_context`` is the memory kind's own third system-prompt
     append (spec memory FR-024) for a channel-driven turn — a plain callable
@@ -99,6 +113,7 @@ def build_agent_provider_registry(
             list_models=_list_models,
             transcriber_factory=transcriber_factory,
             compose_memory_context=compose_memory_context,
+            resolve_channel_name=resolve_channel_name,
             conversation_env=conversation_env,
         ),
         display_name="Claude Code",
@@ -129,6 +144,7 @@ def build_agent_provider_registry(
             transcriber_factory=transcriber_factory,
             list_models=_list_models,
             compose_memory_context=compose_memory_context,
+            resolve_channel_name=resolve_channel_name,
             conversation_env=conversation_env,
         ),
         display_name="Codex",

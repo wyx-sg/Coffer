@@ -1,4 +1,17 @@
-"""`coffer provider …` — provider-profile CLI commands (spec provider-switching)."""
+"""`coffer provider …` — provider-profile CLI commands (spec provider-switching).
+
+Every command here takes the connection's NAME and resolves it through
+``_resolve`` to the uid the routes address
+(ADR resource-identity-is-an-immutable-uid). ``key`` is the exception, and the
+reason the rest of this change was possible: its caller is the ``apiKeyHelper``
+line Coffer writes into another tool's config file, so it takes the uid
+directly — a machine reading a value Coffer put there, not a person typing.
+
+There is no ``rename`` here any more. Renaming is a field on every resource now
+(``coffer resource rename provider <name> <new>``); this kind only ever had a
+verb of its own because its name was written out into that same config file, and
+it no longer is.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +22,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage provider profiles and switch the active provider")
 _console = Console()
@@ -30,7 +44,7 @@ def add(
     of --secret / --credential-ref; an ollama connection needs neither. The new
     connection starts on the wire's own default scope; route it to specific
     agents (e.g. an openai gateway to claude_code) with
-    `coffer scope set provider:<name> --agents claude_code`. The model is chosen
+    `coffer scope set provider <name> --agents claude-code`. The model is chosen
     at the point of use, not on the connection (spec provider-switching E3)."""
     body: dict[str, object] = {
         "name": name,
@@ -86,10 +100,7 @@ def show(name: str = typer.Argument(..., help="Profile name")) -> None:
     """Show one provider profile."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/providers/{name}")
-        if r.status_code == 404:
-            typer.echo(f"provider {name!r} not found", err=True)
-            raise typer.Exit(4)
+        r = c.get(f"/providers/{resolve_uid(c, 'provider', name)}")
         r.raise_for_status()
     typer.echo(_json.dumps(r.json(), indent=2))
 
@@ -129,10 +140,7 @@ def edit(
 
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.patch(f"/providers/{name}", json=patch)
-        if r.status_code == 404:
-            typer.echo(f"provider {name!r} not found", err=True)
-            raise typer.Exit(4)
+        r = c.patch(f"/providers/{resolve_uid(c, 'provider', name)}", json=patch)
         if r.status_code == 409:
             # The daemon's message already names the connection and the command
             # that clears the way, so echo it rather than paraphrasing it.
@@ -146,44 +154,12 @@ def edit(
     typer.echo(f"updated provider {name}")
 
 
-@app.command("rename")
-def rename(
-    name: str = typer.Argument(..., help="Connection to move"),
-    new_name: str = typer.Argument(..., help="The name it should have"),
-) -> None:
-    """Move a connection to a new name.
-
-    Its own verb rather than an `edit` flag, because the name is the
-    connection's IDENTITY: the vault ref it owns, its audit trail and the agent
-    config it is projected into all spell it out, so the rename moves the key
-    and rewrites any live projection along with the row.
-    """
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(f"/providers/{name}/rename", json={"new_name": new_name})
-        if r.status_code == 404:
-            typer.echo(f"provider {name!r} not found", err=True)
-            raise typer.Exit(4)
-        if r.status_code == 409:
-            envelope = r.json().get("error", {})
-            typer.echo(envelope.get("message", f"the name {new_name!r} is taken"), err=True)
-            raise typer.Exit(5)
-        if r.status_code in (400, 422):
-            typer.echo(f"invalid name: {r.text}", err=True)
-            raise typer.Exit(6)
-        r.raise_for_status()
-    typer.echo(f"renamed {name} → {r.json()['name']}")
-
-
 @app.command("rm")
 def rm(name: str = typer.Argument(..., help="Profile name")) -> None:
     """Remove a provider profile."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/providers/{name}")
-        if r.status_code == 404:
-            typer.echo(f"provider {name!r} not found", err=True)
-            raise typer.Exit(4)
+        r = c.delete(f"/providers/{resolve_uid(c, 'provider', name)}")
         r.raise_for_status()
     typer.echo(f"removed provider {name}")
 
@@ -193,10 +169,7 @@ def switch(name: str = typer.Argument(..., help="Profile to activate")) -> None:
     """Switch: make this profile active for its wire and write native config."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/providers/{name}/activate")
-        if r.status_code == 404:
-            typer.echo(f"provider {name!r} not found", err=True)
-            raise typer.Exit(4)
+        r = c.post(f"/providers/{resolve_uid(c, 'provider', name)}/activate")
         r.raise_for_status()
     data = r.json()
     projected = ", ".join(data["projected"]) or "(no matching agent)"
@@ -235,10 +208,7 @@ def internal_default(name: str = typer.Argument(..., help="Connection to use int
     """Make this connection Coffer's internal-engine default (≤1 globally)."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/providers/{name}/internal-default")
-        if r.status_code == 404:
-            typer.echo(f"provider {name!r} not found", err=True)
-            raise typer.Exit(4)
+        r = c.post(f"/providers/{resolve_uid(c, 'provider', name)}/internal-default")
         r.raise_for_status()
     data = r.json()
     typer.echo(f"internal engine now uses {data['name']} [{data['protocol']}]")
@@ -257,10 +227,7 @@ def transcribe_default(
     """
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/providers/{name}/transcribe-default")
-        if r.status_code == 404:
-            typer.echo(f"provider {name!r} not found", err=True)
-            raise typer.Exit(4)
+        r = c.post(f"/providers/{resolve_uid(c, 'provider', name)}/transcribe-default")
         r.raise_for_status()
     data = r.json()
     typer.echo(f"speech is now transcribed on {data['name']} [{data['protocol']}]")
@@ -268,22 +235,35 @@ def transcribe_default(
 
 @app.command("key")
 def key(
-    connection: str | None = typer.Option(
-        None, "--connection", help="Print this specific connection's key (the projected helper)"
+    connection_uid: str | None = typer.Option(
+        None,
+        "--connection-uid",
+        help="Print this specific connection's key (the projected helper)",
     ),
     wire: str | None = typer.Option(
         None, "--wire", help="Back-compat: print the key active for a wire (anthropic | openai)"
     ),
 ) -> None:
-    """Print a provider's API key for Claude Code's apiKeyHelper. Prefer
-    --connection <name> (what Coffer projects); --wire is the legacy form that
-    resolves whichever connection is active for that wire's agent."""
-    if connection:
-        path, missing = f"/providers/{connection}/key", f"no key for connection {connection!r}"
+    """Print a provider's API key for Claude Code's apiKeyHelper.
+
+    The one command in this module that does NOT take a name. Its caller is the
+    ``apiKeyHelper`` line Coffer writes into the agent's own config file, and
+    that line has to keep resolving to the same connection after the user
+    relabels it — so it cites the uid
+    (ADR resource-identity-is-an-immutable-uid). Taking a name here as well
+    would put the rename back into the projected file, which is the exact cost
+    this change removed.
+
+    --wire is the legacy form, which resolves whichever connection is active for
+    that wire's agent instead of naming one.
+    """
+    if connection_uid:
+        path = f"/providers/{connection_uid}/key"
+        missing = f"no key for connection {connection_uid!r}"
     elif wire:
         path, missing = f"/providers/active-key/{wire}", f"no active provider for wire {wire!r}"
     else:
-        typer.echo("specify --connection <name> or --wire <wire>", err=True)
+        typer.echo("specify --connection-uid <uid> or --wire <wire>", err=True)
         raise typer.Exit(6)
     c, _info = _cli_client.client_or_exit()
     with c:

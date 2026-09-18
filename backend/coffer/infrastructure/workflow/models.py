@@ -54,9 +54,11 @@ class WorkflowRunModel(Base):
     __tablename__ = "workflow_runs"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    #: ``workflow:<name>``. Provenance only, and deliberately not a foreign
-    #: key: deleting the template is allowed and leaves this dangling, the way
-    #: a deleted source leaves an artifact's provenance intact.
+    #: The template's LABEL as it read when the run was created. Provenance
+    #: only, and deliberately neither an identity nor a foreign key: deleting
+    #: the template is allowed and leaves this saying what the run was started
+    #: from, and renaming it leaves this alone, the way a deleted source leaves
+    #: an artifact's provenance intact.
     template_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     template_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)

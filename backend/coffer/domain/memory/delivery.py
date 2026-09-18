@@ -77,25 +77,36 @@ class DeliveryUnsupported(CofferError):  # noqa: N818
         self.agent_type = agent_type
 
 
-def context_invocation(agent_key: str) -> str:
+def context_invocation(agent_uid: str) -> str:
     """The bare CLI call Coffer wants running at session start.
+
+    The agent is named by its **uid**, not by its registry name (ADR
+    resource-identity-is-an-immutable-uid). An installed hook is a string
+    sitting in somebody else's settings file for months; a name is a label the
+    user may edit in that time, and the hook would then report an agent that no
+    longer answers to anything. There is no name fallback on the reading side
+    either — one spelling, and it is the one that cannot change.
 
     `--cwd` reads the shell's own `$PWD` at fire time, not a value baked in
     at install time: the session's working directory is only known when the
     hook actually runs (as the *hook's own* process — a child of the
     session), never when it is installed.
     """
-    return f'coffer memory context --agent {shlex.quote(agent_key)} --cwd "$PWD"'
+    return f'coffer memory context --agent-uid {shlex.quote(agent_uid)} --cwd "$PWD"'
 
 
-def hook_command(agent_key: str) -> str:
-    """The exact command string Coffer installs for `agent_key`.
+def hook_command(agent_uid: str) -> str:
+    """The exact command string Coffer installs for `agent_uid`.
 
     Marker-scoped: an adapter that wraps this further (Codex's once-per-
     session guard) keeps the same `": {MARKER};"` prefix, so every adapter's
     installed command is recognised identically regardless of what follows.
+    That is also what makes the switch to `--agent-uid` costless for an
+    already-installed hook: detection never reads the arguments, so a
+    reinstall replaces the entry in place and an old one is found and removed
+    exactly as before.
     """
-    return f": {MARKER}; {context_invocation(agent_key)}"
+    return f": {MARKER}; {context_invocation(agent_uid)}"
 
 
 @dataclass(frozen=True)
@@ -108,7 +119,15 @@ class DeliveryStatus:
     thing that happened.
     """
 
-    agent: str
+    #: Which agent, by identity — what the installed command carries and what
+    #: a caller addresses this status by.
+    agent_uid: str
+    #: The agent's label at the moment the status was read, carried beside the
+    #: uid for the same reason an audit row carries `resource_name` beside
+    #: `resource_id`: a surface has to render something a person recognises,
+    #: and looking the name up again would be a second question with a second
+    #: chance to disagree. It is never matched on.
+    agent_name: str
     installed: bool
     #: What is installed, when `installed`; otherwise what `install()` would
     #: write, so a caller can show it before acting.
@@ -140,12 +159,12 @@ class DeliveryAdapter(Protocol):
         """The hook event this adapter installs on."""
         ...
 
-    def command_for(self, agent_key: str) -> str:
-        """What `install()` would write for `agent_key` — installed or not."""
+    def command_for(self, agent_uid: str) -> str:
+        """What `install()` would write for `agent_uid` — installed or not."""
         ...
 
-    def install(self, text: str, agent_key: str) -> str:
-        """Return new config text with Coffer's entry for `agent_key`
+    def install(self, text: str, agent_uid: str) -> str:
+        """Return new config text with Coffer's entry for `agent_uid`
         inserted or replaced in place. Idempotent; every other entry,
         including one on the same event another tool wrote, is preserved."""
         ...

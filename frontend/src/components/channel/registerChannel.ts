@@ -4,7 +4,8 @@
 // resource is registered; on failure the just-written secrets are rolled
 // back so nothing orphaned stays behind.
 import { getApiClient } from "@/lib/api/client";
-import { throwApiError } from "@/lib/api/errors";
+import { ApiError, throwApiError } from "@/lib/api/errors";
+import type { ResourceOut } from "@/lib/api/resources";
 
 import type { ChannelPlan } from "./schema";
 
@@ -24,23 +25,30 @@ async function rollbackSecrets(refs: string[]): Promise<void> {
   }
 }
 
-async function registerResource(plan: ChannelPlan): Promise<void> {
-  const { error } = await getApiClient().POST("/resources", {
+async function registerResource(plan: ChannelPlan): Promise<ResourceOut> {
+  const { data, error } = await getApiClient().POST("/resources", {
     body: { kind: "channel", name: plan.name, config: plan.config },
   });
   if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");
+  if (!data) throw new ApiError("INTERNAL_ERROR", "empty register response");
+  return data;
 }
 
 /**
  * Fail BEFORE any secret write when the name is taken: writing first would
  * overwrite the live channel's secret and then roll it back (deleting it),
  * leaving the existing channel dead on its next restart.
+ *
+ * The check is a scan of the channel list rather than a lookup, because a
+ * resource is no longer addressable by name: there is no `GET` that takes one.
+ * That is the right shape anyway — the question here is "is this LABEL taken",
+ * which is a question about the set of labels, not about one row.
  */
 async function assertNameAvailable(name: string): Promise<void> {
-  const { data } = await getApiClient().GET("/resources/{kind}/{name}", {
-    params: { path: { kind: "channel", name } },
+  const { data } = await getApiClient().GET("/resources", {
+    params: { query: { kind: "channel" } },
   });
-  if (data) {
+  if ((data?.resources ?? []).some((r) => r.name === name)) {
     throwApiError(
       { error: { code: "RESOURCE_ALREADY_EXISTS", message: `channel ${name} already exists` } },
       "RESOURCE_ALREADY_EXISTS",
@@ -49,8 +57,13 @@ async function assertNameAvailable(name: string): Promise<void> {
   }
 }
 
-/** Secrets-then-resource registration with rollback; returns the name. */
-export async function createChannel(plan: ChannelPlan): Promise<string> {
+/**
+ * Secrets-then-resource registration with rollback.
+ *
+ * Returns the registered resource, not its name: the caller navigates to the
+ * new channel's page, and that URL is built from the uid.
+ */
+export async function createChannel(plan: ChannelPlan): Promise<ResourceOut> {
   await assertNameAvailable(plan.name);
   const written: string[] = [];
   try {
@@ -58,10 +71,9 @@ export async function createChannel(plan: ChannelPlan): Promise<string> {
       await writeSecret(s.ref, s.value);
       written.push(s.ref);
     }
-    await registerResource(plan);
+    return await registerResource(plan);
   } catch (e) {
     await rollbackSecrets(written);
     throw e;
   }
-  return plan.name;
 }

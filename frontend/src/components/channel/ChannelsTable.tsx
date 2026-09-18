@@ -40,7 +40,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { resourcesApi } from "@/lib/api/resources";
 import { resourcesKey } from "@/lib/api/queryKeys";
-import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import { CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
@@ -56,7 +56,7 @@ function channelTypeOf(row: ResourceOut): string {
   return typeof ct === "string" ? ct : "telegram";
 }
 
-/** The bound agent's provider key, or null when the config names none. */
+/** The bound agent's UID, or null when the config names none. */
 function defaultAgentOf(row: ResourceOut): string | null {
   const agent = (row.config as { default_agent?: unknown } | undefined)?.default_agent;
   return typeof agent === "string" && agent.length > 0 ? agent : null;
@@ -72,11 +72,13 @@ export function ChannelsTable({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const del = useDeleteResource();
-  const [deletingName, setDeletingName] = useState<string | null>(null);
+  // The row being deleted, not its name: the confirmation reads the name out
+  // and the request is addressed to the uid.
+  const [deleting, setDeleting] = useState<ResourceOut | null>(null);
   const bulk = useBulkMutate({ invalidate: [resourcesKey] });
-  // Display names for the bound-agent column; one cached query, shared with
-  // the edit dialog's picker.
-  const { data: agents } = useAgentProviders();
+  // Names for the bound-agent column, which stores uids; one cached query,
+  // shared with the edit dialog's picker.
+  const { data: agents } = useAgents();
 
   const columns: Column<ResourceOut>[] = [
     {
@@ -111,7 +113,7 @@ export function ChannelsTable({
       key: "health",
       header: t("channels.cols.health"),
       className: "whitespace-nowrap",
-      cell: (r) => <HealthCell name={r.name} />,
+      cell: (r) => <HealthCell uid={r.uid} />,
     },
     {
       key: "runs-on",
@@ -129,7 +131,7 @@ export function ChannelsTable({
       key: "paired",
       header: t("channels.cols.paired"),
       className: "whitespace-nowrap",
-      cell: (r) => <PairedCell name={r.name} />,
+      cell: (r) => <PairedCell uid={r.uid} />,
     },
     {
       key: "reach",
@@ -139,7 +141,7 @@ export function ChannelsTable({
         <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
           <ScopeControl
             kind={CHANNEL_KIND}
-            name={r.name}
+            uid={r.uid}
             enabled={r.enabled}
             scope={r.scope ?? null}
           />
@@ -153,7 +155,7 @@ export function ChannelsTable({
       cell: (r) => (
         <RowDeleteButton
           ariaLabel={`${t("channels.deleteTitle")}: ${r.name}`}
-          onDelete={() => setDeletingName(r.name)}
+          onDelete={() => setDeleting(r)}
         />
       ),
     },
@@ -165,13 +167,13 @@ export function ChannelsTable({
         rows={items}
         isLoading={isLoading}
         columns={columns}
-        rowKey={(r) => r.name}
+        rowKey={(r) => r.uid}
         search={{
           accessor: (r) => `${r.name} ${channelTypeOf(r)}`,
           placeholder: t("channels.searchPlaceholder"),
         }}
         filters={[reachFilter<ResourceOut>(t, (r) => ({ enabled: r.enabled, scope: r.scope }))]}
-        onRowClick={(r) => navigate(`/channels/${r.name}`)}
+        onRowClick={(r) => navigate(`/channels/${encodeURIComponent(r.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
@@ -180,7 +182,7 @@ export function ChannelsTable({
           renderBulkActions: ({ selectedRows, clear }) => (
             <>
               <BulkReachActions
-                rows={selectedRows.map((r) => ({ kind: CHANNEL_KIND, name: r.name }))}
+                rows={selectedRows.map((r) => ({ kind: CHANNEL_KIND, uid: r.uid }))}
                 onDone={clear}
               />
               <BulkDeleteButton
@@ -188,7 +190,7 @@ export function ChannelsTable({
                 description={t("channels.bulkDeleteConfirm", { count: selectedRows.length })}
                 pending={bulk.isPending}
                 onConfirm={async () => {
-                  await bulk.run(selectedRows, (r) => resourcesApi.remove(CHANNEL_KIND, r.name));
+                  await bulk.run(selectedRows, (r) => resourcesApi.remove(r.uid));
                   clear();
                 }}
               />
@@ -199,18 +201,18 @@ export function ChannelsTable({
       />
 
       <ConfirmDialog
-        open={deletingName !== null}
+        open={deleting !== null}
         onOpenChange={(open) => {
-          if (!open) setDeletingName(null);
+          if (!open) setDeleting(null);
         }}
         title={t("channels.deleteTitle")}
-        description={t("channels.deleteConfirm", { name: deletingName ?? "" })}
+        description={t("channels.deleteConfirm", { name: deleting?.name ?? "" })}
         confirmLabel={t("common.delete")}
         pending={del.isPending}
         onConfirm={() => {
-          const name = deletingName;
-          setDeletingName(null);
-          if (name !== null) del.mutate({ kind: CHANNEL_KIND, name });
+          const row = deleting;
+          setDeleting(null);
+          if (row !== null) del.mutate({ kind: CHANNEL_KIND, uid: row.uid });
         }}
       />
     </>

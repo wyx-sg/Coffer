@@ -4,6 +4,7 @@ and an in-process FakeKeyring + ResourceService for kind-agnostic plumbing.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
@@ -20,7 +21,7 @@ from coffer.application.mcp.supervisor import (
 from coffer.application.resource_service import ResourceService
 from coffer.domain.errors import UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.persistence.base import Base
@@ -122,7 +123,8 @@ async def test_disabled_resource_rejected(tmp_path, monkeypatch):
     resource_svc, engine = await _make_services(
         tmp_path, register_servers=[("fs", _basic_stdio_config("x"))]
     )
-    await resource_svc.set_enabled(ResourceRef("mcp_server", "fs"), False, actor="test")
+    fs = await resource_svc.get_by_name("mcp_server", "fs")
+    await resource_svc.set_enabled(fs.uid, False, actor="test")
     sup = SubprocessSupervisor(
         upstream_factory=build_upstream,
         resource_service=resource_svc,
@@ -204,8 +206,9 @@ async def test_cooldown_expires_and_allows_new_attempt(tmp_path, monkeypatch):
         assert sup.health("flaky") == UpstreamHealth.COOLDOWN
 
         # Replace the resource's config with a good one
+        flaky = await resource_svc.get_by_name("mcp_server", "flaky")
         await resource_svc.update_config(
-            ResourceRef("mcp_server", "flaky"),
+            flaky.uid,
             new_config=_basic_stdio_config("x"),
             actor="test",
         )
@@ -430,3 +433,72 @@ async def test_credential_overlay_passed_through(tmp_path, monkeypatch):
     finally:
         await sup.dispose()
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_evicting_a_server_does_not_wait_for_a_spawn_that_will_never_work(
+    tmp_path, monkeypatch
+):
+    """Eviction wins over a spawn in flight, instead of queueing behind it.
+
+    A delete runs the ``mcp_server`` kind's ``on_delete``, which evicts the
+    server from every supervisor holding a live connection — including the
+    process-wide one behind the capability-management routes. That supervisor
+    is exactly where a detail page's discovery is spawning, and a command that
+    cannot speak MCP takes the full retry ladder to fail. Sharing one lock
+    between the two made deleting such a server wait for a subprocess ladder
+    nobody wanted the answer to any more, which read to the user — and to the
+    browser test that found it — as a request that never came back.
+
+    So the assertion is on TIME, which is the whole defect: the numbers are a
+    generous multiple of the ladder this supervisor is configured with, so the
+    test fails only if eviction is serialised behind it.
+    """
+    _with_in_memory(monkeypatch)
+    resource_svc, engine = await _make_services(
+        tmp_path,
+        register_servers=[
+            (
+                "wedged",
+                {
+                    "transport": {
+                        "type": "stdio",
+                        # Exits immediately and says nothing — the upstream
+                        # never initialises, so every attempt on the ladder
+                        # burns its full timeout.
+                        "command": sys.executable,
+                        "args": ["-c", "pass"],
+                    },
+                },
+            )
+        ],
+    )
+    sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
+        resource_service=resource_svc,
+        credential_resolver=CredentialResolver(KeyringAdapter()),
+        retry_delays=(5.0, 5.0),
+    )
+    try:
+        spawning = asyncio.create_task(_swallow(sup.get_or_spawn("wedged")))
+        # Let the ladder get as far as holding the lock.
+        await asyncio.sleep(0.2)
+
+        started = asyncio.get_running_loop().time()
+        await asyncio.wait_for(sup.evict("wedged"), timeout=2.0)
+        waited = asyncio.get_running_loop().time() - started
+
+        assert waited < 1.0, f"evict queued behind the spawn ladder ({waited:.1f}s)"
+        spawning.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await spawning
+    finally:
+        await sup.dispose()
+        await engine.dispose()
+
+
+async def _swallow(awaitable):
+    """Run something whose failure is the point, not the subject."""
+    with suppress(Exception):
+        return await awaitable
+    return None

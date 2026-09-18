@@ -65,14 +65,20 @@ export function KnowledgeTable({
   const del = useDeleteResource();
   const reach = useKindReach(KIND);
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
-  const [deletingName, setDeletingName] = useState<string | null>(null);
+  // It holds the ROW: the confirmation names the collection, the request is
+  // addressed to its uid.
+  const [deleting, setDeleting] = useState<CollectionOut | null>(null);
   const bulk = useBulkMutate({ invalidate: [resourcesKey, knowledgeCollectionsKey] });
 
   // `scope` is deliberately not read back out of the merge: this kind declares
   // none, so `enabled` is the whole of a row's status and anything still stored
-  // under a collection's name is not this table's answer to anything.
+  // against a collection is not this table's answer to anything.
+  //
+  // The merge is keyed on the uid, which both lists carry: keyed on the name it
+  // would depend on the two reads having happened at the same instant, and a
+  // rename between them would silently report every row as enabled.
   const reachOf = (r: CollectionOut) => ({
-    enabled: reach.get(r.name)?.enabled ?? true,
+    enabled: reach.get(r.uid)?.enabled ?? true,
     scope: null,
   });
 
@@ -112,7 +118,7 @@ export function KnowledgeTable({
       className: "whitespace-nowrap text-right",
       cell: (r) => (
         <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-          <ScopeControl kind={KIND} name={r.name} supportsScope={false} {...reachOf(r)} />
+          <ScopeControl kind={KIND} uid={r.uid} supportsScope={false} {...reachOf(r)} />
         </div>
       ),
     },
@@ -123,7 +129,7 @@ export function KnowledgeTable({
       cell: (r) => (
         <RowDeleteButton
           ariaLabel={`${t("common.delete")}: ${r.name}`}
-          onDelete={() => setDeletingName(r.name)}
+          onDelete={() => setDeleting(r)}
         />
       ),
     },
@@ -135,8 +141,8 @@ export function KnowledgeTable({
         rows={items}
         isLoading={isLoading}
         columns={columns}
-        rowKey={(r) => r.name}
-        onRowClick={(r) => navigate(`/knowledge/${encodeURIComponent(r.name)}`)}
+        rowKey={(r) => r.uid}
+        onRowClick={(r) => navigate(`/knowledge/${encodeURIComponent(r.uid)}`)}
         search={{
           accessor: (r) => `${r.name} ${r.description ?? ""}`,
           placeholder: t("knowledge.searchPlaceholder"),
@@ -150,7 +156,7 @@ export function KnowledgeTable({
           renderBulkActions: ({ selectedRows, clear }) => (
             <>
               <BulkReachActions
-                rows={selectedRows.map((r) => ({ kind: KIND, name: r.name }))}
+                rows={selectedRows.map((r) => ({ kind: KIND, uid: r.uid }))}
                 // Same two choices as the rows: enable or disable the lot, and
                 // no scope write the server would refuse anyway.
                 supportsScope={false}
@@ -164,7 +170,7 @@ export function KnowledgeTable({
                 })}
                 pending={bulk.isPending}
                 onConfirm={async () => {
-                  await bulk.run(selectedRows, (r) => resourcesApi.remove(KIND, r.name));
+                  await bulk.run(selectedRows, (r) => resourcesApi.remove(r.uid));
                   clear();
                 }}
               />
@@ -176,24 +182,24 @@ export function KnowledgeTable({
         emptyMessage={t("knowledge.noMatches")}
       />
       <ConfirmDialog
-        open={deletingName !== null}
+        open={deleting !== null}
         onOpenChange={(open) => {
-          if (!open) setDeletingName(null);
+          if (!open) setDeleting(null);
         }}
         title={t("knowledge.delete.title")}
-        description={t("knowledge.delete.description", { name: deletingName ?? "" })}
+        description={t("knowledge.delete.description", { name: deleting?.name ?? "" })}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         variant="destructive"
         pending={del.isPending}
         onConfirm={() => {
           // Close only on success; the hook toasts a failure and the dialog
           // stays up so the reader can retry or cancel.
-          if (deletingName === null) return;
+          if (deleting === null) return;
           del.mutate(
-            { kind: KIND, name: deletingName },
+            { kind: KIND, uid: deleting.uid },
             {
               onSuccess: () => {
-                setDeletingName(null);
+                setDeleting(null);
                 void qc.invalidateQueries({ queryKey: knowledgeCollectionsKey });
               },
             },

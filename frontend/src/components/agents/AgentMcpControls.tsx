@@ -16,11 +16,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useAgentMcpInstall, useAgentMcpStatus } from "@/lib/hooks/useAgents";
 
-export function AgentMcpButton({ name }: { name: string }) {
+export function AgentMcpButton({ uid }: { uid: string }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const status = useAgentMcpStatus(name);
-  const mutate = useAgentMcpInstall(name);
+  const status = useAgentMcpStatus(uid);
+  const mutate = useAgentMcpInstall(uid);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const installed = status.data?.installed ?? false;
 
@@ -64,9 +64,9 @@ export function AgentMcpButton({ name }: { name: string }) {
 }
 
 /** At-a-glance install status for the agents-table "Coffer MCP" column. */
-export function AgentMcpStatusBadge({ name }: { name: string }) {
+export function AgentMcpStatusBadge({ uid }: { uid: string }) {
   const { t } = useTranslation();
-  const status = useAgentMcpStatus(name);
+  const status = useAgentMcpStatus(uid);
   if (status.isPending) {
     return <Skeleton className="h-5 w-20" aria-label={t("agents.mcp.checking")} />;
   }

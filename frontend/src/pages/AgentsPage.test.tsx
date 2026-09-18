@@ -78,6 +78,7 @@ acceptance("agent-registry", "desktop app agents page", async () => {
   stubHooks({
     data: [
       {
+        uid: "u-cur",
         name: "cur",
         type: "codex",
         config_dir: "/home/u/.codex",
@@ -139,6 +140,7 @@ describe("AgentsPage", () => {
     stubHooks({
       data: [
         {
+          uid: "u-cur",
           name: "cur",
           type: "codex",
           config_dir: "/home/u/.codex",

@@ -81,6 +81,12 @@ def _agent_source(resource: Resource) -> AgentSource:
     ``agent_skill_wiring.py``'s own cross-kind resolvers built the same way."""
     cfg = AgentConfig.model_validate(resource.config)
     return AgentSource(
+        # The NAME, deliberately. This value becomes an entry's ``Origin.agent``
+        # — a line a person reads in a note's provenance ("origin: claude-code
+        # <- ~/.claude/...") — not a reference anything resolves later. An
+        # origin describes what was true when the entry was captured, so a uid
+        # here would make the record unreadable to buy a stability it has no
+        # use for.
         agent=resource.name,
         agent_type=cfg.type.value,
         config_dir=str(cfg.resolved_config_dir()),
@@ -217,14 +223,19 @@ def start_distil_worker(
     Returns the task; the lifespan cancels it at shutdown."""
 
     async def _list_partitions() -> list[str]:
-        return [r.name for r in await resource_svc.list(kind=KIND_MEMORY, enabled=True)]
+        # Uids, not names: the sweep and the page's Distil button are two
+        # writers over one directory and claim the same upkeep-runs key, so
+        # both must spell the partition the way that cannot change between
+        # them reading it (FR-041, ADR resource-identity-is-an-immutable-uid).
+        # The pass resolves the row for the directory it rewrites.
+        return [r.uid for r in await resource_svc.list(kind=KIND_MEMORY, enabled=True)]
 
-    async def _scheduled(partition: str) -> DistilResult:
+    async def _scheduled(uid: str) -> DistilResult:
         """The sweep's own actor, fixed here rather than defaulted in the
         service: ``memory_distilled`` rows written by this timer must be
         readable as the timer's, or the audit log cannot answer whether a
         partition was last rewritten because somebody asked (FR-038)."""
-        return await distil(partition, actor=WORKER_ACTOR)
+        return await distil(uid, actor=WORKER_ACTOR)
 
     worker = DistilWorker(
         distil=_scheduled,

@@ -147,6 +147,36 @@ class MasterStore:
                 raise
         return self.paths_for(name)
 
+    def rename(self, *, old_name: str, new_name: str) -> MasterPaths:
+        """Move `<root>/<old_name>/` to `<root>/<new_name>/`.
+
+        The store is keyed by the skill's NAME, which is a label the user may
+        change (ADR resource-identity-is-an-immutable-uid), so the folder has
+        to travel with it. Both names go through ``_ensure_safe_name`` via
+        ``paths_for``, so a rename can no more escape the root than an import
+        can.
+
+        Deliberately a single ``os.rename`` within one directory: on POSIX and
+        on NTFS that is atomic, so there is no observable moment in which the
+        skill exists under both names or under neither. That is what lets the
+        caller treat "this raised" as "nothing moved".
+
+        Raises ``FileNotFoundError`` when no folder answers to ``old_name``
+        and ``FileExistsError`` when something already occupies ``new_name``.
+        The second check is not redundant: POSIX ``rename`` would silently
+        replace an existing EMPTY directory at the destination, and silently
+        destroying whatever sits there is the opposite of what a label edit
+        should be allowed to do.
+        """
+        src = self.paths_for(old_name).folder
+        dst = self.paths_for(new_name).folder
+        if not src.is_dir():
+            raise FileNotFoundError(f"no master folder for skill {old_name!r}: {src}")
+        if dst.exists() or dst.is_symlink():
+            raise FileExistsError(f"master folder already exists: {dst}")
+        os.rename(src, dst)
+        return self.paths_for(new_name)
+
     def delete(self, name: str) -> None:
         target = self.paths_for(name).folder
         if target.is_dir():

@@ -25,7 +25,11 @@ from coffer.domain.provider.projection import (
 #: ``apply_anthropic_settings`` takes no default helper any more (only the
 #: per-connection form may be written), so tests that do not care WHICH
 #: connection it names pass this one.
-_HELPER = "coffer provider key --connection test-conn"
+_HELPER = "coffer provider key --connection-uid 0123456789abcdef0123456789abcdef"
+
+#: A connection's uid — what the projected helper resolves. Opaque and, unlike
+#: the name it replaced, unchanged by anything the user does to the connection.
+_CONNECTION_UID = "7d4f1e2a3b4c5d6e7f8091a2b3c4d5e6"
 
 
 def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
@@ -34,10 +38,10 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
         base_url="https://gw/anthropic",
         model="claude-opus-4-8",
         fast_model="claude-haiku-4-5",
-        api_key_helper=anthropic_api_key_helper("agnes"),
+        api_key_helper=anthropic_api_key_helper(_CONNECTION_UID),
     )
     d = json.loads(out)
-    assert d["apiKeyHelper"] == anthropic_api_key_helper("agnes")
+    assert d["apiKeyHelper"] == anthropic_api_key_helper(_CONNECTION_UID)
     assert d["theme"] == "dark"  # unrelated key preserved
     assert d["env"]["FOO"] == "1"  # unrelated env preserved
     assert d["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
@@ -183,17 +187,26 @@ def test_target_for_agent_maps_agent_to_config() -> None:
 
 
 def test_per_connection_api_key_helper_is_written_and_removed() -> None:
-    helper = anthropic_api_key_helper("agnes")
-    assert helper == "coffer provider key --connection agnes"
+    # The helper names the connection by UID, which is what makes a rename cost
+    # nothing: the line Coffer writes into somebody else's config file goes on
+    # resolving after the user relabels the connection, so there is no
+    # re-projection to perform and no window in which the agent shells out to a
+    # name that no longer exists.
+    helper = anthropic_api_key_helper(_CONNECTION_UID)
+    assert helper == f"coffer provider key --connection-uid {_CONNECTION_UID}"
     out = apply_anthropic_settings(
         "", base_url="https://agnes", model=None, fast_model=None, api_key_helper=helper
     )
     assert json.loads(out)["apiKeyHelper"] == helper
-    # Removal strips ANY Coffer-managed helper by prefix (per-connection or the
-    # legacy --wire form), so use-builtin always reverts cleanly.
+    # Removal strips ANY Coffer-managed helper by prefix, so use-builtin always
+    # reverts cleanly — including the two forms Coffer no longer writes but did
+    # write into files that are still on this disk.
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(out))
-    legacy = '{"apiKeyHelper": "coffer provider key --wire anthropic"}'
-    assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(legacy))
+    for superseded in (
+        '{"apiKeyHelper": "coffer provider key --wire anthropic"}',
+        '{"apiKeyHelper": "coffer provider key --connection agnes"}',
+    ):
+        assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(superseded))
 
 
 # --- supported-agent invariant -------------------------------------------------

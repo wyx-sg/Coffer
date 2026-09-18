@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from coffer.application.resource_kind_ops import credential_refs
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import Kind
+from coffer.domain.resource import Kind, Resource
 
 if TYPE_CHECKING:
     from coffer.application.resource_service import ResourceService
@@ -60,3 +60,28 @@ async def release_orphaned_credentials(
         except Exception:
             _logger.exception("resource.credential_release_failed", extra={"ref": cred_ref})
     return released
+
+
+async def citations_of(service: ResourceService, credential_ref: str) -> list[Resource]:
+    """Return every resource whose config cites ``credential_ref``.
+
+    A credential lives in the encrypted store and is referenced only by its ref
+    from resource config (a channel's bot token, an mcp_server's auth header, a
+    model's API key). Deleting the credential out from under a live resource
+    silently breaks it, so the credential-delete route calls this first and
+    refuses (409) when the list is non-empty. Each kind that stores secrets
+    supplies a ``credential_ref_extractor``; kinds without one cite nothing and
+    are skipped.
+
+    Whole resources rather than identifiers, because both callers want more
+    than the identity: the 409 names the citing resources back to the user, and
+    the release above only has to know whether the list is empty.
+    """
+    citing: list[Resource] = []
+    for resource in await service._repo.list():
+        kind_def = service._kinds.get(resource.kind)
+        if kind_def is None:
+            continue
+        if credential_ref in credential_refs(kind_def, resource.config).values():
+            citing.append(resource)
+    return citing

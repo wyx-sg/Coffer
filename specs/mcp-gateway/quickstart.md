@@ -63,7 +63,7 @@ coffer mcp add filesystem \
   --stdio "npx -y @modelcontextprotocol/server-filesystem /tmp"
 ```
 
-`add` registers the server and prints `registered: mcp_server:filesystem`. It
+`add` registers the server and prints `registered: mcp_server filesystem`. It
 does not spawn anything — discovery happens on the first list, and you can force
 it now:
 

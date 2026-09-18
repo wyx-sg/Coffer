@@ -80,6 +80,7 @@ def _catalogue() -> guide_render.Catalogue:
     return [
         (
             CollectionEntry(
+                uid="rsc-coffer",
                 name="coffer",
                 description="The Coffer project's own knowledge. Notes an agent wrote.",
                 source_count=4,
@@ -104,6 +105,7 @@ def _catalogue() -> guide_render.Catalogue:
         ),
         (
             CollectionEntry(
+                uid="rsc-scratch",
                 name="scratch",
                 description="",
                 source_count=1,

@@ -6,12 +6,23 @@ from coffer.domain.error_base import CofferError as CofferError
 
 
 class ResourceNotFound(CofferError):  # noqa: N818
+    """Nothing answers to what the caller asked for.
+
+    Carries the SUBJECT the caller used, not a canonical identifier: a lookup
+    by uid has no name to report, and one that started from a label the user
+    typed must echo that label back or the message helps nobody. Use
+    :meth:`named` on the label path so the two phrasings stay in one place.
+    """
+
     code = "RESOURCE_NOT_FOUND"
 
-    def __init__(self, kind: str, name: str) -> None:
-        super().__init__(f"resource not found: {kind}:{name}")
-        self.kind = kind
-        self.name = name
+    def __init__(self, subject: str) -> None:
+        super().__init__(f"resource not found: {subject}")
+        self.subject = subject
+
+    @classmethod
+    def named(cls, kind: str, name: str) -> ResourceNotFound:
+        return cls(f"no {kind} named {name!r}")
 
 
 class ResourceAlreadyExists(CofferError):  # noqa: N818
@@ -28,18 +39,6 @@ class UnknownKind(CofferError):  # noqa: N818
 
     def __init__(self, kind: str) -> None:
         super().__init__(f"unknown kind: {kind!r}")
-        self.kind = kind
-
-
-class RenameNotSupported(CofferError):  # noqa: N818
-    """This kind's rows are addressed by name somewhere this rename cannot
-    reach, so changing it would leave the reference pointing at nothing.
-    Maps to 409."""
-
-    code = "RENAME_NOT_SUPPORTED"
-
-    def __init__(self, kind: str) -> None:
-        super().__init__(f"a {kind!r} cannot be renamed")
         self.kind = kind
 
 

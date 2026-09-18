@@ -8,6 +8,10 @@
 //
 // We mock the hook at the network boundary and the fs actions (their own suite
 // covers the transport), so this asserts what the page asks for and shows.
+//
+// The agent half of the route is its `uid` (`/agents/:uid/conversations`), so
+// the fixture route below mounts a uid that is not the agent's name — the read
+// and the back link both have to spell it.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
@@ -72,10 +76,10 @@ function renderAt(search = `?path=${encodeURIComponent(SOURCE_PATH)}`) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/agents/codex/conversations${search}`]}>
+      <MemoryRouter initialEntries={[`/agents/u-codex/conversations${search}`]}>
         <Routes>
-          <Route path="/agents/:name/conversations" element={<AgentConversationPage />} />
-          <Route path="/agents/:name" element={<div>agent detail</div>} />
+          <Route path="/agents/:uid/conversations" element={<AgentConversationPage />} />
+          <Route path="/agents/:uid" element={<div>agent detail</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -88,7 +92,7 @@ describe("AgentConversationPage", () => {
   test("reads the session named by ?path= — the file, not the session id", () => {
     stub();
     renderAt();
-    expect(vi.mocked(hooks.useTranscriptSession)).toHaveBeenCalledWith("codex", SOURCE_PATH, 0);
+    expect(vi.mocked(hooks.useTranscriptSession)).toHaveBeenCalledWith("u-codex", SOURCE_PATH, 0);
   });
 
   test("renders the header and the turns as a dialogue", () => {
@@ -153,7 +157,7 @@ describe("AgentConversationPage", () => {
     renderAt();
     fireEvent.click(screen.getByRole("button", { name: /later turns/i }));
     expect(vi.mocked(hooks.useTranscriptSession).mock.calls.at(-1)).toEqual([
-      "codex",
+      "u-codex",
       SOURCE_PATH,
       200,
     ]);
@@ -186,7 +190,7 @@ describe("AgentConversationPage", () => {
     stub();
     renderAt();
     const back = screen.getByRole("link", { name: /back to/i });
-    expect(back).toHaveAttribute("href", "/agents/codex?tab=conversations");
+    expect(back).toHaveAttribute("href", "/agents/u-codex?tab=conversations");
     fireEvent.click(back);
     expect(screen.getByText("agent detail")).toBeInTheDocument();
   });

@@ -6,6 +6,12 @@
 //   - a rename field that stays hidden until the daemon answers 409 with a
 //     `suggested_name`; the resubmit then carries `new_name`
 //   - 422 ADOPT_SECRET_UNRESOLVED (no suggested_name) shows the message
+//
+// The dialog is given both halves of the agent's identity and uses each for a
+// different thing, which is what the fixtures below pin down: the request is
+// addressed to the UID (`u-cc`), while the keychain references it mints spell
+// the NAME (`cc`), because a ref is an address a person reads in the vault and
+// nothing ever looks one up again.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -45,7 +51,13 @@ function renderDialog(entry: McpEntryOut = ENTRY) {
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
   return render(
-    <AgentAdoptMcpDialog agentName="cc" entry={entry} open onOpenChange={() => {}} />,
+    <AgentAdoptMcpDialog
+      agentUid="u-cc"
+      agentName="cc"
+      entry={entry}
+      open
+      onOpenChange={() => {}}
+    />,
     { wrapper: Wrapper },
   );
 }
@@ -54,10 +66,11 @@ afterEach(() => vi.clearAllMocks());
 
 describe("AgentAdoptMcpDialog", () => {
   test("renders a prefilled keychain-reference input per secret key and submits the mapping", async () => {
-    adoptMock.mockResolvedValue({ kind: "mcp_server", name: "github" });
+    adoptMock.mockResolvedValue({ uid: "u-github", kind: "mcp_server", name: "github" });
     renderDialog();
 
     const input = screen.getByLabelText("GITHUB_TOKEN");
+    // The prefilled ref spells the agent's NAME, not its uid.
     expect(input).toHaveValue("mcp/cc/github/GITHUB_TOKEN");
     expect(screen.getByText(/likely secrets detected/i)).toBeInTheDocument();
 
@@ -65,7 +78,7 @@ describe("AgentAdoptMcpDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
 
     await waitFor(() =>
-      expect(adoptMock).toHaveBeenCalledWith("cc", "github", {
+      expect(adoptMock).toHaveBeenCalledWith("u-cc", "github", {
         source: "global",
         secrets: { GITHUB_TOKEN: "mcp/custom/ref" },
       }),
@@ -73,12 +86,14 @@ describe("AgentAdoptMcpDialog", () => {
   });
 
   test("no secret keys → no secret inputs and no secrets in the body", async () => {
-    adoptMock.mockResolvedValue({ kind: "mcp_server", name: "plain" });
+    adoptMock.mockResolvedValue({ uid: "u-plain", kind: "mcp_server", name: "plain" });
     renderDialog({ ...ENTRY, name: "plain", env_keys: [], secret_keys: [] });
 
     expect(screen.queryByText(/likely secrets detected/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
-    await waitFor(() => expect(adoptMock).toHaveBeenCalledWith("cc", "plain", { source: "global" }));
+    await waitFor(() =>
+      expect(adoptMock).toHaveBeenCalledWith("u-cc", "plain", { source: "global" }),
+    );
   });
 
   test("409 with suggested_name reveals the prefilled rename field; resubmit sends new_name", async () => {
@@ -88,7 +103,11 @@ describe("AgentAdoptMcpDialog", () => {
           suggested_name: "github-claude_code",
         }),
       )
-      .mockResolvedValueOnce({ kind: "mcp_server", name: "github-claude_code" });
+      .mockResolvedValueOnce({
+        uid: "u-github-claude_code",
+        kind: "mcp_server",
+        name: "github-claude_code",
+      });
     renderDialog();
 
     // Rename field hidden until the daemon reports the conflict.
@@ -101,7 +120,7 @@ describe("AgentAdoptMcpDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Adopt into Coffer" }));
     await waitFor(() =>
-      expect(adoptMock).toHaveBeenLastCalledWith("cc", "github", {
+      expect(adoptMock).toHaveBeenLastCalledWith("u-cc", "github", {
         source: "global",
         secrets: { GITHUB_TOKEN: "mcp/cc/github/GITHUB_TOKEN" },
         new_name: "github-claude_code",

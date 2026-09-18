@@ -39,7 +39,7 @@ export function ConnectionStatusCell({
     <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
       <ScopeControl
         kind={PROVIDER_KIND}
-        name={provider.name}
+        uid={provider.uid}
         enabled={provider.enabled}
         scope={reach?.scope ?? null}
       />
@@ -85,7 +85,7 @@ export function ConnectionsBulkActions({
   return (
     <>
       <BulkReachActions
-        rows={providers.map((p) => ({ kind: PROVIDER_KIND, name: p.name }))}
+        rows={providers.map((p) => ({ kind: PROVIDER_KIND, uid: p.uid }))}
         invalidate={[["providers"]]}
         onDone={onDone}
       />
@@ -94,7 +94,7 @@ export function ConnectionsBulkActions({
         description={t("settings.connections.bulkDeleteConfirm", { count: providers.length })}
         pending={bulk.isPending}
         onConfirm={async () => {
-          await bulk.run(providers, (p) => providersApi.remove(p.name));
+          await bulk.run(providers, (p) => providersApi.remove(p.uid));
           onDone();
         }}
       />

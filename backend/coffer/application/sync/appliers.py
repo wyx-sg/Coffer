@@ -21,14 +21,10 @@ from __future__ import annotations
 
 import asyncio
 import pathlib
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Sequence
 
-import yaml
-
-from coffer.application.resource_service import ResourceService
-from coffer.application.sync.ports import CredentialSyncPort, ImportGate, SyncedStatePort
-from coffer.domain.errors import ResourceNotFound
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.application.sync.appliers_read import read_yaml
+from coffer.application.sync.ports import CredentialSyncPort, SyncedStatePort
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.fernet_time import is_fresher
 from coffer.domain.sync.portability import expand_home
@@ -111,157 +107,6 @@ class TreeApplier:
             parent = parent.parent
 
 
-class ResourceApplier:
-    """``resources/<kind>/<name>.yaml`` — rows in the registry.
-
-    Upsert runs the kind's import gate first, so a document that cannot apply
-    on this machine is reported before anything is written. Removal goes
-    through ``ResourceService.delete``, which releases the credentials no
-    remaining resource cites — the orphaned-credential path that seeded the
-    2026-07-10 clobber.
-
-    What an incoming document may change is narrower than what it used to be.
-    It carries the resource — identity, description, config — and it does not
-    carry the resource's **reach**: ``enabled`` and ``scope`` are one decision
-    the user makes per machine, on the machine, and an arriving document never
-    touches them here. A row that already exists keeps the reach it was given; a row
-    that has just arrived takes the framework's own default, because a resource
-    nobody on this machine has looked at yet has not been given a reach here
-    either.
-
-    A document of a kind that declares ``converges=False`` is ignored outright,
-    upsert and removal alike. The exporter already withholds those, so this end
-    of the rule only matters while the fleet is mixed — but that is exactly
-    when it matters: a machine still on an older build keeps publishing them,
-    and without this the ghost row arrives from the one direction the export
-    fix cannot reach. Removal is skipped for the opposite reason: a derived row
-    here was computed from THIS machine's agents, so a deletion in the tree has
-    no standing over it.
-
-    A row of a *converging* kind that the kind declines row by row
-    (``Kind.converges_row`` — Coffer's own generated skill) is ignored on
-    exactly the same terms, and the removal half is the one that had to be
-    written down. Left to itself a deletion of `resources/skill/coffer-guide
-    .yaml` would reach ``ResourceService.delete``, meet the skill kind's
-    ``validate_delete`` guard, raise ``ResourceProtected`` — and the round,
-    which catches ``CofferError`` and holds the path, would re-derive the same
-    diff on the next tick and refuse it again, every tick, forever. The fix is
-    not to soften the guard: a document about a row this machine does not
-    publish is not this machine's to apply in *either* direction, so it never
-    reaches the guard at all.
-
-    The question is asked of the arriving document's config and of the local
-    row's, and either answer is enough to ignore it. The document's, because a
-    machine that has not yet seeded its own guide has no row to consult; the
-    local row's, because a document written by a build that did not record the
-    source still must not overwrite a folder this machine generated.
-    """
-
-    prefix = "resources/"
-
-    def __init__(
-        self,
-        resources: ResourceService,
-        *,
-        worktree: pathlib.Path,
-        gates: Sequence[ImportGate] = (),
-        home: str | None,
-        actor: str = "sync",
-    ) -> None:
-        self._resources = resources
-        self._worktree = worktree
-        self._gates = {gate.kind: gate for gate in gates}
-        self._home = home
-        self._actor = actor
-
-    async def upsert(self, path: str) -> None:
-        doc = await asyncio.to_thread(_read_yaml, self._worktree / path)
-        kind, name = _ref_from(doc, path)
-        raw_config = doc.get("config")
-        config: dict[str, object] = dict(raw_config) if isinstance(raw_config, Mapping) else {}
-        if self._home:
-            config = expand_home(config, self._home)
-
-        ref = ResourceRef(kind, name)
-        existing = await self._find(ref)
-        if not self._converges(kind, config, existing):
-            return
-
-        gate = self._gates.get(kind)
-        if gate is not None:
-            # The gate sees the config alone. It used to be handed the
-            # document's scope as well, so a scope-aware gate could wave a
-            # dormant doc past a machine-local precondition; reach does not
-            # travel any more, and a gate that still wants that leniency reads
-            # this machine's own row for it — the only place the answer was
-            # ever true.
-            await gate.validate(config)
-
-        raw_description = doc.get("description")
-        description = raw_description if isinstance(raw_description, str) else None
-        if existing is None:
-            # Whatever reach the framework gives a fresh row — the kind's
-            # ``default_scope`` and the ``enabled`` default — is the right one.
-            # This resource has just arrived; nobody on THIS machine has said
-            # yet how far it should reach, and inventing an answer from the
-            # other machine's would be exactly the silent re-answering the
-            # document stopped carrying reach to prevent.
-            await self._resources.register(
-                kind, name, config, self._actor, description=description, allow_lifecycle_kind=True
-            )
-        else:
-            # Config and description only. The local ``enabled`` and ``scope``
-            # are left exactly as this machine set them — that is the whole
-            # decision, and it is a decision about *this* machine that an
-            # incoming document has no standing to revise.
-            await self._resources.update_config(
-                ref,
-                config,
-                self._actor,
-                description=description,
-                allow_lifecycle_kind=True,
-            )
-
-    async def remove(self, path: str) -> None:
-        kind, name = _ref_from({}, path)
-        if not self._resources.converges(kind):
-            return
-        ref = ResourceRef(kind, name)
-        existing = await self._find(ref)
-        if existing is None:
-            # Already gone here — two machines deleting the same resource is
-            # agreement, not a failure.
-            return
-        # A removal carries no document, so the only config to ask about is the
-        # local row's — which is the one that matters here anyway: what is
-        # being protected is the row this machine generated.
-        if not self._converges(kind, existing.config, existing):
-            return
-        await self._resources.delete(ref, self._actor)
-
-    def _converges(
-        self,
-        kind: str,
-        config: Mapping[str, object],
-        existing: Resource | None,
-    ) -> bool:
-        """Whether this machine applies documents for this row at all.
-
-        Both sides have to agree: an arriving document that describes derived
-        output is not applied, and a local row that IS derived output is not
-        revised by an arriving document either.
-        """
-        if not self._resources.converges_row(kind, config):
-            return False
-        return existing is None or self._resources.converges_row(kind, existing.config)
-
-    async def _find(self, ref: ResourceRef) -> Resource | None:
-        try:
-            return await self._resources.get(ref)
-        except ResourceNotFound:
-            return None
-
-
 class StateApplier:
     """``state/<area>/…`` — module-owned shared state.
 
@@ -293,7 +138,7 @@ class StateApplier:
         provider, rel = self._route(path)
         if provider is None:
             return
-        doc = await asyncio.to_thread(_read_yaml, self._worktree / path)
+        doc = await asyncio.to_thread(read_yaml, self._worktree / path)
         if self._home:
             doc = expand_home(doc, self._home)
         failures = await provider.import_docs([(rel, doc)])
@@ -340,25 +185,3 @@ class CredentialApplier:
 
     def _ref(self, path: str) -> str:
         return path[len(self.prefix) :].removesuffix(".enc")
-
-
-def _read_yaml(path: pathlib.Path) -> dict[str, object]:
-    try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError, UnicodeDecodeError) as e:
-        raise SyncSerializationError(f"{path.name} could not be read: {e}") from e
-    if not isinstance(raw, Mapping):
-        raise SyncSerializationError(f"{path.name} is not a mapping")
-    return dict(raw)
-
-
-def _ref_from(doc: Mapping[str, object], path: str) -> tuple[str, str]:
-    """Kind and name, from the document when it is there and the path when it
-    is not — a removal has no document left to read."""
-    kind, name = doc.get("kind"), doc.get("name")
-    if isinstance(kind, str) and isinstance(name, str) and kind and name:
-        return kind, name
-    parts = path.split("/")
-    if len(parts) != 3:
-        raise SyncSerializationError(f"{path} is not resources/<kind>/<name>.yaml")
-    return parts[1], parts[2].removesuffix(".yaml")

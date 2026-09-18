@@ -49,12 +49,12 @@ export function useImportMcpServers() {
 /** Spawn/connect the server once and report latency. A transport failure is
  *  thrown as an Error carrying the daemon's message, which the detail page
  *  folds into a failing result. */
-export function useTestMcpServer(name: string) {
+export function useTestMcpServer(uid: string) {
   return useMutation({
     mutationFn: async (): Promise<TestResult> => {
       const client = getApiClient();
-      const { data, error } = await client.POST("/resources/mcp_server/{name}/test", {
-        params: { path: { name } },
+      const { data, error } = await client.POST("/resources/mcp_server/{uid}/test", {
+        params: { path: { uid } },
       });
       if (error || data === undefined) throw new Error(error?.error?.message ?? "test failed");
       return data;

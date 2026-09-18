@@ -21,11 +21,11 @@ export function useSkills() {
   });
 }
 
-export function useSkill(name: string) {
+export function useSkill(uid: string) {
   return useQuery({
-    queryKey: skillKey(name),
-    queryFn: () => skillsApi.get(name),
-    enabled: !!name,
+    queryKey: skillKey(uid),
+    queryFn: () => skillsApi.get(uid),
+    enabled: !!uid,
   });
 }
 
@@ -45,7 +45,7 @@ export function useRemoveSkill() {
   const qc = useQueryClient();
   const onError = useSkillToastError();
   return useMutation({
-    mutationFn: (name: string) => skillsApi.remove(name),
+    mutationFn: (uid: string) => skillsApi.remove(uid),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: skillsKey });
     },
@@ -53,18 +53,18 @@ export function useRemoveSkill() {
   });
 }
 
-export function useSkillFiles(name: string) {
+export function useSkillFiles(uid: string) {
   return useQuery({
-    queryKey: skillFilesKey(name),
-    queryFn: async () => (await skillsApi.filesTree(name)).root,
-    enabled: !!name,
+    queryKey: skillFilesKey(uid),
+    queryFn: async () => (await skillsApi.filesTree(uid)).root,
+    enabled: !!uid,
   });
 }
 
-export function useSkillFileContent(name: string, path: string | null) {
+export function useSkillFileContent(uid: string, path: string | null) {
   return useQuery({
-    queryKey: skillFileKey(name, path ?? ""),
-    queryFn: () => skillsApi.fileContent(name, path as string),
-    enabled: !!name && !!path,
+    queryKey: skillFileKey(uid, path ?? ""),
+    queryFn: () => skillsApi.fileContent(uid, path as string),
+    enabled: !!uid && !!path,
   });
 }

@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING
 
 from coffer.application.skill import file_ops
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import ResourceRef
 from coffer.domain.workspace_errors import SkillFileStale
 
 if TYPE_CHECKING:
@@ -24,7 +23,7 @@ if TYPE_CHECKING:
 async def write_skill_file(
     service: SkillService,
     *,
-    name: str,
+    uid: str,
     relpath: str,
     content: str,
     expected_fingerprint: str | None = None,
@@ -49,8 +48,11 @@ async def write_skill_file(
     ``ResourceNotFound`` if the skill isn't registered, and ``SkillFileStale``
     on a fingerprint mismatch).
     """
-    await service.get_skill(name)  # 404 if the skill isn't registered.
-    master = pathlib.Path(service.master_path(name))
+    skill = await service.get_skill(uid)  # 404 if the skill isn't registered.
+    # The master folder is named after the skill's CURRENT label; the uid is
+    # how the caller said which skill it meant. Reading the name off the row
+    # we just resolved is what keeps a rename from stranding an editor.
+    master = pathlib.Path(service.master_path(skill.name))
     if expected_fingerprint is not None:
         # Reuse the reader so the path-containment guard runs identically here
         # and in the write below — a path that escapes the folder must be
@@ -61,7 +63,7 @@ async def write_skill_file(
     result = file_ops.write_skill_file(master, relpath, content)
     await service._audit.record(
         AuditEventType.SKILL_UPDATED,
-        ref=ResourceRef("skill", name),
+        resource=skill,
         actor=actor,
         details={"path": result.path, "edited_file": True},
     )

@@ -97,8 +97,11 @@ class Engine:
     repos: FakeRepoMounts
 
     async def create(self, template: str = "delivery", **kwargs: Any) -> Any:
+        # Takes the NAME, passes the uid: the service is addressed by identity
+        # and the fixtures are readable, which is the whole point of the fake
+        # deriving one from the other.
         return await self.runs.create_run(
-            template=template,
+            template_uid=self.templates.uid_of(template),
             title=kwargs.pop("title", "Ship the thing"),
             **kwargs,
         )

@@ -1,6 +1,6 @@
 """Contract tests for the resource scope REST endpoints (ADR per-agent-resource-scope).
 
-GET/PUT /api/v1/resources/{kind}/{name}/scope. Colocated under tests/contract
+GET/PUT /api/v1/resources/{uid}/scope. Colocated under tests/contract
 (not tests/integration/surfaces/http, where the base CRUD routes are covered)
 because this is the wire-contract surface for scope specifically: response
 shapes, the SCOPE_INVALID envelope code, and 404 semantics. Client/fixture
@@ -35,6 +35,11 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
 
+# Agent UIDS. Nothing in a scope is a name any more, which is why these do not
+# look like anything a user typed.
+_AGENT_A = "aa11bb22cc33dd44ee55ff6677889900"
+_AGENT_B = "bb22cc33dd44ee55ff6677889900aa11"
+
 
 async def _client(tmp_path):
     """Wire a real app with the production mcp_server/knowledge/agent/skill Kinds.
@@ -56,7 +61,10 @@ async def _client(tmp_path):
         "mcp_server": make_mcp_kind({}),
         KIND_KNOWLEDGE: make_knowledge_kind(None),  # type: ignore[arg-type]
         "agent": make_agent_kind(None),
-        "skill": make_skill_kind(None),  # type: ignore[arg-type]
+        # The two hooks a skill supplies — binding cleanup on delete and the
+        # master-folder move on rename — are never reached here: this file
+        # only writes scope.
+        "skill": make_skill_kind(None, None),  # type: ignore[arg-type]
     }
     repo = SqlAlchemyResourceRepo(sm)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
@@ -79,13 +87,13 @@ async def _client(tmp_path):
 async def test_get_scope_returns_null_and_supports_scope_for_mcp_server(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(
+        fs = await svc.register(
             kind="mcp_server",
             name="fs",
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
-        r = await c.get("/api/v1/resources/mcp_server/fs/scope")
+        r = await c.get(f"/api/v1/resources/{fs.uid}/scope")
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["scope"] is None
@@ -97,14 +105,14 @@ async def test_get_scope_returns_null_and_supports_scope_for_mcp_server(tmp_path
 async def test_get_scope_reports_kinds_without_scope(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(
+        agent = await svc.register(
             kind="agent",
             name="claude",
             config={"type": "claude_code"},
             actor="agent-service",
             allow_lifecycle_kind=True,
         )
-        r = await c.get("/api/v1/resources/agent/claude/scope")
+        r = await c.get(f"/api/v1/resources/{agent.uid}/scope")
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["scope"] is None
@@ -121,26 +129,30 @@ async def test_put_scope_round_trips_agent_list_and_response_carries_scope(tmp_p
     """The agent allow-list rides the wire as one object."""
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(
+        fs = await svc.register(
             kind="mcp_server",
             name="fs",
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
-        scope = {"agents": ["claude-code", "codex"]}
-        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": scope})
+        # The entries are agent UIDS: a scope is a reference to another
+        # resource, and a reference holds what cannot change underneath it.
+        # While this list held names, renaming an agent emptied every scope
+        # that named it.
+        scope = {"agents": [_AGENT_A, _AGENT_B]}
+        r = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": scope})
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["scope"] == scope
-        assert body["ref"] == "mcp_server:fs"
+        assert body["uid"] == fs.uid
 
         # Round-trip through GET too.
-        get_r = await c.get("/api/v1/resources/mcp_server/fs/scope")
+        get_r = await c.get(f"/api/v1/resources/{fs.uid}/scope")
         assert get_r.status_code == 200
         assert get_r.json()["scope"] == scope
 
         # Full ResourceOut GET also carries scope.
-        full_r = await c.get("/api/v1/resources/mcp_server/fs")
+        full_r = await c.get(f"/api/v1/resources/{fs.uid}")
         assert full_r.status_code == 200
         assert full_r.json()["scope"] == scope
     await engine.dispose()
@@ -152,24 +164,24 @@ async def test_put_empty_scope_is_dormant_and_null_clears(tmp_path):
     null list is unrestricted, and a null scope clears the scope entirely."""
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(
+        fs = await svc.register(
             kind="mcp_server",
             name="fs",
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
             actor="cli",
         )
         dormant = {"agents": []}
-        r = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": dormant})
+        r = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": dormant})
         assert r.status_code == 200, r.text
         assert r.json()["scope"] == dormant
 
         # A null list is unrestricted, which is not the same as no scope at all.
         unrestricted = {"agents": None}
-        r_u = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": unrestricted})
+        r_u = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": unrestricted})
         assert r_u.status_code == 200, r_u.text
         assert r_u.json()["scope"] == unrestricted
 
-        r2 = await c.put("/api/v1/resources/mcp_server/fs/scope", json={"scope": None})
+        r2 = await c.put(f"/api/v1/resources/{fs.uid}/scope", json={"scope": None})
         assert r2.status_code == 200, r2.text
         assert r2.json()["scope"] is None
     await engine.dispose()
@@ -188,20 +200,20 @@ async def test_scope_on_a_lifecycle_kind_that_declares_none_is_reported_and_refu
     """
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(
+        collection = await svc.register(
             kind=KIND_KNOWLEDGE,
             name="shopee",
             config={},
             actor="cli",
             allow_lifecycle_kind=True,
         )
-        get_r = await c.get(f"/api/v1/resources/{KIND_KNOWLEDGE}/shopee/scope")
+        get_r = await c.get(f"/api/v1/resources/{collection.uid}/scope")
         assert get_r.status_code == 200, get_r.text
         assert get_r.json() == {"scope": None, "supports_scope": False}
 
         r = await c.put(
-            f"/api/v1/resources/{KIND_KNOWLEDGE}/shopee/scope",
-            json={"scope": {"agents": ["claude-code"]}},
+            f"/api/v1/resources/{collection.uid}/scope",
+            json={"scope": {"agents": [_AGENT_A]}},
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SCOPE_INVALID"
@@ -218,7 +230,7 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
     is active for, so an agent scoping itself is meaningless."""
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(
+        agent = await svc.register(
             kind="agent",
             name="claude",
             config={"type": "claude_code"},
@@ -226,8 +238,8 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
             allow_lifecycle_kind=True,
         )
         r = await c.put(
-            "/api/v1/resources/agent/claude/scope",
-            json={"scope": {"agents": ["claude-code"]}},
+            f"/api/v1/resources/{agent.uid}/scope",
+            json={"scope": {"agents": [_AGENT_A]}},
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SCOPE_INVALID"
@@ -238,7 +250,7 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
 async def test_put_scope_rejects_a_malformed_payload(tmp_path):
     c, engine, svc = await _client(tmp_path)
     async with c:
-        await svc.register(
+        fs = await svc.register(
             kind="mcp_server",
             name="fs",
             config={"transport": {"type": "http", "url": "http://example.com/mcp"}},
@@ -246,26 +258,26 @@ async def test_put_scope_rejects_a_malformed_payload(tmp_path):
         )
         # The pre-two-axis shape: a bare list is no longer a scope.
         r = await c.put(
-            "/api/v1/resources/mcp_server/fs/scope",
-            json={"scope": ["claude-code"]},
+            f"/api/v1/resources/{fs.uid}/scope",
+            json={"scope": [_AGENT_A]},
         )
         assert r.status_code == 422, r.text
-        # An axis that is not a list of names is refused too.
+        # An axis that is not a list of uids is refused too.
         r2 = await c.put(
-            "/api/v1/resources/mcp_server/fs/scope",
-            json={"scope": {"agents": "claude-code"}},
+            f"/api/v1/resources/{fs.uid}/scope",
+            json={"scope": {"agents": _AGENT_A}},
         )
         assert r2.status_code == 422, r2.text
     await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_put_scope_unknown_name_returns_404(tmp_path):
+async def test_put_scope_unknown_uid_returns_404(tmp_path):
     c, engine, _svc = await _client(tmp_path)
     async with c:
         r = await c.put(
-            "/api/v1/resources/mcp_server/nope/scope",
-            json={"scope": {"agents": ["claude-code"]}},
+            "/api/v1/resources/no-such-uid/scope",
+            json={"scope": {"agents": [_AGENT_A]}},
         )
         assert r.status_code == 404, r.text
         assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
@@ -283,12 +295,11 @@ async def test_put_scope_works_for_lifecycle_kind_skill(tmp_path):
         # Seed directly (a skill's real creation flow is owned by SkillService,
         # not exercised here) — allow_lifecycle_kind mirrors that dedicated
         # service opting in, per CODE-REG.
-        await svc.register(
+        skill = await svc.register(
             kind="skill",
             name="reviewer",
             config={
                 "source": {"type": "local_import", "original_path": "/tmp/reviewer"},
-                "skill_md_name": "reviewer",
                 "skill_md_description": "reviews things",
                 "version_hash": "abc123",
             },
@@ -296,9 +307,9 @@ async def test_put_scope_works_for_lifecycle_kind_skill(tmp_path):
             allow_lifecycle_kind=True,
         )
         r = await c.put(
-            "/api/v1/resources/skill/reviewer/scope",
-            json={"scope": {"agents": ["claude-code"]}},
+            f"/api/v1/resources/{skill.uid}/scope",
+            json={"scope": {"agents": [_AGENT_A]}},
         )
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"agents": ["claude-code"]}
+        assert r.json()["scope"] == {"agents": [_AGENT_A]}
     await engine.dispose()

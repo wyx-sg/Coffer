@@ -1,7 +1,7 @@
 # Feature Specification: Resource Framework
 
 **Status**: Accepted
-**Scope note**: This spec owns the kind-agnostic half of Coffer's resource model — the kind registry and the `<kind>:<name>` identity, the lifecycle surface every kind is managed through, per-agent reach, the audit log, per-table retention and its background prune, the cross-kind read of the passes in flight, and the rule that every management operation is reachable from both REST and the CLI. What a kind *is* — an MCP server, an agent, a skill, a channel, a knowledge collection, a memory partition, a provider connection — belongs to that kind's own spec.
+**Scope note**: This spec owns the kind-agnostic half of Coffer's resource model — the kind registry and the immutable `uid` identity, the lifecycle surface every kind is managed through, per-agent reach, the audit log, per-table retention and its background prune, the cross-kind read of the passes in flight, and the rule that every management operation is reachable from both REST and the CLI. What a kind *is* — an MCP server, an agent, a skill, a channel, a knowledge collection, a memory partition, a provider connection — belongs to that kind's own spec.
 **Input**: Extracted from spec mcp-gateway, which shipped the framework because it shipped the first kind. Seven kinds later the framework's requirements still sat in one kind's spec, so five routes, two tables, three entities, a user story and four acceptance scenarios were owned by nobody.
 
 ## Why this is a spec
@@ -32,7 +32,7 @@ With audit and retention inside it the picture changes, and the five tests in
    contract 6 already fences the core off from every kind; and it has ADRs of
    its own ([Everything Is a Resource Kind](../../docs/decisions/everything-is-a-resource-kind.md),
    [Resource Framework Upfront](../../docs/decisions/resource-framework-upfront.md),
-   [Resource Identifier Format](../../docs/decisions/resource-identifier-format.md),
+   [Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md),
    [Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)).
 3. **The name is accurate** — it is the framework, and nothing here is a kind.
 4. **One behaviour**: what happens to a managed thing between the moment a kind
@@ -59,7 +59,7 @@ auditing slightly differently, and the differences are only found in
 production.
 
 **Independent Test**: With one reach-supporting kind registered, list resources
-through the kind-agnostic surface, read one back by `<kind>:<name>`, disable it,
+through the kind-agnostic surface, read one back by its uid, disable it,
 set its reach to a single agent, clear the reach, delete it, and see every one
 of those steps in the audit log.
 
@@ -151,8 +151,8 @@ scenario in this section is referenced by at least one test marked
 ### Scenario: the kind-agnostic surface serves every kind
 
 - **Given** resources of more than one registered kind exist,
-- **When** the user lists resources without naming a kind, reads one back by its `<kind>:<name>` reference, then disables and re-enables it,
-- **Then** every kind's resources appear in the one list, each carrying its ref, kind, name, config, reach and enabled flag,
+- **When** the user lists resources without naming a kind, reads one back by its uid, then disables and re-enables it,
+- **Then** every kind's resources appear in the one list, each carrying its uid, kind, name, config, reach and enabled flag,
 - **And** the enable/disable round trip is served by the same route for every kind, and each step is audited.
 
 ### Scenario: reject an invalid registration and persist nothing
@@ -169,12 +169,31 @@ scenario in this section is referenced by at least one test marked
 - **Then** each write is persisted, audited as a scope update, and followed by the kind's own post-write reaction,
 - **And** a kind that supports no reach rejects a non-null scope, as does a payload carrying a property the scope schema does not define.
 
-### Scenario: a resource is given a different name
+### Scenario: renaming a resource is an ordinary edit
 
-- **Given** a resource of a kind that declares it may be renamed,
-- **When** the user gives it a new name,
-- **Then** it is reachable under the new name with its config, reach and enabled state intact, the old name resolves to nothing, and the change is audited against the same row id it always had,
-- **And** a name already taken within that kind is refused, a kind that declares no rename is refused, and submitting the name it already has changes nothing.
+- **Given** a resource of any kind, with a reach set, a credential cited by its
+  config, and rows in a table its kind owns,
+- **When** the user changes its name through the kind-agnostic update,
+- **Then** the resource is the same resource — its identity, its reach, its
+  credential and its kind-owned rows are untouched — and its audit trail comes
+  back whole, with the rows written before the change still saying what it was
+  called then,
+- **And** a name another resource of that kind already holds is refused with
+  nothing moved, as is a name the rules would have refused at registration, and
+  submitting the name it already has changes nothing.
+
+### Scenario: a kind whose name is a directory moves it with the rename
+
+- **Given** a resource of a kind that keeps an on-disk artifact named after it —
+  a skill's master folder, a knowledge collection's directory, a memory
+  partition's directory,
+- **When** the user renames it,
+- **Then** the artifact is at the new name with its contents intact and is
+  served from there,
+- **And** a rename the kind cannot carry out — something already occupies the
+  destination — is refused with the row and the artifact both untouched, rather
+  than leaving a resource pointing at a directory that is not there or merging
+  into one that was never its own.
 
 ### Scenario: command line covers every visual operation
 
@@ -224,17 +243,17 @@ scenario in this section is referenced by at least one test marked
 
 **Resource lifecycle**
 
-- **FR-001**: System MUST model every managed thing as a *resource* identified by `<kind>:<name>` ([Resource Identifier Format](../../docs/decisions/resource-identifier-format.md)), unique within its kind, and MUST expose one kind-agnostic surface — `/api/v1/resources*` and `coffer resource` — to list, read, update, enable, disable and delete any of them without the caller knowing the kind. A kind exists only because the composition root registered it; a request naming an unregistered kind MUST be refused rather than bringing one into being.
+- **FR-001**: System MUST model every managed thing as a *resource* identified by an immutable, opaque **`uid`** ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)), and MUST expose one kind-agnostic surface — `/api/v1/resources*` and `coffer resource` — to list, read, update, enable, disable and delete any of them without the caller knowing the kind. Every route and every stored reference from one resource to another MUST address the uid. A uid MUST be minted once and never reused, and MUST be the same value on every machine that holds the resource, so that two machines can tell "the same thing" from "a different thing with the same name" without asking each other. A kind exists only because the composition root registered it; a request naming an unregistered kind MUST be refused rather than bringing one into being.
 - **FR-002**: System MUST validate every registration against its kind's schema and the kind's own pre-write validators, MUST reject a duplicate name within a kind, and MUST persist nothing on a validation failure. This is the contract every kind inherits, which is why it is stated once here rather than once per kind.
 - **FR-003**: Creation is a per-kind seam and MUST stay one. The kind-agnostic create route MUST accept only kinds that declare themselves creatable through it, and MUST refuse a kind that owns a creation invariant beyond config validation — a skill's master folder, an agent's on-disk detection — so that such a kind is registered through its own surface, which can hold that invariant. There is deliberately no `coffer resource create`: a generic create would have to guess a config shape it cannot know. What this spec owns is everything that happens to a resource once a kind has made one.
 - **FR-004**: System MUST carry a framework-level per-agent reach on every resource — one allow-list of agents, `null` meaning every agent, `[]` meaning none ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)) — and MUST serve it for every kind through one kind-agnostic pair of routes rather than per kind, reporting whether the kind supports reach at all so a client can render the right control without knowing the kinds itself. A non-null reach on a kind that declares none, and a payload carrying a property the schema does not define, MUST both be refused rather than stored or silently widened — a client still sending a withdrawn axis means "only there", and keeping what is left would store "every agent". A reach write MUST be audited and MUST fire the kind's post-write reaction, so delivery and reclaim stay in step with the edit. *Enforcing* reach is each kind's own seam at its own choke point; this spec owns the value, its validation and its write path.
 - **FR-005**: Deleting a resource MUST run the kind's own cleanup hook while the resource can still be resolved, and a hook that fails MUST abort the deletion rather than leave a half-deleted thing. Rows a kind owns MUST cascade; history MUST NOT — the audit log and the invocation log outlive the resource they describe. Credentials that no remaining resource cites MUST be released, and a failure to release MUST NOT turn an already-completed deletion into a caller-facing error; the store behind those refs is spec credentials'.
 - **FR-010**: A kind MAY supply a **pre-write delete guard**: given the resource a delete names, it refuses the deletion before anything is torn down. The framework MUST run it after resolving the resource and **before** the kind's cleanup hook of FR-005, MUST turn its refusal into the caller's error unchanged, and MUST leave the resource exactly as it was — no link removed, no row touched, no lifecycle audit entry for a deletion that did not happen. The refusal MUST be identical whichever door the delete came through, the kind's own route or the kind-agnostic one, which is the whole reason it belongs here: a guard written into one route is a guard the second route silently lacks, and the kind-agnostic surface exists precisely so a caller need not know the kind. It is a **validator**, alongside the registration validators of FR-002, rather than a rejection raised from inside `on_delete` — that hook is a *reaction to an already-decided delete*, run to tear the kind's own half down, so a kind refusing from in there refuses only after the framework has committed to the operation and the caller has been told it is under way. The guard is the seam for a resource whose existence is not the owner's to decide: the only one today is a builtin skill, whose master folder the next boot writes back (spec [skill-manager](../skill-manager/spec.md) FR-029).
-- **FR-011**: A resource's name is a LABEL the person chose, and the system MUST let them change it in place for any kind that can bear the change, keeping the resource's identity, its config, its reach, its enabled state and its audit trail. A kind whose name is written out somewhere the move cannot reach — into another tool's configuration, into a folder on disk — MUST declare that the kind-agnostic surface may not rename it; that attempt MUST be refused rather than half-applied, and the kind's own surface, which repairs what it knows about, MUST be the one that moves it. Renaming to a name already taken within the kind MUST be refused, and renaming to the name it already has MUST change nothing and record nothing.
+- **FR-011**: A resource's `name` is a mutable **label**, unique within its kind and nothing more. Renaming MUST be an ordinary field of the kind-agnostic update — available for every kind, at the same level as editing a description — and MUST NOT require any other record to be rewritten, because nothing else holds the name: the resource keeps its identity, its config, its reach, its enabled state and its audit trail, with the entries written before the change still saying what it was called then. The same name rules MUST apply to a rename as to a registration, a collision within the kind MUST be refused before anything moves, and renaming to the name it already has MUST change nothing and record nothing. A kind that keeps an on-disk artifact named after the resource MUST be given the chance to move it, with a failure aborting the rename rather than leaving the two disagreeing. While the name WAS the identity, renaming needed its own route and only one kind ever had one.
 
 **Audit**
 
-- **FR-006**: System MUST record an audit entry for every lifecycle change to any resource or capability, including the actor (CLI / API / UI / system). Entries MUST be readable through both surfaces, filterable by kind, name, event type and time, and MUST carry the resource's stable row id so a trail survives a rename while each row keeps saying what the resource was called then. The event-type vocabulary is shared: this spec defines the resource and retention events and every kind contributes its own, so one record answers "what happened" for the whole vault rather than each kind growing a private log.
+- **FR-006**: System MUST record an audit entry for every lifecycle change to any resource or capability, including the actor (CLI / API / UI / system). Entries MUST be readable through both surfaces, filterable by kind, resource, event type and time, and MUST carry both the resource's stable identity and the label it carried at that moment, so a trail survives a rename while each row keeps saying what the resource was called then. Filtering one resource's history MUST key on that identity and not on the label: a label cannot tell a renamed resource from a deleted one whose name was later taken, and rendering two objects' histories as one is a worse answer than a short one. The event-type vocabulary is shared: this spec defines the resource and retention events and every kind contributes its own, so one record answers "what happened" for the whole vault rather than each kind growing a private log.
 
 **Retention**
 
@@ -281,6 +300,6 @@ scenario in this section is referenced by at least one test marked
 
 - **What a kind is.** Transport, discovery, delivery, projection, conversation — every kind's own behaviour is its own spec's. This spec absorbs none of it.
 - **Enforcing reach.** Each kind gates at its own choke point, where the asking identity is known: spec mcp-gateway at the per-session capability listing, spec skill-manager at delivery, and so on. A second central gate would be unreachable, because every per-kind path already runs downstream of its own.
-- **Scheduling the passes FR-008 reports.** Whether `organise` and `tidy` run on a timer, how often, and against which model is spec internal-engine's; what each pass does is spec memory's and spec knowledge's.
+- **Scheduling the passes FR-008 reports.** Whether `distil` and `curate` run on a timer, how often, and against which model is spec internal-engine's; what each pass does is spec memory's and spec knowledge's.
 - **The invocation log.** A per-call record of gateway traffic is spec mcp-gateway's; it registers as a prunable table here, which is the whole of the relationship.
 - **A generic resource-creation command.** See FR-003.

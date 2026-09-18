@@ -22,16 +22,17 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.agent_vocabulary import agent_key_by_name
 from coffer.application.channel.inbound import ChannelBinding, InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
-from coffer.application.channel.ports import AdapterCallbacks, ChannelPeer
+from coffer.application.channel.ports import AdapterCallbacks
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
+from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import (
@@ -40,7 +41,6 @@ from coffer.application.chat.turn_orchestrator import (
 )
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
-from coffer.domain.agent.config import AgentConfig
 from coffer.domain.audit import AuditEntry
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
@@ -53,7 +53,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.chat.events import TextDelta, TurnDone, TurnStarted
-from coffer.domain.resource import Kind, Resource, ResourceRef
+from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
@@ -70,6 +70,47 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyResourceRepo,
 )
 from tests.unit.chat.conftest import FakeAgentAdapter
+
+#: The agent key this fixture's own scripted provider is registered under, and
+#: therefore the agent every channel here is bound to unless a test says
+#: otherwise.
+DEFAULT_AGENT_KEY = "builtin"
+
+
+def channel_row(name: str, config: dict[str, Any], *, id: int = 1) -> Resource:
+    """A channel row, for the supervision reconcilers driven directly.
+
+    They are handed the resource now rather than an ``(id, config)`` tuple: the
+    runtime needs the row's uid and name as well, and a tuple carrying a subset
+    of a row is a place for the subset to fall behind it.
+    """
+    now = datetime.now(tz=UTC)
+    return Resource(
+        id=id,
+        uid=f"uid-of-{name}",
+        kind="channel",
+        name=name,
+        description=None,
+        config=config,
+        enabled=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+class _StubAgentConfig(BaseModel):
+    """Enough of the agent kind's config for a reference to resolve.
+
+    The real ``AgentConfig`` pins ``type`` to the ``AgentType`` enum, which this
+    fixture's own scripted provider ("builtin") is deliberately not a member of.
+    What the channel kind reads off an agent row is its uid and its ``type``,
+    and it reads the latter as a raw string precisely because it may not import
+    the agent kind (the cross-kind import contract) — so policing which products
+    exist belongs to the agent kind's own tests, not to these.
+    """
+
+    type: str
+
 
 # ---------------------------------------------------------------------------
 # Deterministic waiting
@@ -737,16 +778,39 @@ class ChannelEnv:
         return provider
 
     async def register_agent_resource(self, name: str, agent_key: str) -> Resource:
-        """An agent RESOURCE — what a scope actually names.
+        """An agent RESOURCE — what a scope and a ``default_agent`` both name.
 
         The turn platform's registry (``add_agent``) is keyed by agent key; the
-        resource table is keyed by the name the owner gave the agent, and the
-        two are only ever the same string by coincidence. A test about scope
-        needs the row, because the row is where the translation comes from.
+        resource table is keyed by the row's uid, and the agent key is one
+        field on it. A test about scope or routing needs the row, because the
+        row is what a reference resolves to.
         """
         return await self.resources.register(
             kind="agent", name=name, config={"type": agent_key}, actor="test"
         )
+
+    async def agent_uid(self, agent_key: str, name: str | None = None) -> str:
+        """The uid of the agent row for ``agent_key``, registering it if needed.
+
+        The helper a scope and a ``default_agent`` are both written with: both
+        hold agent uids (ADR resource-identity-is-an-immutable-uid), and a uid
+        only exists once there is a row to mint it for.
+        """
+        name = name or agent_key.replace("_", "-")
+        existing = await self.resources.find_by_name("agent", name)
+        if existing is not None:
+            return existing.uid
+        return (await self.register_agent_resource(name, agent_key)).uid
+
+    async def bound(self, config: dict[str, Any]) -> dict[str, Any]:
+        """``config`` with this fixture's own agent bound into it.
+
+        For the tests that build a channel config by hand rather than through
+        ``register_channel``. A channel that names no agent drives nothing and
+        the runtime declines to start it, so a config that will be reconciled
+        has to say which agent it is for.
+        """
+        return {**config, "default_agent": await self.agent_uid(DEFAULT_AGENT_KEY)}
 
     async def register_channel(
         self,
@@ -755,8 +819,21 @@ class ChannelEnv:
         ref: str = "channel/tg/bot-token",
         config: dict[str, Any] | None = None,
     ) -> Resource:
+        """A channel, bound by default to this fixture's own scripted agent.
+
+        The binding is explicit now because it has to be: ``default_agent``
+        holds the uid of an agent ROW, so a channel registered without one is
+        bound to nobody and the runtime declines to start it. It used to be a
+        constant in the schema, which is exactly the fiction this change
+        removes — there was never an agent behind it.
+        """
         self.keyring.set(ref, f"secret-for-{ref}")
-        cfg = config or {"channel_type": "telegram", "bot_token_ref": ref}
+        cfg = (
+            dict(config)
+            if config is not None
+            else {"channel_type": "telegram", "bot_token_ref": ref}
+        )
+        cfg.setdefault("default_agent", await self.agent_uid(DEFAULT_AGENT_KEY))
         return await self.resources.register(kind="channel", name=name, config=cfg, actor="test")
 
     async def pair(
@@ -786,8 +863,7 @@ class ChannelEnv:
         adapter = adapter or FakeChannelAdapter()
         self.processor.bind(
             ChannelBinding(
-                name=resource.name,
-                resource_id=resource.id,
+                resource=resource,
                 channel_type=str(resource.config.get("channel_type", "telegram")),
                 default_agent=default_agent,
                 default_agent_config=default_agent_config,
@@ -822,8 +898,13 @@ class ChannelEnv:
         row = await self.threads.get(resource.id, chat_id, thread_id)
         return row.preferred_agent if row is not None else None
 
-    async def audit_entries(self, event_type: str, name: str | None = None) -> list[AuditEntry]:
-        return await self.audit.query(kind="channel", name=name, event_type=event_type)
+    async def audit_entries(
+        self, event_type: str, resource: Resource | None = None
+    ) -> list[AuditEntry]:
+        """One channel's trail, or every channel's. Filtered by the resource
+        rather than by a name: the audit service takes the row, so a rename
+        leaves the history addressable by the thing it is about."""
+        return await self.audit.query(kind="channel", resource=resource, event_type=event_type)
 
 
 async def _build_env(tmp_path: Any) -> ChannelEnv:
@@ -894,20 +975,21 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         interval_seconds=0.05,
     )
 
-    async def on_delete(ref: ResourceRef) -> None:
-        await runtime.evict(ref.name)
+    async def on_delete(resource: Resource) -> None:
+        await runtime.evict(resource)
 
-    async def agent_types() -> dict[str, str]:
-        """The registry's name→key map, wired exactly as production wires it —
-        a scope names agent RESOURCES and a channel names an agent KEY, so
-        without this the kind's two validators compare two vocabularies."""
-        return agent_key_by_name(await resources.list(kind="agent"))
+    async def agent_names() -> dict[str, str]:
+        """Every registered agent's uid mapped to its name, wired exactly as
+        production wires it. It decides nothing — a scope and a channel's
+        ``default_agent`` are both agent uids — it only lets a refusal name the
+        agent the way the owner does."""
+        return {r.uid: r.name for r in await resources.list(kind="agent")}
 
-    kinds["channel"] = make_channel_kind(on_delete=on_delete, agent_types=agent_types)
+    kinds["channel"] = make_channel_kind(on_delete=on_delete, agent_names=agent_names)
     # Enough of the agent kind for a scope to have something to name. The real
     # one carries on-disk lifecycle these tests have no use for; what they need
     # is that `kind=agent` rows exist and validate their config the same way.
-    kinds["agent"] = Kind(name="agent", display_name="Agent", config_schema=AgentConfig)
+    kinds["agent"] = Kind(name="agent", display_name="Agent", config_schema=_StubAgentConfig)
 
     service = ChannelService(
         resources=resources,

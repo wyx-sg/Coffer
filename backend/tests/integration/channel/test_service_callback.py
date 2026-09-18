@@ -11,19 +11,25 @@ import httpx
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.service import ChannelService
 from coffer.domain.channel.signing import verify_seatalk_signature
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
+
+#: The uid the stub registry mints. The public callback path is spelled with
+#: it and not with the channel's name: that URL is registered by hand on
+#: SeaTalk's Developer Portal, so it may not be a label the owner can rename.
+_UID = "uid-of-the-channel"
 
 
 class _Resources:
     def __init__(self, config: dict[str, Any]) -> None:
         self._config = config
 
-    async def get(self, ref: ResourceRef) -> Resource:
+    async def get(self, uid: str) -> Resource:
         now = datetime(2026, 1, 1, tzinfo=UTC)
         return Resource(
             id=1,
-            kind=ref.kind,
-            name=ref.name,
+            uid=uid,
+            kind="channel",
+            name="st",
             description=None,
             config=self._config,
             enabled=True,
@@ -52,7 +58,7 @@ class _Runtime:
     def adapter(self, name: str) -> None:
         return None  # nothing started, so there is no identity to diagnose
 
-    def tunnel_running(self, name: str) -> bool:
+    def tunnel_running(self, channel_uid: str) -> bool:
         return False
 
     async def local_machine_id(self) -> str | None:
@@ -92,21 +98,21 @@ def _service(
 
 
 async def test_status_composes_public_callback_url():
-    status = await _service(_seatalk_config("https://x.trycloudflare.com")).status("st")
+    status = await _service(_seatalk_config("https://x.trycloudflare.com")).status(_UID)
     assert status.callback is not None
     assert status.callback.public_base_url == "https://x.trycloudflare.com"
-    assert status.callback.public_callback_url == "https://x.trycloudflare.com/seatalk/st"
+    assert status.callback.public_callback_url == f"https://x.trycloudflare.com/seatalk/{_UID}"
 
 
 async def test_status_public_callback_url_none_when_base_unset():
-    status = await _service(_seatalk_config(None)).status("st")
+    status = await _service(_seatalk_config(None)).status(_UID)
     assert status.callback is not None
     assert status.callback.public_callback_url is None
 
 
 async def test_test_callback_ok_when_signed_challenge_echoes():
     def handler(request: httpx.Request) -> httpx.Response:
-        assert str(request.url) == "https://x.trycloudflare.com/seatalk/st"
+        assert str(request.url) == f"https://x.trycloudflare.com/seatalk/{_UID}"
         assert verify_seatalk_signature(
             request.content, "the-signing-secret", request.headers.get("Signature", "")
         )
@@ -116,13 +122,13 @@ async def test_test_callback_ok_when_signed_challenge_echoes():
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         result = await _service(
             _seatalk_config("https://x.trycloudflare.com"), http_client=client
-        ).test_callback("st")
+        ).test_callback(_UID)
     assert result.ok is True
 
 
 async def test_test_callback_requires_public_base_url():
     result = await _service(_seatalk_config(None), http_client=httpx.AsyncClient()).test_callback(
-        "st"
+        _UID
     )
     assert result.ok is False
     assert "base url" in result.detail.lower()
@@ -132,6 +138,6 @@ async def test_test_callback_rejects_non_seatalk():
     result = await _service(
         {"channel_type": "telegram", "bot_token_ref": "channel/tg/bot"},
         http_client=httpx.AsyncClient(),
-    ).test_callback("tg")
+    ).test_callback(_UID)
     assert result.ok is False
     assert "SeaTalk" in result.detail

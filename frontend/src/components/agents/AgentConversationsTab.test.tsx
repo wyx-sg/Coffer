@@ -9,6 +9,10 @@
 // URL it navigates to — keyed by source_path, because session_id repeats across
 // subagent sidechain files. We mock the hook module (per .agents/frontend.md §8)
 // and useNavigate so the component renders deterministically without network.
+//
+// The tab is given the agent's `uid` and nothing else: it renders no part of
+// the agent, and every transcript query and sub-page link it builds is
+// addressed by the uid. The fixture uid (`u-codex`) is not the agent's name.
 
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -24,7 +28,7 @@ import type { TranscriptListParams } from "@/lib/api/agentTranscripts";
 
 vi.mock("@/lib/hooks/useAgentTranscripts", () => ({
   TRANSCRIPTS_PAGE_SIZE: 10,
-  transcriptsKey: (name: string) => ["agents", name, "conversations"],
+  transcriptsKey: (uid: string) => ["agents", uid, "conversations"],
   useAgentTranscripts: vi.fn(),
 }));
 
@@ -90,7 +94,7 @@ afterEach(() => vi.clearAllMocks());
 describe("AgentConversationsTab", () => {
   test("renders a session row with title, project, count, and times", () => {
     stubTranscripts();
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(screen.getByText("Fix the login redirect bug")).toBeInTheDocument();
     expect(screen.getByText("/home/u/repo")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
@@ -98,12 +102,13 @@ describe("AgentConversationsTab", () => {
 
   test("clicking a row opens that conversation's page, addressed by its file", () => {
     stubTranscripts();
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
 
     fireEvent.click(screen.getByText("Fix the login redirect bug"));
 
     const { path, params } = lastNavigation();
-    expect(path).toBe("/agents/codex/conversations");
+    // Addressed by the agent's uid, so the link survives a rename.
+    expect(path).toBe("/agents/u-codex/conversations");
     expect(params.get("path")).toBe(SESSION.source_path);
   });
 
@@ -111,7 +116,7 @@ describe("AgentConversationsTab", () => {
     // Open / reveal moved to the conversation's own page — a list of a thousand
     // sessions is for finding one, not for acting on each.
     stubTranscripts();
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(screen.queryByRole("button", { name: /more actions/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/open in editor/i)).not.toBeInTheDocument();
     // Read-only surface: no checkboxes (bulk select) anywhere in the table.
@@ -120,32 +125,32 @@ describe("AgentConversationsTab", () => {
 
   test("shows a loading state while sessions are pending", () => {
     stubTranscripts([], { isPending: true });
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
   test("shows an error state when the query fails", () => {
     stubTranscripts([], { error: new Error("request failed: 500") });
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(screen.getByText(/request failed/i)).toBeInTheDocument();
   });
 
   test("shows the empty message when there are no sessions", () => {
     stubTranscripts([]);
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(screen.getByText(/no conversations found/i)).toBeInTheDocument();
   });
 
   test("first page request carries limit/offset (paged on demand)", () => {
     stubTranscripts([SESSION], { total: 250 });
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(typeof lastParams().limit).toBe("number");
     expect(lastParams().offset).toBe(0);
   });
 
   test("typing in search forwards the query to the hook, once it settles", async () => {
     stubTranscripts();
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "alpha" } });
     await waitFor(() => expect(lastParams().q).toBe("alpha"));
   });
@@ -154,7 +159,7 @@ describe("AgentConversationsTab", () => {
     // On a cold reader one query is one full transcript parse, so a request per
     // keystroke is the difference between a pause and five of them.
     stubTranscripts();
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     const box = screen.getByRole("textbox");
     for (const value of ["a", "al", "alp", "alph", "alpha"]) {
       fireEvent.change(box, { target: { value } });
@@ -172,7 +177,7 @@ describe("AgentConversationsTab", () => {
 
   test("default sort is last_activity desc; clicking 'Started' header sorts by started_at", () => {
     stubTranscripts();
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(lastParams().sort).toBe("last_activity_at");
     expect(lastParams().order).toBe("desc");
     fireEvent.click(screen.getByRole("button", { name: /sort by started/i }));
@@ -181,7 +186,7 @@ describe("AgentConversationsTab", () => {
 
   test("re-clicking the active sort header flips the order", () => {
     stubTranscripts();
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /sort by last activity/i }));
     expect(lastParams().sort).toBe("last_activity_at");
     expect(lastParams().order).toBe("asc");
@@ -196,7 +201,7 @@ describe("AgentConversationsTab", () => {
       source_path: "/home/u/.codex/sessions/2026/06/rollout-s1b.jsonl",
     };
     stubTranscripts([SESSION, dup]);
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
 
     fireEvent.click(screen.getByText("Fix the login redirect bug"));
     expect(lastNavigation().params.get("path")).toBe(SESSION.source_path);
@@ -207,7 +212,7 @@ describe("AgentConversationsTab", () => {
 
   test("stepping to the next page advances the offset by the page size", () => {
     stubTranscripts([SESSION], { total: 250 });
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     const limit = lastParams().limit as number;
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     expect(lastParams().offset).toBe(limit);
@@ -217,7 +222,7 @@ describe("AgentConversationsTab", () => {
     // Otherwise the stale offset outruns the narrower result set and the table
     // reads "no conversations" while matches exist.
     stubTranscripts([SESSION], { total: 250 });
-    render(<AgentConversationsTab name="codex" />, { wrapper: wrap });
+    render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
     expect(lastParams().offset).toBeGreaterThan(0);
 

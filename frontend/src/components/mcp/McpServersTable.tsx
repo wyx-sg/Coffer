@@ -56,7 +56,7 @@ export function McpServersTable({
       key: "health",
       header: t("resources.cols.health"),
       className: "whitespace-nowrap",
-      cell: (r) => <ServerHealthCell name={r.name} />,
+      cell: (r) => <ServerHealthCell uid={r.uid} />,
     },
     {
       // The flexible column: takes the remaining width so a long description
@@ -91,13 +91,13 @@ export function McpServersTable({
       rows={resources}
       isLoading={isLoading}
       columns={columns}
-      rowKey={(r) => r.name}
+      rowKey={(r) => r.uid}
       search={{
         accessor: (r) => `${r.name} ${transportType(r)}`,
         placeholder: t("mcp.table.search"),
       }}
       filters={filters}
-      onRowClick={(r) => navigate(`/mcp-servers/${encodeURIComponent(r.name)}`)}
+      onRowClick={(r) => navigate(`/mcp-servers/${encodeURIComponent(r.uid)}`)}
       selection={{
         ariaSelectAll: t("common.bulk.selectAll"),
         ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,

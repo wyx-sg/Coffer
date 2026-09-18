@@ -31,7 +31,7 @@ def _config(**overrides: object) -> dict[str, object]:
     spec="channels", scenario="only the machine a channel names starts its adapter"
 )
 async def test_only_the_bound_machine_starts_the_adapter(env: ChannelEnv) -> None:
-    await env.register_channel("tg", config=_config(runs_on=_OTHER_MACHINE))
+    resource = await env.register_channel("tg", config=_config(runs_on=_OTHER_MACHINE))
 
     here = env.runtime_for(_THIS_MACHINE)
     there = env.runtime_for(_OTHER_MACHINE)
@@ -47,7 +47,7 @@ async def test_only_the_bound_machine_starts_the_adapter(env: ChannelEnv) -> Non
 
     # And the surface separates "not running" from "not mine to run", which is
     # the whole reason both fields are on the wire.
-    status = await env.service_for(here).status("tg")
+    status = await env.service_for(here).status(resource.uid)
     assert status.running is False
     assert status.runs_on == _OTHER_MACHINE
     assert status.runs_here is False
@@ -77,7 +77,7 @@ async def test_a_binding_no_machine_claims_starts_nowhere(env: ChannelEnv) -> No
 
 @pytest.mark.acceptance(spec="channels", scenario="an unbound channel runs nowhere and says so")
 async def test_an_unbound_channel_runs_nowhere_and_is_reported(env: ChannelEnv) -> None:
-    await env.register_channel("tg")  # no runs_on at all
+    resource = await env.register_channel("tg")  # no runs_on at all
 
     for machine in (_THIS_MACHINE, _OTHER_MACHINE):
         runtime = env.runtime_for(machine)
@@ -85,7 +85,7 @@ async def test_an_unbound_channel_runs_nowhere_and_is_reported(env: ChannelEnv) 
         assert runtime.is_running("tg") is False
     assert env.created_adapters == []
 
-    status = await env.service_for(env.runtime_for(_THIS_MACHINE)).status("tg")
+    status = await env.service_for(env.runtime_for(_THIS_MACHINE)).status(resource.uid)
     assert status.runs_on is None
     assert status.runs_here is False
     assert "channel_not_bound" in [d.code for d in status.diagnostics]
@@ -107,7 +107,9 @@ async def test_rebinding_stops_here_and_starts_there(env: ChannelEnv) -> None:
     adapter = env.created_adapters[0]
 
     # An ordinary config edit — no restart, no command reaching another machine.
-    await env.resources.update_config(resource.ref, _config(runs_on=_OTHER_MACHINE), actor="test")
+    await env.resources.update_config(
+        resource.uid, await env.bound(_config(runs_on=_OTHER_MACHINE)), actor="test"
+    )
 
     await here.reconcile_once()
     assert here.is_running("tg") is False
@@ -134,6 +136,6 @@ async def test_a_bound_channel_still_answers_to_reach(env: ChannelEnv) -> None:
     await here.reconcile_once()
     assert here.is_running("tg") is True
 
-    await env.resources.set_enabled(resource.ref, False, actor="test")
+    await env.resources.set_enabled(resource.uid, False, actor="test")
     await here.reconcile_once()
     assert here.is_running("tg") is False

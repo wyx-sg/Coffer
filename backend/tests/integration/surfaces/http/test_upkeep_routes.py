@@ -1,4 +1,4 @@
-"""``POST /knowledge/collections/{name}/curate`` refuses a concurrent pass, and
+"""``POST /knowledge/collections/{uid}/curate`` refuses a concurrent pass, and
 ``GET /api/v1/upkeep/runs`` says what is in flight (spec knowledge FR-030).
 
 The bug both exist for: the Tidy button's disabled state used to live in a
@@ -13,12 +13,26 @@ is rewriting so a page that mounts mid-pass renders the pass.
 from __future__ import annotations
 
 import pytest
+from starlette.testclient import TestClient
 
 from coffer.application.knowledge.service import KIND_KNOWLEDGE
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 
 from .conftest import _create_collection
+
+
+def _collection_uid(client: TestClient, name: str) -> str:
+    """The uid of the collection labelled ``name``.
+
+    The curate route is addressed by identity and the upkeep-runs key is that
+    same uid — a pass takes minutes, and the two writers can only collide if
+    both spell the collection the way that cannot be edited between them
+    reading it (ADR resource-identity-is-an-immutable-uid).
+    """
+    r = client.get("/api/v1/resources", params={"kind": "knowledge", "name": name})
+    assert r.status_code == 200, r.text
+    return str(r.json()["resources"][0]["uid"])
 
 
 @pytest.mark.acceptance(
@@ -33,23 +47,28 @@ def test_a_second_curation_over_the_same_collection_is_refused(client) -> None:
     come from another thread, and what is under test is the refusal itself."""
     _create_collection(client, "shopee")
     _create_collection(client, "other")
+    shopee = _collection_uid(client, "shopee")
+    other_uid = _collection_uid(client, "other")
 
-    assert UPKEEP_RUNS.claim(KIND_KNOWLEDGE, "shopee") is True
+    assert UPKEEP_RUNS.claim(KIND_KNOWLEDGE, shopee) is True
     try:
-        refused = client.post("/api/v1/knowledge/collections/shopee/curate")
+        refused = client.post(f"/api/v1/knowledge/collections/{shopee}/curate")
         assert refused.status_code == 409, refused.text
         assert refused.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
 
         # Per collection, not vault-wide: a different collection is unaffected.
         # No internal connection is configured here, so the pass is the clean
         # no-op spec knowledge FR-029 promises rather than a model call.
-        other = client.post("/api/v1/knowledge/collections/other/curate")
+        other = client.post(f"/api/v1/knowledge/collections/{other_uid}/curate")
         assert other.status_code == 200, other.text
         assert other.json()["status"] == "no_model"
+        # The report names the collection by LABEL: the caller already holds the
+        # uid it sent, and what a pass report adds is something to render.
+        assert other.json()["collection"] == "other"
     finally:
-        UPKEEP_RUNS.release(KIND_KNOWLEDGE, "shopee")
+        UPKEEP_RUNS.release(KIND_KNOWLEDGE, shopee)
 
-    assert client.post("/api/v1/knowledge/collections/shopee/curate").status_code == 200
+    assert client.post(f"/api/v1/knowledge/collections/{shopee}/curate").status_code == 200
 
 
 @pytest.mark.acceptance(

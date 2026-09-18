@@ -170,13 +170,16 @@ asks for it.
   the gateway never has to ask: if the answer were no, the server would not be
   enabled here.
 - **Shim identity handshake.** The Coffer-MCP install (spec agent-registry FR-019)
-  writes `coffer-mcp-shim --agent <name>` into the agent's config, so every
-  managed agent's shim reports its own registered agent name at MCP
-  handshake via `params._meta["coffer/agent"]`, alongside the existing cwd
-  `_meta` injection (`coffer/cwd`). A session's reported identity is carried
+  writes `coffer-mcp-shim --agent-uid <uid>` into the agent's config, so every
+  managed agent's shim reports its own agent **uid** at MCP
+  handshake via `params._meta["coffer/agent-uid"]`, alongside the existing cwd
+  `_meta` injection (`coffer/cwd`). The uid and not the name, because that entry
+  is written once into a file Coffer does not otherwise revisit and a label goes
+  stale on the first rename ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+  A session's reported identity is carried
   for the life of that connection and used for every subsequent list/call.
 - **Unidentified sessions.** A session with no reported identity (a
-  hand-configured shim invocation, or any client that omits the `--agent`
+  hand-configured shim invocation, or any client that omits the `--agent-uid`
   flag) is treated as `agent=None`: it sees, and may call, only servers that
   carry no scope at all — never a scoped one, even one naming the agent that
   happens to be running unidentified. An unidentified session therefore sees
@@ -190,7 +193,7 @@ asks for it.
   listing fan-out spawns only servers from the already-filtered set, and a call
   names its server explicitly and is re-checked at the invocation seam before
   the supervisor is asked for a connection. No session can start a server it may
-  not see. The management surface behaves the same way — `POST /{name}/test`
+  not see. The management surface behaves the same way — `POST /{uid}/test`
   and the other management routes are administrative operations on a resource,
   not agent sessions, and are not scope-gated. So the owner can always run a
   server no session on this machine is allowed to see, which is how they debug
@@ -200,15 +203,16 @@ asks for it.
   single-user, loopback-only posture the daemon holds (spec daemon: every
   surface binds loopback and every management call carries a local token). Any
   local process able to open the loopback MCP connection and set `_meta` could
-  claim any agent name; this is documented explicitly rather than implying a
+  claim any agent uid; this is documented explicitly rather than implying a
   stronger isolation boundary than exists.
 
 `skill` scope is enforced at its own kind's seam (spec skill-manager, delivery),
-and so is every other scoped kind: `channel`, `knowledge`, `memory` and
-`provider` all declare `supports_scope` and gate at their own seam. `agent` is
-the one kind that declares no scope at all and rejects a non-null value at
-validation (422) — it IS the agent, so there is nothing for a per-agent scope to
-narrow.
+and so is every other scoped kind: `channel` and `provider` also declare
+`supports_scope` and gate at their own seam. Three kinds declare no scope at all
+and reject a non-null value at validation (422): `agent` — it IS the agent, so
+there is nothing for a per-agent scope to narrow — and `knowledge` and `memory`,
+which withdrew on 2026-09-18 ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)
+item 7).
 
 ## Acceptance Scenarios
 
@@ -359,7 +363,7 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 
 **Resource lifecycle**
 
-- **FR-005**: Users MUST be able to register, list, view, update, enable, disable, and delete MCP servers as resources with stable identifiers of the form `<kind>:<name>`. Validating that registration against the kind's schema, rejecting a duplicate name within the kind, and persisting nothing on a validation failure are spec [resource-framework](../resource-framework/spec.md) FR-002, which every kind inherits; this requirement is what brings `mcp_server` under it, and the kind-agnostic surface those operations are served through is that spec's too.
+- **FR-005**: Users MUST be able to register, list, view, update, enable, disable, rename and delete MCP servers as resources addressed by the immutable `uid` the framework mints for them ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)); a server's `name` is a mutable label, and the per-server routes are `/api/v1/resources/mcp_server/{uid}/…`. Validating that registration against the kind's schema, rejecting a duplicate name within the kind, and persisting nothing on a validation failure are spec [resource-framework](../resource-framework/spec.md) FR-002, which every kind inherits; this requirement is what brings `mcp_server` under it, and the kind-agnostic surface those operations are served through is that spec's too.
 - **FR-006**: System MUST support both stdio and HTTP MCP transports for upstream servers.
 
 **Capability curation**
@@ -378,8 +382,8 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 
 **Scope enforcement ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md))**
 
-- **FR-012**: System MUST filter `mcp_server` exposure by its framework-level `scope` — one allow-list, `agents`, `null` meaning unrestricted — at the gateway's per-session choke point: the session's self-reported agent identity gates `tools/list` / `resources/list` / `prompts/list` and call routing. A server the scope excludes is indistinguishable from a disabled capability to that session, while staying registered, listed in the management surface and editable. The identity of the asking session is the only input the gate takes; scope names agents and nothing else, because a server's reach is machine-local and never arrives from elsewhere (spec vault-sync `## What does not sync`) — a server that should not run here is simply not enabled here. Scope MUST NOT gate spawning: the supervisor holds no policy and has no session identity to test, so the decision is enforced above it. Every spawn path runs downstream of that gate (the listing fan-out spawns only from the already-filtered set; a call is re-checked at the invocation seam), so a scoped server starts like any other enabled server but no session can start one it may not see. The management routes (including `POST /{name}/test`) are administrative operations rather than agent sessions and MUST NOT be scope-gated — so the owner can always test a server no session here is allowed to see.
-- **FR-013**: System MUST accept a self-reported agent identity at MCP handshake (`params._meta["coffer/agent"]`, alongside the existing `coffer/cwd` key), written into a managed agent's shim invocation as `coffer-mcp-shim --agent <name>` by the Coffer-MCP install (spec agent-registry FR-019). A session with no reported identity MUST be treated as `agent=None`, matching only servers that carry no scope. Identity is self-reported, not cryptographically verified — a documented trust boundary, acceptable under the loopback-only, single-user posture spec daemon holds. It is reported **once, at the handshake**, and nowhere else: when the gateway threads the identity into a Coffer built-in tool call (as the `agent` argument the knowledge and memory tools authorize by), it MUST overwrite any `agent` the client put in the call's arguments with the session's, and MUST drop the argument entirely when the session reported none — so a client cannot pick a different identity per call, and no built-in tool advertises `agent` in its input schema.
+- **FR-012**: System MUST filter `mcp_server` exposure by its framework-level `scope` — one allow-list, `agents`, `null` meaning unrestricted — at the gateway's per-session choke point: the session's self-reported agent identity gates `tools/list` / `resources/list` / `prompts/list` and call routing. A server the scope excludes is indistinguishable from a disabled capability to that session, while staying registered, listed in the management surface and editable. The identity of the asking session is the only input the gate takes; scope names agents and nothing else, because a server's reach is machine-local and never arrives from elsewhere (spec vault-sync `## What does not sync`) — a server that should not run here is simply not enabled here. Scope MUST NOT gate spawning: the supervisor holds no policy and has no session identity to test, so the decision is enforced above it. Every spawn path runs downstream of that gate (the listing fan-out spawns only from the already-filtered set; a call is re-checked at the invocation seam), so a scoped server starts like any other enabled server but no session can start one it may not see. The management routes (including `POST /{uid}/test`) are administrative operations rather than agent sessions and MUST NOT be scope-gated — so the owner can always test a server no session here is allowed to see.
+- **FR-013**: System MUST accept a self-reported agent identity at MCP handshake as the agent's **uid** (`params._meta["coffer/agent-uid"]`, alongside the existing `coffer/cwd` key), written into a managed agent's shim invocation as `coffer-mcp-shim --agent-uid <uid>` by the Coffer-MCP install (spec agent-registry FR-019) — the uid rather than the name, because the entry is written once into a file Coffer does not revisit and a name goes stale on the first rename. A `_meta` carrying only the older name-based key MUST be treated as reporting no identity rather than resolved by name. A session with no reported identity MUST be treated as `agent=None`, matching only servers that carry no scope. Identity is self-reported, not cryptographically verified — a documented trust boundary, acceptable under the loopback-only, single-user posture spec daemon holds. It is reported **once, at the handshake**, and nowhere else: when the gateway threads the identity into a Coffer built-in tool call (as the `agent` argument the knowledge and memory tools authorize by), it MUST overwrite any `agent` the client put in the call's arguments with the session's, and MUST drop the argument entirely when the session reported none — so a client cannot pick a different identity per call, and no built-in tool advertises `agent` in its input schema.
 
 **Sync state area**
 
@@ -411,7 +415,7 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 - Upstream MCP servers behave according to the public MCP protocol specification. Misbehaving upstreams are handled as faults, not modelled as features.
 - An upstream's secrets are resolvable when it is spawned. The encrypted store behind them, the master key that opens it, and what a user is told when that key is unavailable are spec credentials'; this spec persists refs and never holds a key.
 - The daemon this gateway is served from — its port, its discovery file, its token, its loopback posture and the browser host it serves — is spec daemon's. This spec assumes a running daemon rather than specifying one.
-- The kind-agnostic half of what an `mcp_server` is — the `<kind>:<name>` identity, the lifecycle surface, per-agent reach, the audit log and retention — is spec resource-framework's. This spec contributes one `Kind` descriptor to it and owns everything MCP-specific above it.
+- The kind-agnostic half of what an `mcp_server` is — the immutable-`uid` identity, the lifecycle surface (rename included), per-agent reach, the audit log and retention — is spec resource-framework's. This spec contributes one `Kind` descriptor to it and owns everything MCP-specific above it.
 - Concurrent MCP client load is small (low single digits); coffer is not a fleet-scale gateway.
 
 ## Deliberately out of scope

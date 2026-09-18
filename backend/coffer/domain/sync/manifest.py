@@ -52,7 +52,16 @@ MANIFEST_PATH = "manifest.json"
 #: resources/ + state/ + machines/ + optional credentials/). The continuous-sync
 #: workspace layouts that preceded it are a different artifact entirely and
 #: are not readable here.
-SCHEMA_VERSION = 1
+#: 2 = resource and state documents are filed under a resource's immutable
+#: ``uid`` rather than its name (ADR resource-identity-is-an-immutable-uid), so
+#: a rename modifies one file instead of publishing a deletion beside an
+#: addition. This is exactly the kind of change the gate below exists for: a
+#: build on layout 1 reading a layout-2 tree would see every document's path
+#: change at once and apply the lot as "the user deleted everything and created
+#: everything" — the ``ResourceService.delete`` cascade, the orphaned-credential
+#: release, the whole loss this layout was introduced to stop. Refusing the
+#: remote outright is the only safe reading such a build has.
+SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)

@@ -67,7 +67,7 @@ function detail(overrides: Partial<RunDetail["run"]> = {}): RunDetail {
     run: {
       id: "run-1",
       title: "Ship the delivery engine",
-      template_ref: "workflow:delivery",
+      template_ref: "delivery",
       status: "running",
       version: 4,
       workdir: "/repo",

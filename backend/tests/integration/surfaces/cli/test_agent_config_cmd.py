@@ -2,6 +2,22 @@
 
 Covers the spec scenario "config-file and MCP operations mirror across
 surfaces": each CLI subcommand calls the corresponding REST endpoint.
+
+The commands under test live in ``surfaces/cli/agent_config_cmd.py`` (whole
+files) and ``surfaces/cli/agent_workspace_cmd.py`` (directory children); both
+attach onto the typer ``agent_cmd`` owns, so the user-facing tree is still
+``coffer agent config ...`` and the invocations below are unchanged by the
+split. It matters in one place: a test that reaches into a module to patch
+``click.edit`` has to reach into the module the command is actually written in.
+
+The in-process app mounts TWO routers. Each of these commands takes the agent's
+NAME and resolves it to the uid the routes address
+(ADR resource-identity-is-an-immutable-uid) via
+``GET /resources?kind=agent&name=``, which lives on the framework's resource
+router rather than on ``/agents``. Serving only ``agent_config_router`` would
+fail every command at resolution — and fail it with a 404 that reads like a
+missing config file, so the tests would be red for a reason that has nothing to
+do with what they assert.
 """
 
 from __future__ import annotations
@@ -43,6 +59,8 @@ from coffer.surfaces.http.agent_dependencies import (
     get_agent_mcp_service,
 )
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.resource_routes import router as resource_router
 
 _runner = CliRunner()
 _TOKEN = "test-token-agent-config-cli"
@@ -84,8 +102,14 @@ def agent_config_cli(tmp_path, monkeypatch):
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(agent_config_router)
+    # Name → uid resolution runs before every command below and lives here, on
+    # the framework's shared router. The SAME ResourceService the AgentService
+    # was built on — a second one would have its own session and the resolver
+    # would search a registry ``cc`` was never registered into.
+    app.include_router(resource_router)
     app.dependency_overrides[get_agent_config_file_service] = lambda: config_files
     app.dependency_overrides[get_agent_mcp_service] = lambda: mcp
+    app.dependency_overrides[get_resource_service] = lambda: resource_svc
 
     set_active_token(_TOKEN)
     info = DaemonInfo(
@@ -145,8 +169,30 @@ def test_config_cat_reads_existing_file(agent_config_cli):
 
 
 def test_config_cat_unknown_key_exit4(agent_config_cli):
+    """A bad config KEY exits 4 — and says so about the key, not the agent.
+
+    Two different 404s reach exit 4 now: the agent's name failing to resolve,
+    and the key failing to exist once it has. The agent here is real, so the
+    message must be about the key; a message naming the agent would mean
+    resolution had silently gone wrong and the test would be passing on the
+    wrong failure.
+    """
     r = _runner.invoke(cli_app, ["agent", "config", "cat", "cc", "nope"])
     assert r.exit_code == 4
+    assert "no agent named" not in (r.output + (r.stderr or ""))
+
+
+def test_config_unknown_agent_name_exit4(agent_config_cli):
+    """An unheld agent name stops at resolution, before any config route.
+
+    Same exit code the config routes' own 404 produces, from one step earlier
+    and with a message naming what was actually typed — the whole reason the
+    name is resolved up front rather than handed to a route that would 404 on a
+    uid the user never saw (ADR resource-identity-is-an-immutable-uid).
+    """
+    r = _runner.invoke(cli_app, ["agent", "config", "ls", "ghost"])
+    assert r.exit_code == 4, r.output
+    assert "no agent named 'ghost'" in (r.output + (r.stderr or ""))
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="save a config file with valid content")
@@ -171,8 +217,13 @@ def test_config_edit_from_file_valid(agent_config_cli):
 def test_config_edit_interactive_editor(agent_config_cli, monkeypatch):
     """The interactive (no --from-file) path opens $EDITOR via click.edit and
     saves the returned content. Regression: this branch previously called the
-    non-existent `typer.edit` and crashed with AttributeError."""
-    import coffer.surfaces.cli.agent_cmd as agent_cmd
+    non-existent `typer.edit` and crashed with AttributeError.
+
+    Patched on ``agent_config_cmd``, which is where ``config edit`` is written
+    — ``agent_cmd`` owns the ``config`` typer but no longer imports click, so
+    patching it there would raise AttributeError before the command ran.
+    """
+    import coffer.surfaces.cli.agent_config_cmd as agent_config_cmd
 
     tmp_path, _shim = agent_config_cli
     settings = tmp_path / ".claude" / "settings.json"
@@ -185,7 +236,7 @@ def test_config_edit_interactive_editor(agent_config_cli, monkeypatch):
         captured["extension"] = extension
         return '{"theme": "dark"}'
 
-    monkeypatch.setattr(agent_cmd.click, "edit", _fake_edit)
+    monkeypatch.setattr(agent_config_cmd.click, "edit", _fake_edit)
 
     r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "settings"])
     assert r.exit_code == 0, r.output
@@ -197,13 +248,13 @@ def test_config_edit_interactive_editor(agent_config_cli, monkeypatch):
 def test_config_edit_interactive_no_changes(agent_config_cli, monkeypatch):
     """click.edit returns None when the user makes no change / aborts — the
     command exits 0 without writing."""
-    import coffer.surfaces.cli.agent_cmd as agent_cmd
+    import coffer.surfaces.cli.agent_config_cmd as agent_config_cmd
 
     tmp_path, _shim = agent_config_cli
     settings = tmp_path / ".claude" / "settings.json"
     settings.write_text('{"theme": "light"}', encoding="utf-8")
 
-    monkeypatch.setattr(agent_cmd.click, "edit", lambda text, extension=None: None)
+    monkeypatch.setattr(agent_config_cmd.click, "edit", lambda text, extension=None: None)
 
     r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "settings"])
     assert r.exit_code == 0, r.output
@@ -306,6 +357,10 @@ def test_mcp_install_status_uninstall(agent_config_cli):
 
     r = _runner.invoke(cli_app, ["agent", "mcp", "install", "cc"])
     assert r.exit_code == 0, r.output
+    # The echo reports the agent by the label that was typed — the uid it
+    # resolved to is an address, and a person reading this line is checking
+    # which agent they just changed.
+    assert "installed Coffer MCP into agent cc (" in r.output
     assert shim in r.output
 
     r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
@@ -313,5 +368,6 @@ def test_mcp_install_status_uninstall(agent_config_cli):
 
     r = _runner.invoke(cli_app, ["agent", "mcp", "uninstall", "cc"])
     assert r.exit_code == 0
+    assert "removed Coffer MCP from agent cc" in r.output
     r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
     assert json.loads(r.output)["installed"] is False

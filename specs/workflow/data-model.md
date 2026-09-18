@@ -78,7 +78,7 @@ timestamps are UTC.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | TEXT PK | |
-| `template_ref` | TEXT | `workflow:<name>` — provenance only; the snapshot is authoritative |
+| `template_ref` | TEXT | the template's LABEL as it read at creation — provenance only, rendered raw, allowed to go stale; the snapshot is authoritative (migration 0100 stripped the `workflow:` prefix, which spelled a form of identity that no longer resolves) |
 | `template_snapshot` | JSON not null | frozen at creation (FR-010) |
 | `title` | TEXT not null | |
 | `description` | TEXT nullable | what the developer says this delivery is; a LABEL like the title, and like it outside the version cycle (FR-070) |
@@ -238,5 +238,7 @@ Deleting a run cascades its events, attempts and approvals, and removes its
 directory. Its node **conversations are not deleted** — they are ordinary
 conversations and belong to the chat layer's own retention. Deleting a template
 is refused while a run references it only for provenance; since the snapshot is
-authoritative, deletion is permitted and `template_ref` is left dangling by
-design, the way a deleted source leaves an artifact's provenance intact.
+authoritative, deletion is permitted and `template_ref` is left saying what
+the run was started from, the way a deleted source leaves an artifact's
+provenance intact. Renaming the template leaves it alone for the same reason:
+it is a label frozen at a moment, not an address.

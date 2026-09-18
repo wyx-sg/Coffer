@@ -24,14 +24,14 @@ export const TRANSCRIPTS_PAGE_SIZE = 10;
 // Query: list one page of transcript sessions for an agent
 // ---------------------------------------------------------------------------
 
-export function useAgentTranscripts(name: string, params: TranscriptListParams = {}) {
+export function useAgentTranscripts(agentUid: string, params: TranscriptListParams = {}) {
   return useQuery({
-    queryKey: agentTranscriptsKey(name, params),
-    queryFn: () => listTranscripts(name, params),
+    queryKey: agentTranscriptsKey(agentUid, params),
+    queryFn: () => listTranscripts(agentUid, params),
     // Keep the current page on screen while a new page/search key loads — no
     // blank flash on each keystroke or page step.
     placeholderData: keepPreviousData,
-    enabled: !!name,
+    enabled: !!agentUid,
   });
 }
 
@@ -42,17 +42,17 @@ export function useAgentTranscripts(name: string, params: TranscriptListParams =
 /** Default turns per page when reading one conversation. */
 export const TRANSCRIPT_TURNS_PAGE_SIZE = 200;
 
-export function useTranscriptSession(name: string, sourcePath: string, offset = 0) {
+export function useTranscriptSession(agentUid: string, sourcePath: string, offset = 0) {
   return useQuery({
-    queryKey: agentTranscriptSessionKey(name, sourcePath, offset),
+    queryKey: agentTranscriptSessionKey(agentUid, sourcePath, offset),
     queryFn: () =>
-      readTranscriptSession(name, sourcePath, {
+      readTranscriptSession(agentUid, sourcePath, {
         limit: TRANSCRIPT_TURNS_PAGE_SIZE,
         offset,
       }),
     // Keep the turns on screen while the next window loads, so paging through a
     // long conversation does not blank the page between pages.
     placeholderData: keepPreviousData,
-    enabled: !!name && !!sourcePath,
+    enabled: !!agentUid && !!sourcePath,
   });
 }

@@ -16,7 +16,11 @@
 // suites (audit already green), so this spec carries no acceptance marker.
 
 import { test, expect } from "@playwright/test";
-import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
+import {
+  beforeEachInjectToken,
+  readDaemonToken,
+  resolveResourceUid,
+} from "./_helpers";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -54,7 +58,12 @@ function mkSeededConfigDir(): string {
 async function deleteAgentByApi(name: string): Promise<void> {
   try {
     const { token, port } = readDaemonToken();
-    await fetch(`http://127.0.0.1:${port}/api/v1/agents/${name}`, {
+    // The route addresses the uid; the test knows the name it registered.
+    // Nothing is left behind when the lookup finds nothing — that is the
+    // agent already being gone, which is what this teardown wanted.
+    const uid = await resolveResourceUid("agent", name);
+    if (uid === null) return;
+    await fetch(`http://127.0.0.1:${port}/api/v1/agents/${uid}`, {
       method: "DELETE",
       headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e-cleanup" },
     });
@@ -88,8 +97,12 @@ test("agent workspace tabs render MCP entries, plugins and the Skills-page point
     });
     expect(createResp.status).toBe(201);
 
-    // Open the agent detail page.
-    await page.goto(`/agents/${name}`);
+    // Open the agent detail page. The route addresses the agent's uid, which
+    // the creating response does not have to have told us — the test knows the
+    // name it asked for, and looks the identity up the way the CLI does.
+    const uid = await resolveResourceUid("agent", name);
+    expect(uid).not.toBeNull();
+    await page.goto(`/agents/${uid}`);
     await expect(page.getByRole("tab", { name: /mcp servers/i })).toBeVisible({
       timeout: 10_000,
     });

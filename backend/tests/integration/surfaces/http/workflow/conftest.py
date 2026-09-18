@@ -36,7 +36,7 @@ from coffer.surfaces.http.workflow import (
 )
 from coffer.surfaces.http.workflow import dependencies as deps
 from tests.unit.application.workflow.conftest import TEMPLATE, Engine, build_engine
-from tests.unit.application.workflow.fakes import clock
+from tests.unit.application.workflow.fakes import FakeTemplates, clock
 
 _TOKEN = "test-token-workflow-routes"
 _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
@@ -72,11 +72,11 @@ class FakeToolClass:
     def __init__(self) -> None:
         self.remembered: list[tuple[str, str, str]] = []
 
-    async def classify(self, server: str, tool: str) -> str | None:
+    async def classify(self, server_name: str, tool: str) -> str | None:
         return None
 
-    async def remember(self, server: str, tool: str, write_class: str) -> None:
-        self.remembered.append((server, tool, write_class))
+    async def remember(self, server_name: str, tool: str, write_class: str) -> None:
+        self.remembered.append((server_name, tool, write_class))
 
 
 class Surface:
@@ -148,7 +148,13 @@ def surface() -> Iterator[Surface]:
 
 
 def create_run(client: TestClient, **body: Any) -> dict[str, Any]:
-    payload = {"template": "delivery", "title": "Ship it", **body}
+    # The route takes the template's uid; the fake registry derives one from
+    # the name these tests are written in terms of.
+    payload = {
+        "template_uid": FakeTemplates.uid_of("delivery"),
+        "title": "Ship it",
+        **body,
+    }
     response = client.post("/api/v1/workflow/runs", json=payload)
     assert response.status_code == 201, response.text
     run: dict[str, Any] = response.json()

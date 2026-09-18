@@ -37,9 +37,13 @@ async def test_the_exported_document_carries_platform_identity_only(env: Channel
 
     docs = await _provider(env).export_docs()
 
-    assert [path for path, _ in docs] == [doc_path("tg", "chat-42")]
+    # Addressed by the channel's UID, not its name: a rename must not
+    # republish every pairing the channel has (ADR
+    # resource-identity-is-an-immutable-uid).
+    assert [path for path, _ in docs] == [doc_path(resource.uid, "chat-42")]
     payload = docs[0][1]
-    assert payload["channel"] == "tg"
+    assert payload["channel_uid"] == resource.uid
+    assert "tg" not in str(payload)  # the label does not travel at all
     assert payload["chat_id"] == "chat-42"
     assert payload["sender_id"] == "sender-7"
     # Neither the pointer nor the sticky agent is in the document, and not
@@ -72,9 +76,9 @@ async def test_an_arriving_pairing_lands_without_disturbing_the_local_conversati
 
     arriving = [
         (
-            doc_path("tg", "chat-42"),
+            doc_path(resource.uid, "chat-42"),
             {
-                "channel": "tg",
+                "channel_uid": resource.uid,
                 "chat_id": "chat-42",
                 "display_name": "Owner",
                 "sender_id": "sender-7",
@@ -113,7 +117,12 @@ async def test_a_pairing_for_a_channel_not_here_yet_is_held_rather_than_dropped(
     the next export cannot publish it as a deletion the owner never made.
     """
     failures = await _provider(env).import_docs(
-        [(doc_path("ghost", "chat-1"), {"channel": "ghost", "chat_id": "chat-1"})]
+        [
+            (
+                doc_path("uid-of-a-ghost", "chat-1"),
+                {"channel_uid": "uid-of-a-ghost", "chat_id": "chat-1"},
+            )
+        ]
     )
     assert len(failures) == 1
     assert "not registered here yet" in failures[0][1]
@@ -122,7 +131,10 @@ async def test_a_pairing_for_a_channel_not_here_yet_is_held_rather_than_dropped(
 async def test_a_malformed_pairing_is_reported_rather_than_silently_skipped(
     env: ChannelEnv,
 ) -> None:
-    failures = await _provider(env).import_docs([(doc_path("tg", "chat-1"), {"channel": "tg"})])
+    resource = await env.register_channel("tg")
+    failures = await _provider(env).import_docs(
+        [(doc_path(resource.uid, "chat-1"), {"channel_uid": resource.uid})]
+    )
     assert len(failures) == 1
     assert "chat_id" in failures[0][1]
 
@@ -139,10 +151,29 @@ async def test_an_unpairing_deletes_exactly_that_chat(env: ChannelEnv) -> None:
     await env.pair(resource, chat_id="chat-42")
     await env.pair(resource, chat_id="chat-99")
 
-    await _provider(env).delete_docs([doc_path("tg", "chat-42")])
+    await _provider(env).delete_docs([doc_path(resource.uid, "chat-42")])
 
     assert await env.peers.get_by_chat(resource.id, "chat-42") is None
     assert await env.peers.get_by_chat(resource.id, "chat-99") is not None
 
     # A path naming a channel this machine does not hold is nothing to do here.
-    await _provider(env).delete_docs([doc_path("ghost", "chat-1")])
+    await _provider(env).delete_docs([doc_path("uid-of-a-ghost", "chat-1")])
+
+
+@pytest.mark.acceptance(spec="vault-sync", scenario="a channel's pairings travel with it")
+async def test_renaming_a_channel_republishes_nothing(env: ChannelEnv) -> None:
+    """The defect the uid removes, asserted where it was paid for.
+
+    While this area was addressed by the channel's NAME, renaming a channel
+    changed every one of its document paths at once. The other end sees that as
+    a deletion of every old path plus an addition of every new one, and the
+    deletions are APPLIED — ``delete_docs`` un-pairs — so the owner's chats came
+    unpaired and had to be paired again from their phone.
+    """
+    resource = await env.register_channel("tg")
+    await env.pair(resource, chat_id="chat-42")
+    before = await _provider(env).export_docs()
+
+    await env.resources.rename(resource.uid, "telegram-personal", actor="test")
+
+    assert await _provider(env).export_docs() == before

@@ -54,15 +54,15 @@ class CodexDelivery:
     config_key: str = CONFIG_KEY
     event: str = EVENT
 
-    def command_for(self, agent_key: str) -> str:
-        invocation = delivery.context_invocation(agent_key)
+    def command_for(self, agent_uid: str) -> str:
+        invocation = delivery.context_invocation(agent_uid)
         return f": {delivery.MARKER}; {_GUARD_PREFIX}{invocation}; }}"
 
-    def install(self, text: str, agent_key: str) -> str:
+    def install(self, text: str, agent_uid: str) -> str:
         return delivery.install_entry(
             text,
             event=self.event,
-            command=self.command_for(agent_key),
+            command=self.command_for(agent_uid),
             matcher=None,
             timeout=TIMEOUT_SECONDS,
         )

@@ -61,13 +61,27 @@ describe("ConversationListItem structure", () => {
 });
 
 describe("ConversationListItem channel badge", () => {
-  test("renders a via-channel chip from channel_binding", () => {
+  test("renders a via-channel chip naming the channel, not its uid", () => {
     renderItem({
       ...base,
-      channel_binding: { channel: "telegram", chat_id: "c-9" },
+      // The binding stores the channel's uid; the name beside it is resolved
+      // when the conversation is read. The chip is for a person, so it is the
+      // name that has to appear — and the uid that must not.
+      channel_binding: { channel_uid: "ch-4b12", channel: "telegram", chat_id: "c-9" },
     });
-    const chip = screen.getByText(/via telegram/i);
-    expect(chip).toBeInTheDocument();
+    expect(screen.getByText(/via telegram/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ch-4b12/)).toBeNull();
+  });
+
+  test("falls back to the uid once the channel is gone", () => {
+    // A deleted channel leaves the binding standing with no name to resolve.
+    // The conversation really did arrive over a channel, so the chip says the
+    // only thing left that is true rather than going blank.
+    renderItem({
+      ...base,
+      channel_binding: { channel_uid: "ch-4b12", channel: null, chat_id: "c-9" },
+    });
+    expect(screen.getByText(/via ch-4b12/i)).toBeInTheDocument();
   });
 
   test("renders no chip for a web conversation (channel_binding null)", () => {

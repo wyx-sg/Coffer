@@ -81,7 +81,11 @@ class RunCreateIn(BaseModel):
     thing, available for one moment only.
     """
 
-    template: str
+    #: The template resource's **uid**, not its name: the picker that fills
+    #: this field has the uid already, and a run created from a label would be
+    #: created from whatever that label pointed at when the request landed
+    #: (ADR resource-identity-is-an-immutable-uid).
+    template_uid: str
     title: str
     agent: str | None = None
 

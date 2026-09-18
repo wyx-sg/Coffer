@@ -38,7 +38,7 @@ export function AgentSkillsTab({ agent }: { agent: AgentOut }) {
         </div>
       </Card>
 
-      <UnmanagedSkillsSection agentName={agent.name} />
+      <UnmanagedSkillsSection agentUid={agent.uid} />
     </div>
   );
 }

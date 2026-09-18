@@ -111,7 +111,10 @@ async def shutdown(running: Running) -> None:
     # The built-in agent's chat gateway session first (best-effort); its
     # on_dispose callback removes its entry from session_supervisors.
     await best_effort("chat_gateway_session", running.chat.gateway_session.dispose())
-    await best_effort("process_supervisor", running.kinds.mcp.process_supervisor.dispose())
+    # Dispose MCP supervisors (best-effort). The process-wide supervisor is IN
+    # this registry now — it has to be, or the kind's delete and rename hooks
+    # cannot reach the upstreams it holds — so the loop covers it and the
+    # separate call it used to get would only dispose it twice.
     for session_id, sup in list(running.kinds.mcp.session_supervisors.items()):
         await best_effort(f"session_supervisor[{session_id}]", sup.dispose())
     running.kinds.mcp.session_supervisors.clear()

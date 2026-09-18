@@ -37,8 +37,6 @@ import tempfile
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ResourceNotFound
-from coffer.domain.resource import ResourceRef
 from coffer.domain.skill.builtin import is_builtin
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import BuiltinSource
@@ -46,6 +44,7 @@ from coffer.domain.skill.validator import ValidationFailure, validate_skill_fold
 
 if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
+    from coffer.domain.resource import Resource
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +111,8 @@ class BuiltinSkillSeed:
 
         config = SkillConfig(
             source=BuiltinSource(),
-            skill_md_name=validation.frontmatter.name,
+            # The frontmatter's ``name`` is deliberately not stored: it is the
+            # row's ``name``, and ``_write`` was handed that name to begin with.
             skill_md_description=validation.frontmatter.description,
             version_hash=validation.skill_md_sha256,
             # Deliberately null: a timestamp differs on every machine and the
@@ -121,9 +121,12 @@ class BuiltinSkillSeed:
             last_synced_from_source_at=None,
         ).model_dump(mode="json")
 
-        ref = ResourceRef("skill", name)
+        # Both branches hand the audit the row they just wrote rather than a
+        # label to look one up from: ``register`` mints the identity and
+        # returns it, ``update_config`` returns the row as it now stands, and
+        # neither answer can go stale between the write and the record.
         if row is None:
-            await service._rs.register(
+            seeded = await service._rs.register(
                 kind="skill",
                 name=name,
                 config=config,
@@ -133,8 +136,8 @@ class BuiltinSkillSeed:
             )
             event = AuditEventType.SKILL_IMPORTED
         else:
-            await service._rs.update_config(
-                ref,
+            seeded = await service._rs.update_config(
+                row.uid,
                 new_config=config,
                 actor=SEED_ACTOR,
                 description=validation.frontmatter.description,
@@ -143,17 +146,23 @@ class BuiltinSkillSeed:
             event = AuditEventType.SKILL_UPDATED
         await service._audit.record(
             event.value,
-            ref=ref,
+            resource=seeded,
             actor=SEED_ACTOR,
             details={"version_hash": validation.skill_md_sha256, "builtin": True},
         )
         return True
 
-    async def _row(self, name: str) -> object | None:
-        try:
-            return await self._skills._rs.get(ResourceRef("skill", name))
-        except ResourceNotFound:
-            return None
+    async def _row(self, name: str) -> Resource | None:
+        """The seeded row, if this machine already has one.
+
+        By NAME, which everything else inside the daemon has stopped doing —
+        and rightly here, because the seeder has no uid to start from. It is
+        handed a name the running build generates, and whether some earlier
+        boot already minted a row for it is precisely the question. Absence is
+        an answer (first boot on this machine), not a failure, so this asks
+        ``find_by_name`` rather than catching a ``ResourceNotFound``.
+        """
+        return await self._skills._rs.find_by_name("skill", name)
 
     async def _deliver(self, name: str) -> None:
         """Reconcile every agent's delivered set, so the new row lands."""

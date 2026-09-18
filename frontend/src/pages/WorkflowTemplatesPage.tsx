@@ -93,7 +93,7 @@ export function WorkflowTemplatesPage() {
         // rather than vanishing as if it had worked.
         onConfirm={async () => {
           if (deleting === null) return;
-          await del.mutateAsync(deleting.name);
+          await del.mutateAsync(deleting.uid);
           setDeleting(null);
         }}
       />

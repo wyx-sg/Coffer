@@ -11,20 +11,13 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import (
-    TIMESTAMP,
-    Index,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
     func,
     select,
     update,
 )
-from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
@@ -36,74 +29,7 @@ from coffer.domain.chat.message import (
     block_from_dict,
     block_to_dict,
 )
-from coffer.infrastructure.persistence.base import Base
-
-# ---------------------------------------------------------------------------
-# ORM models
-# ---------------------------------------------------------------------------
-
-
-class ConversationModel(Base):
-    """Row in the ``conversations`` table."""
-
-    __tablename__ = "conversations"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    # No column default. It used to be ``"builtin"``, an agent that has since
-    # been withdrawn and is refused at channel create/edit — so the default
-    # could only ever mint a row no turn can route. Every writer passes the
-    # key explicitly; an absent one is a programming error, not a fallback.
-    agent_key: Mapped[str] = mapped_column(String, nullable=False)
-    title: Mapped[str] = mapped_column(String, nullable=False)
-    # Provider-owned per-conversation state (cwd + upstream session id + model),
-    # stored as the JSON of an ``AgentConfig``; NULL = none. See
-    # ConversationRepo.*_agent_config.
-    agent_config: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    # Optional channel binding (return address, spec channels) for a conversation the
-    # owner also drives from an IM channel; "has a binding" iff channel_name set.
-    channel_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    # Whose conversation this is. NULL is the developer's own — the only kind
-    # the chat list shows — and a name is the surface that owns it, which today
-    # is only ``workflow``. Chat needs no idea what that means: it lists the
-    # unowned ones, and everything else belongs to whoever put a name here.
-    owner: Mapped[str | None] = mapped_column(String, nullable=True)
-
-    __table_args__ = (
-        Index("idx_conversations_updated", "updated_at"),
-        Index("idx_conversations_archived", "archived_at"),
-        Index("idx_conversations_owner", "owner"),
-    )
-
-
-class MessageModel(Base):
-    """Row in the ``chat_messages`` table."""
-
-    __tablename__ = "chat_messages"
-
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    conversation_id: Mapped[str] = mapped_column(String, nullable=False)
-    seq: Mapped[int] = mapped_column(Integer, nullable=False)
-    role: Mapped[str] = mapped_column(String, nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)  # JSON list of content blocks
-    status: Mapped[str] = mapped_column(String, nullable=False, default="complete")
-    model_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint("conversation_id", "seq", name="uq_chat_messages_conv_seq"),
-        Index("idx_chat_messages_conv", "conversation_id", "seq"),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+from coffer.infrastructure.chat.persistence_models import ConversationModel, MessageModel
 
 
 def _tz(dt: datetime) -> datetime:
@@ -141,7 +67,7 @@ class ConversationRepo:
             created_at=_tz(row.created_at),
             updated_at=_tz(row.updated_at),
             archived_at=_tz(row.archived_at) if row.archived_at else None,
-            channel_name=row.channel_name,
+            channel_uid=row.channel_uid,
             peer_chat_id=row.peer_chat_id,
             owner=row.owner,
         )
@@ -154,7 +80,7 @@ class ConversationRepo:
                 title=conversation.title,
                 created_at=conversation.created_at,
                 updated_at=conversation.updated_at,
-                channel_name=conversation.channel_name,
+                channel_uid=conversation.channel_uid,
                 peer_chat_id=conversation.peer_chat_id,
                 owner=conversation.owner,
             )

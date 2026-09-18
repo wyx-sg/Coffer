@@ -76,7 +76,7 @@ function WebSocketCard({ callback }: { callback: CallbackInfo }) {
   );
 }
 
-export function ChannelCallbackCard({ name, callback }: { name: string; callback: CallbackInfo }) {
+export function ChannelCallbackCard({ uid, callback }: { uid: string; callback: CallbackInfo }) {
   const { t } = useTranslation();
   const endpoint = `127.0.0.1:${callback.port}${callback.path}`;
   const [copied, setCopied] = useState(false);
@@ -94,7 +94,7 @@ export function ChannelCallbackCard({ name, callback }: { name: string; callback
   const runTest = () => {
     setTesting(true);
     setTestResult(null);
-    void testChannelCallback(name)
+    void testChannelCallback(uid)
       .then((r) => setTestResult(r))
       .catch((e) => setTestResult({ ok: false, detail: translateApiError(t, e) }))
       .finally(() => setTesting(false));

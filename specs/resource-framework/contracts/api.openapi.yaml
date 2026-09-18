@@ -58,6 +58,14 @@ paths:
           name: kind
           required: false
           schema: { type: string, example: mcp_server }
+        - in: query
+          name: name
+          required: false
+          description: >-
+            Filter by exact label. The ONE place a name may be used to find a
+            resource: it is how a surface that started from what a human typed
+            — the CLI — turns that into the uid every other route takes.
+          schema: { type: string }
       responses:
         "200":
           description: OK
@@ -91,15 +99,12 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /resources/{kind}/{name}:
+  /resources/{uid}:
     parameters:
       - in: path
-        name: kind
+        name: uid
         required: true
-        schema: { type: string }
-      - in: path
-        name: name
-        required: true
+        description: The resource's immutable identity.
         schema: { type: string }
     get:
       tags: [resources]
@@ -138,15 +143,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /resources/{kind}/{name}/enable:
+  /resources/{uid}/enable:
     parameters:
       - in: path
-        name: kind
+        name: uid
         required: true
-        schema: { type: string }
-      - in: path
-        name: name
-        required: true
+        description: The resource's immutable identity.
         schema: { type: string }
     post:
       tags: [resources]
@@ -160,15 +162,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /resources/{kind}/{name}/disable:
+  /resources/{uid}/disable:
     parameters:
       - in: path
-        name: kind
+        name: uid
         required: true
-        schema: { type: string }
-      - in: path
-        name: name
-        required: true
+        description: The resource's immutable identity.
         schema: { type: string }
     post:
       tags: [resources]
@@ -182,15 +181,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /resources/{kind}/{name}/scope:
+  /resources/{uid}/scope:
     parameters:
       - in: path
-        name: kind
+        name: uid
         required: true
-        schema: { type: string }
-      - in: path
-        name: name
-        required: true
+        description: The resource's immutable identity.
         schema: { type: string }
     get:
       tags: [resources]
@@ -250,7 +246,12 @@ paths:
           name: kind
           schema: { type: string }
         - in: query
-          name: name
+          name: resource_uid
+          description: >-
+            One resource's whole trail, including rows written while it carried
+            a different name. Filtering by name was removed with the identity
+            change: a label cannot tell a renamed resource from a deleted one
+            whose name was later reused.
           schema: { type: string }
         - in: query
           name: event_type
@@ -334,7 +335,7 @@ paths:
       summary: What this daemon is rewriting right now
       description: |
         Every *upkeep pass* in flight: memory's `distil` over a partition,
-        knowledge's `tidy` over a collection. Both take minutes, both rewrite
+        knowledge's `curate` over a collection. Both take minutes, both rewrite
         files with a model in the loop, and both can be started from a button,
         the CLI or a timer — so whether one is running is a fact about the
         daemon, not about whichever surface started it.
@@ -351,8 +352,8 @@ paths:
         list comes back empty. That is the truth, not a lost record.
 
         Starting a pass is the kind's own route
-        (`POST /memory/partitions/{name}/distil`,
-        `POST /knowledge/collections/{name}/tidy`); each refuses a second
+        (`POST /memory/partitions/{uid}/distil`,
+        `POST /knowledge/collections/{uid}/curate`); each refuses a second
         concurrent pass over the same target with `UPKEEP_ALREADY_RUNNING`.
         Whether a pass runs on a timer at all is spec internal-engine's.
       responses:
@@ -416,12 +417,6 @@ components:
               type: object
               additionalProperties: true
 
-    ResourceRef:
-      type: string
-      description: "<kind>:<name>"
-      pattern: "^[a-z][a-z0-9_]*:[a-zA-Z0-9_.-]+$"
-      example: mcp_server:filesystem
-
     ScopeOut:
       type: object
       description: >-
@@ -437,9 +432,14 @@ components:
       properties:
         agents:
           type: array
+          description: >-
+            Agent resource UIDS, not names. A scope is a reference to another
+            resource and a name is a label its owner may change; while this
+            held names, renaming an agent silently emptied every scope naming
+            it.
           items: { type: string }
           nullable: true
-          example: [claude-code]
+          example: [9f2c1a7b4e8d4c1fa0b3d5e6f7081920]
       nullable: true
 
     ResourceScopeOut:
@@ -469,11 +469,19 @@ components:
 
     ResourceOut:
       type: object
-      required: [ref, kind, name, config, enabled, created_at, updated_at]
+      required: [uid, kind, name, config, enabled, created_at, updated_at]
       properties:
-        ref: { $ref: "#/components/schemas/ResourceRef" }
+        uid:
+          type: string
+          description: >-
+            The resource's identity: immutable, opaque, and the same value on
+            every machine holding it. Every route that addresses a resource
+            takes this.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
         kind: { type: string }
-        name: { type: string }
+        name:
+          type: string
+          description: A mutable label, unique within its kind. Editable through PATCH.
         description:
           type: string
           nullable: true
@@ -526,9 +534,10 @@ components:
           minLength: 1
           maxLength: 64
           pattern: "^[a-zA-Z0-9_.\\-]+$"
-          description: |
-            A new name (FR-011). Absent leaves it alone. A kind that declares
-            no rename refuses it with 409 rather than ignoring it.
+          description: >-
+            Renaming is a field, not an operation — the same level as editing a
+            description, for every kind. Absent leaves the label alone; a label
+            another resource of this kind already holds answers 409.
         description:
           type: string
           nullable: true

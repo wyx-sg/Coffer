@@ -34,6 +34,12 @@ export type FileOut = Schemas["FileOut"];
  * the contract types as `string` only.
  */
 export interface CollectionOut {
+  /** The collection Resource's immutable identity — what `curate` takes, and
+   *  what a link to this collection is built from. */
+  uid: string;
+  /** A mutable label, and the collection's directory name under the knowledge
+   *  root. Display it, and build the `path` / `collection` arguments of the
+   *  FILE routes from it: those address a place on disk. */
   name: string;
   description: string | null;
   /** Files under `sources/`, counted recursively. */

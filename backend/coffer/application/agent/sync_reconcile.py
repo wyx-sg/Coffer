@@ -83,8 +83,9 @@ class AgentSideEffectsReconcile:
             if self._reconcile_skill_delivery is not None:
                 try:
                     # Re-run delivery reconciliation against the predicate;
-                    # per-skill failures come back as strings.
-                    for failure in await self._reconcile_skill_delivery(row.name):
+                    # per-skill failures come back as strings. The hook is keyed
+                    # on the agent's uid, which is what a skill's scope holds.
+                    for failure in await self._reconcile_skill_delivery(row.uid):
                         errors.append(f"{row.name} (skill delivery): {failure}")
                 except Exception as e:
                     errors.append(f"{row.name} (skill delivery): {e}")

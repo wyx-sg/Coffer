@@ -14,10 +14,14 @@
 // a form with forty inputs in it is a thing to forget to press, and the
 // Discard beside it was the only way to undo a typo three tabs away.
 //
-// It writes through `PATCH /resources/workflow/{name}` like every other client
-// of every other kind (FR-056), and it reads a refusal back as the FIELD it
-// names (FR-055): `templateRefusal` turns the daemon's answer into a path, and
-// the dialog holding that path puts the message on the control.
+// It writes through `PATCH /resources/{uid}` like every other client of every
+// other kind (FR-056), and it reads a refusal back as the FIELD it names
+// (FR-055): `templateRefusal` turns the daemon's answer into a path, and the
+// dialog holding that path puts the message on the control.
+//
+// The URL carries the workflow's uid, so renaming one from this page is an
+// ordinary field edit: the address the page is read through does not move, and
+// there is nothing to navigate afterwards.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
@@ -40,10 +44,10 @@ import { templateRefusal } from "@/lib/workflow/templateErrors";
 
 export function WorkflowTemplatePage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const navigate = useNavigate();
-  const { data: template, isPending, error } = useWorkflowTemplate(name);
-  const editor = useTemplateEditor(name);
+  const { data: template, isPending, error } = useWorkflowTemplate(uid);
+  const editor = useTemplateEditor(uid);
   const del = useDeleteResource();
   const [deleting, setDeleting] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -63,7 +67,9 @@ export function WorkflowTemplatePage() {
   if (error || !template) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={name} />
+        {/* The workflow could not be read, so there is no name to head the
+            page with — and a uid is not a name. The heading is the failure. */}
+        <PageHeader back={back} title={t("workflow.templates.notFound")} />
         <EmptyState
           title={t("workflow.templates.notFound")}
           description={error ? translateApiError(t, error) : undefined}
@@ -109,14 +115,7 @@ export function WorkflowTemplatePage() {
         }
       />
 
-      <TemplateRenameDialog
-        template={template}
-        open={renaming}
-        onOpenChange={setRenaming}
-        // The URL carries the name, so a rename has to move the page with it
-        // or the next read is a 404 of the workflow that was just saved.
-        onRenamed={(next) => navigate(`/workflows/${encodeURIComponent(next)}`, { replace: true })}
-      />
+      <TemplateRenameDialog template={template} open={renaming} onOpenChange={setRenaming} />
 
       <ConfirmDialog
         open={deleting}
@@ -127,7 +126,7 @@ export function WorkflowTemplatePage() {
         pending={del.isPending}
         error={del.error}
         onConfirm={async () => {
-          await del.mutateAsync({ kind: WORKFLOW_TEMPLATE_KIND, name: template.name });
+          await del.mutateAsync({ kind: WORKFLOW_TEMPLATE_KIND, uid: template.uid });
           navigate("/workflows");
         }}
       />

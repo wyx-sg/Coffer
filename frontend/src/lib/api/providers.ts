@@ -8,7 +8,7 @@
 // marks `ProviderModel.modality` optional where the UI relies on it being set.
 // Transport via the shared `call` (agents/frontend.md §4).
 
-import { call } from "@/lib/api/call";
+import { call, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/generated/provider-switching";
 
 type Schemas = components["schemas"];
@@ -26,7 +26,7 @@ export type Protocol = Schemas["Protocol"];
 // The set is not a connection FIELD any more — it is derived from the resource's
 // framework per-agent scope (ADR per-agent-resource-scope), so it appears only on
 // the read side (`Provider.compatible_agents`) and is changed through
-// `PUT /resources/provider/{name}/scope` (see `lib/api/scope.ts`).
+// `PUT /resources/{uid}/scope` (see `lib/api/scope.ts`).
 // Not exported: `@/lib/api/agents` is where the rest of the app takes this
 // type from, and two names for one enum is how they drift. It is only
 // spelled here because `compatible_agents` below is typed with it.
@@ -79,6 +79,13 @@ export const WIRE_BY_AGENT: Record<string, Protocol> = {
 };
 
 export interface Provider {
+  /** The connection Resource's immutable identity — what every route below
+   *  takes. */
+  uid: string;
+  /** A mutable label. Display only: nothing Coffer writes into another tool's
+   *  config spells it any more, which is what let the provider-specific rename
+   *  route go — renaming is now the kind-agnostic
+   *  `PATCH /resources/{uid}` (`resourcesApi.rename`). */
   name: string;
   protocol: Protocol;
   base_url: string;
@@ -88,8 +95,8 @@ export interface Provider {
    * server-side from the resource's per-agent scope intersected with the agent
    * types Coffer knows; empty for a disabled or keyless (ollama) connection. The
    * Agent Overview picker and the chat ModelPicker filter on this. To CHANGE it,
-   * write the scope (`scopeApi.put("provider", name, …)`) — there is no request
-   * field for it. */
+   * write the scope (`scopeApi.put(uid, …)`) — there is no request field for
+   * it. */
   compatible_agents: AgentType[];
   is_active: boolean;
   /** ≤1 globally — the connection Coffer's internal engine uses. */
@@ -153,37 +160,39 @@ export function wireNeedsCredential(wire: Protocol): boolean {
 export const providersApi = {
   list: () => call<ProviderListOut>("/providers"),
 
-  get: (name: string) => call<Provider>(`/providers/${name}`),
+  get: (uid: string) => call<Provider>(`/providers/${enc(uid)}`),
 
   create: (body: ProviderCreate) => call<Provider>("/providers", { method: "POST", body }),
 
-  update: (name: string, body: ProviderPatch) =>
-    call<Provider>(`/providers/${name}`, { method: "PATCH", body }),
+  update: (uid: string, body: ProviderPatch) =>
+    call<Provider>(`/providers/${enc(uid)}`, { method: "PATCH", body }),
 
-  /** Rename a connection. Its own route rather than a PATCH field because a
-   * name is a label rather than one of the connection's settings, and a name
-   * already in use is a 409 rather than a merge. Nothing else moves: the vault
-   * entry and the audit trail both hang off the resource's stable id. */
-  rename: (name: string, newName: string) =>
-    call<Provider>(`/providers/${name}/rename`, { method: "POST", body: { new_name: newName } }),
+  // There is no `rename` here. It was a route of this kind's own, and it
+  // existed because the connection's name was its identity: the projection
+  // Coffer wrote into an agent's config spelled it, so moving it had to be a
+  // deliberate act with its own endpoint. The projection now spells the uid
+  // (`coffer provider key --connection-uid …`), which leaves a rename as an
+  // ordinary label edit — `resourcesApi.rename`, the same PATCH every other
+  // kind uses.
 
-  remove: (name: string) => call<void>(`/providers/${name}`, { method: "DELETE" }),
+  remove: (uid: string) => call<void>(`/providers/${enc(uid)}`, { method: "DELETE" }),
 
-  activate: (name: string) => call<ActivateOut>(`/providers/${name}/activate`, { method: "POST" }),
+  activate: (uid: string) =>
+    call<ActivateOut>(`/providers/${enc(uid)}/activate`, { method: "POST" }),
 
   /** Switch a wire's agent(s) back to their own built-in login: remove Coffer's
    * projection and clear the active connection. Idempotent. */
   useBuiltin: (wire: Protocol) =>
-    call<DeactivateOut>(`/providers/use-builtin/${wire}`, { method: "POST" }),
+    call<DeactivateOut>(`/providers/use-builtin/${enc(wire)}`, { method: "POST" }),
 
   /** Make this connection Coffer's internal-engine default (clears the flag on
    * all others). Returns the updated connection. */
-  setInternalDefault: (name: string) =>
-    call<Provider>(`/providers/${name}/internal-default`, { method: "POST" }),
+  setInternalDefault: (uid: string) =>
+    call<Provider>(`/providers/${enc(uid)}/internal-default`, { method: "POST" }),
 
   /** Make this connection the one Coffer transcribes speech on (clears the flag
    * on all others). The twin of `setInternalDefault`, never a substitute for
    * it: nothing falls back between the two. */
-  setTranscribeDefault: (name: string) =>
-    call<Provider>(`/providers/${name}/transcribe-default`, { method: "POST" }),
+  setTranscribeDefault: (uid: string) =>
+    call<Provider>(`/providers/${enc(uid)}/transcribe-default`, { method: "POST" }),
 };

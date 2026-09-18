@@ -22,11 +22,12 @@ from pydantic import (
     model_validator,
 )
 
-# A credential ref is a human-chosen path like "channel/tg/bot-token".
-# Raw secrets are longer and machine-shaped; reject the obvious cases. The
-# high-entropy pattern deliberately excludes "/": path-style refs of any
-# length stay valid, and the Telegram/Bearer patterns still catch the
-# secrets users realistically paste here.
+# A credential ref is a vault ADDRESS, not a secret: Coffer mints
+# "channel/<uuid4 hex>/<secret>" for one the UI stores, and a user may type a
+# path of their own. Raw secrets are longer and machine-shaped; reject the
+# obvious cases. The high-entropy pattern deliberately excludes "/": path-style
+# refs of any length stay valid, and the Telegram/Bearer patterns still catch
+# the secrets users realistically paste here.
 _RAW_SECRET_PATTERNS = [
     re.compile(r"^\d{6,}:[A-Za-z0-9_-]{30,}$"),  # Telegram bot token
     re.compile(r"^[A-Za-z0-9+=_-]{40,}$"),  # long high-entropy blob (no path separator)
@@ -44,19 +45,24 @@ def _reject_raw_secret(field: str, value: str) -> str:
     return value
 
 
-#: The agent a channel routes to when its config names none. Exported so the
-#: runtime can read a stored config's routing target without paying for a full
-#: parse (a row it cannot parse is not one it can start either).
-DEFAULT_AGENT = "claude_code"
-
-
 class _CommonChannelFields(BaseModel):
     """Fields shared by every channel type: the agent it routes to by default."""
 
-    # The provider key the chat AgentProviderRegistry resolves a turn by
-    # (underscore form), NOT the "claude-code" resource name — a hyphenated
-    # value reaches turn time and fails with UNKNOWN_AGENT.
-    default_agent: str = DEFAULT_AGENT
+    # The **uid** of the agent resource this channel drives by default (ADR
+    # resource-identity-is-an-immutable-uid). It is a cross-resource reference,
+    # so it holds the one thing about that agent the owner cannot change: not
+    # its registry name, and not the turn platform's agent key either. The key
+    # is derived from this at the one place the turn platform needs it (the
+    # runtime gate in ``application/channel/wanted.py``), which is what let the
+    # translation module this field used to need be deleted outright.
+    #
+    # There is NO default value, because there is nothing a schema could name:
+    # a uid is minted per vault, so no constant can stand for "the usual
+    # agent". ``None`` therefore means exactly what it says — this channel is
+    # bound to no agent — and a channel in that state drives nothing and is not
+    # started. That is a visible, fail-closed state, not a silent fallback to
+    # whichever agent happened to be called ``claude-code``.
+    default_agent: str | None = Field(default=None, max_length=64)
     default_agent_config: dict[str, Any] | None = None
     # Group inbound gating (FR-037). ``require_mention`` (default on) keeps the
     # bot silent in a group until @mentioned / replied-to; ``ignore_other_mentions``

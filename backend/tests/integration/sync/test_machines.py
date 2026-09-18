@@ -164,7 +164,7 @@ async def test_reach_stays_on_the_machine_it_was_set_on(pair) -> None:
     # Neither machine published reach at all: the document in the shared tree
     # is identity, description and config, and that is the reason the two
     # answers above can coexist.
-    doc = await a.remote_text("resources/mcp_server/shared.yaml")
+    doc = await a.remote_text(await a.doc_path("mcp_server", "shared"))
     assert doc is not None
     assert "enabled" not in doc
     assert "scope" not in doc
@@ -232,8 +232,22 @@ async def test_a_channel_travels_carrying_the_machine_that_runs_it(pair) -> None
     design exists to prevent.
     """
     a, b = pair
-    await a.register("channel", "seatalk-a", {"value": "port-8787", "runs_on": a.machine_id})
-    await b.register("channel", "telegram-b", {"value": "port-9090", "runs_on": b.machine_id})
+    # Each channel names an agent by uid, because a channel that routes nowhere
+    # never reaches the binding question the gate is being asked about below.
+    # The agent resources travel too, so both uids resolve on both machines —
+    # which is what leaves ``runs_on`` as the only thing deciding who runs what.
+    coder_a = await a.register("agent", "coder-a", {"value": "a", "type": "claude_code"})
+    coder_b = await b.register("agent", "coder-b", {"value": "b", "type": "codex"})
+    await a.register(
+        "channel",
+        "seatalk-a",
+        {"value": "port-8787", "runs_on": a.machine_id, "default_agent": coder_a.uid},
+    )
+    await b.register(
+        "channel",
+        "telegram-b",
+        {"value": "port-9090", "runs_on": b.machine_id, "default_agent": coder_b.uid},
+    )
     await settle(a, b)
 
     # Both machines hold both channels now.
@@ -251,8 +265,8 @@ async def test_a_channel_travels_carrying_the_machine_that_runs_it(pair) -> None
 
     # The remote carries the documents, which it never used to.
     remote = await a.remote_paths()
-    assert "resources/channel/seatalk-a.yaml" in remote
-    assert "resources/channel/telegram-b.yaml" in remote
+    assert await a.doc_path("channel", "seatalk-a") in remote
+    assert await a.doc_path("channel", "telegram-b") in remote
 
     # And the production gate, run against the rows that actually came off the
     # remote, answers the way the design needs it to. Asserting the FIELD
@@ -283,7 +297,7 @@ async def test_a_travelling_channel_publishes_refs_and_not_secrets(pair) -> None
     )
     await settle(a, b)
 
-    document = await a.remote_text("resources/channel/tg.yaml")
+    document = await a.remote_text(await a.doc_path("channel", "tg"))
     assert document is not None
     assert "channel/tg/bot-token" in document
     assert "placeholder-not-a-real-bot-token" not in document

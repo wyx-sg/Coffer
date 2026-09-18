@@ -42,10 +42,10 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import (
     CredentialApplier,
-    ResourceApplier,
     StateApplier,
     TreeApplier,
 )
+from coffer.application.sync.appliers_resource import ResourceApplier
 from coffer.application.sync.conflicts import ConflictArbiter
 from coffer.application.sync.convergence import ConvergeRound
 from coffer.application.sync.exporter import SyncExporter
@@ -53,7 +53,7 @@ from coffer.application.sync.joining import JoinResolver
 from coffer.application.sync.machines import MachineRegistry
 from coffer.application.sync.service import ConvergeService
 from coffer.domain.error_base import CofferError
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
 from coffer.domain.skill.builtin import is_builtin
 from coffer.domain.sync.backup import BackupRemote
@@ -699,27 +699,30 @@ class VaultMachine:
         kind: str,
         name: str,
         config: dict[str, Any] | None = None,
-    ) -> None:
-        await self.resources.register(
+    ) -> Resource:
+        return await self.resources.register(
             kind, name, config or {"value": name}, "test", allow_lifecycle_kind=True
         )
 
     async def edit_config(self, kind: str, name: str, config: dict[str, Any]) -> None:
         await self.resources.update_config(
-            ResourceRef(kind, name), config, "test", allow_lifecycle_kind=True
+            await self.uid(kind, name), config, "test", allow_lifecycle_kind=True
         )
 
+    async def rename_resource(self, kind: str, name: str, new_name: str) -> None:
+        await self.resources.rename(await self.uid(kind, name), new_name, "test")
+
     async def delete_resource(self, kind: str, name: str) -> None:
-        await self.resources.delete(ResourceRef(kind, name), "test")
+        await self.resources.delete(await self.uid(kind, name), "test")
 
     async def resource_names(self, kind: str) -> list[str]:
         return sorted(r.name for r in await self.resources.list(kind=kind))
 
     async def set_scope(self, kind: str, name: str, scope: Scope | None) -> None:
-        await self.resources.update_scope(ResourceRef(kind, name), scope, actor="test")
+        await self.resources.update_scope(await self.uid(kind, name), scope, actor="test")
 
     async def set_enabled(self, kind: str, name: str, enabled: bool) -> None:
-        await self.resources.set_enabled(ResourceRef(kind, name), enabled, actor="test")
+        await self.resources.set_enabled(await self.uid(kind, name), enabled, actor="test")
 
     async def reach(self, kind: str, name: str) -> tuple[bool, Scope | None]:
         """This machine's answer for a resource: is it live, and for whom.
@@ -732,13 +735,30 @@ class VaultMachine:
         assert resource is not None, f"{kind}/{name} is not registered on {self.name}"
         return resource.enabled, resource.scope
 
-    async def find(self, kind: str, name: str) -> Any:
-        from coffer.domain.errors import ResourceNotFound
+    async def find(self, kind: str, name: str) -> Resource | None:
+        """Resolve a LABEL, the way a human's input is resolved.
 
-        try:
-            return await self.resources.get(ResourceRef(kind, name))
-        except ResourceNotFound:
-            return None
+        Every helper above goes through here, because a test is written in the
+        vocabulary the user has — names — while everything it drives is
+        addressed by uid (ADR resource-identity-is-an-immutable-uid). This is
+        the one place in the harness that translates, which is also what keeps
+        a test honest about a rename: after one, the old name resolves to
+        nothing and the new name resolves to the same uid.
+        """
+        return await self.resources.find_by_name(kind, name)
+
+    async def uid(self, kind: str, name: str) -> str:
+        resource = await self.find(kind, name)
+        assert resource is not None, f"{kind}/{name} is not registered on {self.name}"
+        return resource.uid
+
+    async def doc_path(self, kind: str, name: str) -> str:
+        """Where this resource's document sits in the bundle.
+
+        Keyed on the uid, so a test that wants to read or hand-write one has
+        to resolve the resource first — exactly as the applier does.
+        """
+        return f"resources/{kind}/{await self.uid(kind, name)}.yaml"
 
     def set_credential(self, ref: str, value: str) -> None:
         self.credential_store.set(ref, value)
@@ -793,7 +813,7 @@ class VaultMachine:
         self.knowledge_root.mkdir(parents=True, exist_ok=True)
         self.skills_root.mkdir(parents=True, exist_ok=True)
         for resource in await self.resources.list():
-            await self.resources.delete(ResourceRef(resource.kind, resource.name), "test")
+            await self.resources.delete(resource.uid, "test")
 
     # --- inspection ---------------------------------------------------------
 

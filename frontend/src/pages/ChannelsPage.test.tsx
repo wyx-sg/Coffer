@@ -22,7 +22,9 @@ vi.mock("@/components/channel/ChannelsTable", () => ({
   ChannelsTable: ({ items, isLoading }: { items: ResourceOut[]; isLoading?: boolean }) => (
     <div data-testid="channels-table" data-loading={isLoading ? "true" : "false"}>
       {items.map((r) => (
-        <span key={r.name}>{r.name}</span>
+        // Keyed on the uid like the real table's rowKey — the name is a label
+        // the owner may change, and React keys have to outlive that.
+        <span key={r.uid}>{r.name}</span>
       ))}
     </div>
   ),
@@ -40,11 +42,14 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-function channel(name: string): ResourceOut {
+/** A channel row as the list hands it over: an opaque uid, a readable name,
+ *  and a `default_agent` holding an agent's uid rather than a provider key. */
+function channel(uid: string, name: string): ResourceOut {
   return {
+    uid,
     name,
     kind: "channel",
-    config: { channel_type: "telegram", default_agent: "builtin" },
+    config: { channel_type: "telegram", default_agent: "u-6c1d0b83" },
     enabled: true,
   } as unknown as ResourceOut;
 }
@@ -86,7 +91,7 @@ describe("ChannelsPage", () => {
   });
 
   test("renders the table and the header Add button opens the dialog", () => {
-    stubQuery({ data: [channel("tg"), channel("st")] });
+    stubQuery({ data: [channel("u-3d9a1f77", "tg"), channel("u-c0be4512", "st")] });
     render(wrap(<ChannelsPage />));
     expect(screen.getByTestId("channels-table")).toBeInTheDocument();
     expect(screen.getByText("tg")).toBeInTheDocument();

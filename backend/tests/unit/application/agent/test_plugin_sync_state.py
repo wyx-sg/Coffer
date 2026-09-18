@@ -37,9 +37,21 @@ class _Listing:
     marketplaces: list[_Market]
 
 
+def _uid_of(name: str) -> str:
+    """The uid the fake registry mints for an agent named *name*.
+
+    Spelled differently from the name on purpose: the reader that asks the
+    plugin service for an inventory holds the uid, while the document it files
+    is titled with the label — and a fake where the two are the same string
+    would prove neither.
+    """
+    return f"uid-of-{name}"
+
+
 @dataclass
 class _Resource:
     name: str
+    uid: str
 
 
 class _Resources:
@@ -48,17 +60,17 @@ class _Resources:
 
     async def list(self, kind: str | None = None) -> list[_Resource]:
         assert kind == "agent"
-        return [_Resource(n) for n in self._names]
+        return [_Resource(n, _uid_of(n)) for n in self._names]
 
 
 class _Plugins:
     def __init__(self, by_agent: dict[str, _Listing | Exception]) -> None:
-        self._by_agent = by_agent
+        self._by_uid = {_uid_of(name): v for name, v in by_agent.items()}
         self.calls: list[str] = []
 
-    async def list_plugins(self, name: str):
-        self.calls.append(name)
-        result = self._by_agent[name]
+    async def list_plugins(self, uid: str):
+        self.calls.append(uid)
+        result = self._by_uid[uid]
         if isinstance(result, Exception):
             raise result
         return result

@@ -10,32 +10,32 @@ import { useQuery } from "@tanstack/react-query";
 import { agentNativeMemoryApi } from "@/lib/api/agentNativeMemory";
 import { agentNativeMemoryKey } from "@/lib/api/queryKeys";
 
-export function useAgentNativeMemory(name: string) {
+export function useAgentNativeMemory(agentUid: string) {
   return useQuery({
-    queryKey: agentNativeMemoryKey(name),
-    queryFn: () => agentNativeMemoryApi.list(name),
-    enabled: !!name,
+    queryKey: agentNativeMemoryKey(agentUid),
+    queryFn: () => agentNativeMemoryApi.list(agentUid),
+    enabled: !!agentUid,
   });
 }
 
-const nativeMemoryFilesKey = (name: string, dir: string) =>
-  ["agents", name, "native-memory", dir, "files"] as const;
+const nativeMemoryFilesKey = (agentUid: string, dir: string) =>
+  ["agents", agentUid, "native-memory", dir, "files"] as const;
 
-const nativeMemoryFileKey = (name: string, dir: string, path: string) =>
-  ["agents", name, "native-memory", dir, "files", path] as const;
+const nativeMemoryFileKey = (agentUid: string, dir: string, path: string) =>
+  ["agents", agentUid, "native-memory", dir, "files", path] as const;
 
-export function useNativeMemoryFiles(name: string, dir: string) {
+export function useNativeMemoryFiles(agentUid: string, dir: string) {
   return useQuery({
-    queryKey: nativeMemoryFilesKey(name, dir),
-    queryFn: () => agentNativeMemoryApi.files(name, dir),
-    enabled: !!name && !!dir,
+    queryKey: nativeMemoryFilesKey(agentUid, dir),
+    queryFn: () => agentNativeMemoryApi.files(agentUid, dir),
+    enabled: !!agentUid && !!dir,
   });
 }
 
-export function useNativeMemoryFileContent(name: string, dir: string, path: string) {
+export function useNativeMemoryFileContent(agentUid: string, dir: string, path: string) {
   return useQuery({
-    queryKey: nativeMemoryFileKey(name, dir, path),
-    queryFn: () => agentNativeMemoryApi.fileContent(name, dir, path),
-    enabled: !!name && !!dir && !!path,
+    queryKey: nativeMemoryFileKey(agentUid, dir, path),
+    queryFn: () => agentNativeMemoryApi.fileContent(agentUid, dir, path),
+    enabled: !!agentUid && !!dir && !!path,
   });
 }

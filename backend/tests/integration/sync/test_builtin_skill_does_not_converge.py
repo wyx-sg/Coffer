@@ -30,7 +30,6 @@ import pytest
 
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME, render
 from coffer.domain.knowledge.entry import CollectionEntry, FileEntry
-from coffer.domain.resource import ResourceRef
 from coffer.domain.sync.convergence import ConvergeStatus
 from coffer.domain.sync.manifest import MANIFEST_PATH
 from tests.integration.sync.harness import BRANCH, VaultMachine, settle, two_machines
@@ -39,7 +38,12 @@ pytestmark = pytest.mark.timeout(120)
 
 GUIDE_TREE_PREFIX = f"skills/{GUIDE_SKILL_NAME}/"
 GUIDE_SKILL_MD = f"{GUIDE_TREE_PREFIX}SKILL.md"
-GUIDE_DOC = f"resources/skill/{GUIDE_SKILL_NAME}.yaml"
+
+# The skills *tree* is still filed under the folder's name, because that is
+# what it is — a directory on disk. The resource *document* is not: it lives at
+# ``resources/skill/<uid>.yaml`` (ADR resource-identity-is-an-immutable-uid),
+# and a uid is minted by whichever machine first seeded the row, so there is no
+# module-level constant for it. Ask the machine — ``_guide_doc`` below.
 
 _COLLECTIONS = {
     "notes": ("Day-to-day working notes.", "notes/topics/standup.md", "Standup"),
@@ -58,7 +62,17 @@ def _guide_text(*enabled: str) -> str:
     catalogue = []
     for name in enabled:
         description, path, title = _COLLECTIONS[name]
-        entry = CollectionEntry(name=name, description=description, source_count=1, topic_count=1)
+        # A uid is required of a catalogue entry now, and deliberately fixed
+        # here: the rendered text must depend on WHICH collections are on and
+        # on nothing else, so a per-machine identity leaking into these bytes
+        # would recreate the very divergence this file is about.
+        entry = CollectionEntry(
+            uid=f"rsc_{name}",
+            name=name,
+            description=description,
+            source_count=1,
+            topic_count=1,
+        )
         topic = FileEntry(
             path=path, title=title, description=description, actor="agent", updated_at=""
         )
@@ -84,6 +98,17 @@ async def _seed_guide(machine: VaultMachine, text: str) -> None:
     """What a boot does on one machine: write the master, register the row."""
     machine.write_skill(GUIDE_SKILL_NAME, text)
     await machine.register("skill", GUIDE_SKILL_NAME, _builtin_config(text))
+
+
+async def _guide_doc(machine: VaultMachine) -> str:
+    """Where *this* machine's guide document would sit, if it published one.
+
+    Each machine seeds its own guide and mints its own uid for it, so the two
+    machines here disagree about this path — which is itself the point: a
+    document keyed on identity is one machine's row, not a shared slot two
+    machines take turns overwriting.
+    """
+    return await machine.doc_path("skill", GUIDE_SKILL_NAME)
 
 
 def _master(machine: VaultMachine) -> str | None:
@@ -131,7 +156,8 @@ async def test_two_machines_keep_their_own_guide_and_stop_talking_about_it(pair)
     # 2. Neither half of it was published at all — not the folder, not the row.
     remote = await a.remote_paths()
     assert not [p for p in remote if p.startswith(GUIDE_TREE_PREFIX)], sorted(remote)
-    assert GUIDE_DOC not in remote
+    for machine in (a, b):
+        assert await _guide_doc(machine) not in remote, sorted(remote)
 
     # 3. The control: everything else still converges, so the silence above is
     #    about this one artifact and not about a round that stopped working.
@@ -184,7 +210,7 @@ async def test_a_second_render_on_one_machine_is_not_news_to_the_other(pair) -> 
 
     assert run.status is ConvergeStatus.NO_CHANGE, (run.status, run.error)
     assert not [c for c in run.published.changes if c.path.startswith(GUIDE_TREE_PREFIX)]
-    assert GUIDE_DOC not in {c.path for c in run.published.changes}
+    assert await _guide_doc(a) not in {c.path for c in run.published.changes}
 
 
 # --- the upgrade path -------------------------------------------------------
@@ -196,7 +222,7 @@ def _older_build_publishes(remote_url: str, files: dict[str, str]) -> None:
     Driven through plain git rather than a :class:`VaultMachine`, for the same
     reason ``harness.another_coffer_pushes`` is: a harness machine can only
     write what *this* build writes, and what is under test is what this build
-    does with a tree an older one left behind.
+    does with a tree another one left behind.
     """
     clone = pathlib.Path(remote_url).parent / "older-build"
     subprocess.run(
@@ -223,12 +249,20 @@ async def test_a_guide_an_older_build_published_is_ignored_and_left_alone(pair) 
     * the arriving folder must not overwrite the master this machine rendered
       (an export-side rule alone cannot stop that);
     * the arriving row document must not be *applied* — ``ResourceApplier
-      .remove`` would reach the skill kind's ``validate_delete``, raise
+      .remove`` would reach the skill kind's delete guard, raise
       ``ResourceProtected``, and be refused again on every tick because the
       round re-derives its diff each time;
     * and this machine must not publish the stale paths' **absence**, because a
       deletion is the one change every machine acts on, and the older build at
       the other end would take it as leave to unlink its own live master.
+
+    The stale document sits at **this machine's own guide uid**, and that is
+    the faithful reconstruction rather than a convenience: before the rule
+    existed the guide converged like anything else, so the machine at the other
+    end applied this one's document and registered the row under the identity
+    it carried. One guide, one uid, two machines — which is exactly why the
+    stale path is one this machine recognises as its own and withholds, rather
+    than one it would sweep out of the tree as somebody's leftover.
     """
     a, _b = pair
     text_a = _guide_text("notes")
@@ -236,15 +270,18 @@ async def test_a_guide_an_older_build_published_is_ignored_and_left_alone(pair) 
     await _seed_guide(a, text_a)
     await settle(a)
 
+    stale_uid = await a.uid("skill", GUIDE_SKILL_NAME)
+    stale_guide_doc = f"resources/skill/{stale_uid}.yaml"
     stale_doc = json.dumps({"kind": "skill", "name": GUIDE_SKILL_NAME})
     _older_build_publishes(
         a.remote_url,
         {
             GUIDE_SKILL_MD: _guide_text("notes", "archive"),
             f"{GUIDE_TREE_PREFIX}.coffer.meta.json": stale_doc,
-            GUIDE_DOC: (
+            stale_guide_doc: (
                 f"config:\n  source:\n    type: builtin\n  value: {GUIDE_SKILL_NAME}\n"
                 f"  version_hash: stale\nkind: skill\nname: {GUIDE_SKILL_NAME}\n"
+                f"uid: {stale_uid}\n"
             ),
         },
     )
@@ -256,7 +293,8 @@ async def test_a_guide_an_older_build_published_is_ignored_and_left_alone(pair) 
     assert not run.failures, run.failures
     # The master and the row are exactly as this machine wrote them.
     assert _master(a) == text_a
-    row = await a.resources.get(ResourceRef("skill", GUIDE_SKILL_NAME))
+    row = await a.resources.get_by_name("skill", GUIDE_SKILL_NAME)
+    assert row.uid == stale_uid, "the same resource, which is what makes it stale"
     assert row.config["version_hash"] == _builtin_config(text_a)["version_hash"]
 
     # The stale copies are left where they are — inert, not deleted. Deleting
@@ -264,7 +302,7 @@ async def test_a_guide_an_older_build_published_is_ignored_and_left_alone(pair) 
     # nobody has to act on.
     remote = await a.remote_paths()
     assert GUIDE_SKILL_MD in remote
-    assert GUIDE_DOC in remote
+    assert stale_guide_doc in remote
 
     # ...and it stays that way, tick after tick, rather than being re-refused.
     again = await a.converge()

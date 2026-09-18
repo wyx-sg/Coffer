@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
 from coffer.application.mcp.gateway_builtin import dispatch_builtin_tool
 from coffer.domain.knowledge.errors import CollectionNotFound
-from coffer.domain.mcp.capability import MCPInvocation
+from coffer.domain.mcp.capability import BUILTIN_SERVER_UID, MCPInvocation
 
 _SENTINEL = "COFFER_LEAK_SENTINEL_xyz789"
 
@@ -110,7 +110,9 @@ async def test_success_path_wraps_result_as_mcp_call_tool_result() -> None:
     row = invocations.rows[0]
     assert row.status == "ok"
     assert row.capability_key == "recall"
-    assert row.resource_name == "coffer"
+    # A built-in has no mcp_server row behind it, so the identity column carries
+    # the reserved sentinel rather than a uid.
+    assert row.resource_uid == BUILTIN_SERVER_UID
 
 
 async def test_handler_error_returns_in_band_iserror_result() -> None:

@@ -220,9 +220,9 @@ That split is a reaction to a specific failure. Coffer shipped a session-context
 A partition carries **no per-agent reach**: every enabled partition is served to every agent, on delivery and on recall alike. It used to carry one, seeded with the agents it had been aggregated from — which meant a repository's notes were withheld from the other agent working in that same repository, the exact opposite of what aggregating several agents' memory is for. Switching a partition off is the one gate left, and it stops Coffer serving it anywhere.
 
 ```bash
-coffer resource disable memory:coffer
-coffer resource enable memory:coffer
-coffer resource delete memory:coffer        # lifecycle is a Resource concern
+coffer resource disable memory coffer
+coffer resource enable memory coffer
+coffer resource delete memory coffer        # lifecycle is a Resource concern
 ```
 
 `enabled` governs **what Coffer serves**, not what a process on your machine can open: delivery hands an agent an absolute directory path, and an agent holding a path can read the file. Deleting takes the directory with it, and is safe in the sense that matters here: the next sync and distil rebuild it from the agents' own files.
@@ -244,7 +244,7 @@ Aggregation and distil both run on a timer and both default to **on**, for the r
 | Passes | `sync` · `distil` |
 | Delivery | `context` · `delivery` · `delivery-install` · `delivery-remove` |
 
-Deleting a partition is a Resource operation: `coffer resource delete memory:<name>`. So is switching one off: `coffer resource disable memory:<name>`.
+Deleting a partition is a Resource operation: `coffer resource delete memory <name>`. So is switching one off: `coffer resource disable memory <name>`.
 
 ## The REST surface
 

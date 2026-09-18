@@ -4,7 +4,8 @@ Entities, fields, relationships, and the SQLite schema for the `mcp_server`
 kind. ORM models follow these names exactly; OpenAPI schemas match the same
 field names.
 
-The kind-agnostic half — `Resource`, `ResourceRef`, `Kind`, `Scope`,
+The kind-agnostic half — `Resource` (its immutable `uid`, its mutable `name`
+label and the internal surrogate `id`), `Kind`, `Scope`,
 `AuditEntry`, `RetentionPolicy`, `PrunableTable`, and the `resources`,
 `audit_log` and `retention_policies` tables — is modelled by spec
 [resource-framework](../resource-framework/data-model.md). This document covers
@@ -37,6 +38,7 @@ resource-framework:
 | `credential_ref_extractor` | the transport's `credential_refs`, so refs are probed before any write and released after a delete |
 | `audit_redactor`           | an audit-safe copy of a transport config                                                     |
 | `on_delete`                | tears down any running upstream for that server before its row goes                          |
+| `on_rename`                | releases every live connection held under the name being left behind, before the row changes. A supervisor keys its entries — and each one's upstream subprocess — on the server's NAME, because `<server>__<tool>` is the vocabulary the downstream client speaks; without this the old entry becomes unreachable and the next call under the new name starts a second subprocess. It is reachable only because rename became available to every kind ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)) |
 
 ## MCP kind value objects (`backend/coffer/domain/mcp/`)
 
@@ -134,13 +136,25 @@ persisted (per [Capability State Model](../../docs/decisions/capability-state-mo
 | ----------------- | --------------------------------------------- | ------------------------------- |
 | `id`              | `int \| None`                                 | DB surrogate                    |
 | `timestamp`       | `datetime`                                    |                                 |
-| `resource_name`   | `str`                                         | MCP server name                 |
+| `resource_uid`    | `str`                                         | the MCP server's uid, or one of two reserved non-uid values — see below |
 | `capability_type` | `Literal["tool", "resource", "prompt"]`       |                                 |
 | `capability_key`  | `str`                                         | original (unprefixed) name      |
 | `duration_ms`     | `int`                                         | wall-clock milliseconds         |
 | `status`          | `Literal["ok", "error", "timeout", "denied"]` |                                 |
 | `error_message`   | `str \| None`                                 | populated when `status != "ok"` |
 | `session_id`      | `str \| None`                                 | per-session correlation         |
+
+Two reserved values appear in `resource_uid` and are deliberately not uids — a
+real uid is a 32-character `uuid4().hex`, and a name may not contain `:`, so
+neither can collide with one (`domain/mcp/capability.py`):
+
+| Value              | Means                                                                                                                                                                                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `coffer`           | one of Coffer's own `coffer__*` builtin tools. Builtins share this log so retention and the activity surfaces work uniformly, but no `mcp_server` row stands behind them and there is no uid to record.                                                          |
+| `deleted:<name>`   | a server already deleted when migration 0097 re-keyed the log. Its identity was never recorded and cannot be recovered, so the label it did carry survives behind a marker that is visibly not an identity. The row joins to no resource, which is the truth about it. |
+
+A row carrying either joins to nothing, which is what the tiering query's inner
+join relies on.
 
 **Never store args or results** — schema cannot hold them.
 
@@ -168,7 +182,7 @@ CREATE INDEX idx_prefs_resource ON mcp_capability_preferences(resource_id, capab
 CREATE TABLE mcp_invocations (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    resource_name    TEXT      NOT NULL,
+    resource_uid     TEXT      NOT NULL,                    -- a resource uid, or 'coffer' / 'deleted:<name>'
     capability_type  TEXT      NOT NULL,
     capability_key   TEXT      NOT NULL,
     duration_ms      INTEGER   NOT NULL,
@@ -176,13 +190,13 @@ CREATE TABLE mcp_invocations (
     error_message    TEXT,
     session_id       TEXT
 );
-CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_name, timestamp DESC);
+CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_uid, timestamp DESC);
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);
 CREATE INDEX idx_invocations_session  ON mcp_invocations(session_id, timestamp);
 
--- MCP-specific: persisted upstream health (revision 0003)
+-- MCP-specific: persisted upstream health (revision 0003; re-keyed by 0097)
 CREATE TABLE mcp_server_health (
-    resource_name  TEXT      PRIMARY KEY,
+    resource_uid   TEXT      PRIMARY KEY,
     status         TEXT      NOT NULL,                    -- 'healthy' | 'failing' | 'unknown'
     checked_at     TIMESTAMP NOT NULL
 );
@@ -211,9 +225,10 @@ Each ORM model provides:
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELETE FROM resources WHERE id=?`        | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does. |
 | `DELETE FROM mcp_capability_preferences`  | never done directly: a preference is flipped, not removed, which is what makes a decision survive an upstream upgrade (FR-008).                                       |
-| `mcp_server_health`                       | keyed by server NAME rather than row id, so a rename leaves a stale row that the next health check replaces.                                                          |
+| `mcp_server_health`                       | keyed by the server's `uid` rather than by its name or its row id (migration 0097), so a rename keeps the row it already has. Keyed by name it left a permanent orphan nothing would overwrite, and the status page went blank for a server that had tested green a second earlier. |
 
-The kind-agnostic rules these sit under — what `rename` does to the audit trail,
+The kind-agnostic rules these sit under — what a rename does to the audit trail
+(nothing: the identity does not move, so the history follows the resource),
 why `kind` is never updated, why a retention policy is never deleted — are spec
 resource-framework's.
 

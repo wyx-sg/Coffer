@@ -24,20 +24,22 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export function AgentMemoryStorePage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const params = useSearchParams()[0];
   const dir = params.get("dir") ?? "";
   const project = params.get("project");
 
   const back = {
-    to: `/agents/${encodeURIComponent(name)}?tab=memory`,
+    to: `/agents/${encodeURIComponent(uid)}?tab=memory`,
     label: t("common.backTo", { label: t("agents.workspace.memory") }),
   };
 
   if (!dir) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={name} />
+        {/* No store was named, so there is nothing to head the page with — and
+            the agent's uid is not a title. The failure is. */}
+        <PageHeader back={back} title={t("agents.memoryStore.missingDir")} />
         <Card className="border-destructive/40">
           <CardContent className="py-6">
             <p className="text-sm text-destructive" role="alert">
@@ -62,7 +64,7 @@ export function AgentMemoryStorePage() {
         }
       />
 
-      <AgentMemoryStoreTree name={name} dir={dir} />
+      <AgentMemoryStoreTree agentUid={uid} dir={dir} />
     </div>
   );
 }

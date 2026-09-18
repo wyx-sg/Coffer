@@ -49,11 +49,14 @@ export function TemplateCreateDialog({
         config: { ...emptyTemplate(), description: about.length > 0 ? about : null },
       },
       {
-        onSuccess: () => {
+        // The editor is addressed by the workflow's uid, which only the daemon
+        // knows — hence the created resource coming back rather than this
+        // rebuilding the URL out of what was typed.
+        onSuccess: (created) => {
           onOpenChange(false);
           setName("");
           setDescription("");
-          navigate(`/workflows/${encodeURIComponent(trimmed)}`);
+          navigate(`/workflows/${encodeURIComponent(created.uid)}`);
         },
       },
     );

@@ -4,7 +4,7 @@ Layout::
 
     manifest.json                  # layout schema version; read before an apply
     knowledge/ skills/             # mirrors of the live file-backed trees
-    resources/<kind>/<name>.yaml   # one deterministic file per synced resource
+    resources/<kind>/<uid>.yaml    # one deterministic file per synced resource
     state/<area>/...yaml           # module-owned shared state
     credentials/<ref>.enc          # Fernet ciphertext, opt-in; never the key
     machines/<machine_id>.yaml     # one descriptor per machine, disjointly owned
@@ -232,8 +232,17 @@ class Bundle:
         is not "the user deleted it", so those paths are protected exactly like
         a held one.
 
+        The file is named after the resource's **uid**, never its name (ADR
+        resource-identity-is-an-immutable-uid). That one choice is what makes a
+        rename survive the trip: the path is stable across it, so the change
+        reaches the other machine as a modification of one file, and the
+        receiving machine reads the new name out of the document. Keyed on the
+        name, the same edit left the tree as a deletion beside an addition —
+        and this method's own contract ("a document ``docs`` does not name was
+        deleted here") is precisely what turned it into one.
+
         ``withheld`` is the second escape hatch, and it is the one that makes
-        the paragraph above precise: it holds ``<kind>/<name>`` for rows a
+        the paragraph above precise: it holds ``<kind>/<uid>`` for rows a
         **converging kind** declined to publish row by row (``Kind
         .converges_row`` — today, Coffer's own generated skill). Those are
         protected; a whole withheld *kind*'s documents are not. The asymmetry
@@ -242,8 +251,16 @@ class Bundle:
         it takes nothing away. A builtin skill row over there is backed by a
         real master folder that machine wrote itself and still delivers, so
         publishing its deletion would ask the fleet to tear down something
-        live — and an older build, which has no row-level rule, would obey."""
-        desired = {f"{doc['kind']}/{doc['name']}.yaml": _dump(doc) for doc in docs}
+        live — and an older build, which has no row-level rule, would obey.
+
+        One thing the uid key narrowed: a withheld path is protected only at a
+        uid THIS machine holds, where the name-keyed version protected the
+        label wherever it came from. Benign, because a build on this layout
+        never publishes a guide document at all — the only way one exists in
+        the tree is a machine that published it before FR-093, and that one
+        registered it at the identity the document carried, so it is the same
+        uid."""
+        desired = {f"{doc['kind']}/{doc['uid']}.yaml": _dump(doc) for doc in docs}
         protected = (
             self._held_under(_RESOURCES)
             | {f"{ref}.yaml" for ref in unserializable}

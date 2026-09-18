@@ -65,7 +65,7 @@ Every scenario here is referenced by at least one test marked `@pytest.mark.acce
 
 **Coffer MCP install**
 
-- **FR-004**: The `McpInjectionSpec` agent-registry FR-015 installs through MUST write `[mcp_servers.coffer]` in `config.toml`, a typed-array entry whose first element is the resolved absolute shim path and whose `--agent <name>` argument is APPENDED to that `command` array. Edits to this file MUST preserve the user's comments and key ordering, which is why it is edited as TOML rather than reserialized.
+- **FR-004**: The `McpInjectionSpec` agent-registry FR-015 installs through MUST write `[mcp_servers.coffer]` in `config.toml`, a typed-array entry whose first element is the resolved absolute shim path and whose `--agent-uid <uid>` argument is APPENDED to that `command` array. Edits to this file MUST preserve the user's comments and key ordering, which is why it is edited as TOML rather than reserialized.
 
 **Agent MCP entries**
 

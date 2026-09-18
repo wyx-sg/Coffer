@@ -40,15 +40,28 @@ def _pid_dir() -> Path:
     return Path(os.environ.get("HOME", "~")).expanduser() / ".coffer" / "upstream-pids"
 
 
-def record_spawn(server_name: str, pid: int, command_line: list[str]) -> Path:
-    """Called by spawn_and_initialize after the SDK has spawned the upstream."""
+def record_spawn(server_uid: str, pid: int, command_line: list[str]) -> Path:
+    """Called by spawn_and_initialize after the SDK has spawned the upstream.
+
+    Filed under the server's **uid**, not its name (ADR
+    resource-identity-is-an-immutable-uid). A pid file outlives the process that
+    wrote it — that is the whole point, it is read by the NEXT daemon after a
+    crash — so it must not be titled with a label the user can change in
+    between. The uid is also a safe path segment by construction, where a name is
+    only a safe one by a rule this module would otherwise have to trust.
+
+    A file written by an older Coffer carries ``server`` (a name) instead of
+    ``server_uid``; nothing about reaping depends on either field, because
+    :func:`reap_pidfile` matches on pid + command line. The key is read only to
+    say which server was reaped in the log.
+    """
     pid_dir = _pid_dir()
     pid_dir.mkdir(parents=True, exist_ok=True)
-    path = pid_dir / f"{server_name}-{pid}.json"
+    path = pid_dir / f"{server_uid}-{pid}.json"
     path.write_text(
         json.dumps(
             {
-                "server": server_name,
+                "server_uid": server_uid,
                 "pid": pid,
                 "command_line": command_line,
                 "spawned_at": datetime.now(tz=UTC).isoformat(),
@@ -123,7 +136,7 @@ def reap_pidfile(path: Path) -> bool:
         killed = True
         _logger.info(
             "orphan_sweep.killed",
-            extra={"server": payload.get("server"), "pid": pid},
+            extra={"server_uid": payload.get("server_uid"), "pid": pid},
         )
     except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
         _logger.warning("orphan_sweep.kill_failed", extra={"pid": pid, "error": str(e)})

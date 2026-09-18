@@ -4,13 +4,20 @@ Boots the app exactly like ``test_skill_routes.py``: a temp ``HOME`` so the
 master store lands under ``tmp_path/.coffer/skills`` and a temp SQLite DB.
 Imports a skill with a nested folder, then exercises the endpoints:
 
-- ``GET /skills/{name}/files`` — tree shape
-- ``GET /skills/{name}/files/content`` — single-file read, path-escape
+- ``GET /skills/{uid}/files`` — tree shape
+- ``GET /skills/{uid}/files/content`` — single-file read, path-escape
   rejection, binary detection, oversize truncation, content fingerprint.
-- ``PUT /skills/{name}/files/content`` — save, guards, and the optimistic
+- ``PUT /skills/{uid}/files/content`` — save, guards, and the optimistic
   ``expected_fingerprint`` concurrency check (FR-025). The master folder is
   also the user's own working copy, so the stale case is exercised by mutating
   the file on disk behind the API — exactly what an external editor does.
+
+The skill is addressed by its ``uid``, taken straight off the import response
+(ADR resource-identity-is-an-immutable-uid). Its NAME still appears in the
+assertions, because the master folder on disk is ``~/.coffer/skills/<name>/``:
+the uid finds the row, the row's current name says where its bytes are, and the
+``path`` parameter — still relative, still guarded by ``file_ops`` — says which
+file inside it. Three different questions; the tests keep them apart.
 """
 
 from __future__ import annotations
@@ -67,6 +74,7 @@ def _write_nested_skill_folder(folder: pathlib.Path, *, name: str) -> pathlib.Pa
 
 
 def _import(c: TestClient, src: pathlib.Path) -> dict:
+    """Import a skill and hand back its wire shape — ``["uid"]`` is its address."""
     r = c.post("/api/v1/skills/import", json={"path": str(src)})
     assert r.status_code == 201, r.text
     return r.json()
@@ -79,15 +87,17 @@ def test_list_skill_files_returns_tree(tmp_path, monkeypatch):
     _write_nested_skill_folder(src, name="tree-skill")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
-        r = c.get("/api/v1/skills/tree-skill/files")
+        r = c.get(f"/api/v1/skills/{uid}/files")
         assert r.status_code == 200, r.text
         root = r.json()["root"]
         assert root["type"] == "dir"
         assert root["path"] == ""
 
-        # The master folder lives at ~/.coffer/skills/<name>/ (HOME=tmp_path).
+        # The route was addressed by uid, but the master folder is still keyed
+        # by NAME on disk (~/.coffer/skills/<name>/, HOME=tmp_path): the tree
+        # the uid produced must be rooted at the folder the name points to.
         master = (tmp_path / ".coffer" / "skills" / "tree-skill").resolve()
         # The read-only viewer backs open/reveal with absolute paths:
         # the root node's abs_path IS the master folder; its folder is the parent.
@@ -130,10 +140,10 @@ def test_read_single_skill_file(tmp_path, monkeypatch):
     _write_nested_skill_folder(src, name="read-skill")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
         r = c.get(
-            "/api/v1/skills/read-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "scripts/run.py"},
         )
         assert r.status_code == 200, r.text
@@ -152,7 +162,7 @@ def test_read_single_skill_file(tmp_path, monkeypatch):
     # A file that does not exist in the skill is a 404.
     with _client(app) as c:
         r = c.get(
-            "/api/v1/skills/read-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "scripts/missing.py"},
         )
         assert r.status_code == 404, r.text
@@ -168,11 +178,13 @@ def test_reject_path_escape(tmp_path, monkeypatch):
     _write_nested_skill_folder(src, name="escape-skill")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
-        # Relative traversal out of the master folder.
+        # Relative traversal out of the master folder. The path SEGMENT is a
+        # minted uid and can no longer carry an escape; what still can, and what
+        # this guards, is the ``path`` parameter.
         r = c.get(
-            "/api/v1/skills/escape-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "../../etc/passwd"},
         )
         assert r.status_code == 400, r.text
@@ -182,7 +194,7 @@ def test_reject_path_escape(tmp_path, monkeypatch):
 
         # An absolute path is likewise rejected (it resolves outside root).
         r = c.get(
-            "/api/v1/skills/escape-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "/etc/passwd"},
         )
         assert r.status_code == 400, r.text
@@ -190,10 +202,13 @@ def test_reject_path_escape(tmp_path, monkeypatch):
 
 def test_files_endpoints_404_for_unknown_skill(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59730)
+    # A well-formed uid no resource carries — both file routes resolve the
+    # skill before they touch disk.
+    unknown = "0" * 32
     with _client(app) as c:
-        r = c.get("/api/v1/skills/nope/files")
+        r = c.get(f"/api/v1/skills/{unknown}/files")
         assert r.status_code == 404, r.text
-        r = c.get("/api/v1/skills/nope/files/content", params={"path": "SKILL.md"})
+        r = c.get(f"/api/v1/skills/{unknown}/files/content", params={"path": "SKILL.md"})
         assert r.status_code == 404, r.text
 
 
@@ -205,9 +220,9 @@ def test_binary_file_returns_binary_true(tmp_path, monkeypatch):
     (src / "blob.bin").write_bytes(b"\x00\x01\x02PNG\x00")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
         r = c.get(
-            "/api/v1/skills/bin-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "blob.bin"},
         )
         assert r.status_code == 200, r.text
@@ -230,12 +245,12 @@ def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
     _write_nested_skill_folder(src, name="edit-skill")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
         # An editor first reads the file; the read hands back the fingerprint
         # that makes the eventual save conditional.
         r = c.get(
-            "/api/v1/skills/edit-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "scripts/run.py"},
         )
         assert r.status_code == 200, r.text
@@ -245,7 +260,7 @@ def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
 
         new_body = "print('edited')\n"
         r = c.put(
-            "/api/v1/skills/edit-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={
                 "path": "scripts/run.py",
                 "content": new_body,
@@ -265,7 +280,7 @@ def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
         # The change is persisted — a fresh read returns the new content and
         # the same fingerprint the write reported.
         r = c.get(
-            "/api/v1/skills/edit-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "scripts/run.py"},
         )
         assert r.json()["content"] == new_body
@@ -273,7 +288,7 @@ def test_write_skill_file_roundtrip(tmp_path, monkeypatch):
 
         # A second save using that returned fingerprint round-trips too.
         r = c.put(
-            "/api/v1/skills/edit-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={
                 "path": "scripts/run.py",
                 "content": "print('again')\n",
@@ -294,10 +309,10 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
     master = tmp_path / ".coffer" / "skills" / "stale-skill"
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
         r = c.get(
-            "/api/v1/skills/stale-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "scripts/run.py"},
         )
         stale_fp = r.json()["fingerprint"]
@@ -308,7 +323,7 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
         (master / "scripts" / "run.py").write_text(external, encoding="utf-8")
 
         r = c.put(
-            "/api/v1/skills/stale-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={
                 "path": "scripts/run.py",
                 "content": "print('from the app')\n",
@@ -323,13 +338,13 @@ def test_write_skill_file_rejects_stale_fingerprint(tmp_path, monkeypatch):
 
         # Re-reading yields the current fingerprint, and the retry succeeds.
         r = c.get(
-            "/api/v1/skills/stale-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "scripts/run.py"},
         )
         fresh_fp = r.json()["fingerprint"]
         assert fresh_fp != stale_fp
         r = c.put(
-            "/api/v1/skills/stale-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={
                 "path": "scripts/run.py",
                 "content": "print('merged')\n",
@@ -348,14 +363,14 @@ def test_write_without_fingerprint_is_unconditional(tmp_path, monkeypatch):
     master = tmp_path / ".coffer" / "skills" / "uncond-skill"
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
         # Change the file behind the API — with no expected_fingerprint the
         # write must still land (last writer wins).
         (master / "scripts" / "run.py").write_text("print('drift')\n", encoding="utf-8")
 
         r = c.put(
-            "/api/v1/skills/uncond-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={"path": "scripts/run.py", "content": "print('cli')\n"},
         )
         assert r.status_code == 200, r.text
@@ -368,26 +383,26 @@ def test_write_skill_file_rejects_missing_and_escape(tmp_path, monkeypatch):
     _write_nested_skill_folder(src, name="edit-guard")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
         # A file that does not exist cannot be written (no create-file).
         r = c.put(
-            "/api/v1/skills/edit-guard/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={"path": "scripts/new.py", "content": "x"},
         )
         assert r.status_code == 404, r.text
 
         # Path traversal out of the master folder is rejected.
         r = c.put(
-            "/api/v1/skills/edit-guard/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={"path": "../../etc/passwd", "content": "x"},
         )
         assert r.status_code == 400, r.text
 
-    # Unknown skill is a 404.
+    # A uid no resource carries is a 404 — checked before anything is written.
     with _client(app) as c:
         r = c.put(
-            "/api/v1/skills/nope/files/content",
+            f"/api/v1/skills/{'0' * 32}/files/content",
             json={"path": "SKILL.md", "content": "x"},
         )
         assert r.status_code == 404, r.text
@@ -400,18 +415,18 @@ def test_write_skill_file_rejects_binary_and_oversize(tmp_path, monkeypatch):
     (src / "blob.bin").write_bytes(b"\x00\x01PNG\x00")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
 
         # Refuse to overwrite a binary file with text.
         r = c.put(
-            "/api/v1/skills/edit-limits/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={"path": "blob.bin", "content": "text"},
         )
         assert r.status_code == 400, r.text
 
         # Content over the byte cap is rejected.
         r = c.put(
-            "/api/v1/skills/edit-limits/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             json={"path": "SKILL.md", "content": "a" * (MAX_FILE_BYTES + 1)},
         )
         assert r.status_code == 400, r.text
@@ -425,9 +440,9 @@ def test_oversize_file_is_truncated(tmp_path, monkeypatch):
     (src / "big.txt").write_text(big, encoding="utf-8")
 
     with _client(app) as c:
-        _import(c, src)
+        uid = _import(c, src)["uid"]
         r = c.get(
-            "/api/v1/skills/big-skill/files/content",
+            f"/api/v1/skills/{uid}/files/content",
             params={"path": "big.txt"},
         )
         assert r.status_code == 200, r.text

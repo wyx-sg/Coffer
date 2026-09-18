@@ -33,7 +33,7 @@ from coffer.domain.agent.mcp_install import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ShimNotFound
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import McpInstallUnsupported
 
 _SHIM_BINARY = "coffer-mcp-shim"
@@ -74,7 +74,7 @@ class McpInstallStatus:
 
 
 class _AgentLookup(Protocol):
-    async def get(self, name: str) -> Resource: ...
+    async def get(self, uid: str) -> Resource: ...
 
 
 class AgentMcpService:
@@ -91,26 +91,34 @@ class AgentMcpService:
         self._store = store
         self._resolve_shim = shim_resolver
 
-    async def _mcp_spec(self, name: str) -> tuple[ConfigFileSpec, McpInjectionSpec]:
-        # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        resource = await self._agents.get(name)
+    async def _mcp_spec(self, uid: str) -> tuple[Resource, ConfigFileSpec, McpInjectionSpec]:
+        """The agent row, its MCP config file and how that file is shaped.
+
+        The row travels with the other two because the write paths need it
+        twice over: the audit entry is keyed on the resource, and the entry
+        Coffer writes carries the agent's uid so the shim can report which
+        agent it is speaking for.
+
+        Raises ResourceNotFound (→ 404) when the agent doesn't exist.
+        """
+        resource = await self._agents.get(uid)
         cfg = AgentConfig.model_validate(resource.config)
         injection = descriptor_for(cfg.type).mcp
         if injection is None:
             raise McpInstallUnsupported(cfg.type.value)
         spec = spec_for(cfg.type, injection.config_key, cfg.resolved_config_dir())
-        return spec, injection
+        return resource, spec, injection
 
-    async def status(self, name: str) -> McpInstallStatus:
-        spec, inj = await self._mcp_spec(name)
+    async def status(self, uid: str) -> McpInstallStatus:
+        _agent, spec, inj = await self._mcp_spec(uid)
         text = self._store.read_text(spec.path) or ""
         return McpInstallStatus(
             installed=is_installed(spec.format, text, container_key=inj.container_key),
             command=installed_command(spec.format, text, container_key=inj.container_key),
         )
 
-    async def install(self, name: str, *, actor: str = "api") -> McpInstallStatus:
-        spec, inj = await self._mcp_spec(name)
+    async def install(self, uid: str, *, actor: str = "api") -> McpInstallStatus:
+        agent, spec, inj = await self._mcp_spec(uid)
         shim = self._resolve_shim()  # raises ShimNotFound (→ 422) before any write
         text = self._store.read_text(spec.path) or ""
         new_text = apply_install(
@@ -119,19 +127,19 @@ class AgentMcpService:
             shim,
             container_key=inj.container_key,
             entry_style=inj.entry_style,
-            agent_name=name,
+            agent_uid=agent.uid,
         )
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.AGENT_MCP_INSTALLED.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"command": shim, "path": str(spec.path)},
         )
         return McpInstallStatus(installed=True, command=shim)
 
-    async def uninstall(self, name: str, *, actor: str = "api") -> McpInstallStatus:
-        spec, inj = await self._mcp_spec(name)
+    async def uninstall(self, uid: str, *, actor: str = "api") -> McpInstallStatus:
+        agent, spec, inj = await self._mcp_spec(uid)
         text = self._store.read_text(spec.path)
         # No-op success when not installed — don't write or audit.
         if text is None or not is_installed(spec.format, text, container_key=inj.container_key):
@@ -140,7 +148,7 @@ class AgentMcpService:
         self._store.write_text_atomic(spec.path, new_text)
         await self._audit.record(
             AuditEventType.AGENT_MCP_UNINSTALLED.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"path": str(spec.path)},
         )

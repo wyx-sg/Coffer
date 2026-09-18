@@ -27,7 +27,7 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "claude_code" }] })),
+  useAgents: vi.fn(() => ({ data: [{ uid: "u-cc", name: "claude_code" }] })),
 }));
 const disableMutate = vi.fn();
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
@@ -46,8 +46,13 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
+// A partition carries three strings that are easy to confuse and are three
+// different things: the `uid` every route takes, the `name` that is its folder
+// and its label, and the `repository_key` a working directory resolves
+// through. None of them is derived from another.
 const ROWS: MemoryPartitionRow[] = [
   {
+    uid: "mp-4410",
     name: "global",
     repository_path: "",
     repository_key: "",
@@ -56,6 +61,7 @@ const ROWS: MemoryPartitionRow[] = [
     enabled: true,
   },
   {
+    uid: "mp-be27",
     name: "coffer",
     repository_path: "/Users/dev/coffer",
     // A repository with an `origin` is keyed on the remote, so a worktree and a
@@ -72,6 +78,7 @@ const ROWS: MemoryPartitionRow[] = [
 
 /** A partition whose repository has been deleted from disk (FR-016). */
 const GONE: MemoryPartitionRow = {
+  uid: "mp-0d5c",
   name: "old-api",
   repository_path: "/Users/dev/old-api",
   repository_key: "path:/Users/dev/old-api",
@@ -141,7 +148,8 @@ describe("MemoryPartitionsTable", () => {
     fireEvent.click(controlIn("global"));
     fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
 
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "memory", name: "global" });
+    // Picked by the name in the row; written against the uid.
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "memory", uid: "mp-4410" });
   });
 
   test("the column and its filter are headed Status, not Reach", () => {

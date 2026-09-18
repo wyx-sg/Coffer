@@ -20,9 +20,9 @@ coffer skill show my-skill          # metadata + files
 A skill reaches an agent iff the skill is **enabled** and that agent is in the skill's **scope**. An imported skill starts enabled and unscoped, so it goes to every agent; narrow it with the same scope commands every scoped resource uses:
 
 ```bash
-coffer scope set skill:my-skill --agents claude-code   # only this agent
-coffer scope clear skill:my-skill                      # back to every agent
-coffer resource disable skill:my-skill                 # take it away from all of them
+coffer scope set skill my-skill --agents claude-code   # only this agent
+coffer scope clear skill my-skill                      # back to every agent
+coffer resource disable skill my-skill                 # take it away from all of them
 coffer skill verify                                    # report drift; non-zero exit if any
 ```
 

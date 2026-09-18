@@ -106,7 +106,18 @@ async def _repo(tmp_path) -> tuple[ConversationRepo, Any]:  # type: ignore[no-un
     return ConversationRepo(session_maker(engine)), engine
 
 
-def _conv(agent_key: str = "claude_code", *, channel_name: str | None = None) -> Conversation:
+#: The channel a bridged conversation points at. A uid, because that is what the
+#: row stores (ADR resource-identity-is-an-immutable-uid) — the name reaches the
+#: prompt only through the resolver the provider is handed.
+_TELEGRAM_UID = "0b9d2f1a4c7e4b6a8d3f5c1e7a9b2d40"
+
+
+async def _telegram_name(uid: str) -> str | None:
+    assert uid == _TELEGRAM_UID
+    return "Telegram"
+
+
+def _conv(agent_key: str = "claude_code", *, channel_uid: str | None = None) -> Conversation:
     now = datetime.now(tz=UTC)
     return Conversation(
         id=uuid.uuid4().hex,
@@ -114,7 +125,7 @@ def _conv(agent_key: str = "claude_code", *, channel_name: str | None = None) ->
         title="t",
         created_at=now,
         updated_at=now,
-        channel_name=channel_name,
+        channel_uid=channel_uid,
     )
 
 
@@ -385,15 +396,24 @@ async def test_build_adapter_resumes_stored_session(tmp_path) -> None:  # type: 
 @pytest.mark.asyncio
 async def test_channel_conversation_appends_system_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """A channel-originated conversation makes build_adapter inject a system-prompt
-    note (channel name + mobile/no-dialogs guidance) onto Claude Code's preset."""
+    note (channel name + mobile/no-dialogs guidance) onto Claude Code's preset.
+
+    The row holds the channel's uid; the human-readable name the note actually
+    says is resolved from it at turn time, which is what lets the user rename
+    the channel without every conversation bound to it going stale."""
     repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_name="Telegram"))
+    conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
     async def _models(agent_key: str) -> list[str]:
         return ["fable", "sonnet"]
 
-    provider = ClaudeSdkProvider(conversations=repo, session_factory=factory, list_models=_models)
+    provider = ClaudeSdkProvider(
+        conversations=repo,
+        session_factory=factory,
+        list_models=_models,
+        resolve_channel_name=_telegram_name,
+    )
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
     adapter = await provider.build_adapter(conv.id)
@@ -410,6 +430,46 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
     await engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note(
+    tmp_path,
+) -> None:  # type: ignore[no-untyped-def]
+    """The uid decides that this is a channel turn; the name is only colour.
+
+    A channel deleted out from under a live thread leaves the uid unresolvable.
+    If that downgraded the turn, the agent would lose the "short replies, you
+    cannot click dialogs" contract — and the memory digest with it — for a
+    reason that has nothing to do with where the user is sitting. So the note
+    goes out either way, minus the name it cannot honestly give."""
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
+    factory, captured = _make_factory(_simple_messages())
+
+    async def _gone(uid: str) -> str | None:
+        return None
+
+    async def _memory(agent_key: str, cwd: str) -> str | None:
+        return "## Coffer memory\nKnown about you:\n- **Likes tabs** (`likes-tabs.md`) — x."
+
+    provider = ClaudeSdkProvider(
+        conversations=repo,
+        session_factory=factory,
+        resolve_channel_name=_gone,
+        compose_memory_context=_memory,
+    )
+
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await _collect(adapter, _user_turn("hi", conv.id))
+
+    append = captured[0].system_prompt["append"]
+    assert "over a chat channel" in append
+    assert "MEDIA:/absolute/path" in append
+    assert "## Coffer memory" in append
+
+    await engine.dispose()
+
+
 @pytest.mark.acceptance(
     spec="memory",
     scenario="a channel turn carries the index without a hook",
@@ -422,7 +482,7 @@ async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  #
     injected composer, the same seam ``list_models`` already uses, so the
     chat/provider layer never reaches into the memory kind directly."""
     repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_name="Telegram"))
+    conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
     calls: list[tuple[str, str]] = []
@@ -461,7 +521,7 @@ async def test_no_memory_to_deliver_appends_no_header(tmp_path) -> None:  # type
     header at all — an empty ``## Coffer memory`` section would be worse than
     saying nothing."""
     repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv(channel_name="Telegram"))
+    conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
     async def _memory(agent_key: str, cwd: str) -> str | None:
@@ -486,7 +546,7 @@ async def test_web_conversation_never_gets_memory_context(tmp_path) -> None:  # 
     FR-053 names — even a wired composer must not be consulted for it (the
     agent's own hook, FR-054, is the delivery path there instead)."""
     repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv())  # no channel_name
+    conv = await repo.create(_conv())  # no channel binding
     factory, captured = _make_factory(_simple_messages())
 
     async def _memory(agent_key: str, cwd: str) -> str | None:
@@ -511,7 +571,7 @@ async def test_web_conversation_gets_the_model_note_only(tmp_path) -> None:  # t
     gets the model note — the agent cannot otherwise tell which model Coffer put
     it on, and left to itself it guesses wrong."""
     repo, engine = await _repo(tmp_path)
-    conv = await repo.create(_conv())  # no channel_name
+    conv = await repo.create(_conv())  # no channel binding
     factory, captured = _make_factory(_simple_messages())
 
     async def _models(agent_key: str) -> list[str]:

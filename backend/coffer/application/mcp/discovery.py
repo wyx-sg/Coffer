@@ -28,7 +28,6 @@ from coffer.domain.mcp.capability import (
     MCPTool,
 )
 from coffer.domain.mcp.namespace import prefix_prompt, prefix_resource_uri, prefix_tool
-from coffer.domain.resource import ResourceRef
 
 _DEFAULT_CACHE_TTL_SECONDS = 60.0
 
@@ -92,7 +91,16 @@ class DiscoveredPrompt:
 
 
 class CapabilityDiscovery:
-    """Per-session live-query + cache + preferences reconciliation."""
+    """Per-session live-query + cache + preferences reconciliation.
+
+    Keyed throughout on the server's NAME, because a capability's public
+    identity on the MCP wire is the namespaced ``<server>__<tool>`` this class
+    builds, and that namespace is the label. The name is resolved to the row
+    once per cold path, and everything persisted from there on — the preference
+    rows this reconciles — is keyed on ``resource.id``, the surrogate key those
+    rows have always held (ADR resource-identity-is-an-immutable-uid leaves the
+    four kind-owned tables exactly as they were).
+    """
 
     def __init__(
         self,
@@ -155,7 +163,7 @@ class CapabilityDiscovery:
                     for t in getattr(result, "tools", [])
                 ]
                 cache.tools_fetched_at = self._clock()
-                resource = await self._resources.get(ResourceRef("mcp_server", server_name))
+                resource = await self._resources.get_by_name("mcp_server", server_name)
                 await self._reconcile_preferences(resource, "tool", [t.name for t in cache.tools])
 
         prefs = await self._build_pref_map(server_name, "tool", resource=resource)
@@ -201,7 +209,7 @@ class CapabilityDiscovery:
                     for r in getattr(result, "resources", [])
                 ]
                 cache.resources_fetched_at = self._clock()
-                resource = await self._resources.get(ResourceRef("mcp_server", server_name))
+                resource = await self._resources.get_by_name("mcp_server", server_name)
                 await self._reconcile_preferences(
                     resource, "resource", [r.uri for r in cache.resources]
                 )
@@ -256,7 +264,7 @@ class CapabilityDiscovery:
                     for p in getattr(result, "prompts", [])
                 ]
                 cache.prompts_fetched_at = self._clock()
-                resource = await self._resources.get(ResourceRef("mcp_server", server_name))
+                resource = await self._resources.get_by_name("mcp_server", server_name)
                 await self._reconcile_preferences(
                     resource, "prompt", [p.name for p in cache.prompts]
                 )
@@ -329,7 +337,7 @@ class CapabilityDiscovery:
         # preference rows themselves are always read fresh so enable/disable
         # toggles take effect immediately, independent of the list cache TTL.
         if resource is None:
-            resource = await self._resources.get(ResourceRef("mcp_server", server_name))
+            resource = await self._resources.get_by_name("mcp_server", server_name)
         prefs = await self._prefs.list_for(resource.id, capability_type)
         return {p.capability_key: p.enabled for p in prefs}
 

@@ -14,28 +14,28 @@ import { agentKey, agentUnmanagedSkillsKey, skillsKey } from "@/lib/api/queryKey
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 export function AgentUnmanagedSkillsBulkActions({
-  agentName,
+  agentUid,
   rows,
   clear,
 }: {
-  agentName: string;
+  agentUid: string;
   rows: UnmanagedSkillOut[];
   clear: () => void;
 }) {
   const { t } = useTranslation();
-  const invalidate = [agentUnmanagedSkillsKey(agentName), skillsKey, agentKey(agentName)];
+  const invalidate = [agentUnmanagedSkillsKey(agentUid), skillsKey, agentKey(agentUid)];
   const adopt = useBulkMutate({ invalidate });
   const remove = useBulkMutate({ invalidate });
 
   const adoptable = rows.filter((s) => s.valid && !s.foreign_link);
 
   const adoptAll = async () => {
-    await adopt.run(adoptable, (s) => agentsApi.adoptUnmanagedSkill(agentName, s.name, s.location));
+    await adopt.run(adoptable, (s) => agentsApi.adoptUnmanagedSkill(agentUid, s.name, s.location));
     clear();
   };
 
   const deleteAll = async () => {
-    await remove.run(rows, (s) => agentsApi.deleteUnmanagedSkill(agentName, s.name, s.location));
+    await remove.run(rows, (s) => agentsApi.deleteUnmanagedSkill(agentUid, s.name, s.location));
     clear();
   };
 

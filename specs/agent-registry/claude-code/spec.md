@@ -83,7 +83,7 @@ Every scenario here is referenced by at least one test marked `@pytest.mark.acce
 
 **Coffer MCP install**
 
-- **FR-004**: The `McpInjectionSpec` agent-registry FR-015 installs through MUST write `mcpServers.coffer` in `~/.claude.json`, a command-map entry whose `command` is the resolved absolute shim path and whose `args` carry `--agent <name>`. Because the whole JSON document is reserialized on write, the `.bak` of agent-registry FR-013 is what makes that diff recoverable.
+- **FR-004**: The `McpInjectionSpec` agent-registry FR-015 installs through MUST write `mcpServers.coffer` in `~/.claude.json`, a command-map entry whose `command` is the resolved absolute shim path and whose `args` carry `--agent-uid <uid>`. Because the whole JSON document is reserialized on write, the `.bak` of agent-registry FR-013 is what makes that diff recoverable.
 
 **Agent MCP entries**
 

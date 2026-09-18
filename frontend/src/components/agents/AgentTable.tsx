@@ -42,17 +42,21 @@ export function AgentTable({
 
   const rows: Row[] = agents;
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
-  const [deletingName, setDeletingName] = useState<string | null>(null);
+  // It holds the ROW: the confirmation names the agent and the request is
+  // addressed to its uid.
+  const [deleting, setDeleting] = useState<AgentOut | null>(null);
 
   // Coffer-managed skills currently delivered per agent. A binding row IS a
   // live delivery (the wire drops spent rows), so every row counts. Build the
   // per-agent counts once (single pass over skills × bindings) rather than
   // re-scanning the whole skills list for every agent row on each render.
+  // Counted per agent UID: a binding is a pointer at an agent row, and the
+  // name beside it on the wire is only what that row is currently called.
   const cofferSkillCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const s of skills.data ?? []) {
       for (const b of s.bindings) {
-        counts.set(b.agent_name, (counts.get(b.agent_name) ?? 0) + 1);
+        counts.set(b.agent_uid, (counts.get(b.agent_uid) ?? 0) + 1);
       }
     }
     return counts;
@@ -129,13 +133,13 @@ export function AgentTable({
       key: "coffer_skills",
       header: t("agents.cofferSkills"),
       className: "whitespace-nowrap",
-      cell: (a) => <Badge variant="secondary">{cofferSkillCounts.get(a.name) ?? 0}</Badge>,
+      cell: (a) => <Badge variant="secondary">{cofferSkillCounts.get(a.uid) ?? 0}</Badge>,
     },
     {
       key: "mcp",
       header: t("agents.mcp.title"),
       className: "whitespace-nowrap",
-      cell: (a) => <AgentMcpStatusBadge name={a.name} />,
+      cell: (a) => <AgentMcpStatusBadge uid={a.uid} />,
     },
     {
       key: "actions",
@@ -145,7 +149,7 @@ export function AgentTable({
         <RowDeleteButton
           ariaLabel={t("agents.deleteAria", { name: a.name })}
           disabled={remove.isPending}
-          onDelete={() => setDeletingName(a.name)}
+          onDelete={() => setDeleting(a)}
         />
       ),
     },
@@ -157,12 +161,12 @@ export function AgentTable({
         rows={rows}
         isLoading={isLoading}
         columns={columns}
-        rowKey={(a) => a.name}
+        rowKey={(a) => a.uid}
         search={{
           accessor: (a) => `${a.name} ${agentTypeLabel(a.type)} ${a.config_dir}`,
           placeholder: t("agents.searchPlaceholder"),
         }}
-        onRowClick={(a) => navigate(`/agents/${a.name}`)}
+        onRowClick={(a) => navigate(`/agents/${encodeURIComponent(a.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (a) => `${t("common.bulk.selectRow")}: ${a.name}`,
@@ -176,15 +180,15 @@ export function AgentTable({
       />
 
       <ConfirmDialog
-        open={deletingName !== null}
-        onOpenChange={(o) => !o && setDeletingName(null)}
-        title={t("agents.removeConfirm", { name: deletingName ?? "" })}
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title={t("agents.removeConfirm", { name: deleting?.name ?? "" })}
         description={t("agents.removeConfirmBody")}
         confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
         pending={remove.isPending}
         onConfirm={() => {
-          if (deletingName) {
-            remove.mutate(deletingName, { onSuccess: () => setDeletingName(null) });
+          if (deleting) {
+            remove.mutate(deleting.uid, { onSuccess: () => setDeleting(null) });
           }
         }}
       />

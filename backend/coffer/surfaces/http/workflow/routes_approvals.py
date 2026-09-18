@@ -92,7 +92,7 @@ async def decide_approval(
         remember_tool_class=body.remember_tool_class,
     )
     if row is None:
-        raise ResourceNotFound(KIND_APPROVAL, approval_id)
+        raise ResourceNotFound.named(KIND_APPROVAL, approval_id)
     if row.status == ApprovalStatus.EXPIRED.value:
         raise IllegalTransition(
             f"approval {approval_id}",

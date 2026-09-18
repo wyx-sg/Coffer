@@ -36,7 +36,7 @@ def test_a_created_run_starts_in_draft_and_is_owned_here(surface: Surface) -> No
     run = create_run(surface.client)
     assert run["status"] == "draft"
     assert run["owned_here"] is True
-    assert run["template_ref"] == "workflow:delivery"
+    assert run["template_ref"] == "delivery"
     assert run["version"] == 1
     # A run has no conversation of its own (FR-030): every conversation in it
     # belongs to one task.
@@ -45,7 +45,7 @@ def test_a_created_run_starts_in_draft_and_is_owned_here(surface: Surface) -> No
 
 def test_creating_a_run_from_a_template_that_is_not_there_is_404(surface: Surface) -> None:
     response = surface.client.post(
-        _RUNS, json={"template": "nope", "title": "x", "workdir": "/repo"}
+        _RUNS, json={"template_uid": "wfuid-nope", "title": "x", "workdir": "/repo"}
     )
     assert response.status_code == 404
     assert code_of(response) == "RESOURCE_NOT_FOUND"

@@ -1,3 +1,11 @@
+// frontend/src/components/agents/AgentOverviewTab.test.tsx
+//
+// The Overview tab's connection panel: draft → test → confirm. Names and uids
+// are two different things here and the fixtures keep them apart — the picker's
+// option LABELS are connection names, while its option VALUES, the activation
+// call and the per-agent PATCH all carry uids. So `makeConn` mints a `u-`
+// prefixed uid beside every name, and an assertion about what was REQUESTED
+// spells the uid while an assertion about what was DISPLAYED spells the name.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { acceptance } from "@/test/acceptance";
@@ -39,6 +47,7 @@ const patchAgentMutate = vi.fn((_vars: unknown, opts?: { onSuccess?: () => void 
 );
 
 const agent: AgentOut = {
+  uid: "u-my-claude",
   name: "my-claude",
   type: "claude_code",
   config_dir: "/home/me/.claude",
@@ -49,6 +58,10 @@ const agent: AgentOut = {
 
 function makeConn(over: Partial<Provider> = {}): Provider {
   const merged = {
+    // A uid that is NOT the name: everything the panel REQUESTS is addressed
+    // by it, so a picker that had kept using the name would fail loudly here
+    // rather than pass by coincidence.
+    uid: `u-${over.name ?? "official"}`,
     name: "official",
     protocol: "anthropic" as Provider["protocol"],
     base_url: "https://api.anthropic.com",
@@ -275,14 +288,14 @@ describe("AgentOverviewTab", () => {
     fireEvent.click(confirmBtn());
     // Confirm PATCHes both slots (default = first model) then activates.
     expect(patchAgentMutate).toHaveBeenCalledWith(
-      { name: "my-claude", body: { model: "agnes-2.0", fast_model: "agnes-2.0" } },
+      { uid: "u-my-claude", body: { model: "agnes-2.0", fast_model: "agnes-2.0" } },
       expect.anything(),
     );
-    expect(activateMutate).toHaveBeenCalledWith("agnes");
+    expect(activateMutate).toHaveBeenCalledWith("u-agnes");
   });
 
   test("Codex confirm binds only the model (no fast slot)", () => {
-    const codex: AgentOut = { ...agent, name: "my-codex", type: "codex" };
+    const codex: AgentOut = { ...agent, uid: "u-my-codex", name: "my-codex", type: "codex" };
     useProvidersMock.mockReturnValue({ data: [agnes({ compatible_agents: ["codex"] })] });
     useListMock.mockReturnValue({
       mutate: (_p: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
@@ -297,10 +310,10 @@ describe("AgentOverviewTab", () => {
     rerender(<AgentOverviewTab agent={codex} />);
     fireEvent.click(confirmBtn());
     expect(patchAgentMutate).toHaveBeenCalledWith(
-      { name: "my-codex", body: { model: "gpt-5-codex" } },
+      { uid: "u-my-codex", body: { model: "gpt-5-codex" } },
       expect.anything(),
     );
-    expect(activateMutate).toHaveBeenCalledWith("agnes");
+    expect(activateMutate).toHaveBeenCalledWith("u-agnes");
   });
 
   test("switching to built-in confirms without a test", () => {
@@ -324,7 +337,7 @@ describe("AgentOverviewTab", () => {
   });
 
   test("Codex has no fast-model slot", () => {
-    const codex: AgentOut = { ...agent, name: "my-codex", type: "codex" };
+    const codex: AgentOut = { ...agent, uid: "u-my-codex", name: "my-codex", type: "codex" };
     useProvidersMock.mockReturnValue({
       data: [makeConn({ protocol: "openai", is_active: true })],
     });

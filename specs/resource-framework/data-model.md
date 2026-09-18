@@ -18,21 +18,19 @@ shows in place: `scope_json` on `resources` (migration `0046`) and
 
 ## Domain entities (`backend/coffer/domain/`)
 
-### `ResourceRef` (`domain/resource.py`)
+### Identity (`domain/resource.py`)
 
-Frozen dataclass / Pydantic value object. The external identifier for a Resource.
+There is no identifier value object. A resource is addressed by its `uid`, a
+plain string, and the `<kind>:<name>` string form that `ResourceRef` used to
+carry is **deleted** rather than demoted to a label — leaving it as "the label"
+would have kept two spellings of identity in the codebase and an obvious place
+for the next reader to reach for the wrong one
+([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
 
-| Field  | Type  | Notes                                                             |
-| ------ | ----- | ----------------------------------------------------------------- |
-| `kind` | `str` | matches a registered `Kind.name`, e.g. `"mcp_server"`             |
-| `name` | `str` | kind-internally unique; matches `^[a-zA-Z0-9_.-]+$`; max 64 chars |
-
-Behaviour:
-
-- `__str__` → `f"{kind}:{name}"`
-- `ResourceRef.parse("mcp_server:filesystem")` → `ResourceRef(kind="mcp_server", name="filesystem")`
-- `parse` raises `ValueError` if input lacks a single `:` separator or either side is empty
-- Equality and hashing implied by `frozen=True`
+`validate_resource_name(name)` is the framework's one name rule, raising
+`InvalidResourceNameError`. It is applied by registration AND by rename, from a
+single helper, because while rename lived in one kind's service the two had
+already drifted apart.
 
 ### `Resource` (`domain/resource.py`)
 
@@ -40,9 +38,10 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 
 | Field         | Type             | Notes                                                                      |
 | ------------- | ---------------- | -------------------------------------------------------------------------- |
-| `id`          | `int`            | DB surrogate; internal only, never serialised externally                   |
+| `id`          | `int`            | DB surrogate; internal and per-machine. The FK four kind-owned tables hold. Never serialised externally, and NOT the identity — two machines allocate the same row number to different resources |
+| `uid`         | `str`            | **the identity**: `uuid4().hex`, minted once, never reused, the same value on every machine holding this resource. Every route, every cross-resource reference and the synced document's filename address this |
 | `kind`        | `str`            | matches `Kind.name`                                                        |
-| `name`        | `str`            | kind-internally unique                                                     |
+| `name`        | `str`            | a mutable **label**, unique within its kind                                |
 | `description` | `str \| None`    | optional free text                                                         |
 | `config`      | `dict[str, Any]` | kind-specific config, already validated against the kind's `config_schema` |
 | `enabled`     | `bool`           | user-controlled enable/disable flag                                        |
@@ -50,7 +49,8 @@ Plain Python dataclass; **not** a Pydantic model (domain stays pure).
 | `updated_at`  | `datetime`       | UTC, updated on every mutation                                             |
 | `scope`       | `Scope \| None`  | framework-level per-agent activation scope ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)); `None` = unscoped (active for every agent). Interpreted via `domain/scope.py`; only kinds whose `Kind.supports_scope` is True may set it. Machine-local — it does not travel with the vault. |
 
-Derived: `Resource.ref` returns `ResourceRef(self.kind, self.name)`.
+There is no derived `ref`: a resource carries its `uid`, its `kind` and its
+`name` as three plain fields, and nothing combines them into a fourth.
 
 ### `Kind` (`domain/resource.py`)
 
@@ -68,15 +68,16 @@ any framework-level adapter.
 | **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
 | `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule (`mcp_server` reserves the `__` namespace separator)                            |
 | `validate_config`           | `Callable[[dict], None] \| None`                                           | semantic config validation at REGISTRATION only, beyond the schema's shape                              |
-| `on_update_config`          | `Callable[[ResourceRef, dict, dict], Awaitable[None] \| None] \| None`     | pre-write hook for `update_config`, which knows WHICH resource is being edited                           |
+| `on_update_config`          | `Callable[[Resource, dict], Awaitable[None] \| None] \| None`               | pre-write hook for `update_config`, handed the resource as it stands and the proposed config             |
+| `on_rename`                 | `Callable[[Resource, str], Awaitable[None] \| None] \| None`                | pre-write hook for `rename`; where a kind whose name is also a directory moves it. Raising aborts the rename with nothing moved. `skill`, `knowledge` and `memory` supply one |
 | `validate_scope_for`        | `Callable[[Resource, Scope \| None], Awaitable[None] \| None] \| None`     | pre-write hook for `update_scope`; only `channel` supplies one                                           |
 | `credential_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any DB write                          |
 | `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
 | `default_scope`             | `Callable[[dict], Scope \| None] \| None`                                  | the scope a new row is created with, consulted once at register (`provider` pre-fills the wire's own default) |
 | **Post-write reactions**    |                                                                            | run AFTER persistence + audit; cannot reject                                                            |
-| `on_delete`                 | `Callable[[ResourceRef], Awaitable[None] \| None] \| None`                 | cleanup hook, awaited BEFORE the row is removed so it can still resolve it; a reaction, not a veto       |
-| `on_scope_changed`          | `Callable[[ResourceRef], Awaitable[None] \| None] \| None`                 | keeps delivery/reclaim in step with a scope edit                                                        |
-| `on_enabled_changed`        | `Callable[[ResourceRef], Awaitable[None] \| None] \| None`                 | the exact mirror, for a kind whose `enabled` flag has an on-disk consequence (`skill`)                   |
+| `on_delete`                 | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | cleanup hook, awaited BEFORE the row is removed so it can still resolve it; a reaction, not a veto       |
+| `on_scope_changed`          | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | keeps delivery/reclaim in step with a scope edit; handed the row AFTER the write                        |
+| `on_enabled_changed`        | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | the exact mirror, for a kind whose `enabled` flag has an on-disk consequence (`skill`)                   |
 
 Surface artefacts (routers, Typer groups) are deliberately NOT carried here:
 the composition root registers them through its own per-kind wiring modules, so
@@ -177,17 +178,19 @@ revisions included.
 ```sql
 -- Resources: kind-agnostic core
 CREATE TABLE resources (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,      -- internal, per-machine; the FK kinds hold
+    uid           TEXT      NOT NULL,                     -- THE IDENTITY (migration 0095)
     kind          TEXT      NOT NULL,
-    name          TEXT      NOT NULL,
+    name          TEXT      NOT NULL,                     -- a mutable label
     description   TEXT,
     config_json   TEXT      NOT NULL,                       -- validated JSON
     enabled       BOOLEAN   NOT NULL DEFAULT 1,
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    scope_json    TEXT,              -- per-agent scope; NULL = unscoped (migration 0046)
-    UNIQUE (kind, name)
+    scope_json    TEXT,              -- per-agent scope, agent UIDS; NULL = unscoped (0046, rewritten by 0096)
+    UNIQUE (kind, name)              -- the LABEL is unique within its kind; that is a constraint, not identity
 );
+CREATE UNIQUE INDEX uq_resources_uid      ON resources(uid);
 CREATE INDEX idx_resources_kind_enabled ON resources(kind, enabled);
 
 -- Audit log: kind-agnostic
@@ -195,7 +198,9 @@ CREATE TABLE audit_log (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     event_type      TEXT      NOT NULL,
-    resource_id     INTEGER,                                -- stable row id; survives a rename (migration 0067)
+    resource_id     INTEGER,                                -- stable row id; survives a rename (migration 0067).
+                                                            -- Still the integer id, not the uid: a local join
+                                                            -- into a local table that never travels.
     resource_kind   TEXT,                                   -- nullable; the label carried at the time
     resource_name   TEXT,
     actor           TEXT      NOT NULL,
@@ -239,7 +244,8 @@ Each ORM model provides:
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELETE FROM resources WHERE id=?` | cascades to whatever a kind owns by FK (spec mcp-gateway's `mcp_capability_preferences`, for one). Does **not** cascade to `audit_log` or to any kind's invocation log — history outlives the resource it describes.                                                     |
 | `UPDATE resources SET kind=?`      | forbidden — the application layer never updates `kind`.                                                                                                                                                                                                                |
-| `UPDATE resources SET name=?`      | allowed, through `ResourceService.rename` only — it moves the row and records `resource_renamed`. The audit trail needs no repointing: rows carry the resource's stable `resource_id`, so history follows the resource while each row keeps saying what it was called then. Only spec provider-switching exposes rename on a surface today; the service operation is the framework's. |
+| `UPDATE resources SET name=?`      | allowed, through `ResourceService.rename` only, which is reached by every kind through `PATCH /api/v1/resources/{uid}`. It writes one column and records `resource_renamed`. Nothing else is repointed, because nothing else holds the name: cross-resource references, the synced document and the audit trail all hold identity, so history follows the resource while each row keeps saying what it was called then. A kind with an on-disk artifact named after the resource moves it in its `on_rename` hook. |
+| `UPDATE resources SET uid=?`       | forbidden — the identity is minted once at creation and never changes. The only writer is migration 0095's one-time backfill.                                                                                                                                                                                                                                       |
 | `DELETE FROM retention_policies`   | forbidden — policies are upserted at startup, never deleted.                                                                                                                                                                                                           |
 
 ## Default retention policy seed (run on first daemon startup)

@@ -1,7 +1,15 @@
 // frontend/src/components/agents/AgentEditForm.tsx — spec agent-registry
-// User Story 4 / FR-006: edit an existing agent's config_dir override and
-// description. Rendered as a modal dialog (mirrors AgentAddDialog); the agent
-// name and type are immutable post-registration so they show read-only.
+// User Story 4 / FR-006: edit an existing agent's name, config_dir override and
+// description. Rendered as a modal dialog (mirrors AgentAddDialog); the agent's
+// TYPE is immutable post-registration and shows read-only.
+//
+// The NAME is editable. It was read-only because it was the agent's identity —
+// everything that pointed at this agent spelled it — and now it is a label like
+// any other, so it is edited like any other. It travels through a different
+// request from the rest of the form, though: renaming is the kind-agnostic
+// `PATCH /resources/{uid}` that every kind renames through, while `config_dir`
+// and `description` are the agent kind's own PATCH. Both are sent, in that
+// order, and a 409 on the name shows up next to the field the user typed it in.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -21,6 +29,7 @@ import type { AgentOut, AgentPatch } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
+import { useRenameResource } from "@/lib/hooks/useResourceMutations";
 
 export function AgentEditForm(props: {
   agent: AgentOut;
@@ -29,8 +38,10 @@ export function AgentEditForm(props: {
 }) {
   const { t } = useTranslation();
   const patch = usePatchAgent();
+  const rename = useRenameResource();
   // Initialise inputs from the existing record so the user sees what is
   // currently set; the folder the user picks IS the config dir.
+  const [name, setName] = useState<string>(props.agent.name);
   const [configDir, setConfigDir] = useState<string>(props.agent.config_dir ?? "");
   const [description, setDescription] = useState<string>(props.agent.description ?? "");
 
@@ -48,15 +59,25 @@ export function AgentEditForm(props: {
     if (newDescription !== (props.agent.description ?? null)) {
       body.description = newDescription;
     }
-    if (Object.keys(body).length === 0) {
+    const newName = name.trim();
+    const renamed = newName !== "" && newName !== props.agent.name;
+    if (!renamed && Object.keys(body).length === 0) {
       props.onClose();
       return;
     }
     try {
-      await patch.mutateAsync({ name: props.agent.name, body });
+      // The rename goes FIRST: it is the one write that can be refused for a
+      // reason the user has to fix (the label is taken), and a refusal has to
+      // leave the rest of the form unapplied rather than half-applied.
+      if (renamed) {
+        await rename.mutateAsync({ kind: "agent", uid: props.agent.uid, name: newName });
+      }
+      if (Object.keys(body).length > 0) {
+        await patch.mutateAsync({ uid: props.agent.uid, body });
+      }
       props.onSaved();
     } catch {
-      // Error surfaced via `patch.error` below; nothing else to do.
+      // Error surfaced via `patch.error` / `rename.error` below.
     }
   };
 
@@ -75,7 +96,12 @@ export function AgentEditForm(props: {
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="agent-edit-name">{t("agents.name")}</Label>
-            <Input id="agent-edit-name" value={props.agent.name} disabled readOnly />
+            <Input
+              id="agent-edit-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("agents.namePlaceholder")}
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="agent-edit-type">{t("agents.type")}</Label>
@@ -105,17 +131,17 @@ export function AgentEditForm(props: {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          {patch.error ? (
+          {rename.error || patch.error ? (
             <p role="alert" className="text-sm text-destructive">
-              {translateApiError(t, patch.error)}
+              {translateApiError(t, rename.error ?? patch.error)}
             </p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={props.onClose}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={patch.isPending}>
-              {patch.isPending ? t("common.saving") : t("agents.save")}
+            <Button type="submit" disabled={patch.isPending || rename.isPending}>
+              {patch.isPending || rename.isPending ? t("common.saving") : t("agents.save")}
             </Button>
           </DialogFooter>
         </form>

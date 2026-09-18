@@ -36,6 +36,9 @@ function wrap(ui: React.ReactNode) {
 
 const SAMPLE: SkillOut[] = [
   {
+    // The identity the row's link and every request are built from; "hello" is
+    // only what the cell prints.
+    uid: "sk-11aa",
     name: "hello",
     description: "h",
     source: { type: "local_import", original_path: "/tmp/h" },
@@ -117,6 +120,7 @@ describe("SkillsPage", () => {
           ...SAMPLE[0],
           bindings: [
             {
+              agent_uid: "u-cc",
               agent_name: "cc",
               last_linked_at: null,
               last_link_path: null,
@@ -137,6 +141,7 @@ describe("SkillsPage", () => {
           ...SAMPLE[0],
           bindings: [
             {
+              agent_uid: "u-cc",
               agent_name: "cc",
               last_linked_at: null,
               last_link_path: null,

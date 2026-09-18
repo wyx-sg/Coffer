@@ -1,5 +1,5 @@
 // frontend/src/lib/api/agentNativeMemory.ts
-// Read-only client for /api/v1/agents/{name}/native-memory — the coding agent's
+// Read-only client for /api/v1/agents/{uid}/native-memory — the coding agent's
 // OWN native per-project memory stores (Claude Code's
 // <config_dir>/projects/<slug>/memory, Codex's global memories/MEMORY.md sliced
 // by routed cwd), plus one store's files: a tree and one file's contents.
@@ -49,13 +49,13 @@ export interface NativeMemoryFileContent {
 }
 
 export const agentNativeMemoryApi = {
-  list: (name: string) => call<NativeMemoryListOut>(`/agents/${enc(name)}/native-memory`),
-  files: (name: string, dir: string) =>
+  list: (agentUid: string) => call<NativeMemoryListOut>(`/agents/${enc(agentUid)}/native-memory`),
+  files: (agentUid: string, dir: string) =>
     call<NativeMemoryFileTreeOut>(
-      `/agents/${enc(name)}/native-memory/files?${new URLSearchParams({ dir })}`,
+      `/agents/${enc(agentUid)}/native-memory/files?${new URLSearchParams({ dir })}`,
     ),
-  fileContent: (name: string, dir: string, path: string) =>
+  fileContent: (agentUid: string, dir: string, path: string) =>
     call<NativeMemoryFileContent>(
-      `/agents/${enc(name)}/native-memory/files/content?${new URLSearchParams({ dir, path })}`,
+      `/agents/${enc(agentUid)}/native-memory/files/content?${new URLSearchParams({ dir, path })}`,
     ),
 };

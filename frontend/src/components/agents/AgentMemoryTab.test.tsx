@@ -29,7 +29,7 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 
 vi.mock("@/lib/hooks/useAgentNativeMemory", () => ({
   useAgentNativeMemory: vi.fn(),
-  agentNativeMemoryKey: (name: string) => ["agents", name, "native-memory"],
+  agentNativeMemoryKey: (uid: string) => ["agents", uid, "native-memory"],
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgentMcpStatus: vi.fn() }));
 // Section B's own network hooks. Delivery has its own suite
@@ -38,9 +38,10 @@ vi.mock("@/lib/hooks/useMemory", () => ({
   useMemoryDelivery: vi.fn(() => ({
     data: [
       {
-        agent: "claude",
+        agent_uid: "u-claude",
+        agent_name: "claude",
         installed: true,
-        command: "coffer memory context --agent claude",
+        command: "coffer memory context --agent-uid u-claude",
         event: "SessionStart",
       },
     ],
@@ -64,6 +65,7 @@ function wrap({ children }: PropsWithChildren) {
 }
 
 const AGENT: AgentOut = {
+  uid: "u-claude",
   name: "claude",
   type: "claude_code",
   config_dir: "/home/u/.claude",
@@ -188,7 +190,9 @@ describe("AgentMemoryTab", () => {
 
     const target = navigateMock.mock.calls.at(-1)?.[0] as string;
     const [path, query] = target.split("?");
-    expect(path).toBe("/agents/claude/memory");
+    // The agent in that URL is its uid — a link built from the label would
+    // break the moment the agent was renamed.
+    expect(path).toBe("/agents/u-claude/memory");
     const params = new URLSearchParams(query);
     expect(params.get("dir")).toBe(COFFER_STORE.memory_dir);
     // The label rides along only so the heading can say something readable.

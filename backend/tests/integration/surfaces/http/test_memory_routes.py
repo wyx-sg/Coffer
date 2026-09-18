@@ -16,6 +16,12 @@ response — that ``POST /context`` carries a line for *every* note plus the
 absolute ``notes/`` path, and that under a binding ceiling it is ``global``
 that loses lines while the repository the session is open in keeps its own.
 
+Every route on this family is addressed by **uid**, so the helpers below take
+the label a fixture created and look the uid up once — the same one round trip
+the CLI makes through ``_resolve``. The tests keep naming partitions ``coffer``
+and ``global`` because that is what a reader recognises; what travels on the
+wire is the identity.
+
 ``COFFER_MEMORY_ROOT``, ``COFFER_KNOWLEDGE_ROOT`` and ``HOME`` are all pinned
 into ``tmp_path``, so nothing here ever reaches a real ``~/.coffer`` or a real
 ``~/.claude``.
@@ -89,9 +95,26 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
-def _register_agent(c: TestClient, name: str, agent_type: str = "claude_code") -> None:
+def _register_agent(c: TestClient, name: str, agent_type: str = "claude_code") -> str:
     r = c.post("/api/v1/agents", json={"type": agent_type, "name": name})
     assert r.status_code == 201, r.text
+    return str(r.json()["uid"])
+
+
+def _uid(c: TestClient, kind: str, name: str) -> str:
+    """The uid of the ``kind`` resource labelled ``name``.
+
+    ``GET /resources?kind=&name=`` is the one route allowed to find a resource
+    by its label, and this is the same single lookup the CLI makes before every
+    command (``surfaces/cli/_resolve.py``). Doing it here keeps the tests
+    readable in labels while the requests they make are spelled the way a real
+    client spells them.
+    """
+    r = c.get("/api/v1/resources", params={"kind": kind, "name": name})
+    assert r.status_code == 200, r.text
+    matches = r.json()["resources"]
+    assert matches, f"no {kind} named {name!r}"
+    return str(matches[0]["uid"])
 
 
 def _repository(tmp_path: pathlib.Path, name: str = "coffer") -> pathlib.Path:
@@ -124,8 +147,18 @@ def _partitions(c: TestClient) -> dict[str, dict]:
     return {p["name"]: p for p in r.json()["partitions"]}
 
 
+def _partition_uid(c: TestClient, name: str) -> str:
+    """The uid of the partition labelled ``name``, read off the list route.
+
+    Deliberately not through ``_uid``: the list is what a real surface renders
+    and then acts from, so taking the uid out of the row it already has is the
+    client behaviour ``PartitionOut.uid`` exists to make possible.
+    """
+    return str(_partitions(c)[name]["uid"])
+
+
 def _distil(c: TestClient, partition: str) -> dict:
-    r = c.post(f"/api/v1/memory/partitions/{partition}/distil")
+    r = c.post(f"/api/v1/memory/partitions/{_partition_uid(c, partition)}/distil")
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -193,6 +226,10 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     # `global` is no repository, and is resolvable from everywhere regardless.
     assert listed["global"]["repository_path"] == ""
     assert listed["global"]["unresolvable"] is False
+    # Each row carries the identity every other route on this family takes, so
+    # a surface that has listed the partitions acts on one without looking it
+    # up by label first.
+    assert listed["coffer"]["uid"] and listed["coffer"]["uid"] != listed["global"]["uid"]
 
     distilled = _distil(client, "coffer")
     assert distilled == {
@@ -206,7 +243,8 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     _distil(client, "global")
     assert _partitions(client)["coffer"]["note_count"] == 1
 
-    notes = client.get("/api/v1/memory/partitions/coffer/notes").json()["notes"]
+    coffer_uid = _partition_uid(client, "coffer")
+    notes = client.get(f"/api/v1/memory/partitions/{coffer_uid}/notes").json()["notes"]
     assert len(notes) == 1
     summary = notes[0]
     assert summary["title"] == "python-lockfile"
@@ -221,7 +259,7 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     assert "status" not in summary
     assert "superseded_by" not in summary
 
-    detail = client.get("/api/v1/memory/partitions/coffer/notes/python-lockfile").json()
+    detail = client.get(f"/api/v1/memory/partitions/{coffer_uid}/notes/python-lockfile").json()
     assert "uv sync --frozen" in detail["body"]
     assert detail["origins"][0]["agent"] == "cc"
     assert detail["origins"][0]["native_path"].endswith("/memory/python-lockfile.md")
@@ -229,20 +267,25 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
 
     # The personal entry went to `global` whichever repository it was learned
     # in — and that is what the session is given first (FR-011).
-    global_notes = client.get("/api/v1/memory/partitions/global/notes").json()["notes"]
+    global_uid = _partition_uid(client, "global")
+    global_notes = client.get(f"/api/v1/memory/partitions/{global_uid}/notes").json()["notes"]
     assert [n["title"] for n in global_notes] == ["worktree-development"]
     assert global_notes[0]["type"] == "feedback"
 
 
 def test_unknown_partition_notes_is_not_found(client) -> None:
-    r = client.get("/api/v1/memory/partitions/does-not-exist/notes")
+    """A uid nothing answers to — the only way to miss, now that the path
+    carries an identity rather than a label a typo could mangle."""
+    r = client.get("/api/v1/memory/partitions/no-such-uid/notes")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_unknown_note_slug_is_not_found(client, tmp_path) -> None:
     partition = _distilled(client, tmp_path)
-    r = client.get(f"/api/v1/memory/partitions/{partition}/notes/does-not-exist")
+    r = client.get(
+        f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/notes/does-not-exist"
+    )
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "MEMORY_NOTE_NOT_FOUND"
 
@@ -273,7 +316,8 @@ def test_retired_answers_from_the_partitions_retirement_record(client, tmp_path)
     """``GET /retired`` reads ``RETIRED.md`` (FR-025), newest first — the file
     is appended to, so the wire order is the file's reversed."""
     partition = _distilled(client, tmp_path)
-    assert client.get(f"/api/v1/memory/partitions/{partition}/retired").json()["retired"] == []
+    uid = _partition_uid(client, partition)
+    assert client.get(f"/api/v1/memory/partitions/{uid}/retired").json()["retired"] == []
 
     memory_store.write_retired(
         partition,
@@ -296,7 +340,7 @@ def test_retired_answers_from_the_partitions_retirement_record(client, tmp_path)
         ],
     )
 
-    retired = client.get(f"/api/v1/memory/partitions/{partition}/retired").json()["retired"]
+    retired = client.get(f"/api/v1/memory/partitions/{uid}/retired").json()["retired"]
     assert [r["title"] for r in retired] == ["A scratch observation", "Context injection ships"]
     assert retired[1] == {
         "slug": "hook-injection",
@@ -312,7 +356,7 @@ def test_retired_answers_from_the_partitions_retirement_record(client, tmp_path)
 
 
 def test_retired_of_an_unknown_partition_is_not_found(client) -> None:
-    r = client.get("/api/v1/memory/partitions/does-not-exist/retired")
+    r = client.get("/api/v1/memory/partitions/no-such-uid/retired")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
@@ -333,7 +377,8 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
     assert body["opened"] == 1
 
     index = client.get(
-        "/api/v1/memory/partitions/coffer/files/content", params={"path": "MEMORY.md"}
+        f"/api/v1/memory/partitions/{_partition_uid(client, 'coffer')}/files/content",
+        params={"path": "MEMORY.md"},
     ).json()
     assert "python-lockfile" in index["content"]
     assert str(repository.resolve()) in index["content"]
@@ -344,7 +389,7 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
 
 
 def test_distil_unknown_partition_is_not_found(client) -> None:
-    r = client.post("/api/v1/memory/partitions/does-not-exist/distil")
+    r = client.post("/api/v1/memory/partitions/no-such-uid/distil")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
@@ -364,10 +409,14 @@ def test_a_second_distil_over_the_same_partition_is_refused(client, tmp_path) ->
     another thread, and what is under test is the refusal, not the threading.
     """
     partition = _distilled(client, tmp_path)
+    uid = _partition_uid(client, partition)
 
-    assert UPKEEP_RUNS.claim(KIND_MEMORY, partition) is True
+    # Claimed by UID, because that is what the route claims and what the
+    # unattended sweep claims: two writers only collide if both spell the
+    # partition the same way, and the label is the spelling that can move.
+    assert UPKEEP_RUNS.claim(KIND_MEMORY, uid) is True
     try:
-        r = client.post(f"/api/v1/memory/partitions/{partition}/distil")
+        r = client.post(f"/api/v1/memory/partitions/{uid}/distil")
         assert r.status_code == 409, r.text
         assert r.json()["error"]["code"] == "UPKEEP_ALREADY_RUNNING"
 
@@ -375,12 +424,12 @@ def test_a_second_distil_over_the_same_partition_is_refused(client, tmp_path) ->
         # instead of inviting that second click.
         runs = client.get("/api/v1/upkeep/runs").json()["runs"]
         assert {"memory"} == {run["kind"] for run in runs}
-        assert [run["name"] for run in runs] == [partition]
+        assert [run["name"] for run in runs] == [uid]
     finally:
-        UPKEEP_RUNS.release(KIND_MEMORY, partition)
+        UPKEEP_RUNS.release(KIND_MEMORY, uid)
 
     # The key is free again, so the real pass runs.
-    assert client.post(f"/api/v1/memory/partitions/{partition}/distil").status_code == 200
+    assert client.post(f"/api/v1/memory/partitions/{uid}/distil").status_code == 200
     assert client.get("/api/v1/upkeep/runs").json()["runs"] == []
 
 
@@ -410,7 +459,8 @@ def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path
     repository = tmp_path / "coffer"
 
     r = client.post(
-        "/api/v1/memory/context", json={"agent": "cc", "cwd": str(repository / "backend")}
+        "/api/v1/memory/context",
+        json={"agent_uid": _uid(client, "agent", "cc"), "cwd": str(repository / "backend")},
     )
     assert r.status_code == 200, r.text
     data = r.json()
@@ -457,9 +507,10 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     )
     partition = _distilled(client, tmp_path, files)
     repository = tmp_path / "coffer"
+    cc_uid = _uid(client, "agent", "cc")
 
     full = client.post(
-        "/api/v1/memory/context", json={"agent": "cc", "cwd": str(repository)}
+        "/api/v1/memory/context", json={"agent_uid": cc_uid, "cwd": str(repository)}
     ).json()
     assert full["notes_omitted"] == 0, "the untrimmed payload is the baseline"
 
@@ -467,7 +518,7 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
 
     r = client.post(
         "/api/v1/memory/context",
-        json={"agent": "cc", "cwd": str(repository), "ceiling_tokens": ceiling},
+        json={"agent_uid": cc_uid, "cwd": str(repository), "ceiling_tokens": ceiling},
     )
     assert r.status_code == 200, r.text
     data = r.json()
@@ -505,26 +556,27 @@ def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
     aggregating several agents' memory into one place.
     """
     partition = _distilled(client, tmp_path)
-    _register_agent(client, "outsider", agent_type="codex")
+    outsider_uid = _register_agent(client, "outsider", agent_type="codex")
     repository = tmp_path / "coffer"
 
     # The kind carries no reach any more, and the framework's own scope route
     # says so rather than reporting an empty narrowing.
-    scope = client.get(f"/api/v1/resources/memory/{partition}/scope").json()
+    scope = client.get(f"/api/v1/resources/{_partition_uid(client, partition)}/scope").json()
     assert scope["supports_scope"] is False
     assert scope["scope"] is None
 
     served = client.post(
-        "/api/v1/memory/context", json={"agent": "outsider", "cwd": str(repository)}
+        "/api/v1/memory/context", json={"agent_uid": outsider_uid, "cwd": str(repository)}
     ).json()
     to_a_source = client.post(
-        "/api/v1/memory/context", json={"agent": "cc", "cwd": str(repository)}
+        "/api/v1/memory/context",
+        json={"agent_uid": _uid(client, "agent", "cc"), "cwd": str(repository)},
     ).json()
 
     assert served["partition"] == partition
     assert "`python-lockfile.md`" in served["text"]
     assert served["notes_included"] > 0
-    # Byte-identical: the caller's name decides nothing about the payload. It
+    # Byte-identical: who is asking decides nothing about the payload. The uid
     # travels for ``record_fired`` — who fired — and for nothing else.
     assert served["text"] == to_a_source["text"]
 
@@ -534,7 +586,10 @@ def test_context_for_a_directory_in_no_repository_is_global(client, tmp_path) ->
 
     data = client.post(
         "/api/v1/memory/context",
-        json={"agent": "cc", "cwd": str(tmp_path / "Documents" / "2026-09-17")},
+        json={
+            "agent_uid": _uid(client, "agent", "cc"),
+            "cwd": str(tmp_path / "Documents" / "2026-09-17"),
+        },
     ).json()
 
     assert data["partition"] == "global"
@@ -546,42 +601,79 @@ def test_context_for_a_directory_in_no_repository_is_global(client, tmp_path) ->
 
 
 def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
-    _register_agent(client, "cc")
+    cc_uid = _register_agent(client, "cc")
 
-    status = client.get("/api/v1/memory/delivery", params={"agent": "cc"}).json()
+    status = client.get("/api/v1/memory/delivery", params={"agent_uid": cc_uid}).json()
     assert status["delivery"][0]["installed"] is False
+    # Both halves travel: the uid a surface acts on, the label it renders. A row
+    # carrying one of the two would send every client back for the other.
+    assert status["delivery"][0]["agent_uid"] == cc_uid
+    assert status["delivery"][0]["agent_name"] == "cc"
     # A fire is an event, never a field on the status (FR-033, FR-039).
     assert "last_fired_at" not in status["delivery"][0]
 
-    installed = client.post("/api/v1/memory/delivery/cc/install").json()
+    installed = client.post(f"/api/v1/memory/delivery/{cc_uid}/install").json()
     assert installed["installed"] is True
-    assert "coffer memory context --agent cc" in installed["command"]
+    # The uid goes INTO the installed command, so the entry keeps naming this
+    # agent however the user relabels it — the whole reason delivery is keyed
+    # on an identity rather than on a label.
+    assert f"coffer memory context --agent-uid {cc_uid}" in installed["command"]
 
     audit = client.get("/api/v1/audit").json()
     assert any(e["event_type"] == "memory_delivery_installed" for e in audit["entries"])
 
     r = client.post(
         "/api/v1/memory/context",
-        json={"agent": "cc", "cwd": "/tmp", "record_fired": True},
+        json={"agent_uid": cc_uid, "cwd": "/tmp", "record_fired": True},
     )
     assert r.status_code == 200, r.text
 
     audit2 = client.get("/api/v1/audit").json()
     assert any(e["event_type"] == "memory_delivery_fired" for e in audit2["entries"])
     # Installation is unchanged by a fire.
-    assert client.get("/api/v1/memory/delivery", params={"agent": "cc"}).json()["delivery"][0][
-        "installed"
-    ]
+    assert client.get("/api/v1/memory/delivery", params={"agent_uid": cc_uid}).json()["delivery"][
+        0
+    ]["installed"]
 
-    removed = client.delete("/api/v1/memory/delivery/cc").json()
+    removed = client.delete(f"/api/v1/memory/delivery/{cc_uid}").json()
     assert removed["installed"] is False
 
 
-def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
-    _register_agent(client, "cc")
-    client.post("/api/v1/memory/delivery/cc/install")
+def test_an_installed_hook_survives_the_agent_being_renamed(client) -> None:
+    """The failure the uid removes. The hook entry is a string in somebody
+    else's settings file that Coffer writes once and never revisits, so a label
+    baked into it would start naming an agent nothing answers to the first time
+    the user edited it — and every session's fire would go unattributed.
+    """
+    cc_uid = _register_agent(client, "cc")
+    installed = client.post(f"/api/v1/memory/delivery/{cc_uid}/install").json()
+    command = installed["command"]
 
-    client.post("/api/v1/memory/context", json={"agent": "cc", "cwd": "/tmp"})
+    renamed = client.patch(f"/api/v1/resources/{cc_uid}", json={"name": "claude-code"})
+    assert renamed.status_code == 200, renamed.text
+
+    # The command on disk was not rewritten, and it is still recognised …
+    status = client.get("/api/v1/memory/delivery", params={"agent_uid": cc_uid}).json()
+    assert status["delivery"][0]["installed"] is True
+    assert status["delivery"][0]["command"] == command
+    # … under the agent's new label, which is what the row renders.
+    assert status["delivery"][0]["agent_name"] == "claude-code"
+
+    # And the fire it records still lands on this agent.
+    r = client.post(
+        "/api/v1/memory/context",
+        json={"agent_uid": cc_uid, "cwd": "/tmp", "record_fired": True},
+    )
+    assert r.status_code == 200, r.text
+    audit = client.get("/api/v1/audit").json()["entries"]
+    assert any(e["event_type"] == "memory_delivery_fired" for e in audit)
+
+
+def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
+    cc_uid = _register_agent(client, "cc")
+    client.post(f"/api/v1/memory/delivery/{cc_uid}/install")
+
+    client.post("/api/v1/memory/context", json={"agent_uid": cc_uid, "cwd": "/tmp"})
 
     audit = client.get("/api/v1/audit").json()
     assert not any(e["event_type"] == "memory_delivery_fired" for e in audit["entries"])
@@ -600,7 +692,8 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
         [RetiredNote(slug="gone", title="Gone", reason="No longer true.", entry_ids=("cc:x",))],
     )
 
-    tree = client.get(f"/api/v1/memory/partitions/{partition}/files").json()["root"]
+    uid = _partition_uid(client, partition)
+    tree = client.get(f"/api/v1/memory/partitions/{uid}/files").json()["root"]
     assert tree["path"] == ""
     assert tree["abs_path"] == str(tmp_path / "memory" / partition)
     names = {child["name"]: child for child in tree["children"]}
@@ -618,7 +711,7 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     assert len(raw_children) == 1
 
     content = client.get(
-        f"/api/v1/memory/partitions/{partition}/files/content",
+        f"/api/v1/memory/partitions/{uid}/files/content",
         params={"path": "notes/python-lockfile.md"},
     ).json()
     assert content["binary"] is False
@@ -630,7 +723,7 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     # The hidden half reads too, verbatim: it is the distil pass's input, and
     # it is what makes a note's paraphrase checkable back against the source.
     raw = client.get(
-        f"/api/v1/memory/partitions/{partition}/files/content",
+        f"/api/v1/memory/partitions/{uid}/files/content",
         params={"path": raw_children[0]["path"]},
     ).json()
     assert "uv sync --frozen" in raw["content"]
@@ -643,7 +736,7 @@ def test_partition_files_are_read_only(client, tmp_path) -> None:
     partition = _distilled(client, tmp_path)
 
     r = client.put(
-        f"/api/v1/memory/partitions/{partition}/files/content",
+        f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/files/content",
         json={"path": "notes/python-lockfile.md", "content": "rewritten"},
     )
     assert r.status_code == 405
@@ -653,7 +746,7 @@ def test_partition_files_refuse_a_path_that_escapes_the_partition(client, tmp_pa
     partition = _distilled(client, tmp_path)
 
     r = client.get(
-        f"/api/v1/memory/partitions/{partition}/files/content",
+        f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/files/content",
         params={"path": "../../../../etc/passwd"},
     )
     assert r.status_code == 400
@@ -664,7 +757,7 @@ def test_partition_file_that_is_not_there_is_not_found(client, tmp_path) -> None
     partition = _distilled(client, tmp_path)
 
     r = client.get(
-        f"/api/v1/memory/partitions/{partition}/files/content",
+        f"/api/v1/memory/partitions/{_partition_uid(client, partition)}/files/content",
         params={"path": "notes/no-such-note.md"},
     )
     assert r.status_code == 404
@@ -672,6 +765,6 @@ def test_partition_file_that_is_not_there_is_not_found(client, tmp_path) -> None
 
 
 def test_files_of_an_unknown_partition_are_not_found(client) -> None:
-    r = client.get("/api/v1/memory/partitions/does-not-exist/files")
+    r = client.get("/api/v1/memory/partitions/no-such-uid/files")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"

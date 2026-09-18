@@ -95,12 +95,25 @@ async def _setup(tmp_path: pathlib.Path):
         on_config_dir_changed=skill_svc.relink_for_agent,
     )
 
-    async def _agent_on_delete(ref):
-        await skill_svc.cleanup_bindings_for_agent(ref)
+    async def _agent_on_delete(agent: Resource):
+        await skill_svc.cleanup_bindings_for_agent(agent)
 
     placeholder_kinds["agent"] = make_agent_kind(on_delete=_agent_on_delete)
-    placeholder_kinds["skill"] = make_skill_kind(skill_svc.cleanup_bindings_for_skill)
+    placeholder_kinds["skill"] = make_skill_kind(
+        skill_svc.cleanup_bindings_for_skill,
+        skill_svc.move_master_folder,
+    )
     return skill_svc, agent_svc, audit, master_store, fake_home, engine
+
+
+async def _by_name(skill_svc: SkillService, name: str) -> Resource:
+    """Resolve a skill LABEL to its row.
+
+    The one-shot resolution a surface does at its front door
+    (ADR resource-identity-is-an-immutable-uid): a test states what it means in
+    the name a person would type, and converts once.
+    """
+    return await skill_svc._rs.get_by_name("skill", name)
 
 
 async def _register_agent(
@@ -131,7 +144,7 @@ async def _register_agent(
 )
 async def test_list_unmanaged_valid_invalid_and_exclusions(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     # Managed link: import a skill — auto-bind delivers a symlink into master.
     src = tmp_path / "src"
     _write_skill_folder(src, name="managed-one")
@@ -142,7 +155,7 @@ async def test_list_unmanaged_valid_invalid_and_exclusions(tmp_path):
     (skill_dir / "broken-skill").mkdir()
     (skill_dir / ".system").mkdir()
 
-    views = await skill_svc.list_unmanaged("cur")
+    views = await skill_svc.list_unmanaged(agent.uid)
     by_name = {v.name: v for v in views}
     assert set(by_name) == {"hand-made", "broken-skill"}  # managed + .system excluded
     assert by_name["hand-made"].valid is True
@@ -160,14 +173,14 @@ async def test_list_unmanaged_valid_invalid_and_exclusions(tmp_path):
 )
 async def test_list_unmanaged_labels_codex_second_location(tmp_path):
     skill_svc, agent_svc, _, _, fake_home, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(
+    agent, skill_dir = await _register_agent(
         agent_svc, tmp_path, name="cdx", agent_type=AgentType.CODEX
     )
     _write_skill_folder(skill_dir / "primary-one", name="primary-one")
     agents_dir = fake_home / ".agents" / "skills"
     _write_skill_folder(agents_dir / "secondary-one", name="secondary-one")
 
-    views = await skill_svc.list_unmanaged("cdx")
+    views = await skill_svc.list_unmanaged(agent.uid)
     by_name = {v.name: v for v in views}
     assert by_name["primary-one"].location == "skills"
     assert by_name["secondary-one"].location == "agents_dir"
@@ -178,13 +191,13 @@ async def test_list_unmanaged_labels_codex_second_location(tmp_path):
 @pytest.mark.asyncio
 async def test_list_unmanaged_flags_foreign_link(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     skill_dir.mkdir(parents=True, exist_ok=True)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     os.symlink(elsewhere, skill_dir / "foreign")
 
-    views = await skill_svc.list_unmanaged("cur")
+    views = await skill_svc.list_unmanaged(agent.uid)
     assert len(views) == 1
     v = views[0]
     assert v.foreign_link is True
@@ -197,7 +210,7 @@ async def test_list_unmanaged_flags_foreign_link(tmp_path):
 async def test_list_unmanaged_unknown_agent_raises(tmp_path):
     skill_svc, _, _, _, _, engine = await _setup(tmp_path)
     with pytest.raises(ResourceNotFound):
-        await skill_svc.list_unmanaged("ghost")
+        await skill_svc.list_unmanaged("no-such-uid")
     await engine.dispose()
 
 
@@ -215,7 +228,7 @@ async def test_adopt_happy_path(tmp_path):
     _write_skill_folder(original, name="hand-made", body="adopt me")
 
     r = await skill_svc.adopt_unmanaged(
-        agent_name="cur", skill_name="hand-made", location="skills", actor="cli"
+        agent_uid=agent.uid, skill_name="hand-made", location="skills", actor="cli"
     )
     assert r.kind == "skill" and r.name == "hand-made"
     # Master copy exists with the original content.
@@ -224,13 +237,13 @@ async def test_adopt_happy_path(tmp_path):
     assert original.is_symlink()
     assert original.resolve() == store.paths_for("hand-made").folder.resolve()
     # Binding enabled for this agent.
-    bindings = await skill_svc.bindings_for("hand-made")
+    bindings = await skill_svc.bindings_for(r.uid)
     assert any(b.agent_resource_id == agent.id and b.enabled for b in bindings)
     # Audit trail.
     adopted = await audit.query(event_type=AuditEventType.SKILL_ADOPTED.value)
     assert len(adopted) == 1
     # And it no longer shows up as unmanaged.
-    assert await skill_svc.list_unmanaged("cur") == []
+    assert await skill_svc.list_unmanaged(agent.uid) == []
     await engine.dispose()
 
 
@@ -240,7 +253,7 @@ async def test_adopt_happy_path(tmp_path):
 )
 async def test_adopt_name_conflict_leaves_original_untouched(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     # Register a master skill named "dup" first.
     src = tmp_path / "src"
     _write_skill_folder(src, name="dup")
@@ -252,7 +265,7 @@ async def test_adopt_name_conflict_leaves_original_untouched(tmp_path):
 
     with pytest.raises(ResourceAlreadyExists):
         await skill_svc.adopt_unmanaged(
-            agent_name="cur", skill_name="dup-copy", location="skills", actor="cli"
+            agent_uid=agent.uid, skill_name="dup-copy", location="skills", actor="cli"
         )
     assert original.is_dir() and not original.is_symlink()
     assert "local copy" in (original / "SKILL.md").read_text()
@@ -262,14 +275,14 @@ async def test_adopt_name_conflict_leaves_original_untouched(tmp_path):
 @pytest.mark.asyncio
 async def test_adopt_invalid_folder_raises_and_registers_nothing(tmp_path):
     skill_svc, agent_svc, _, store, _, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     original = skill_dir / "no-md"
     original.mkdir(parents=True)
     (original / "notes.txt").write_text("not a skill")
 
     with pytest.raises(UnmanagedSkillInvalid) as exc:
         await skill_svc.adopt_unmanaged(
-            agent_name="cur", skill_name="no-md", location="skills", actor="cli"
+            agent_uid=agent.uid, skill_name="no-md", location="skills", actor="cli"
         )
     assert exc.value.reason == "skill_md_missing"
     assert await skill_svc.list_skills() == []
@@ -281,7 +294,7 @@ async def test_adopt_invalid_folder_raises_and_registers_nothing(tmp_path):
 @pytest.mark.asyncio
 async def test_adopt_foreign_link_raises(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     skill_dir.mkdir(parents=True, exist_ok=True)
     elsewhere = tmp_path / "elsewhere"
     _write_skill_folder(elsewhere, name="foreign")
@@ -289,7 +302,7 @@ async def test_adopt_foreign_link_raises(tmp_path):
 
     with pytest.raises(UnmanagedSkillInvalid) as exc:
         await skill_svc.adopt_unmanaged(
-            agent_name="cur", skill_name="foreign", location="skills", actor="cli"
+            agent_uid=agent.uid, skill_name="foreign", location="skills", actor="cli"
         )
     assert "outside the master store" in exc.value.reason
     assert (skill_dir / "foreign").is_symlink()  # untouched
@@ -310,13 +323,13 @@ async def test_adopt_from_codex_agents_dir(tmp_path):
     _write_skill_folder(original, name="side-skill")
 
     await skill_svc.adopt_unmanaged(
-        agent_name="cdx", skill_name="side-skill", location="agents_dir", actor="cli"
+        agent_uid=agent.uid, skill_name="side-skill", location="agents_dir", actor="cli"
     )
     assert not original.exists()
     delivered = skill_dir / "side-skill"
     assert delivered.is_symlink()
     assert delivered.resolve() == store.paths_for("side-skill").folder.resolve()
-    bindings = await skill_svc.bindings_for("side-skill")
+    bindings = await skill_svc.bindings_for((await _by_name(skill_svc, "side-skill")).uid)
     assert any(b.agent_resource_id == agent.id and b.enabled for b in bindings)
     await engine.dispose()
 
@@ -324,10 +337,10 @@ async def test_adopt_from_codex_agents_dir(tmp_path):
 @pytest.mark.asyncio
 async def test_adopt_unknown_raises_not_found(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
-    await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, _ = await _register_agent(agent_svc, tmp_path, name="cur")
     with pytest.raises(UnmanagedSkillNotFound):
         await skill_svc.adopt_unmanaged(
-            agent_name="cur", skill_name="ghost", location="skills", actor="cli"
+            agent_uid=agent.uid, skill_name="ghost", location="skills", actor="cli"
         )
     await engine.dispose()
 
@@ -339,12 +352,12 @@ async def test_adopt_unknown_raises_not_found(tmp_path):
 @pytest.mark.acceptance(spec="skill-manager", scenario="delete an unmanaged skill")
 async def test_delete_unmanaged_dir(tmp_path):
     skill_svc, agent_svc, audit, _, _, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     original = skill_dir / "junk"
     _write_skill_folder(original, name="junk")
 
     await skill_svc.delete_unmanaged(
-        agent_name="cur", skill_name="junk", location="skills", actor="cli"
+        agent_uid=agent.uid, skill_name="junk", location="skills", actor="cli"
     )
     assert not original.exists()
     deleted = await audit.query(event_type=AuditEventType.SKILL_UNMANAGED_DELETED.value)
@@ -358,7 +371,7 @@ async def test_delete_unmanaged_dir(tmp_path):
 @pytest.mark.asyncio
 async def test_delete_foreign_link_unlinks_without_touching_target(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     skill_dir.mkdir(parents=True, exist_ok=True)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
@@ -367,7 +380,7 @@ async def test_delete_foreign_link_unlinks_without_touching_target(tmp_path):
     os.symlink(elsewhere, link)
 
     await skill_svc.delete_unmanaged(
-        agent_name="cur", skill_name="foreign", location="skills", actor="cli"
+        agent_uid=agent.uid, skill_name="foreign", location="skills", actor="cli"
     )
     assert not link.is_symlink() and not link.exists()
     assert (elsewhere / "precious.txt").read_text() == "keep me"
@@ -377,10 +390,10 @@ async def test_delete_foreign_link_unlinks_without_touching_target(tmp_path):
 @pytest.mark.asyncio
 async def test_delete_unknown_raises_not_found(tmp_path):
     skill_svc, agent_svc, _, _, _, engine = await _setup(tmp_path)
-    await _register_agent(agent_svc, tmp_path, name="cur")
+    agent, _ = await _register_agent(agent_svc, tmp_path, name="cur")
     with pytest.raises(UnmanagedSkillNotFound):
         await skill_svc.delete_unmanaged(
-            agent_name="cur", skill_name="ghost", location="skills", actor="cli"
+            agent_uid=agent.uid, skill_name="ghost", location="skills", actor="cli"
         )
     await engine.dispose()
 
@@ -394,5 +407,5 @@ async def test_unmanaged_methods_require_configured_deps(tmp_path):
     skill_svc, _, _, _, _, engine = await _setup(tmp_path)
     skill_svc._workspace_scan = None
     with pytest.raises(RuntimeError, match="workspace_scan"):
-        await skill_svc.list_unmanaged("any")
+        await skill_svc.list_unmanaged("any-uid")
     await engine.dispose()

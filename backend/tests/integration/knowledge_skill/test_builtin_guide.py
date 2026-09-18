@@ -72,11 +72,30 @@ def _register_agent(client: TestClient, name: str, config_dir: pathlib.Path) -> 
     assert resp.status_code == 201, resp.text
 
 
-def _seed_collection(client: TestClient, name: str, description: str) -> None:
+def _seed_collection(client: TestClient, name: str, description: str) -> str:
     resp = client.post(
         "/api/v1/knowledge/collections", json={"name": name, "description": description}
     )
     assert resp.status_code == 201, resp.text
+    # The uid, because that is what the resource routes take. The name is a
+    # label here as everywhere else (ADR resource-identity-is-an-immutable-uid)
+    # and a test that spelled it into a URL would be asserting a route shape
+    # Coffer no longer has.
+    return str(resp.json()["uid"])
+
+
+def _guide_uid(client: TestClient) -> str:
+    """The seeded guide's identity, looked up the way a client would.
+
+    Nothing outside this module knows the uid: it is minted by the seed on
+    whichever boot first ran, so every test that addresses the guide has to
+    resolve it from the label the running build generates.
+    """
+    listed = client.get("/api/v1/skills")
+    assert listed.status_code == 200, listed.text
+    rows = {s["name"]: s for s in listed.json()["items"]}
+    assert GUIDE_SKILL_NAME in rows, sorted(rows)
+    return str(rows[GUIDE_SKILL_NAME]["uid"])
 
 
 def _master(home: pathlib.Path) -> pathlib.Path:
@@ -180,10 +199,8 @@ def test_deleting_the_guide_is_refused_on_both_delete_routes(home) -> None:  # t
         pass
 
     with _client() as client:
-        for url in (
-            f"/api/v1/skills/{GUIDE_SKILL_NAME}",
-            f"/api/v1/resources/skill/{GUIDE_SKILL_NAME}",
-        ):
+        uid = _guide_uid(client)
+        for url in (f"/api/v1/skills/{uid}", f"/api/v1/resources/{uid}"):
             resp = client.delete(url)
             assert resp.status_code == 409, f"{url}: {resp.status_code} {resp.text}"
             assert resp.json()["error"]["code"] == "RESOURCE_PROTECTED", resp.text
@@ -191,7 +208,7 @@ def test_deleting_the_guide_is_refused_on_both_delete_routes(home) -> None:  # t
     # Refused before anything was torn down: the master is untouched.
     assert _master(home).is_file()
     with _client() as client:
-        assert client.get(f"/api/v1/skills/{GUIDE_SKILL_NAME}").status_code == 200
+        assert client.get(f"/api/v1/skills/{_guide_uid(client)}").status_code == 200
 
 
 def test_disabling_the_guide_is_allowed_and_reclaims_the_copy(home) -> None:  # type: ignore[no-untyped-def]
@@ -206,7 +223,7 @@ def test_disabling_the_guide_is_allowed_and_reclaims_the_copy(home) -> None:  # 
     assert (config_dir / "skills" / GUIDE_SKILL_NAME).is_symlink()
 
     with _client() as client:
-        resp = client.post(f"/api/v1/resources/skill/{GUIDE_SKILL_NAME}/disable")
+        resp = client.post(f"/api/v1/resources/{_guide_uid(client)}/disable")
         assert resp.status_code == 200, resp.text
 
     delivered = config_dir / "skills" / GUIDE_SKILL_NAME
@@ -228,12 +245,12 @@ def test_disabling_a_collection_rewrites_the_guide_at_once(home) -> None:  # typ
     of them at once.
     """
     with _client() as client:
-        _seed_collection(client, "shopee", "Shopee's account system.")
+        shopee = _seed_collection(client, "shopee", "Shopee's account system.")
         _seed_collection(client, "personal", "Things that are nobody else's business.")
 
         assert "Shopee's account system" in _master(home).read_text(encoding="utf-8")
 
-        resp = client.post("/api/v1/resources/knowledge/shopee/disable")
+        resp = client.post(f"/api/v1/resources/{shopee}/disable")
         assert resp.status_code == 200, resp.text
 
         text = _master(home).read_text(encoding="utf-8")
@@ -280,11 +297,13 @@ def test_the_seed_writes_nothing_when_the_catalogue_has_not_moved(home) -> None:
     with _client() as client:
         _seed_collection(client, "shopee", "Internal systems.")
     with _client() as client:
-        first = client.get(f"/api/v1/skills/{GUIDE_SKILL_NAME}").json()
+        first = client.get(f"/api/v1/skills/{_guide_uid(client)}").json()
 
     with _client() as client:
-        second = client.get(f"/api/v1/skills/{GUIDE_SKILL_NAME}").json()
+        second = client.get(f"/api/v1/skills/{_guide_uid(client)}").json()
 
+    # Same row on both boots, so a uid that moved would itself be the defect.
+    assert second["uid"] == first["uid"]
     assert second["updated_at"] == first["updated_at"]
     assert second["version_hash"] == first["version_hash"]
 
@@ -297,12 +316,14 @@ def test_a_changed_catalogue_does_rewrite_the_guide(home) -> None:  # type: igno
     with _client() as client:
         _seed_collection(client, "shopee", "Internal systems.")
     with _client() as client:
-        first = client.get(f"/api/v1/skills/{GUIDE_SKILL_NAME}").json()
+        first = client.get(f"/api/v1/skills/{_guide_uid(client)}").json()
         _seed_collection(client, "coffer", "Notes an agent wrote while working on Coffer.")
 
     with _client() as client:
-        second = client.get(f"/api/v1/skills/{GUIDE_SKILL_NAME}").json()
+        second = client.get(f"/api/v1/skills/{_guide_uid(client)}").json()
 
+    # A rewrite, not a re-registration: the identity is the same row's.
+    assert second["uid"] == first["uid"]
     assert second["version_hash"] != first["version_hash"]
     assert "Notes an agent wrote" in _master(home).read_text(encoding="utf-8")
 

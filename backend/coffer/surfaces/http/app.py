@@ -39,7 +39,7 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.diagnostics import register_diagnostics_builtin_tools
 from coffer.application.resource_service import ResourceService
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.logging.setup import configure_logging
@@ -152,17 +152,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     audit_repo = SqlAlchemyAuditRepo(sm)
     resource_repo = SqlAlchemyResourceRepo(sm)
 
-    async def _resolve_resource_id(kind: str, name: str) -> int | None:
-        """The stable row id behind a ``<kind>:<name>``, for the audit trail.
-
-        Injected rather than imported so ``AuditService`` keeps its one
-        dependency: the resource side already depends on audit, and the
-        reverse import would close the loop.
-        """
-        found = await resource_repo.find(ResourceRef(kind, name))
-        return found.id if found else None
-
-    audit = AuditService(audit_repo, resolve_resource_id=_resolve_resource_id)
+    # No resolver is injected any more. ``AuditService.record`` is handed the
+    # ``Resource`` the event is about, and every caller performing a mutation
+    # already has that row — so the id it stores is read off it rather than
+    # looked back up from a label that may since have changed.
+    audit = AuditService(audit_repo)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
         repo=resource_repo,
@@ -194,7 +188,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # and the daemon log both lost their human reader, so the reader is the
     # agent and the way in is a tool it already holds.
     register_diagnostics_builtin_tools(
-        builtin_tools, audit_repo=audit_repo, log_path=lambda: log_dir() / "daemon.log"
+        builtin_tools,
+        audit_repo=audit_repo,
+        log_path=lambda: log_dir() / "daemon.log",
+        # The tool's filter names a resource the way the agent asking knows it —
+        # a kind and a name. Resolving it here is what lets the query key on the
+        # resource's identity instead, so "what happened to X" answers with X's
+        # whole history rather than the slice that happened to carry its current
+        # label. Without this the tool refuses the filter rather than silently
+        # answering a different question.
+        find_resource=resource_svc.find_by_name,
     )
 
     # Every resource kind, in dependency order (see kind_wiring).
@@ -218,6 +221,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         kinds.mcp.session_factory,
         credential_store,
         kinds.agent_skill.agent_service,
+        resource_svc,
         # The lookup that gives a node's agent its run identity (workflow FR-035).
         conversation_env_lookup(build_attempt_repo(sm)),
     )

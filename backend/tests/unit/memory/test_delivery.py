@@ -30,14 +30,19 @@ from coffer.domain.memory.delivery import (
 
 
 def test_context_invocation_shells_out_to_coffer_memory_context() -> None:
-    assert context_invocation("claude-code") == (
-        'coffer memory context --agent claude-code --cwd "$PWD"'
-    )
+    """The agent is spelled by uid — the one thing a rename cannot change."""
+    assert context_invocation("7a1f") == 'coffer memory context --agent-uid 7a1f --cwd "$PWD"'
 
 
-def test_context_invocation_quotes_an_agent_key_with_special_characters() -> None:
-    inv = context_invocation("agent with spaces")
-    assert "'agent with spaces'" in inv
+def test_context_invocation_quotes_its_argument() -> None:
+    """Quoting is not there for the uids Coffer mints, which are plain hex.
+
+    It is there because this builds a shell command out of a value from the
+    database, and a builder that is only safe for well-formed input is one bad
+    row away from being a shell injection.
+    """
+    inv = context_invocation("uid with spaces")
+    assert "'uid with spaces'" in inv
 
 
 def test_hook_command_is_marker_prefixed() -> None:
@@ -211,8 +216,15 @@ def test_non_object_json_raises() -> None:
 
 
 def test_delivery_status_is_frozen_and_comparable() -> None:
-    a = DeliveryStatus(agent="cc", installed=True, command="X", event="SessionStart")
-    b = DeliveryStatus(agent="cc", installed=True, command="X", event="SessionStart")
+    kwargs = {
+        "agent_uid": "7a1f",
+        "agent_name": "cc",
+        "installed": True,
+        "command": "X",
+        "event": "SessionStart",
+    }
+    a = DeliveryStatus(**kwargs)  # type: ignore[arg-type]
+    b = DeliveryStatus(**kwargs)  # type: ignore[arg-type]
     assert a == b
     with pytest.raises(AttributeError):
         a.installed = False  # type: ignore[misc]

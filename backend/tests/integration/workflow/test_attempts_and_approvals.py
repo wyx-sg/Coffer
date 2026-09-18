@@ -31,7 +31,7 @@ async def _run(repos: Repos, **overrides: object) -> str:
         "workdir": "/repo",
         "machine_id": "machine-a",
         "template_snapshot": SNAPSHOT,
-        "template_ref": "workflow:delivery",
+        "template_ref": "delivery",
     }
     kwargs.update(overrides)
     await repos.runs.create_run(**kwargs)  # type: ignore[arg-type]

@@ -49,6 +49,11 @@ export function WorkflowRunsTable({ runs, isLoading = false, onDelete }: Props) 
       key: "template",
       header: t("workflow.cols.template"),
       className: "whitespace-nowrap",
+      // Text, never a link to the workflow. This is the LABEL the run was
+      // started under, frozen at creation: the workflow it names may since
+      // have been renamed or deleted, and what the run actually executes is
+      // the snapshot it took (FR-010). Linking would promise that the words
+      // still address something.
       cell: (r) => <span className="text-muted-foreground">{r.template_ref}</span>,
     },
     {

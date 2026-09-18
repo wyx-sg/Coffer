@@ -30,7 +30,6 @@ from coffer.application.workflow.transcripts import TaskTranscript, TranscriptMe
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Role, TextBlock
 from coffer.domain.errors import CofferError
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.chat.persistence import MessageRepo
 from coffer.infrastructure.sync.identity import resolve_identity
 
@@ -312,16 +311,12 @@ class WorkflowAudit:
         event_type: str,
         *,
         actor: str,
-        resource_kind: str | None = None,
-        resource_name: str | None = None,
+        subject_kind: str | None = None,
+        subject_name: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None:
-        ref = (
-            ResourceRef(kind=resource_kind, name=resource_name)
-            if resource_kind and resource_name
-            else None
-        )
-        await self._audit.record(event_type, ref=ref, actor=actor, details=detail or {})
+        subject = (subject_kind, subject_name) if subject_kind and subject_name else None
+        await self._audit.record(event_type, subject=subject, actor=actor, details=detail or {})
 
 
 class ThisMachine:

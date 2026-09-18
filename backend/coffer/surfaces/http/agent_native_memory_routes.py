@@ -1,4 +1,4 @@
-"""/api/v1/agents/{name}/native-memory* — read-only native-memory surfaces.
+"""/api/v1/agents/{uid}/native-memory* — read-only native-memory surfaces.
 
 Lists a coding agent's OWN native per-project memory stores (Claude Code's
 ``<config_dir>/projects/<slug>/memory``, Codex's global ``memories/MEMORY.md``
@@ -16,7 +16,7 @@ the same answer as a store that has gone, so the difference cannot be used to
 probe.
 
 Agents with no native memory layout — and agents with no projects dir on disk —
-return an empty list; a non-existent agent name returns 404 via the service's
+return an empty list; a uid no agent answers to returns 404 via the service's
 agent lookup. Like every workspace listing (spec agent-registry FR-048), none of
 these audits.
 """
@@ -80,13 +80,13 @@ class MemoryFileContentOut(BaseModel):
     size: int
 
 
-@router.get("/{name}/native-memory", response_model=NativeMemoryListOut)
+@router.get("/{uid}/native-memory", response_model=NativeMemoryListOut)
 async def list_native_memory(
-    name: str,
+    uid: str,
     svc: Any = Depends(get_agent_native_memory_service),  # noqa: B008
 ) -> NativeMemoryListOut:
     """The agent's own native memory stores, most populated first."""
-    stores = await svc.list_stores(name)
+    stores = await svc.list_stores(uid)
     return NativeMemoryListOut(
         items=[
             NativeMemoryStoreOut(
@@ -100,15 +100,15 @@ async def list_native_memory(
     )
 
 
-@router.get("/{name}/native-memory/files", response_model=MemoryFileTreeOut)
+@router.get("/{uid}/native-memory/files", response_model=MemoryFileTreeOut)
 async def list_native_memory_files(
-    name: str,
+    uid: str,
     dir: str = Query(description="A memory_dir from the listing — this agent's store."),
     svc: Any = Depends(get_agent_native_memory_service),  # noqa: B008
 ) -> MemoryFileTreeOut:
     """One native-memory store's directory, as a read-only tree."""
     try:
-        root = await svc.read_tree(name, dir)
+        root = await svc.read_tree(uid, dir)
     except ValueError:
         return error_response(  # type: ignore[return-value]
             "NOT_FOUND",
@@ -117,16 +117,16 @@ async def list_native_memory_files(
     return MemoryFileTreeOut(root=_node_out(root))
 
 
-@router.get("/{name}/native-memory/files/content", response_model=MemoryFileContentOut)
+@router.get("/{uid}/native-memory/files/content", response_model=MemoryFileContentOut)
 async def read_native_memory_file(
-    name: str,
+    uid: str,
     dir: str = Query(description="A memory_dir from the listing — this agent's store."),
     path: str = Query(min_length=1, description="File path relative to the store directory."),
     svc: Any = Depends(get_agent_native_memory_service),  # noqa: B008
 ) -> MemoryFileContentOut:
     """Read one file inside a native-memory store, for the read-only preview."""
     try:
-        content = await svc.read_file(name, dir, path)
+        content = await svc.read_file(uid, dir, path)
     except (ValueError, FileNotFoundError):
         # One answer for "not this agent's store", "escapes the store" and "gone":
         # the caller is holding a stale or invented path either way, and telling

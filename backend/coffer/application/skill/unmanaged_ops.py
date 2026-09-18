@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.skill.scan import UnmanagedSkill, classify
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import ValidationOk, validate_skill_folder
@@ -53,7 +53,7 @@ def _label(index: int) -> str:
     return _LOC_PRIMARY if index == 0 else _LOC_SECONDARY
 
 
-async def _scan(service: SkillService, agent_name: str) -> list[tuple[str, UnmanagedSkill]]:
+def _scan(service: SkillService, agent: Resource) -> list[tuple[str, UnmanagedSkill]]:
     """(location_label, UnmanagedSkill) pairs across the agent's locations."""
     # Narrow the optional deps for the type checker; callers go through
     # SkillService._require_unmanaged_deps first, so this never trips.
@@ -61,7 +61,6 @@ async def _scan(service: SkillService, agent_name: str) -> list[tuple[str, Unman
     scanner = service._workspace_scan
     if resolver is None or scanner is None:  # pragma: no cover — guarded upstream
         raise RuntimeError("workspace scan dependencies are not wired")
-    agent = await service._rs.get(ResourceRef("agent", agent_name))
     locations = resolver(agent)
     master_root = service._store.root
     out: list[tuple[str, UnmanagedSkill]] = []
@@ -81,10 +80,11 @@ def _find(
     raise UnmanagedSkillNotFound(skill_name)
 
 
-async def list_unmanaged(*, service: SkillService, agent_name: str) -> list[UnmanagedView]:
+async def list_unmanaged(*, service: SkillService, agent_uid: str) -> list[UnmanagedView]:
     """Discover unmanaged skills across the agent's scan locations."""
+    agent = await service._rs.get(agent_uid)
     views: list[UnmanagedView] = []
-    for label, u in await _scan(service, agent_name):
+    for label, u in _scan(service, agent):
         if u.foreign_link:
             valid, reason = False, FOREIGN_LINK_REASON
         else:
@@ -109,7 +109,7 @@ async def list_unmanaged(*, service: SkillService, agent_name: str) -> list[Unma
 async def adopt_unmanaged(
     *,
     service: SkillService,
-    agent_name: str,
+    agent_uid: str,
     skill_name: str,
     location: str,
     actor: str,
@@ -128,7 +128,11 @@ async def adopt_unmanaged(
     """
     from coffer.application.skill.lifecycle_ops import register_from_validated
 
-    found = await _scan(service, agent_name)
+    agent = await service._rs.get(agent_uid)
+    # ``skill_name`` here is a DIRECTORY name found on disk, not a resource
+    # label: an unmanaged skill has no row, so there is no uid to address it
+    # by until adoption mints one.
+    found = _scan(service, agent)
     entry = _find(found, skill_name=skill_name, location=location)
     if entry.foreign_link:
         raise UnmanagedSkillInvalid(skill_name, FOREIGN_LINK_REASON)
@@ -158,8 +162,8 @@ async def adopt_unmanaged(
 
     await enable_skill_for_agent(
         service=service,
-        skill_name=resource.name,
-        agent_name=agent_name,
+        skill_uid=resource.uid,
+        agent_uid=agent.uid,
         force=False,
         actor=actor,
     )
@@ -169,7 +173,7 @@ async def adopt_unmanaged(
 async def delete_unmanaged(
     *,
     service: SkillService,
-    agent_name: str,
+    agent_uid: str,
     skill_name: str,
     location: str,
     actor: str,
@@ -179,20 +183,22 @@ async def delete_unmanaged(
     A foreign symlink is unlinked (its target is never touched); a plain
     directory is removed recursively.
     """
-    found = await _scan(service, agent_name)
+    agent = await service._rs.get(agent_uid)
+    found = _scan(service, agent)
     entry = _find(found, skill_name=skill_name, location=location)
     if entry.path.is_symlink():
         entry.path.unlink()
     else:
         service._rmtree(entry.path)
-    # No ResourceRef: unmanaged entries have no resource row, and arbitrary
-    # on-disk folder names may not satisfy the resource-name pattern.
+    # No ``resource=``: unmanaged entries have no resource row at all, so the
+    # event is recorded against nothing and says in its details what was
+    # removed and from where.
     await service._audit.record(
         AuditEventType.SKILL_UNMANAGED_DELETED.value,
         actor=actor,
         details={
             "name": skill_name,
-            "agent": agent_name,
+            "agent": agent.name,
             "path": str(entry.path),
             "location": location,
         },

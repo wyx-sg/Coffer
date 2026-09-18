@@ -1,6 +1,8 @@
 # Resource Identifier Format — `<kind>:<name>`, Not URN
 
-**Status**: Accepted
+**Status**: Superseded by [Resource Identity Is an Immutable `uid`](resource-identity-is-an-immutable-uid.md) — a resource's identity is now an
+immutable `uid`; `<kind>:<name>` survives only as the human-readable LABEL this
+ADR's naming rules still govern.
 **Date**: 2026-05-20
 **Deciders**: Yuxing Wu
 **Related**: [Resource Framework Upfront](resource-framework-upfront.md)

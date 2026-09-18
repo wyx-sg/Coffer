@@ -54,6 +54,11 @@ WORKER_ACTOR = "system:memory-distil-worker"
 
 DistilCallable = Callable[..., Awaitable[object]]
 EnabledCheck = Callable[[], Awaitable[bool]]
+#: Yields the **uids** of the partitions to sweep. A pass spends a model and
+#: rewrites every note in a directory, so it is aimed at the identity rather
+#: than at a label the user can edit while it runs — and the Distil button
+#: sends the same uid, which is what lets the claim below and the route's claim
+#: collide the way FR-041 needs them to without either side translating.
 PartitionLister = Callable[[], Awaitable[list[str]]]
 
 
@@ -112,23 +117,23 @@ class DistilWorker:
         """One sweep over every partition, or nothing at all when disabled."""
         if not await self._is_enabled():
             return
-        for partition in await self._list_partitions():
+        for uid in await self._list_partitions():
             try:
-                async with self._runs.claimed(KIND_MEMORY, partition) as claimed:
+                async with self._runs.claimed(KIND_MEMORY, uid) as claimed:
                     if not claimed:
                         logger.debug(
                             "memory.distil_worker.partition_busy",
-                            extra={"partition": partition},
+                            extra={"partition_uid": uid},
                         )
                         continue
-                    await self._distil(partition)
+                    await self._distil(uid)
             except asyncio.CancelledError:
                 raise
             except Exception:
                 # One partition failing must not skip the rest.
                 logger.warning(
                     "memory.distil_worker.partition_failed",
-                    extra={"partition": partition},
+                    extra={"partition_uid": uid},
                     exc_info=True,
                 )
 

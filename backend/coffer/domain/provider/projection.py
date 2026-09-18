@@ -70,22 +70,31 @@ CODEX_MODEL_CATALOG_KEY = "model_catalog_json"
 #: value here instead of guessing one for a third-party endpoint.
 CODEX_CATALOG_TRUNCATION_LIMIT = 10_000
 
-#: Prefix of every Coffer-managed ``apiKeyHelper`` — both the per-connection form
-#: (``coffer provider key --connection <name>``) and the legacy wire form
-#: (``--wire anthropic``) still found in older ``settings.json`` files.
+#: Prefix of every Coffer-managed ``apiKeyHelper``: the uid form Coffer writes
+#: (``coffer provider key --connection-uid <uid>``) and the two older forms
+#: still found in ``settings.json`` files on disk — the name form
+#: (``--connection <name>``) and the wire form (``--wire anthropic``).
 #: De-projection removes a helper iff it starts with this, so it never clobbers a
-#: user-owned helper but always reverts ours. Coffer WRITES only the
-#: per-connection form (:func:`anthropic_api_key_helper`); the legacy form is
-#: recognised for removal, never emitted.
+#: user-owned helper but always reverts ours — including one this machine wrote
+#: before the uid existed. Recognising those on the way OUT is not a
+#: compatibility shim: nothing reads them, and a file Coffer wrote is a file
+#: Coffer has to be able to clean up.
 MANAGED_API_KEY_HELPER_PREFIX = "coffer provider key"
 
 
-def anthropic_api_key_helper(connection: str) -> str:
-    """The ``apiKeyHelper`` Coffer projects for Claude Code: fetch the named
-    connection's key on demand (so the raw key is never written to disk). Keyed
-    by CONNECTION, not wire, so the projected agent always reads exactly the key
-    of the connection that was activated — no silent wire+active mismatch."""
-    return f"{MANAGED_API_KEY_HELPER_PREFIX} --connection {connection}"
+def anthropic_api_key_helper(connection_uid: str) -> str:
+    """The ``apiKeyHelper`` Coffer projects for Claude Code: fetch one specific
+    connection's key on demand (so the raw key is never written to disk).
+
+    Keyed by the connection's UID, not its name and not its wire. The wire could
+    not say which connection's key to fetch at all; the name could, until the
+    user renamed the connection and left the agent shelling out to something
+    that no longer resolved — which is why a rename used to have to rewrite
+    this file, and why it no longer has to
+    (ADR resource-identity-is-an-immutable-uid). A uid never changes, so the
+    line stays true for the life of the connection.
+    """
+    return f"{MANAGED_API_KEY_HELPER_PREFIX} --connection-uid {connection_uid}"
 
 
 @dataclass(frozen=True)

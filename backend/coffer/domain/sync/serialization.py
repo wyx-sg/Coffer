@@ -1,8 +1,11 @@
 """Deterministic, kind-agnostic projection of a resource to/from a synced doc.
 
 A *resource document* is the plain-dict form written to
-``resources/<kind>/<name>.yaml`` in the tree the vault converges through, and
-it is identity plus description plus config — nothing else. Determinism is
+``resources/<kind>/<uid>.yaml`` in the tree the vault converges through, and
+it is identity plus description plus config — nothing else. The path is keyed
+on the **uid** and the name lives inside the document, which is what makes a
+rename a modification of one file rather than a deletion beside an addition
+(ADR resource-identity-is-an-immutable-uid). Determinism is
 load-bearing (spec vault-sync "Determinism"): machine-local, churn-prone
 fields (``id``, ``created_at``, ``updated_at``) are excluded and the encoder
 (infrastructure) dumps with sorted keys — so an unchanged vault serializes to
@@ -37,31 +40,33 @@ from typing import Any
 
 from coffer.domain.sync.errors import SyncSerializationError
 
-#: Fields that are part of the document, in canonical order.
-_DOC_FIELDS = ("kind", "name", "description", "config")
+#: Fields that are part of the document, in canonical order. ``uid`` leads
+#: because it is the identity — everything after it is something the identity
+#: has, including the name.
+_DOC_FIELDS = ("uid", "kind", "name", "description", "config")
 
-#: Fields this build reads and then throws away — the reach fields older builds
-#: wrote into the document.
-#:
-#: Ignoring them is the point, not an oversight left behind. The shared tree
-#: already holds documents written before reach stopped travelling, and it will
-#: keep receiving freshly written ones from every machine in the remote that
-#: has not upgraded yet. Refusing them the way an unknown field is refused
-#: would quarantine those documents on every machine that *has* upgraded, so
-#: one stale machine would stall convergence for all of them. They are named
-#: here, read, and dropped.
-#:
-#: The applier reaches the same outcome by a different route — it reads the
-#: keys it wants straight off the YAML and never calls this parser — so this
-#: leniency is what :meth:`BundlePort.read_resource_docs` gives a caller that
-#: wants the whole document, not the gate the import path passes through.
-_IGNORED_FIELDS = ("enabled", "scope")
+# NOTE — there is no ignored-field list here any more, and the layout version
+# is why. It used to name ``enabled`` and ``scope``, the reach fields older
+# builds wrote into the document, and read-and-drop them rather than refusing
+# them: a shared tree still receiving documents from an un-upgraded machine
+# would otherwise have quarantined them on every machine that *had* upgraded,
+# and one stale machine would have stalled convergence for all of them.
+#
+# Bumping the bundle layout to 2 (``manifest.SCHEMA_VERSION``) retires that
+# argument outright, because an un-upgraded machine no longer writes into this
+# tree at all — it reads the manifest, finds a layout it does not know, and
+# refuses the remote before it imports or exports anything. The only documents
+# that can arrive here now are ones a build with this layout wrote, and such a
+# build never emits a reach field. So an unexpected key is once again what it
+# reads like: a typo'd document that would import as something other than what
+# it says, and it is refused.
 
 
 @dataclass(frozen=True)
 class ResourceDoc:
     """The exported projection of a resource: identity + description + config."""
 
+    uid: str
     kind: str
     name: str
     description: str | None
@@ -70,6 +75,7 @@ class ResourceDoc:
 
 def resource_to_doc(
     *,
+    uid: str,
     kind: str,
     name: str,
     description: str | None,
@@ -77,8 +83,17 @@ def resource_to_doc(
 ) -> dict[str, Any]:
     """Project a resource into its canonical bundle-document dict.
 
+    ``uid`` is emitted even though the document's own path is named after it,
+    because the path is the tree's filing and the document is what the vault
+    reads: a machine applying a removal has only the path, and a machine
+    applying an upsert reads the document, and both have to reach the same
+    identity. Writing it twice is also what lets the user (or a merge) see the
+    identity in a diff of the file alone.
+
     ``id``/``created_at``/``updated_at`` are intentionally absent — they are
     machine-local and would make two exports of the same vault differ.
+    ``uid`` is emphatically not one of them: it is minted once and never
+    changes, so it is identical on every machine that holds this resource.
 
     ``enabled`` and ``scope`` are absent for a stronger reason than churn: they
     are one thing, the resource's reach, and reach is machine-local. It is set
@@ -91,6 +106,7 @@ def resource_to_doc(
     byte-identical across exports rather than gaining and losing a key.
     """
     return {
+        "uid": uid,
         "kind": kind,
         "name": name,
         "description": description,
@@ -100,13 +116,16 @@ def resource_to_doc(
 
 def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
     """Validate and parse a bundle document back into a ``ResourceDoc``."""
-    missing = [f for f in ("kind", "name", "config") if f not in data]
+    missing = [f for f in ("uid", "kind", "name", "config") if f not in data]
     if missing:
         raise SyncSerializationError(f"document missing field(s): {', '.join(missing)}")
+    uid = data["uid"]
     kind = data["kind"]
     name = data["name"]
     description = data.get("description")
     config = data["config"]
+    if not isinstance(uid, str) or not uid:
+        raise SyncSerializationError("'uid' must be a non-empty string")
     if not isinstance(kind, str) or not kind:
         raise SyncSerializationError("'kind' must be a non-empty string")
     if not isinstance(name, str) or not name:
@@ -115,13 +134,13 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         raise SyncSerializationError("'description' must be a string or null")
     if not isinstance(config, Mapping):
         raise SyncSerializationError("'config' must be a mapping")
-    # Strict about fields nobody has ever written — a typo'd key is a document
-    # that would import as something other than what it says — but deliberately
-    # lenient about the two reach fields, which are read and discarded.
-    extra = [k for k in data if k not in _DOC_FIELDS and k not in _IGNORED_FIELDS]
+    # Strict about every field nobody has ever written: a typo'd key is a
+    # document that would import as something other than what it says.
+    extra = [k for k in data if k not in _DOC_FIELDS]
     if extra:
         raise SyncSerializationError(f"unexpected field(s): {', '.join(sorted(extra))}")
     return ResourceDoc(
+        uid=uid,
         kind=kind,
         name=name,
         description=description,

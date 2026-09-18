@@ -1,7 +1,7 @@
 """Partial-update path for ``ProviderService`` (spec provider-switching).
 
 ``credential_ref`` is immutable — it is the vault address the connection owns,
-and moving it is what ``rename_ops`` exists for. ``protocol`` is NOT immutable:
+and nothing about the connection moves it. ``protocol`` is NOT immutable:
 an endpoint that turns out to speak a different wire than the probe guessed is
 corrected in place rather than deleted and re-entered, key and all.
 
@@ -34,7 +34,7 @@ every scoped kind shares.
 
 Lives here rather than in ``provider/service.py`` because that module is at its
 file-size ceiling; ``ProviderService.update`` stays a thin delegate, mirroring
-``rename``.
+how ``ResourceService`` delegates its own long paths.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
 
 async def update(
     service: ProviderService,
-    name: str,
+    uid: str,
     *,
     protocol: Protocol | None = None,
     base_url: str | None = None,
@@ -65,7 +65,7 @@ async def update(
     actor: str = "api",
 ) -> Resource:
     """Apply a partial update; see the module docstring for what may move."""
-    current = await service.get(name)
+    current = await service.get(uid)
     config = dict(current.config)
     if protocol is not None and protocol.value != config.get("protocol"):
         # Refused, not de-projected — see the module docstring. Re-sending the
@@ -73,7 +73,10 @@ async def update(
         # submits a whole form rather than a diff is never told its unchanged
         # dropdown is a conflict.
         if config.get("is_active"):
-            raise ProviderProtocolLockedWhileActive(name, str(config.get("protocol")))
+            # The connection's NAME in the error, because the message is read
+            # by a person looking at a form they just submitted; the uid it was
+            # addressed by would tell them nothing.
+            raise ProviderProtocolLockedWhileActive(current.name, str(config.get("protocol")))
         config["protocol"] = protocol.value
     if base_url is not None:
         config["base_url"] = base_url
@@ -86,6 +89,4 @@ async def update(
         if not ref:
             raise ProviderCredentialSourceInvalid()
         await asyncio.to_thread(service._credentials.set, str(ref), secret_value)
-    return await service._resources.update_config(
-        service._ref(name), validated, actor, description=description
-    )
+    return await service._resources.update_config(uid, validated, actor, description=description)

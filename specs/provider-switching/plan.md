@@ -83,7 +83,6 @@ application/provider/
                         refuses a stale file
   projection_ops.py     project / de-project one agent type for the service
   update_ops.py         the patch path, including secret rotation
-  rename_ops.py         name, vault entry, audit trail and projection, together
   internal_default_ops.py  the global flag; the model-drop is the engine's
   boot_reconcile.py     the start-up check that a projection is really on disk
   sync_reconcile.py     the post-converge hook that re-projects from the rows
@@ -112,7 +111,7 @@ settings row, its routes and the passes it runs unattended — is spec
 Reach is not in this list on purpose: which agents a connection covers is the
 framework's per-agent scope on the resource row, so it is read through
 `domain/scope.py` and written through the shared scope surface
-(`PUT /api/v1/resources/provider/{name}/scope`, `coffer scope set`).
+(`PUT /api/v1/resources/{uid}/scope`, `coffer scope set provider <name>`).
 
 ### Frontend
 

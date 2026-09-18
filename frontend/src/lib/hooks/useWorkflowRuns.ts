@@ -57,9 +57,13 @@ export function useMachineLabel(): (machineId: string) => string {
 }
 
 /**
- * Create a run from a template, a title and a working directory. The run lands
- * in `draft` — starting it is a separate signal, so the developer can mount
- * inputs before the first node opens.
+ * Create a run from a template's uid and a title. The run lands in `draft` —
+ * starting it is a separate signal, so the developer can mount inputs before
+ * the first node opens.
+ *
+ * The uid rather than the label: the run freezes the template's snapshot at
+ * creation, and the thing it freezes has to be the workflow the developer
+ * picked rather than whatever that label named by the time the request landed.
  *
  * No toast on success: the caller navigates to the new run, which says more
  * than a toast would.

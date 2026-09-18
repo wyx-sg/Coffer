@@ -37,7 +37,7 @@ function run(overrides: Partial<Run> = {}): Run {
   return {
     id: "run-1",
     title: "Ship the delivery engine",
-    template_ref: "workflow:delivery",
+    template_ref: "delivery",
     status: "running",
     version: 3,
     workdir: "/repo",
@@ -58,7 +58,7 @@ describe("WorkflowRunsTable", () => {
   test("a row says what it is, its template, its status and where it got to", () => {
     render(wrap(<WorkflowRunsTable runs={[run()]} onDelete={vi.fn()} />));
     expect(screen.getByText("Ship the delivery engine")).toBeInTheDocument();
-    expect(screen.getByText("workflow:delivery")).toBeInTheDocument();
+    expect(screen.getByText("delivery")).toBeInTheDocument();
     expect(screen.getByText("Running")).toBeInTheDocument();
     // Where it is, is ONE stage — read down the column, not reassembled per
     // row — and it is what the developer called it, never the key.

@@ -42,7 +42,7 @@ from coffer.domain.agent.config_files import (
 )
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigFileNotAllowed
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import ConfigFileStale
 
 # Prefix of a LEGACY memory-projection block marker. Native projection was
@@ -143,9 +143,11 @@ class ConfigFileContent:
 
 
 # Structural type for the agent-lookup dependency — avoids a hard import of
-# AgentService (and keeps this service unit-testable with a fake).
+# AgentService (and keeps this service unit-testable with a fake). Keyed on the
+# agent's uid: every method here is reached from a surface that has already
+# resolved whatever the human typed.
 class _AgentLookup(Protocol):
-    async def get(self, name: str) -> Resource: ...
+    async def get(self, uid: str) -> Resource: ...
 
 
 class AgentConfigFileService:
@@ -160,10 +162,20 @@ class AgentConfigFileService:
         self._audit = audit
         self._store = store
 
-    async def _config_for(self, name: str) -> AgentConfig:
-        # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        resource = await self._agents.get(name)
-        return AgentConfig.model_validate(resource.config)
+    async def _agent(self, uid: str) -> tuple[Resource, AgentConfig]:
+        """The agent row and its parsed config.
+
+        Both halves, because the write paths need the row itself for the audit
+        entry — ``AuditService.record`` is handed the resource, not an
+        identifier it would have to resolve a second time.
+
+        Raises ResourceNotFound (→ 404) when the agent doesn't exist.
+        """
+        resource = await self._agents.get(uid)
+        return resource, AgentConfig.model_validate(resource.config)
+
+    async def _config_for(self, uid: str) -> AgentConfig:
+        return (await self._agent(uid))[1]
 
     def _child_path(self, spec: ConfigFileSpec, relpath: str) -> pathlib.Path:
         """Validated child path: pure relpath rules + resolved containment.
@@ -206,12 +218,12 @@ class AgentConfigFileService:
             modified_at=st.modified_at if st else None,
         )
 
-    async def list_files(self, name: str) -> list[ConfigFileInfo]:
-        cfg = await self._config_for(name)
+    async def list_files(self, uid: str) -> list[ConfigFileInfo]:
+        cfg = await self._config_for(uid)
         return [self._info(spec) for spec in config_files_for(cfg.type, cfg.resolved_config_dir())]
 
-    async def read_file(self, name: str, key: str) -> ConfigFileContent:
-        cfg = await self._config_for(name)
+    async def read_file(self, uid: str, key: str) -> ConfigFileContent:
+        cfg = await self._config_for(uid)
         spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
         if spec.kind is ConfigFileKind.DIRECTORY:
             raise ConfigFileNotAllowed(cfg.type.value, key)
@@ -229,7 +241,7 @@ class AgentConfigFileService:
 
     async def write_file(
         self,
-        name: str,
+        uid: str,
         key: str,
         content: str,
         *,
@@ -247,7 +259,7 @@ class AgentConfigFileService:
         left unchanged), writes atomically keeping a `.bak` of the prior content,
         records an audit entry, and returns the refreshed metadata view.
         """
-        cfg = await self._config_for(name)
+        agent, cfg = await self._agent(uid)
         spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
         if spec.kind is ConfigFileKind.DIRECTORY:
             raise ConfigFileNotAllowed(cfg.type.value, key)
@@ -259,19 +271,19 @@ class AgentConfigFileService:
         self._store.write_text_atomic(spec.path, content)  # atomic + <path>.bak
         await self._audit.record(
             AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"key": spec.key},
         )
         return self._info(spec)
 
-    async def read_child(self, name: str, key: str, relpath: str) -> ConfigFileContent:
+    async def read_child(self, uid: str, key: str, relpath: str) -> ConfigFileContent:
         """Read a child file of a DIRECTORY-type config entry.
 
         Returns ``exists=False``, empty content, and ``fingerprint=""`` when the
         child is missing; never creates the file.
         """
-        cfg = await self._config_for(name)
+        cfg = await self._config_for(uid)
         spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
         if spec.kind is not ConfigFileKind.DIRECTORY:
             raise ConfigFileNotAllowed(cfg.type.value, key)
@@ -290,7 +302,7 @@ class AgentConfigFileService:
 
     async def write_child(
         self,
-        name: str,
+        uid: str,
         key: str,
         relpath: str,
         content: str,
@@ -303,7 +315,7 @@ class AgentConfigFileService:
         Performs an optional stale check, validates content, writes atomically,
         records an audit entry, and returns the refreshed directory listing.
         """
-        cfg = await self._config_for(name)
+        agent, cfg = await self._agent(uid)
         spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
         if spec.kind is not ConfigFileKind.DIRECTORY:
             raise ConfigFileNotAllowed(cfg.type.value, key)
@@ -316,18 +328,18 @@ class AgentConfigFileService:
         self._store.write_text_atomic(path, content)
         await self._audit.record(
             AuditEventType.AGENT_CONFIG_FILE_WRITTEN.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"key": key, "child": relpath},
         )
         return self._info(spec)
 
-    async def delete_child(self, name: str, key: str, relpath: str, *, actor: str = "api") -> None:
+    async def delete_child(self, uid: str, key: str, relpath: str, *, actor: str = "api") -> None:
         """Delete a child file of a DIRECTORY-type config entry (with backup).
 
         Raises `ConfigFileNotAllowed` when the child is missing.
         """
-        cfg = await self._config_for(name)
+        agent, cfg = await self._agent(uid)
         spec = spec_for(cfg.type, key, cfg.resolved_config_dir())  # ConfigFileNotAllowed → 404
         if spec.kind is not ConfigFileKind.DIRECTORY:
             raise ConfigFileNotAllowed(cfg.type.value, key)
@@ -337,7 +349,7 @@ class AgentConfigFileService:
             raise ConfigFileNotAllowed("child", relpath)
         await self._audit.record(
             AuditEventType.AGENT_CONFIG_FILE_DELETED.value,
-            ref=ResourceRef("agent", name),
+            resource=agent,
             actor=actor,
             details={"key": key, "child": relpath},
         )

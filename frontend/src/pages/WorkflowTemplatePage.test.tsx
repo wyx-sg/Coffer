@@ -77,7 +77,7 @@ function threeStages(): TemplateConfig {
 
 function resource(config: TemplateConfig) {
   return {
-    ref: "workflow:delivery",
+    uid: "wf-delivery",
     kind: "workflow",
     name: "delivery",
     description: null,
@@ -120,9 +120,9 @@ function mount(config: TemplateConfig, { search = "" }: { search?: string } = {}
   return render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <MemoryRouter initialEntries={[`/workflows/delivery${search}`]}>
+        <MemoryRouter initialEntries={[`/workflows/wf-delivery${search}`]}>
           <Routes>
-            <Route path="/workflows/:name" element={<WorkflowTemplatePage />} />
+            <Route path="/workflows/:uid" element={<WorkflowTemplatePage />} />
           </Routes>
         </MemoryRouter>
       </TooltipProvider>
@@ -247,7 +247,7 @@ describe("WorkflowTemplatePage", () => {
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
     // Through the resource endpoint, like every other client of every other
     // kind (FR-056) — the editor has no write path of its own.
-    expect(vi.mocked(api.PATCH).mock.calls[0][0]).toBe("/resources/{kind}/{name}");
+    expect(vi.mocked(api.PATCH).mock.calls[0][0]).toBe("/resources/{uid}");
 
     const config = written();
     expect(config.stages[0].nodes[0].name).toBe("Draft the technical design");

@@ -28,10 +28,11 @@ export function AddMcpServerDialog() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [serverErrors, setServerErrors] = useState<string[]>([]);
-  // Names already registered in a prior attempt of THIS import session, so a
-  // retry after a partial failure re-attempts only the servers that failed
-  // instead of re-POSTing the created ones (which would 409 "already exists").
-  const createdRef = useRef<Set<string>>(new Set());
+  // What a prior attempt of THIS import session already registered — name to
+  // uid — so a retry after a partial failure re-attempts only the servers that
+  // failed instead of re-POSTing the created ones (which would 409 "already
+  // exists"), and so a retry that ends with one server still knows where it is.
+  const createdRef = useRef<Map<string, string>>(new Map());
   const importBatch = useImportMcpServers();
 
   const runImport = (servers: ParsedServer[]) => {
@@ -42,7 +43,7 @@ export function AddMcpServerDialog() {
         onSuccess: (created) => {
           setOpen(false);
           if (created.length === 1) {
-            navigate(`/mcp-servers/${encodeURIComponent(created[0])}`);
+            navigate(`/mcp-servers/${encodeURIComponent(created[0].uid)}`);
           }
         },
         onError: (err: unknown) => {
@@ -61,7 +62,7 @@ export function AddMcpServerDialog() {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next) createdRef.current = new Set();
+        if (next) createdRef.current = new Map();
         else setServerErrors([]);
       }}
     >

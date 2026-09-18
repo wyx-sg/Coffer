@@ -18,11 +18,11 @@ export function AgentBulkActions({ agents, onDone }: { agents: AgentOut[]; onDon
   const { t } = useTranslation();
 
   const bulk = useBulkMutate({
-    invalidate: [agentsKey, ...agents.map((a) => agentMcpInstallKey(a.name))],
+    invalidate: [agentsKey, ...agents.map((a) => agentMcpInstallKey(a.uid))],
   });
 
-  const run = async (op: (name: string) => Promise<unknown>) => {
-    await bulk.run(agents, (a) => op(a.name));
+  const run = async (op: (uid: string) => Promise<unknown>) => {
+    await bulk.run(agents, (a) => op(a.uid));
     onDone();
   };
 

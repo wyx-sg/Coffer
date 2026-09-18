@@ -1,24 +1,46 @@
-"""coffer skill ... commands (local-folder import only)."""
+"""coffer skill ... commands (local-folder import only).
+
+Takes NAMES — the skill's, and the agent's where a command names one — and
+resolves each to a uid through ``_resolve`` before it addresses a route
+(ADR resource-identity-is-an-immutable-uid). An UNMANAGED skill is the one
+exception: it is a folder on disk with no resource row, so there is no uid to
+resolve and its directory name is what the route takes.
+"""
 
 from __future__ import annotations
 
 import json as _json
 from typing import Any
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage skills (AgentSkills standard)")
 _console = Console()
 
 
-def _scope_label(skill: dict[str, Any]) -> str:
+def _agent_names(c: httpx.Client) -> dict[str, str]:
+    """``agent uid -> agent name``, read once per command.
+
+    A stored scope holds agent UIDS, and printing those would hand the reader a
+    column of hex they cannot match to anything they typed. The listing is
+    fetched once and every scope on the page is rendered against it, the same
+    way ``coffer scope show`` does it.
+    """
+    r = c.get("/resources", params={"kind": "agent"})
+    r.raise_for_status()
+    return {a["uid"]: a["name"] for a in r.json()["resources"]}
+
+
+def _scope_label(skill: dict[str, Any], agent_names: dict[str, str]) -> str:
     """Render the delivery rule: a skill reaches an agent iff it is enabled and
-    that agent is inside its scope. ``coffer scope set skill:<name>`` edits the
-    scope; ``coffer resource enable/disable skill:<name>`` flips the flag."""
+    that agent is inside its scope. ``coffer scope set skill <name>`` edits the
+    scope; ``coffer resource enable/disable skill <name>`` flips the flag."""
     if not skill["enabled"]:
         return "disabled"
     scope: dict[str, list[str] | None] | None = skill["scope"]
@@ -27,7 +49,11 @@ def _scope_label(skill: dict[str, Any]) -> str:
     agents = scope.get("agents")
     if agents is None:
         return "everywhere"
-    return "agents: " + (", ".join(agents) if agents else "none")
+    # A uid no agent answers to is shown verbatim rather than dropped: it is a
+    # real entry of the stored scope, and hiding it would make the printed reach
+    # narrower than the one the daemon applies.
+    named = [agent_names.get(uid, uid) for uid in agents]
+    return "agents: " + (", ".join(named) if named else "none")
 
 
 @app.command("list")
@@ -41,6 +67,10 @@ def list_cmd(
     with c:
         r = c.get("/skills")
         _cli_client.check(r, verbose=verbose)
+        # Only the rendered table spells a scope out; `--json` hands the stored
+        # uids over untouched, so the lookup is skipped rather than paid for a
+        # caller that is not going to read it.
+        agent_names = {} if output_json else _agent_names(c)
     items = r.json()["items"]
     if output_json:
         typer.echo(_json.dumps(items, indent=2))
@@ -53,7 +83,7 @@ def list_cmd(
         table.add_row(
             it["name"],
             it["source"]["type"],
-            _scope_label(it),
+            _scope_label(it, agent_names),
             delivered or "—",
             it["version_hash"][:12],
         )
@@ -74,7 +104,7 @@ def import_cmd(
         if r.status_code >= 400:
             typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
             raise typer.Exit(2)
-    typer.echo(f"imported: skill:{r.json()['name']}")
+    typer.echo(f"imported: skill {r.json()['name']}")
 
 
 @app.command("show")
@@ -87,11 +117,9 @@ def show(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/skills/{name}")
-        if r.status_code == 404:
-            typer.echo("not found", err=True)
-            raise typer.Exit(4)
+        r = c.get(f"/skills/{resolve_uid(c, 'skill', name, verbose=verbose)}")
         _cli_client.check(r, verbose=verbose)
+        agent_names = {} if output_json else _agent_names(c)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
@@ -101,7 +129,7 @@ def show(
     typer.echo(f"source:      {data['source']['type']}")
     typer.echo(f"master:      {data['master_path']}")
     typer.echo(f"hash:        {data['version_hash']}")
-    typer.echo(f"scope:       {_scope_label(data)}")
+    typer.echo(f"scope:       {_scope_label(data, agent_names)}")
     if data["bindings"]:
         typer.echo("delivered to:")
         for b in data["bindings"]:
@@ -120,19 +148,16 @@ def rm(
     generates answers DELETE with 409 RESOURCE_PROTECTED, and a bare
     ``raise_for_status()`` turned that into an httpx traceback. Routing
     through ``_client.check`` gives this door the same rendered message and
-    exit code ``coffer resource delete skill:<name>`` already gives.
+    exit code ``coffer resource delete skill <name>`` already gives.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
-    if not force and not typer.confirm(f"Really remove skill:{name}?"):
+    if not force and not typer.confirm(f"Really remove skill {name}?"):
         raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/skills/{name}")
-        if r.status_code == 404:
-            typer.echo("not found", err=True)
-            raise typer.Exit(4)
+        r = c.delete(f"/skills/{resolve_uid(c, 'skill', name, verbose=verbose)}")
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"removed: skill:{name}")
+    typer.echo(f"removed: skill {name}")
 
 
 @app.command("unmanaged")
@@ -145,10 +170,7 @@ def unmanaged(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{agent}/unmanaged-skills")
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        r = c.get(f"/agents/{resolve_uid(c, 'agent', agent, verbose=verbose)}/unmanaged-skills")
         _cli_client.check(r, verbose=verbose)
     items = r.json()["items"]
     if output_json:
@@ -179,16 +201,13 @@ def adopt(
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(
-            f"/agents/{agent}/unmanaged-skills/{skill}/adopt",
+            f"/agents/{resolve_uid(c, 'agent', agent)}/unmanaged-skills/{skill}/adopt",
             json={"location": location},
         )
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
         if r.status_code >= 400:
             typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
             raise typer.Exit(2)
-    typer.echo(f"adopted: skill:{r.json()['name']}")
+    typer.echo(f"adopted: skill {r.json()['name']}")
 
 
 @app.command("rm-unmanaged")
@@ -202,19 +221,19 @@ def rm_unmanaged(
 ) -> None:
     """Delete an unmanaged skill folder from the agent's workspace (from disk)."""
     if not force and not typer.confirm(
-        f"Really delete unmanaged skill {skill!r} from agent:{agent}?"
+        f"Really delete unmanaged skill {skill!r} from agent {agent}?"
     ):
         raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/agents/{agent}/unmanaged-skills/{skill}", params={"location": location})
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        r = c.delete(
+            f"/agents/{resolve_uid(c, 'agent', agent)}/unmanaged-skills/{skill}",
+            params={"location": location},
+        )
         if r.status_code >= 400:
             typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
             raise typer.Exit(2)
-    typer.echo(f"deleted: unmanaged skill {skill} (agent:{agent})")
+    typer.echo(f"deleted: unmanaged skill {skill} (agent {agent})")
 
 
 @app.command("verify")

@@ -33,7 +33,7 @@ class _PluginListerPort(Protocol):
     """The read half of ``AgentPluginService`` (structural, so this module does
     not depend on the service's whole surface)."""
 
-    async def list_plugins(self, name: str) -> Any: ...
+    async def list_plugins(self, uid: str) -> Any: ...
 
 
 class AgentPluginSyncState:
@@ -55,7 +55,7 @@ class AgentPluginSyncState:
         docs: list[tuple[str, dict[str, object]]] = []
         for resource in await self._resources.list(kind="agent"):
             try:
-                listing = await self._plugins.list_plugins(resource.name)
+                listing = await self._plugins.list_plugins(resource.uid)
             except Exception:
                 continue
             items = [
@@ -77,6 +77,14 @@ class AgentPluginSyncState:
                 {"name": m.name, "source_type": m.source_type, "source": m.source}
                 for m in getattr(listing, "marketplaces", [])
             ]
+            # The document is still filed and titled under the agent's NAME,
+            # not its uid. A resource document is laid out by uid because a
+            # rename there must converge as a rename rather than as a delete
+            # plus a create; this area has neither consequence — import writes
+            # nothing and delete drops nothing — so the only thing the rel
+            # decides is whether the user can tell whose inventory they are
+            # reading when they open the directory (which is the whole point of
+            # the area).
             docs.append(
                 (
                     resource.name,

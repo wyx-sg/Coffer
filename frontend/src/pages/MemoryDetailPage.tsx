@@ -40,23 +40,29 @@ import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 
 export function MemoryDetailPage() {
   const { t } = useTranslation();
-  const partition = useParams<{ name: string }>().name ?? "";
+  const uid = useParams<{ uid: string }>().uid ?? "";
 
   // `enabled` is a generic Resource field (not on the dedicated partitions
   // endpoint), so ScopeControl's required prop comes from the single-resource
   // read — the only reach state this kind has; the repository path and whether it still resolves DO live on the
   // dedicated endpoint, so those are read from there rather than reaching into
   // the resource's untyped `config`.
-  const resource = useResource("memory", partition);
+  const resource = useResource(uid);
   const partitions = useMemoryPartitions();
-  const row = partitions.data?.find((p) => p.name === partition);
-  const distil = useDistilPartition(partition);
+  const row = partitions.data?.find((p) => p.uid === uid);
+  // The partition's LABEL, which is what the heading and the upkeep run list
+  // both speak. Either read answers it; the resource read is the one that is
+  // certain to be about this uid.
+  const partition = resource.data?.name ?? row?.name ?? "";
+  const distil = useDistilPartition(uid);
   // Whether a pass is running is the DAEMON's answer, not this component's:
   // the mutation's own `isPending` dies with the component, so leaving the
   // page mid-pass and coming back used to show an idle button and invite a
   // second concurrent pass over the same files. The local pending state is
   // still OR-ed in, because it covers the moment between the click and the
   // first poll.
+  // Matched by NAME because that is what a run reports: `/upkeep/runs` names
+  // the folder being rewritten, and the folder is named after the partition.
   const passRunning = useUpkeepRunning("memory", partition);
   const distilling = distil.isPending || passRunning;
 
@@ -73,7 +79,7 @@ export function MemoryDetailPage() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ScopeControl kind="memory" name={partition} enabled={resource.data?.enabled ?? true} />
+            <ScopeControl kind="memory" uid={uid} enabled={resource.data?.enabled ?? true} />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -95,7 +101,7 @@ export function MemoryDetailPage() {
         }
       />
 
-      <MemoryFileTree name={partition} />
+      <MemoryFileTree uid={uid} />
     </div>
   );
 }

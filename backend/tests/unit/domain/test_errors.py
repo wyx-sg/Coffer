@@ -8,13 +8,23 @@ from coffer.domain.errors import (
 )
 
 
-def test_resource_not_found_carries_ref():
-    err = ResourceNotFound("mcp_server", "filesystem")
-    assert err.kind == "mcp_server"
-    assert err.name == "filesystem"
-    assert "mcp_server:filesystem" in str(err)
-    assert isinstance(err, CofferError)
-    assert err.code == "RESOURCE_NOT_FOUND"
+def test_resource_not_found_carries_what_was_looked_for():
+    """The error echoes the caller's own SUBJECT, not a canonical identifier.
+
+    Replaces an assertion that it carried `kind` and `name`: a lookup by uid
+    has no name to report, and one that started from a label the user typed
+    must say that label back or the message helps nobody.
+    """
+    by_uid = ResourceNotFound("9f2c1a7b4e8d4c1fa0b3d5e6f7081920")
+    assert by_uid.subject == "9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
+    assert "9f2c1a7b4e8d4c1fa0b3d5e6f7081920" in str(by_uid)
+
+    by_name = ResourceNotFound.named("mcp_server", "filesystem")
+    assert "mcp_server" in str(by_name)
+    assert "filesystem" in str(by_name)
+
+    assert isinstance(by_uid, CofferError)
+    assert by_uid.code == "RESOURCE_NOT_FOUND"
 
 
 def test_resource_already_exists_carries_ref():

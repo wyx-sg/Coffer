@@ -276,13 +276,24 @@ class NotifyPort(Protocol):
 
 
 class AuditPort(Protocol):
+    """One vault-wide audit row about something this layer did.
+
+    The subject is a ``(kind, name)`` pair and NOT a resource: a run, an
+    attempt and an approval each have an id of their own and no row in
+    ``resources``, so there is no resource identity to file and the pair is
+    recorded as plain text. Spelling that out is the point of the parameter
+    names — the framework's own audit path takes a whole ``Resource`` so a
+    rename cannot split a history, and this layer must not look like it is
+    taking the same road by a shorter name.
+    """
+
     async def record(
         self,
         event_type: str,
         *,
         actor: str,
-        resource_kind: str | None = None,
-        resource_name: str | None = None,
+        subject_kind: str | None = None,
+        subject_name: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None: ...
 
@@ -315,8 +326,15 @@ class ToolClassPort(Protocol):
     ``classify`` returns ``None`` for a tool nothing has judged yet, which the
     gate treats as write-class (FR-036); ``remember`` records the developer's
     answer on the server that serves the tool, so the same question is asked
-    once."""
+    once.
 
-    async def classify(self, server: str, tool: str) -> str | None: ...
+    ``server_name`` is a NAME and not a uid, alone among this release's
+    resource references, because it is split out of the gateway tool prefix
+    ``<server>__<tool>`` — the string an agent read out of ``tools/list`` and
+    typed back. There is no uid on that path to use instead. What makes it
+    safe is where the judgements live: inside the resolved row's own config,
+    never in a table keyed on the label, so a rename carries them."""
 
-    async def remember(self, server: str, tool: str, write_class: str) -> None: ...
+    async def classify(self, server_name: str, tool: str) -> str | None: ...
+
+    async def remember(self, server_name: str, tool: str, write_class: str) -> None: ...

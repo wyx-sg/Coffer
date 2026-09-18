@@ -268,8 +268,10 @@ export interface components {
             conversations: components["schemas"]["ConversationOut"][];
         };
         ChannelBindingOut: {
-            /** @description The channel resource name. */
-            channel: string;
+            /** @description The channel's identity. The conversation row stores this, not the name, so a renamed channel keeps its conversations — and a client follows it to reach the channel. */
+            channel_uid: string;
+            /** @description The channel's current label, resolved when this is read rather than stored, so it says what the channel is called now. Null when the channel has since been deleted: the conversation keeps its binding — it really did arrive over a channel — and there is simply no name left to show for it. */
+            channel: string | null;
             /** @description The IM chat id used as the return address. */
             chat_id: string;
         };

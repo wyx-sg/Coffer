@@ -29,6 +29,7 @@ const deleteMock = vi.mocked(useDeleteWorkflowTemplate);
 
 function template(name: string, stages: string[]): WorkflowTemplate {
   return {
+    uid: `uid-${name}`,
     name,
     description: `${name} flow`,
     enabled: true,
@@ -131,6 +132,7 @@ describe("WorkflowTemplatesPage", () => {
     refuse = false;
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(mutateAsync).toHaveBeenCalledWith("delivery");
+    // By uid: the row's identity, not the label the confirmation printed.
+    expect(mutateAsync).toHaveBeenCalledWith("uid-delivery");
   });
 });

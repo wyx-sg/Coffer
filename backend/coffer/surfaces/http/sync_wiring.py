@@ -39,10 +39,10 @@ from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import (
     CredentialApplier,
-    ResourceApplier,
     StateApplier,
     TreeApplier,
 )
+from coffer.application.sync.appliers_resource import ResourceApplier
 from coffer.application.sync.conflicts import ConflictArbiter
 from coffer.application.sync.convergence import ConvergeRound
 from coffer.application.sync.exporter import SyncExporter

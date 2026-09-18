@@ -170,10 +170,14 @@ class BundlePort(Protocol):
         withheld: Sequence[str] = (),
     ) -> None:
         """Converge ``resources/`` on ``docs`` — one deterministic YAML file
-        per doc, writing only what changed and removing only what ``docs`` no
-        longer names (never a held path).
+        per doc at ``resources/<kind>/<uid>.yaml``, writing only what changed
+        and removing only what ``docs`` no longer names (never a held path).
 
-        ``unserializable`` and ``withheld`` are both ``<kind>/<name>`` refs
+        Filed under the resource's uid rather than its name, so a rename edits
+        one file instead of removing one and adding another
+        (ADR resource-identity-is-an-immutable-uid).
+
+        ``unserializable`` and ``withheld`` are both ``<kind>/<uid>`` refs
         absent from ``docs`` for a reason that is not a deletion, so their
         paths survive: one could not be rendered, the other declined to travel
         row by row (``Kind.converges_row``)."""

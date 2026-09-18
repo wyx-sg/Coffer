@@ -83,6 +83,11 @@ class ChannelDiagnosticOut(BaseModel):
 
 
 class ChannelStatusOut(BaseModel):
+    #: The channel's identity — what every route addresses and what the public
+    #: callback path is keyed by.
+    uid: str
+    #: A mutable label. It is what the page, the CLI and every error message
+    #: about this channel show, because a uid in front of a person is a dead end.
     name: str
     channel_type: str
     enabled: bool
@@ -118,15 +123,15 @@ class EventAcceptedOut(BaseModel):
     accepted: bool
 
 
-@router.post("/{name}/pairing-code", response_model=PairingCodeOut)
-async def issue_pairing_code(name: str, actor: str = Depends(get_actor)) -> PairingCodeOut:
-    code, expires_at, pair_url = await get_channel_service().issue_pairing_code(name, actor=actor)
+@router.post("/{uid}/pairing-code", response_model=PairingCodeOut)
+async def issue_pairing_code(uid: str, actor: str = Depends(get_actor)) -> PairingCodeOut:
+    code, expires_at, pair_url = await get_channel_service().issue_pairing_code(uid, actor=actor)
     return PairingCodeOut(code=code, expires_at=expires_at, pair_url=pair_url)
 
 
-@router.get("/{name}/status", response_model=ChannelStatusOut)
-async def channel_status(name: str) -> ChannelStatusOut:
-    status = await get_channel_service().status(name)
+@router.get("/{uid}/status", response_model=ChannelStatusOut)
+async def channel_status(uid: str) -> ChannelStatusOut:
+    status = await get_channel_service().status(uid)
     peer = (
         ChannelPeerOut(
             chat_id=status.peer.chat_id,
@@ -154,6 +159,7 @@ async def channel_status(name: str) -> ChannelStatusOut:
         else None
     )
     return ChannelStatusOut(
+        uid=status.uid,
         name=status.name,
         channel_type=status.channel_type,
         enabled=status.enabled,
@@ -169,21 +175,25 @@ async def channel_status(name: str) -> ChannelStatusOut:
     )
 
 
-@router.post("/{name}/notify", response_model=NotifyOut)
-async def notify_channel(name: str, body: NotifyIn, actor: str = Depends(get_actor)) -> NotifyOut:
-    await get_channel_service().notify(name, body.text, actor=actor, chat_id=body.chat_id)
+@router.post("/{uid}/notify", response_model=NotifyOut)
+async def notify_channel(uid: str, body: NotifyIn, actor: str = Depends(get_actor)) -> NotifyOut:
+    await get_channel_service().notify(uid, body.text, actor=actor, chat_id=body.chat_id)
     return NotifyOut(sent=True)
 
 
-@router.post("/{name}/callback-test", response_model=CallbackTestOut)
-async def test_channel_callback(name: str) -> CallbackTestOut:
+@router.post("/{uid}/callback-test", response_model=CallbackTestOut)
+async def test_channel_callback(uid: str) -> CallbackTestOut:
     """Probe a SeaTalk channel's public callback URL end to end."""
-    result = await get_channel_service().test_callback(name)
+    result = await get_channel_service().test_callback(uid)
     return CallbackTestOut(ok=result.ok, detail=result.detail)
 
 
-@router.post("/{name}/events", response_model=EventAcceptedOut)
-async def ingest_channel_event(name: str, envelope: dict[str, Any]) -> EventAcceptedOut:
-    """Verified SeaTalk events forwarded by the callback listener."""
-    await get_channel_service().ingest_event(name, envelope)
+@router.post("/{uid}/events", response_model=EventAcceptedOut)
+async def ingest_channel_event(uid: str, envelope: dict[str, Any]) -> EventAcceptedOut:
+    """Verified SeaTalk events forwarded by the callback listener.
+
+    The listener addresses this by uid because the public callback path it
+    serves is itself keyed by uid — that URL is registered by hand on SeaTalk's
+    platform, so it is the last place a mutable label belongs."""
+    await get_channel_service().ingest_event(uid, envelope)
     return EventAcceptedOut(accepted=True)

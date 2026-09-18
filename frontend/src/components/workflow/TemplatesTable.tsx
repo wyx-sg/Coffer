@@ -83,7 +83,7 @@ export function TemplatesTable({ templates, isLoading = false, onDelete }: Props
             disabled={busy}
             aria-label={t("workflow.templates.enabledAria", { name: row.name })}
             onCheckedChange={(next) => {
-              const input = { kind: WORKFLOW_TEMPLATE_KIND, name: row.name };
+              const input = { kind: WORKFLOW_TEMPLATE_KIND, uid: row.uid };
               if (next) enable.mutate(input);
               else disable.mutate(input);
             }}
@@ -109,12 +109,12 @@ export function TemplatesTable({ templates, isLoading = false, onDelete }: Props
       rows={templates}
       isLoading={isLoading}
       columns={columns}
-      rowKey={(row) => row.name}
+      rowKey={(row) => row.uid}
       search={{
         accessor: (row) => `${row.name} ${row.description ?? ""} ${stageNames(row)}`,
         placeholder: t("workflow.templates.searchPlaceholder"),
       }}
-      onRowClick={(row) => navigate(`/workflows/${encodeURIComponent(row.name)}`)}
+      onRowClick={(row) => navigate(`/workflows/${encodeURIComponent(row.uid)}`)}
       emptyMessage={t("workflow.templates.noMatches")}
     />
   );

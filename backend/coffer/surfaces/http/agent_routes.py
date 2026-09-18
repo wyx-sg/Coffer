@@ -28,8 +28,11 @@ class AgentCreate(BaseModel):
     # Optional. When omitted the server derives a stable default from the type
     # (mirrors auto-detect naming, e.g. claude_code -> claude-code). When a
     # name IS supplied it must follow `Resource.name` rules: a short identifier
-    # of alphanumerics, underscores, and hyphens (no slashes — names appear in
-    # URL paths and must not introduce route ambiguity).
+    # of alphanumerics, underscores, and hyphens. A name no longer addresses
+    # anything — routes take the uid — but the framework keeps the rule while
+    # three other kinds still turn a name into a directory
+    # (ADR resource-identity-is-an-immutable-uid), and an agent is not the kind
+    # to make an exception of.
     name: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     # Optional override of the agent's config directory. When omitted the server
     # uses the type's standard location (~/.claude, ~/.codex). Skills are
@@ -55,6 +58,12 @@ class AgentPatch(BaseModel):
 
 
 class AgentOut(BaseModel):
+    # The agent's identity, and what every other route addresses it by
+    # (ADR resource-identity-is-an-immutable-uid). ``name`` travels beside it as
+    # the label a person reads — the two are never interchangeable, which is
+    # exactly why both are here: a client that stores one of them for later must
+    # store the uid, and a client that prints one must print the name.
+    uid: str
     name: str
     type: AgentType
     # The agent's config directory — where its config files live and, under
@@ -95,6 +104,7 @@ class AgentCandidatesOut(BaseModel):
 def _to_out(r: Resource) -> AgentOut:
     cfg = AgentConfig.model_validate(r.config)
     return AgentOut(
+        uid=r.uid,
         name=r.name,
         type=cfg.type,
         config_dir=str(cfg.resolved_config_dir()),
@@ -131,7 +141,7 @@ async def register_agent(
     return _to_out(r)
 
 
-# Declared before GET /{name} so "candidates" isn't captured as an agent name.
+# Declared before GET /{uid} so "candidates" isn't captured as an agent uid.
 @router.get("/candidates", response_model=AgentCandidatesOut)
 async def list_candidates(
     svc: AutoDetectService = Depends(get_auto_detect_service),  # noqa: B008
@@ -156,17 +166,17 @@ async def list_candidates(
     )
 
 
-@router.get("/{name}", response_model=AgentOut)
+@router.get("/{uid}", response_model=AgentOut)
 async def get_agent(
-    name: str,
+    uid: str,
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
 ) -> AgentOut:
-    return _to_out(await svc.get(name))
+    return _to_out(await svc.get(uid))
 
 
-@router.patch("/{name}", response_model=AgentOut)
+@router.patch("/{uid}", response_model=AgentOut)
 async def update_agent(
-    name: str,
+    uid: str,
     body: AgentPatch,
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
     actor: str = Depends(_actor),
@@ -175,11 +185,11 @@ async def update_agent(
     # from "field explicitly set to null". A PATCH that omits `config_dir`
     # must preserve any existing override, not reset it to the default.
     sent = body.model_fields_set
-    r = await svc.get(name)
+    r = await svc.get(uid)
     if "config_dir" in sent or "description" in sent:
         current = AgentConfig.model_validate(r.config)
         r = await svc.update_config_dir(
-            name=name,
+            uid=uid,
             new_config_dir=body.config_dir if "config_dir" in sent else current.config_dir,
             actor=actor,
             description=body.description if "description" in sent else r.description,
@@ -188,7 +198,7 @@ async def update_agent(
         # Per-agent model binding (E3). An explicit null fast_model clears the
         # fast slot; the caller re-activates the connection to re-project.
         r = await svc.set_model_binding(
-            name=name,
+            uid=uid,
             model=body.model if "model" in sent else None,
             fast_model=body.fast_model if "fast_model" in sent else None,
             clear_fast_model="fast_model" in sent and body.fast_model is None,
@@ -198,11 +208,11 @@ async def update_agent(
     return _to_out(r)
 
 
-@router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_agent(
-    name: str,
+    uid: str,
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> Response:
-    await svc.remove(name=name, actor=actor)
+    await svc.remove(uid=uid, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

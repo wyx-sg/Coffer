@@ -61,11 +61,16 @@ class FakeSupervisor:
 
 
 class FakeResources:
-    async def get(self, ref: Any) -> Resource:
+    async def get(self, uid: str) -> Resource:
+        """The identity path — here, only to label a built-in call's actor."""
+        return await self.get_by_name("agent", uid.removeprefix("uid-"))
+
+    async def get_by_name(self, kind: str, name: str) -> Resource:
         return Resource(
             id=1,
-            kind="mcp_server",
-            name=ref.name,
+            uid=f"uid-{name}",
+            kind=kind,
+            name=name,
             description=None,
             config={},
             enabled=True,
@@ -147,7 +152,7 @@ CALL: dict[str, Any] = {
 
 
 async def _initialize(session: MCPGatewaySession, *, run: str | None) -> None:
-    meta: dict[str, Any] = {"coffer/cwd": "/work/repo", "coffer/agent": "claude_code"}
+    meta: dict[str, Any] = {"coffer/cwd": "/work/repo", "coffer/agent-uid": "uid-claude-code"}
     if run is not None:
         meta["coffer/run"] = run
     await session.handle_initialize({"protocolVersion": "x", "_meta": meta})

@@ -32,6 +32,7 @@ _NOW = datetime(2026, 9, 11, tzinfo=UTC)
 def _agent(config_dir: pathlib.Path) -> Resource:
     return Resource(
         id=1,
+        uid="bd93f0a1c2e34556778899aabbccddee",
         kind="agent",
         name="cx",
         description=None,
@@ -47,13 +48,28 @@ def _text(*ids: str) -> list[CuratedModel]:
     return [CuratedModel(id=i) for i in ids]
 
 
-def _connection(models: list[CuratedModel]) -> ProviderConfig:
-    return ProviderConfig(
+def _connection(models: list[CuratedModel]) -> tuple[Resource, ProviderConfig]:
+    """The connection ROW and its parsed config, which is what the projector
+    takes: the row carries the identity the projection writes down (and the
+    label Codex shows), the config carries the endpoint."""
+    cfg = ProviderConfig(
         protocol=Protocol.OPENAI,
         base_url="https://gw.example/v1",
         credential_ref="provider/agnes/key",
         models=models,
     )
+    resource = Resource(
+        id=2,
+        uid="0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+        kind="provider",
+        name="agnes",
+        description=None,
+        config=cfg.model_dump(mode="json"),
+        enabled=True,
+        created_at=_NOW,
+        updated_at=_NOW,
+    )
+    return resource, cfg
 
 
 def _projector() -> ProviderProjector:
@@ -71,9 +87,9 @@ def test_activate_then_deactivate_adds_and_retires_the_catalog(tmp_path: pathlib
     agents = [_agent(cfg)]
     projector = _projector()
 
-    assert projector.project_type(
-        "agnes", _connection(_text("fast", "pro")), agents, AgentType.CODEX
-    ) == ["cx"]
+    assert projector.project_type(*_connection(_text("fast", "pro")), agents, AgentType.CODEX) == [
+        "cx"
+    ]
     doc = tomllib.loads((cfg / "config.toml").read_text())
     assert doc["model_catalog_json"] == str(_catalog(cfg))
     assert doc["approval_policy"] == "never"  # the user's own key survives
@@ -89,6 +105,25 @@ def test_activate_then_deactivate_adds_and_retires_the_catalog(tmp_path: pathlib
     assert not _catalog(cfg).exists()
 
 
+def test_codexs_provider_label_is_the_connections_name(tmp_path: pathlib.Path) -> None:
+    """The one place a connection's NAME still reaches into another tool's file.
+
+    It is a label in Codex's own provider picker, read by a person, so the uid
+    would be worse than useless there. Nothing resolves it — Coffer owns the
+    block by its ``coffer`` id, and the key comes from ``env_key`` — so a rename
+    leaves it cosmetically stale until the next projection and breaks nothing.
+    That is what lets rename be one column: the OTHER place the name was written
+    out, Claude Code's ``apiKeyHelper``, carries the uid instead.
+    """
+    cfg = tmp_path / ".codex"
+    cfg.mkdir()
+
+    _projector().project_type(*_connection(_text("fast")), [_agent(cfg)], AgentType.CODEX)
+
+    doc = tomllib.loads((cfg / "config.toml").read_text())
+    assert doc["model_providers"]["coffer"]["name"] == "Coffer (agnes)"
+
+
 def test_an_uncurated_connection_leaves_codex_own_model_list_alone(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -96,7 +131,7 @@ def test_an_uncurated_connection_leaves_codex_own_model_list_alone(
     cfg.mkdir()
     agents = [_agent(cfg)]
 
-    _projector().project_type("agnes", _connection([]), agents, AgentType.CODEX)
+    _projector().project_type(*_connection([]), agents, AgentType.CODEX)
 
     doc = tomllib.loads((cfg / "config.toml").read_text())
     assert doc["model_provider"] == "coffer"  # the connection IS projected …
@@ -114,8 +149,7 @@ def test_only_the_text_models_reach_codex_own_picker(tmp_path: pathlib.Path) -> 
     agents = [_agent(cfg)]
 
     _projector().project_type(
-        "agnes",
-        _connection(
+        *_connection(
             [
                 CuratedModel(id="fast"),
                 CuratedModel(id="embed-1", modality=Modality.EMBEDDING),
@@ -142,8 +176,7 @@ def test_a_connection_curating_no_text_model_leaves_codex_own_list_alone(
     agents = [_agent(cfg)]
 
     _projector().project_type(
-        "agnes",
-        _connection([CuratedModel(id="embed-1", modality=Modality.EMBEDDING)]),
+        *_connection([CuratedModel(id="embed-1", modality=Modality.EMBEDDING)]),
         agents,
         AgentType.CODEX,
     )
@@ -162,12 +195,12 @@ def test_clearing_the_curated_set_retires_the_catalog_on_reprojection(
     agents = [_agent(cfg)]
     projector = _projector()
 
-    projector.project_type("agnes", _connection(_text("fast")), agents, AgentType.CODEX)
+    projector.project_type(*_connection(_text("fast")), agents, AgentType.CODEX)
     assert _catalog(cfg).exists()
 
     # The user unticks every model: "no restriction" must restore Codex's list
     # rather than leave yesterday's catalogue in force.
-    projector.project_type("agnes", _connection([]), agents, AgentType.CODEX)
+    projector.project_type(*_connection([]), agents, AgentType.CODEX)
     assert "model_catalog_json" not in tomllib.loads((cfg / "config.toml").read_text())
     assert not _catalog(cfg).exists()
 
@@ -178,15 +211,15 @@ def test_reprojection_rewrites_only_a_changed_catalog(tmp_path: pathlib.Path) ->
     agents = [_agent(cfg)]
     projector = _projector()
 
-    projector.project_type("agnes", _connection(_text("fast")), agents, AgentType.CODEX)
+    projector.project_type(*_connection(_text("fast")), agents, AgentType.CODEX)
     before = _catalog(cfg).stat().st_mtime_ns
 
     # Identical projection: the boot sweep re-derives this on every start, and
     # churning the file's mtime would hide a projection that had gone missing.
-    projector.project_type("agnes", _connection(_text("fast")), agents, AgentType.CODEX)
+    projector.project_type(*_connection(_text("fast")), agents, AgentType.CODEX)
     assert _catalog(cfg).stat().st_mtime_ns == before
 
-    projector.project_type("agnes", _connection(_text("fast", "pro")), agents, AgentType.CODEX)
+    projector.project_type(*_connection(_text("fast", "pro")), agents, AgentType.CODEX)
     models = json.loads(_catalog(cfg).read_text())["models"]
     assert [m["slug"] for m in models] == ["fast", "pro"]
 
@@ -202,7 +235,7 @@ def test_a_user_owned_catalog_is_never_removed(tmp_path: pathlib.Path) -> None:
     # Activating a connection that curates nothing, then reverting to the
     # built-in login, must leave the user's own catalogue pointer untouched.
     projector = _projector()
-    projector.project_type("agnes", _connection([]), agents, AgentType.CODEX)
+    projector.project_type(*_connection([]), agents, AgentType.CODEX)
     assert tomllib.loads((cfg / "config.toml").read_text())["model_catalog_json"] == str(mine)
 
     projector.deproject_type(agents, AgentType.CODEX)

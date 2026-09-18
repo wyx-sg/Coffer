@@ -22,6 +22,7 @@ from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.infrastructure.chat.adapter_support import (
+    ChannelNameResolver,
     ConversationEnv,
     MemoryContextComposer,
     ModelLister,
@@ -68,6 +69,7 @@ class CodexAppServerProvider:
         transcriber_factory: TranscriberFactory | None = None,
         list_models: ModelLister | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
+        resolve_channel_name: ChannelNameResolver | None = None,
         conversation_env: ConversationEnv | None = None,
     ) -> None:
         self._conversations = conversations
@@ -88,6 +90,11 @@ class CodexAppServerProvider:
         # answering a phone had no idea it was on one.
         self._list_models = list_models
         self._compose_memory_context = compose_memory_context
+        # Turns the conversation's stored channel uid into the name the system
+        # prompt reads. ``None`` ⇒ a channel turn still gets its channel append,
+        # just without naming the channel — the uid is what decides that it IS a
+        # channel turn, and the label was only ever colour.
+        self._resolve_channel_name = resolve_channel_name
         # None ⇒ the agent process gets only what the key injection below adds,
         # which is what every conversation a person is driving gets.
         self._conversation_env = conversation_env
@@ -154,11 +161,12 @@ class CodexAppServerProvider:
 
         system_context = await compose_system_context(
             agent_key=self.agent_key,
-            channel_name=conv.channel_name or "",
+            channel_uid=conv.channel_uid or "",
             cwd=config.cwd,
             model=config.model,
             list_models=self._list_models,
             compose_memory=self._compose_memory_context,
+            resolve_channel_name=self._resolve_channel_name,
         )
 
         return CodexAppServerAdapter(

@@ -12,6 +12,11 @@
 //      is hidden here (it IS the gateway hookup), duplicate-of-Coffer entries
 //      get an inline hint (informational only), and unparseable config files
 //      surface as a banner.
+//
+// The tab takes the whole agent rather than one field of it, because it needs
+// both halves of its identity: every request here is addressed to the UID,
+// while the credential refs the adopt path mints spell the NAME. The fixture
+// keeps the two apart (`u-cc` / `cc`).
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
@@ -19,7 +24,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AgentMcpServersTab } from "./AgentMcpServersTab";
-import type { McpEntriesResponse, McpEntryOut } from "@/lib/api/agents";
+import type { AgentOut, McpEntriesResponse, McpEntryOut } from "@/lib/api/agents";
 import en from "@/i18n/locales/en.json";
 import zh from "@/i18n/locales/zh.json";
 
@@ -33,6 +38,16 @@ vi.mock("@/lib/api/agents", () => ({
 }));
 const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
+
+const AGENT: AgentOut = {
+  uid: "u-cc",
+  name: "cc",
+  type: "claude_code",
+  config_dir: "/home/u/.claude",
+  description: null,
+  created_at: "2026-05-22T00:00:00Z",
+  updated_at: "2026-05-22T00:00:00Z",
+};
 
 const ENTRY_BASE = {
   command: null,
@@ -94,7 +109,7 @@ function renderTab() {
       <MemoryRouter>{children}</MemoryRouter>
     </QueryClientProvider>
   );
-  return render(<AgentMcpServersTab agentName="cc" />, { wrapper: Wrapper });
+  return render(<AgentMcpServersTab agent={AGENT} />, { wrapper: Wrapper });
 }
 
 afterEach(() => vi.clearAllMocks());
@@ -190,7 +205,7 @@ describe("AgentMcpServersTab", () => {
     expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
   });
 
-  test("delete flows through the confirm dialog and passes the entry's source", async () => {
+  test("delete flows through the confirm dialog with the agent uid and the entry's source", async () => {
     stub();
     renderTab();
     await screen.findByText("github");
@@ -207,7 +222,9 @@ describe("AgentMcpServersTab", () => {
     // Nothing is written until the confirm button is pressed.
     expect(api.removeMcpEntry).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(api.removeMcpEntry).toHaveBeenCalledWith("cc", "github", "global"));
+    await waitFor(() =>
+      expect(api.removeMcpEntry).toHaveBeenCalledWith("u-cc", "github", "global"),
+    );
   });
 
   test("cancelling the delete dialog writes nothing", async () => {

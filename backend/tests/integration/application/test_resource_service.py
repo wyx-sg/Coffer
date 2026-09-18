@@ -11,7 +11,7 @@ from coffer.domain.errors import (
     ResourceNotFound,
     UnknownKind,
 )
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind, Resource
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -58,6 +58,10 @@ async def test_register_persists_and_audits(tmp_path):
         actor="cli",
     )
     assert r.id != 0
+    # register MINTS the identity, and it is not derived from anything the user
+    # can change: two resources with the same name in different kinds, or one
+    # renamed later, never collide here.
+    assert r.uid
     assert r.kind == "fake_kind"
     assert r.config == {"foo": 1, "bar": "hello"}
     assert r.enabled is True
@@ -68,6 +72,30 @@ async def test_register_persists_and_audits(tmp_path):
     assert entries[0].resource_kind == "fake_kind"
     assert entries[0].resource_name == "t"
     assert entries[0].actor == "cli"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_register_mints_a_distinct_uid_per_resource(tmp_path):
+    svc, _, engine = await _service(tmp_path)
+    a = await svc.register(kind="fake_kind", name="a", config={"foo": 1}, actor="cli")
+    b = await svc.register(kind="fake_kind", name="b", config={"foo": 1}, actor="cli")
+    assert a.uid != b.uid
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_register_accepts_a_supplied_uid_for_the_sync_applier(tmp_path):
+    """``uid=`` has exactly one caller: the sync applier, putting a resource
+    this vault has not seen before at the identity the other machine already
+    gave it. Without that, the same resource on two machines would be two
+    resources and every reference to it would resolve on only one of them."""
+    svc, _, engine = await _service(tmp_path)
+    r = await svc.register(
+        kind="fake_kind", name="t", config={"foo": 1}, actor="sync", uid="from-the-other-machine"
+    )
+    assert r.uid == "from-the-other-machine"
+    assert (await svc.get("from-the-other-machine")).name == "t"
     await engine.dispose()
 
 
@@ -120,9 +148,9 @@ async def test_generic_register_rejects_lifecycle_kind(tmp_path):
         # lifecycle kind's config behind its owning service (the row would
         # desync from the on-disk artifact). The owning service opts in.
         with pytest.raises(GenericCreateNotAllowed):
-            await svc.update_config(ResourceRef("skill", "t"), new_config={"foo": 2}, actor="cli")
+            await svc.update_config(r.uid, new_config={"foo": 2}, actor="cli")
         updated = await svc.update_config(
-            ResourceRef("skill", "t"),
+            r.uid,
             new_config={"foo": 2},
             actor="skill-service",
             allow_lifecycle_kind=True,
@@ -207,10 +235,14 @@ async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
 @pytest.mark.asyncio
 async def test_find_credential_citations_lists_referencing_resources(tmp_path):
     """find_credential_citations scans every resource's config (via each kind's
-    credential_ref_extractor) and returns the refs that cite a given credential
-    — so the credential-delete route can refuse with the citing names. A
-    credential nothing references yields an empty list; kinds without an
-    extractor are skipped, not crashed.
+    credential_ref_extractor) and returns the RESOURCES that cite a given
+    credential — so the credential-delete route can refuse and name them back
+    to the user. A credential nothing references yields an empty list; kinds
+    without an extractor are skipped, not crashed.
+
+    It returns whole resources rather than identifiers because both callers
+    want more than the identity: the 409 names the citing resources, and the
+    orphan-release check only asks whether the list is empty.
     """
 
     class _SecretConfig(BaseModel):
@@ -249,15 +281,18 @@ async def test_find_credential_citations_lists_referencing_resources(tmp_path):
             audit=audit,
             credentials=_FakeKeyring(),
         )
-        await svc.register(kind="vault", name="a", config={"secret_ref": "k1"}, actor="cli")
-        await svc.register(kind="vault", name="b", config={"secret_ref": "k1"}, actor="cli")
+        a = await svc.register(kind="vault", name="a", config={"secret_ref": "k1"}, actor="cli")
+        b = await svc.register(kind="vault", name="b", config={"secret_ref": "k1"}, actor="cli")
         await svc.register(kind="vault", name="c", config={"secret_ref": "k2"}, actor="cli")
         # An extractor-less kind must be skipped, not crash the scan.
         await svc.register(kind="plain", name="d", config={"foo": 1}, actor="cli")
 
         citing_k1 = await svc.find_credential_citations("k1")
-        names = sorted(str(r) for r in citing_k1)
-        assert names == ["vault:a", "vault:b"]
+        assert all(isinstance(r, Resource) for r in citing_k1)
+        # Identified by uid — the list is a set of resources, not of labels.
+        assert sorted(r.uid for r in citing_k1) == sorted([a.uid, b.uid])
+        # And it carries the labels the 409 message shows the user.
+        assert sorted(r.name for r in citing_k1) == ["a", "b"]
 
         # A credential nothing references → empty list (delete proceeds).
         assert await svc.find_credential_citations("unused") == []
@@ -275,6 +310,9 @@ async def test_register_unknown_kind_raises(tmp_path):
 
 @pytest.mark.asyncio
 async def test_register_duplicate_raises(tmp_path):
+    """The NAME is still unique within a kind — it is a label a user reads, and
+    two skills called the same thing help nobody. Uniqueness is a constraint on
+    the label; it stopped being the identity."""
     svc, _, engine = await _service(tmp_path)
     await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
     with pytest.raises(ResourceAlreadyExists):
@@ -285,26 +323,42 @@ async def test_register_duplicate_raises(tmp_path):
 @pytest.mark.asyncio
 async def test_list_and_get(tmp_path):
     svc, _, engine = await _service(tmp_path)
-    await svc.register(kind="fake_kind", name="a", config={"foo": 1}, actor="cli")
+    a = await svc.register(kind="fake_kind", name="a", config={"foo": 1}, actor="cli")
     await svc.register(kind="fake_kind", name="b", config={"foo": 2}, actor="cli")
 
     all_resources = await svc.list()
     assert {r.name for r in all_resources} == {"a", "b"}
 
-    r = await svc.get(ResourceRef("fake_kind", "a"))
+    r = await svc.get(a.uid)
     assert r.config == {"foo": 1, "bar": "default"}
 
     with pytest.raises(ResourceNotFound):
-        await svc.get(ResourceRef("fake_kind", "nope"))
+        await svc.get("no-such-uid")
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_get_by_name_is_the_label_path(tmp_path):
+    """The one resolution that starts from what a human typed. It reports the
+    LABEL back when nothing answers, because a lookup that began with a name
+    and failed with a uid in the message would help nobody."""
+    svc, _, engine = await _service(tmp_path)
+    created = await svc.register(kind="fake_kind", name="a", config={"foo": 1}, actor="cli")
+
+    assert (await svc.get_by_name("fake_kind", "a")).uid == created.uid
+    assert await svc.find_by_name("fake_kind", "nope") is None
+
+    with pytest.raises(ResourceNotFound, match="no fake_kind named 'nope'"):
+        await svc.get_by_name("fake_kind", "nope")
     await engine.dispose()
 
 
 @pytest.mark.asyncio
 async def test_update_config_audits_with_before_after(tmp_path):
     svc, audit, engine = await _service(tmp_path)
-    await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
+    created = await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
     await svc.update_config(
-        ResourceRef("fake_kind", "t"),
+        created.uid,
         new_config={"foo": 2, "bar": "different"},
         actor="api",
         description="changed",
@@ -320,14 +374,14 @@ async def test_update_config_audits_with_before_after(tmp_path):
 @pytest.mark.asyncio
 async def test_set_enabled_is_idempotent_and_audits_only_on_change(tmp_path):
     svc, audit, engine = await _service(tmp_path)
-    await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
+    created = await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
 
     # idempotent: enabling an already-enabled resource doesn't audit
-    await svc.set_enabled(ResourceRef("fake_kind", "t"), True, actor="api")
+    await svc.set_enabled(created.uid, True, actor="api")
     enabled_events = await audit.query(event_type=AuditEventType.RESOURCE_ENABLED.value)
     assert len(enabled_events) == 0
 
-    await svc.set_enabled(ResourceRef("fake_kind", "t"), False, actor="api")
+    await svc.set_enabled(created.uid, False, actor="api")
     disabled_events = await audit.query(event_type=AuditEventType.RESOURCE_DISABLED.value)
     assert len(disabled_events) == 1
     assert disabled_events[0].actor == "api"
@@ -336,11 +390,13 @@ async def test_set_enabled_is_idempotent_and_audits_only_on_change(tmp_path):
 
 @pytest.mark.asyncio
 async def test_delete_invokes_on_delete_hook_and_audits(tmp_path):
-    calls: list[ResourceRef] = []
-    svc, audit, engine = await _service(tmp_path, on_delete=lambda ref: calls.append(ref))
-    await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
-    await svc.delete(ResourceRef("fake_kind", "t"), actor="cli")
-    assert calls == [ResourceRef("fake_kind", "t")]
+    calls: list[Resource] = []
+    svc, audit, engine = await _service(tmp_path, on_delete=lambda resource: calls.append(resource))
+    created = await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
+    await svc.delete(created.uid, actor="cli")
+    # The hook is handed the row it is cleaning up after, so it has the kind,
+    # the label AND the identity without a lookup that could come back empty.
+    assert [(r.uid, r.kind, r.name) for r in calls] == [(created.uid, "fake_kind", "t")]
     assert await svc.list() == []
 
     entries = await audit.query(event_type=AuditEventType.RESOURCE_DELETED.value)
@@ -351,16 +407,16 @@ async def test_delete_invokes_on_delete_hook_and_audits(tmp_path):
 
 @pytest.mark.asyncio
 async def test_delete_aborts_when_on_delete_raises(tmp_path):
-    def boom(ref: ResourceRef) -> None:
+    def boom(resource: Resource) -> None:
         raise RuntimeError("cleanup failed")
 
     svc, audit, engine = await _service(tmp_path, on_delete=boom)
-    await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
+    created = await svc.register(kind="fake_kind", name="t", config={"foo": 1}, actor="cli")
     with pytest.raises(RuntimeError, match="cleanup failed"):
-        await svc.delete(ResourceRef("fake_kind", "t"), actor="cli")
+        await svc.delete(created.uid, actor="cli")
 
     # Resource still exists
-    r = await svc.get(ResourceRef("fake_kind", "t"))
+    r = await svc.get(created.uid)
     assert r.name == "t"
     # No deletion audit entry
     entries = await audit.query(event_type=AuditEventType.RESOURCE_DELETED.value)
@@ -372,7 +428,7 @@ async def test_delete_aborts_when_on_delete_raises(tmp_path):
 async def test_delete_unknown_resource_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     with pytest.raises(ResourceNotFound):
-        await svc.delete(ResourceRef("fake_kind", "nope"), actor="cli")
+        await svc.delete("no-such-uid", actor="cli")
     await engine.dispose()
 
 
@@ -407,14 +463,14 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
             audit=audit,
             credentials=_EmptyKeyring(),
         )
-        await svc.register(
+        created = await svc.register(
             kind=KIND_KNOWLEDGE,
             name="shopee",
             config={},
             actor="cli",
             allow_lifecycle_kind=True,
         )
-        stored = await svc.get(ResourceRef(KIND_KNOWLEDGE, "shopee"))
+        stored = await svc.get(created.uid)
         # A collection carries no config at all (spec knowledge FR-046).
         assert stored.config == {}
     finally:
@@ -464,17 +520,17 @@ async def test_delete_releases_credentials_only_it_cited(tmp_path):
         kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit, credentials=store
     )
     try:
-        await svc.register("vault", "a", {"secret_ref": "only-mine"}, "t")
-        await svc.register("vault", "b", {"secret_ref": "shared"}, "t")
-        await svc.register("vault", "c", {"secret_ref": "shared"}, "t")
+        a = await svc.register("vault", "a", {"secret_ref": "only-mine"}, "t")
+        b = await svc.register("vault", "b", {"secret_ref": "shared"}, "t")
+        c = await svc.register("vault", "c", {"secret_ref": "shared"}, "t")
 
-        await svc.delete(ResourceRef("vault", "a"), "t")
+        await svc.delete(a.uid, "t")
         assert not store.exists("only-mine")  # released with its only citer
 
-        await svc.delete(ResourceRef("vault", "b"), "t")
+        await svc.delete(b.uid, "t")
         assert store.exists("shared")  # still cited by c
 
-        await svc.delete(ResourceRef("vault", "c"), "t")
+        await svc.delete(c.uid, "t")
         assert not store.exists("shared")  # last citation gone
 
         entries = await audit.query(event_type=AuditEventType.CREDENTIAL_DELETED.value)
@@ -506,10 +562,10 @@ async def test_delete_without_credential_store_is_unaffected(tmp_path):
         audit=AuditService(SqlAlchemyAuditRepo(sm)),
     )
     try:
-        await svc.register("vault", "a", {"secret_ref": "unprobed"}, "t")
-        await svc.delete(ResourceRef("vault", "a"), "t")  # must not raise
+        a = await svc.register("vault", "a", {"secret_ref": "unprobed"}, "t")
+        await svc.delete(a.uid, "t")  # must not raise
         with pytest.raises(ResourceNotFound):
-            await svc.get(ResourceRef("vault", "a"))
+            await svc.get(a.uid)
     finally:
         await engine.dispose()
 
@@ -550,8 +606,10 @@ async def test_register_probes_credentials_off_the_loop_thread(tmp_path) -> None
             audit=AuditService(SqlAlchemyAuditRepo(sm)),
             credentials=_RecordingStore(),
         )
-        await svc.register(kind="vault", name="t", config={"secret_ref": "k1"}, actor="cli")
-        await svc.update_config(ResourceRef("vault", "t"), {"secret_ref": "k2"}, actor="cli")
+        created = await svc.register(
+            kind="vault", name="t", config={"secret_ref": "k1"}, actor="cli"
+        )
+        await svc.update_config(created.uid, {"secret_ref": "k2"}, actor="cli")
     finally:
         await engine.dispose()
     assert len(seen) == 2, "register and update each probe once"

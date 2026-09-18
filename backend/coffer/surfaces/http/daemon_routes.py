@@ -101,11 +101,18 @@ async def get_status(
             # servers with no health row or "unknown" contribute to neither.
             healthy = 0
             unhealthy = 0
+            # Keyed on the uid, never resolved to a name: this payload is a
+            # count of servers, not a list of them, so nothing here is ever
+            # read by a human. Resolving would cost a join to produce labels
+            # that are immediately thrown away — and would reintroduce the very
+            # mismatch this intersection exists to avoid, since the health rows
+            # and the resource rows would then have to agree on a label rather
+            # than on an identity.
             if health_repo is not None:
-                health_by_name = dict(await health_repo.list_all())
-                registered_names = {r.name for r in resources}
-                for name in registered_names:
-                    st = health_by_name.get(name)
+                health_by_uid = dict(await health_repo.list_all())
+                registered_uids = {r.uid for r in resources}
+                for server_uid in registered_uids:
+                    st = health_by_uid.get(server_uid)
                     if st == "healthy":
                         healthy += 1
                     elif st == "failing":

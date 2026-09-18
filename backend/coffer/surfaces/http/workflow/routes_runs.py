@@ -119,7 +119,7 @@ async def create_run(
     (FR-050).
     """
     run = await runs.create_run(
-        template=body.template,
+        template_uid=body.template_uid,
         title=body.title,
         agent=body.agent,
         actor=event_actor(actor),

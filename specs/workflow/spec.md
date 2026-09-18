@@ -149,7 +149,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 ### The template
 
-- **FR-001**: The system MUST register a workflow template as a resource of kind `workflow`, identified `workflow:<name>`, taking the framework's lifecycle, audit, schema validation and sync.
+- **FR-001**: The system MUST register a workflow template as a resource of kind `workflow`, identified by the framework's immutable `uid` ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)), taking the framework's lifecycle, audit, schema validation, rename and sync. Creating a run MUST name the template by that uid; what a run records of it afterwards is its LABEL, frozen at creation and provenance only (FR-010).
 - **FR-002**: A template MUST carry an ordered list of one or more stages, each with a key and a display name chosen by the user.
 - **FR-003**: The system MUST attach no behaviour to any stage key — a stage's meaning is its position in the template and nothing else.
 - **FR-004**: A stage MUST carry an ordered list of nodes; a node names its type, an optional skill to run, optional additional instructions, the artifacts it owes, its approval policy, its failure behaviour and optionally the agent it runs on.
@@ -256,7 +256,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 - **Given** a valid template definition
 - **When** it is registered
-- **Then** it exists as `workflow:<name>` with the framework's lifecycle and an audit entry (FR-001, FR-040)
+- **Then** it exists as a `workflow` resource with its own identity, the framework's lifecycle and an audit entry (FR-001, FR-040)
 
 ### Scenario: a template with any number of stages runs as written
 
@@ -340,7 +340,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 - **Given** a workflow with stages and tasks already authored
 - **When** the developer edits its name and its description on its own page
-- **Then** both change, its stages and tasks are untouched, and the page follows it to the new name (FR-054)
+- **Then** both change, its stages and tasks are untouched, and the page does not move — it was never addressed by the name (FR-054)
 
 ### Scenario: a task is its own conversation, opened from the run
 

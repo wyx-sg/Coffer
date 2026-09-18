@@ -22,7 +22,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
-from coffer.application.channel.ports import ChannelPeer, ChannelThreadConversation
+from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversation
 from coffer.infrastructure.persistence.base import Base
 
 

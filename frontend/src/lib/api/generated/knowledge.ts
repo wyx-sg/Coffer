@@ -183,7 +183,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/knowledge/collections/{name}/curate": {
+    "/api/v1/knowledge/collections/{uid}/curate": {
         parameters: {
             query?: never;
             header?: never;
@@ -242,6 +242,7 @@ export interface components {
         /**
          * @description One collection, as the collection list sees it.
          * @example {
+         *       "uid": "9f2c1a7b4e8d4c1fa0b3d5e6f7081920",
          *       "name": "shopee",
          *       "description": "Internal systems at Shopee — services, data plane, the chains between them.",
          *       "source_count": 61,
@@ -249,7 +250,21 @@ export interface components {
          *     }
          */
         CollectionOut: {
-            /** @description The directory name under the knowledge root, and the Resource name. */
+            /**
+             * @description The collection Resource's immutable identity, and what every route
+             *     addressing this collection takes. A client that has a collection
+             *     from this list never has to look one up by name to act on it.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
+            /**
+             * @description A mutable label, unique among collections, which is also the
+             *     directory name under the knowledge root — a rename moves the
+             *     directory. Use it to display the collection and to build the
+             *     `path` and `collection` arguments of the file routes, which are
+             *     filesystem paths; use `uid` for anything that has to keep pointing
+             *     at this collection.
+             */
             name: string;
             /**
              * @description The first paragraph of the collection's `README.md`, empty when
@@ -527,7 +542,7 @@ export interface components {
             };
         };
         /**
-         * @description No such collection (`KNOWLEDGE_COLLECTION_NOT_FOUND`). An unknown name
+         * @description No such collection (`KNOWLEDGE_COLLECTION_NOT_FOUND`). An unknown uid
          *     is always an error — nothing is conjured into existence by being asked
          *     for (FR-008).
          */
@@ -604,10 +619,14 @@ export interface components {
     };
     parameters: {
         /**
-         * @description The collection's name — which is also the Resource name and the
-         *     top-level directory name under `~/.coffer/knowledge/`.
+         * @description The collection Resource's immutable uid. Not the collection's name:
+         *     that name is also the top-level directory under
+         *     `~/.coffer/knowledge/`, and renaming a collection moves the directory
+         *     with it — so a name is precisely the thing that does not stay put. The
+         *     uid does, and a pass started before a rename is a pass over the same
+         *     collection after it.
          */
-        CollectionName: string;
+        CollectionUid: string;
         /**
          * @description A directory path relative to the knowledge root, carrying the lane: a
          *     collection's `sources` or `topics`, or a folder nested inside one.
@@ -873,10 +892,14 @@ export interface operations {
             };
             path: {
                 /**
-                 * @description The collection's name — which is also the Resource name and the
-                 *     top-level directory name under `~/.coffer/knowledge/`.
+                 * @description The collection Resource's immutable uid. Not the collection's name:
+                 *     that name is also the top-level directory under
+                 *     `~/.coffer/knowledge/`, and renaming a collection moves the directory
+                 *     with it — so a name is precisely the thing that does not stay put. The
+                 *     uid does, and a pass started before a rename is a pass over the same
+                 *     collection after it.
                  */
-                name: components["parameters"]["CollectionName"];
+                uid: components["parameters"]["CollectionUid"];
             };
             cookie?: never;
         };

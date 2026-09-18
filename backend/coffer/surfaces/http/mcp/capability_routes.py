@@ -1,6 +1,12 @@
 """MCP-specific capability list/enable/disable/refresh routes.
 
-The transient upstream health-check route (POST /{name}/test) lives in
+Every route here addresses its server by the resource's immutable ``uid``
+(ADR resource-identity-is-an-immutable-uid) and resolves it to the row once,
+through ``require_mcp_server``. The NAME the row carries is then what goes to
+capability discovery, which is keyed on it because the wire namespace
+``<server>__<tool>`` is built from the label.
+
+The transient upstream health-check route (POST /{uid}/test) lives in
 ``server_test_routes`` to keep this module under the file-size limit.
 """
 
@@ -18,7 +24,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import UpstreamTimeout, UpstreamUnavailable
 from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.persistence import (
     MCPCapabilityPreferenceRepo,
     MCPInvocationRepo,
@@ -39,6 +45,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     get_health_repo,
     get_invocation_repo,
     get_preferences_repo,
+    require_mcp_server,
 )
 from coffer.surfaces.http.schemas import (
     CapabilityKeyBody,
@@ -63,17 +70,20 @@ CapabilityType = Literal["tool", "resource", "prompt"]
 _CAPABILITY_LIST_TIMEOUT = 35.0
 
 
-@router.get("/{name}/capabilities", response_model=CapabilityListOut)
-async def list_capabilities(
-    name: str,
-    discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
-    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
-    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
+async def _capability_list(
+    resource: Resource,
+    discovery: CapabilityDiscovery,
+    prefs: MCPCapabilityPreferenceRepo,
 ) -> CapabilityListOut:
-    """Return the live (cache-aware) capability list for one MCP server.
+    """The live (cache-aware) capability list for one already-resolved server.
 
-    This is the management surface: it returns every discovered capability
-    with its ``enabled`` flag (including disabled ones) so the UI can show and
+    Shared by GET /{uid}/capabilities and POST /{uid}/refresh so the refresh
+    route does not have to re-enter the handler function (and re-resolve, or
+    worse, inherit the handler's ``Depends`` defaults as if they were real
+    collaborators).
+
+    This is the management view: it returns every discovered capability with
+    its ``enabled`` flag (including disabled ones) so the UI can show and
     re-enable them. The three discovery calls run concurrently under a single
     timeout budget (CODE-M2).
 
@@ -85,6 +95,7 @@ async def list_capabilities(
     nothing was ever discovered (no persisted rows) does the upstream failure
     surface as ``UpstreamUnavailable`` (→ UPSTREAM_UNAVAILABLE).
     """
+    name = resource.name
     tasks: list[asyncio.Task[Any]] = [
         asyncio.ensure_future(discovery.list_tools(name, include_disabled=True)),
         asyncio.ensure_future(discovery.list_resources(name, include_disabled=True)),
@@ -103,7 +114,7 @@ async def list_capabilities(
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        cached = await cached_capability_list(name, prefs, resource_service)
+        cached = await cached_capability_list(resource, prefs)
         if cached is not None:
             return cached
         if isinstance(e, TimeoutError):
@@ -112,8 +123,7 @@ async def list_capabilities(
             ) from e
         raise
     except BaseException:
-        # Any other failure (e.g. ResourceNotFound for an unknown server → 404):
-        # reap siblings and let the global handler map it.
+        # Any other failure: reap siblings and let the global handler map it.
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -121,9 +131,27 @@ async def list_capabilities(
     return live_capability_list(name, tools, resources, prompts)
 
 
-@router.get("/{name}/status", response_model=McpServerStatusOut)
+@router.get("/{uid}/capabilities", response_model=CapabilityListOut)
+async def list_capabilities(
+    uid: str,
+    discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
+    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
+    resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
+) -> CapabilityListOut:
+    """Return the live (cache-aware) capability list for one MCP server.
+
+    404s (via ``require_mcp_server``) before any upstream work when the uid
+    names nothing, which is why the response's ``server_name`` is the resolved
+    label rather than the path segment echoed back: a capabilities page headed
+    by an opaque uid would be unreadable.
+    """
+    resource = await require_mcp_server(uid, resource_service)
+    return await _capability_list(resource, discovery, prefs)
+
+
+@router.get("/{uid}/status", response_model=McpServerStatusOut)
 async def get_server_status(
-    name: str,
+    uid: str,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
     prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
     invocations: MCPInvocationRepo = Depends(get_invocation_repo),  # noqa: B008
@@ -132,19 +160,22 @@ async def get_server_status(
     """Per-server status from persisted state — health record (from /test),
     discovered capabilities, or last invocation. Cheap (DB only + one PATH
     lookup); never spawns."""
-    resource = await resource_service.get(ResourceRef("mcp_server", name))
+    resource = await require_mcp_server(uid, resource_service)
     # A stdio launcher that does not resolve on THIS machine (synced server,
     # runner not installed here) — surfaced so the cause is visible.
     runner = await asyncio.to_thread(_missing_runner_of, resource)
 
-    # T7: prefer the persisted health state written by POST /test
-    health = await health_repo.get(name)
+    # T7: prefer the persisted health state written by POST /test. Both the
+    # health record and the invocation log are keyed on the uid, so a renamed
+    # server keeps the status it earned instead of reading "unknown" until the
+    # next test.
+    health = await health_repo.get(resource.uid)
     if health is not None:
         health_status, _ = health
         return McpServerStatusOut(status=health_status, missing_runner=runner)
 
     caps = await prefs.list_for(resource.id)
-    recent = await invocations.query(resource_name=name, limit=1)
+    recent = await invocations.query(resource_uid=resource.uid, limit=1)
     last = recent[0] if recent else None
     state: Literal["healthy", "failing", "unknown"]
     if last is not None and last.status != "ok":
@@ -168,7 +199,7 @@ def _missing_runner_of(resource: Resource) -> str | None:
 
 async def _toggle_capability(
     *,
-    name: str,
+    uid: str,
     capability_type: CapabilityType,
     capability_key: str,
     enabled: bool,
@@ -177,7 +208,7 @@ async def _toggle_capability(
     prefs: MCPCapabilityPreferenceRepo,
     audit: AuditService,
 ) -> Response:
-    resource = await resource_service.get(ResourceRef("mcp_server", name))
+    resource = await require_mcp_server(uid, resource_service)
     updated = await prefs.set_enabled(resource.id, capability_type, capability_key, enabled)
     if updated is None:
         raise HTTPException(
@@ -190,7 +221,7 @@ async def _toggle_capability(
             if enabled
             else AuditEventType.CAPABILITY_DISABLED.value
         ),
-        ref=resource.ref,
+        resource=resource,
         actor=actor,
         details={"capability_type": capability_type, "capability_key": capability_key},
     )
@@ -200,12 +231,12 @@ async def _toggle_capability(
 # Canonical (body-based) form — supports capability_keys containing '/' such as
 # resource URIs (e.g., file:///path/to/x). See CODE-001 in PR #14 review.
 @router.post(
-    "/{name}/capabilities/{capability_type}/enable",
+    "/{uid}/capabilities/{capability_type}/enable",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def enable_capability(
-    name: str,
+    uid: str,
     capability_type: CapabilityType,
     body: CapabilityKeyBody = Body(...),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
@@ -213,9 +244,9 @@ async def enable_capability(
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Enable a specific capability for the named MCP server."""
+    """Enable a specific capability for the MCP server this uid names."""
     return await _toggle_capability(
-        name=name,
+        uid=uid,
         capability_type=capability_type,
         capability_key=body.capability_key,
         enabled=True,
@@ -227,12 +258,12 @@ async def enable_capability(
 
 
 @router.post(
-    "/{name}/capabilities/{capability_type}/disable",
+    "/{uid}/capabilities/{capability_type}/disable",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def disable_capability(
-    name: str,
+    uid: str,
     capability_type: CapabilityType,
     body: CapabilityKeyBody = Body(...),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
@@ -240,9 +271,9 @@ async def disable_capability(
     audit: AuditService = Depends(get_audit_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Disable a specific capability for the named MCP server."""
+    """Disable a specific capability for the MCP server this uid names."""
     return await _toggle_capability(
-        name=name,
+        uid=uid,
         capability_type=capability_type,
         capability_key=body.capability_key,
         enabled=False,
@@ -253,17 +284,20 @@ async def disable_capability(
     )
 
 
-@router.post("/{name}/refresh", response_model=CapabilityListOut)
+@router.post("/{uid}/refresh", response_model=CapabilityListOut)
 async def refresh_capabilities(
-    name: str,
+    uid: str,
     discovery: CapabilityDiscovery = Depends(get_capability_discovery),  # noqa: B008
+    prefs: MCPCapabilityPreferenceRepo = Depends(get_preferences_repo),  # noqa: B008
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> CapabilityListOut:
     """Invalidate the discovery cache for this server and re-query upstream.
 
-    Returns 404 if the named server is not registered.
+    Returns 404 if the uid names no MCP server.
     """
-    # Raises ResourceNotFound (→ 404) if this server doesn't exist.
-    await resource_service.get(ResourceRef("mcp_server", name))
-    discovery.invalidate(name)
-    return await list_capabilities(name, discovery)
+    resource = await require_mcp_server(uid, resource_service)
+    # The discovery cache is keyed on the name, the same key its upstream
+    # sessions are, so invalidating it means invalidating under the label the
+    # row carries right now.
+    discovery.invalidate(resource.name)
+    return await _capability_list(resource, discovery, prefs)

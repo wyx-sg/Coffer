@@ -171,23 +171,29 @@ def test_missing_channel_type_rejected():
         parse_channel_config({"bot_token_ref": "channel/tg/bot-token"})
 
 
-def test_default_agent_defaults_to_managed_agent():
-    # The builtin chat agent is retired; channels default to a managed
-    # agent. The default must be the provider key ("claude_code", underscore) —
-    # the same key the chat AgentProviderRegistry resolves a turn by — not the
-    # "claude-code" resource name, which would fail with UNKNOWN_AGENT at turn time.
+def test_a_channel_names_no_agent_until_its_owner_picks_one():
+    # ``default_agent`` holds the UID of an agent resource (ADR
+    # resource-identity-is-an-immutable-uid), and there is no constant a schema
+    # could default it to: a uid is minted per vault. So the absent value is
+    # ``None`` — bound to nobody — and not a guess at which agent the owner
+    # meant. The runtime refuses to start such a channel rather than routing it
+    # somewhere it was never told to.
     cfg = parse_channel_config(TELEGRAM_CONFIG)
-    assert cfg.default_agent == "claude_code"
+    assert cfg.default_agent is None
     assert cfg.default_agent_config is None
     seatalk = parse_channel_config(SEATALK_CONFIG)
-    assert seatalk.default_agent == "claude_code"
+    assert seatalk.default_agent is None
 
 
 def test_default_agent_override_kept():
     cfg = parse_channel_config(
-        {**TELEGRAM_CONFIG, "default_agent": "claude", "default_agent_config": {"model": "opus"}}
+        {
+            **TELEGRAM_CONFIG,
+            "default_agent": "9f2c1b7a4e8d4c3f9a0b5d6e7f801234",
+            "default_agent_config": {"model": "opus"},
+        }
     )
-    assert cfg.default_agent == "claude"
+    assert cfg.default_agent == "9f2c1b7a4e8d4c3f9a0b5d6e7f801234"
     assert cfg.default_agent_config == {"model": "opus"}
 
 
@@ -273,7 +279,7 @@ def test_root_model_round_trips_flat_dict():
     assert dumped == {
         "channel_type": "telegram",
         "bot_token_ref": "channel/tg/bot-token",
-        "default_agent": "claude_code",
+        "default_agent": None,
         "default_agent_config": None,
         "require_mention": True,
         "ignore_other_mentions": False,
@@ -286,7 +292,7 @@ def test_root_model_round_trips_seatalk_dict():
     dumped = model.model_dump(mode="json")
     assert dumped == {
         **SEATALK_CONFIG,
-        "default_agent": "claude_code",
+        "default_agent": None,
         "default_agent_config": None,
         "delivery": "webhook",
         "public_base_url": None,

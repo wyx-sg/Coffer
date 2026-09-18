@@ -24,16 +24,16 @@ function isMarkdown(path: string): boolean {
 }
 
 export function AgentMemoryStoreFileViewer({
-  name,
+  agentUid,
   dir,
   path,
 }: {
-  name: string;
+  agentUid: string;
   dir: string;
   path: string;
 }) {
   const { t } = useTranslation();
-  const content = useNativeMemoryFileContent(name, dir, path);
+  const content = useNativeMemoryFileContent(agentUid, dir, path);
 
   if (content.isPending) {
     return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;

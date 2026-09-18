@@ -25,7 +25,6 @@ _STATUS: dict[str, int] = {
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
     "GENERIC_CREATE_NOT_ALLOWED": 409,
-    "RENAME_NOT_SUPPORTED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
     "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)

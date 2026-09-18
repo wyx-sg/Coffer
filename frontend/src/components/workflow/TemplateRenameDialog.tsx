@@ -7,10 +7,13 @@
 // editable field and a heading, which is a worse place to look for a name than
 // the header the name is printed in — so Edit on the header opens this.
 //
-// The name goes through the kind-agnostic PATCH, which renames a kind that
-// declares it may be renamed and refuses one that does not. A workflow may:
-// the only thing that records a template's name is a run's `template_ref`,
-// which is provenance and already dangles when the template is deleted.
+// Both go through the kind-agnostic PATCH, and the name is no more special
+// than the description: a resource is identified by its uid, so its label is
+// an ordinary editable field for every kind (ADR
+// resource-identity-is-an-immutable-uid). Nothing addresses this workflow by
+// what it is called — a run's `template_ref` records the label it was started
+// under as frozen provenance, which is a fact about that run and is meant to
+// keep saying what it said.
 //
 // The description is written in BOTH places on purpose. A workflow carries one
 // as a resource and one inside its config, and the config's is what the page
@@ -38,11 +41,9 @@ interface Props {
   template: WorkflowTemplate;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Where to go when the name changed — the URL carries it. */
-  onRenamed: (name: string) => void;
 }
 
-export function TemplateRenameDialog({ template, open, onOpenChange, onRenamed }: Props) {
+export function TemplateRenameDialog({ template, open, onOpenChange }: Props) {
   const { t } = useTranslation();
   const rename = useRenameWorkflowTemplate();
   const [name, setName] = useState(template.name);
@@ -111,13 +112,12 @@ export function TemplateRenameDialog({ template, open, onOpenChange, onRenamed }
               // Closes only on success: a refused name stays on screen with the
               // reason, rather than vanishing and leaving the old one.
               await rename.mutateAsync({
-                name: template.name,
-                newName: trimmed,
+                uid: template.uid,
+                name: trimmed,
                 description,
                 config: template.config,
               });
               onOpenChange(false);
-              if (trimmed !== template.name) onRenamed(trimmed);
             }}
           >
             {t("common.save")}

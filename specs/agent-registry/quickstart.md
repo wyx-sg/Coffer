@@ -330,7 +330,8 @@ web Agents page. Restart your agent afterward to pick up Coffer's tools.
 ## What happens behind the scenes
 
 - Each agent is stored as a Resource of kind `agent` in Coffer's SQLite
-  database, identified by `agent:<name>`. The kind-agnostic Resource framework
+  database, identified by an immutable `uid`; its name is a label you can
+  change. The kind-agnostic Resource framework
   (spec resource-framework) provides CRUD, validation, and audit.
 - Audit events are recorded for every add / edit / remove and queryable from
   `coffer audit list`.

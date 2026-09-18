@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest
 
-from coffer.application.memory.service import MemoryService
+from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.infrastructure.memory import paths, source_state, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
@@ -106,7 +106,12 @@ def vault(tmp_path: pathlib.Path):  # type: ignore[no-untyped-def]
             model_selector=StubModelSelector(),
         )
 
-    return {"service": service, "completion": completion, "project_root": project_root}
+    return {
+        "service": service,
+        "resources": resources,
+        "completion": completion,
+        "project_root": project_root,
+    }
 
 
 async def _aggregate_then_distil(vault, *, wording: str) -> None:  # type: ignore[no-untyped-def]
@@ -116,7 +121,9 @@ async def _aggregate_then_distil(vault, *, wording: str) -> None:  # type: ignor
     service = vault["service"]()
     await service.aggregate()
     vault["completion"]._responses.extend(_answers(wording=wording))
-    await service.distil(_PARTITION)
+    # Resolved after aggregation: the partition's row (and so its uid) is what
+    # that half creates.
+    await service.distil(vault["resources"].uid_of(KIND_MEMORY, _PARTITION))
 
 
 def _answers(*, wording: str) -> list[str]:
@@ -191,12 +198,10 @@ async def test_a_source_whose_entries_are_gone_is_read_again_however_familiar_it
 
 @pytest.mark.asyncio
 async def test_a_partition_rebuilt_from_scratch_is_registered_again(vault) -> None:  # type: ignore[no-untyped-def]
-    from coffer.application.memory.service import KIND_MEMORY
-
     service = vault["service"]()
     await service.aggregate()
     summaries = {p.name: p for p in await service.list_partitions()}
-    assert KIND_MEMORY and summaries[_PARTITION].repository_path
+    assert summaries[_PARTITION].repository_path
 
     store.delete_partition(_PARTITION)
     await vault["service"]().aggregate()

@@ -31,6 +31,7 @@ from coffer.application.channel.supervision_ports import (
     TunnelControllerPort,
     WebSocketControllerPort,
 )
+from coffer.domain.resource import Resource
 
 _logger = logging.getLogger(__name__)
 
@@ -38,9 +39,24 @@ _logger = logging.getLogger(__name__)
 # start ladder in ``ChannelRuntime`` so one answer covers every retry here.
 FAILURE_RETRY_SECONDS = 30.0
 
-# ``{channel name: (resource id, config)}`` for every enabled channel.
-Desired = dict[str, tuple[int, dict[str, object]]]
+# ``{channel name: resource row}`` for every channel this machine should run.
+# The row itself rather than the two fields the reconcilers used to be handed:
+# they read its ``config``, the runtime also needs its ``id`` and its ``uid``,
+# and a tuple that exists only to carry a subset of a row is a place for the
+# subset to fall behind the row.
+Desired = dict[str, Resource]
 MaterializeFn = Callable[[dict[str, str]], Awaitable[dict[str, str]]]
+
+
+#: What the three reconcilers below key their controllers by: the channel's
+#: **uid**, never its name. Two of the three have a seam the outside world can
+#: see — the callback listener answers a public URL whose last segment is this
+#: key, and the SeaTalk WebSocket holds a register handshake per key — and a
+#: label the owner may rename is the wrong thing on either. The third (the
+#: cloudflared tunnel) follows for one reason: all three read the same desired
+#: set, and one of them keyed differently is a reader away from being keyed
+#: wrongly. The channel's NAME still goes in the log lines, because that is what
+#: the owner calls it.
 
 
 def delivery_of(config: dict[str, object]) -> str:
@@ -93,7 +109,8 @@ async def reconcile_listener(
     """Run the callback listener exactly while a webhook channel wants it."""
     refs: dict[str, str] = {}
     if materialize is not None:
-        for name, (_rid, config) in desired.items():
+        for resource in desired.values():
+            config = resource.config
             # spec channels/seatalk FR-004: only WEBHOOK delivery needs the listener. A deployment
             # whose
             # only SeaTalk channel is websocket must leave it stopped — not
@@ -101,19 +118,19 @@ async def reconcile_listener(
             # transport, and a listener nothing posts to is a port open for
             # nothing.
             if config.get("channel_type") == "seatalk" and delivery_of(config) == "webhook":
-                refs[name] = str(config.get("signing_secret_ref", ""))
+                refs[resource.uid] = str(config.get("signing_secret_ref", ""))
     if refs == latch.refs and (not refs or listener.running()):
         return
     if latch.cooling(wanted=bool(refs)):
         return
     secrets: dict[str, str] = {}
-    for name, ref in refs.items():
+    for uid, ref in refs.items():
         assert materialize is not None  # refs is empty otherwise
         try:
-            secrets[name] = (await materialize({"secret": ref}))["secret"]
+            secrets[uid] = (await materialize({"secret": ref}))["secret"]
         except Exception:
             latch.failed()
-            _logger.exception("channel.listener.secret_failed", extra={"channel": name})
+            _logger.exception("channel.listener.secret_failed", extra={"channel_uid": uid})
             return
     try:
         if secrets:
@@ -136,32 +153,33 @@ async def reconcile_tunnels(
     """Keep one cloudflared child per channel that records a connector token."""
     refs: dict[str, str] = {}
     if materialize is not None:
-        for name, (_rid, config) in desired.items():
+        for resource in desired.values():
+            config = resource.config
             if config.get("channel_type") == "seatalk":
                 ref = str(config.get("tunnel_token_ref") or "")
                 if ref:
-                    refs[name] = ref
+                    refs[resource.uid] = ref
     # Always stop tunnels for channels no longer managed (disabled, deleted, or
     # token-ref cleared), even when the rest is a steady state.
-    for name in tunnel.active() - set(refs):
+    for uid in tunnel.active() - set(refs):
         with contextlib.suppress(Exception):
-            await tunnel.ensure_stopped(name)
+            await tunnel.ensure_stopped(uid)
     if refs == latch.refs and all(tunnel.running(n) for n in refs):
         return
     if latch.cooling(wanted=bool(refs)):
         return
     tokens: dict[str, str] = {}
-    for name, ref in refs.items():
+    for uid, ref in refs.items():
         assert materialize is not None  # refs is empty otherwise
         try:
-            tokens[name] = (await materialize({"token": ref}))["token"]
+            tokens[uid] = (await materialize({"token": ref}))["token"]
         except Exception:
             latch.failed()
-            _logger.exception("channel.tunnel.secret_failed", extra={"channel": name})
+            _logger.exception("channel.tunnel.secret_failed", extra={"channel_uid": uid})
             return
     try:
-        for name, token in tokens.items():
-            await tunnel.ensure_running(name, token)
+        for uid, token in tokens.items():
+            await tunnel.ensure_running(uid, token)
     except Exception:
         # cloudflared missing / spawn failure — retry on the 30s ladder.
         latch.failed()
@@ -185,35 +203,36 @@ async def reconcile_websockets(
     """
     refs: dict[str, tuple[str, str]] = {}
     if materialize is not None:
-        for name, (_rid, config) in desired.items():
+        for resource in desired.values():
+            config = resource.config
             if config.get("channel_type") != "seatalk" or delivery_of(config) != "websocket":
                 continue
             app_id = str(config.get("app_id") or "")
             secret_ref = str(config.get("app_secret_ref") or "")
             if app_id and secret_ref:
-                refs[name] = (app_id, secret_ref)
+                refs[resource.uid] = (app_id, secret_ref)
     # Always drop connections for channels no longer wanted (disabled, deleted,
     # or switched back to webhook), even in a steady state.
-    for name in websockets.active() - set(refs):
+    for uid in websockets.active() - set(refs):
         with contextlib.suppress(Exception):
-            await websockets.ensure_stopped(name)
+            await websockets.ensure_stopped(uid)
     if refs == latch.refs and all(websockets.running(n) for n in refs):
         return
     if latch.cooling(wanted=bool(refs)):
         return
     credentials: dict[str, tuple[str, str]] = {}
-    for name, (app_id, secret_ref) in refs.items():
+    for uid, (app_id, secret_ref) in refs.items():
         assert materialize is not None  # refs is empty otherwise
         try:
             secret = (await materialize({"secret": secret_ref}))["secret"]
         except Exception:
             latch.failed()
-            _logger.exception("channel.websocket.secret_failed", extra={"channel": name})
+            _logger.exception("channel.websocket.secret_failed", extra={"channel_uid": uid})
             return
-        credentials[name] = (app_id, secret)
+        credentials[uid] = (app_id, secret)
     try:
-        for name, (app_id, secret) in credentials.items():
-            await websockets.ensure_running(name, app_id, secret)
+        for uid, (app_id, secret) in credentials.items():
+            await websockets.ensure_running(uid, app_id, secret)
     except Exception:
         latch.failed()
         _logger.exception("channel.websocket.reconcile_failed")

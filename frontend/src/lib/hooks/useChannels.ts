@@ -19,7 +19,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { getChannelStatus, issuePairingCode, notifyChannel } from "@/lib/api/channels";
 import { applyChannelEdit } from "@/components/channel/editChannel";
 import { createChannel } from "@/components/channel/registerChannel";
-import type { ChannelPlan } from "@/components/channel/schema";
+import type { ChannelEditPlan, ChannelPlan } from "@/components/channel/schema";
 import { useResources } from "@/lib/hooks/useResources";
 import { useToast } from "@/components/ui/toast";
 import { channelStatusKey, resourcesKey } from "@/lib/api/queryKeys";
@@ -36,11 +36,11 @@ export function useChannels() {
  * Pass `poll: true` on surfaces that stay open (the detail page) so pairing
  * confirmations and adapter restarts show up without a manual refresh.
  */
-export function useChannelStatus(name: string, opts: { poll?: boolean } = {}) {
+export function useChannelStatus(uid: string, opts: { poll?: boolean } = {}) {
   return useQuery({
-    queryKey: channelStatusKey(name),
-    queryFn: () => getChannelStatus(name),
-    enabled: name.length > 0,
+    queryKey: channelStatusKey(uid),
+    queryFn: () => getChannelStatus(uid),
+    enabled: uid.length > 0,
     refetchInterval: opts.poll ? 5_000 : false,
     refetchIntervalInBackground: false,
     // Non-polling consumers (the per-row paired cell on the list page) must
@@ -50,14 +50,14 @@ export function useChannelStatus(name: string, opts: { poll?: boolean } = {}) {
 }
 
 /** Issue a pairing code; refreshes the status (pending_pairing) on success. */
-export function useIssuePairingCode(name: string) {
+export function useIssuePairingCode(uid: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: () => issuePairingCode(name),
+    mutationFn: () => issuePairingCode(uid),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: channelStatusKey(name) });
+      void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
@@ -73,10 +73,13 @@ export function useUpdateChannel() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (plan: ChannelPlan) => applyChannelEdit(plan),
-    onSuccess: (name) => {
+    mutationFn: (plan: ChannelEditPlan) => applyChannelEdit(plan),
+    // The apply hands back the channel it wrote: the uid to refresh the status
+    // under, and the name to put in the toast. Two answers, two fields — the
+    // one string that used to serve both is exactly what this change split.
+    onSuccess: ({ uid, name }) => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
-      void qc.invalidateQueries({ queryKey: channelStatusKey(name) });
+      void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
       toast.success(t("channels.edit.saved", { name }));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
@@ -103,16 +106,16 @@ export interface ChannelRebind {
  * and the channel status carries the daemon's own `runs_here` plus the
  * unbound diagnostic this may have just cleared.
  */
-export function useRebindChannel(name: string) {
+export function useRebindChannel(uid: string, name: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
     mutationFn: ({ config, runsOn }: ChannelRebind) =>
-      applyChannelEdit({ name, config: { ...config, runs_on: runsOn }, secrets: [] }),
-    onSuccess: (_name, { machine }) => {
+      applyChannelEdit({ uid, name, config: { ...config, runs_on: runsOn }, secrets: [] }),
+    onSuccess: (_written, { machine }) => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
-      void qc.invalidateQueries({ queryKey: channelStatusKey(name) });
+      void qc.invalidateQueries({ queryKey: channelStatusKey(uid) });
       toast.success(t("channels.machine.rebound", { name, machine }));
     },
     onError: (error) => toast.error(translateApiError(t, error)),
@@ -120,11 +123,11 @@ export function useRebindChannel(name: string) {
 }
 
 /** Push a test message to the channel's paired peer (notify capability). */
-export function useNotifyChannel(name: string) {
+export function useNotifyChannel(uid: string) {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (text: string) => notifyChannel(name, text),
+    mutationFn: (text: string) => notifyChannel(uid, text),
     onSuccess: () => toast.success(t("channels.test.sent")),
     onError: (error) => toast.error(translateApiError(t, error)),
   });

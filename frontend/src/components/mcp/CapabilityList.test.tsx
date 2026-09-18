@@ -60,7 +60,7 @@ describe("CapabilityList", () => {
   });
 
   test("renders tool rows with name, prefixed name, and description", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     expect(screen.getByText("read_file")).toBeInTheDocument();
     expect(screen.getByText("fs__read_file")).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe("CapabilityList", () => {
   });
 
   test("renders selection checkboxes when there are rows", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     // Select-all header checkbox + one per row — at least one must render so
     // the bulk Enable/Disable flow is reachable.
@@ -78,13 +78,13 @@ describe("CapabilityList", () => {
   });
 
   test("shows empty state when no items", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={[]} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={[]} />));
 
     expect(screen.getByText(/No tools discovered/)).toBeInTheDocument();
   });
 
   test("expands schema JSON when a tool row is clicked", async () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     const row = screen.getByText("read_file").closest("tr")!;
     fireEvent.click(row);
@@ -100,7 +100,9 @@ describe("CapabilityList", () => {
       POST: postMock,
     } as unknown as ReturnType<typeof getApiClient>);
 
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={[{ ...sampleTools[1] }]} />));
+    render(
+      wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={[{ ...sampleTools[1] }]} />),
+    );
 
     // write_file is disabled (enabled: false) — toggling it should call enable
     const toggle = screen.getByRole("switch", { name: /Toggle tool write_file/ });
@@ -108,9 +110,9 @@ describe("CapabilityList", () => {
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith(
-        "/resources/mcp_server/{name}/capabilities/{capability_type}/enable",
+        "/resources/mcp_server/{uid}/capabilities/{capability_type}/enable",
         expect.objectContaining({
-          params: { path: { name: "fs", capability_type: "tool" } },
+          params: { path: { uid: "u-filesystem", capability_type: "tool" } },
           body: { capability_key: "write_file" },
         }),
       );
@@ -133,7 +135,9 @@ describe("CapabilityList", () => {
       },
     ];
 
-    render(wrap(<CapabilityList serverName="fs" kind="resource" resources={sampleResources} />));
+    render(
+      wrap(<CapabilityList serverUid="u-filesystem" kind="resource" resources={sampleResources} />),
+    );
 
     expect(screen.getByText("file:///data")).toBeInTheDocument();
     expect(screen.getByText("fs__file:///data")).toBeInTheDocument();
@@ -146,9 +150,9 @@ describe("CapabilityList", () => {
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith(
-        "/resources/mcp_server/{name}/capabilities/{capability_type}/disable",
+        "/resources/mcp_server/{uid}/capabilities/{capability_type}/disable",
         expect.objectContaining({
-          params: { path: { name: "fs", capability_type: "resource" } },
+          params: { path: { uid: "u-filesystem", capability_type: "resource" } },
           body: { capability_key: "file:///data" },
         }),
       );
@@ -170,7 +174,7 @@ describe("CapabilityList", () => {
       },
     ];
 
-    render(wrap(<CapabilityList serverName="fs" kind="prompt" prompts={samplePrompts} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="prompt" prompts={samplePrompts} />));
 
     expect(screen.getByText("summarize")).toBeInTheDocument();
     expect(screen.getByText("fs__summarize")).toBeInTheDocument();
@@ -183,9 +187,9 @@ describe("CapabilityList", () => {
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith(
-        "/resources/mcp_server/{name}/capabilities/{capability_type}/enable",
+        "/resources/mcp_server/{uid}/capabilities/{capability_type}/enable",
         expect.objectContaining({
-          params: { path: { name: "fs", capability_type: "prompt" } },
+          params: { path: { uid: "u-filesystem", capability_type: "prompt" } },
           body: { capability_key: "summarize" },
         }),
       );
@@ -193,7 +197,7 @@ describe("CapabilityList", () => {
   });
 
   test("Resource tab: empty state keeps the search/filter chrome (consistent with Tools)", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="resource" resources={[]} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="resource" resources={[]} />));
     // The empty copy renders inside the table, and the search box is still
     // present so an empty Resources tab looks like the Tools tab.
     expect(screen.getByText(/No resources discovered/)).toBeInTheDocument();
@@ -201,7 +205,7 @@ describe("CapabilityList", () => {
   });
 
   test("Prompt tab: empty state keeps the search/filter chrome (consistent with Tools)", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="prompt" prompts={[]} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="prompt" prompts={[]} />));
     expect(screen.getByText(/No prompts discovered/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Search by name")).toBeInTheDocument();
   });
@@ -212,7 +216,11 @@ describe("CapabilityList", () => {
     // The two must read differently: a failed fetch must NOT claim "no prompts
     // discovered" (which wrongly implies the upstream has none).
     const err = new ApiError("UPSTREAM_UNAVAILABLE", "upstream down");
-    render(wrap(<CapabilityList serverName="fs" kind="prompt" prompts={undefined} error={err} />));
+    render(
+      wrap(
+        <CapabilityList serverUid="u-filesystem" kind="prompt" prompts={undefined} error={err} />,
+      ),
+    );
 
     expect(screen.getByText(/Couldn't load/i)).toBeInTheDocument();
     expect(screen.queryByText(/No prompts discovered/)).not.toBeInTheDocument();
@@ -221,7 +229,7 @@ describe("CapabilityList", () => {
   // ── Search + filter tests ────────────────────────────────────────────────
 
   test("search box filters capabilities by name (case-insensitive)", async () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     const searchInput = screen.getByPlaceholderText("Search by name");
     fireEvent.change(searchInput, { target: { value: "READ" } });
@@ -231,7 +239,7 @@ describe("CapabilityList", () => {
   });
 
   test("status filter set to 'disabled' shows only disabled capabilities", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     selectStatus("Disabled");
 
@@ -241,7 +249,7 @@ describe("CapabilityList", () => {
   });
 
   test("status filter set to 'enabled' shows only enabled capabilities", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     selectStatus("Enabled");
 
@@ -250,7 +258,7 @@ describe("CapabilityList", () => {
   });
 
   test("shows 'no matches' message when search excludes all capabilities", () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     const searchInput = screen.getByPlaceholderText("Search by name");
     fireEvent.change(searchInput, { target: { value: "zzznomatch" } });
@@ -263,7 +271,7 @@ describe("CapabilityList", () => {
 
   test("shows 'no matches' message when filter excludes all capabilities (all enabled)", () => {
     const allEnabledTools = sampleTools.map((t) => ({ ...t, enabled: true }));
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={allEnabledTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={allEnabledTools} />));
 
     selectStatus("Disabled");
 
@@ -272,7 +280,7 @@ describe("CapabilityList", () => {
   });
 
   test("toggling a switch does not expand the row's schema detail", async () => {
-    render(wrap(<CapabilityList serverName="fs" kind="tool" tools={sampleTools} />));
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={sampleTools} />));
 
     const row = screen.getByText("read_file").closest("tr")!;
     const toggle = within(row).getByRole("switch");

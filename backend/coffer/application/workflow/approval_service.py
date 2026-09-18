@@ -227,8 +227,8 @@ class ApprovalService:
         await self._audit.record(
             AuditEventType.WORKFLOW_APPROVAL_DECIDED.value,
             actor=actor,
-            resource_kind="workflow_run",
-            resource_name=row.run_id,
+            subject_kind="workflow_run",
+            subject_name=row.run_id,
             detail={
                 "approval_id": row.id,
                 "kind": row.kind,

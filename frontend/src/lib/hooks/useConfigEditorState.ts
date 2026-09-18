@@ -31,8 +31,8 @@ export function visibleConfigFiles(files: ConfigFileInfo[]): ConfigFileInfo[] {
   return files.filter((f) => (f.kind === "directory" ? (f.files ?? []).length > 0 : f.exists));
 }
 
-export function useConfigEditorState(name: string) {
-  const files = useAgentConfigFiles(name);
+export function useConfigEditorState(agentUid: string) {
+  const files = useAgentConfigFiles(agentUid);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // When set, the selection is a child file inside the directory-backed
   // config key `selectedKey` (relpath within that directory).
@@ -46,8 +46,8 @@ export function useConfigEditorState(name: string) {
 
   // Top-level file content — gated off for directory nodes (the directory key
   // itself has no content) and while a child is the active selection.
-  const file = useAgentConfigFile(name, selectedChild || isDirSelected ? null : selectedKey);
-  const child = useAgentConfigChild(name, selectedKey ?? "", selectedChild ?? "");
+  const file = useAgentConfigFile(agentUid, selectedChild || isDirSelected ? null : selectedKey);
+  const child = useAgentConfigChild(agentUid, selectedKey ?? "", selectedChild ?? "");
 
   // The curated allowlist (spec agent-registry FR-010 / User Story 7), filtered
   // to entries that exist on disk — not-yet-created files and empty directories
@@ -70,8 +70,8 @@ export function useConfigEditorState(name: string) {
     save: async (content, expectedFingerprint) => {
       const key = selectedKey as string;
       const body = { content, expected_fingerprint: expectedFingerprint };
-      if (selectedChild) await agentsApi.writeConfigChild(name, key, selectedChild, body);
-      else await agentsApi.writeConfigFile(name, key, body);
+      if (selectedChild) await agentsApi.writeConfigChild(agentUid, key, selectedChild, body);
+      else await agentsApi.writeConfigFile(agentUid, key, body);
       // Neither write returns the new content fingerprint (both answer with the
       // file's metadata), so the next save re-reads for it via the reload below.
       return undefined;

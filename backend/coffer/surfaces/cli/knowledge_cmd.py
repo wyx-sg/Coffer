@@ -16,6 +16,13 @@ deliberately no ``grep`` and no ``search`` command: the corpus is plain
 Markdown under ``~/.coffer/knowledge/``, so a person's own ``grep`` is already
 better than anything this group could wrap, and the group's help says where
 the files are so reaching for it is obvious.
+
+Every command here takes a **name**, because that is what a person knows. Where
+a route is addressed by the collection's uid — only ``curate`` is — the name is
+resolved once through ``_resolve`` and never asked of the user (ADR
+resource-identity-is-an-immutable-uid). The rest take filesystem paths, whose
+first segment is the collection's directory, and those are names on both sides
+of the wire.
 """
 
 from __future__ import annotations
@@ -28,6 +35,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(
     help=(
@@ -234,6 +242,11 @@ def curate(
     body = {"source": source} if source else {}
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/knowledge/collections/{collection}/curate", json=body)
+        # The one command in this group addressed by identity rather than by a
+        # path: a pass runs for minutes over a whole corpus, so it is aimed at
+        # the collection's uid. The lookup happens here, once, so the person
+        # still types the name they gave the collection.
+        uid = resolve_uid(c, "knowledge", collection, verbose=_verbose(ctx))
+        r = c.post(f"/knowledge/collections/{uid}/curate", json=body)
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(_json.dumps(r.json(), indent=2))

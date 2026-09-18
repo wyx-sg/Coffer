@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.errors import ScopeInvalidError
+from coffer.domain.errors import ConfigValidationError, ScopeInvalidError
 from coffer.domain.scope import Scope
 
 from .conftest import (
+    DEFAULT_AGENT_KEY,
     ChannelEnv,
     FakeChannelAdapter,
     Resource,
@@ -136,7 +137,7 @@ async def test_a_channel_scoped_to_no_agent_is_never_started(env: ChannelEnv) ->
     """The dormant case fails early rather than per-turn: the reconciler simply
     does not start the adapter, so the channel accepts nothing to refuse."""
     resource = await env.register_channel("tg")
-    await env.resources.update_scope(resource.ref, Scope(agents=[]), actor="test")
+    await env.resources.update_scope(resource.uid, Scope(agents=[]), actor="test")
 
     await env.runtime.reconcile_once()
 
@@ -155,12 +156,13 @@ async def test_narrowing_a_scope_past_the_default_agent_never_reaches_the_runtim
     await env.runtime.reconcile_once()
     assert env.runtime.is_running("tg") is True
 
-    with pytest.raises(ScopeInvalidError, match="claude_code"):
-        await env.resources.update_scope(resource.ref, Scope(agents=["codex"]), actor="test")
+    other = await env.agent_uid("codex")
+    with pytest.raises(ScopeInvalidError, match="unable to drive anything"):
+        await env.resources.update_scope(resource.uid, Scope(agents=[other]), actor="test")
 
     await env.runtime.reconcile_once()
     assert env.runtime.is_running("tg") is True
-    assert (await env.resources.get(resource.ref)).scope is None
+    assert (await env.resources.get(resource.uid)).scope is None
 
 
 async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv) -> None:
@@ -168,11 +170,11 @@ async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv
     is part of what the reconciler compares. Uses the dormant scope, now the
     only narrowing that can stop a running channel."""
     resource = await env.register_channel("tg")
-    await env.resources.update_scope(resource.ref, Scope(agents=[]), actor="test")
+    await env.resources.update_scope(resource.uid, Scope(agents=[]), actor="test")
     await env.runtime.reconcile_once()
     assert env.runtime.is_running("tg") is False
 
-    await env.resources.update_scope(resource.ref, None, actor="test")
+    await env.resources.update_scope(resource.uid, None, actor="test")
     await env.runtime.reconcile_once()
 
     assert env.runtime.is_running("tg") is True
@@ -181,22 +183,26 @@ async def test_widening_a_scope_rebinds_without_a_daemon_restart(env: ChannelEnv
 @pytest.mark.acceptance(
     spec="channels", scenario="a channel's scope names agent resources, not agent keys"
 )
-async def test_narrowing_to_the_agents_resource_name_is_accepted(env: ChannelEnv) -> None:
-    """The bug this file could not see, because it never registered an agent ROW.
+async def test_narrowing_to_the_channels_own_agent_is_accepted(env: ChannelEnv) -> None:
+    """The narrowing a user actually makes, end to end.
 
-    A scope names agent RESOURCES — ``claude-code``, whatever the owner called
-    it — and that is the only vocabulary the reach picker can offer. The
-    channel's ``default_agent`` is an agent KEY, ``claude_code``. Compared
-    directly, the only narrowing a user could make was refused, and the only
-    value accepted was one the picker then rendered as registered nowhere.
+    There is one vocabulary now: a scope and a ``default_agent`` both hold the
+    UID of an agent row, which is also what the reach picker offers. While the
+    scope held a resource NAME and the default held an agent KEY, this exact
+    edit — narrowing a channel to the only value the picker could produce — was
+    refused, and the only value that passed was one the picker then had to
+    render as an agent registered nowhere.
+
+    The agent KEY survives in exactly one place, below the gate: the binding,
+    because that is what the turn platform dispatches on.
     """
-    await env.register_agent_resource("claude-code", "claude_code")
     await env.register_agent_resource("my-codex", "codex")
+    mine = await env.agent_uid(DEFAULT_AGENT_KEY)
     resource = await env.register_channel("tg")
     await env.runtime.reconcile_once()
     assert env.runtime.is_running("tg") is True
 
-    await env.resources.update_scope(resource.ref, Scope(agents=["claude-code"]), actor="test")
+    await env.resources.update_scope(resource.uid, Scope(agents=[mine]), actor="test")
     await env.runtime.reconcile_once()
 
     assert env.runtime.is_running("tg") is True
@@ -204,20 +210,68 @@ async def test_narrowing_to_the_agents_resource_name_is_accepted(env: ChannelEnv
     # reads — `/agent`, the card, the routing of a chosen key.
     binding = env.processor.binding("tg")
     assert binding is not None
-    assert binding.agent_scope == Scope(agents=["claude_code"])
+    assert binding.agent_scope == Scope(agents=[DEFAULT_AGENT_KEY])
 
 
-async def test_narrowing_past_the_default_agent_is_still_refused_by_name(
-    env: ChannelEnv,
-) -> None:
-    """Translating the vocabularies must not soften the invariant: a scope that
-    genuinely excludes the channel's own agent is still refused, and the refusal
-    still names the agent it excluded."""
-    await env.register_agent_resource("claude-code", "claude_code")
+async def test_narrowing_past_the_default_agent_is_still_refused(env: ChannelEnv) -> None:
+    """One vocabulary must not soften the invariant: a scope that genuinely
+    excludes the channel's own agent is still refused, and the refusal still
+    names — in labels — the agent it excluded."""
     await env.register_agent_resource("my-codex", "codex")
+    other = await env.agent_uid("codex", name="my-codex")
     resource = await env.register_channel("tg")
 
-    with pytest.raises(ScopeInvalidError, match="claude_code"):
-        await env.resources.update_scope(resource.ref, Scope(agents=["my-codex"]), actor="test")
+    with pytest.raises(ScopeInvalidError, match=DEFAULT_AGENT_KEY):
+        await env.resources.update_scope(resource.uid, Scope(agents=[other]), actor="test")
 
-    assert (await env.resources.get(resource.ref)).scope is None
+    assert (await env.resources.get(resource.uid)).scope is None
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel bound to an agent that does not exist is refused"
+)
+async def test_registering_a_channel_bound_to_no_such_agent_is_refused(env: ChannelEnv) -> None:
+    """Through the real ``ResourceService.register``, not the hook alone.
+
+    The hook is async now — a uid is only checkable against the resource table —
+    and an async validator the framework forgot to await is a validator that
+    passes everything in silence. Driving registration end to end is what makes
+    that failure impossible to ship: the row must not exist afterwards.
+    """
+    # One real agent, so the registry has something to say. An EMPTY registry
+    # cannot answer "is this registered" at all, and the check skips rather than
+    # blocking every channel write on a vault that has no agents yet.
+    await env.agent_uid(DEFAULT_AGENT_KEY)
+    env.keyring.set("channel/tg/bot-token", "secret")
+
+    with pytest.raises(ConfigValidationError, match="not a registered agent"):
+        await env.resources.register(
+            kind="channel",
+            name="tg",
+            config={
+                "channel_type": "telegram",
+                "bot_token_ref": "channel/tg/bot-token",
+                "default_agent": "uid-of-an-agent-that-does-not-exist",
+            },
+            actor="test",
+        )
+
+    assert await env.resources.list(kind="channel") == []
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a channel bound to no agent never starts")
+async def test_a_channel_bound_to_no_agent_never_starts(env: ChannelEnv) -> None:
+    """No substitute. There is no value a schema could default to — a uid is
+    minted per vault — so a channel nobody bound stays dark and says why."""
+    env.keyring.set("channel/tg/bot-token", "secret")
+    await env.resources.register(
+        kind="channel",
+        name="tg",
+        config={"channel_type": "telegram", "bot_token_ref": "channel/tg/bot-token"},
+        actor="test",
+    )
+
+    await env.runtime.reconcile_once()
+
+    assert env.runtime.is_running("tg") is False
+    assert env.created_adapters == []

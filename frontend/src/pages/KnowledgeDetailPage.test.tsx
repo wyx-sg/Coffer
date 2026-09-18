@@ -22,6 +22,17 @@ import { acceptance } from "@/test/acceptance";
 // whole point — a component's own pending flag dies on navigation), so the hook
 // is mocked here the way every other data hook is.
 vi.mock("@/lib/hooks/useUpkeep", () => ({ useUpkeepRunning: vi.fn(() => false) }));
+// The route carries the collection's UID, and everything the page puts on
+// screen — the title, and every `path` its two trees ask for — is built from
+// the NAME. The name arrives on this read and nowhere else, so it is stubbed
+// like any other data hook rather than left to a query that never resolves.
+vi.mock("@/lib/hooks/useResources", () => ({
+  useResource: vi.fn(() => ({
+    data: { uid: "kn-8c1f", kind: "knowledge", name: "shopee", enabled: true },
+    isPending: false,
+    error: null,
+  })),
+}));
 vi.mock("@/lib/hooks/useKnowledge", () => ({
   useKnowledgeTree: vi.fn(),
   useKnowledgeFile: vi.fn(),
@@ -40,6 +51,8 @@ const {
   useDeleteKnowledgeFile,
 } = await import("@/lib/hooks/useKnowledge");
 const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
+const { useResource } = await import("@/lib/hooks/useResources");
+const resourceMock = vi.mocked(useResource);
 const runningMock = vi.mocked(useUpkeepRunning);
 const treeMock = vi.mocked(useKnowledgeTree);
 const fileMock = vi.mocked(useKnowledgeFile);
@@ -88,6 +101,12 @@ function stubDelete(
   } as unknown as ReturnType<typeof useDeleteKnowledgeFile>);
   return mutate;
 }
+
+/** The collection's two identities, deliberately unlike each other: the uid the
+ *  URL and the curate request carry, and the name the directory — and so every
+ *  knowledge PATH — is built from. */
+const COLLECTION_UID = "kn-8c1f";
+const COLLECTION_NAME = "shopee";
 
 /** The curate mutation, stubbed. `error` is how a 409 reaches the button. */
 function stubCurate(overrides: { mutate?: ReturnType<typeof vi.fn>; error?: unknown } = {}) {
@@ -153,9 +172,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <MemoryRouter initialEntries={["/knowledge/shopee"]}>
+        <MemoryRouter initialEntries={[`/knowledge/${COLLECTION_UID}`]}>
           <Routes>
-            <Route path="/knowledge/:name" element={<KnowledgeDetailPage />} />
+            <Route path="/knowledge/:uid" element={<KnowledgeDetailPage />} />
           </Routes>
         </MemoryRouter>
       </TooltipProvider>
@@ -255,6 +274,25 @@ describe("KnowledgeDetailPage", () => {
 
     const button = screen.getByRole("button", { name: /already running/i });
     expect(button).toBeDisabled();
+  });
+
+  test("the uid addresses the collection; its name builds every path", () => {
+    // The split this page exists to hold: it is reached by an opaque uid, and
+    // a knowledge `path` names a place on disk, where the collection's
+    // directory is its NAME. So the trees, the title and the run-list lookup
+    // all speak the name, and only the curate request speaks the uid.
+    renderPage();
+
+    expect(resourceMock).toHaveBeenCalledWith(COLLECTION_UID);
+    expect(screen.getByRole("heading", { name: COLLECTION_NAME })).toBeInTheDocument();
+    expect(curateMock).toHaveBeenCalledWith(COLLECTION_UID);
+    // `/upkeep/runs` reports a running pass by the collection's name.
+    expect(runningMock).toHaveBeenCalledWith("knowledge", COLLECTION_NAME);
+
+    const askedFor = treeMock.mock.calls.map((call) => call[0]);
+    expect(askedFor).toContain(`${COLLECTION_NAME}/sources`);
+    expect(askedFor).toContain(`${COLLECTION_NAME}/topics`);
+    expect(askedFor.some((path) => path.includes(COLLECTION_UID))).toBe(false);
   });
 
   test("offers the way back to the collection list", () => {

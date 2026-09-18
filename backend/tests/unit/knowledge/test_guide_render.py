@@ -25,7 +25,13 @@ from coffer.domain.skill.validator import ValidationOk, validate_skill_folder
 
 
 def _collection(name: str, description: str, topics: int = 1):  # type: ignore[no-untyped-def]
-    entry = CollectionEntry(name=name, description=description, source_count=1, topic_count=topics)
+    entry = CollectionEntry(
+        uid=f"uid-{name}",
+        name=name,
+        description=description,
+        source_count=1,
+        topic_count=topics,
+    )
     files = [
         FileEntry(
             path=f"{name}/topics/doc{i}.md",

@@ -17,9 +17,8 @@ from coffer.application.mcp.discovery import (
     DiscoveredResource,
     DiscoveredTool,
 )
-from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.namespace import prefix_prompt, prefix_resource_uri, prefix_tool
-from coffer.domain.resource import ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
 from coffer.surfaces.http.schemas import (
     CapabilityListOut,
@@ -83,9 +82,8 @@ def live_capability_list(
 
 
 async def cached_capability_list(
-    name: str,
+    resource: Resource,
     prefs: MCPCapabilityPreferenceRepo,
-    resource_service: ResourceService,
 ) -> CapabilityListOut | None:
     """Build the capability list from persisted enable/disable preferences.
 
@@ -94,16 +92,20 @@ async def cached_capability_list(
     stores tool schemas — only each capability's key and its ``enabled`` flag —
     so the views carry name + enabled with empty descriptions/schemas: enough
     for the management list and its toggles. Returns ``None`` when the server
-    was never discovered (no rows) or is unknown, so the caller surfaces the
-    upstream error instead of a misleadingly empty page.
+    was never discovered (no rows), so the caller surfaces the upstream error
+    instead of a misleadingly empty page.
+
+    Takes the resolved row, not a name: the route has already turned the uid in
+    its path into this resource, and the preference rows are keyed on
+    ``resource.id``. Looking the server up a second time here — and swallowing
+    the failure — used to be how an unknown server reached this path at all;
+    with identity resolved up front it cannot, so there is nothing left to
+    swallow.
     """
-    try:
-        resource = await resource_service.get(ResourceRef("mcp_server", name))
-    except Exception:
-        return None
     rows = await prefs.list_for(resource.id)
     if not rows:
         return None
+    name = resource.name
     return CapabilityListOut(
         server_name=name,
         tools=[

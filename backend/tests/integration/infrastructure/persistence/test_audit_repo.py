@@ -17,6 +17,7 @@ def _entry(
     event_type: str = AuditEventType.RESOURCE_CREATED.value,
     kind: str | None = "mcp_server",
     name: str | None = "filesystem",
+    resource_id: int | None = None,
     actor: str = "cli",
     details: dict | None = None,
 ) -> AuditEntry:
@@ -24,6 +25,7 @@ def _entry(
         id=None,
         timestamp=when,
         event_type=event_type,
+        resource_id=resource_id,
         resource_kind=kind,
         resource_name=name,
         actor=actor,
@@ -52,14 +54,23 @@ async def test_insert_then_query(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_query_by_kind_and_name(tmp_path):
+async def test_query_by_kind_and_by_resource(tmp_path):
+    """``kind`` is the coarse filter; one resource's trail keys on its ID.
+
+    Replaces a ``name=`` filter that no longer exists. Filtering history by a
+    LABEL could not tell a renamed resource from a deleted one whose name was
+    later reused, so it rendered two objects' histories as one; the id cannot.
+    The label is still stored on each row, because that is what the resource
+    was called when the event happened.
+    """
     repo, engine = await _repo(tmp_path)
     when = datetime(2026, 5, 20, tzinfo=UTC)
-    await repo.insert(_entry(when=when, kind="mcp_server", name="filesystem"))
-    await repo.insert(_entry(when=when, kind="mcp_server", name="github"))
-    await repo.insert(_entry(when=when, kind="other_kind", name="x"))
-    fs_only = await repo.query(kind="mcp_server", name="filesystem")
+    await repo.insert(_entry(when=when, kind="mcp_server", name="filesystem", resource_id=1))
+    await repo.insert(_entry(when=when, kind="mcp_server", name="github", resource_id=2))
+    await repo.insert(_entry(when=when, kind="other_kind", name="x", resource_id=3))
+    fs_only = await repo.query(resource_id=1)
     assert len(fs_only) == 1
+    assert fs_only[0].resource_name == "filesystem"
     mcp_all = await repo.query(kind="mcp_server")
     assert len(mcp_all) == 2
     await engine.dispose()

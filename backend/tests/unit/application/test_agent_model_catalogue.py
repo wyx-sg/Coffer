@@ -27,6 +27,7 @@ def _agent(
 ) -> Resource:
     return Resource(
         id=1,
+        uid=f"uid-{name}",
         kind="agent",
         name=name,
         description=None,

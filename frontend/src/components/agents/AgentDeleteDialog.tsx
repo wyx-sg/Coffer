@@ -14,11 +14,15 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
 
 export function AgentDeleteDialog({
+  uid,
   name,
   open,
   onOpenChange,
   onDeleted,
 }: {
+  /** The agent to delete. */
+  uid: string;
+  /** Its label, which the confirmation reads out. */
   name: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -42,7 +46,7 @@ export function AgentDeleteDialog({
       onConfirm={() =>
         // Closes only on success, so a failure leaves the dialog up with the
         // reason on it.
-        remove.mutate(name, {
+        remove.mutate(uid, {
           onSuccess: () => {
             onOpenChange(false);
             onDeleted();

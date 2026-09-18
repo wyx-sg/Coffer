@@ -1,4 +1,4 @@
-"""POST /{name}/test — transient upstream health-check route for MCP servers.
+"""POST /{uid}/test — transient upstream health-check route for MCP servers.
 
 Extracted from capability_routes.py to keep that module under the file-size
 limit. Named `server_test_routes` (not `test_routes`) so its filename never
@@ -19,14 +19,13 @@ from fastapi import APIRouter, Depends
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
-from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.credential_composition import get_credential_store
 from coffer.surfaces.http.dependencies import get_resource_service
-from coffer.surfaces.http.mcp.dependencies import get_health_repo
+from coffer.surfaces.http.mcp.dependencies import get_health_repo, require_mcp_server
 from coffer.surfaces.http.schemas import McpTestResultOut
 
 router = APIRouter(
@@ -36,16 +35,16 @@ router = APIRouter(
 )
 
 
-@router.post("/{name}/test", response_model=McpTestResultOut)
+@router.post("/{uid}/test", response_model=McpTestResultOut)
 async def test_mcp_server(
-    name: str,
+    uid: str,
     resource_service: ResourceService = Depends(get_resource_service),  # noqa: B008
     health_repo: MCPServerHealthRepo = Depends(get_health_repo),  # noqa: B008
     credential_store: Any = Depends(get_credential_store),  # noqa: B008
 ) -> McpTestResultOut:
     """Open a transient upstream session, run MCP initialize, return health info.
     Persists the result to mcp_server_health so GET /status reflects it."""
-    resource = await resource_service.get(ResourceRef("mcp_server", name))
+    resource = await require_mcp_server(uid, resource_service)
 
     # Scope (ADR per-agent-resource-scope) is per-AGENT and is enforced at the
     # gateway, which knows
@@ -69,7 +68,10 @@ async def test_mcp_server(
                 env_overlay=overlay,
                 spawn_timeout_seconds=config.spawn_timeout_seconds,
                 request_timeout_seconds=config.request_timeout_seconds,
-                server_name=name,
+                # The label, not the identity: this is what the connection puts
+                # in its spawn diagnostics, and a uid there would tell whoever
+                # reads them nothing.
+                server_name=resource.name,
             )
         elif isinstance(config.transport, HttpTransport):
             overlay = await asyncio.to_thread(
@@ -90,7 +92,8 @@ async def test_mcp_server(
         try:
             caps = await conn.spawn_and_initialize()
             latency_ms = int((time.monotonic() - start) * 1000)
-            await health_repo.upsert(name, "healthy", datetime.now(tz=UTC))
+            # Keyed on the identity, so the result survives a later rename.
+            await health_repo.upsert(resource.uid, "healthy", datetime.now(tz=UTC))
             return McpTestResultOut(
                 ok=True,
                 latency_ms=latency_ms,
@@ -102,7 +105,7 @@ async def test_mcp_server(
             await conn.close()
     except Exception as e:  # incl. UpstreamUnavailable / UpstreamTimeout
         latency_ms = int((time.monotonic() - start) * 1000)
-        await health_repo.upsert(name, "failing", datetime.now(tz=UTC))
+        await health_repo.upsert(resource.uid, "failing", datetime.now(tz=UTC))
         return McpTestResultOut(
             ok=False,
             latency_ms=latency_ms,

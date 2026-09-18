@@ -33,10 +33,12 @@ import { scopeApi, type Scope } from "@/lib/api/scope";
 import { agentsKey, resourcesKey, scopeKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
-/** The minimum a row must carry to be reachable: its resource identity. */
+/** The minimum a row must carry to be reachable: its resource identity. `kind`
+ *  is not part of any request — every route here takes the uid — it only says
+ *  which kind's behaviour (and list key) the write belongs to. */
 export interface ReachTarget {
   kind: string;
-  name: string;
+  uid: string;
 }
 
 interface Props {
@@ -62,12 +64,12 @@ export function BulkReachActions({ rows, supportsScope = true, invalidate = [], 
     onDone();
   };
 
-  const goDisabled = () => void runAll((r) => resourcesApi.disable(r.kind, r.name));
+  const goDisabled = () => void runAll((r) => resourcesApi.disable(r.uid));
 
   const goEnabled = (scope: Scope | null) =>
     void runAll(async (r) => {
-      await resourcesApi.enable(r.kind, r.name);
-      if (supportsScope) await scopeApi.put(r.kind, r.name, scope);
+      await resourcesApi.enable(r.uid);
+      if (supportsScope) await scopeApi.put(r.uid, scope);
     });
 
   // There is no "current one": the selection can hold rows in all three states,

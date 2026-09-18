@@ -22,7 +22,6 @@ import httpx
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.agent_vocabulary import agent_key_by_name
 from coffer.application.channel.inbound import InboundProcessor
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
@@ -32,8 +31,7 @@ from coffer.application.channel.service import ChannelService
 from coffer.application.channel.sync_state import ChannelPeerSyncState
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
-from coffer.domain.resource import ResourceRef
-from coffer.domain.scope import Scope
+from coffer.domain.resource import Resource
 from coffer.infrastructure.channel.listener_spawn import CallbackListenerController
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
@@ -68,13 +66,17 @@ def _daemon_info() -> tuple[str, str]:
     return f"http://127.0.0.1:{daemon_routes.get_port()}", token
 
 
-async def _ingest_websocket_event(name: str, envelope: dict[str, Any]) -> None:
+async def _ingest_websocket_event(channel_uid: str, envelope: dict[str, Any]) -> None:
     """Hand a websocket-delivered event to the same ingest the webhook route uses.
+
+    The controller supervises its sockets by channel uid — the same key the
+    callback path and the listener's secret map use — so what arrives here is
+    an identity, not a label, and it goes straight through.
 
     Resolved at call time BY DESIGN: ``ChannelService`` is built at the end of
     ``wire_channel_kind``, after the runtime this feeds, and the self-reference
     cannot be handed in before it exists."""
-    await get_channel_service().ingest_event(name, envelope)
+    await get_channel_service().ingest_event(channel_uid, envelope)
 
 
 def wire_channel_kind(
@@ -149,37 +151,26 @@ def wire_channel_kind(
         machine_id=local_machine_id,
     )
 
-    async def on_delete(ref: ResourceRef) -> None:
-        await runtime.evict(ref.name)
+    async def on_delete(channel: Resource) -> None:
+        await runtime.evict(channel)
 
-    async def channel_scope(ref: ResourceRef) -> Scope | None:
-        """The channel's own scope, for the edit-time default_agent check. Read
-        live off the row rather than cached: an edit lands after whatever scope
-        the row carries right now."""
-        return (await resource_svc.get(ref)).scope
+    async def agent_names() -> dict[str, str]:
+        """Every registered agent's UID mapped to its name.
 
-    async def agent_types() -> dict[str, str]:
-        """Every registered agent's resource NAME mapped to its agent KEY.
-
-        The channel surfaces speak agent keys (``claude_code``) because that is
-        what the turn platform routes on; a scope speaks resource names
-        (``claude-code``) because that is what an agent resource is called.
-        This is the one place the two meet, so the checks compare in a single
-        vocabulary instead of rejecting every correctly-narrowed scope.
+        One direction, one vocabulary. This used to be a name→key map feeding
+        three separate injections, because an agent answered to two names and a
+        channel's scope and its ``default_agent`` were written in different
+        ones. Both hold uids now, so the comparisons need no translation at all
+        and the only thing left to resolve is the label a human reads.
         """
-        return agent_key_by_name(await resource_svc.list(kind="agent"))
+        return {r.uid: r.name for r in await resource_svc.list(kind="agent")}
 
     app.state.kinds["channel"] = make_channel_kind(
         on_delete=on_delete,
-        # Validate a channel's default_agent against the live agent registry at
-        # create/edit, so an unknown agent (e.g. the retired "builtin") is
-        # rejected up front instead of failing silently on the first turn.
-        agent_keys=chat.registry.agent_keys,
-        # ...and against the agents this channel may drive (ADR per-agent-resource-scope), so
-        # an edit cannot bind it to an agent its scope excludes.
-        scope_of=channel_scope,
-        # …read in the same vocabulary the channel's own default_agent uses.
-        agent_types=agent_types,
+        # Validate a channel's default_agent against the live agent registry on
+        # BOTH write paths, so a channel cannot be created — or edited — bound
+        # to an agent that does not exist and fail silently on the first turn.
+        agent_names=agent_names,
         # ...except for a channel bound to another machine, whose agents are
         # that machine's business. Without this a converged channel would be
         # refused at this registry's door for a fault on nobody's machine.

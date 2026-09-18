@@ -4,10 +4,18 @@ A timer pass and a button pass over one partition (or one collection) are two
 writers over one directory, not one faster pass. The worker's answer is to
 SKIP — never to queue behind it (the next sweep comes round anyway) and never
 to fail the sweep (busy is an ordinary state, not a fault).
+
+Both workers sweep **uids**, and claim them, because that is what the route the
+button hits claims: the collision only happens if the two writers spell the
+target the same way, and a label is exactly what can be edited between them
+reading it (ADR resource-identity-is-an-immutable-uid). The uids below are
+readable strings (``uid-busy``) rather than real hex, so a failure names which
+target was skipped; nothing in either worker parses them.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -15,11 +23,35 @@ import pytest
 from coffer.application.knowledge.curate_worker import CurationWorker
 from coffer.application.memory.distil_worker import DistilWorker
 from coffer.application.upkeep_runs import UpkeepRunRegistry
+from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import fs
 
 
 async def _enabled() -> bool:
     return True
+
+
+class _Collections:
+    """The slice of ``KnowledgeService`` the curation worker actually uses.
+
+    It holds a collection by uid and reads the *name* off the row, once, for
+    the directory ``pending_sources`` walks — so a fake has to answer that one
+    question. ``uid-<name>`` keeps the mapping obvious at the call sites.
+    """
+
+    async def collection(self, uid: str) -> Resource:
+        now = datetime.now(tz=UTC)
+        return Resource(
+            id=0,
+            uid=uid,
+            kind="knowledge",
+            name=uid.removeprefix("uid-"),
+            description=None,
+            config={},
+            enabled=True,
+            created_at=now,
+            updated_at=now,
+        )
 
 
 @pytest.fixture
@@ -42,33 +74,33 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 async def test_distil_worker_skips_a_partition_already_being_distilled() -> None:
     runs = UpkeepRunRegistry()
-    runs.claim("memory", "busy")
+    runs.claim("memory", "uid-busy")
     distilled: list[str] = []
 
-    async def _distil(partition: str) -> object:
-        distilled.append(partition)
+    async def _distil(uid: str) -> object:
+        distilled.append(uid)
         return object()
 
     async def _partitions() -> list[str]:
-        return ["busy", "free"]
+        return ["uid-busy", "uid-free"]
 
     worker = DistilWorker(distil=_distil, list_partitions=_partitions, runs=runs)
     await worker.run_once()
 
     # Skipped, not queued — and the rest of the sweep still happened.
-    assert distilled == ["free"]
+    assert distilled == ["uid-free"]
 
 
 async def test_distil_worker_gives_each_partition_s_key_back() -> None:
     """A sweep that held its claims would lock the button out afterwards."""
     runs = UpkeepRunRegistry()
 
-    async def _distil(partition: str) -> object:
-        assert runs.running("memory", partition) is not None
+    async def _distil(uid: str) -> object:
+        assert runs.running("memory", uid) is not None
         return object()
 
     async def _partitions() -> list[str]:
-        return ["coffer"]
+        return ["uid-coffer"]
 
     await DistilWorker(distil=_distil, list_partitions=_partitions, runs=runs).run_once()
 
@@ -77,18 +109,18 @@ async def test_distil_worker_gives_each_partition_s_key_back() -> None:
 
 async def test_curation_worker_skips_a_collection_already_being_curated(corpus) -> None:  # type: ignore[no-untyped-def]
     runs = UpkeepRunRegistry()
-    runs.claim("knowledge", "busy")
+    runs.claim("knowledge", "uid-busy")
     curated: list[str] = []
 
-    async def _curate(svc: Any, collection: str, **kwargs: Any) -> dict[str, object]:
-        curated.append(collection)
+    async def _curate(svc: Any, collection_uid: str, **kwargs: Any) -> dict[str, object]:
+        curated.append(collection_uid)
         return {"status": "ok"}
 
     async def _collections() -> list[str]:
-        return ["busy", "free"]
+        return ["uid-busy", "uid-free"]
 
     worker = CurationWorker(
-        service=object(),  # type: ignore[arg-type]  # passed straight through to _curate
+        service=_Collections(),  # type: ignore[arg-type]
         curate=_curate,
         is_enabled=_enabled,
         deliver=None,
@@ -97,9 +129,10 @@ async def test_curation_worker_skips_a_collection_already_being_curated(corpus) 
     )
     await worker.run_once()
 
-    assert curated == ["free"]
-    assert runs.running("knowledge", "busy") is not None  # the holder keeps its key
-    assert runs.running("knowledge", "free") is None
+    # The pass is handed the UID, not the name it resolved for the directory.
+    assert curated == ["uid-free"]
+    assert runs.running("knowledge", "uid-busy") is not None  # the holder keeps its key
+    assert runs.running("knowledge", "uid-free") is None
 
 
 async def test_a_disabled_worker_delivers_but_starts_no_pass(corpus) -> None:  # type: ignore[no-untyped-def]
@@ -114,8 +147,8 @@ async def test_a_disabled_worker_delivers_but_starts_no_pass(corpus) -> None:  #
     started: list[str] = []
     delivered: list[int] = []
 
-    async def _curate(svc: Any, collection: str, **kwargs: Any) -> dict[str, object]:
-        started.append(collection)
+    async def _curate(svc: Any, collection_uid: str, **kwargs: Any) -> dict[str, object]:
+        started.append(collection_uid)
         return {"status": "ok"}
 
     async def _deliver() -> None:
@@ -125,10 +158,10 @@ async def test_a_disabled_worker_delivers_but_starts_no_pass(corpus) -> None:  #
         return False
 
     async def _collections() -> list[str]:
-        return ["free"]
+        return ["uid-free"]
 
     await CurationWorker(
-        service=object(),  # type: ignore[arg-type]
+        service=_Collections(),  # type: ignore[arg-type]
         curate=_curate,
         is_enabled=_off,
         deliver=_deliver,
@@ -145,18 +178,18 @@ async def test_a_delivery_that_raises_does_not_stop_the_sweep(corpus) -> None:  
     give an agent, so a failure there must not cost the curation it precedes."""
     started: list[str] = []
 
-    async def _curate(svc: Any, collection: str, **kwargs: Any) -> dict[str, object]:
-        started.append(collection)
+    async def _curate(svc: Any, collection_uid: str, **kwargs: Any) -> dict[str, object]:
+        started.append(collection_uid)
         return {"status": "ok"}
 
     async def _deliver() -> None:
         raise OSError("an agent's skill directory is unwritable")
 
     async def _collections() -> list[str]:
-        return ["free"]
+        return ["uid-free"]
 
     await CurationWorker(
-        service=object(),  # type: ignore[arg-type]
+        service=_Collections(),  # type: ignore[arg-type]
         curate=_curate,
         is_enabled=_enabled,
         deliver=_deliver,
@@ -164,4 +197,4 @@ async def test_a_delivery_that_raises_does_not_stop_the_sweep(corpus) -> None:  
         runs=UpkeepRunRegistry(),
     ).run_once()
 
-    assert started == ["free"]
+    assert started == ["uid-free"]

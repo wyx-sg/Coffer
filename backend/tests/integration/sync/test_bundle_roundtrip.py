@@ -25,6 +25,7 @@ import json
 import os
 import pathlib
 import time
+import uuid
 from datetime import date
 from typing import Any
 
@@ -34,12 +35,11 @@ from cryptography.fernet import Fernet
 
 from coffer.application.sync.appliers import (
     CredentialApplier,
-    ResourceApplier,
     StateApplier,
     TreeApplier,
 )
-from coffer.domain.errors import ResourceNotFound, UnknownKind
-from coffer.domain.resource import ResourceRef
+from coffer.application.sync.appliers_resource import ResourceApplier
+from coffer.domain.errors import UnknownKind
 from coffer.domain.scope import Scope
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.fernet_time import is_fresher
@@ -142,6 +142,21 @@ def _stage_doc(worktree: pathlib.Path, rel: str, doc: dict[str, Any]) -> pathlib
     return _stage(worktree, rel, yaml.safe_dump(doc, sort_keys=True, allow_unicode=True))
 
 
+def _uid(tag: str) -> str:
+    """A stable stand-in for a minted uid.
+
+    A document staged by hand has to carry an identity and be filed under it
+    (``resources/<kind>/<uid>.yaml``, ADR resource-identity-is-an-immutable-uid),
+    and a test that hard-codes a random hex twice is a test that will one day
+    disagree with itself. Each fixture names itself and this derives the uid.
+    """
+    return uuid.uuid5(uuid.NAMESPACE_OID, tag).hex
+
+
+def _doc_at(kind: str, uid: str) -> str:
+    return f"resources/{kind}/{uid}.yaml"
+
+
 async def _populate(machine: VaultMachine) -> None:
     """A vault with something in every area the export serializes."""
     await machine.register("mcp_server", "files", {"value": "files"})
@@ -163,19 +178,23 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
     root = pathlib.Path(vault.bundle.path)
 
     manifest = Manifest.from_dict(json.loads((root / "manifest.json").read_text("utf-8")))
-    assert manifest.schema_version == 1
+    # Layout 2: documents filed under a resource's uid.
+    assert manifest.schema_version == 2
     # A converge export writes no creation time: a restamped timestamp would
     # stage a change on every round.
     assert manifest.created_at is None
 
-    files = _doc(root / "resources" / "mcp_server" / "files.yaml")
+    files = _doc(root / await vault.doc_path("mcp_server", "files"))
     assert files == {
+        # Filed under the uid and spelling it inside, so the tree and the
+        # document reach the same identity (ADR resource-identity-is-an-immutable-uid).
+        "uid": await vault.uid("mcp_server", "files"),
         "kind": "mcp_server",
         "name": "files",
         "description": None,
         "config": {"value": "files", "config_dir": "", "credential_ref": ""},
     }
-    assert (root / "resources" / "agent" / "coder.yaml").is_file()
+    assert (root / await vault.doc_path("agent", "coder")).is_file()
 
     assert (root / "knowledge" / "notes" / "alpha.md").read_text(encoding="utf-8") == "alpha body\n"
     assert (root / "knowledge" / "notes" / "beta.md").is_file()
@@ -210,8 +229,8 @@ async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
 
     await vault.exporter.export(vault.bundle, with_credentials=False)
 
-    path = pathlib.Path(vault.bundle.path) / "resources" / "mcp_server" / "files.yaml"
-    assert set(_doc(path)) == {"kind", "name", "description", "config"}
+    path = pathlib.Path(vault.bundle.path) / await vault.doc_path("mcp_server", "files")
+    assert set(_doc(path)) == {"uid", "kind", "name", "description", "config"}
     # Not merely absent as keys — absent as text, so a future encoder cannot
     # smuggle either back in under a nested name.
     raw = path.read_text(encoding="utf-8")
@@ -234,7 +253,7 @@ async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachi
     summary = await vault.exporter.export(vault.bundle, with_credentials=False)
 
     root = pathlib.Path(vault.bundle.path)
-    document = root / "resources" / "channel" / "seatalk.yaml"
+    document = root / await vault.doc_path("channel", "seatalk")
     assert document.is_file()
     assert _doc(document)["config"]["runs_on"] == vault.machine_id
     assert _areas(summary)["resources"] == 2
@@ -263,7 +282,7 @@ async def test_export_withholds_a_kind_whose_rows_are_derived_on_each_machine(
 
     root = pathlib.Path(vault.bundle.path)
     assert not (root / "resources" / "memory").exists()
-    assert (root / "resources" / "mcp_server" / "files.yaml").is_file()
+    assert (root / await vault.doc_path("mcp_server", "files")).is_file()
     # Counted as it is written: a document withheld is not a document exported.
     assert _areas(summary)["resources"] == 1
     assert summary.failures == []
@@ -282,12 +301,17 @@ async def test_export_removes_a_derived_document_an_older_build_published(
     """
     await vault.register("mcp_server", "files", {"value": "files"})
     root = pathlib.Path(vault.bundle.path)
-    stale = "resources/memory/coffer.yaml"
+    stale = _doc_at("memory", _uid("memory/coffer"))
     _stage(
         root,
         stale,
         yaml.safe_dump(
-            {"kind": "memory", "name": "coffer", "config": {"value": "/elsewhere"}},
+            {
+                "uid": _uid("memory/coffer"),
+                "kind": "memory",
+                "name": "coffer",
+                "config": {"value": "/elsewhere"},
+            },
             sort_keys=True,
         ),
     )
@@ -295,7 +319,7 @@ async def test_export_removes_a_derived_document_an_older_build_published(
     await vault.exporter.export(vault.bundle, with_credentials=False)
 
     assert not (root / stale).exists()
-    assert (root / "resources" / "mcp_server" / "files.yaml").is_file()
+    assert (root / await vault.doc_path("mcp_server", "files")).is_file()
 
 
 async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_nothing(
@@ -329,16 +353,16 @@ async def test_a_locally_deleted_resource_removes_exactly_its_document(
     await vault.exporter.export(vault.bundle, with_credentials=True)
     _age(root)
     before = _mtimes(root)
-    gone = "resources/mcp_server/gone.yaml"
+    gone = await vault.doc_path("mcp_server", "gone")
     assert gone in before
 
-    await vault.resources.delete(ResourceRef("mcp_server", "gone"), "test")
+    await vault.delete_resource("mcp_server", "gone")
     await vault.exporter.export(vault.bundle, with_credentials=True)
 
     # Exactly one document disappeared, and every other file kept the mtime it
     # had: the export diffs, it does not clear and rewrite the directory.
     assert _mtimes(root) == {rel: at for rel, at in before.items() if rel != gone}
-    assert (root / "resources" / "mcp_server" / "files.yaml").is_file()
+    assert (root / await vault.doc_path("mcp_server", "files")).is_file()
 
 
 async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
@@ -351,8 +375,13 @@ async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
     # What a merge leaves behind when this vault could not apply the other
     # machine's documents: files in the tree that local state does not produce.
     pending = {
-        "resources/mcp_server/theirs.yaml": yaml.safe_dump(
-            {"kind": "mcp_server", "name": "theirs", "config": {"value": "b"}},
+        _doc_at("mcp_server", _uid("mcp_server/theirs")): yaml.safe_dump(
+            {
+                "uid": _uid("mcp_server/theirs"),
+                "kind": "mcp_server",
+                "name": "theirs",
+                "config": {"value": "b"},
+            },
             sort_keys=True,
         ),
         "state/peers/peer-2.yaml": yaml.safe_dump({"paired": False}, sort_keys=True),
@@ -373,7 +402,7 @@ async def test_an_export_never_deletes_a_path_this_vault_has_not_absorbed(
         )
     # The vault's own documents are still there too.
     assert (root / "knowledge" / "notes" / "alpha.md").is_file()
-    assert (root / "resources" / "mcp_server" / "files.yaml").is_file()
+    assert (root / await vault.doc_path("mcp_server", "files")).is_file()
 
     # And the hold is what saved them: released, the same export removes them.
     for rel in pending:
@@ -430,11 +459,12 @@ async def test_home_paths_leave_the_vault_as_a_portable_token(vault: VaultMachin
 
     await vault.exporter.export(vault.bundle, with_credentials=False)
 
-    config = _doc(root / "resources" / "agent" / "coder.yaml")["config"]
+    document = root / await vault.doc_path("agent", "coder")
+    config = _doc(document)["config"]
     assert config["config_dir"] == "${HOME}/.claude"
     # A path outside $HOME rides verbatim rather than being mangled.
     assert config["value"] == "/opt/shared/bin"
-    assert home not in (root / "resources" / "agent" / "coder.yaml").read_text(encoding="utf-8")
+    assert home not in document.read_text(encoding="utf-8")
 
 
 async def test_a_machine_publishes_its_own_descriptor_and_no_other(vault: VaultMachine) -> None:
@@ -558,11 +588,13 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
-    path = "resources/mcp_server/files.yaml"
+    uid = _uid("mcp_server/files")
+    path = _doc_at("mcp_server", uid)
     _stage_doc(
         vault.worktree,
         path,
         {
+            "uid": uid,
             "kind": "mcp_server",
             "name": "files",
             "description": "the file server",
@@ -571,7 +603,10 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
     )
 
     await applier.upsert(path)
-    created = await vault.resources.get(ResourceRef("mcp_server", "files"))
+    created = await vault.resources.get(uid)
+    # Registered at the identity the document carried, not a fresh one: the
+    # two machines have to go on holding the same resource.
+    assert created.uid == uid
     assert created.description == "the file server"
     assert created.config["value"] == "first"
     # ``${HOME}`` expands against THIS machine's home, not the exporter's.
@@ -589,6 +624,7 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
         vault.worktree,
         path,
         {
+            "uid": uid,
             "kind": "mcp_server",
             "name": "files",
             "description": "renamed in the doc",
@@ -597,7 +633,7 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
     )
     await applier.upsert(path)
 
-    updated = await vault.resources.get(ResourceRef("mcp_server", "files"))
+    updated = await vault.resources.get(uid)
     assert updated.id == created.id, "the row was updated, not replaced"
     assert updated.description == "renamed in the doc"
     assert updated.config["value"] == "second"
@@ -609,84 +645,129 @@ async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine
     assert await vault.resource_names("mcp_server") == ["files"]
 
 
-async def test_resource_applier_takes_an_older_builds_document_without_its_reach(
+async def test_resource_applier_moves_no_reach_even_when_a_document_spells_one(
     vault: VaultMachine,
 ) -> None:
-    """The shared tree still holds documents written before reach stopped
-    travelling, and machines that have not upgraded keep writing more.
+    """Reach is machine-local, and the applier reaches for it nowhere.
 
-    Such a document must import — refusing it the way an unknown field is
-    refused would quarantine it on every upgraded machine, so one stale machine
-    would stall the fleet — and what it says about reach must go nowhere.
+    A document is not supposed to carry ``enabled`` or ``scope`` at all — the
+    exporter stopped emitting them and the parser now refuses them. But the
+    applier does not go through the parser: it reads the keys it wants straight
+    off the YAML, which is a second, independent reason reach cannot travel.
+    That is the reason under test here, because it is the one that holds for a
+    document nobody in this codebase wrote — a hand-edit, a merge resolver's
+    output, a file recovered out of the remote's history.
     """
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
-    await vault.register("mcp_server", "files", {"value": "local"})
+    local = await vault.register("mcp_server", "files", {"value": "local"})
     await vault.set_enabled("mcp_server", "files", False)
     await vault.set_scope("mcp_server", "files", Scope(agents=["claude-code"]))
 
-    path = "resources/mcp_server/files.yaml"
+    path = _doc_at("mcp_server", local.uid)
     _stage_doc(
         vault.worktree,
         path,
         {
+            "uid": local.uid,
             "kind": "mcp_server",
             "name": "files",
             "description": None,
             "enabled": True,
-            "config": {"value": "from-the-old-build"},
+            "config": {"value": "from-somewhere-else"},
             "scope": {"agents": [], "machines": [MACHINE_B]},
         },
     )
 
     await applier.upsert(path)
 
-    got = await vault.resources.get(ResourceRef("mcp_server", "files"))
-    assert got.config["value"] == "from-the-old-build", "the document must still import"
-    # Neither half of the reach it carried — not the ``enabled: true`` that
+    got = await vault.resources.get(local.uid)
+    assert got.config["value"] == "from-somewhere-else", "the document must still import"
+    # Neither half of the reach it spelled — not the ``enabled: true`` that
     # would have switched this server back on, nor the two scope axes, one of
     # which names a machine this build has no field for.
     assert got.enabled is False
     assert got.scope == Scope(agents=["claude-code"])
 
 
-async def test_bundle_reads_an_older_builds_document_but_not_a_misspelled_one(
+async def test_bundle_reads_a_whole_document_and_refuses_a_field_it_does_not_know(
     vault: VaultMachine,
 ) -> None:
-    """The same leniency at the seam that validates a whole document.
+    """``Bundle.read_resource_docs`` is where a document is parsed rather than
+    merely read key by key, so it is where strictness is decidable.
 
-    ``Bundle.read_resource_docs`` is where a document is parsed rather than
-    merely read key by key, so it is where "tolerate the two retired reach
-    fields, refuse anything else" is decidable. Tolerated means *dropped*: the
-    parsed document has no field left to carry reach in.
+    It used to make one exception, for the two retired reach fields, so that a
+    machine still on an older build could not quarantine its documents on every
+    machine that had upgraded. Bumping the bundle layout retired the exception
+    with the problem: a build that would write those fields cannot write into
+    this tree at all — it reads the manifest, finds layout 2 and refuses the
+    remote. So every field is judged the same way again, and the parsed
+    document has no field to carry reach in either.
     """
     root = pathlib.Path(vault.bundle.path)
+    uid = _uid("mcp_server/old")
     _stage_doc(
         root,
-        "resources/mcp_server/old.yaml",
+        _doc_at("mcp_server", uid),
         {
+            "uid": uid,
             "kind": "mcp_server",
             "name": "old",
             "description": None,
-            "enabled": False,
             "config": {"value": "v"},
-            "scope": {"agents": [], "machines": [MACHINE_B]},
         },
     )
 
     docs = vault.bundle.read_resource_docs()
 
-    assert [(d.kind, d.name, d.config) for d in docs] == [("mcp_server", "old", {"value": "v"})]
+    assert [(d.uid, d.kind, d.name, d.config) for d in docs] == [
+        (uid, "mcp_server", "old", {"value": "v"})
+    ]
     assert not hasattr(docs[0], "enabled")
     assert not hasattr(docs[0], "scope")
 
-    # And a typo'd key is still a document that would import as something
-    # other than what it says.
+    # A typo'd key is a document that would import as something other than what
+    # it says...
+    typo = _uid("mcp_server/typo")
+    typo_path = _stage_doc(
+        root,
+        _doc_at("mcp_server", typo),
+        {
+            "uid": typo,
+            "kind": "mcp_server",
+            "name": "typo",
+            "description": None,
+            "config": {},
+            "scop": None,
+        },
+    )
+    with pytest.raises(SyncSerializationError):
+        vault.bundle.read_resource_docs()
+
+    # ...and so, now, is one that spells a reach the document stopped carrying.
     _stage_doc(
         root,
-        "resources/mcp_server/typo.yaml",
-        {"kind": "mcp_server", "name": "typo", "description": None, "config": {}, "scop": None},
+        typo_path.relative_to(root).as_posix(),
+        {
+            "uid": typo,
+            "kind": "mcp_server",
+            "name": "typo",
+            "description": None,
+            "config": {},
+            "enabled": False,
+        },
+    )
+    with pytest.raises(SyncSerializationError):
+        vault.bundle.read_resource_docs()
+
+    # And a document with no identity at all — everything the previous layout
+    # wrote — is refused rather than guessed at.
+    typo_path.unlink()
+    _stage_doc(
+        root,
+        _doc_at("mcp_server", "legacy"),
+        {"kind": "mcp_server", "name": "legacy", "description": None, "config": {}},
     )
     with pytest.raises(SyncSerializationError):
         vault.bundle.read_resource_docs()
@@ -699,11 +780,13 @@ async def test_resource_applier_runs_the_gate_before_it_writes_anything(
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[vault.gate], home=str(vault.home)
     )
-    path = "resources/mcp_server/blocked.yaml"
+    uid = _uid("mcp_server/blocked")
+    path = _doc_at("mcp_server", uid)
     _stage_doc(
         vault.worktree,
         path,
         {
+            "uid": uid,
             "kind": "mcp_server",
             "name": "blocked",
             "config": {"value": "nope", "config_dir": "${HOME}/.gone"},
@@ -739,10 +822,12 @@ async def test_resource_applier_registers_an_arriving_channel_with_its_binding(
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
+    uid = _uid("channel/theirs")
     _stage_doc(
         vault.worktree,
-        "resources/channel/theirs.yaml",
+        _doc_at("channel", uid),
         {
+            "uid": uid,
             "kind": "channel",
             "name": "theirs",
             "description": None,
@@ -750,7 +835,7 @@ async def test_resource_applier_registers_an_arriving_channel_with_its_binding(
         },
     )
 
-    await applier.upsert("resources/channel/theirs.yaml")
+    await applier.upsert(_doc_at("channel", uid))
 
     arrived = await vault.find("channel", "theirs")
     assert arrived is not None
@@ -774,11 +859,14 @@ async def test_a_channel_deletion_in_the_tree_deletes_the_channel(
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
-    await vault.register("channel", "seatalk", {"value": "port-8787", "runs_on": vault.machine_id})
+    seatalk = await vault.register(
+        "channel", "seatalk", {"value": "port-8787", "runs_on": vault.machine_id}
+    )
     _stage_doc(
         vault.worktree,
-        "resources/channel/seatalk.yaml",
+        _doc_at("channel", seatalk.uid),
         {
+            "uid": seatalk.uid,
             "kind": "channel",
             "name": "seatalk",
             "description": None,
@@ -786,7 +874,7 @@ async def test_a_channel_deletion_in_the_tree_deletes_the_channel(
         },
     )
 
-    await applier.remove("resources/channel/seatalk.yaml")
+    await applier.remove(_doc_at("channel", seatalk.uid))
 
     assert await vault.find("channel", "seatalk") is None
 
@@ -805,17 +893,17 @@ async def test_resource_applier_ignores_a_document_of_a_kind_that_does_not_conve
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
-    path = "resources/memory/theirs.yaml"
+    uid = _uid("memory/theirs")
+    path = _doc_at("memory", uid)
     _stage_doc(
         vault.worktree,
         path,
-        {"kind": "memory", "name": "theirs", "config": {"value": "/their/repo"}},
+        {"uid": uid, "kind": "memory", "name": "theirs", "config": {"value": "/their/repo"}},
     )
 
     await applier.upsert(path)
 
-    with pytest.raises(ResourceNotFound):
-        await vault.resources.get(ResourceRef("memory", "theirs"))
+    assert await vault.find("memory", "theirs") is None
 
 
 async def test_resource_applier_still_names_a_kind_it_does_not_know(
@@ -833,11 +921,12 @@ async def test_resource_applier_still_names_a_kind_it_does_not_know(
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
-    path = "resources/telepathy/whatever.yaml"
+    uid = _uid("telepathy/whatever")
+    path = _doc_at("telepathy", uid)
     _stage_doc(
         vault.worktree,
         path,
-        {"kind": "telepathy", "name": "whatever", "config": {"value": "x"}},
+        {"uid": uid, "kind": "telepathy", "name": "whatever", "config": {"value": "x"}},
     )
 
     with pytest.raises(UnknownKind):
@@ -851,14 +940,14 @@ async def test_resource_applier_will_not_delete_a_derived_row_the_remote_dropped
     arriving from the tree has no standing to remove it — and once the tree
     stops carrying these documents at all, every machine's export publishes
     exactly that deletion."""
-    await vault.register("memory", "coffer", {"value": "/here"})
+    coffer = await vault.register("memory", "coffer", {"value": "/here"})
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
 
-    await applier.remove("resources/memory/coffer.yaml")
+    await applier.remove(_doc_at("memory", coffer.uid))
 
-    assert await vault.resources.get(ResourceRef("memory", "coffer")) is not None
+    assert await vault.resources.get(coffer.uid) is not None
 
 
 async def test_resource_applier_removes_a_row_and_agrees_when_it_is_already_gone(
@@ -867,14 +956,20 @@ async def test_resource_applier_removes_a_row_and_agrees_when_it_is_already_gone
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
     )
-    await vault.register("mcp_server", "files", {"value": "files"})
+    files = await vault.register("mcp_server", "files", {"value": "files"})
     await vault.register("mcp_server", "keep", {"value": "keep"})
 
-    await applier.remove("resources/mcp_server/files.yaml")
+    await applier.remove(_doc_at("mcp_server", files.uid))
     assert await vault.resource_names("mcp_server") == ["keep"]
 
     # Two machines deleting the same resource is agreement, not failure.
-    await applier.remove("resources/mcp_server/files.yaml")
+    await applier.remove(_doc_at("mcp_server", files.uid))
+    assert await vault.resource_names("mcp_server") == ["keep"]
+
+    # And so is a path from the previous bundle layout, which spells a name
+    # where this one spells an identity: no name is a uid this vault minted,
+    # so the deletions that clear those files out of the tree match nothing.
+    await applier.remove("resources/mcp_server/keep.yaml")
     assert await vault.resource_names("mcp_server") == ["keep"]
 
 

@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy.exc
-from sqlalchemy import and_, or_, select
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.domain.audit import AuditEntry
 from coffer.domain.errors import ResourceAlreadyExists, ResourceNotFound
@@ -20,7 +20,7 @@ from coffer.domain.internal_engine_config import (
     GlobalInternalEngineConfig,
     UpkeepSetting,
 )
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.models import (
     AuditLogModel,
@@ -37,6 +37,7 @@ __all__ = ["SqlAlchemyRetentionRepo"]
 def _to_domain(row: ResourceModel) -> Resource:
     return Resource(
         id=row.id,
+        uid=row.uid,
         kind=row.kind,
         name=row.name,
         description=row.description,
@@ -59,14 +60,27 @@ class SqlAlchemyResourceRepo:
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
         self._sm = sm
 
-    async def find(self, ref: ResourceRef) -> Resource | None:
+    async def find(self, uid: str) -> Resource | None:
+        async with self._sm() as session:
+            row = await self._row(session, uid)
+            return _to_domain(row) if row else None
+
+    async def find_by_name(self, kind: str, name: str) -> Resource | None:
+        """Resolve a LABEL to a resource — for a human's input, and for the
+        within-kind uniqueness check. Never used to carry identity around."""
         async with self._sm() as session:
             stmt = select(ResourceModel).where(
-                ResourceModel.kind == ref.kind,
-                ResourceModel.name == ref.name,
+                ResourceModel.kind == kind,
+                ResourceModel.name == name,
             )
             row = (await session.execute(stmt)).scalar_one_or_none()
             return _to_domain(row) if row else None
+
+    @staticmethod
+    async def _row(session: AsyncSession, uid: str) -> ResourceModel | None:
+        stmt = select(ResourceModel).where(ResourceModel.uid == uid)
+        row: ResourceModel | None = (await session.execute(stmt)).scalar_one_or_none()
+        return row
 
     async def list(
         self,
@@ -95,6 +109,7 @@ class SqlAlchemyResourceRepo:
     async def create(self, resource: Resource) -> Resource:
         async with self._sm() as session:
             row = ResourceModel(
+                uid=resource.uid,
                 kind=resource.kind,
                 name=resource.name,
                 description=resource.description,
@@ -114,18 +129,14 @@ class SqlAlchemyResourceRepo:
 
     async def update_config(
         self,
-        ref: ResourceRef,
+        uid: str,
         config: dict[str, Any],
         description: str | None,
     ) -> Resource:
         async with self._sm() as session:
-            stmt = select(ResourceModel).where(
-                ResourceModel.kind == ref.kind,
-                ResourceModel.name == ref.name,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            row = await self._row(session, uid)
             if row is None:
-                raise ResourceNotFound(ref.kind, ref.name)
+                raise ResourceNotFound(uid)
             row.config_json = json.dumps(config)
             row.description = description
             row.updated_at = datetime.now(tz=UTC)
@@ -133,15 +144,11 @@ class SqlAlchemyResourceRepo:
             await session.refresh(row)
             return _to_domain(row)
 
-    async def set_enabled(self, ref: ResourceRef, enabled: bool) -> Resource:
+    async def set_enabled(self, uid: str, enabled: bool) -> Resource:
         async with self._sm() as session:
-            stmt = select(ResourceModel).where(
-                ResourceModel.kind == ref.kind,
-                ResourceModel.name == ref.name,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            row = await self._row(session, uid)
             if row is None:
-                raise ResourceNotFound(ref.kind, ref.name)
+                raise ResourceNotFound(uid)
             row.enabled = enabled
             row.updated_at = datetime.now(tz=UTC)
             await session.commit()
@@ -150,15 +157,11 @@ class SqlAlchemyResourceRepo:
 
     async def update_scope(
         self,
-        ref: ResourceRef,
+        uid: str,
         scope: Scope | None,
     ) -> Resource | None:
         async with self._sm() as session:
-            stmt = select(ResourceModel).where(
-                ResourceModel.kind == ref.kind,
-                ResourceModel.name == ref.name,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            row = await self._row(session, uid)
             if row is None:
                 return None
             row.scope_json = _scope_json(scope)
@@ -167,8 +170,9 @@ class SqlAlchemyResourceRepo:
             await session.refresh(row)
             return _to_domain(row)
 
-    async def rename(self, ref: ResourceRef, new_name: str) -> Resource:
-        """Move a row to ``new_name`` within its kind.
+    async def rename(self, uid: str, new_name: str) -> Resource:
+        """Change the row's LABEL. The resource does not move; nothing else
+        pointing at it has to be rewritten, because nothing else holds the name.
 
         The (kind, name) unique constraint is the authority on collisions, so a
         racing writer that claimed the name first surfaces as the same
@@ -176,29 +180,22 @@ class SqlAlchemyResourceRepo:
         never as a raw IntegrityError.
         """
         async with self._sm() as session:
-            stmt = select(ResourceModel).where(
-                ResourceModel.kind == ref.kind,
-                ResourceModel.name == ref.name,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            row = await self._row(session, uid)
             if row is None:
-                raise ResourceNotFound(ref.kind, ref.name)
+                raise ResourceNotFound(uid)
+            kind = row.kind
             row.name = new_name
             row.updated_at = datetime.now(tz=UTC)
             try:
                 await session.commit()
             except sqlalchemy.exc.IntegrityError as e:
-                raise ResourceAlreadyExists(ref.kind, new_name) from e
+                raise ResourceAlreadyExists(kind, new_name) from e
             await session.refresh(row)
             return _to_domain(row)
 
-    async def delete(self, ref: ResourceRef) -> None:
+    async def delete(self, uid: str) -> None:
         async with self._sm() as session:
-            stmt = select(ResourceModel).where(
-                ResourceModel.kind == ref.kind,
-                ResourceModel.name == ref.name,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            row = await self._row(session, uid)
             if row is None:
                 return  # idempotent
             await session.delete(row)
@@ -263,20 +260,18 @@ class SqlAlchemyAuditRepo:
         async with self._sm() as session:
             stmt = select(AuditLogModel).order_by(AuditLogModel.timestamp.desc())
             if resource_id is not None:
-                # Match the resource by id OR by the label it carries, so a
-                # renamed resource's whole trail comes back — including the rows
-                # written under its old name, and the rows written before the id
-                # column existed.
-                label = and_(
-                    AuditLogModel.resource_kind == kind,
-                    AuditLogModel.resource_name == name,
-                )
-                stmt = stmt.where(or_(AuditLogModel.resource_id == resource_id, label))
-            else:
-                if kind is not None:
-                    stmt = stmt.where(AuditLogModel.resource_kind == kind)
-                if name is not None:
-                    stmt = stmt.where(AuditLogModel.resource_name == name)
+                # By id alone. The old query ORed in "rows carrying this kind
+                # and name", which brought back a renamed resource's earlier
+                # trail — and, in exactly the same breath, the trail of a
+                # DIFFERENT resource that had held the name before being
+                # deleted. Two objects' histories rendered as one is a worse
+                # answer than a short one, and now that every write records the
+                # row's real id there is nothing left for the fallback to
+                # rescue except rows written before migration 0067, which are
+                # still readable in the unfiltered and kind-filtered views.
+                stmt = stmt.where(AuditLogModel.resource_id == resource_id)
+            elif kind is not None:
+                stmt = stmt.where(AuditLogModel.resource_kind == kind)
             if event_type is not None:
                 stmt = stmt.where(AuditLogModel.event_type == event_type)
             if event_prefix is not None:

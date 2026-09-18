@@ -14,6 +14,7 @@ import {
   readDaemonToken,
   readReply,
   registerMcpServer,
+  resolveResourceUid,
   sendEnvelope,
   spawnShim,
   uniqueName,
@@ -27,7 +28,9 @@ import {
  */
 async function refreshCapabilities(serverName: string): Promise<void> {
   const { port, token } = readDaemonToken();
-  const url = `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${serverName}/refresh`;
+  const uid = await resolveResourceUid("mcp_server", serverName);
+  if (uid === null) throw new Error(`no mcp_server named ${serverName}`);
+  const url = `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${uid}/refresh`;
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -50,12 +53,14 @@ async function disableTool(
   toolName: string,
 ): Promise<void> {
   const { port, token } = readDaemonToken();
+  const uid = await resolveResourceUid("mcp_server", serverName);
+  if (uid === null) throw new Error(`no mcp_server named ${serverName}`);
   // The capability key travels in the BODY, not the path. A path-shaped
   // variant used to exist alongside this one and was deleted as legacy; this
   // helper was its last caller anywhere, and it lived in the one tier
   // `make verify` does not run, so nothing local caught the 404.
   const url =
-    `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${serverName}` +
+    `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${uid}` +
     `/capabilities/tool/disable`;
   const response = await fetch(url, {
     method: "POST",

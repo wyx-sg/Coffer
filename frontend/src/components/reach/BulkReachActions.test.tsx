@@ -8,6 +8,11 @@
 // Its button cannot state a current reach the way a row's does — a mixed
 // selection has none — so it names the action instead, opens with nothing
 // chosen, and writes nothing at all if the user picks nothing.
+//
+// Every request it fans out is addressed by the row's UID alone; the `kind` a
+// row carries never reaches the wire, it only says which list key the batch
+// refreshes. The fixtures keep uid and name unalike so an assertion that
+// reached for the label would fail rather than coincide.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -16,12 +21,21 @@ import type { PropsWithChildren } from "react";
 import { BulkReachActions } from "./BulkReachActions";
 import { ApiError } from "@/lib/api/errors";
 
+/** The agents the machine knows: the uid a scope stores, and the name the
+ *  pick-list rows are labelled by. */
+const CLAUDE = "u-agent-7f21";
+
 vi.mock("@/lib/api/resources", () => ({
-  resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
+  resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
 }));
 vi.mock("@/lib/api/scope", () => ({ scopeApi: { get: vi.fn(), put: vi.fn() } }));
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "claude" }, { name: "codex" }] })),
+  useAgents: vi.fn(() => ({
+    data: [
+      { uid: "u-agent-7f21", name: "claude" },
+      { uid: "u-agent-be04", name: "codex" },
+    ],
+  })),
 }));
 
 const toastSuccess = vi.fn();
@@ -36,9 +50,14 @@ const { scopeApi } = await import("@/lib/api/scope");
 const resources = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const scope = scopeApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
+/** Two selected skills, by uid. They are labelled "writing" and "reviewing",
+ *  which is what the table shows and what nothing below asserts on. */
+const WRITING_UID = "u-skill-4e8d";
+const REVIEWING_UID = "u-skill-0a13";
+
 const ROWS = [
-  { kind: "skill", name: "writing" },
-  { kind: "skill", name: "reviewing" },
+  { kind: "skill", uid: WRITING_UID },
+  { kind: "skill", uid: REVIEWING_UID },
 ];
 
 function mount(props: Partial<Parameters<typeof BulkReachActions>[0]> = {}) {
@@ -58,6 +77,8 @@ const openPanel = () => fireEvent.click(trigger());
 const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
 const closePanel = () =>
   fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+/** One agent's row in the pick-list, by the NAME it is labelled with. */
+const agentRow = (name: string) => within(screen.getByTestId(`scope-agent-${name}`));
 
 /** Open the panel and pick one whole-value choice, which also closes it. */
 const pick = (label: RegExp) => {
@@ -89,14 +110,18 @@ describe("BulkReachActions", () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 
-  test("Disabled disables every selected row and writes no scope", async () => {
+  test("Disabled disables every selected row by uid, and writes no scope", async () => {
     resources.disable.mockResolvedValue(undefined);
     const { onDone } = mount();
 
     pick(/^disabled$/i);
 
     await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
-    expect(resources.disable.mock.calls.map((c) => c[1]).sort()).toEqual(["reviewing", "writing"]);
+    // The uid is the whole argument: the kind the row carries is for the
+    // invalidation, not for the route.
+    expect(resources.disable.mock.calls.map((c) => c[0]).sort()).toEqual(
+      [REVIEWING_UID, WRITING_UID].sort(),
+    );
     expect(scope.put).not.toHaveBeenCalled();
     await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
@@ -110,7 +135,7 @@ describe("BulkReachActions", () => {
 
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
     expect(resources.enable).toHaveBeenCalledTimes(2);
-    expect(scope.put.mock.calls.every((c) => c[2] === null)).toBe(true);
+    expect(scope.put.mock.calls.every((c) => c[1] === null)).toBe(true);
   });
 
   test("Restricted writes the SAME staged scope to every row, once", async () => {
@@ -122,36 +147,37 @@ describe("BulkReachActions", () => {
     fireEvent.click(choice(/only selected agents/i));
     // The panel opens on an EMPTY draft: a bulk write is a new intent, not an
     // edit of whichever row happened to be first.
-    expect(
-      within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"),
-    ).not.toBeChecked();
+    expect(agentRow("claude").getByRole("checkbox")).not.toBeChecked();
 
-    fireEvent.click(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"));
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
     expect(scope.put).not.toHaveBeenCalled();
 
     closePanel();
     await waitFor(() => expect(scope.put).toHaveBeenCalledTimes(2));
-    expect(scope.put.mock.calls.map((c) => [c[1], c[2]])).toEqual([
-      ["writing", { agents: ["claude"] }],
-      ["reviewing", { agents: ["claude"] }],
+    // Ticked by name, written as a uid, addressed by a uid — both halves of
+    // the translation in one assertion.
+    expect(scope.put.mock.calls.map((c) => [c[0], c[1]])).toEqual([
+      [WRITING_UID, { agents: [CLAUDE] }],
+      [REVIEWING_UID, { agents: [CLAUDE] }],
     ]);
   });
 
   test("a kind with no scope gets two choices, and Enabled writes only the flag", async () => {
     resources.enable.mockResolvedValue(undefined);
-    mount({ rows: [{ kind: "channel", name: "tg" }], supportsScope: false });
+    const TG_UID = "u-channel-1b77"; // named "tg"
+    mount({ rows: [{ kind: "channel", uid: TG_UID }], supportsScope: false });
 
     openPanel();
     expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
     fireEvent.click(choice(/^enabled$/i));
 
-    await waitFor(() => expect(resources.enable).toHaveBeenCalledWith("channel", "tg"));
+    await waitFor(() => expect(resources.enable).toHaveBeenCalledWith(TG_UID));
     expect(scope.put).not.toHaveBeenCalled();
   });
 
   test("one failed row does not abort the rest, and the partial is reported", async () => {
-    resources.disable.mockImplementation((_kind: string, name: string) =>
-      name === "writing"
+    resources.disable.mockImplementation((uid: string) =>
+      uid === WRITING_UID
         ? Promise.reject(new ApiError("RESOURCE_NOT_FOUND", "gone"))
         : Promise.resolve(undefined),
     );
@@ -171,8 +197,8 @@ describe("BulkReachActions", () => {
 
   test("a row that enables but fails its scope write counts as failed, not half-done", async () => {
     resources.enable.mockResolvedValue(undefined);
-    scope.put.mockImplementation((_kind: string, name: string) =>
-      name === "writing"
+    scope.put.mockImplementation((uid: string) =>
+      uid === WRITING_UID
         ? Promise.reject(new ApiError("VALIDATION_ERROR", "bad"))
         : Promise.resolve(undefined),
     );

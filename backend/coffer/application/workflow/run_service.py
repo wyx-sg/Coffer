@@ -28,7 +28,6 @@ from coffer.application.workflow.commands import (
     parse_snapshot,
     utcnow,
 )
-from coffer.application.workflow.kind import KIND_WORKFLOW
 from coffer.application.workflow.ports import (
     ApprovalRepoPort,
     ArtifactStorePort,
@@ -41,7 +40,7 @@ from coffer.application.workflow.ports import (
 )
 from coffer.application.workflow.run_label_ops import KEEP, KeepStored
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workflow.errors import TemplateDisabled
 from coffer.domain.workflow.events import EventActor, EventType
 from coffer.domain.workflow.run import (
@@ -72,10 +71,12 @@ class TemplateSourcePort(Protocol):
     Declared here rather than in ``ports`` because it is not a seam to another
     kind: it is the resource framework, which this layer is a kind of.
     ``ResourceService.get`` satisfies it structurally, and a test satisfies it
-    with three lines.
+    with three lines. It takes the template's **uid**, because that is a
+    resource's identity — a run started from a template the developer renames
+    an hour later was still started from that template.
     """
 
-    async def get(self, ref: ResourceRef) -> Resource: ...
+    async def get(self, uid: str) -> Resource: ...
 
 
 class WorkflowRunService:
@@ -126,7 +127,7 @@ class WorkflowRunService:
     async def create_run(
         self,
         *,
-        template: str,
+        template_uid: str,
         title: str,
         agent: str | None = None,
         actor: EventActor = DEFAULT_ACTOR,
@@ -150,12 +151,12 @@ class WorkflowRunService:
         that task starts, so a run created and never started has spent nothing
         and left no empty thread behind for the developer to wonder about.
         """
-        resource = await self._templates.get(ResourceRef(KIND_WORKFLOW, template))
+        resource = await self._templates.get(template_uid)
         # Enabled decides whether a workflow starts new runs (FR-066), and the
         # decision is made here so that it holds for the CLI and the API as
         # well as for the dropdown that also hides it.
         if not resource.enabled:
-            raise TemplateDisabled(template)
+            raise TemplateDisabled(resource.name)
         snapshot: dict[str, Any] = dict(resource.config)
         # Parsed once at creation so a template stored before a validation rule
         # existed is refused HERE, naming the field, rather than stalling the
@@ -175,7 +176,14 @@ class WorkflowRunService:
             workdir=workdir,
             machine_id=self._cmd.machine_id,
             template_snapshot=snapshot,
-            template_ref=str(ResourceRef(KIND_WORKFLOW, template)),
+            # The template's LABEL as it read at this moment, not its
+            # identity: this is provenance for a person to recognise, it is
+            # rendered raw as the run's subtitle, and it is allowed to dangle
+            # (FR-010 — the snapshot beside it is what the run actually
+            # executes). Freezing the label is what makes it still answer
+            # "what was this started from" after the template is renamed or
+            # deleted, which an identity nothing resolves any more would not.
+            template_ref=resource.name,
             status=RunStatus.DRAFT.value,
             inputs=[],
             now=self._clock(),
@@ -249,8 +257,8 @@ class WorkflowRunService:
         await self._audit.record(
             event.value,
             actor="user",
-            resource_kind=KIND_WORKFLOW,
-            resource_name=run.id,
+            subject_kind="workflow_run",
+            subject_name=run.id,
             detail={"status": run.status, "title": run.title, "reason": reason},
         )
 

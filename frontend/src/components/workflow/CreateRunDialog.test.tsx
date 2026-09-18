@@ -3,6 +3,10 @@
 // being delivered. The working directory is Coffer's to make, and inputs are
 // mounted on the run's own page for the whole of its life (FR-050) — so both
 // fields are asserted ABSENT here, not merely optional.
+//
+// The picker shows names and sends uids, so the fixtures carry both: a run
+// created from a label would be created from whatever that label pointed at
+// when the request landed.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -31,8 +35,8 @@ describe("CreateRunDialog", () => {
   beforeEach(() => {
     mutate.mockReset();
     templates.mockReturnValue([
-      { name: "delivery", enabled: true },
-      { name: "hotfix", enabled: true },
+      { uid: "wf-delivery", name: "delivery", enabled: true },
+      { uid: "wf-hotfix", name: "hotfix", enabled: true },
     ]);
   });
   afterEach(() => vi.clearAllMocks());
@@ -63,15 +67,15 @@ describe("CreateRunDialog", () => {
 
     fireEvent.click(submit);
     expect(mutate).toHaveBeenCalledTimes(1);
-    expect(mutate.mock.calls[0][0]).toEqual({ template: "delivery", title: "Ship it" });
+    expect(mutate.mock.calls[0][0]).toEqual({ template_uid: "wf-delivery", title: "Ship it" });
   });
 
   test("a switched-off workflow is not offered", async () => {
     // The daemon refuses a run from a disabled workflow (FR-066), so offering
     // it here would be offering a refusal.
     templates.mockReturnValue([
-      { name: "delivery", enabled: true },
-      { name: "retired", enabled: false },
+      { uid: "wf-delivery", name: "delivery", enabled: true },
+      { uid: "wf-retired", name: "retired", enabled: false },
     ]);
     render(wrap());
 
@@ -81,7 +85,7 @@ describe("CreateRunDialog", () => {
   });
 
   test("says so when every workflow is switched off, rather than showing an empty picker", () => {
-    templates.mockReturnValue([{ name: "retired", enabled: false }]);
+    templates.mockReturnValue([{ uid: "wf-retired", name: "retired", enabled: false }]);
     render(wrap());
 
     expect(screen.getByText(/Every workflow is switched off/)).toBeInTheDocument();

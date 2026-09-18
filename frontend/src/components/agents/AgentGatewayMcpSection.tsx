@@ -10,13 +10,13 @@ import { useTranslation } from "react-i18next";
 
 import { CofferGatewayCard } from "@/components/agents/AgentManagedLink";
 
-export function AgentGatewayMcpSection({ agentName }: { agentName: string }) {
+export function AgentGatewayMcpSection({ agentUid }: { agentUid: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
     <CofferGatewayCard
-      agentName={agentName}
+      agentUid={agentUid}
       title={t("agents.workspace.mcp.gatewayTitle")}
       hint={t("agents.workspace.mcp.gatewayManagedHint")}
       buttonLabel={t("agents.workspace.mcp.openServersPage")}

@@ -22,19 +22,19 @@ coffer resource list --kind agent    # one kind
 coffer resource list --json          # for scripts
 ```
 
-Each row is a `<kind>:<name>` reference, which is the only identifier any of
+Each row carries a `uid`, which is the only identifier any of
 these commands takes:
 
 ```bash
-coffer resource show mcp_server:filesystem
-coffer resource show mcp_server:filesystem --json
+coffer resource show mcp_server filesystem
+coffer resource show mcp_server filesystem --json
 ```
 
 ## Switch one off without deleting it
 
 ```bash
-coffer resource disable mcp_server:filesystem
-coffer resource enable  mcp_server:filesystem
+coffer resource disable mcp_server filesystem
+coffer resource enable  mcp_server filesystem
 ```
 
 Disabled means "registered, configured, and not in play". A kind whose
@@ -48,10 +48,10 @@ Reach is one allow-list of agent names. No list at all means every agent; an
 empty list means none, which is a deliberate way to park something.
 
 ```bash
-coffer scope show mcp_server:filesystem
-coffer scope set  mcp_server:filesystem --agents claude-code,codex
-coffer scope set  mcp_server:filesystem --no-agents     # dormant
-coffer scope clear mcp_server:filesystem                # back to every agent
+coffer scope show mcp_server filesystem
+coffer scope set  mcp_server filesystem --agents claude-code,codex
+coffer scope set  mcp_server filesystem --no-agents     # dormant
+coffer scope clear mcp_server filesystem                # back to every agent
 ```
 
 Two things worth knowing:
@@ -69,8 +69,8 @@ in `coffer scope show`, and refuses a non-null write.
 ## Delete one, and know what goes with it
 
 ```bash
-coffer resource delete mcp_server:filesystem            # asks first
-coffer resource delete mcp_server:filesystem --force
+coffer resource delete mcp_server filesystem            # asks first
+coffer resource delete mcp_server filesystem --force
 ```
 
 What happens, in order: the kind's own cleanup runs while the resource can
@@ -111,7 +111,7 @@ audited.
 ## Ask what the daemon is busy with
 
 Some passes take minutes and rewrite files with a model in the loop — memory's
-`organise` over a partition, knowledge's `tidy` over a collection. Whether one
+`distil` over a partition, knowledge's `curate` over a collection. Whether one
 is running is a fact about the daemon rather than about the button you pressed:
 
 ```bash

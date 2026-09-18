@@ -47,12 +47,22 @@ class StdioUpstreamConnection:
         spawn_timeout_seconds: int = 30,
         request_timeout_seconds: int = 120,
         server_name: str = "upstream",
+        server_uid: str = "",
     ) -> None:
         self._transport = transport
         self._env_overlay = env_overlay
         self._spawn_timeout = spawn_timeout_seconds
         self._request_timeout = request_timeout_seconds
+        # Two values, two jobs. ``_server_name`` is the label: it titles this
+        # upstream's stderr file and every timeout message a user reads.
+        # ``_server_uid`` is the identity the PID files are recorded under, so a
+        # leaked child is still attributable to the same registration after the
+        # user renames it (ADR resource-identity-is-an-immutable-uid). It
+        # defaults to empty for a hand-built connection in a test that spawns
+        # nothing it cares to attribute; ``record_spawn`` then writes the file
+        # under the empty identity, which still reaps by pid + cmdline.
         self._server_name = server_name
+        self._server_uid = server_uid
 
         self._exit_stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
@@ -152,7 +162,7 @@ class StdioUpstreamConnection:
                 for new_pid in new_pids:
                     try:
                         cmd = psutil.Process(new_pid).cmdline()
-                        self._pid_files.append(record_spawn(self._server_name, new_pid, cmd))
+                        self._pid_files.append(record_spawn(self._server_uid, new_pid, cmd))
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
                         pass
             # --- end PID snapshot ---

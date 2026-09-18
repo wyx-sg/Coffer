@@ -35,8 +35,13 @@ const SERVER = {
 describe("useImportMcpServers", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  test("registers each server and refreshes the resources cache", async () => {
-    const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
+  test("registers each server and records the uid the registration returned", async () => {
+    // POST /resources answers with the created row, whose `uid` is the handle
+    // the import keeps — the name it posted is only what the pasted document
+    // called it.
+    const postMock = vi
+      .fn()
+      .mockResolvedValue({ data: { uid: "u-filesystem", name: "fs" }, error: undefined });
     getApiClientMock.mockReturnValue({ POST: postMock } as unknown as ReturnType<
       typeof getApiClient
     >);
@@ -44,16 +49,20 @@ describe("useImportMcpServers", () => {
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
     const { result } = renderHook(() => useImportMcpServers(), { wrapper });
 
-    const created = new Set<string>();
+    // Keyed by NAME (that is what the pasted batch says) and valued by uid
+    // (that is what a caller acts on).
+    const created = new Map<string, string>();
+    let imported: { name: string; uid: string }[] = [];
     await act(async () => {
-      await result.current.mutateAsync({ servers: [SERVER], created });
+      imported = await result.current.mutateAsync({ servers: [SERVER], created });
     });
 
     expect(postMock).toHaveBeenCalledWith(
       "/resources",
       expect.objectContaining({ body: expect.objectContaining({ name: "fs" }) }),
     );
-    expect(created.has("fs")).toBe(true);
+    expect(created.get("fs")).toBe("u-filesystem");
+    expect(imported).toEqual([{ name: "fs", uid: "u-filesystem" }]);
     await waitFor(() =>
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: resourcesKey }),
@@ -61,18 +70,27 @@ describe("useImportMcpServers", () => {
     );
   });
 
-  test("skips servers this session already created", async () => {
-    const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
+  test("skips servers this session already created, still reporting their uid", async () => {
+    const postMock = vi
+      .fn()
+      .mockResolvedValue({ data: { uid: "u-x", name: "fs" }, error: undefined });
     getApiClientMock.mockReturnValue({ POST: postMock } as unknown as ReturnType<
       typeof getApiClient
     >);
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useImportMcpServers(), { wrapper });
 
+    let imported: { name: string; uid: string }[] = [];
     await act(async () => {
-      await result.current.mutateAsync({ servers: [SERVER], created: new Set(["fs"]) });
+      imported = await result.current.mutateAsync({
+        servers: [SERVER],
+        created: new Map([["fs", "u-filesystem"]]),
+      });
     });
     expect(postMock).not.toHaveBeenCalled();
+    // A retry that re-POSTs nothing must still say where the server is, or the
+    // dialog could not follow a one-server import to its page.
+    expect(imported).toEqual([{ name: "fs", uid: "u-filesystem" }]);
   });
 });
 
@@ -87,7 +105,7 @@ describe("useTestMcpServer", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(() => useTestMcpServer("fs"), { wrapper });
+    const { result } = renderHook(() => useTestMcpServer("u-filesystem"), { wrapper });
 
     await act(async () => {
       await result.current.mutateAsync().catch(() => undefined);

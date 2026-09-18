@@ -34,13 +34,13 @@ async def test_disable_stops_the_adapter_and_enable_restarts_it(env: ChannelEnv)
     assert first.callbacks is not None  # inbound delivery wired to the processor
     assert env.processor.binding("tg") is not None
 
-    await env.resources.set_enabled(resource.ref, False, actor="cli")
+    await env.resources.set_enabled(resource.uid, False, actor="cli")
     await env.runtime.reconcile_once()
     assert env.runtime.is_running("tg") is False
     assert first.stopped is True
     assert env.processor.binding("tg") is None
 
-    await env.resources.set_enabled(resource.ref, True, actor="cli")
+    await env.resources.set_enabled(resource.uid, True, actor="cli")
     await env.runtime.reconcile_once()
     assert env.runtime.is_running("tg") is True
     assert len(env.created_adapters) == 2
@@ -61,7 +61,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     env.pairing.issue("tg")
     assert (await env.peers.owner_peer(resource.id)) is not None
 
-    await env.resources.delete(resource.ref, actor="cli")
+    await env.resources.delete(resource.uid, actor="cli")
 
     # on_delete → runtime.evict: adapter stopped, binding gone, pairing dropped.
     assert adapter.stopped is True
@@ -70,7 +70,7 @@ async def test_delete_stops_the_adapter_and_removes_the_peer_row(env: ChannelEnv
     assert env.pairing.pending("tg") is False
     # The resource row is gone and the peer row went with it (FK cascade).
     with pytest.raises(ResourceNotFound):
-        await env.resources.get(resource.ref)
+        await env.resources.get(resource.uid)
     assert await env.peers.owner_peer(resource.id) is None
 
 
@@ -81,23 +81,26 @@ async def test_listener_tracks_the_enabled_seatalk_channel(env: ChannelEnv) -> N
     env.keyring.set("channel/st/app", "app-secret-value")
     env.keyring.set("channel/st/sign", "signing-secret-value")
     resource = await env.resources.register(
-        kind="channel", name="st", config=_SEATALK_CONFIG, actor="cli"
+        kind="channel", name="st", config=await env.bound(_SEATALK_CONFIG), actor="cli"
     )
 
     await env.runtime.reconcile_once()
     assert env.listener.running() is True
     # The listener got the channel's materialized signing secret.
-    assert env.listener.ensure_running_calls[-1] == {"st": "signing-secret-value"}
+    # Keyed by the channel's UID: that key is the last segment of the public
+    # callback path the owner registers with SeaTalk, and a label they may
+    # rename cannot be what an externally-registered URL spells.
+    assert env.listener.ensure_running_calls[-1] == {resource.uid: "signing-secret-value"}
 
-    await env.resources.set_enabled(resource.ref, False, actor="cli")
+    await env.resources.set_enabled(resource.uid, False, actor="cli")
     await env.runtime.reconcile_once()
     assert env.listener.running() is False
     assert env.listener.ensure_stopped_calls >= 1
 
-    await env.resources.set_enabled(resource.ref, True, actor="cli")
+    await env.resources.set_enabled(resource.uid, True, actor="cli")
     await env.runtime.reconcile_once()
     assert env.listener.running() is True
-    assert env.listener.ensure_running_calls[-1] == {"st": "signing-secret-value"}
+    assert env.listener.ensure_running_calls[-1] == {resource.uid: "signing-secret-value"}
 
 
 _WEBSOCKET_CONFIG = {
@@ -119,17 +122,20 @@ async def test_websocket_only_deployment_keeps_the_listener_stopped(env: Channel
     reason the transport exists.
     """
     env.keyring.set("channel/st/app", "app-secret-value")
-    await env.resources.register(kind="channel", name="st", config=_WEBSOCKET_CONFIG, actor="cli")
+    resource = await env.resources.register(
+        kind="channel", name="st", config=await env.bound(_WEBSOCKET_CONFIG), actor="cli"
+    )
 
     await env.runtime.reconcile_once()
 
     assert env.runtime.is_running("st") is True
     assert env.listener.running() is False
     assert env.listener.ensure_running_calls == []
-    # The connection is held instead, with the app's own materialized credentials.
-    assert env.websockets.started == {"st": ("app-1", "app-secret-value")}
+    # The connection is held instead, with the app's own materialized
+    # credentials, under the same uid key the other two controllers use.
+    assert env.websockets.started == {resource.uid: ("app-1", "app-secret-value")}
     # Nothing on this channel reports webhook ingress.
-    status = await env.service.status("st")
+    status = await env.service.status(resource.uid)
     assert status.callback is not None
     assert status.callback.delivery == "websocket"
     assert status.callback.listener_running is False
@@ -143,38 +149,44 @@ async def test_a_webhook_channel_beside_a_websocket_one_still_runs_the_listener(
 ) -> None:
     env.keyring.set("channel/st/app", "app-secret-value")
     env.keyring.set("channel/st/sign", "signing-secret-value")
-    await env.resources.register(kind="channel", name="hook", config=_SEATALK_CONFIG, actor="cli")
-    await env.resources.register(kind="channel", name="ws", config=_WEBSOCKET_CONFIG, actor="cli")
+    hook = await env.resources.register(
+        kind="channel", name="hook", config=await env.bound(_SEATALK_CONFIG), actor="cli"
+    )
+    ws = await env.resources.register(
+        kind="channel", name="ws", config=await env.bound(_WEBSOCKET_CONFIG), actor="cli"
+    )
 
     await env.runtime.reconcile_once()
 
     # Only the webhook channel's secret reaches the listener; the websocket one
     # has no signing secret to give it.
     assert env.listener.running() is True
-    assert env.listener.ensure_running_calls[-1] == {"hook": "signing-secret-value"}
-    assert set(env.websockets.started) == {"ws"}
+    assert env.listener.ensure_running_calls[-1] == {hook.uid: "signing-secret-value"}
+    assert set(env.websockets.started) == {ws.uid}
 
 
 async def test_deleting_a_websocket_channel_stops_its_connection(env: ChannelEnv) -> None:
     env.keyring.set("channel/st/app", "app-secret-value")
     resource = await env.resources.register(
-        kind="channel", name="st", config=_WEBSOCKET_CONFIG, actor="cli"
+        kind="channel", name="st", config=await env.bound(_WEBSOCKET_CONFIG), actor="cli"
     )
     await env.runtime.reconcile_once()
-    assert env.websockets.running("st") is True
+    assert env.websockets.running(resource.uid) is True
 
-    await env.resources.delete(resource.ref, actor="cli")
+    await env.resources.delete(resource.uid, actor="cli")
 
     # on_delete → runtime.evict: the held connection goes with the channel.
-    assert "st" in env.websockets.stopped
-    assert env.websockets.running("st") is False
+    assert resource.uid in env.websockets.stopped
+    assert env.websockets.running(resource.uid) is False
 
 
 async def test_dispose_releases_every_held_connection(env: ChannelEnv) -> None:
     env.keyring.set("channel/st/app", "app-secret-value")
-    await env.resources.register(kind="channel", name="st", config=_WEBSOCKET_CONFIG, actor="cli")
+    resource = await env.resources.register(
+        kind="channel", name="st", config=await env.bound(_WEBSOCKET_CONFIG), actor="cli"
+    )
     await env.runtime.reconcile_once()
-    assert env.websockets.running("st") is True
+    assert env.websockets.running(resource.uid) is True
 
     await env.runtime.dispose()
 

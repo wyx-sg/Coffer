@@ -212,8 +212,8 @@ class WorkflowToolGate:
         await self._audit.record(
             AuditEventType.WORKFLOW_TOOL_CALL_GATED.value,
             actor="workflow",
-            resource_kind="workflow_run",
-            resource_name=run_id,
+            subject_kind="workflow_run",
+            subject_name=run_id,
             detail={"tool_name": tool_name, "approval_id": approval_id, "outcome": outcome},
         )
 

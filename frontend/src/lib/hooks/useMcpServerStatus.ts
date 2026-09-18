@@ -19,10 +19,10 @@ interface ServerStatusRead {
 
 /** A cheap backend read of persisted state (discovered capabilities + last
  * invocation), no subprocess spawn. An API error degrades to "nothing known". */
-async function readServerStatus(serverName: string): Promise<ServerStatusRead> {
+async function readServerStatus(serverUid: string): Promise<ServerStatusRead> {
   const client = getApiClient();
-  const { data, error } = await client.GET("/resources/mcp_server/{name}/status", {
-    params: { path: { name: serverName } },
+  const { data, error } = await client.GET("/resources/mcp_server/{uid}/status", {
+    params: { path: { uid: serverUid } },
   });
   if (error || !data) return { status: null, missingRunner: null };
   return {
@@ -31,10 +31,10 @@ async function readServerStatus(serverName: string): Promise<ServerStatusRead> {
   };
 }
 
-function useServerStatusRead<T>(serverName: string, select: (read: ServerStatusRead) => T) {
+function useServerStatusRead<T>(serverUid: string, select: (read: ServerStatusRead) => T) {
   return useQuery({
-    queryKey: mcpStatusKey(serverName),
-    queryFn: () => readServerStatus(serverName),
+    queryKey: mcpStatusKey(serverUid),
+    queryFn: () => readServerStatus(serverUid),
     select,
   });
 }
@@ -45,14 +45,14 @@ const selectStatus = (read: ServerStatusRead) => read.status;
 const selectRunner = (read: ServerStatusRead) => ({ missingRunner: read.missingRunner });
 
 /** Card-level health of a server; `null` = nothing known yet. */
-export function useMcpServerStatus(serverName: string) {
-  return useServerStatusRead(serverName, selectStatus);
+export function useMcpServerStatus(serverUid: string) {
+  return useServerStatusRead(serverUid, selectStatus);
 }
 
 /** The stdio launcher missing on THIS machine (imported server, runner not
  * installed here), if any — rendered as "missing <runner>" with a hint to
  * install it manually. Coffer manages configuration; it does not install
  * software on the user's machine. */
-export function useMcpServerRunner(serverName: string) {
-  return useServerStatusRead(serverName, selectRunner);
+export function useMcpServerRunner(serverUid: string) {
+  return useServerStatusRead(serverUid, selectRunner);
 }

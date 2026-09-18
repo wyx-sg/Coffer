@@ -6,12 +6,14 @@ which renders the standard ``{error, message}`` envelope.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 
 from fastapi import APIRouter, Depends, Response, status
 
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
+from coffer.application.resource_service import ResourceService
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.message import (
     AttachmentBlock,
@@ -35,6 +37,7 @@ from coffer.surfaces.http.chat.schemas import (
     MessageListOut,
     MessageOut,
 )
+from coffer.surfaces.http.dependencies import get_resource_service
 
 router = APIRouter(
     prefix="/api/v1/chat",
@@ -48,13 +51,26 @@ router = APIRouter(
 # ---------------------------------------------------------------------------
 
 
-def _conv_out(conv: Conversation) -> ConversationOut:
-    # A conversation "has a channel binding" iff channel_name is set
-    # (ADR chat-single-owner-live-mirror).
+async def _channel_names(resources: ResourceService) -> dict[str, str]:
+    """``uid -> name`` for every channel, built once per request.
+
+    Once per REQUEST rather than once per conversation: the list route renders
+    up to a page of them and a lookup each would be the N+1 the resource list
+    was ordered to avoid.
+    """
+    return {c.uid: c.name for c in await resources.list(kind="channel")}
+
+
+def _conv_out(conv: Conversation, channel_names: Mapping[str, str]) -> ConversationOut:
+    # A conversation "has a channel binding" iff channel_uid is set
+    # (ADR chat-single-owner-live-mirror). The row stores the channel's
+    # IDENTITY so a renamed channel keeps its conversations; the NAME is
+    # resolved here, where a human reads it.
     binding: ChannelBindingOut | None = None
-    if conv.channel_name is not None:
+    if conv.channel_uid is not None:
         binding = ChannelBindingOut(
-            channel=conv.channel_name,
+            channel_uid=conv.channel_uid,
+            channel=channel_names.get(conv.channel_uid),
             chat_id=conv.peer_chat_id or "",
         )
     return ConversationOut(
@@ -117,11 +133,13 @@ def _msg_out(msg: Message) -> MessageOut:
 async def list_conversations(
     archived: bool = False,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ConversationListOut:
     """List conversations, newest first. ``?archived=true`` returns the archived
     threads; the default lists active ones only."""
     convs = await svc.list_conversations(archived=archived)
-    return ConversationListOut(conversations=[_conv_out(c) for c in convs])
+    names = await _channel_names(resources)
+    return ConversationListOut(conversations=[_conv_out(c, names) for c in convs])
 
 
 @router.post(
@@ -132,6 +150,7 @@ async def list_conversations(
 async def create_conversation(
     body: ConversationCreate,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ConversationOut:
     """Create a conversation for the named Coffer-managed agent.
 
@@ -140,17 +159,18 @@ async def create_conversation(
     agent. An unknown agent or an invalid config is rejected with 400.
     """
     conv = await svc.create_conversation(agent_key=body.agent_key, agent_config=body.agent_config)
-    return _conv_out(conv)
+    return _conv_out(conv, await _channel_names(resources))
 
 
 @router.get("/conversations/{id}", response_model=ConversationOut)
 async def get_conversation(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ConversationOut:
     """Get a single conversation by id.  Returns 404 if not found."""
     conv = await svc.get_conversation(id)
-    return _conv_out(conv)
+    return _conv_out(conv, await _channel_names(resources))
 
 
 @router.patch("/conversations/{id}", response_model=ConversationOut)
@@ -158,6 +178,7 @@ async def update_conversation(
     id: str,
     body: ConversationPatch,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ConversationOut:
     """Rename a conversation.
 
@@ -170,7 +191,7 @@ async def update_conversation(
         conv = await svc.rename_conversation(id, new_title=body.title)
     else:
         conv = await svc.get_conversation(id)
-    return _conv_out(conv)
+    return _conv_out(conv, await _channel_names(resources))
 
 
 @router.get("/conversations/{id}/agent-config", response_model=AgentConfigOut)
@@ -218,20 +239,22 @@ async def set_agent_config(
 async def archive_conversation(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ConversationOut:
     """Archive a conversation — hidden from the default list, still restorable."""
     conv = await svc.archive_conversation(id)
-    return _conv_out(conv)
+    return _conv_out(conv, await _channel_names(resources))
 
 
 @router.post("/conversations/{id}/unarchive", response_model=ConversationOut)
 async def unarchive_conversation(
     id: str,
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ConversationOut:
     """Restore an archived conversation back into the active list."""
     conv = await svc.unarchive_conversation(id)
-    return _conv_out(conv)
+    return _conv_out(conv, await _channel_names(resources))
 
 
 @router.delete(

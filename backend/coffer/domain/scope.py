@@ -1,13 +1,20 @@
 """Framework-level activation scope: one allow-list of agents (ADR per-agent-resource-scope).
 
-A resource's ``scope`` names the agents it activates for:
+A resource's ``scope`` names the agents it activates for, **by their uid**:
 
-- ``None``                          — active for every agent (the default)
-- ``{"agents": ["claude-code"]}``   — only for that agent
-- ``{"agents": []}``                — dormant (an empty list matches nothing)
+- ``None``                      — active for every agent (the default)
+- ``{"agents": ["<uid>"]}``     — only for that agent
+- ``{"agents": []}``            — dormant (an empty list matches nothing)
 
-Unknown names are legal and simply never match, so a resource can be scoped to
-an agent that has not been registered yet.
+Uids rather than names because a scope is a reference to another resource, and
+a name is a label its owner may change (ADR resource-identity-is-an-immutable-uid).
+While this list held names, renaming an agent silently emptied every scope that
+named it, and the channel kind had to carry a whole module translating between
+the two names an agent answered to. Neither is reachable now: one vocabulary,
+and it is the one that cannot change underneath a reference.
+
+A uid that matches no registered agent is legal and simply never matches — a
+resource may be scoped to an agent this machine does not have.
 
 **There is no machine axis, and there is nothing for one to say.** A resource's
 activation state is machine-local: it is set on the machine it applies to and
@@ -61,21 +68,21 @@ def _axis(value: Any) -> list[str] | None:
         raise ScopeValidationError("a scope axis must be a list of names or null")
     for name in value:
         if not isinstance(name, str) or not name:
-            raise ScopeValidationError("scope entries must be non-empty names")
+            raise ScopeValidationError("scope entries must be non-empty agent uids")
     return list(value)
 
 
-def is_active(scope: Scope | None, agent: str | None) -> bool:
+def is_active(scope: Scope | None, agent_uid: str | None) -> bool:
     """Whether a resource carrying ``scope`` activates for this agent.
 
-    An unrestricted scope matches anything; a restricted one needs a name. An
-    unidentified session (``agent is None`` — a hand-configured shim that
-    reports no ``--agent``) matches only an unrestricted scope, so it sees
-    strictly less, never more.
+    An unrestricted scope matches anything; a restricted one needs a uid. An
+    unidentified session (``agent_uid is None`` — a hand-configured shim that
+    reports no agent) matches only an unrestricted scope, so it sees strictly
+    less, never more.
     """
     if scope is None or scope.agents is None:
         return True
-    return agent is not None and agent in scope.agents
+    return agent_uid is not None and agent_uid in scope.agents
 
 
 def validate_scope(scope: object, *, supports_scope: bool) -> None:

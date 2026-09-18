@@ -1,4 +1,4 @@
-"""GET /api/v1/agents/{name}/transcripts* — the agent's local conversations.
+"""GET /api/v1/agents/{uid}/transcripts* — the agent's local conversations.
 
 Two read-only surfaces over the ``.jsonl`` transcripts the agent itself wrote.
 The **listing** is the browse table: title, project, message count, start and
@@ -69,7 +69,7 @@ class TranscriptMessageOut(BaseModel):
 
 
 class TranscriptSessionDetailResponse(BaseModel):
-    """Response for GET /api/v1/agents/{name}/transcripts/session.
+    """Response for GET /api/v1/agents/{uid}/transcripts/session.
 
     The summary fields are the listing's, so a page reached by deep link shows
     the same title and project the row did. ``message_count`` is the WHOLE
@@ -90,7 +90,7 @@ class TranscriptSessionDetailResponse(BaseModel):
 
 
 class TranscriptSessionListResponse(BaseModel):
-    """Response for GET /api/v1/agents/{name}/transcripts.
+    """Response for GET /api/v1/agents/{uid}/transcripts.
 
     ``sessions`` is one page; ``total`` is the number of sessions matching the
     search/filter, so the UI can page and show "N of total".
@@ -102,9 +102,9 @@ class TranscriptSessionListResponse(BaseModel):
     offset: int
 
 
-@router.get("/{name}/transcripts", response_model=TranscriptSessionListResponse)
+@router.get("/{uid}/transcripts", response_model=TranscriptSessionListResponse)
 async def list_transcripts(
-    name: str,
+    uid: str,
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     q: str | None = Query(None, description="Search title or project path."),
@@ -122,7 +122,7 @@ async def list_transcripts(
     """
     try:
         total, sessions = await svc.list_sessions(
-            name,
+            uid,
             limit=limit,
             offset=offset,
             query=q,
@@ -155,9 +155,9 @@ async def list_transcripts(
     )
 
 
-@router.get("/{name}/transcripts/session", response_model=TranscriptSessionDetailResponse)
+@router.get("/{uid}/transcripts/session", response_model=TranscriptSessionDetailResponse)
 async def read_transcript_session(
-    name: str,
+    uid: str,
     path: str = Query(description="Absolute source_path of a session, as the listing gave it."),
     limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -173,7 +173,7 @@ async def read_transcript_session(
     anything else is 404 rather than a file read.
     """
     try:
-        body = await svc.read_session(name, source_path=path, limit=limit, offset=offset)
+        body = await svc.read_session(uid, source_path=path, limit=limit, offset=offset)
     except UnsupportedAgentTypeError as exc:
         return error_response(  # type: ignore[return-value]
             "BAD_REQUEST",

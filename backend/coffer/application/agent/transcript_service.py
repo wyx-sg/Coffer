@@ -54,7 +54,7 @@ class AgentTranscriptService:
 
     async def list_sessions(
         self,
-        agent_name: str,
+        agent_uid: str,
         *,
         limit: int = 100,
         offset: int = 0,
@@ -63,14 +63,14 @@ class AgentTranscriptService:
         sort: str = "last_activity_at",
         order: str = "desc",
     ) -> tuple[int, list[TranscriptSession]]:
-        """Return ``(matched_total, page)`` for *agent_name*.
+        """Return ``(matched_total, page)`` for the agent with *agent_uid*.
 
         Raises ``ResourceNotFound`` when no such agent is registered, and
         ``UnsupportedAgentTypeError`` when its type has no transcript layout.
         Backed by the reader's mtime-aware cache, so an agent with thousands of
         past sessions stays responsive.
         """
-        resource = await self._agents.get(agent_name)
+        resource = await self._agents.get(agent_uid)
         cfg = AgentConfig.model_validate(resource.config)
         # A cold cache parses every .jsonl the agent ever wrote — thousands of
         # files, seconds of blocking I/O. The daemon serves the MCP gateway from
@@ -93,13 +93,13 @@ class AgentTranscriptService:
 
     async def read_session(
         self,
-        agent_name: str,
+        agent_uid: str,
         *,
         source_path: str,
         limit: int = 200,
         offset: int = 0,
     ) -> TranscriptSessionBody:
-        """One session of *agent_name*: its summary plus a window of its turns.
+        """One session of that agent: its summary plus a window of its turns.
 
         ``source_path`` is a path the listing handed out. The reader is the one
         that decides whether it really is one of this agent's transcripts — the
@@ -112,7 +112,7 @@ class AgentTranscriptService:
         ``ValueError`` when the path is not one of this agent's transcripts, and
         ``FileNotFoundError`` when the file is gone.
         """
-        resource = await self._agents.get(agent_name)
+        resource = await self._agents.get(agent_uid)
         cfg = AgentConfig.model_validate(resource.config)
         # A cold summary is a full parse of one file, which for a long session
         # is tens of megabytes of blocking I/O; the daemon serves the MCP

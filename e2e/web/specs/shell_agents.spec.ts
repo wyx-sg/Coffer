@@ -10,7 +10,11 @@
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";
-import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
+import {
+  beforeEachInjectToken,
+  readDaemonToken,
+  resolveResourceUid,
+} from "./_helpers";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -30,7 +34,12 @@ function mkConfigDir(): string {
 async function deleteAgentByApi(name: string): Promise<void> {
   try {
     const { token, port } = readDaemonToken();
-    await fetch(`http://127.0.0.1:${port}/api/v1/agents/${name}`, {
+    // The route addresses the uid; the test knows the name it registered.
+    // Nothing is left behind when the lookup finds nothing — that is the
+    // agent already being gone, which is what this teardown wanted.
+    const uid = await resolveResourceUid("agent", name);
+    if (uid === null) return;
+    await fetch(`http://127.0.0.1:${port}/api/v1/agents/${uid}`, {
       method: "DELETE",
       headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e-cleanup" },
     });

@@ -1,8 +1,10 @@
 // pages/ProviderDetailPage.test.tsx
 //
 // The connection detail page: two tabs over one header. The header owns Edit
-// (which can RENAME — its own call, ahead of the patch, with the page following
-// the new URL), Delete, and the enable/disable control. Overview holds the
+// (which can RENAME — the kind-agnostic `PATCH /resources/{uid}` every kind
+// renames through, still ahead of the patch so a taken label fails first, and
+// with the page STAYING PUT, because the URL is built from the uid), Delete,
+// and the enable/disable control. Overview holds the
 // read-only Configuration card (which NEVER renders a secret — only whether one
 // is stored); Models holds the table that introspects the endpoint AS IT OPENS —
 // no fetch button — and writes the curated set back with PATCH {models: [...]},
@@ -41,11 +43,21 @@ vi.mock("@/lib/api/providers", async (orig) => {
       update: vi.fn(),
       remove: vi.fn(),
       activate: vi.fn(),
-      rename: vi.fn(),
+      // No `rename`: the connection-specific rename route is gone. A rename is
+      // `resourcesApi.rename` now, stubbed below with the rest of the generic
+      // resource writes.
       setInternalDefault: vi.fn(),
+      setTranscribeDefault: vi.fn(),
     },
   };
 });
+
+// Renaming goes through the generic resource PATCH, so THAT is what is stubbed
+// — the hook itself stays real, which is what lets the 409 below arrive as the
+// mutation's own error and render beside the field the user typed in.
+vi.mock("@/lib/api/resources", () => ({
+  resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn(), rename: vi.fn() },
+}));
 
 // Model introspection is a network probe the Models tab fires on open; drive its
 // result from the test rather than letting it reach a daemon.
@@ -57,8 +69,8 @@ let endpointState: {
   isFetching?: boolean;
 } = {};
 vi.mock("@/lib/hooks/useModelIntrospection", () => ({
-  useEndpointModels: (name: string) => {
-    probedFor.push(name);
+  useEndpointModels: (uid: string) => {
+    probedFor.push(uid);
     return {
       data: undefined,
       error: null,
@@ -89,15 +101,26 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useUpdateResourceScope: () => ({ mutate: updateScopeMutate, isPending: false }),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: () => ({ data: [] }) }));
-vi.mock("@/lib/hooks/useResourceMutations", () => ({
+// Only the two enable/disable hooks are replaced; `useRenameResource` is left
+// real, over the stubbed `resourcesApi` above.
+vi.mock("@/lib/hooks/useResourceMutations", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/hooks/useResourceMutations")>()),
   useEnableResource: () => ({ mutate: enableMutate, isPending: false }),
   useDisableResource: () => ({ mutate: disableMutate, isPending: false }),
 }));
 
 const { providersApi } = await import("@/lib/api/providers");
+const { resourcesApi } = await import("@/lib/api/resources");
 const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+const resourceMock = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+
+/** The connection's identity — what the route, every request and the header's
+ *  reach control are built from. It survives the rename below, which is the
+ *  whole point of it: "acme" is a label and "acme-eu" is the same connection. */
+const UID = "cn-31f0";
 
 const makeProvider = (overrides?: Partial<Provider>): Provider => ({
+  uid: UID,
   name: "acme",
   protocol: "openai",
   base_url: "https://gw/v1",
@@ -119,10 +142,10 @@ function renderPage() {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <MemoryRouter initialEntries={["/model-providers/acme"]}>
+    <MemoryRouter initialEntries={[`/model-providers/${UID}`]}>
       <QueryClientProvider client={qc}>
         <Routes>
-          <Route path="/model-providers/:name" element={<ProviderDetailPage />} />
+          <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>,
@@ -220,7 +243,7 @@ describe("ProviderDetailPage", () => {
       await openModelsTab();
       expect(await screen.findByText(/pick which of this endpoint's models/i)).toBeInTheDocument();
       // Opening the tab IS the fetch trigger — there is no button to press.
-      expect(probedFor).toContain("acme");
+      expect(probedFor).toContain(UID);
       expect(screen.queryByRole("button", { name: /fetch models/i })).not.toBeInTheDocument();
     },
   );
@@ -262,7 +285,7 @@ describe("ProviderDetailPage", () => {
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
     // Everything that was implicitly on, explicitly, minus the one turned off —
     // each carrying the kind its row is showing, not a bare id.
-    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+    expect(apiMock.update).toHaveBeenCalledWith(UID, {
       models: [{ id: "gpt-5-codex", modality: "text" }],
     });
   });
@@ -279,7 +302,7 @@ describe("ProviderDetailPage", () => {
 
     fireEvent.click(toggle);
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+    expect(apiMock.update).toHaveBeenCalledWith(UID, {
       models: [{ id: "gpt-5-codex", modality: "text" }],
     });
   });
@@ -343,7 +366,7 @@ describe("ProviderDetailPage", () => {
       // curated — one connection, two kinds of model.
       fireEvent.click(switchFor("text-embedding-3-large"));
       await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-      expect(apiMock.update).toHaveBeenCalledWith("acme", {
+      expect(apiMock.update).toHaveBeenCalledWith(UID, {
         models: [
           { id: "gpt-4o", modality: "text" },
           { id: "text-embedding-3-large", modality: "embedding" },
@@ -365,7 +388,7 @@ describe("ProviderDetailPage", () => {
 
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
     // The whole set is rewritten, so the untouched row keeps its own kind.
-    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+    expect(apiMock.update).toHaveBeenCalledWith(UID, {
       models: [
         { id: "gpt-5", modality: "text" },
         { id: "house-embeddings-v2", modality: "embedding" },
@@ -390,7 +413,7 @@ describe("ProviderDetailPage", () => {
 
     fireEvent.click(switchFor("house-embeddings-v2"));
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+    expect(apiMock.update).toHaveBeenCalledWith(UID, {
       models: [
         { id: "gpt-5", modality: "text" },
         { id: "house-embeddings-v2", modality: "embedding" },
@@ -410,7 +433,7 @@ describe("ProviderDetailPage", () => {
 
     setModality("house-embeddings-v2", "Embedding");
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update).toHaveBeenCalledWith("acme", {
+    expect(apiMock.update).toHaveBeenCalledWith(UID, {
       models: [
         { id: "gpt-5", modality: "text" },
         { id: "house-embeddings-v2", modality: "embedding" },
@@ -483,7 +506,7 @@ describe("ProviderDetailPage", () => {
     fireEvent.click(form.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
     expect(apiMock.update).toHaveBeenCalledWith(
-      "acme",
+      UID,
       expect.objectContaining({ base_url: "https://gw/v2" }),
     );
   });
@@ -508,9 +531,9 @@ describe("ProviderDetailPage", () => {
     expect(apiMock.update.mock.calls[0][1]).not.toHaveProperty("compatible_agents");
   });
 
-  test("renaming from the edit dialog renames first, then patches under the new name", async () => {
+  test("renaming from the edit dialog goes through the generic resource PATCH", async () => {
     apiMock.get.mockResolvedValue(makeProvider());
-    apiMock.rename.mockResolvedValue(makeProvider({ name: "acme-eu" }));
+    resourceMock.rename.mockResolvedValue(makeProvider({ name: "acme-eu" }));
     apiMock.update.mockResolvedValue(makeProvider({ name: "acme-eu" }));
     renderPage();
     await screen.findByRole("heading", { name: "acme" });
@@ -520,15 +543,34 @@ describe("ProviderDetailPage", () => {
     fireEvent.change(form.getByLabelText("Name"), { target: { value: "acme-eu" } });
     fireEvent.click(form.getByRole("button", { name: "Save" }));
 
-    // The name is identity, so it moves on its own call — and the patch that
-    // follows addresses the connection by the name it now has.
-    await waitFor(() => expect(apiMock.rename).toHaveBeenCalledWith("acme", "acme-eu"));
+    // A label edit, addressed to the uid — not `POST /providers/{name}/rename`,
+    // which existed only while the name WAS the identity. It still goes first,
+    // so a label already taken fails before anything else is written.
+    await waitFor(() => expect(resourceMock.rename).toHaveBeenCalledWith(UID, "acme-eu"));
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.update.mock.calls[0][0]).toBe("acme-eu");
-    // This route IS the name, so the page follows it rather than 404ing.
-    await waitFor(() =>
-      expect(navigateMock).toHaveBeenCalledWith("/model-providers/acme-eu", { replace: true }),
-    );
+    // And the patch that follows is addressed to the same uid it always was:
+    // the new label is not an address.
+    expect(apiMock.update.mock.calls[0][0]).toBe(UID);
+  });
+
+  test("a rename does not move the page — the URL is built from the uid", async () => {
+    // This is the change made visible. The old route WAS the name, so a rename
+    // left the reader on a URL that 404s and the page had to chase it with a
+    // `navigate(.../${newName})`. The uid does not change, so the page the user
+    // is reading stays the page they are reading, and nothing navigates at all.
+    apiMock.get.mockResolvedValue(makeProvider());
+    resourceMock.rename.mockResolvedValue(makeProvider({ name: "acme-eu" }));
+    apiMock.update.mockResolvedValue(makeProvider({ name: "acme-eu" }));
+    renderPage();
+    await screen.findByRole("heading", { name: "acme" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const form = within(screen.getByRole("dialog"));
+    fireEvent.change(form.getByLabelText("Name"), { target: { value: "acme-eu" } });
+    fireEvent.click(form.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   test("saving without touching the name patches in place and never renames", async () => {
@@ -543,13 +585,13 @@ describe("ProviderDetailPage", () => {
     fireEvent.click(form.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(apiMock.update).toHaveBeenCalledTimes(1));
-    expect(apiMock.rename).not.toHaveBeenCalled();
+    expect(resourceMock.rename).not.toHaveBeenCalled();
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
   test("a name another connection already uses fails the rename and stops the patch", async () => {
     apiMock.get.mockResolvedValue(makeProvider());
-    apiMock.rename.mockRejectedValue(
+    resourceMock.rename.mockRejectedValue(
       new ApiError("RESOURCE_ALREADY_EXISTS", "resource already exists: provider:taken"),
     );
     renderPage();
@@ -580,7 +622,7 @@ describe("ProviderDetailPage", () => {
 
     fireEvent.click(control);
     fireEvent.click(screen.getByRole("radio", { name: "Disabled" }));
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "provider", name: "acme" });
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "provider", uid: UID });
   });
 
   test("a disabled connection can be re-enabled from its own page", async () => {
@@ -592,7 +634,7 @@ describe("ProviderDetailPage", () => {
     expect(control).toHaveTextContent("Disabled");
     fireEvent.click(control);
     fireEvent.click(screen.getByRole("radio", { name: "Every agent" }));
-    expect(enableMutate).toHaveBeenCalledWith({ kind: "provider", name: "acme" });
+    expect(enableMutate).toHaveBeenCalledWith({ kind: "provider", uid: UID });
   });
 
   test("Delete confirms first, then removes and returns to the list", async () => {
@@ -606,14 +648,19 @@ describe("ProviderDetailPage", () => {
 
     const dialog = within(screen.getByRole("dialog"));
     fireEvent.click(dialog.getByRole("button", { name: "Delete" }));
-    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledWith("acme"));
+    await waitFor(() => expect(apiMock.remove).toHaveBeenCalledWith(UID));
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/model-providers"));
   });
 
   test("a missing connection shows a not-found card with a way back", async () => {
     apiMock.get.mockRejectedValue(new ApiError("RESOURCE_NOT_FOUND", "no such connection"));
     renderPage();
-    expect(await screen.findByText("Model provider not found")).toBeInTheDocument();
+    // There is no name to head the page with, and a uid is not a name — so the
+    // heading IS the failure, rather than the opaque string out of the URL.
+    expect(
+      await screen.findByRole("heading", { name: "Model provider not found" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(UID)).toBeNull();
     // The header's back link and the empty state's action both lead home.
     const links = screen.getAllByRole("link", { name: /back to model providers/i });
     expect(links.length).toBeGreaterThan(0);
@@ -624,16 +671,16 @@ describe("ProviderDetailPage", () => {
     apiMock.get.mockResolvedValue(makeProvider());
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <MemoryRouter initialEntries={["/model-providers/acme?tab=models"]}>
+      <MemoryRouter initialEntries={[`/model-providers/${UID}?tab=models`]}>
         <QueryClientProvider client={qc}>
           <Routes>
-            <Route path="/model-providers/:name" element={<ProviderDetailPage />} />
+            <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
           </Routes>
         </QueryClientProvider>
       </MemoryRouter>,
     );
     await screen.findByRole("heading", { name: "acme" });
     expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
-    expect(probedFor).toContain("acme");
+    expect(probedFor).toContain(UID);
   });
 });

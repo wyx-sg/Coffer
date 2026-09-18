@@ -40,7 +40,7 @@ import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
 export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const native = useAgentNativeMemory(agent.name);
+  const native = useAgentNativeMemory(agent.uid);
 
   const columns: Column<NativeMemoryStore>[] = [
     {
@@ -75,7 +75,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
           THROUGH the gateway lives on the Memory page, not here. */}
       <Card className="p-4">
         <CofferGatewayRow
-          agentName={agent.name}
+          agentUid={agent.uid}
           title={t("agents.cofferManaged")}
           hint={t("agents.memoryTab.accessViaGateway")}
           buttonLabel={t("agents.memoryTab.openMemoryPage")}
@@ -85,7 +85,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
       </Card>
 
       {/* Delivery: whether this agent's own session-start hook is installed. */}
-      <AgentMemoryDelivery agentName={agent.name} />
+      <AgentMemoryDelivery agentUid={agent.uid} />
 
       <Card className="space-y-3 p-4">
         <div className="space-y-1">
@@ -108,7 +108,7 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
             // say "api" rather than a forty-character slug path.
             onRowClick={(s) =>
               navigate(
-                `/agents/${encodeURIComponent(agent.name)}/memory?${new URLSearchParams({
+                `/agents/${encodeURIComponent(agent.uid)}/memory?${new URLSearchParams({
                   dir: s.memory_dir,
                   project: s.path ?? s.project,
                 })}`,

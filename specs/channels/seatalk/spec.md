@@ -163,7 +163,7 @@ auth-gated and a bare URL is useless to an agent.
 ### Transport
 
 - **FR-006**: The SeaTalk callback listener serves exactly one protocol, and
-  this spec owns that protocol: `POST /seatalk/{channel}` answers
+  this spec owns that protocol: `POST /seatalk/{channel_uid}` answers
   `event_verification` with the echoed challenge, verifies
   `sha256(body + signing_secret)` signatures, forwards valid events to the
   daemon over loopback with the daemon token, and rejects everything else. It

@@ -41,13 +41,13 @@ async def _client(tmp_path):
             display_name="Fake",
             config_schema=_FakeConfig,
         ),
-        # A kind that may be renamed and one that may not, because FR-011 is
-        # half about the refusal.
+        # A second kind only so a rename can be watched carrying a reach with
+        # it — `fake_kind` declares none. Every kind may be renamed, so there
+        # is no third kind here standing for the refusal there no longer is.
         "nameable": Kind(
             name="nameable",
             display_name="Nameable",
             config_schema=_FakeConfig,
-            supports_rename=True,
             supports_scope=True,
         ),
     }
@@ -78,7 +78,11 @@ async def test_register_resource(tmp_path):
         )
         assert r.status_code == 201, r.text
         body = r.json()
-        assert body["ref"] == "fake_kind:t"
+        # The wire carries the identity, not a `<kind>:<name>` string built out
+        # of two fields that are also on the object. ``uid`` is what every
+        # other route takes; ``name`` is the label beside it.
+        assert body["uid"]
+        assert body["name"] == "t"
         assert body["kind"] == "fake_kind"
         assert body["config"] == {"foo": 1, "bar": "default"}
         assert body["enabled"] is True
@@ -204,18 +208,48 @@ async def test_list_resources(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_list_filters_by_exact_name(tmp_path):
+    """The ONE place a name may be used to find a resource.
+
+    A surface that started from what a human typed — the CLI — turns it into
+    the uid here, and then addresses the resource the way everything else does.
+    It is a filter over the list rather than a lookup route precisely so it
+    cannot be mistaken for an identity.
+    """
+    c, engine = await _client(tmp_path)
+    async with c:
+        created = await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "a", "config": {"foo": 1}},
+        )
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "b", "config": {"foo": 2}},
+        )
+        r = await c.get("/api/v1/resources?name=a")
+        assert r.status_code == 200
+        assert [item["uid"] for item in r.json()["resources"]] == [created.json()["uid"]]
+
+        # Exact, not a prefix or a substring.
+        assert (await c.get("/api/v1/resources?name=")).json()["resources"] == []
+        assert (await c.get("/api/v1/resources?name=nope")).json()["resources"] == []
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_get_resource(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
-        await c.post(
+        created = await c.post(
             "/api/v1/resources",
             json={"kind": "fake_kind", "name": "t", "config": {"foo": 1}},
         )
-        r = await c.get("/api/v1/resources/fake_kind/t")
+        uid = created.json()["uid"]
+        r = await c.get(f"/api/v1/resources/{uid}")
         assert r.status_code == 200
         assert r.json()["name"] == "t"
         # Not found
-        r = await c.get("/api/v1/resources/fake_kind/nope")
+        r = await c.get("/api/v1/resources/no-such-uid")
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
     await engine.dispose()
@@ -225,12 +259,13 @@ async def test_get_resource(tmp_path):
 async def test_update_resource_config(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
-        await c.post(
+        created = await c.post(
             "/api/v1/resources",
             json={"kind": "fake_kind", "name": "t", "config": {"foo": 1}},
         )
+        uid = created.json()["uid"]
         r = await c.patch(
-            "/api/v1/resources/fake_kind/t",
+            f"/api/v1/resources/{uid}",
             json={"config": {"foo": 99}, "description": "new desc"},
         )
         assert r.status_code == 200
@@ -242,19 +277,87 @@ async def test_update_resource_config(tmp_path):
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="resource-framework",
+    scenario="renaming a resource is an ordinary edit",
+)
+async def test_patch_renames_any_kind(tmp_path):
+    """Renaming is a FIELD on PATCH, not an operation, and it is available to
+    every kind.
+
+    While the name was the identity, moving it needed its own route — and only
+    one kind of the seven ever got one, so for the other six "rename" meant
+    delete-and-recreate, which threw away the audit trail and every reference.
+    The uid is the identity now, so the label is just another editable field.
+    """
+    c, engine = await _client(tmp_path)
+    async with c:
+        created = await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "before", "config": {"foo": 1}},
+        )
+        uid = created.json()["uid"]
+
+        r = await c.patch(f"/api/v1/resources/{uid}", json={"name": "after"})
+        assert r.status_code == 200, r.text
+        assert r.json()["name"] == "after"
+        # The identity did not move with the label, so the same URL still works.
+        assert r.json()["uid"] == uid
+        assert (await c.get(f"/api/v1/resources/{uid}")).json()["name"] == "after"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_patch_rename_onto_a_taken_label_returns_409(tmp_path):
+    c, engine = await _client(tmp_path)
+    async with c:
+        a = await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "a", "config": {"foo": 1}},
+        )
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "b", "config": {"foo": 2}},
+        )
+        r = await c.patch(f"/api/v1/resources/{a.json()['uid']}", json={"name": "b"})
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
+        # Refused with nothing moved.
+        assert (await c.get(f"/api/v1/resources/{a.json()['uid']}")).json()["name"] == "a"
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_patch_rename_enforces_the_name_pattern(tmp_path):
+    """The same rule registration applies. It used to be enforced wherever an
+    identifier was BUILT, which is why the one kind that had a rename route
+    checked something else entirely."""
+    c, engine = await _client(tmp_path)
+    async with c:
+        created = await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "ok", "config": {"foo": 1}},
+        )
+        r = await c.patch(f"/api/v1/resources/{created.json()['uid']}", json={"name": "bad name!"})
+        assert r.status_code == 422, r.text
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
     scenario="the kind-agnostic surface serves every kind",
 )
 async def test_enable_disable(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
-        await c.post(
+        created = await c.post(
             "/api/v1/resources",
             json={"kind": "fake_kind", "name": "t", "config": {"foo": 1}},
         )
-        r = await c.post("/api/v1/resources/fake_kind/t/disable")
+        uid = created.json()["uid"]
+        r = await c.post(f"/api/v1/resources/{uid}/disable")
         assert r.status_code == 200
         assert r.json()["enabled"] is False
-        r = await c.post("/api/v1/resources/fake_kind/t/enable")
+        r = await c.post(f"/api/v1/resources/{uid}/enable")
         assert r.status_code == 200
         assert r.json()["enabled"] is True
     await engine.dispose()
@@ -264,13 +367,14 @@ async def test_enable_disable(tmp_path):
 async def test_delete_resource(tmp_path):
     c, engine = await _client(tmp_path)
     async with c:
-        await c.post(
+        created = await c.post(
             "/api/v1/resources",
             json={"kind": "fake_kind", "name": "t", "config": {"foo": 1}},
         )
-        r = await c.delete("/api/v1/resources/fake_kind/t")
+        uid = created.json()["uid"]
+        r = await c.delete(f"/api/v1/resources/{uid}")
         assert r.status_code == 204
-        r = await c.get("/api/v1/resources/fake_kind/t")
+        r = await c.get(f"/api/v1/resources/{uid}")
         assert r.status_code == 404
     await engine.dispose()
 
@@ -419,54 +523,47 @@ def _renames(tmp_path) -> list[tuple[str, str]]:
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
     spec="resource-framework",
-    scenario="a resource is given a different name",
+    scenario="renaming a resource is an ordinary edit",
 )
-async def test_a_resource_is_given_a_different_name(tmp_path):
+async def test_a_rename_carries_everything_that_was_not_the_name(tmp_path):
     """FR-011: the name is a label, so it moves and nothing else does."""
     c, engine = await _client(tmp_path)
     async with c:
-        await c.post(
+        created = await c.post(
             "/api/v1/resources",
             json={"kind": "nameable", "name": "draft", "config": {"foo": 1}, "description": "hi"},
         )
-        await c.put("/api/v1/resources/nameable/draft/scope", json={"scope": {"agents": ["a"]}})
-        await c.post("/api/v1/resources/nameable/draft/disable")
+        uid = created.json()["uid"]
+        await c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": ["a"]}})
+        await c.post(f"/api/v1/resources/{uid}/disable")
 
-        r = await c.patch("/api/v1/resources/nameable/draft", json={"name": "release"})
+        r = await c.patch(f"/api/v1/resources/{uid}", json={"name": "release"})
         assert r.status_code == 200, r.text
-        assert r.json()["ref"] == "nameable:release"
+        assert r.json()["name"] == "release"
 
-        # Everything that was not the name came with it.
-        moved = (await c.get("/api/v1/resources/nameable/release")).json()
+        # Everything that was not the name came with it — and it is reachable
+        # at the address it always had, which is the change made visible.
+        moved = (await c.get(f"/api/v1/resources/{uid}")).json()
         assert moved["config"] == {"foo": 1, "bar": "default"}
         assert moved["description"] == "hi"
         assert moved["enabled"] is False
         assert moved["scope"] == {"agents": ["a"]}
-        assert (await c.get("/api/v1/resources/nameable/draft")).status_code == 404
 
         # The trail is against the ROW, which never moved. Read straight out
         # of the table: this app mounts the resource router only.
         assert _renames(tmp_path) == [("nameable", "release")]
 
-        # A name already taken, and a kind that declares no rename.
+        # A name already taken.
         await c.post(
             "/api/v1/resources",
             json={"kind": "nameable", "name": "taken", "config": {"foo": 2}},
         )
-        clash = await c.patch("/api/v1/resources/nameable/release", json={"name": "taken"})
+        clash = await c.patch(f"/api/v1/resources/{uid}", json={"name": "taken"})
         assert clash.status_code == 409
         assert clash.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
 
-        await c.post(
-            "/api/v1/resources",
-            json={"kind": "fake_kind", "name": "fixed", "config": {"foo": 3}},
-        )
-        refused = await c.patch("/api/v1/resources/fake_kind/fixed", json={"name": "moved"})
-        assert refused.status_code == 409
-        assert refused.json()["error"]["code"] == "RENAME_NOT_SUPPORTED"
-
         # The name it already has is a no-op, not a second audit entry.
-        same = await c.patch("/api/v1/resources/nameable/release", json={"name": "release"})
+        same = await c.patch(f"/api/v1/resources/{uid}", json={"name": "release"})
         assert same.status_code == 200
         assert len(_renames(tmp_path)) == 1
     await engine.dispose()
@@ -474,7 +571,7 @@ async def test_a_resource_is_given_a_different_name(tmp_path):
 
 @pytest.mark.asyncio
 async def test_a_rename_alone_does_not_rewrite_the_config(tmp_path):
-    """FR-010: a PATCH carrying only a name touches only the name.
+    """FR-011: a PATCH carrying only a name touches only the name.
 
     Writing the stored config back over itself is not a no-op — it re-validates,
     re-probes every credential the config cites, fires the kind's update hook
@@ -484,13 +581,13 @@ async def test_a_rename_alone_does_not_rewrite_the_config(tmp_path):
     """
     c, engine = await _client(tmp_path)
     async with c:
-        await c.post(
+        created = await c.post(
             "/api/v1/resources",
             json={"kind": "nameable", "name": "draft", "config": {"foo": 1}},
         )
         before = len(_events(tmp_path, "resource_updated"))
 
-        r = await c.patch("/api/v1/resources/nameable/draft", json={"name": "release"})
+        r = await c.patch(f"/api/v1/resources/{created.json()['uid']}", json={"name": "release"})
 
         assert r.status_code == 200, r.text
         assert len(_events(tmp_path, "resource_updated")) == before
@@ -505,13 +602,13 @@ async def test_an_explicit_null_config_leaves_the_stored_one_alone(tmp_path):
     empty says `{}`."""
     c, engine = await _client(tmp_path)
     async with c:
-        await c.post(
+        created = await c.post(
             "/api/v1/resources",
             json={"kind": "fake_kind", "name": "t", "config": {"foo": 7, "bar": "keep"}},
         )
 
         r = await c.patch(
-            "/api/v1/resources/fake_kind/t",
+            f"/api/v1/resources/{created.json()['uid']}",
             json={"config": None, "description": "only the words changed"},
         )
 

@@ -48,7 +48,7 @@ info:
 
     ## The file family is read-only, and that is the design
 
-    `GET /partitions/{name}/files` and `.../files/content` walk one
+    `GET /partitions/{uid}/files` and `.../files/content` walk one
     partition's own directory and read a file out of it (FR-037). There is
     deliberately **no write**: the tree is derived, so an edit would survive
     exactly until the next aggregation pass, and offering one would be
@@ -63,9 +63,9 @@ info:
 
     ## Why deleting a partition is not here
 
-    There is deliberately **no** `DELETE /api/v1/memory/partitions/{name}`. A
+    There is deliberately **no** `DELETE /api/v1/memory/partitions/{uid}`. A
     partition's lifecycle is a Resource's lifecycle, so deletion goes through
-    the kind-agnostic resource route, `DELETE /api/v1/resources/memory/{name}`,
+    the kind-agnostic resource route, `DELETE /api/v1/resources/{uid}`,
     which runs the same audit and cascade as every other kind and cleans the
     directory up through the Kind's `on_delete`.
 
@@ -85,7 +85,7 @@ info:
     `{"error": {"code": "...", "message": "..."}}`, raised from a `CofferError`
     and mapped centrally — no route here builds an `HTTPException` of its own.
     The codes this family raises: `RESOURCE_NOT_FOUND` (404, no `memory`
-    Resource by that name), `MEMORY_NOTE_NOT_FOUND` (404),
+    Resource by that uid), `MEMORY_NOTE_NOT_FOUND` (404),
     `MEMORY_FILE_NOT_FOUND` (404), `MEMORY_UNSAFE_PATH` (400, a path escaping
     the partition — FR-044), `MEMORY_DELIVERY_UNSUPPORTED` (the agent type has
     no hook adapter), `MEMORY_DELIVERY_CONFIG_INVALID` (its settings file is
@@ -117,7 +117,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PartitionListOut"
 
-  /api/v1/memory/partitions/{name}/notes:
+  /api/v1/memory/partitions/{uid}/notes:
     get:
       tags: [memory]
       operationId: listMemoryNotes
@@ -128,7 +128,7 @@ paths:
         retirement takes the file out of that directory and records it in
         `RETIRED.md` (FR-025).
       parameters:
-        - $ref: "#/components/parameters/PartitionName"
+        - $ref: "#/components/parameters/PartitionUid"
       responses:
         "200":
           description: The partition's notes.
@@ -139,13 +139,13 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory/partitions/{name}/notes/{slug}:
+  /api/v1/memory/partitions/{uid}/notes/{slug}:
     get:
       tags: [memory]
       operationId: getMemoryNote
       summary: One note, whole — Coffer's own text and the entries behind it.
       parameters:
-        - $ref: "#/components/parameters/PartitionName"
+        - $ref: "#/components/parameters/PartitionUid"
         - name: slug
           in: path
           required: true
@@ -162,7 +162,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory/partitions/{name}/retired:
+  /api/v1/memory/partitions/{uid}/retired:
     get:
       tags: [memory]
       operationId: listMemoryRetired
@@ -174,7 +174,7 @@ paths:
         (FR-025). It is therefore part of that pass's own input, and readable
         here for the same reason a human browsing the folder can read it.
       parameters:
-        - $ref: "#/components/parameters/PartitionName"
+        - $ref: "#/components/parameters/PartitionUid"
       responses:
         "200":
           description: The partition's retirement record, newest first.
@@ -185,13 +185,13 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory/partitions/{name}/files:
+  /api/v1/memory/partitions/{uid}/files:
     get:
       tags: [memory]
       operationId: listMemoryPartitionFiles
       summary: The partition's own directory, as a read-only tree.
       parameters:
-        - $ref: "#/components/parameters/PartitionName"
+        - $ref: "#/components/parameters/PartitionUid"
       responses:
         "200":
           description: The tree, rooted at the partition directory.
@@ -202,7 +202,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory/partitions/{name}/files/content:
+  /api/v1/memory/partitions/{uid}/files/content:
     get:
       tags: [memory]
       operationId: readMemoryPartitionFile
@@ -211,7 +211,7 @@ paths:
         Read-only. There is no `PUT` counterpart: the tree is derived, so an
         edit would be overwritten by the next aggregation pass.
       parameters:
-        - $ref: "#/components/parameters/PartitionName"
+        - $ref: "#/components/parameters/PartitionUid"
         - name: path
           in: query
           required: true
@@ -254,7 +254,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/AggregationResultOut"
 
-  /api/v1/memory/partitions/{name}/distil:
+  /api/v1/memory/partitions/{uid}/distil:
     post:
       tags: [memory]
       operationId: distilMemoryPartition
@@ -275,7 +275,7 @@ paths:
         (FR-041), and the in-flight pass is readable on the shared upkeep-runs
         surface.
       parameters:
-        - $ref: "#/components/parameters/PartitionName"
+        - $ref: "#/components/parameters/PartitionUid"
       responses:
         "200":
           description: What the pass found.
@@ -327,10 +327,12 @@ paths:
       operationId: listMemoryDelivery
       summary: Per-agent delivery installation state.
       parameters:
-        - name: agent
+        - name: agent_uid
           in: query
           required: false
-          description: Restrict to one agent. Omitted, every registered agent is reported.
+          description: >-
+            Restrict to one agent, by uid. Omitted, every registered agent is
+            reported.
           schema:
             type: string
       responses:
@@ -341,7 +343,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeliveryStatusListOut"
 
-  /api/v1/memory/delivery/{agent}/install:
+  /api/v1/memory/delivery/{agent_uid}/install:
     post:
       tags: [memory]
       operationId: installMemoryDelivery
@@ -353,7 +355,7 @@ paths:
         *settings* file — never any file that is an agent's memory. Records a
         `memory_delivery_installed` audit event with the actor.
       parameters:
-        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/AgentUid"
       responses:
         "200":
           description: The resulting state.
@@ -364,7 +366,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/memory/delivery/{agent}:
+  /api/v1/memory/delivery/{agent_uid}:
     delete:
       tags: [memory]
       operationId: removeMemoryDelivery
@@ -374,7 +376,7 @@ paths:
         top-level hooks key once they are empty. With nothing installed it is a
         clean no-op that writes no file and records no audit event.
       parameters:
-        - $ref: "#/components/parameters/AgentName"
+        - $ref: "#/components/parameters/AgentUid"
       responses:
         "200":
           description: The resulting state.
@@ -393,18 +395,26 @@ components:
       name: X-Coffer-Token
 
   parameters:
-    PartitionName:
-      name: name
+    PartitionUid:
+      name: uid
       in: path
       required: true
-      description: The partition — `global` or a project slug.
+      description: |
+        The partition Resource's immutable uid. Its name — `global` or a
+        project slug — is also its directory under the memory root and moves
+        when the partition is renamed, so the name addresses a place on disk
+        and the uid addresses the partition.
       schema:
         type: string
-    AgentName:
-      name: agent
+    AgentUid:
+      name: agent_uid
       in: path
       required: true
-      description: The registered agent's resource name, e.g. `claude-code`.
+      description: |
+        The registered agent Resource's immutable uid. Spelled `agent_uid`
+        rather than `uid` because nothing else in this path is a resource:
+        the delivery routes act on one agent's own settings file, and a bare
+        `uid` here would read as the partition's.
       schema:
         type: string
 
@@ -438,11 +448,24 @@ components:
 
     PartitionOut:
       type: object
-      required: [name, repository_key, repository_path, note_count, unresolvable]
+      required: [uid, name, repository_key, repository_path, note_count, unresolvable]
       properties:
+        uid:
+          type: string
+          description: |
+            The partition Resource's immutable identity, and what every route
+            under `/partitions/{uid}/…` takes. Note it is not the partition's
+            *resolution* key: a working directory resolves to a partition
+            through `repository_key`, which is derived from the repository and
+            is the same on every machine holding that clone.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
         name:
           type: string
-          description: The directory name, and the `memory` Resource's name.
+          description: |
+            A mutable label — `global` or a project slug — which is also the
+            partition's directory name under the memory root, so renaming one
+            moves its directory. Display only; anything addressing the
+            partition holds `uid`.
         repository_key:
           type: string
           description: |
@@ -482,7 +505,12 @@ components:
       properties:
         agent:
           type: string
-          description: The registered agent this fact was read out of.
+          description: |
+            The registered agent this fact was read out of, by name. A name
+            and not a uid because provenance is written for a person to read
+            in a note's own frontmatter, and because the derived tree is
+            rewritten by every aggregation pass — so the label re-resolves on
+            its own rather than going stale the way a stored reference would.
         native_path:
           type: string
           description: Absolute path of the agent's own file it came from.
@@ -661,12 +689,16 @@ components:
           type: string
           default: ""
           description: The session's working directory, which selects the project partition.
-        agent:
+        agent_uid:
           type: [string, "null"]
           default: null
           description: |
-            The calling agent's registered name. It narrows nothing — it is
-            what a recorded fire names as its actor (FR-033).
+            The calling agent's uid. It narrows nothing — it is what a
+            recorded fire names as its actor (FR-033). A uid rather than a
+            name because the caller is the installed hook, whose command line
+            Coffer wrote once (`--agent-uid <uid>`) and does not rewrite when
+            the agent is renamed; a name baked into that command would start
+            attributing fires to nobody the first time the label changed.
         ceiling_tokens:
           type: [integer, "null"]
           default: null
@@ -773,13 +805,26 @@ components:
 
     DeliveryStatusOut:
       type: object
-      required: [agent, installed, command, event]
+      required: [agent_uid, agent_name, installed, command, event]
       description: |
         Installed or not, and nothing else. There is deliberately no
         last-fired field — see the `info.description` above (FR-033, FR-039).
       properties:
-        agent:
+        agent_uid:
           type: string
+          description: |
+            Which agent this row is about — and what the install and remove
+            routes take, so a surface rendering this list acts on a row
+            without translating anything.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        agent_name:
+          type: string
+          description: |
+            The same agent's label, for the row's heading. Carried beside the
+            uid rather than instead of it: the list is one row per agent and
+            has to be both readable and actionable, and a client holding only
+            one of the two would have to fetch the agent list to get the
+            other.
         installed:
           type: boolean
         command:

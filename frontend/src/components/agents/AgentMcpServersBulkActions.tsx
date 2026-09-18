@@ -16,6 +16,10 @@ import { agentsApi, type McpEntryOut } from "@/lib/api/agents";
 import { agentMcpEntriesKey, resourcesByKindKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
+/** Where an adopted entry's secrets are stored. The ref spells the agent's
+ *  NAME because a credential ref is an address a person reads in the vault,
+ *  and it is minted once at adoption — nothing ever looks one up by name, so a
+ *  later rename leaves the stored refs intact and still resolving. */
 function defaultSecretRefs(agentName: string, entry: McpEntryOut): Record<string, string> {
   return Object.fromEntries(
     entry.secret_keys.map((key) => [key, `mcp/${agentName}/${entry.name}/${key}`]),
@@ -23,23 +27,27 @@ function defaultSecretRefs(agentName: string, entry: McpEntryOut): Record<string
 }
 
 export function AgentMcpServersBulkActions({
+  agentUid,
   agentName,
   rows,
   clear,
 }: {
+  /** The agent being adopted from — what every request is addressed to. */
+  agentUid: string;
+  /** Its label, which the minted credential refs spell. */
   agentName: string;
   rows: McpEntryOut[];
   clear: () => void;
 }) {
   const { t } = useTranslation();
   const adopt = useBulkMutate({
-    invalidate: [agentMcpEntriesKey(agentName), resourcesByKindKey("mcp_server")],
+    invalidate: [agentMcpEntriesKey(agentUid), resourcesByKindKey("mcp_server")],
   });
-  const remove = useBulkMutate({ invalidate: [agentMcpEntriesKey(agentName)] });
+  const remove = useBulkMutate({ invalidate: [agentMcpEntriesKey(agentUid)] });
 
   const adoptAll = async () => {
     await adopt.run(rows, (e) =>
-      agentsApi.adoptMcpEntry(agentName, e.name, {
+      agentsApi.adoptMcpEntry(agentUid, e.name, {
         source: e.source,
         secrets: defaultSecretRefs(agentName, e),
       }),
@@ -48,7 +56,7 @@ export function AgentMcpServersBulkActions({
   };
 
   const deleteAll = async () => {
-    await remove.run(rows, (e) => agentsApi.removeMcpEntry(agentName, e.name, e.source));
+    await remove.run(rows, (e) => agentsApi.removeMcpEntry(agentUid, e.name, e.source));
     clear();
   };
 

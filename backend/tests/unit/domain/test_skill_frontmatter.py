@@ -5,7 +5,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from coffer.domain.skill.frontmatter import _DESCRIPTION_MAX, SkillFrontmatter
+from coffer.domain.skill.frontmatter import (
+    _DESCRIPTION_MAX,
+    FrontmatterNameError,
+    SkillFrontmatter,
+    rewrite_name,
+    validate_frontmatter_name,
+)
 
 
 def test_minimum_fields_parse():
@@ -99,3 +105,90 @@ def test_unknown_extra_fields_tolerated():
     )
     # Tolerated, not dropped: still reachable for forward-compatibility.
     assert fm.model_dump()["metadata"] == {"k": "v"}
+
+
+# ----- validate_frontmatter_name -----
+
+
+@pytest.mark.parametrize("name", ["my-skill", "a", "s_1", "0abc", "a" * 64])
+def test_frontmatter_name_accepts_the_standard_charset(name):
+    validate_frontmatter_name(name)  # does not raise
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "My.Skill",  # the exact shape the FRAMEWORK rule lets through
+        "MySkill",  # uppercase
+        "my.skill",  # dot
+        "-leading",  # must start alphanumeric
+        "",
+        "a" * 65,
+    ],
+)
+def test_frontmatter_name_rejects_what_the_framework_rule_would_allow(name):
+    """The kind's rule is narrower than the framework's on purpose.
+
+    ``My.Skill`` satisfies ``^[a-zA-Z0-9_.-]{1,64}$`` and would be a perfectly
+    good directory name, but Coffer writes the name into SKILL.md and its own
+    importer would then reject the file it just wrote.
+    """
+    with pytest.raises(FrontmatterNameError):
+        validate_frontmatter_name(name)
+
+
+# ----- rewrite_name -----
+
+
+def test_rewrite_name_changes_only_the_name_line():
+    text = (
+        "---\n"
+        "# a comment the user wrote\n"
+        "description: keep me\n"
+        "name: before\n"
+        "allowed-tools: [Bash]\n"
+        "future-field: 1\n"
+        "---\n"
+        "\n"
+        "Body text with a `name:` mention that must not move.\n"
+    )
+    out = rewrite_name(text, "after")
+    assert out == text.replace("name: before", "name: after")
+
+
+def test_rewrite_name_preserves_crlf_line_endings():
+    text = "---\r\nname: before\r\ndescription: d\r\n---\r\nbody\r\n"
+    assert rewrite_name(
+        text, "after"
+    ) == "---\r\nname: before\r\ndescription: d\r\n---\r\nbody\r\n".replace(
+        "name: before", "name: after"
+    )
+
+
+def test_rewrite_name_tolerates_spacing_before_the_colon():
+    assert rewrite_name("---\nname : before\ndescription: d\n---\n", "after") == (
+        "---\nname: after\ndescription: d\n---\n"
+    )
+
+
+def test_rewrite_name_ignores_an_indented_name_key():
+    """An indented ``name:`` belongs to a nested mapping, not to the skill."""
+    text = "---\ndescription: d\nmetadata:\n  name: nested\n---\nbody\n"
+    assert rewrite_name(text, "after") is None
+
+
+def test_rewrite_name_ignores_a_name_after_the_closing_delimiter():
+    text = "---\ndescription: d\n---\nname: this is prose\n"
+    assert rewrite_name(text, "after") is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "no frontmatter at all\n",
+        "---\ndescription: d\n",  # block never closes
+    ],
+)
+def test_rewrite_name_returns_none_when_there_is_nothing_to_rewrite(text):
+    assert rewrite_name(text, "after") is None

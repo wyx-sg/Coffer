@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 from coffer.application.skill.builtin_seed import is_builtin
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError, ResourceAlreadyExists, ResourceProtected
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.scope import is_active
 from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
@@ -65,7 +65,7 @@ def _refuse_overwriting_a_builtin(existing: list[Resource], name: str) -> None:
     """
     if any(r.name == name and is_builtin(r.config) for r in existing):
         raise ResourceProtected(
-            str(ResourceRef("skill", name)),
+            f"skill {name}",
             "the name belongs to a skill Coffer generates and rewrites at every "
             "start; import under a different name",
         )
@@ -82,9 +82,12 @@ async def register_from_validated(
     overwrite: bool = False,
 ) -> Resource:
     name = validation.frontmatter.name
-    # Duplicate check before copying any bytes.
+    # Duplicate check before copying any bytes. A skill's name is a label, but
+    # it is still unique within the kind — and it is the master folder's name,
+    # so the store is asked as well as the registry.
     existing = await service._rs.list(kind="skill")
-    name_taken = any(r.name == name for r in existing) or service._store.exists(name)
+    existing_row = next((r for r in existing if r.name == name), None)
+    name_taken = existing_row is not None or service._store.exists(name)
     if name_taken and not overwrite:
         raise ResourceAlreadyExists("skill", name)
     _refuse_overwriting_a_builtin(existing, name)
@@ -92,7 +95,8 @@ async def register_from_validated(
     now = datetime.now(tz=UTC)
     cfg = SkillConfig(
         source=source_meta,
-        skill_md_name=name,
+        # ``name`` is not stored on the config: it IS the resource's name,
+        # taken from the frontmatter right here. See ``SkillConfig``.
         skill_md_description=validation.frontmatter.description,
         version_hash=validation.skill_md_sha256,
         last_synced_from_source_at=now,
@@ -104,16 +108,17 @@ async def register_from_validated(
         "version_hash": validation.skill_md_sha256,
     }
 
-    row_exists = any(r.name == name for r in existing)
     if name_taken:
         # Overwrite path: swap the master folder in place (atomic_replace also
         # covers an orphan master folder with no row — DriftKind.ORPHAN_MASTER).
         service._store.atomic_replace(src=src, name=name, meta=meta)
-        if row_exists:
-            # Update the existing row, preserving its id + per-agent bindings +
-            # delivered symlinks (the master folder path is unchanged).
+        if existing_row is not None:
+            # Update the existing row, preserving its uid + id + per-agent
+            # bindings + delivered symlinks (the master folder path is
+            # unchanged). Re-importing a skill is an update of the same
+            # resource, so its identity must survive it.
             r = await service._rs.update_config(
-                ResourceRef("skill", name),
+                existing_row.uid,
                 new_config=cfg.model_dump(mode="json"),
                 actor=actor,
                 description=validation.frontmatter.description,
@@ -156,7 +161,7 @@ async def register_from_validated(
 
     await service._audit.record(
         audit_event.value,
-        ref=ResourceRef("skill", name),
+        resource=r,
         actor=actor,
         details={"version_hash": validation.skill_md_sha256},
     )
@@ -174,12 +179,10 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
     if not skill.enabled:
         return
     for a in await service._rs.list(kind="agent"):
-        if not a.enabled or not is_active(skill.scope, a.name):
+        if not a.enabled or not is_active(skill.scope, a.uid):
             continue
         try:
-            await service.enable_for(
-                skill_name=skill.name, agent_name=a.name, force=False, actor=actor
-            )
+            await service.enable_for(skill_uid=skill.uid, agent_uid=a.uid, force=False, actor=actor)
         except (CofferError, OSError) as e:
             # A per-agent failure (TargetConflict, config validation, OSError)
             # must not abort auto-bind for the rest — but it must not be silent
@@ -187,7 +190,7 @@ async def auto_bind_all(*, service: SkillService, skill: Resource, actor: str) -
             logger.warning("auto-bind of skill %r to agent %r skipped: %s", skill.name, a.name, e)
 
 
-async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: str) -> None:
+async def relink_agent_skills(*, service: SkillService, agent_uid: str, actor: str) -> None:
     """Re-deliver an agent's skills after its config_dir changed.
 
     Wired as the agent kind's on-config-dir-changed hook. The agent resource
@@ -206,7 +209,7 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
     ``apply_scope_for_agent``'s job, not this hook's.
     """
     try:
-        agent = await service._rs.get(ResourceRef("agent", agent_name))
+        agent = await service._rs.get(agent_uid)
     except CofferError:
         return
     new_skill_dir = service._resolve_agent_skill_dir(agent)
@@ -224,7 +227,7 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
                 service._sync.remove_directory_link(old_path, link_mode=b.link_mode)
         if not b.enabled:
             continue
-        if not (skill.enabled and is_active(skill.scope, agent_name)):
+        if not (skill.enabled and is_active(skill.scope, agent.uid)):
             # The predicate no longer grants this delivery — do not resurrect
             # the link. The row keeps its (now stale) enabled/last_link_path
             # until a reconciliation run reclaims it; we only refuse to
@@ -253,7 +256,7 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
                         "relink: foreign content at %s (skill %r / agent %r) — left intact",
                         new_link,
                         skill.name,
-                        agent_name,
+                        agent.name,
                     )
                     mode = None
             else:
@@ -270,10 +273,10 @@ async def relink_agent_skills(*, service: SkillService, agent_name: str, actor: 
                 with contextlib.suppress(Exception):
                     await service._audit.record(
                         AuditEventType.SKILL_RELINKED.value,
-                        ref=ResourceRef("skill", skill.name),
+                        resource=skill,
                         actor=actor,
-                        details={"agent": agent_name, "link": str(new_link)},
+                        details={"agent": agent.name, "link": str(new_link)},
                     )
         except (CofferError, OSError) as e:
-            logger.warning("relink of skill %r for agent %r skipped: %s", skill.name, agent_name, e)
+            logger.warning("relink of skill %r for agent %r skipped: %s", skill.name, agent.name, e)
             continue

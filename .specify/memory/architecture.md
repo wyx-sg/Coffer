@@ -25,9 +25,17 @@ The framework is [spec resource-framework](../../specs/resource-framework/spec.m
 the kind registry, the lifecycle surface, per-agent reach, the audit log,
 per-table retention and the cross-kind read of the passes in flight. What a kind
 *is* belongs to that kind's own spec. Every user-managed entity in coffer is a
-**Resource** identified by `<kind>:<name>`. The framework unifies:
+**Resource** identified by an immutable `uid` — an opaque `uuid4().hex` minted
+once, never reused, and the same value on every machine that holds that
+resource ([Resource Identity Is an Immutable `uid`](../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+The framework unifies:
 
-- Identity (`kind`, `name`, stable `<kind>:<name>` string reference)
+- Identity (an immutable `uid`; `kind` alongside it, and `name` as a mutable
+  label that stays unique within its kind. Renaming is a field on `PATCH
+  /api/v1/resources/{uid}`, available to every kind; the file-backed kinds move
+  their directory through an `on_rename` hook. The integer `resources.id` stays
+  an internal surrogate primary key — the FK the four kind-owned tables hold —
+  and is never an external identity)
 - Lifecycle (register / update / enable / disable / delete). A kind may supply a
   **pre-write delete guard** (`Kind.validate_delete`), run once the resource is
   resolved and before its cleanup hook, so a refusal costs nothing and reads the
@@ -36,7 +44,7 @@ per-table retention and the cross-kind read of the passes in flight. What a kind
   already decided. Only `skill` supplies one (spec resource-framework FR-010).
 - Audit (every lifecycle change recorded with actor)
 - Schema validation (per-kind Pydantic schema, kind-agnostic dispatch)
-- Scope (an optional activation list of agent names, `null` meaning every
+- Scope (an optional activation list of agent `uid`s, `null` meaning every
   agent — framework-owned; each kind declares whether it supports scope and
   owns its enforcement point; registered-but-inactive semantics. Scope and
   `enabled` together are the resource's **reach**, and reach is machine-local:
@@ -178,7 +186,7 @@ Layer-first, with kind-specific subdirectories inside each layer. See
 ```
 backend/coffer/
 ├── domain/                       # kind-agnostic entities + kind protocol; imports nothing
-│   ├── resource.py               # Resource, Kind, ResourceRef
+│   ├── resource.py               # Resource (uid + mutable name), Kind, name validation
 │   ├── scope.py                  # is_active(scope, agent) — the one reach predicate
 │   ├── audit.py                  # audit event names + entry
 │   ├── errors.py                 # app-wide error base + codes

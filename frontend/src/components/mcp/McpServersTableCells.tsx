@@ -24,10 +24,10 @@ import { HealthBadge } from "./HealthBadge";
  * A stdio server whose launcher is missing on THIS machine says so, with a
  * static hint naming the runner to install — Coffer surfaces the cause, the
  * user installs the software. */
-export function ServerHealthCell({ name }: { name: string }) {
+export function ServerHealthCell({ uid }: { uid: string }) {
   const { t } = useTranslation();
-  const { data: status } = useMcpServerStatus(name);
-  const { data: runner } = useMcpServerRunner(name);
+  const { data: status } = useMcpServerStatus(uid);
+  const { data: runner } = useMcpServerRunner(uid);
 
   if (runner?.missingRunner) {
     return (
@@ -59,7 +59,7 @@ export function ServerStatusCell({ resource }: { resource: ResourceOut }) {
     <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
       <ScopeControl
         kind={resource.kind}
-        name={resource.name}
+        uid={resource.uid}
         enabled={resource.enabled}
         scope={resource.scope ?? null}
       />
@@ -92,10 +92,7 @@ export function ServerDeleteCell({ resource }: { resource: ResourceOut }) {
         error={del.error}
         onConfirm={() =>
           // Close only on success so a failure leaves the dialog (and error) up.
-          del.mutate(
-            { kind: resource.kind, name: resource.name },
-            { onSuccess: () => setOpen(false) },
-          )
+          del.mutate({ kind: resource.kind, uid: resource.uid }, { onSuccess: () => setOpen(false) })
         }
       />
     </div>
@@ -130,7 +127,7 @@ export function McpServersBulkActions({
         onConfirm={async () => {
           // Clear regardless of partial failure; the summary toast reports the
           // outcome, so the bar never stays stuck silently.
-          await bulk.run(rows, (r) => resourcesApi.remove(r.kind, r.name));
+          await bulk.run(rows, (r) => resourcesApi.remove(r.uid));
           onDone();
         }}
       />

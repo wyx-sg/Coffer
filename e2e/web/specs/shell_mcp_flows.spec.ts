@@ -14,6 +14,7 @@ import {
   deregisterMcpServer,
   generateUniqueName,
   readDaemonToken,
+  resolveResourceUid,
 } from "./_helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,14 +54,22 @@ async function registerFakeServer(
   if (!r.ok) throw new Error(`register failed: ${r.status} ${await r.text()}`);
 }
 
+/** The uid of the server called ``name`` — what every route addresses. */
+async function uidOf(name: string): Promise<string> {
+  const uid = await resolveResourceUid("mcp_server", name);
+  if (uid === null) throw new Error(`no mcp_server named ${name}`);
+  return uid;
+}
+
 /**
  * Trigger capability discovery so that Resource/Prompt preference rows exist
  * in the DB. Required before enable/disable calls.
  */
 async function refreshCapabilities(name: string): Promise<void> {
   const { token, port } = readDaemonToken();
+  const uid = await uidOf(name);
   const r = await fetch(
-    `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${name}/refresh`,
+    `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${uid}/refresh`,
     {
       method: "POST",
       headers: {
@@ -95,7 +104,11 @@ acceptance(
       await page.getByRole("button", { name: /continue/i }).click();
       await page.getByRole("button", { name: /import/i }).click();
 
-      await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}`), {
+      // The detail route carries the uid, which no test can predict, so the
+      // claim "it landed on the new server's page" is made where it is
+      // legible: the URL is A detail page, and the page is THIS server's.
+      await expect(page).toHaveURL(/\/mcp-servers\/[^/]+$/, { timeout: 15_000 });
+      await expect(page.getByRole("heading", { name })).toBeVisible({
         timeout: 15_000,
       });
       // The redesigned detail page surfaces the server name as a level-1
@@ -124,7 +137,7 @@ acceptance(
     const name = generateUniqueName("e2e002tog");
     try {
       await registerFakeServer(name);
-      await page.goto(`/mcp-servers/${name}`);
+      await page.goto(`/mcp-servers/${await uidOf(name)}`);
       // Tabs row uses the new design tokens but the role + tab names are
       // unchanged (spec web-ui explicitly requires backwards-compatible
       // selectors here).
@@ -171,7 +184,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/mcp-servers/${name}`);
+      await page.goto(`/mcp-servers/${await uidOf(name)}`);
       await page.getByRole("tab", { name: "Resources" }).click();
 
       // The resource row appears with its URI and is enabled by default
@@ -218,7 +231,7 @@ acceptance(
       // Discovery must run before the UI can toggle
       await refreshCapabilities(name);
 
-      await page.goto(`/mcp-servers/${name}`);
+      await page.goto(`/mcp-servers/${await uidOf(name)}`);
       await page.getByRole("tab", { name: "Prompts" }).click();
 
       // The prompt row appears and is enabled by default
@@ -268,7 +281,11 @@ acceptance(
       await page.getByRole("button", { name: /import/i }).click();
 
       // Import navigates to the detail page
-      await expect(page).toHaveURL(new RegExp(`/mcp-servers/${name}`), {
+      // The detail route carries the uid, which no test can predict, so the
+      // claim "it landed on the new server's page" is made where it is
+      // legible: the URL is A detail page, and the page is THIS server's.
+      await expect(page).toHaveURL(/\/mcp-servers\/[^/]+$/, { timeout: 15_000 });
+      await expect(page.getByRole("heading", { name })).toBeVisible({
         timeout: 15_000,
       });
 
@@ -358,7 +375,7 @@ acceptance(
       // Two distinct tools so the search can filter one out
       await registerFakeServer(name, ["--tools", "alpha_tool", "beta_tool"]);
 
-      await page.goto(`/mcp-servers/${name}`);
+      await page.goto(`/mcp-servers/${await uidOf(name)}`);
       await page.getByRole("tab", { name: "Tools" }).click();
 
       // Both tools visible initially

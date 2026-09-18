@@ -29,8 +29,18 @@ from coffer.infrastructure.persistence.base import Base
 class ResourceModel(Base):
     __tablename__ = "resources"
 
+    #: Surrogate primary key. Internal and per-machine: it is the FK four
+    #: kind-owned tables hold, and it is NOT an identity anyone outside this
+    #: process may use — two machines allocate the same row number to different
+    #: resources.
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: The identity (migration 0095): opaque, immutable, and the same value on
+    #: every machine holding this resource. Everything outside the process
+    #: addresses a resource by this — routes, cross-resource references, the
+    #: synced document's filename.
+    uid: Mapped[str] = mapped_column(String, nullable=False)
     kind: Mapped[str] = mapped_column(String, nullable=False)
+    #: A mutable label, unique within ``kind``.
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     config_json: Mapped[str] = mapped_column(Text, nullable=False)
@@ -38,11 +48,16 @@ class ResourceModel(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     # Framework-level per-agent activation scope (ADR per-agent-resource-scope): a JSON list of
-    # agent names; NULL means unscoped. Added by migration 0046.
+    # agent UIDS; NULL means unscoped. Added by migration 0046; rewritten from
+    # names to uids by migration 0096.
     scope_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
+        # The label is still unique within its kind — a user should not have two
+        # skills called the same thing — but that is a constraint on the label,
+        # not the identity. ``uq_resources_uid`` is what says who this row IS.
         UniqueConstraint("kind", "name", name="uq_resources_kind_name"),
+        Index("uq_resources_uid", "uid", unique=True),
         Index("idx_resources_kind_enabled", "kind", "enabled"),
     )
 
@@ -54,6 +69,9 @@ class AuditLogModel(Base):
     timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     event_type: Mapped[str] = mapped_column(String, nullable=False)
     #: The resource's stable row id; kind+name are the label it carried then.
+    #: Still the integer ``resources.id`` rather than the uid: this is a local
+    #: join into a local table, the audit log does not travel, and re-pointing
+    #: it would rewrite history rows for no reader's benefit.
     resource_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resource_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     resource_name: Mapped[str | None] = mapped_column(String, nullable=True)

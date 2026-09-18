@@ -14,6 +14,11 @@
 // Two keys keep a flat shape on purpose, documented where they are declared:
 // `messagesKey` (a sibling of the conversation, not a child) and
 // `endpointModelsKey` (deliberately NOT under `providersKey`).
+//
+// Every key that names one resource is keyed on its UID, never on its name. A
+// cache key has to identify the same row before and after a rename, and a name
+// does not: keying on it would leave the renamed resource's entries stranded
+// under the old label while its detail page mounted a fresh, empty one.
 import type { QueryKey } from "@tanstack/react-query";
 
 // ---------------------------------------------------------------------------
@@ -24,37 +29,40 @@ export const resourcesKey = ["resources"] as const;
 /** One kind's list (`kind` undefined = every kind). Object segment so a
  *  `["resources", { kind: "mcp_server" }]` invalidation matches by kind. */
 export const resourcesByKindKey = (kind?: string) => ["resources", { kind }] as const;
-export const resourceKey = (kind: string, name: string) => ["resources", kind, name] as const;
+/** One resource, by uid. The kind is NOT a segment: a uid already names
+ *  exactly one row, and a second segment would only be a second way to get it
+ *  wrong. */
+export const resourceKey = (uid: string) => ["resources", uid] as const;
 
 // ---------------------------------------------------------------------------
 // agents
 // ---------------------------------------------------------------------------
 
 export const agentsKey = ["agents"] as const;
-export const agentKey = (name: string) => ["agents", name] as const;
+export const agentKey = (uid: string) => ["agents", uid] as const;
 export const agentCandidatesKey = ["agents", "candidates"] as const;
-export const agentConfigFilesKey = (name: string) => ["agents", name, "config-files"] as const;
-export const agentConfigFileKey = (name: string, key: string) =>
-  ["agents", name, "config-files", key] as const;
-export const agentConfigChildKey = (name: string, key: string, relpath: string) =>
-  ["agents", name, "config-files", key, relpath] as const;
-export const agentMcpInstallKey = (name: string) => ["agents", name, "mcp-install"] as const;
-export const agentMcpEntriesKey = (name: string) => ["agents", name, "mcp-entries"] as const;
-export const agentPluginsKey = (name: string) => ["agents", name, "plugins"] as const;
-export const agentUnmanagedSkillsKey = (name: string) =>
-  ["agents", name, "unmanaged-skills"] as const;
-export const agentNativeMemoryKey = (name: string) => ["agents", name, "native-memory"] as const;
+export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
+export const agentConfigFileKey = (uid: string, key: string) =>
+  ["agents", uid, "config-files", key] as const;
+export const agentConfigChildKey = (uid: string, key: string, relpath: string) =>
+  ["agents", uid, "config-files", key, relpath] as const;
+export const agentMcpInstallKey = (uid: string) => ["agents", uid, "mcp-install"] as const;
+export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
+export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as const;
+export const agentUnmanagedSkillsKey = (uid: string) =>
+  ["agents", uid, "unmanaged-skills"] as const;
+export const agentNativeMemoryKey = (uid: string) => ["agents", uid, "native-memory"] as const;
 /** One page of an agent's transcript list; `params` omitted = the whole
  *  subtree, for invalidation. */
-export const agentTranscriptsKey = <P extends object>(name: string, params?: P) =>
+export const agentTranscriptsKey = <P extends object>(uid: string, params?: P) =>
   params
-    ? (["agents", name, "conversations", params] as const)
-    : (["agents", name, "conversations"] as const);
+    ? (["agents", uid, "conversations", params] as const)
+    : (["agents", uid, "conversations"] as const);
 /** One session's body, keyed by its FILE: `session_id` repeats across the
  *  sidechain files a single conversation can leave behind, so the path is the
  *  only thing that names exactly one of them. */
-export const agentTranscriptSessionKey = (name: string, sourcePath: string, offset: number) =>
-  ["agents", name, "conversations", "session", sourcePath, offset] as const;
+export const agentTranscriptSessionKey = (uid: string, sourcePath: string, offset: number) =>
+  ["agents", uid, "conversations", "session", sourcePath, offset] as const;
 
 // ---------------------------------------------------------------------------
 // agentProviders — the turn platform's agent registry (/agent-providers)
@@ -71,19 +79,20 @@ export const agentProviderModelsKey = (agentKey: string) =>
 // ---------------------------------------------------------------------------
 
 export const skillsKey = ["skills"] as const;
-export const skillKey = (name: string) => ["skills", name] as const;
-export const skillFilesKey = (name: string) => ["skills", name, "files"] as const;
-export const skillFileKey = (name: string, path: string) => ["skills", name, "file", path] as const;
+export const skillKey = (uid: string) => ["skills", uid] as const;
+export const skillFilesKey = (uid: string) => ["skills", uid, "files"] as const;
+export const skillFileKey = (uid: string, path: string) =>
+  ["skills", uid, "file", path] as const;
 
 // ---------------------------------------------------------------------------
 // mcp — per-server discovery, health and invocation log
 // ---------------------------------------------------------------------------
 
-export const mcpCapabilitiesKey = (serverName: string) =>
-  ["mcp", "capabilities", serverName] as const;
-export const mcpStatusKey = (serverName: string) => ["mcp", "status", serverName] as const;
-export const mcpInvocationsKey = (serverName: string, filters: Record<string, unknown>) =>
-  ["mcp", "invocations", serverName, filters] as const;
+export const mcpCapabilitiesKey = (serverUid: string) =>
+  ["mcp", "capabilities", serverUid] as const;
+export const mcpStatusKey = (serverUid: string) => ["mcp", "status", serverUid] as const;
+export const mcpInvocationsKey = (serverUid: string, filters: Record<string, unknown>) =>
+  ["mcp", "invocations", serverUid, filters] as const;
 /** The gateway-wide invocation log (every server) — the Activity page. */
 export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
   ["mcp", "invocations", "all", filters] as const;
@@ -93,20 +102,20 @@ export const mcpAllInvocationsKey = (filters: Record<string, unknown>) =>
 // ---------------------------------------------------------------------------
 
 export const providersKey = ["providers"] as const;
-export const providerKey = (name: string) => ["providers", name] as const;
+export const providerKey = (uid: string) => ["providers", uid] as const;
 
 /** The models a connection's endpoint reports. Deliberately NOT under
- *  `providerKey(name)`: every connection mutation invalidates that subtree,
+ *  `providerKey(uid)`: every connection mutation invalidates that subtree,
  *  and this list changes when the ENDPOINT changes, not when our curation
  *  does. MUST stay equal to `endpointModelsKey` in
  *  `lib/hooks/useModelIntrospection.ts` until that file imports this one. */
-export const endpointModelsKey = (name: string) => ["endpointModels", name] as const;
+export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as const;
 
 // ---------------------------------------------------------------------------
 // channels — channel resources ride `resourcesKey`; only live status is here
 // ---------------------------------------------------------------------------
 
-export const channelStatusKey = (name: string) => ["channels", name, "status"] as const;
+export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as const;
 
 // ---------------------------------------------------------------------------
 // workflow — runs, their events/artifacts, and approvals across every run
@@ -175,7 +184,7 @@ export const syncKeyFingerprintKey = ["sync", "key-fingerprint"] as const;
 // ---------------------------------------------------------------------------
 
 export const scopeKey = ["scope"] as const;
-export const resourceScopeKey = (kind: string, name: string) => ["scope", kind, name] as const;
+export const resourceScopeKey = (uid: string) => ["scope", uid] as const;
 
 // ---------------------------------------------------------------------------
 // knowledge — collections, one directory level per key, one file per key
@@ -195,12 +204,13 @@ export const memoryKey = ["memory"] as const;
 export const memoryPartitionsKey = ["memory", "partitions"] as const;
 /** A partition's own directory, and one file in it — the tree the detail page
  *  browses (spec memory FR-037). */
-export const memoryPartitionFilesKey = (partition: string) =>
-  ["memory", "partitions", partition, "files"] as const;
-export const memoryPartitionFileKey = (partition: string, path: string) =>
-  ["memory", "partitions", partition, "files", "content", path] as const;
+export const memoryPartitionFilesKey = (partitionUid: string) =>
+  ["memory", "partitions", partitionUid, "files"] as const;
+export const memoryPartitionFileKey = (partitionUid: string, path: string) =>
+  ["memory", "partitions", partitionUid, "files", "content", path] as const;
 export const memoryDeliveryKey = ["memory", "delivery"] as const;
-export const memoryAgentDeliveryKey = (agent: string) => ["memory", "delivery", agent] as const;
+export const memoryAgentDeliveryKey = (agentUid: string) =>
+  ["memory", "delivery", agentUid] as const;
 
 // ---------------------------------------------------------------------------
 // upkeep — the long rewrites (memory organise, knowledge curation) in flight
@@ -241,8 +251,8 @@ export const internalEngineKey = ["settings", "internalEngine"] as const;
 
 /**
  * Some kinds are read through their OWN list key rather than the generic
- * resource list — `useSkill` reads `skillKey(name)`, `useProvider` reads
- * `providerKey(name)`, agents read `agentKey(name)`. Invalidating only
+ * resource list — `useSkill` reads `skillKey(uid)`, `useProvider` reads
+ * `providerKey(uid)`, agents read `agentKey(uid)`. Invalidating only
  * `resourcesKey` leaves those surfaces rendering the pre-write state (a skill
  * detail page would keep showing "enabled" after a successful disable), so a
  * kind-agnostic write (enable/disable/delete/scope) refreshes this key too.

@@ -58,8 +58,10 @@ export function AgentOverviewTab({ agent }: { agent: AgentOut }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={BUILTIN}>{t("agents.connection.builtin")}</SelectItem>
+                  {/* The VALUE is the connection's uid — what activation
+                      takes — and the LABEL is its name. */}
                   {c.compatible.map((p) => (
-                    <SelectItem key={p.name} value={p.name}>
+                    <SelectItem key={p.uid} value={p.uid}>
                       {p.name}
                     </SelectItem>
                   ))}

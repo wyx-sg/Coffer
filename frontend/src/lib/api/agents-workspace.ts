@@ -19,6 +19,16 @@ export type McpEntriesResponse = Schemas["McpEntriesOut"];
 
 export type AdoptMcpEntryBody = Schemas["McpEntryAdopt"];
 
+/** What adopting an MCP entry created: `uid`, `kind`, `name`. The uid is where
+ *  the caller navigates, the name is what it tells the user the thing ended up
+ *  being called — after a `new_name` override those are not the same answer,
+ *  which is why both travel. */
+export type AdoptedResource = Schemas["AdoptedResource"];
+
+/** What adopting an unmanaged skill folder created: the new skill's uid and the
+ *  label it was adopted under. Same two answers, same reason. */
+export type SkillRefOut = SkillManager["schemas"]["SkillRefOut"];
+
 /** `version` … `mcp_servers`: best-effort detail read from the plugin's
  * install dir (Claude only today; null / empty otherwise). */
 export type PluginOut = Schemas["Plugin"];

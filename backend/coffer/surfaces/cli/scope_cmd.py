@@ -1,16 +1,22 @@
 """coffer scope ... commands (activation scope; ADR: per-agent-resource-scope).
 
-Thin CLI wrapper over ``GET/PUT /api/v1/resources/{kind}/{name}/scope``.
-Same ``<kind>:<name>`` ref parsing (``kind, _, name = ref.partition(":")`` +
-``typer.Exit(2)`` guard) and the same ``client_or_exit()`` + ``check()``
-call shape as the other resource sub-groups.
+Thin CLI wrapper over ``GET/PUT /api/v1/resources/{uid}/scope``. Takes a KIND
+and a NAME, like every other resource command, and resolves both the resource
+and the agents it names through ``_resolve``.
 
 One allow-list of agents, mirroring ``coffer.domain.scope``:
 
-- ``scope show``                         — read the current one
-- ``scope set <ref> --agents a,b``       — active only for those agents
-- ``scope set <ref> --no-agents``        — dormant (matches no agent)
-- ``scope clear <ref>``                  — unscoped (every agent)
+- ``scope show <kind> <name>``                    — read the current one
+- ``scope set <kind> <name> --agents a,b``        — active only for those agents
+- ``scope set <kind> <name> --no-agents``         — dormant (matches no agent)
+- ``scope clear <kind> <name>``                   — unscoped (every agent)
+
+**The stored list holds agent UIDs; this surface speaks agent NAMES.** The
+translation happens here, in both directions: ``set`` resolves each name to a
+uid before writing, and ``show`` renders the stored uids back as names. Doing it
+at the surface is what keeps the daemon on one vocabulary — while the stored
+list held names, an agent had two of them and a whole module existed to
+reconcile the two.
 
 ``set`` is a whole-value write, not a read-modify-write.
 
@@ -22,24 +28,51 @@ machine you are sitting at.
 from __future__ import annotations
 
 import json as _json
+from typing import Any
 
+import httpx
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Activation scope for a resource")
+
+_KIND = typer.Argument(..., help="Resource kind, e.g. mcp_server")
+_NAME = typer.Argument(..., help="Resource name")
+
+
+def _agent_uids(c: httpx.Client, names: list[str], *, verbose: bool) -> list[str]:
+    """Each agent NAME the user typed, as the uid the scope stores.
+
+    An unknown name is refused rather than passed through. A uid that matches
+    no agent is legal in the stored value — a machine may be scoped to an agent
+    it does not have yet — but a name the user typed that resolves to nothing
+    is almost always a typo, and silently writing it would produce a scope that
+    quietly matches one agent fewer than they think.
+    """
+    return [resolve_uid(c, "agent", name, verbose=verbose) for name in names]
+
+
+def _agent_names(
+    c: httpx.Client, scope: dict[str, Any] | None, *, verbose: bool
+) -> dict[str, Any] | None:
+    """The stored scope with its agent uids rendered back as names.
+
+    A uid with no agent behind it is shown verbatim: it is a real entry of the
+    stored value and hiding it would make the displayed scope narrower than the
+    one in the database.
+    """
+    if scope is None or scope.get("agents") is None:
+        return scope
+    r = c.get("/resources", params={"kind": "agent"})
+    _cli_client.check(r, verbose=verbose)
+    names_by_uid = {a["uid"]: a["name"] for a in r.json()["resources"]}
+    return {**scope, "agents": [names_by_uid.get(uid, uid) for uid in scope["agents"]]}
 
 
 def _verbose(ctx: typer.Context) -> bool:
     return bool((ctx.obj or {}).get("verbose", False))
-
-
-def _parse_ref(ref: str) -> tuple[str, str]:
-    kind, _, name = ref.partition(":")
-    if not kind or not name:
-        typer.echo("ref must be <kind>:<name>", err=True)
-        raise typer.Exit(2)
-    return kind, name
 
 
 def _axis(names: str | None, empty: bool, flag: str) -> list[str] | None:
@@ -61,19 +94,21 @@ def _axis(names: str | None, empty: bool, flag: str) -> list[str] | None:
 @app.command("show")
 def show(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
+    kind: str = _KIND,
+    name: str = _NAME,
 ) -> None:
     """Show a resource's current scope and whether its kind supports scope."""
     verbose = _verbose(ctx)
-    kind, name = _parse_ref(ref)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/resources/{kind}/{name}/scope")
+        uid = resolve_uid(c, kind, name, verbose=verbose)
+        r = c.get(f"/resources/{uid}/scope")
         _cli_client.check(r, verbose=verbose)
-    body = r.json()
+        body = r.json()
+        shown = _agent_names(c, body["scope"], verbose=verbose)
     typer.echo(
         _json.dumps(
-            {"scope": body["scope"], "supports_scope": body["supports_scope"]},
+            {"scope": shown, "supports_scope": body["supports_scope"]},
             indent=2,
         )
     )
@@ -82,7 +117,8 @@ def show(
 @app.command("set")
 def set_(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
+    kind: str = _KIND,
+    name: str = _NAME,
     agents: str | None = typer.Option(
         None, "--agents", help="Comma-separated agent names this resource is active for"
     ),
@@ -99,33 +135,36 @@ def set_(
     The scope written here applies to THIS machine only and is not synced.
     """
     verbose = _verbose(ctx)
-    kind, name = _parse_ref(ref)
     if not (agents or no_agents):
         typer.echo("name the agents (--agents, or --no-agents)", err=True)
         raise typer.Exit(2)
 
-    scope = {"agents": _axis(agents, no_agents, "agents")}
+    named = _axis(agents, no_agents, "agents")
     if no_agents:
-        typer.echo(f"{kind}:{name} is now DORMANT — an empty allow-list matches nothing")
+        typer.echo(f"{kind} {name} is now DORMANT — an empty allow-list matches nothing")
 
     c, _info = _cli_client.client_or_exit()
     with c:
-        put_r = c.put(f"/resources/{kind}/{name}/scope", json={"scope": scope})
+        uid = resolve_uid(c, kind, name, verbose=verbose)
+        scope = {"agents": None if named is None else _agent_uids(c, named, verbose=verbose)}
+        put_r = c.put(f"/resources/{uid}/scope", json={"scope": scope})
         _cli_client.check(put_r, verbose=verbose)
-    typer.echo(_json.dumps({"scope": put_r.json()["scope"]}, indent=2))
+        shown = _agent_names(c, put_r.json()["scope"], verbose=verbose)
+    typer.echo(_json.dumps({"scope": shown}, indent=2))
 
 
 @app.command("clear")
 def clear(
     ctx: typer.Context,
-    ref: str = typer.Argument(..., help="Resource as <kind>:<name>"),
+    kind: str = _KIND,
+    name: str = _NAME,
 ) -> None:
     """Clear the scope back to unscoped — active for every agent on this machine."""
     verbose = _verbose(ctx)
-    kind, name = _parse_ref(ref)
     c, _info = _cli_client.client_or_exit()
     with c:
-        typer.echo(f"clearing scope for {kind}:{name} — it becomes active for every agent")
-        put_r = c.put(f"/resources/{kind}/{name}/scope", json={"scope": None})
+        uid = resolve_uid(c, kind, name, verbose=verbose)
+        typer.echo(f"clearing scope for {kind} {name} — it becomes active for every agent")
+        put_r = c.put(f"/resources/{uid}/scope", json={"scope": None})
         _cli_client.check(put_r, verbose=verbose)
     typer.echo(_json.dumps({"scope": put_r.json()["scope"]}, indent=2))

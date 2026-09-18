@@ -59,7 +59,7 @@ def test_mcp_invocation_never_carries_args_or_result_content():
     inv = MCPInvocation(
         id=None,
         timestamp=datetime(2026, 5, 20, tzinfo=UTC),
-        resource_name="filesystem",
+        resource_uid="aa11bb22cc33dd44ee55ff6677889900",
         capability_type="tool",
         capability_key="read_file",
         duration_ms=42,

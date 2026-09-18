@@ -55,7 +55,7 @@ export function useListProviderModels() {
  *  it the loading / error / refetch states that makes a failed probe visible and
  *  retryable.
  *
- *  The key deliberately does NOT extend ``["providers", name]``: every
+ *  The key deliberately does NOT extend ``["providers", uid]``: every
  *  connection mutation invalidates that subtree, so ticking one model on would
  *  re-probe the remote endpoint — a network round trip per click. This list
  *  changes when the ENDPOINT changes, not when our curation does.
@@ -64,9 +64,9 @@ export function useListProviderModels() {
  *  answer the user must see, not a blip worth three silent attempts.
  *
  *  `endpointModelsKey` lives in `lib/api/queryKeys.ts` with every other key. */
-export function useEndpointModels(name: string, probe: ProviderProbe) {
+export function useEndpointModels(uid: string, probe: ProviderProbe) {
   return useQuery({
-    queryKey: endpointModelsKey(name),
+    queryKey: endpointModelsKey(uid),
     queryFn: () =>
       post<EndpointModelsOut>("/models/list-models", {
         provider: probe.provider,
@@ -74,7 +74,7 @@ export function useEndpointModels(name: string, probe: ProviderProbe) {
         credential_ref: probe.credential_ref ?? null,
         secret_value: probe.secret_value ?? null,
       }),
-    enabled: name !== "",
+    enabled: uid !== "",
     retry: false,
     refetchOnWindowFocus: false,
     // The tab this renders in unmounts when the user switches away, so without a

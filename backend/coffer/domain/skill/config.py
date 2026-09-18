@@ -15,9 +15,13 @@ class SkillConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source: SkillSource
-    # Capped at 64 to match the master store folder-name limit and the
-    # SKILL.md frontmatter ``name`` cap (see ``frontmatter._NAME_RE``).
-    skill_md_name: str = Field(min_length=1, max_length=64)
+    # There is deliberately NO ``skill_md_name``. It used to mirror the
+    # SKILL.md frontmatter's ``name``, which is also where the resource's own
+    # name comes from — so it was a second spelling of ``Resource.name``, with
+    # no reader anywhere and two places to disagree once renaming existed
+    # (ADR resource-identity-is-an-immutable-uid). Migration 0098 strips it.
+    # The skill's name is ``Resource.name``; ask the row.
+    #
     # Capped at 1024 to match the SKILL.md frontmatter ``description`` cap
     # (see ``frontmatter._DESCRIPTION_MAX``).
     skill_md_description: str = Field(min_length=1, max_length=1024)

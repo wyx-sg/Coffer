@@ -22,7 +22,7 @@ type PromptView = components["schemas"]["MCPPromptView"];
 type CapabilityKind = "tool" | "resource" | "prompt";
 
 interface Props {
-  serverName: string;
+  serverUid: string;
   kind: CapabilityKind;
   tools?: ToolView[];
   resources?: ResourceView[];
@@ -43,11 +43,11 @@ interface RowDescriptor {
 }
 
 function ToggleSwitch({
-  serverName,
+  serverUid,
   kind,
   row,
 }: {
-  serverName: string;
+  serverUid: string;
   kind: CapabilityKind;
   row: RowDescriptor;
 }) {
@@ -70,7 +70,7 @@ function ToggleSwitch({
         setPending(true);
         m.mutate(
           {
-            serverName,
+            serverUid,
             capabilityType: kind,
             capabilityKey: row.key,
           },
@@ -83,7 +83,7 @@ function ToggleSwitch({
 
 export function CapabilityList(props: Props) {
   const { t } = useTranslation();
-  const { serverName, kind } = props;
+  const { serverUid, kind } = props;
   const rows = toRows(props);
 
   // Render the same DataTable (search + status filter + per-row enable) for
@@ -127,7 +127,7 @@ export function CapabilityList(props: Props) {
       key: "enabled",
       header: t("mcp.capabilities.header.enabled"),
       className: "w-24 text-right",
-      cell: (row) => <ToggleSwitch serverName={serverName} kind={kind} row={row} />,
+      cell: (row) => <ToggleSwitch serverUid={serverUid} kind={kind} row={row} />,
     },
   ];
 
@@ -165,7 +165,7 @@ export function CapabilityList(props: Props) {
         clearLabel: t("common.clear"),
         renderBulkActions: ({ selectedRows, clear }) => (
           <CapabilityBulkActions
-            serverName={serverName}
+            serverUid={serverUid}
             kind={kind}
             rows={selectedRows}
             onDone={clear}

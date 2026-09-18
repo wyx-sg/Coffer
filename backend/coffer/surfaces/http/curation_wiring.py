@@ -82,7 +82,14 @@ def start_curation_worker(
     async def list_collections() -> list[str]:
         # The registry is the authority on which collections exist; the
         # application layer must not go looking for directories to answer it.
-        return [r.name for r in await resources.list(kind=KIND_KNOWLEDGE, enabled=True)]
+        #
+        # Uids, not names. A sweep holds one of these across a pass that takes
+        # minutes and rewrites a corpus, and the worker claims it in the same
+        # upkeep-runs table the page's Curate button claims — so it has to be
+        # the value that cannot be edited underneath either of them (ADR
+        # resource-identity-is-an-immutable-uid). The worker reads the
+        # directory name off the row itself.
+        return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE, enabled=True)]
 
     async def is_enabled() -> bool:
         """On, and on the machine that owns the pass.

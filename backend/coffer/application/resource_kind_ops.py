@@ -6,7 +6,7 @@ two this is not one mutation path. It is the whole of the read side of the kind
 registry: every place the kind-agnostic core has to consult a kind's
 *declaration* rather than act on a row.
 
-Four questions, and they belong together because they are one shape. Each takes
+Five questions, and they belong together because they are one shape. Each takes
 the registry and a kind name (or a ``Kind`` the caller already resolved), reads
 a field the kind set when it was built, and answers. None of them touches the
 repository, the audit log or a resource; none of them can fail a write. The
@@ -22,7 +22,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from coffer.domain.resource import Kind
+from coffer.domain.errors import ConfigValidationError
+from coffer.domain.resource import Kind, validate_resource_name
 
 Registry = Mapping[str, Kind]
 
@@ -101,9 +102,36 @@ def converges_row(kinds: Registry, kind: str, config: Mapping[str, Any]) -> bool
     return kind_def.converges_row(dict(config))
 
 
+def check_name(kind_def: Kind, name: str) -> None:
+    """Framework rule then kind rule, BEFORE any DB write.
+
+    One helper because registration and rename must apply the same rules;
+    while rename lived in one kind's service the two had already drifted —
+    ``provider`` checked a length the framework did not and skipped the
+    pattern the framework did.
+
+    The one question here that can raise. It still asks only what the kind
+    *declares*, and still never touches a row: what it refuses is the argument
+    a caller is about to write, not the state of the vault.
+    """
+    try:
+        validate_resource_name(name)
+    except ValueError as e:
+        raise ConfigValidationError(str(e)) from e
+    # CODE-030: kind-specific name validation (e.g. mcp_server reserves '__'
+    # as the tool/prompt namespace separator; skill enforces the SKILL.md
+    # frontmatter charset, which is stricter than the framework's).
+    if kind_def.validate_name is not None:
+        try:
+            kind_def.validate_name(name)
+        except ValueError as e:
+            raise ConfigValidationError(str(e)) from e
+
+
 __all__ = [
     "Registry",
     "audit_safe_config",
+    "check_name",
     "converges",
     "converges_row",
     "credential_refs",

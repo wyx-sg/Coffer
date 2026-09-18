@@ -30,7 +30,7 @@ NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 def a_run(**overrides: object) -> Run:
     fields: dict[str, object] = {
         "id": "run-1",
-        "template_ref": "workflow:small-change",
+        "template_ref": "small-change",
         "template_snapshot": {"stages": []},
         "title": "Buffer table for int64 userid",
         "workdir": "/Users/dev/work/account",

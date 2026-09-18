@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound, ScopeInvalidError
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope, validate_scope
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 async def update_scope(
     service: ResourceService,
-    ref: ResourceRef,
+    uid: str,
     scope: Scope | None,
     *,
     actor: str,
@@ -36,16 +36,15 @@ async def update_scope(
     ``scope`` is validated against the kind's declared ``supports_scope``
     (False means the kind does not support scope at all).
     """
-    kind_def = service._require_kind(ref.kind)
+    # Read first: the kind is a property of the row, not of the request, so
+    # there is nothing to validate the scope against until we have it.
+    before = await service.get(uid)
+    kind_def = service._require_kind(before.kind)
     try:
         # ``ScopeValidationError`` is itself a ``ValueError`` subclass.
         validate_scope(scope, supports_scope=kind_def.supports_scope)
     except ValueError as e:
         raise ScopeInvalidError(str(e)) from e
-    # Confirms existence up front (raises ResourceNotFound) — mirrors
-    # update_config's before-read, and gives the kind's pre-validation hook
-    # below the resource it has to judge the proposed scope against.
-    before = await service.get(ref)
     # Kind-level pre-validation: runs BEFORE persistence + audit, the exact
     # opposite of its neighbour ``on_scope_changed`` at the end of this
     # function. The two differ because they answer different questions: this one
@@ -62,14 +61,14 @@ async def update_scope(
             # Same envelope as the shape check above (SCOPE_INVALID → 422), so
             # the wire contract is one code for "this scope is not acceptable".
             raise ScopeInvalidError(str(e)) from e
-    updated = await service._repo.update_scope(ref, scope)
+    updated = await service._repo.update_scope(uid, scope)
     if updated is None:
-        raise ResourceNotFound(ref.kind, ref.name)
+        raise ResourceNotFound(uid)
     await service._audit.record(
         AuditEventType.RESOURCE_SCOPE_UPDATED.value,
-        ref=ref,
+        resource=updated,
         actor=actor,
-        # Scope carries only agent names — no secrets — so it is audited
+        # Scope carries only agent uids — no secrets — so it is audited
         # verbatim (no redactor needed, unlike config), in the same shape the
         # column stores.
         details={"scope": scope.to_json() if scope is not None else None},
@@ -79,7 +78,7 @@ async def update_scope(
     # scope is already the row's scope, so a hook re-reading the resource
     # (e.g. skill delivery reconciliation) sees the edit that triggered it.
     if kind_def.on_scope_changed is not None:
-        hook_result = kind_def.on_scope_changed(ref)
+        hook_result = kind_def.on_scope_changed(updated)
         if inspect.isawaitable(hook_result):
             await hook_result
     return updated

@@ -10,6 +10,12 @@
 // sit a header away from each other and answer different questions — which
 // MACHINE runs the adapter, and which AGENTS the channel may drive — and a
 // test that conflated them would be the first place the UI does too.
+//
+// The page is reached by the channel's `uid`: the route is `/channels/:uid`,
+// `useResource` takes it alone (no kind), and enable/disable/delete address it.
+// Everything a person reads — the heading, the picker's accessible name, the
+// delete confirmation — is still the NAME, so the fixture carries both and
+// spells them differently.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -33,9 +39,6 @@ vi.mock("@/lib/hooks/useChannels", () => ({
 // the four binding states are set up directly rather than through a daemon.
 vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
 vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
-vi.mock("@/lib/hooks/useAgentProviders", () => ({
-  useAgentProviders: vi.fn(() => ({ data: [] })),
-}));
 // The header carries ScopeControl now. On a detail page it fetches its own
 // scope, so the hooks behind it are stubbed rather than served by a real client.
 // `channel` declares scope, so the control's panel offers all three states.
@@ -43,8 +46,10 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: true } })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+// Read by the reach control's agent picker and by the edit dialog's
+// AgentSelect — both of which offer NAMES and store uids.
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
+  useAgents: vi.fn(() => ({ data: [{ uid: "u-6c1d0b83", name: "claude-code" }] })),
 }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
@@ -81,6 +86,13 @@ function mutationStub(): MutationStub {
 const HERE = "machine-here";
 const THERE = "machine-there";
 
+/** The channel this page is about: the uid in its URL, the name on its
+ *  heading. Nothing derives one from the other. */
+const ST = { uid: "u-c0be4512", name: "st" };
+
+/** The agent its config binds — a uid, like every cross-resource reference. */
+const AGENT_UID = "u-6c1d0b83";
+
 const REGISTRY = [
   { machine_id: HERE, name: "Laptop", is_self: true },
   { machine_id: THERE, name: "Desktop", is_self: false },
@@ -95,11 +107,11 @@ function stubMachines(machines = REGISTRY) {
 function stubResource(enabled = true, runsOn: string | null = HERE) {
   useResourceMock.mockReturnValue({
     data: {
+      ...ST,
       kind: "channel",
-      name: "st",
       config: {
         channel_type: "seatalk",
-        default_agent: "builtin",
+        default_agent: AGENT_UID,
         ...(runsOn === null ? {} : { runs_on: runsOn }),
       },
       enabled,
@@ -112,7 +124,7 @@ function stubResource(enabled = true, runsOn: string | null = HERE) {
 function stubStatus(status: Partial<ChannelStatus> = {}) {
   useChannelStatusMock.mockReturnValue({
     data: {
-      name: "st",
+      ...ST,
       channel_type: "seatalk",
       enabled: true,
       running: true,
@@ -138,9 +150,9 @@ function stubPairing(data?: PairingCode) {
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={["/channels/st"]}>
+    <MemoryRouter initialEntries={[`/channels/${ST.uid}`]}>
       <Routes>
-        <Route path="channels/:name" element={<ChannelDetailPage />} />
+        <Route path="channels/:uid" element={<ChannelDetailPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -218,6 +230,20 @@ acceptance("channels", "channel status reports runtime, pairing, and callback de
 });
 
 describe("ChannelDetailPage", () => {
+  test("reads the channel, and polls its status, by the uid in the URL", () => {
+    stubResource();
+    stubStatus();
+    stubPairing();
+    renderPage();
+
+    // `useResource(uid)` takes no kind: a uid already names exactly one row.
+    // Asserted because the failure is silent — a route param this page did not
+    // read would leave the uid empty and every query below it disabled, with
+    // the page rendering as if the channel were merely still loading.
+    expect(useResourceMock).toHaveBeenCalledWith(ST.uid);
+    expect(useChannelStatusMock).toHaveBeenCalledWith(ST.uid, { poll: true });
+  });
+
   test("shows 'not paired' when the channel has no peer", () => {
     stubResource();
     stubStatus({ peer: null });
@@ -254,7 +280,7 @@ describe("ChannelDetailPage", () => {
     fireEvent.click(reach);
     expect(screen.getByRole("radio", { name: /only selected agents/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
-    expect(disable.mutate).toHaveBeenCalledWith({ kind: "channel", name: "st" });
+    expect(disable.mutate).toHaveBeenCalledWith({ kind: "channel", uid: ST.uid });
     expect(enable.mutate).not.toHaveBeenCalled();
   });
 
@@ -268,7 +294,7 @@ describe("ChannelDetailPage", () => {
     // the confirm dialog's confirm button is plain "Delete".
     fireEvent.click(screen.getByRole("button", { name: /^delete channel$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
-    expect(del.mutate).toHaveBeenCalledWith({ kind: "channel", name: "st" }, expect.anything());
+    expect(del.mutate).toHaveBeenCalledWith({ kind: "channel", uid: ST.uid }, expect.anything());
   });
 
   test("the edit button opens the edit dialog", () => {
@@ -318,7 +344,7 @@ describe("ChannelDetailPage", () => {
     stubPairing();
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "st" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: ST.name })).toBeInTheDocument();
     expect(screen.getByText("SeaTalk")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /back to channels/i })).toHaveAttribute(
       "href",
@@ -329,7 +355,7 @@ describe("ChannelDetailPage", () => {
     expect(screen.getByText("Stopped")).toHaveClass("text-status-warn");
   });
 
-  test("a missing channel shows the shared empty state with the translated error", () => {
+  test("a missing channel heads the page with the failure, never with a uid", () => {
     useResourceMock.mockReturnValue({
       data: undefined,
       isPending: false,
@@ -342,6 +368,11 @@ describe("ChannelDetailPage", () => {
     expect(screen.getAllByText(/not found/i).length).toBeGreaterThan(0);
     expect(screen.queryByText("raw server text")).not.toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: /back to channels/i }).length).toBeGreaterThan(0);
+    // The channel could not be read, so there is no name to head the page
+    // with — and the uid from the URL is not a name. The heading is the
+    // failure itself rather than an opaque string the reader cannot place.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/not found/i);
+    expect(screen.queryByText(ST.uid)).not.toBeInTheDocument();
   });
 });
 
@@ -349,7 +380,8 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
   /** The picker, by its accessible name. It is a row of the status card: the
    *  binding is the other half of that card's "Running" headline, not a
    *  separate subject needing its own heading. */
-  const picker = () => screen.getByRole("combobox", { name: /machine running st/i });
+  const picker = () =>
+    screen.getByRole("combobox", { name: new RegExp(`machine running ${ST.name}`, "i") });
 
   test("the binding is a row of the status card, naming this machine", () => {
     stubResource();
@@ -361,7 +393,11 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
     // once you know which machine it is running on.
     const card = screen.getByTestId("channel-status-card");
     expect(within(card).getByText(/^runs on$/i)).toBeInTheDocument();
-    expect(within(card).getByRole("combobox", { name: /machine running st/i })).toBeInTheDocument();
+    expect(
+      within(card).getByRole("combobox", {
+        name: new RegExp(`machine running ${ST.name}`, "i"),
+      }),
+    ).toBeInTheDocument();
     expect(picker()).toHaveTextContent(/Laptop · this machine/i);
   });
 
@@ -420,7 +456,7 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
     fireEvent.click(screen.getByRole("option", { name: "Desktop" }));
 
     expect(rebind.mutate).toHaveBeenCalledWith({
-      config: { channel_type: "seatalk", default_agent: "builtin", runs_on: HERE },
+      config: { channel_type: "seatalk", default_agent: AGENT_UID, runs_on: HERE },
       runsOn: THERE,
       machine: "Desktop",
     });

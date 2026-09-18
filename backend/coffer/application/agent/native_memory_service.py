@@ -5,8 +5,8 @@ per-project memory layout for that type (``domain/agent/native_memory.py``), and
 scans the agent's config dir for ``<projects>/<slug>/<memory>`` directories via
 a :class:`NativeMemoryScanPort`. An agent type with no known native layout
 — or a missing projects dir — yields an empty list, never an
-error. A non-existent agent name raises ``ResourceNotFound`` (→ 404) via the
-agent lookup.
+error. A uid naming no registered agent raises ``ResourceNotFound`` (→ 404)
+via the agent lookup.
 
 Beyond the listing it also opens one store: its directory as a tree and one of
 its files as text, which is what the store's detail page renders. A store is a
@@ -77,7 +77,7 @@ class NativeMemoryScanPort(Protocol):
 # Structural type for the agent-lookup dependency — avoids a hard import of
 # AgentService (and keeps this service unit-testable with a fake).
 class _AgentLookup(Protocol):
-    async def get(self, name: str) -> Resource: ...
+    async def get(self, uid: str) -> Resource: ...
 
 
 class AgentNativeMemoryService:
@@ -90,9 +90,9 @@ class AgentNativeMemoryService:
         self._agents = agent_service
         self._scanner = scanner
 
-    async def list_stores(self, name: str) -> list[NativeMemoryStore]:
+    async def list_stores(self, uid: str) -> list[NativeMemoryStore]:
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        cfg = AgentConfig.model_validate((await self._agents.get(name)).config)
+        cfg = AgentConfig.model_validate((await self._agents.get(uid)).config)
         layout = native_memory_layout_for(cfg.type)
         if layout is None:
             return []
@@ -118,7 +118,7 @@ class AgentNativeMemoryService:
         result = [self._to_store(scan) for scan in scans]
         return sorted(result, key=lambda s: (-s.item_count, s.project_label))
 
-    async def read_tree(self, name: str, memory_dir: str) -> MemoryFileNode:
+    async def read_tree(self, uid: str, memory_dir: str) -> MemoryFileNode:
         """The store at *memory_dir*, as a file tree.
 
         Raises ``ResourceNotFound`` when no such agent is registered and
@@ -126,22 +126,22 @@ class AgentNativeMemoryService:
         memory stores — a client may only browse a directory the scan itself
         would have listed.
         """
-        store_dir, only = await self._checked_store_dir(name, memory_dir)
+        store_dir, only = await self._checked_store_dir(uid, memory_dir)
         return await asyncio.to_thread(
             functools.partial(self._scanner.build_tree, store_dir, only=only)
         )
 
-    async def read_file(self, name: str, memory_dir: str, relpath: str) -> MemoryFileContent:
+    async def read_file(self, uid: str, memory_dir: str, relpath: str) -> MemoryFileContent:
         """One file inside the store at *memory_dir*.
 
         Raises as :meth:`read_tree` does, plus ``ValueError`` when *relpath*
         escapes the store and ``FileNotFoundError`` when nothing is there.
         """
-        store_dir, _only = await self._checked_store_dir(name, memory_dir)
+        store_dir, _only = await self._checked_store_dir(uid, memory_dir)
         return await asyncio.to_thread(self._scanner.read_file, store_dir, relpath)
 
     async def _checked_store_dir(
-        self, name: str, memory_dir: str
+        self, uid: str, memory_dir: str
     ) -> tuple[pathlib.Path, frozenset[str] | None]:
         """Resolve *memory_dir*, prove it is one of this agent's stores, and say
         which of its entries the store actually consists of.
@@ -157,7 +157,7 @@ class AgentNativeMemoryService:
         memory. A per-project store has no such problem, and gets ``None``.
         """
         # Raises ResourceNotFound (→ 404) when the agent doesn't exist.
-        cfg = AgentConfig.model_validate((await self._agents.get(name)).config)
+        cfg = AgentConfig.model_validate((await self._agents.get(uid)).config)
         layout = native_memory_layout_for(cfg.type)
         candidate = pathlib.Path(memory_dir).resolve()
         if not is_native_memory_dir(layout, cfg.resolved_config_dir().resolve(), candidate):

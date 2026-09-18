@@ -162,12 +162,12 @@ class FakeToolClass:
     known: dict[tuple[str, str], str] = field(default_factory=dict)
     remembered: list[tuple[str, str, str]] = field(default_factory=list)
 
-    async def classify(self, server: str, tool: str) -> str | None:
-        return self.known.get((server, tool))
+    async def classify(self, server_name: str, tool: str) -> str | None:
+        return self.known.get((server_name, tool))
 
-    async def remember(self, server: str, tool: str, write_class: str) -> None:
-        self.remembered.append((server, tool, write_class))
-        self.known[(server, tool)] = write_class
+    async def remember(self, server_name: str, tool: str, write_class: str) -> None:
+        self.remembered.append((server_name, tool, write_class))
+        self.known[(server_name, tool)] = write_class
 
 
 @dataclass

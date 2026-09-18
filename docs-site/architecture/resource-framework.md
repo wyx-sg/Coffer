@@ -4,7 +4,7 @@ The Resource framework is Coffer's core abstraction. Understanding it is the key
 
 ## Everything is a resource kind
 
-Every user-managed entity in Coffer is a **Resource**, identified by a stable string of the form `<kind>:<name>`. **Seven** kinds are registered today — one `make_<kind>_kind()` factory each, under `application/<kind>/kind.py`:
+Every user-managed entity in Coffer is a **Resource**, identified by an immutable `uid`. **Seven** kinds are registered today — one `make_<kind>_kind()` factory each, under `application/<kind>/kind.py`:
 
 | Kind             | Spec                                                   | Description                                                                                                       |
 | ---------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
@@ -26,8 +26,8 @@ The framework provides four things, and only four things:
 
 | Concern               | What the framework does                                                                                                           |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **Identity**          | Assigns each resource a `kind`, a `name`, and the composite stable reference `<kind>:<name>`.                                     |
-| **Lifecycle**         | Defines and enforces the states a resource can be in: registered, enabled, disabled, deleted.                                     |
+| **Identity**          | Mints each resource an immutable `uid` and records its `kind` beside a mutable `name` label.                                      |
+| **Lifecycle**         | Defines and enforces the states a resource can be in: registered, enabled, disabled, deleted — and renaming, which is a field on `PATCH /api/v1/resources/{uid}` rather than a state change. |
 | **Audit**             | Records every lifecycle change with a timestamp and an actor (`cli`, `api`, `ui`, `system`).                                      |
 | **Schema validation** | Dispatches per-kind Pydantic schema validation at the application boundary, while the dispatch mechanism itself is kind-agnostic. |
 
@@ -45,23 +45,23 @@ The alternative of building per-kind silos with no shared abstraction was also r
 
 The consequence is that the first spec (`mcp-gateway`) carries the framework's abstraction overhead with only one concrete kind to justify it. This is accepted as a known cost, explicitly balanced against the avoided refactor.
 
-## Identifier format: `<kind>:<name>` (ADR resource-identifier-format)
+## Identity: an immutable `uid` (ADR resource-identity-is-an-immutable-uid)
 
-Resources are referenced externally by the string `<kind>:<name>`:
+A resource's external identity is its **`uid`** — an opaque `uuid4().hex`, minted once when the resource is created, never reused, and the **same value on every machine that holds that resource**:
 
-- CLI: `coffer resource show mcp_server:filesystem`
-- REST API URL: `/api/v1/resources/mcp_server/filesystem`
-- Config references: an agent's `tools` field listing `mcp_server:filesystem`
+- REST API URL: `/api/v1/resources/{uid}`, and the per-kind routes under it (`/api/v1/resources/mcp_server/{uid}/capabilities`)
+- Sync bundle: one document per resource at `resources/<kind>/<uid>.yaml`, carrying its `uid` inside
+- Cross-resource references: a resource `scope`'s agent list, a channel's `default_agent`
 
-The format is self-describing: the prefix tells you which kind to look in, eliminating one lookup in many code paths. It is human-readable and survives debugging without a decoder ring.
+`name` is a **mutable label**. It stays unique within its kind — you should not have two skills called the same thing — but uniqueness is a constraint, not an identity. Renaming is a field on `PATCH /api/v1/resources/{uid}`, available to every kind; the three file-backed kinds (`skill`, `knowledge`, `memory`) move their directory through an `on_rename` hook, which is the whole of what rename costs.
 
-Internally, the database uses a surrogate `id INTEGER PRIMARY KEY AUTOINCREMENT` for joins and foreign keys, with a `UNIQUE (kind, name)` constraint enforcing the external identifier's uniqueness. A `ResourceRef(kind: str, name: str)` domain value object handles parsing and serialization at the application boundary — raw strings never enter the domain layer.
+Nobody is asked to type a UUID. The CLI still takes names and resolves them to a `uid` once, at the surface (`surfaces/cli/_resolve.py`, the single place a label becomes an identity): `coffer resource show mcp_server filesystem`, `coffer resource rename mcp_server filesystem files`. `kind` remains a field on every response and a namespace in the route prefixes, so the self-description the old scheme valued survives — only the part of it that was pretending to be an identity is gone.
 
-**Rejected alternatives:**
+Internally, the database keeps its surrogate `id INTEGER PRIMARY KEY AUTOINCREMENT` for joins and foreign keys, unchanged: it is the FK the four kind-owned tables hold, it is per-machine, and it is never an external identity. `UNIQUE (kind, name)` still enforces the label's uniqueness, and `uid` carries its own unique index.
 
-- **Full URN** (`urn:coffer:mcp_server:filesystem`): Rejected because Coffer is single-user local-first — there is no other Coffer installation to distinguish from, making the `urn:coffer:` prefix pure ceremony.
-- **Pure UUID**: Rejected because opaque, not self-describing, and forces a separate `kind` field on every reference.
-- **Path-style** (`mcp_server/filesystem`): Functionally equivalent but rejected because slashes are overloaded in URLs, file paths, and many DSLs; the colon makes the kind-namespace relationship clearer.
+**Why it changed.** The identifier used to be the string `<kind>:<name>`, on the reasoning that Coffer is single-user local-first with no other installation to distinguish from. Vault sync ended that: a vault now converges across the user's machines through a git remote, so the question the identifier has to answer is "is the thing on that machine the same thing as the thing on this one?" — which a name cannot answer, because a name is exactly what the user is allowed to change. A rename crossed the remote as a deletion plus a creation, cascading away the renamed resource's paired chats, capability preferences and skill bindings. The `<kind>:<name>` string form and the `ResourceRef` value object are **deleted**, not kept as a label, so there is only one spelling of identity in the codebase; `ref` is gone from every response, leaving three plain fields — `uid`, `kind`, `name`.
+
+**How two machines agree on a `uid` without talking.** They cannot negotiate — a vault converges through a git remote with no online handshake — so the migration that introduced `uid` backfilled existing rows deterministically, as `uuid5(COFFER_RESOURCE_NAMESPACE, "<kind>:<name>")`. `(kind, name)` is the one thing every machine in a fleet provably agreed on at the moment it upgraded, because it *was* the identity until then, so every machine computes the same value independently with no protocol. Afterwards the derivation is never used again and new resources get a random `uuid4().hex`, which is what keeps "delete `foo`, create a new `foo`" from resurrecting the old resource's identity. A machine on an older build is handled by the bundle's layout `schema_version`, which went 1 → 2: it refuses a too-new tree and tells the user to upgrade.
 
 ## Capability state model (ADR capability-state-model)
 
@@ -90,7 +90,7 @@ stateDiagram-v2
 
 **disabled** — the resource configuration is retained, but the daemon will not connect to it or expose its tools. Disabling is non-destructive: re-enabling brings it back without re-registration.
 
-**deleted** — the resource is removed. This is a terminal state. Re-adding a server with the same name is a new registration.
+**deleted** — the resource is removed. This is a terminal state. Re-adding a server with the same name is a new registration, with a new `uid`: the name is free to be reused, the identity never is.
 
 Every state transition is recorded in the audit log with an actor. The audit log cannot be modified or deleted through the normal API — it is append-only.
 

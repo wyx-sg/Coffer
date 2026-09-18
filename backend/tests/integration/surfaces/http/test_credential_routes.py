@@ -1,5 +1,6 @@
 """Integration tests for /api/v1/credentials — secret storage endpoint."""
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -8,7 +9,7 @@ from httpx import ASGITransport, AsyncClient
 
 from coffer.application.audit_service import AuditService
 from coffer.domain.audit import AuditEntry
-from coffer.domain.resource import ResourceRef
+from coffer.domain.resource import Resource
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.credential_composition import get_credential_store
@@ -51,16 +52,34 @@ class _FakeAuditRepo:
         return list(self.entries)
 
 
+def _resource(kind: str, name: str, *, row_id: int = 1) -> Resource:
+    now = datetime.now(tz=UTC)
+    return Resource(
+        id=row_id,
+        uid=f"{row_id:032x}",
+        kind=kind,
+        name=name,
+        description=None,
+        config={},
+        enabled=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 class _FakeResourceService:
     """Stand-in for ResourceService.find_credential_citations.
 
-    Maps credential ref -> citing resource refs; absent refs cite nothing.
+    Maps credential ref -> the citing resources; absent refs cite nothing.
+    Whole rows, not identifiers: the refusal has to name each citer in words
+    the user can act on, which means reading its kind and its current label off
+    the row.
     """
 
-    def __init__(self, citations: dict[str, list[ResourceRef]] | None = None) -> None:
+    def __init__(self, citations: dict[str, list[Resource]] | None = None) -> None:
         self.citations = citations or {}
 
-    async def find_credential_citations(self, credential_ref: str) -> list[ResourceRef]:
+    async def find_credential_citations(self, credential_ref: str) -> list[Resource]:
         return list(self.citations.get(credential_ref, []))
 
 
@@ -238,8 +257,8 @@ async def test_delete_referenced_credential_returns_409_with_citations() -> None
     resources = _FakeResourceService(
         {
             "channel/tg/bot-token": [
-                ResourceRef("channel", "my-bot"),
-                ResourceRef("mcp_server", "github"),
+                _resource("channel", "my-bot", row_id=1),
+                _resource("mcp_server", "github", row_id=2),
             ]
         }
     )
@@ -253,10 +272,14 @@ async def test_delete_referenced_credential_returns_409_with_citations() -> None
         assert r.status_code == 409
         body = r.json()
         assert body["error"]["code"] == "CREDENTIAL_IN_USE"
-        # The citing resources are named so the user knows what to detach.
+        # The citing resources are named so the user knows what to detach —
+        # each one's kind AND its current label, because "go and find this" is
+        # the only useful thing a refusal can say. No uid: the identity the
+        # system holds onto is not what the user sees on the page they have to
+        # visit next.
         refs = body["error"]["details"]["references"]
-        assert "channel:my-bot" in refs
-        assert "mcp_server:github" in refs
+        assert refs == ["channel 'my-bot'", "mcp_server 'github'"]
+        assert "channel 'my-bot'" in body["error"]["message"]
     # The credential must survive the refused delete.
     assert fake.store["channel/tg/bot-token"] == "123:abc"
     # A refused delete is not a lifecycle change — nothing audited.

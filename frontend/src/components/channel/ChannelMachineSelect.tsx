@@ -32,7 +32,9 @@ import { cn } from "@/lib/utils";
 import { bindingState, machineOptions, type MachineOption } from "./channelBinding";
 
 interface Props {
-  /** The channel being bound. */
+  /** The channel being bound — its identity, which the PATCH is addressed to. */
+  uid: string;
+  /** Its label, for the picker's accessible name and the toast. */
   name: string;
   /** Its current config — carried through the PATCH untouched beside the new
    *  binding, so a rebind never drops a credential ref. */
@@ -46,11 +48,18 @@ interface Props {
   compact?: boolean;
 }
 
-export function ChannelMachineSelect({ name, config, runsOn, runsHere, compact = false }: Props) {
+export function ChannelMachineSelect({
+  uid,
+  name,
+  config,
+  runsOn,
+  runsHere,
+  compact = false,
+}: Props) {
   const { t } = useTranslation();
   const { data: machineList } = useMachines();
   const { data: syncStatus } = useSyncStatus();
-  const rebind = useRebindChannel(name);
+  const rebind = useRebindChannel(uid, name);
 
   const machines = machineList?.machines ?? [];
   const selfId = syncStatus?.machine_id ?? null;

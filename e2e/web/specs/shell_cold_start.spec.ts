@@ -168,11 +168,11 @@ acceptance(
     });
     if (listResp.ok) {
       const body = (await listResp.json()) as {
-        resources: Array<{ kind: string; name: string }>;
+        resources: Array<{ uid: string }>;
       };
       for (const r of body.resources) {
         await fetch(
-          `http://127.0.0.1:${port}/api/v1/resources/${r.kind}/${r.name}`,
+          `http://127.0.0.1:${port}/api/v1/resources/${r.uid}`,
           {
             method: "DELETE",
             headers: {

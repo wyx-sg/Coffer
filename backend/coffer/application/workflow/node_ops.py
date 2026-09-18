@@ -28,7 +28,6 @@ from coffer.application.workflow.commands import (
     utcnow,
 )
 from coffer.application.workflow.dispatch import NodeDispatcher
-from coffer.application.workflow.kind import KIND_WORKFLOW
 from coffer.application.workflow.node_walk import Walk, adhoc_node, walk_run
 from coffer.application.workflow.ports import (
     ArtifactStorePort,
@@ -160,7 +159,7 @@ class NodeOps:
         """
         row = await self.attempts.update_attempt(attempt_id)
         if row is None:
-            raise ResourceNotFound(KIND_ATTEMPT, attempt_id)
+            raise ResourceNotFound.named(KIND_ATTEMPT, attempt_id)
         return row
 
     async def require_attempt(self, run_id: str, node_key: str) -> AttemptRow:
@@ -386,7 +385,7 @@ class NodeOps:
         await self._audit.record(
             AuditEventType.WORKFLOW_RUN_FINISHED.value,
             actor="workflow",
-            resource_kind=KIND_WORKFLOW,
-            resource_name=result.run.id,
+            subject_kind="workflow_run",
+            subject_name=result.run.id,
             detail={"status": result.run.status, "title": result.run.title},
         )

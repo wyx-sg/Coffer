@@ -43,7 +43,7 @@ import { useUpdateProvider } from "@/lib/hooks/useProviders";
 
 export function ProviderModelsTable({ provider }: { provider: Provider }) {
   const { t } = useTranslation();
-  const endpoint = useEndpointModels(provider.name, probe(provider));
+  const endpoint = useEndpointModels(provider.uid, probe(provider));
   const update = useUpdateProvider();
 
   // A modality picked on a row that is NOT offered yet has nowhere to be stored
@@ -75,7 +75,7 @@ export function ProviderModelsTable({ provider }: { provider: Provider }) {
     selected.find((m) => m.id === row.id)?.modality ?? pending[row.id] ?? row.modality;
 
   const write = (models: ProviderModel[]) =>
-    update.mutate({ name: provider.name, patch: { models } });
+    update.mutate({ uid: provider.uid, patch: { models } });
 
   /** The explicit list equivalent to what is on screen right now. */
   const materialised = () =>

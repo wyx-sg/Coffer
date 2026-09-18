@@ -3,8 +3,13 @@
 ADR chat-single-owner-live-mirror.
 
 A conversation the owner also drives from an IM channel carries a channel binding
-(``channel_name`` + ``peer_chat_id``); the conversation-list mapper surfaces it so
+(``channel_uid`` + ``peer_chat_id``); the conversation-list mapper surfaces it so
 the desktop can badge and observe it. A desktop-only conversation has no binding.
+
+The row stores the channel's uid, not its name (ADR
+resource-identity-is-an-immutable-uid) — a binding has to keep naming the same
+channel after a rename. The name the console badge shows is resolved from that
+uid by the mapper.
 """
 
 from __future__ import annotations
@@ -22,6 +27,14 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.surfaces.http.chat.conversation_routes import _conv_out
+
+#: The channel resource this thread is bridged to, by uid.
+_STANDUP_UID = "7f2b6e0c9a1d4f8e5b3c2a6d0e9f1b47"
+#: What the mapper is given to resolve that uid with. In the daemon it is built
+#: once per request from the channel registry (``_channel_names``); here it is
+#: written out, because what this test is about is the mapper's own join and not
+#: the read that feeds it.
+_CHANNEL_NAMES = {_STANDUP_UID: "team-standup"}
 
 
 @pytest.mark.acceptance(
@@ -44,7 +57,7 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
             title="standup thread",
             created_at=now,
             updated_at=now,
-            channel_name="team-standup",
+            channel_uid=_STANDUP_UID,
             peer_chat_id="peer-42",
         )
     )
@@ -59,11 +72,18 @@ async def test_channel_conversation_observable(tmp_path: pathlib.Path) -> None:
         )
     )
 
-    by_id = {c.id: _conv_out(c) for c in await repo.list()}
+    by_id = {c.id: _conv_out(c, _CHANNEL_NAMES) for c in await repo.list()}
     try:
         # --- Observable: the channel binding surfaces in the conversation list ---
         channel_out = by_id["c-channel"]
         assert channel_out.channel_binding is not None
+        # The binding points at the channel's IDENTITY — that is what keeps it
+        # naming the same channel after a rename, and it is what the desktop
+        # follows the badge with...
+        assert channel_out.channel_binding.channel_uid == _STANDUP_UID
+        # ...while the name beside it is resolved from that uid, for the person
+        # reading the badge. Same assertion as before the identity change: the
+        # console can say WHICH channel this thread belongs to.
         assert channel_out.channel_binding.channel == "team-standup"
         assert channel_out.channel_binding.chat_id == "peer-42"
 

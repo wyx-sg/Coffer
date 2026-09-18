@@ -12,46 +12,61 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from coffer.domain.audit import AuditEntry
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.retention import RetentionPolicy
 from coffer.domain.scope import Scope
 
 
 class ResourceRepo(Protocol):
-    async def find(self, ref: ResourceRef) -> Resource | None: ...
+    """Every row is addressed by its ``uid``.
+
+    The port used to take a ``(kind, name)`` pair, which is what made "address
+    a resource by its label" a rule of the persistence layer rather than a
+    choice any one surface made. A uid is the identity, so it is what every
+    mutation names; ``find_by_name`` exists for the two jobs that genuinely
+    start from a label — resolving what a human typed, and enforcing the
+    within-kind uniqueness the label still has.
+    """
+
+    async def find(self, uid: str) -> Resource | None: ...
+    async def find_by_name(self, kind: str, name: str) -> Resource | None: ...
     async def list(
         self,
         kind: str | None = None,
         enabled: bool | None = None,
     ) -> list[Resource]: ...
     async def create(self, resource: Resource) -> Resource: ...
+    # ``description`` is written UNCONDITIONALLY — passing ``None`` clears the
+    # column. It is required rather than defaulted for exactly that reason:
+    # there is no "leave it alone" at this layer, so a caller that only means
+    # to rewrite the config has to say what the description should be, and a
+    # caller that forgets cannot silently erase one. Distinguishing "absent"
+    # from "explicitly null" is the surface's job, where the request body knows
+    # which keys it carried (``resource_routes.update_resource``).
     async def update_config(
         self,
-        ref: ResourceRef,
+        uid: str,
         config: dict[str, Any],
         description: str | None,
     ) -> Resource: ...
-    async def set_enabled(self, ref: ResourceRef, enabled: bool) -> Resource: ...
+    async def set_enabled(self, uid: str, enabled: bool) -> Resource: ...
     async def update_scope(
         self,
-        ref: ResourceRef,
+        uid: str,
         scope: Scope | None,
     ) -> Resource | None: ...
-    # A resource's name is its identity, so moving it is its own operation:
-    # ``ResourceAlreadyExists`` when the target name is taken.
-    async def rename(self, ref: ResourceRef, new_name: str) -> Resource: ...
-    async def delete(self, ref: ResourceRef) -> None: ...
+    # Moving the label, not the resource: ``ResourceAlreadyExists`` when the
+    # target name is taken within the kind.
+    async def rename(self, uid: str, new_name: str) -> Resource: ...
+    async def delete(self, uid: str) -> None: ...
 
 
 class AuditRepo(Protocol):
     async def insert(self, entry: AuditEntry) -> None: ...
-    # Move every row recorded against (kind, old_name) onto ``new_name``;
-    # returns the number of rows moved.
     async def query(
         self,
         *,
         kind: str | None = None,
-        name: str | None = None,
         resource_id: int | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,

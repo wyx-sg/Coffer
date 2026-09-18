@@ -58,7 +58,7 @@ ingress is aware of the difference.
   to the IM platforms the user explicitly registered. ✓
 - **Public-reachable surfaces as separate process, signed paths only** — the
   SeaTalk listener is its own process, serves only
-  `POST /seatalk/{channel}` + signature verification, binds 127.0.0.1, and the
+  `POST /seatalk/{channel_uid}` + signature verification, binds 127.0.0.1, and the
   public URL is provided by a tunnel — one the owner runs, or a `cloudflared`
   child the daemon supervises from a connector token on the channel. The daemon
   itself stays loopback-only. A channel on websocket delivery has no reachable
@@ -90,13 +90,19 @@ backend/coffer/
 │   ├── credentials/resolver.py   # CredentialResolver (kind-agnostic, shared)
 │   └── channel/         # the kind-agnostic core, ~30 modules, grouped:
 │       ├── ports.py     # ChannelAdapter + LiveText protocols, AdapterCallbacks,
-│       │                #   the peer/thread repo ports, catalogue + context ports
-│       ├── kind.py      # make_channel_kind (redactor, ref extractor, on_delete)
+│       │                #   ChannelBinding, catalogue + context ports — the
+│       │                #   TRANSPORT side
+│       ├── store_ports.py # ChannelPeer + ChannelThreadConversation and their
+│       │                #   repo ports — the two tables a channel owns
+│       ├── kind.py      # make_channel_kind (ref extractor, on_delete, the
+│       │                #   default_agent/scope invariant on both write paths)
 │       ├── wanted.py    # the three gates deciding which channels run here
 │       ├── runtime.py / runtime_supervision.py / supervision_ports.py
 │       │                # the reconcile loop, and the listener / tunnel /
 │       │                #   websocket connectors it keeps in step
-│       ├── service.py   # ChannelService: pairing API, notify, status, peers
+│       ├── service.py   # ChannelService: pairing API, notify, status, ingest
+│       ├── callback_ops.py # the SeaTalk callback path (keyed by channel uid),
+│       │                #   the transport block it reports, and its self-test
 │       ├── pairing.py / callback_probe.py
 │       ├── inbound.py / inbound_events.py
 │       │                # owner gate, dedup, command dispatch, session registry
@@ -104,9 +110,6 @@ backend/coffer/
 │       │                # the slash commands and the switches they perform
 │       ├── selection_cards.py / card_delivery.py / ephemeral.py
 │       │                # FR-015 cards, their in-place rewrite, FR-048 delivery
-│       ├── agent_vocabulary.py
-│       │                # the one translation between scope's agent RESOURCE
-│       │                #   names and the turn platform's agent KEYS
 │       ├── conversation_ops.py / conversation_spec.py
 │       ├── turn_driver.py / turn_render.py / turn_progress.py /
 │       │   turn_text.py / turn_media.py
@@ -130,7 +133,7 @@ backend/coffer/
 │   └── media_retention.py # the media dir's 30-day prune (FR-033)
 └── surfaces/
     ├── callback/        # the listener process (separate uvicorn app)
-    │   ├── app.py       # POST /seatalk/{channel}: challenge echo, verify,
+    │   ├── app.py       # POST /seatalk/{channel_uid}: challenge echo, verify,
     │   │                #   forward to daemon over loopback
     │   └── __main__.py  # python -m coffer.surfaces.callback
     ├── http/
@@ -170,9 +173,18 @@ Key seams:
   spawn `[sys.executable, -m, coffer.surfaces.callback]`; frozen builds
   locate a sibling `coffer-callback` binary (same probe pattern as
   `daemon_spawn_command`).
-- `agent_vocabulary` is the one place a channel's `scope` (agent **resource**
-  names) is translated into the turn platform's agent **keys**. Every
-  comparison between the two goes through it (FR-025).
+- `wanted.Routing` is the ONE place a channel's agent **uids** — its `scope` and
+  its `default_agent` — become the turn platform's agent **keys**, and it runs
+  one way: the gate projects them onto the live `ChannelBinding`, and nothing
+  below the binding holds a uid to compare wrongly (FR-025). It replaced
+  `agent_vocabulary.py`, a module that existed only to translate between the two
+  names an agent used to answer to.
+- The SeaTalk callback path is `/seatalk/<channel uid>`, composed once in
+  `callback_ops.callback_path` and used by both the URL the owner registers and
+  the probe that tests it. The listener's signing-secret map, the cloudflared
+  tunnels and the SeaTalk websockets are all keyed by that same uid: two of the
+  three have a seam the outside world can see, and a label the owner may rename
+  is the wrong thing on either.
 
 ## Module layout — frontend
 

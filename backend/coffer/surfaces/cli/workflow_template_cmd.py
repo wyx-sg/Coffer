@@ -9,6 +9,10 @@ definition comes from a file rather than from a shell-quoted JSON blob.
 A refusal here is the kind's own validation (FR-006) and names the JSON path of
 the offending field, so a bad template is rejected with somewhere to look
 rather than with "invalid config".
+
+Every command here takes the template's NAME, because that is what a person
+knows; the uid the routes address is looked up once, through ``_resolve``
+(ADR resource-identity-is-an-immutable-uid).
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Define the shape of a delivery")
 _console = Console()
@@ -80,7 +85,8 @@ def update_template(
     config = _load_definition(file)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.patch(f"/resources/{_KIND}/{name}", json={"config": config})
+        uid = resolve_uid(c, _KIND, name, verbose=_verbose(ctx))
+        r = c.patch(f"/resources/{uid}", json={"config": config})
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(f"updated workflow:{name}")
 
@@ -128,7 +134,7 @@ def show_template(
     """One template's definition, as stored."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/resources/{_KIND}/{name}")
+        r = c.get(f"/resources/{resolve_uid(c, _KIND, name, verbose=_verbose(ctx))}")
         _cli_client.check(r, verbose=_verbose(ctx))
         typer.echo(_json.dumps(r.json().get("config", {}), indent=2))
 
@@ -141,6 +147,6 @@ def remove_template(
     """Delete a template. Runs created from it are unaffected."""
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/resources/{_KIND}/{name}")
+        r = c.delete(f"/resources/{resolve_uid(c, _KIND, name, verbose=_verbose(ctx))}")
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(f"deleted workflow:{name}")

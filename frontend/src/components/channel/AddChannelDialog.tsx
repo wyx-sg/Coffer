@@ -13,6 +13,15 @@
 // and "I filled in the form and the bot never answered" is the worst possible
 // first experience of the feature. The binding is movable afterwards from the
 // list row or the detail page.
+//
+// The form ASKS which agent the channel drives (AgentSelect). It used to send
+// a constant — the `claude_code` provider key — because the binding was
+// expressed in a vocabulary every install shared. It is an agent resource's uid
+// now, minted per vault, so there is no constant to send and the only honest
+// thing a create form can do is offer the agents this vault actually has.
+//
+// Validation lives in `addChannel.ts`, beside `editChannel.ts`, so this file is
+// the markup and the sequencing and neither file is both.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -25,41 +34,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AgentSelect } from "@/components/agents/AgentSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
+import { useAgents } from "@/lib/hooks/useAgents";
 import { translateApiError } from "@/lib/api/errors";
 import { useSyncStatus } from "@/lib/hooks/useSync";
 import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
 import { useCreateChannel } from "@/lib/hooks/useChannels";
+import { EMPTY_SECRET_DRAFT, validateAddChannel } from "./addChannel";
 import {
   AddChannelSecretFields,
   type ChannelFieldErrors,
   type ChannelSecretDraft,
 } from "./AddChannelSecretFields";
 import { FieldError, RequiredLabel } from "./RequiredLabel";
-import { addChannelFormSchema, DEFAULT_DELIVERY, planChannel, type ChannelPlan } from "./schema";
-
-/** Schema path (wire field name) → the input it is rendered under. */
-const FIELD_OF_PATH: Record<string, keyof ChannelFieldErrors> = {
-  name: "name",
-  bot_token: "botToken",
-  app_id: "appId",
-  app_secret: "appSecret",
-  signing_secret: "signingSecret",
-  public_base_url: "publicBaseUrl",
-  tunnel_token: "tunnelToken",
-};
-
-/** A blank credential draft — what the form opens on and resets to. */
-const EMPTY_SECRET_DRAFT: ChannelSecretDraft = {
-  botToken: "",
-  appId: "",
-  appSecret: "",
-  signingSecret: "",
-  publicBaseUrl: "",
-  tunnelToken: "",
-};
+import { DEFAULT_DELIVERY, planChannel, type ChannelPlan } from "./schema";
 
 export function AddChannelDialog({
   open,
@@ -75,6 +66,12 @@ export function AddChannelDialog({
   // passed into the planner rather than fetched there, so planning stays pure.
   const { data: syncStatus } = useSyncStatus();
   const machineId = syncStatus?.machine_id ?? null;
+  // The agents this vault has, and the one the new channel will drive. The
+  // form opens on the first of them rather than on nothing: a channel bound to
+  // nobody never answers, so "none" is not a state the form may produce.
+  const { data: agents } = useAgents();
+  const [agentUid, setAgentUid] = useState("");
+  const defaultAgentUid = agentUid || (agents?.[0]?.uid ?? "");
   const [channelType, setChannelType] = useState<ChannelType>("telegram");
   const [delivery, setDelivery] = useState<ChannelDelivery>(DEFAULT_DELIVERY);
   const [name, setName] = useState("");
@@ -98,6 +95,7 @@ export function AddChannelDialog({
   };
 
   const reset = () => {
+    setAgentUid("");
     setChannelType("telegram");
     setDelivery(DEFAULT_DELIVERY);
     setName("");
@@ -111,11 +109,13 @@ export function AddChannelDialog({
   const create = useCreateChannel();
   const runCreate = (plan: ChannelPlan) =>
     create.mutate(plan, {
-      onSuccess: (createdName) => {
-        toast.success(t("channels.dialog.created", { name: createdName }));
+      // The registration hands back the whole resource: the name for the
+      // toast, the uid for the link. Two answers, and no longer one string.
+      onSuccess: (created) => {
+        toast.success(t("channels.dialog.created", { name: created.name }));
         reset();
         onOpenChange(false);
-        navigate(`/channels/${createdName}`);
+        navigate(`/channels/${encodeURIComponent(created.uid)}`);
       },
       onError: (e) => setFormError(translateApiError(t, e)),
     });
@@ -123,28 +123,9 @@ export function AddChannelDialog({
   const submit = () => {
     setFormError(null);
     setFieldErrors({});
-    const parsed = addChannelFormSchema.safeParse(
-      channelType === "telegram"
-        ? { channel_type: "telegram", name, bot_token: secrets.botToken }
-        : {
-            channel_type: "seatalk",
-            name,
-            delivery,
-            app_id: secrets.appId,
-            app_secret: secrets.appSecret,
-            signing_secret: secrets.signingSecret,
-            public_base_url: secrets.publicBaseUrl,
-            tunnel_token: secrets.tunnelToken,
-          },
-    );
-    if (!parsed.success) {
-      // First issue per field wins; the message is an i18n key by contract.
-      const next: ChannelFieldErrors = {};
-      for (const issue of parsed.error.issues) {
-        const field = FIELD_OF_PATH[String(issue.path[0])];
-        if (field && !next[field]) next[field] = t(issue.message);
-      }
-      setFieldErrors(next);
+    const parsed = validateAddChannel({ channelType, delivery, name, secrets }, t);
+    if (!parsed.ok) {
+      setFieldErrors(parsed.fieldErrors);
       return;
     }
     // A channel is bound to the machine it is created from. Without this
@@ -155,7 +136,13 @@ export function AddChannelDialog({
       setFormError(t("channels.dialog.machineUnknown"));
       return;
     }
-    runCreate(planChannel(parsed.data, machineId));
+    // Same rule for the agent: a channel bound to nobody is a bot that never
+    // answers, and the form says so rather than registering one.
+    if (defaultAgentUid === "") {
+      setFormError(t("channels.dialog.errors.agent"));
+      return;
+    }
+    runCreate(planChannel(parsed.values, machineId, defaultAgentUid));
   };
 
   return (
@@ -197,6 +184,16 @@ export function AddChannelDialog({
                 </Button>
               ))}
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="channel-agent">{t("channels.dialog.agent")}</Label>
+            <AgentSelect
+              id="channel-agent"
+              label={t("channels.dialog.agent")}
+              value={defaultAgentUid}
+              onChange={setAgentUid}
+            />
+            <p className="text-xs text-muted-foreground">{t("channels.dialog.agentHint")}</p>
           </div>
           <div className="space-y-2">
             <RequiredLabel htmlFor="channel-name">{t("channels.dialog.name")}</RequiredLabel>

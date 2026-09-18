@@ -4,7 +4,8 @@ Two free functions the service delegates to: the CLI-mediated path (Claude —
 shell out to its own ``plugin uninstall`` so Coffer never hand-writes the
 agent's internal inventory) and the Codex config-edit path (remove the entry
 from ``config.toml`` + delete the cache dir). They take their collaborators
-explicitly so the service class stays within the size budget.
+explicitly so the service class stays within the size budget — including the
+agent ``Resource`` itself, which is what the audit entry is keyed on.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from coffer.application.agent.plugin_views import PluginCliRunner
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.plugin_state import remove_codex_entry
 from coffer.domain.audit import AuditEventType
-from coffer.domain.resource import ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import PluginNotFound, PluginUninstallUnsupported
 
 _UNINSTALLED = AuditEventType.AGENT_PLUGIN_UNINSTALLED.value
@@ -52,7 +53,7 @@ async def uninstall_via_cli(
     cli_runner: PluginCliRunner | None,
     audit: AuditService,
     agent_type: str,
-    name: str,
+    agent: Resource,
     plugin_id: str,
     actor: str,
 ) -> None:
@@ -68,7 +69,7 @@ async def uninstall_via_cli(
     await asyncio.to_thread(cli_runner.uninstall, plugin_id)
     await audit.record(
         _UNINSTALLED,
-        ref=ResourceRef("agent", name),
+        resource=agent,
         actor=actor,
         details={"plugin": plugin_id, "cache_removed": True, "via": "cli"},
     )
@@ -80,7 +81,7 @@ async def uninstall_codex(
     audit: AuditService,
     dir_exists: Callable[[pathlib.Path], bool],
     rmtree: Callable[[pathlib.Path], None],
-    name: str,
+    agent: Resource,
     plugin_id: str,
     spec_path: pathlib.Path,
     cfg_dir: pathlib.Path,
@@ -102,7 +103,7 @@ async def uninstall_codex(
     # already removed, so the event must survive an rmtree failure.
     await audit.record(
         _UNINSTALLED,
-        ref=ResourceRef("agent", name),
+        resource=agent,
         actor=actor,
         details={"plugin": plugin_id, "cache_removed": cache_removed},
     )

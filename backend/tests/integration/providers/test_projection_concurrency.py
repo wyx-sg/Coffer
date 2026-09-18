@@ -21,7 +21,7 @@ from coffer.application.provider.projector import ProviderProjector
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEntry, AuditEventType
 from coffer.domain.provider.config import Protocol, ProviderConfig
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import ConfigFileStale
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.surfaces.http.errors import _STATUS
@@ -29,9 +29,13 @@ from coffer.surfaces.http.errors import _STATUS
 _NOW = datetime(2026, 9, 14, tzinfo=UTC)
 
 
+_CONNECTION_UID = "3c9a7b15d0e24f6688aa1b2c3d4e5f60"
+
+
 def _agent(config_dir: pathlib.Path) -> Resource:
     return Resource(
         id=1,
+        uid="f0e1d2c3b4a596877665544332211009",
         kind="agent",
         name="cc",
         description=None,
@@ -42,11 +46,28 @@ def _agent(config_dir: pathlib.Path) -> Resource:
     )
 
 
-def _connection() -> ProviderConfig:
+def _config() -> ProviderConfig:
     return ProviderConfig(
         protocol=Protocol.ANTHROPIC,
         base_url="https://gw.example",
         credential_ref="provider/x/key",
+    )
+
+
+def _connection() -> Resource:
+    """The connection ROW. The projector takes the resource rather than its
+    name because the two halves of it go to different places: the uid into the
+    ``apiKeyHelper``, the name into Codex's human-readable provider label."""
+    return Resource(
+        id=2,
+        uid=_CONNECTION_UID,
+        kind="provider",
+        name="x",
+        description=None,
+        config=_config().model_dump(mode="json"),
+        enabled=True,
+        created_at=_NOW,
+        updated_at=_NOW,
     )
 
 
@@ -76,7 +97,7 @@ def test_projection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Pat
 
     with pytest.raises(ConfigFileStale) as exc:
         ProviderProjector(store).project_type(
-            "x", _connection(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
+            _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
         )
 
     assert exc.value.key == str(settings)
@@ -87,7 +108,7 @@ def test_projection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Pat
 def test_deprojection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Path) -> None:
     settings = tmp_path / "settings.json"
     ProviderProjector(ConfigFileStore()).project_type(
-        "x", _connection(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
+        _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     projected = settings.read_text(encoding="utf-8")
     store = _EditedUnderneath(projected.replace("}", ', "theme": "dark"}', 1))
@@ -105,7 +126,7 @@ def test_unchanged_file_projects_normally_with_the_fingerprint_check(
     settings = tmp_path / "settings.json"
     settings.write_text('{"theme": "light"}', encoding="utf-8")
     projected = ProviderProjector(ConfigFileStore()).project_type(
-        "x", _connection(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
+        _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     assert projected == ["cc"]
     text = settings.read_text(encoding="utf-8")
@@ -121,15 +142,16 @@ class _FakeAudit:
 
 
 class _FakeService:
-    """The three attributes ``projection_ops`` reaches into."""
+    """The two attributes ``projection_ops`` reaches into.
+
+    It used to be three: the ops module also asked the service to build a
+    ``ResourceRef`` for the audit row. The row it files carries the resource
+    itself now, so there is nothing to build.
+    """
 
     def __init__(self, store: ConfigFileStore) -> None:
         self._projector = ProviderProjector(store)
         self._audit = _FakeAudit()
-
-    @staticmethod
-    def _ref(name: str) -> ResourceRef:
-        return ResourceRef("provider", name)
 
 
 @pytest.mark.asyncio
@@ -141,8 +163,8 @@ async def test_service_audits_a_refused_projection_then_reraises(tmp_path: pathl
     with pytest.raises(ConfigFileStale):
         await project_connection(
             service,
-            "x",
             _connection(),
+            _config(),
             [AgentType.CLAUDE_CODE],
             [_agent(tmp_path)],
             actor="cli",  # type: ignore[arg-type]
@@ -151,7 +173,9 @@ async def test_service_audits_a_refused_projection_then_reraises(tmp_path: pathl
     (entry,) = service._audit.entries
     assert entry["event_type"] == AuditEventType.PROVIDER_PROJECTION_REFUSED.value
     assert entry["actor"] == "cli"
-    assert entry["ref"] == ResourceRef("provider", "x")
+    # The row itself, so the event stays filed under this connection's identity
+    # however the user relabels it; the name rides the details for the reader.
+    assert entry["resource"] is not None and entry["resource"].uid == _CONNECTION_UID
     assert entry["details"]["path"] == str(settings)
     assert entry["details"]["agent_type"] == "claude_code"
     assert entry["details"]["connection"] == "x"
@@ -161,7 +185,7 @@ async def test_service_audits_a_refused_projection_then_reraises(tmp_path: pathl
 async def test_service_audits_a_refused_deprojection(tmp_path: pathlib.Path) -> None:
     settings = tmp_path / "settings.json"
     ProviderProjector(ConfigFileStore()).project_type(
-        "x", _connection(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
+        _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     edited = settings.read_text(encoding="utf-8").replace("}", ', "theme": "dark"}', 1)
     service = _FakeService(_EditedUnderneath(edited))
@@ -171,7 +195,7 @@ async def test_service_audits_a_refused_deprojection(tmp_path: pathlib.Path) -> 
 
     (entry,) = service._audit.entries
     assert entry["event_type"] == AuditEventType.PROVIDER_PROJECTION_REFUSED.value
-    assert entry["ref"] is None and entry["details"]["connection"] is None
+    assert entry["resource"] is None and entry["details"]["connection"] is None
 
 
 @pytest.mark.asyncio
@@ -180,8 +204,8 @@ async def test_successful_projection_audits_nothing_here(tmp_path: pathlib.Path)
     service = _FakeService(ConfigFileStore())
     projected = await project_connection(
         service,
-        "x",
         _connection(),
+        _config(),
         [AgentType.CLAUDE_CODE],
         [_agent(tmp_path)],
         actor="cli",  # type: ignore[arg-type]

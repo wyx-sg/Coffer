@@ -21,7 +21,7 @@ the framework keeps for every kind in the constitution, and each kind's own
 config in that kind's spec. The **reach** control this spec
 specifies more than any other element is a view of exactly two of those
 fields — `Resource.enabled` and `Resource.scope` — read and written through
-`GET`/`PUT /resources/{kind}/{name}/scope`; its wire shapes are `ScopeOut`,
+`GET`/`PUT /resources/{uid}/scope`; its wire shapes are `ScopeOut`,
 `ResourceScopeOut` and `ResourceScopeUpdate` in
 [`specs/mcp-gateway/contracts/api.openapi.yaml`](../mcp-gateway/contracts/api.openapi.yaml).
 It belongs there rather than here because scope is a property of the

@@ -15,6 +15,7 @@ import pytest
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.diagnostics import register_diagnostics_builtin_tools
 from coffer.domain.audit import AuditEntry
+from coffer.domain.resource import Resource
 
 
 class _FakeAuditRepo:
@@ -29,7 +30,6 @@ class _FakeAuditRepo:
         self,
         *,
         kind=None,
-        name=None,
         resource_id=None,
         event_type=None,
         event_prefix=None,
@@ -37,7 +37,13 @@ class _FakeAuditRepo:
         limit=50,
     ):
         self.calls.append(
-            {"kind": kind, "name": name, "event_type": event_type, "since": since, "limit": limit}
+            {
+                "kind": kind,
+                "resource_id": resource_id,
+                "event_type": event_type,
+                "since": since,
+                "limit": limit,
+            }
         )
         return self._entries[:limit]
 
@@ -60,9 +66,26 @@ def _log(tmp_path, lines: list[str]):
     return lambda: path
 
 
-def _tool(repo, log_path):
+def _resource(kind: str, name: str, *, row_id: int = 7) -> Resource:
+    now = datetime.now(tz=UTC)
+    return Resource(
+        id=row_id,
+        uid="a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        kind=kind,
+        name=name,
+        description=None,
+        config={},
+        enabled=True,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _tool(repo, log_path, find_resource=None):
     registry = BuiltinToolRegistry()
-    register_diagnostics_builtin_tools(registry, audit_repo=repo, log_path=log_path)
+    register_diagnostics_builtin_tools(
+        registry, audit_repo=repo, log_path=log_path, find_resource=find_resource
+    )
     [tool] = [t for t in registry.list() if t.name == "diagnose"]
     return tool
 
@@ -91,7 +114,10 @@ async def test_one_call_answers_from_both_records(tmp_path) -> None:
 
     assert [c["event"] for c in out["changes"]] == ["credential_read"]
     assert [r["event"] for r in out["log"]] == ["credential.missing"]
-    assert out["changes"][0]["resource"] == "mcp_server:jira"
+    assert (out["changes"][0]["resource_kind"], out["changes"][0]["resource"]) == (
+        "mcp_server",
+        "jira",
+    )
 
 
 @pytest.mark.asyncio
@@ -227,15 +253,70 @@ async def test_the_window_bounds_both_sides(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_filters_reach_the_audit_query(tmp_path) -> None:
+async def test_a_named_resource_is_resolved_to_its_row_before_the_query(tmp_path) -> None:
+    """The audit log is filtered by a resource's id, not its label — that is
+    what makes a renamed resource's trail read as one trail. The agent asking
+    only ever has a name, so the name is resolved here and the id is what
+    reaches the query."""
     repo = _FakeAuditRepo([])
-    tool = _tool(repo, _log(tmp_path, []))
+    asked: list[tuple[str, str]] = []
+
+    async def _find(kind, name):
+        asked.append((kind, name))
+        return _resource(kind, name, row_id=42)
+
+    tool = _tool(repo, _log(tmp_path, []), find_resource=_find)
     await tool.handler(
         {"event_type": "resource_deleted", "resource_kind": "skill", "resource_name": "x"}
     )
+
+    assert asked == [("skill", "x")]
     assert repo.calls[0]["event_type"] == "resource_deleted"
-    assert repo.calls[0]["kind"] == "skill"
-    assert repo.calls[0]["name"] == "x"
+    assert repo.calls[0]["resource_id"] == 42
+    # The kind is implied by the row; re-applying it would only narrow the
+    # resource's own trail.
+    assert repo.calls[0]["kind"] is None
+
+
+@pytest.mark.asyncio
+async def test_kind_alone_still_filters_by_kind(tmp_path) -> None:
+    repo = _FakeAuditRepo([])
+    tool = _tool(repo, _log(tmp_path, []))
+    await tool.handler({"resource_kind": "skill"})
+    assert (repo.calls[0]["kind"], repo.calls[0]["resource_id"]) == ("skill", None)
+
+
+@pytest.mark.asyncio
+async def test_a_name_that_resolves_to_nothing_is_refused_not_ignored(tmp_path) -> None:
+    """Dropping an unresolvable filter would answer "what happened to X" with
+    every resource's history — which an agent reads as "X was involved in all
+    of this", the opposite of the truth at the one moment it is establishing
+    what actually happened."""
+    repo = _FakeAuditRepo([_entry("resource_created")])
+
+    async def _find(kind, name):
+        return None
+
+    tool = _tool(repo, _log(tmp_path, []), find_resource=_find)
+
+    with pytest.raises(ValueError, match="no skill named 'gone'"):
+        await tool.handler({"resource_kind": "skill", "resource_name": "gone"})
+    assert repo.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_name_without_a_kind_is_refused(tmp_path) -> None:
+    """A name is unique only within a kind, so a bare name names nothing."""
+    repo = _FakeAuditRepo([])
+
+    async def _find(kind, name):  # pragma: no cover - must not be reached
+        raise AssertionError("resolution must not be attempted without a kind")
+
+    tool = _tool(repo, _log(tmp_path, []), find_resource=_find)
+
+    with pytest.raises(ValueError, match="needs 'resource_kind'"):
+        await tool.handler({"resource_name": "x"})
+    assert repo.calls == []
 
 
 @pytest.mark.asyncio

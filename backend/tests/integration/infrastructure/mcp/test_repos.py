@@ -14,6 +14,9 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.models import ResourceModel
 
+#: An opaque uuid4 hex, the shape a real resource uid has.
+_FS_UID = "aa11bb22cc33dd44ee55ff6677889900"
+
 
 def _now() -> datetime:
     return datetime.now(tz=UTC)
@@ -26,6 +29,7 @@ async def _setup(tmp_path):
     sm = session_maker(engine)
     async with sm() as s:
         r = ResourceModel(
+            uid=_FS_UID,
             kind="mcp_server",
             name="filesystem",
             description=None,
@@ -96,7 +100,7 @@ async def test_invocation_insert_and_query(tmp_path):
             MCPInvocation(
                 id=None,
                 timestamp=base + timedelta(seconds=i),
-                resource_name="filesystem",
+                resource_uid=_FS_UID,
                 capability_type="tool",
                 capability_key="read_file",
                 duration_ms=10 + i,
@@ -105,10 +109,10 @@ async def test_invocation_insert_and_query(tmp_path):
                 session_id=None,
             )
         )
-    rows = await inv_repo.query(resource_name="filesystem")
+    rows = await inv_repo.query(resource_uid=_FS_UID)
     assert len(rows) == 5
     # Newest first
     assert rows[0].duration_ms == 14
-    only_ok = await inv_repo.query(resource_name="filesystem", status="ok")
+    only_ok = await inv_repo.query(resource_uid=_FS_UID, status="ok")
     assert len(only_ok) == 3
     await engine.dispose()
