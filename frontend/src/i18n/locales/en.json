@@ -1285,7 +1285,8 @@
         "appId": "Enter the App ID",
         "appSecret": "Enter the App secret",
         "signingSecret": "Enter the signing secret",
-        "websocketField": "Not used with WebSocket delivery — clear it or switch to Webhook"
+        "websocketField": "Not used with WebSocket delivery — clear it or switch to Webhook",
+        "agent": "Register an agent first — a channel has to name the agent it drives."
       },
       "telegramHint": "The token BotFather gave you for the bot.",
       "seatalkHint": "App ID, App secret and Signing secret from the SeaTalk Open Platform app.",
@@ -1300,7 +1301,9 @@
       "deliveryWebsocket": "WebSocket",
       "deliveryHint": "Webhook needs a publicly reachable URL and a signing secret. WebSocket holds one outbound connection to SeaTalk and needs neither. A bot can only use one at a time.",
       "websocketSdkNote": "WebSocket needs SeaTalk's official Python SDK in ~/.coffer/vendor (or $COFFER_SEATALK_SDK_DIR). It is not on PyPI, so Coffer cannot ship it — the channel stays stopped until it is there.",
-      "websocketPortalNote": "Switch this bot's event delivery to WebSocket in SeaTalk's Developer Portal too. Its Re-verify only passes while Coffer is holding the connection."
+      "websocketPortalNote": "Switch this bot's event delivery to WebSocket in SeaTalk's Developer Portal too. Its Re-verify only passes while Coffer is holding the connection.",
+      "agent": "Default agent",
+      "agentHint": "New conversations on this channel start on this agent."
     },
     "edit": {
       "title": "Edit channel",

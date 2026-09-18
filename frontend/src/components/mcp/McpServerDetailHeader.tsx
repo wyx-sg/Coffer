@@ -57,7 +57,7 @@ export function McpServerDetailHeader({
       }
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          <ScopeControl kind="mcp_server" name={resource.name} enabled={resource.enabled} />
+          <ScopeControl kind="mcp_server" uid={resource.uid} enabled={resource.enabled} />
           <Button size="sm" variant="outline" onClick={onTestConnection} disabled={isTestPending}>
             <Activity className="mr-1.5 size-3.5" />
             {isTestPending ? t("mcp.server.testing") : t("mcp.server.testConnection")}

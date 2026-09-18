@@ -16,13 +16,13 @@ const t = ((key: string) => key) as unknown as TFunction;
 describe("reachModeOf", () => {
   test("disabled beats scope", () => {
     expect(reachModeOf({ enabled: false, scope: null })).toBe("disabled");
-    expect(reachModeOf({ enabled: false, scope: { agents: ["cc"] } })).toBe("disabled");
+    expect(reachModeOf({ enabled: false, scope: { agents: ["u-agent-7f21"] } })).toBe("disabled");
   });
 
   test("an enabled row is unscoped or restricted", () => {
     expect(reachModeOf({ enabled: true, scope: null })).toBe("everywhere");
     expect(reachModeOf({ enabled: true, scope: undefined })).toBe("everywhere");
-    expect(reachModeOf({ enabled: true, scope: { agents: ["cc"] } })).toBe("restricted");
+    expect(reachModeOf({ enabled: true, scope: { agents: ["u-agent-7f21"] } })).toBe("restricted");
     // An empty agent list is still a restriction (it names nobody).
     expect(reachModeOf({ enabled: true, scope: { agents: [] } })).toBe("restricted");
   });
@@ -88,7 +88,7 @@ describe("reachFilter", () => {
     // A scope left in the payload from when the kind had one does not put the
     // row in a state the filter no longer offers — it would be unreachable
     // under either choice.
-    expect(filter.accessor({ on: true, scope: { agents: ["cc"] } })).toBe("everywhere");
-    expect(filter.accessor({ on: false, scope: { agents: ["cc"] } })).toBe("disabled");
+    expect(filter.accessor({ on: true, scope: { agents: ["u-agent-7f21"] } })).toBe("everywhere");
+    expect(filter.accessor({ on: false, scope: { agents: ["u-agent-7f21"] } })).toBe("disabled");
   });
 });

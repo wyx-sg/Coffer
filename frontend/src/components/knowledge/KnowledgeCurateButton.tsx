@@ -24,14 +24,23 @@ import { ApiError } from "@/lib/api/errors";
 import { useCurateCollection } from "@/lib/hooks/useKnowledge";
 import { useUpkeepRunning } from "@/lib/hooks/useUpkeep";
 
-export function KnowledgeCurateButton({ collection }: { collection: string }) {
+export function KnowledgeCurateButton({
+  collectionUid,
+  collectionName,
+}: {
+  /** The collection to curate — what the request is addressed to. */
+  collectionUid: string;
+  /** Its label, which is also its directory name, and therefore what
+   *  `/upkeep/runs` names a running pass by. */
+  collectionName: string;
+}) {
   const { t } = useTranslation();
-  const curate = useCurateCollection(collection);
+  const curate = useCurateCollection(collectionUid);
   const refusedAsRunning =
     curate.error instanceof ApiError && curate.error.code === "UPKEEP_ALREADY_RUNNING";
   // Three sources, one answer: the daemon's run list, this click's own refusal,
   // and the optimistic gap between the click and the first poll.
-  const alreadyRunning = useUpkeepRunning("knowledge", collection) || refusedAsRunning;
+  const alreadyRunning = useUpkeepRunning("knowledge", collectionName) || refusedAsRunning;
   const busy = alreadyRunning || curate.isPending;
 
   return (

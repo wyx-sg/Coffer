@@ -50,20 +50,20 @@ export function useMemoryPartitions() {
 
 /** The partition's directory, recursively — one read for the whole tree, as
  * the skill file browser does: a partition holds tens of files, not a repo. */
-export function usePartitionFiles(partition: string) {
+export function usePartitionFiles(partitionUid: string) {
   return useQuery({
-    queryKey: memoryPartitionFilesKey(partition),
-    queryFn: async () => (await listPartitionFiles(partition)).root,
-    enabled: partition.length > 0,
+    queryKey: memoryPartitionFilesKey(partitionUid),
+    queryFn: async () => (await listPartitionFiles(partitionUid)).root,
+    enabled: partitionUid.length > 0,
   });
 }
 
 /** One file out of that directory, read-only. */
-export function usePartitionFileContent(partition: string, path: string | null) {
+export function usePartitionFileContent(partitionUid: string, path: string | null) {
   return useQuery({
-    queryKey: memoryPartitionFileKey(partition, path ?? ""),
-    queryFn: () => readPartitionFile(partition, path as string),
-    enabled: Boolean(partition && path),
+    queryKey: memoryPartitionFileKey(partitionUid, path ?? ""),
+    queryFn: () => readPartitionFile(partitionUid, path as string),
+    enabled: Boolean(partitionUid && path),
   });
 }
 
@@ -102,12 +102,12 @@ export function useSyncMemory() {
  * failure the user needs told about — it is the state the button should
  * already have been showing, so refreshing the run list is the whole
  * response. */
-export function useDistilPartition(partition: string) {
+export function useDistilPartition(partitionUid: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: () => distil(partition),
+    mutationFn: () => distil(partitionUid),
     onSuccess: () => {
       invalidateMemory(qc);
       toast.success(t("memory.detail.distilDone"));
@@ -122,12 +122,15 @@ export function useDistilPartition(partition: string) {
 
 /** Per-agent delivery state — whether Coffer's hook is installed in that
  * agent's own settings (FR-039). Whether it has ever fired is a separate
- * question, answered by the audit surface. Omit `agent` to list every agent
- * delivery can install for. */
-export function useMemoryDelivery(agent?: string) {
+ * question, answered by the audit surface. Omit `agentUid` to list every agent
+ * delivery can install for.
+ *
+ * Each row carries the agent's name beside its uid, so a surface renders the
+ * name and acts on the uid without a second request. */
+export function useMemoryDelivery(agentUid?: string) {
   return useQuery({
-    queryKey: agent ? memoryAgentDeliveryKey(agent) : memoryDeliveryKey,
-    queryFn: async () => (await listDelivery(agent)).delivery,
+    queryKey: agentUid ? memoryAgentDeliveryKey(agentUid) : memoryDeliveryKey,
+    queryFn: async () => (await listDelivery(agentUid)).delivery,
   });
 }
 
@@ -136,7 +139,7 @@ export function useInstallDelivery() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (agent: string) => installDelivery(agent),
+    mutationFn: (agentUid: string) => installDelivery(agentUid),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: memoryDeliveryKey });
       toast.success(t("memory.delivery.installDone"));
@@ -152,7 +155,7 @@ export function useRemoveDelivery() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (agent: string) => removeDelivery(agent),
+    mutationFn: (agentUid: string) => removeDelivery(agentUid),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: memoryDeliveryKey });
       toast.success(t("memory.delivery.removeDone"));

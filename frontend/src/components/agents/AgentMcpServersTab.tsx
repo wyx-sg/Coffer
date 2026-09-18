@@ -35,13 +35,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
-import type { McpEntryOut } from "@/lib/api/agents";
+import type { AgentOut, McpEntryOut } from "@/lib/api/agents";
 import { useAgentMcpEntries, useRemoveMcpEntry } from "@/lib/hooks/useAgents";
 
-export function AgentMcpServersTab({ agentName }: { agentName: string }) {
+export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const entries = useAgentMcpEntries(agentName);
-  const removeEntry = useRemoveMcpEntry(agentName);
+  const entries = useAgentMcpEntries(agent.uid);
+  const removeEntry = useRemoveMcpEntry(agent.uid);
   const [adoptTarget, setAdoptTarget] = useState<McpEntryOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<McpEntryOut | null>(null);
 
@@ -116,7 +116,7 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
     <div className="space-y-6">
       {/* A. Via Coffer gateway — renders its own card (install status or the
           shared "open the MCP servers page" link). */}
-      <AgentGatewayMcpSection agentName={agentName} />
+      <AgentGatewayMcpSection agentUid={agent.uid} />
 
       {/* B. Direct servers (the agent's own config entries) */}
       <Card className="space-y-3 p-4">
@@ -159,7 +159,8 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
               clearLabel: t("common.clear"),
               renderBulkActions: ({ selectedRows, clear }) => (
                 <AgentMcpServersBulkActions
-                  agentName={agentName}
+                  agentUid={agent.uid}
+                  agentName={agent.name}
                   rows={selectedRows}
                   clear={clear}
                 />
@@ -172,7 +173,8 @@ export function AgentMcpServersTab({ agentName }: { agentName: string }) {
 
       {adoptTarget && (
         <AgentAdoptMcpDialog
-          agentName={agentName}
+          agentUid={agent.uid}
+          agentName={agent.name}
           entry={adoptTarget}
           open
           onOpenChange={(open) => {

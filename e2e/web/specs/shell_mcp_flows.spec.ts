@@ -14,6 +14,7 @@ import {
   deregisterMcpServer,
   generateUniqueName,
   readDaemonToken,
+  resolveResourceUid,
 } from "./_helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -59,8 +60,10 @@ async function registerFakeServer(
  */
 async function refreshCapabilities(name: string): Promise<void> {
   const { token, port } = readDaemonToken();
+  const uid = await resolveResourceUid("mcp_server", name);
+  if (uid === null) throw new Error(`no mcp_server named ${name}`);
   const r = await fetch(
-    `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${name}/refresh`,
+    `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${uid}/refresh`,
     {
       method: "POST",
       headers: {

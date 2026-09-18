@@ -21,10 +21,14 @@ import { ChannelMachineSelect } from "./ChannelMachineSelect";
 import { RunStateBadge, StatusRow } from "./ChannelDetailCards";
 
 export function ChannelStatusCard({
+  uid,
   name,
   config,
   status,
 }: {
+  /** The channel — what the rebind PATCH is addressed to. */
+  uid: string;
+  /** Its label, which names the machine picker for assistive tech. */
   name: string;
   /** The channel's current config, carried through the rebind PATCH. */
   config: Record<string, unknown>;
@@ -77,6 +81,7 @@ export function ChannelStatusCard({
               label={t("channels.machine.title")}
               value={
                 <ChannelMachineSelect
+                  uid={uid}
                   name={name}
                   config={config}
                   runsOn={runsOn}

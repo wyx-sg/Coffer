@@ -7,13 +7,13 @@ import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
-export function useMcpCapabilities(serverName: string, enabled: boolean = true) {
+export function useMcpCapabilities(serverUid: string, enabled: boolean = true) {
   return useQuery({
-    queryKey: mcpCapabilitiesKey(serverName),
+    queryKey: mcpCapabilitiesKey(serverUid),
     queryFn: async (): Promise<CapabilityListOut> => {
       const client = getApiClient();
-      const { data, error } = await client.GET("/resources/mcp_server/{name}/capabilities", {
-        params: { path: { name: serverName } },
+      const { data, error } = await client.GET("/resources/mcp_server/{uid}/capabilities", {
+        params: { path: { uid: serverUid } },
       });
       if (error) throwApiError(error, "UPSTREAM_UNAVAILABLE", "list capabilities failed");
       if (!data) throw new ApiError("UPSTREAM_UNAVAILABLE", "empty capability response");

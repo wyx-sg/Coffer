@@ -22,6 +22,8 @@ const sampleInvocations = {
   invocations: [
     {
       timestamp: "2026-05-22T12:00:00Z",
+      resource_uid: "u-filesystem",
+      resource_name: "fs",
       capability_type: "tool" as const,
       capability_key: "read_file",
       duration_ms: 50,
@@ -39,7 +41,7 @@ describe("useMcpInvocations", () => {
       GET: vi.fn().mockResolvedValue({ data: sampleInvocations, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpInvocations({ serverName: "fs" }), {
+    const { result } = renderHook(() => useMcpInvocations({ serverUid: "u-filesystem" }), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -54,14 +56,14 @@ describe("useMcpInvocations", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpInvocations({ serverName: "fs" }), {
+    const { result } = renderHook(() => useMcpInvocations({ serverUid: "u-filesystem" }), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("db fail");
   });
 
-  test("passes status filter and since param in query", async () => {
+  test("passes the server uid in the path, plus status filter and since in the query", async () => {
     const getMock = vi.fn().mockResolvedValue({ data: sampleInvocations, error: undefined });
     getApiClientMock.mockReturnValue({ GET: getMock } as unknown as ReturnType<
       typeof getApiClient
@@ -70,7 +72,7 @@ describe("useMcpInvocations", () => {
     const { result } = renderHook(
       () =>
         useMcpInvocations({
-          serverName: "fs",
+          serverUid: "u-filesystem",
           status: "error",
           since: "2026-05-01T00:00:00Z",
           limit: 10,
@@ -79,10 +81,10 @@ describe("useMcpInvocations", () => {
     );
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(getMock).toHaveBeenCalledWith(
-      "/resources/mcp_server/{name}/invocations",
+      "/resources/mcp_server/{uid}/invocations",
       expect.objectContaining({
         params: {
-          path: { name: "fs" },
+          path: { uid: "u-filesystem" },
           query: expect.objectContaining({
             status: "error",
             since: "2026-05-01T00:00:00Z",
@@ -99,7 +101,7 @@ describe("useMcpInvocations", () => {
       typeof getApiClient
     >);
 
-    renderHook(() => useMcpInvocations({ serverName: "fs", enabled: false }), {
+    renderHook(() => useMcpInvocations({ serverUid: "u-filesystem", enabled: false }), {
       wrapper: wrapper(),
     });
     expect(getMock).not.toHaveBeenCalled();

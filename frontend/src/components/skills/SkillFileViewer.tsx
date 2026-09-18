@@ -24,14 +24,14 @@ function isMarkdown(path: string): boolean {
   return /\.mdx?$/i.test(path);
 }
 
-export function SkillFileViewer({ name, path }: { name: string; path: string }) {
+export function SkillFileViewer({ uid, path }: { uid: string; path: string }) {
   const { t } = useTranslation();
-  const content = useSkillFileContent(name, path);
+  const content = useSkillFileContent(uid, path);
   const draft = useFileDraft({
     loaded: content.data?.content,
     fingerprint: content.data?.fingerprint,
     save: async (text, expectedFingerprint) => {
-      const saved = await skillsApi.writeFileContent(name, {
+      const saved = await skillsApi.writeFileContent(uid, {
         path,
         content: text,
         expected_fingerprint: expectedFingerprint,

@@ -40,7 +40,9 @@ export function SkillsTable({
   const navigate = useNavigate();
   const remove = useRemoveSkill();
   // Styled confirmation dialog (no native window.confirm). `null` = closed.
-  const [deletingName, setDeletingName] = useState<string | null>(null);
+  // It holds the ROW, not its name: the dialog's title reads the name out and
+  // the request is addressed to the uid, and those are two different fields.
+  const [deleting, setDeleting] = useState<SkillOut | null>(null);
 
   const columns: Column<SkillOut>[] = [
     {
@@ -90,7 +92,7 @@ export function SkillsTable({
         <SkillRowActions
           skill={s}
           deleteDisabled={remove.isPending}
-          onDelete={() => setDeletingName(s.name)}
+          onDelete={() => setDeleting(s)}
         />
       ),
     },
@@ -107,13 +109,13 @@ export function SkillsTable({
         rows={skills}
         isLoading={isLoading}
         columns={columns}
-        rowKey={(s) => s.name}
+        rowKey={(s) => s.uid}
         search={{
           accessor: (s) => `${s.name} ${s.description}`,
           placeholder: t("skills.searchPlaceholder"),
         }}
         filters={filters}
-        onRowClick={(s) => navigate(`/skills/${s.name}`)}
+        onRowClick={(s) => navigate(`/skills/${encodeURIComponent(s.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (s) => `${t("common.bulk.selectRow")}: ${s.name}`,
@@ -127,17 +129,17 @@ export function SkillsTable({
       />
 
       <ConfirmDialog
-        open={deletingName !== null}
-        onOpenChange={(o) => !o && setDeletingName(null)}
-        title={t("skills.removeConfirmTitle", { name: deletingName ?? "" })}
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title={t("skills.removeConfirmTitle", { name: deleting?.name ?? "" })}
         description={t("skills.removeConfirmBody")}
         confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
         pending={remove.isPending}
         onConfirm={() => {
           // Close only on success; the hook toasts a failure and the dialog
           // stays up so the reader can retry or cancel.
-          if (deletingName) {
-            remove.mutate(deletingName, { onSuccess: () => setDeletingName(null) });
+          if (deleting) {
+            remove.mutate(deleting.uid, { onSuccess: () => setDeleting(null) });
           }
         }}
       />

@@ -41,8 +41,12 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: undefined })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+// The agent vocabulary a scope is judged against is a list of UIDS with names
+// hanging off them: ScopeControl compares `scope.agents` to `a.uid`, and the
+// pick-list prints `a.name`. A stub carrying only one of the two would either
+// make every scoped skill look dormant or make the panel unreadable.
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
+  useAgents: vi.fn(() => ({ data: [{ uid: "u-cc", name: "cc" }] })),
 }));
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
   useEnableResource: vi.fn(),
@@ -104,8 +108,13 @@ function selectStatus(optionName: string) {
   fireEvent.click(screen.getByRole("option", { name: optionName }));
 }
 
+// Every fixture carries BOTH identities, deliberately unlike each other: the
+// uid is what the row navigates to and what a delete/enable/disable is
+// addressed to, the name is what the reader sees. A fixture whose uid equalled
+// its name would let a request built from the label pass these tests.
 const SAMPLE: SkillOut[] = [
   {
+    uid: "sk-7f31",
     name: "hello-skill",
     description: "Greets the user",
     source: { type: "local_import", original_path: "/tmp/hello" },
@@ -118,6 +127,7 @@ const SAMPLE: SkillOut[] = [
     updated_at: "2026-05-22T00:00:00Z",
     bindings: [
       {
+        agent_uid: "u-cc",
         agent_name: "cc",
         last_linked_at: "2026-05-22T00:00:00Z",
         last_link_path: "/home/u/.claude/skills/hello-skill",
@@ -126,6 +136,7 @@ const SAMPLE: SkillOut[] = [
     ],
   },
   {
+    uid: "sk-2b98",
     name: "git-skill",
     description: "From a repo",
     source: { type: "local_import", original_path: "/tmp/git-skill" },
@@ -140,11 +151,13 @@ const SAMPLE: SkillOut[] = [
   },
   {
     // Enabled but scoped: the state the old on/off switch could not express.
+    // The scope names the agent's UID; the panel below still reads "cc".
+    uid: "sk-c40d",
     name: "scoped-skill",
     description: "Only for cc",
     source: { type: "local_import", original_path: "/tmp/scoped" },
     enabled: true,
-    scope: { agents: ["cc"] },
+    scope: { agents: ["u-cc"] },
     version_hash: "111222333444",
     master_path: "/master/scoped-skill",
     last_synced_from_source_at: null,
@@ -228,11 +241,12 @@ describe("SkillsTable", () => {
     stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
 
-    // Third argument is the query's `enabled` flag: false on every row, so a
-    // list of N skills costs one request, not N.
+    // The hook is `useResourceScope(uid, enabled)` — the kind segment is gone,
+    // so the SECOND argument is the query's `enabled` flag: false on every row,
+    // so a list of N skills costs one request, not N.
     expect(vi.mocked(useResourceScope).mock.calls.length).toBeGreaterThan(0);
     for (const call of vi.mocked(useResourceScope).mock.calls) {
-      expect(call[2]).toBe(false);
+      expect(call[1]).toBe(false);
     }
   });
 
@@ -242,13 +256,14 @@ describe("SkillsTable", () => {
 
     // Each state is picked inside the row's panel; a whole-value choice closes
     // it and commits on the way out.
+    // Picked by name off the screen, written by uid onto the wire.
     fireEvent.click(reachIn("hello-skill"));
     fireEvent.click(choice(/^disabled$/i));
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", name: "hello-skill" });
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", uid: "sk-7f31" });
 
     fireEvent.click(reachIn("git-skill"));
     fireEvent.click(choice(/every agent/i));
-    expect(enableMutate).toHaveBeenCalledWith({ kind: "skill", name: "git-skill" });
+    expect(enableMutate).toHaveBeenCalledWith({ kind: "skill", uid: "sk-2b98" });
   });
 
   test("clicking inside the scope control does not navigate to the detail page", () => {
@@ -265,9 +280,10 @@ describe("SkillsTable", () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     expect(navigateMock).not.toHaveBeenCalled();
 
-    // …while the row itself still navigates.
+    // …while the row itself still navigates — to the uid, which is what the
+    // detail route is keyed on now, not to the label the row prints.
     fireEvent.click(screen.getByText("Greets the user"));
-    expect(navigateMock).toHaveBeenCalledWith("/skills/hello-skill");
+    expect(navigateMock).toHaveBeenCalledWith("/skills/sk-7f31");
   });
 
   test("the status filter narrows the rows by reach", () => {
@@ -291,11 +307,15 @@ describe("SkillsTable", () => {
   test("the delete action opens a styled dialog and confirming invokes remove", () => {
     const mutate = stubHooks();
     render(<SkillsTable skills={SAMPLE} />, { wrapper: wrap(null) });
+    // Both halves of the split in one test: the action and the confirmation
+    // name the skill (that is what the user is being asked about), and the
+    // request that follows is addressed to the uid.
     fireEvent.click(screen.getByRole("button", { name: /delete hello-skill/i }));
     const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("hello-skill");
     fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
     expect(mutate).toHaveBeenCalled();
-    expect(mutate.mock.calls[0][0]).toBe("hello-skill");
+    expect(mutate.mock.calls[0][0]).toBe("sk-7f31");
   });
 
   test("cancelling the delete dialog is a no-op", () => {

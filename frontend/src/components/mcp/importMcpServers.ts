@@ -7,7 +7,8 @@
 import type { TFunction } from "i18next";
 
 import { getApiClient } from "@/lib/api/client";
-import { throwApiError, translateApiError } from "@/lib/api/errors";
+import { ApiError, throwApiError, translateApiError } from "@/lib/api/errors";
+import { mintCredentialRef } from "@/lib/credentialRef";
 import type { ParsedServer } from "./jsonImport";
 
 interface ServerPlan {
@@ -22,6 +23,13 @@ interface ServerPlan {
  * `credential_refs`; non-secret values stay inline — in `env` for stdio,
  * in `headers` for http (HttpTransport has no `env` field), mirroring how
  * the secret path already routes to each transport's credential_refs.
+ *
+ * Each secret's ref is minted opaque (`mcp_server/<uuid4 hex>/<env key>`) and
+ * NOT from the server's name, which is what `<name>.<env key>` used to do. A
+ * server can now be renamed like every other resource, and a ref built from the
+ * name would be left describing a label the resource no longer has — while the
+ * secret itself sits in the encrypted store under the old address, reachable
+ * only because something still cites it.
  */
 function planServer(srv: ParsedServer): ServerPlan {
   const credentialRefs: Record<string, string> = {};
@@ -29,7 +37,7 @@ function planServer(srv: ParsedServer): ServerPlan {
   const secrets: { ref: string; value: string }[] = [];
   for (const e of srv.env) {
     if (e.isSecret) {
-      const ref = `${srv.name}.${e.key}`;
+      const ref = mintCredentialRef("mcp_server", e.key);
       credentialRefs[e.key] = ref;
       secrets.push({ ref, value: e.value });
     } else {
@@ -49,12 +57,17 @@ function planServer(srv: ParsedServer): ServerPlan {
   return { config: { transport }, secrets };
 }
 
-async function registerResource(name: string, config: Record<string, unknown>): Promise<void> {
+/** Registers the server and returns its uid — which is what a rollback needs:
+ *  the resource is addressed by identity, and the name it was registered under
+ *  is only how the failure is reported. */
+async function registerResource(name: string, config: Record<string, unknown>): Promise<string> {
   const client = getApiClient();
-  const { error } = await client.POST("/resources", {
+  const { data, error } = await client.POST("/resources", {
     body: { kind: "mcp_server", name, config },
   });
   if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");
+  if (!data) throw new ApiError("INTERNAL_ERROR", "empty register response");
+  return data.uid;
 }
 
 async function writeCredential(ref: string, value: string): Promise<void> {
@@ -69,12 +82,10 @@ async function writeCredential(ref: string, value: string): Promise<void> {
  * was never stored; any cleanup error is logged but not surfaced — the
  * primary failure (the secret write) is what the user needs to act on.
  */
-async function rollbackResource(name: string): Promise<void> {
+async function rollbackResource(uid: string, name: string): Promise<void> {
   try {
     const client = getApiClient();
-    await client.DELETE("/resources/{kind}/{name}", {
-      params: { path: { kind: "mcp_server", name } },
-    });
+    await client.DELETE("/resources/{uid}", { params: { path: { uid } } });
   } catch (e) {
     console.warn(`[importMcpServers] rollback delete failed for ${name}:`, e);
   }
@@ -89,13 +100,26 @@ export class BatchImportError extends Error {
   }
 }
 
+/** One server this import registered: the name the batch named it, and the uid
+ *  it now has — which is what a caller follows to its page. */
+export interface ImportedServer {
+  name: string;
+  uid: string;
+}
+
 export interface ImportMcpServersArgs {
   servers: ParsedServer[];
-  /** Names already registered by a prior attempt of THIS import session, so a
-   *  retry after a partial failure re-attempts only the servers that failed
-   *  instead of re-POSTing the created ones (which would 409). Mutated in
-   *  place as servers succeed. */
-  created: Set<string>;
+  /** What a prior attempt of THIS import session already registered, keyed by
+   *  the name the pasted batch used, so a retry after a partial failure
+   *  re-attempts only the servers that failed instead of re-POSTing the created
+   *  ones (which would 409). Mutated in place as servers succeed.
+   *
+   *  A map rather than a set of names: the uid is the half a caller acts on,
+   *  and a retry that skips an already-registered server still has to report
+   *  it. Keyed by NAME because that is what the pasted document says, and the
+   *  question being asked here is "did this batch already register this
+   *  entry" — a question about the input, not about a resource. */
+  created: Map<string, string>;
   t: TFunction;
 }
 
@@ -103,37 +127,39 @@ export interface ImportMcpServersArgs {
  * Import a batch. Each server is registered before its secrets are written
  * to the encrypted credential store, so a failed registration leaves nothing
  * orphaned; a failed secret write rolls the registration back. Resolves with
- * the names created; rejects with a BatchImportError naming every server that
+ * the servers created; rejects with a BatchImportError naming every server that
  * failed (the ones that did register stay registered).
  */
 export async function importMcpServers({
   servers,
   created,
   t,
-}: ImportMcpServersArgs): Promise<string[]> {
-  const done: string[] = [];
+}: ImportMcpServersArgs): Promise<ImportedServer[]> {
+  const done: ImportedServer[] = [];
   const failed: string[] = [];
   for (const srv of servers) {
-    if (created.has(srv.name)) {
-      done.push(srv.name);
+    const already = created.get(srv.name);
+    if (already !== undefined) {
+      done.push({ name: srv.name, uid: already });
       continue;
     }
     const { config, secrets } = planServer(srv);
-    let registered = false;
+    // The uid the registration returned, and the handle a rollback needs;
+    // `null` while nothing has been registered yet.
+    let registeredUid: string | null = null;
     try {
-      await registerResource(srv.name, config);
-      registered = true;
+      registeredUid = await registerResource(srv.name, config);
       for (const s of secrets) {
         await writeCredential(s.ref, s.value);
       }
-      created.add(srv.name);
-      done.push(srv.name);
+      created.set(srv.name, registeredUid);
+      done.push({ name: srv.name, uid: registeredUid });
     } catch (e) {
       // Secret write failed after registration — roll the resource back so we
       // don't leave a Coffer server pointing at a credential ref that was
       // never stored in the encrypted store.
-      if (registered) {
-        await rollbackResource(srv.name);
+      if (registeredUid !== null) {
+        await rollbackResource(registeredUid, srv.name);
       }
       failed.push(`${srv.name}: ${translateApiError(t, e)}`);
     }

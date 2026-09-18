@@ -23,8 +23,11 @@ vi.mock("@/lib/hooks/useAgents", () => ({
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
+// Identity and label, kept deliberately unalike: the page is addressed by the
+// uid in its route and in every request it makes, while everything on screen
+// (the title, the delete confirmation) says "fs".
 const stdioResource = {
-  ref: "mcp_server:fs",
+  uid: "u-filesystem",
   kind: "mcp_server",
   name: "fs",
   description: "Filesystem MCP",
@@ -34,7 +37,7 @@ const stdioResource = {
   updated_at: "2026-05-21T00:00:00Z",
 };
 
-function wrap(ui: React.ReactNode, route = "/mcp-servers/fs") {
+function wrap(ui: React.ReactNode, route = "/mcp-servers/u-filesystem") {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -42,7 +45,7 @@ function wrap(ui: React.ReactNode, route = "/mcp-servers/fs") {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[route]}>
         <Routes>
-          <Route path="/mcp-servers/:name" element={ui} />
+          <Route path="/mcp-servers/:uid" element={ui} />
           <Route path="/mcp-servers" element={<div data-testid="resources-page">resources</div>} />
         </Routes>
       </MemoryRouter>
@@ -104,10 +107,8 @@ describe("McpServerDetailPage", () => {
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith(
-        "/resources/{kind}/{name}/disable",
-        expect.objectContaining({
-          params: { path: { kind: "mcp_server", name: "fs" } },
-        }),
+        "/resources/{uid}/disable",
+        expect.objectContaining({ params: { path: { uid: "u-filesystem" } } }),
       );
     });
   });
@@ -118,7 +119,7 @@ describe("McpServerDetailPage", () => {
       error: undefined,
     });
     const postMock = vi.fn().mockImplementation((path: string) => {
-      if (path === "/resources/mcp_server/{name}/test") {
+      if (path === "/resources/mcp_server/{uid}/test") {
         return Promise.resolve({
           data: { ok: true, latency_ms: 42 },
           error: undefined,
@@ -151,17 +152,17 @@ describe("McpServerDetailPage", () => {
     // which (a) is slow and (b) conflates "discovery errored" with "failing".
     // After the fix, the header badge reads from /status (same source as the card).
     const getMock = vi.fn().mockImplementation((path: string) => {
-      if (path === "/resources/mcp_server/{name}/status") {
+      if (path === "/resources/mcp_server/{uid}/status") {
         return Promise.resolve({ data: { status: "healthy" }, error: undefined });
       }
-      if (path === "/resources/mcp_server/{name}/capabilities") {
+      if (path === "/resources/mcp_server/{uid}/capabilities") {
         // Simulate a live-discovery failure — must NOT flip the badge to failing.
         return Promise.resolve({
           data: undefined,
           error: { error: { code: "UPSTREAM_UNAVAILABLE", message: "subprocess exited" } },
         });
       }
-      // Default: return the resource (e.g. /resources/{kind}/{name})
+      // Default: return the resource (GET /resources/{uid})
       return Promise.resolve({ data: stdioResource, error: undefined });
     });
     getApiClientMock.mockReturnValue({
@@ -191,10 +192,10 @@ describe("McpServerDetailPage", () => {
     // empty upstream. The overview counts must not claim a confident "0" when
     // the truth is "couldn't load"; they read "—" instead.
     const getMock = vi.fn().mockImplementation((path: string) => {
-      if (path === "/resources/mcp_server/{name}/status") {
+      if (path === "/resources/mcp_server/{uid}/status") {
         return Promise.resolve({ data: { status: "healthy" }, error: undefined });
       }
-      if (path === "/resources/mcp_server/{name}/capabilities") {
+      if (path === "/resources/mcp_server/{uid}/capabilities") {
         return Promise.resolve({
           data: undefined,
           error: { error: { code: "UPSTREAM_UNAVAILABLE", message: "down" } },
@@ -241,7 +242,7 @@ describe("McpServerDetailPage", () => {
 
   test("clicking Refresh invalidates the capabilities query", async () => {
     const getMock = vi.fn().mockImplementation((path: string) => {
-      if (path === "/resources/mcp_server/{name}/capabilities") {
+      if (path === "/resources/mcp_server/{uid}/capabilities") {
         return Promise.resolve({
           data: { tools: [], resources: [], prompts: [] },
           error: undefined,
@@ -266,12 +267,12 @@ describe("McpServerDetailPage", () => {
     fireEvent.click(screen.getByRole("tab", { name: /tools/i }));
     const refreshBtn = await screen.findByRole("button", { name: /refresh/i });
     const initialCallCount = getMock.mock.calls.filter(
-      ([path]) => path === "/resources/mcp_server/{name}/capabilities",
+      ([path]) => path === "/resources/mcp_server/{uid}/capabilities",
     ).length;
     fireEvent.click(refreshBtn);
     await waitFor(() => {
       const after = getMock.mock.calls.filter(
-        ([path]) => path === "/resources/mcp_server/{name}/capabilities",
+        ([path]) => path === "/resources/mcp_server/{uid}/capabilities",
       ).length;
       expect(after).toBeGreaterThan(initialCallCount);
     });
@@ -283,7 +284,7 @@ describe("McpServerDetailPage", () => {
       error: undefined,
     });
     const postMock = vi.fn().mockImplementation((path: string) => {
-      if (path === "/resources/mcp_server/{name}/test") {
+      if (path === "/resources/mcp_server/{uid}/test") {
         return Promise.resolve({
           data: undefined,
           error: { error: { code: "UPSTREAM_UNAVAILABLE", message: "connection refused" } },
@@ -334,10 +335,8 @@ describe("McpServerDetailPage", () => {
 
     await waitFor(() => {
       expect(deleteMock).toHaveBeenCalledWith(
-        "/resources/{kind}/{name}",
-        expect.objectContaining({
-          params: { path: { kind: "mcp_server", name: "fs" } },
-        }),
+        "/resources/{uid}",
+        expect.objectContaining({ params: { path: { uid: "u-filesystem" } } }),
       );
     });
 

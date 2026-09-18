@@ -39,10 +39,12 @@ export function MemoryPage() {
   const { data: resources } = useResources("memory");
   const sync = useSyncMemory();
 
+  // Merged on the uid, which both reads carry: on the name the join would hold
+  // only for as long as nothing was renamed between the two requests.
   const rows: MemoryPartitionRow[] = useMemo(() => {
-    const byName = new Map((resources ?? []).map((r) => [r.name, r]));
+    const byUid = new Map((resources ?? []).map((r) => [r.uid, r]));
     return (partitions ?? []).map((p) => {
-      const resource = byName.get(p.name);
+      const resource = byUid.get(p.uid);
       // `enabled` alone: the `memory` kind declares no per-agent scope, so
       // there is no second Resource field for a row to carry.
       return { ...p, enabled: resource?.enabled ?? true };

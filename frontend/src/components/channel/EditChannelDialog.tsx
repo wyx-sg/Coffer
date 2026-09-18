@@ -18,20 +18,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
+import { AgentSelect } from "@/components/agents/AgentSelect";
 import { useUpdateChannel } from "@/lib/hooks/useChannels";
 import type { ResourceOut } from "@/lib/api/resources";
 import type { ChannelDelivery } from "@/lib/api/channels";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
 import { planChannelEdit } from "./editChannel";
-import { DEFAULT_AGENT, DEFAULT_DELIVERY } from "./schema";
+import { DEFAULT_DELIVERY } from "./schema";
 
 function strField(config: Record<string, unknown>, key: string): string {
   const v = config[key];
@@ -51,15 +44,12 @@ export function EditChannelDialog({
   const config = resource.config as Record<string, unknown>;
   const channelType = strField(config, "channel_type") || "telegram";
   const update = useUpdateChannel();
-  // Source the picker from the chat provider registry (provider keys like
-  // claude_code) — the same registry the turn resolves by — not the resource
-  // list (names like claude-code), which would re-bind to an agent that fails
-  // at turn time with UNKNOWN_AGENT.
-  const { data: agents } = useAgentProviders();
-
-  const [defaultAgent, setDefaultAgent] = useState(
-    strField(config, "default_agent") || DEFAULT_AGENT,
-  );
+  // The picker is AgentSelect: `default_agent` holds an agent RESOURCE UID, and
+  // so does every other reference to an agent, so there is one list to read and
+  // nothing to translate. (It used to read the chat provider registry, because
+  // the binding was a provider KEY while the scope beside it held resource
+  // names — two vocabularies for one thing, which is what this change removes.)
+  const [defaultAgent, setDefaultAgent] = useState(strField(config, "default_agent"));
   // The credential inputs. The rotation fields start blank on purpose: blank
   // means "leave the stored secret alone".
   const storedSecrets = (): ChannelEditDraft => ({
@@ -93,17 +83,8 @@ export function EditChannelDialog({
     }
   };
 
-  // Offer the registered provider keys, plus the channel's current binding so a
-  // value that is still loading or since-removed (e.g. a legacy "builtin")
-  // stays shown until the owner picks a valid one. De-duped, keyed by provider
-  // key; the human-readable display name is looked up per key.
-  const agentLabels = new Map((agents ?? []).map((a) => [a.agent_key, a.display_name]));
-  const agentOptions = Array.from(
-    new Set([defaultAgent, ...(agents ?? []).map((a) => a.agent_key)]),
-  );
-
   const reset = () => {
-    setDefaultAgent(strField(config, "default_agent") || DEFAULT_AGENT);
+    setDefaultAgent(strField(config, "default_agent"));
     setSecrets(storedSecrets());
     setDelivery(storedDelivery());
     setFormError(null);
@@ -120,6 +101,7 @@ export function EditChannelDialog({
       return;
     }
     const plan = planChannelEdit({
+      uid: resource.uid,
       name: resource.name,
       config,
       values: {
@@ -166,18 +148,14 @@ export function EditChannelDialog({
         >
           <div className="space-y-2">
             <Label htmlFor="edit-channel-agent">{t("channels.edit.agent")}</Label>
-            <Select value={defaultAgent} onValueChange={setDefaultAgent}>
-              <SelectTrigger id="edit-channel-agent" aria-label={t("channels.edit.agent")}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {agentOptions.map((a) => (
-                  <SelectItem key={a} value={a}>
-                    {agentLabels.get(a) ?? a}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* A binding this vault has no agent for is kept and shown as the
+                uid it is, rather than dropped — see AgentSelect. */}
+            <AgentSelect
+              id="edit-channel-agent"
+              label={t("channels.edit.agent")}
+              value={defaultAgent}
+              onChange={setDefaultAgent}
+            />
             <p className="text-xs text-muted-foreground">{t("channels.edit.agentHint")}</p>
           </div>
 

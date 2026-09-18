@@ -36,16 +36,16 @@ describe("useEnableCapability", () => {
 
     await act(async () => {
       await result.current.mutateAsync({
-        serverName: "fs",
+        serverUid: "u-filesystem",
         capabilityType: "tool",
         capabilityKey: "read_file",
       });
     });
 
     expect(postMock).toHaveBeenCalledWith(
-      "/resources/mcp_server/{name}/capabilities/{capability_type}/enable",
+      "/resources/mcp_server/{uid}/capabilities/{capability_type}/enable",
       expect.objectContaining({
-        params: { path: { name: "fs", capability_type: "tool" } },
+        params: { path: { uid: "u-filesystem", capability_type: "tool" } },
         body: { capability_key: "read_file" },
       }),
     );
@@ -64,7 +64,7 @@ describe("useEnableCapability", () => {
 
     await act(async () => {
       await result.current.mutateAsync({
-        serverName: "fs",
+        serverUid: "u-filesystem",
         capabilityType: "tool",
         capabilityKey: "write_file",
       });
@@ -72,7 +72,7 @@ describe("useEnableCapability", () => {
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
     expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ["mcp", "capabilities", "fs"] }),
+      expect.objectContaining({ queryKey: ["mcp", "capabilities", "u-filesystem"] }),
     );
   });
 
@@ -90,7 +90,7 @@ describe("useEnableCapability", () => {
     await act(async () => {
       try {
         await result.current.mutateAsync({
-          serverName: "fs",
+          serverUid: "u-filesystem",
           capabilityType: "tool",
           capabilityKey: "missing",
         });
@@ -121,16 +121,16 @@ describe("useDisableCapability", () => {
 
     await act(async () => {
       await result.current.mutateAsync({
-        serverName: "fs",
+        serverUid: "u-filesystem",
         capabilityType: "resource",
         capabilityKey: "file:///data/path",
       });
     });
 
     expect(postMock).toHaveBeenCalledWith(
-      "/resources/mcp_server/{name}/capabilities/{capability_type}/disable",
+      "/resources/mcp_server/{uid}/capabilities/{capability_type}/disable",
       expect.objectContaining({
-        params: { path: { name: "fs", capability_type: "resource" } },
+        params: { path: { uid: "u-filesystem", capability_type: "resource" } },
         body: { capability_key: "file:///data/path" },
       }),
     );
@@ -149,7 +149,7 @@ describe("useDisableCapability", () => {
 
     await act(async () => {
       await result.current.mutateAsync({
-        serverName: "fs",
+        serverUid: "u-filesystem",
         capabilityType: "tool",
         capabilityKey: "read_file",
       });
@@ -157,7 +157,7 @@ describe("useDisableCapability", () => {
 
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
     expect(invalidateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ queryKey: ["mcp", "capabilities", "fs"] }),
+      expect.objectContaining({ queryKey: ["mcp", "capabilities", "u-filesystem"] }),
     );
   });
 });

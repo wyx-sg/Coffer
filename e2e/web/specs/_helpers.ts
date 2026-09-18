@@ -62,8 +62,11 @@ export function generateUniqueName(prefix: string): string {
 export async function deregisterMcpServer(name: string): Promise<void> {
   try {
     const { token, port } = readDaemonToken();
+    // The route addresses the uid; the test knows the name it registered.
+    const uid = await resolveResourceUid("mcp_server", name);
+    if (uid === null) return; // already gone — best-effort cleanup
     await fetch(
-      `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${name}`,
+      `http://127.0.0.1:${port}/api/v1/resources/${uid}`,
       {
         method: "DELETE",
         headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e-cleanup" },
@@ -72,4 +75,28 @@ export async function deregisterMcpServer(name: string): Promise<void> {
   } catch {
     // best-effort
   }
+}
+
+/**
+ * Resolve a resource NAME to the uid every route now addresses it by.
+ *
+ * A resource's identity is an opaque uid (ADR
+ * resource-identity-is-an-immutable-uid); a test knows the name it registered,
+ * so it looks the uid up the same way the CLI does — through the one route
+ * allowed to find a resource by its label. Returns null when nothing matches,
+ * so a cleanup path can stay best-effort.
+ */
+export async function resolveResourceUid(
+  kind: string,
+  name: string,
+): Promise<string | null> {
+  const { token, port } = readDaemonToken();
+  const resp = await fetch(
+    `http://127.0.0.1:${port}/api/v1/resources?kind=${encodeURIComponent(kind)}` +
+      `&name=${encodeURIComponent(name)}`,
+    { headers: { "X-Coffer-Token": token } },
+  );
+  if (!resp.ok) return null;
+  const body = (await resp.json()) as { resources: Array<{ uid: string }> };
+  return body.resources[0]?.uid ?? null;
 }

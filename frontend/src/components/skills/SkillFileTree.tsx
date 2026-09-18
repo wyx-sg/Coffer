@@ -15,9 +15,9 @@ import type { SkillFileNode } from "@/lib/api/skills";
 import { useSkillFiles } from "@/lib/hooks/useSkills";
 import { cn } from "@/lib/utils";
 
-export function SkillFileTree({ name }: { name: string }) {
+export function SkillFileTree({ uid }: { uid: string }) {
   const { t } = useTranslation();
-  const tree = useSkillFiles(name);
+  const tree = useSkillFiles(uid);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   return (
@@ -47,7 +47,7 @@ export function SkillFileTree({ name }: { name: string }) {
       {/* Right: rendered/editable content of the selected file. */}
       <div className="min-w-0">
         {selectedPath ? (
-          <SkillFileViewer name={name} path={selectedPath} />
+          <SkillFileViewer uid={uid} path={selectedPath} />
         ) : (
           <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("skills.files.selectFile")}

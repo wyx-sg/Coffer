@@ -11,9 +11,14 @@
 // curation's lane, and `curateCollection` is the one way anything gets into it.
 //
 // Deleting a COLLECTION is deliberately absent: a collection is one `knowledge`
-// Resource, so it goes through the kind-agnostic
-// `DELETE /resources/knowledge/{name}` (`useDeleteResource`) like every other
-// kind. Only files are deleted here.
+// Resource, so it goes through the kind-agnostic `DELETE /resources/{uid}`
+// (`useDeleteResource`) like every other kind. Only files are deleted here.
+//
+// Two vocabularies meet in this module and both are correct. `curate` addresses
+// a collection, so it takes the collection's `uid`. The file routes address a
+// place on disk, and a collection's directory is named after it, so `path` and
+// `collection` are NAMES — the same strings the tree hands back. A caller that
+// holds a `CollectionOut` has both and picks by what it is asking for.
 //
 // Transport via the shared `call` (.agents/frontend.md §4); wire types in
 // `knowledgeTypes.ts`.
@@ -99,8 +104,8 @@ export function deleteFile(path: string): Promise<void> {
  * A second pass over the same collection is refused with 409
  * `UPKEEP_ALREADY_RUNNING` rather than queued (FR-039).
  */
-export function curateCollection(name: string, source?: string | null): Promise<CurationOut> {
-  return call<CurationOut>(`${ROOT}/collections/${enc(name)}/curate`, {
+export function curateCollection(uid: string, source?: string | null): Promise<CurationOut> {
+  return call<CurationOut>(`${ROOT}/collections/${enc(uid)}/curate`, {
     method: "POST",
     body: { source: source ?? null },
   });
@@ -119,6 +124,7 @@ export function curateCollection(name: string, source?: string | null): Promise<
  * tree lists beside its conversion.
  */
 export function uploadFile(params: {
+  /** The collection's NAME: this lands a file in its directory. */
   collection: string;
   folder?: string | null;
   file: File;

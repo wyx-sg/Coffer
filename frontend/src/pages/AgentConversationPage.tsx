@@ -27,20 +27,22 @@ import { TRANSCRIPT_TURNS_PAGE_SIZE, useTranscriptSession } from "@/lib/hooks/us
 
 export function AgentConversationPage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const sourcePath = useSearchParams()[0].get("path") ?? "";
   const [offset, setOffset] = useState(0);
-  const { data, isPending, error } = useTranscriptSession(name, sourcePath, offset);
+  const { data, isPending, error } = useTranscriptSession(uid, sourcePath, offset);
 
   const back = {
-    to: `/agents/${encodeURIComponent(name)}?tab=conversations`,
+    to: `/agents/${encodeURIComponent(uid)}?tab=conversations`,
     label: t("common.backTo", { label: t("agents.workspace.conversations") }),
   };
 
   if (isPending) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={name} />
+        {/* Nothing has been read yet, so the conversation has no title to show
+            and the agent's uid is not one. The state of the page is. */}
+        <PageHeader back={back} title={t("common.loading")} />
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             {t("common.loading")}
@@ -52,7 +54,7 @@ export function AgentConversationPage() {
   if (error || !data) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={name} />
+        <PageHeader back={back} title={t("agents.conversationDetail.loadFailed")} />
         <Card className="border-destructive/40">
           <CardContent className="space-y-3 py-6">
             <p className="text-sm text-destructive" role="alert">

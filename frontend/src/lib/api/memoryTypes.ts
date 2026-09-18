@@ -24,6 +24,12 @@
  *  Keyed on a REPOSITORY, not a working directory — a worktree and a second
  *  clone of the same repo resolve to one partition (FR-014). */
 export interface PartitionOut {
+  /** The partition Resource's immutable identity — what every route under
+   *  `/memory/partitions/{uid}/…` takes. Deliberately NOT the resolution key:
+   *  `repository_key` is what a working directory resolves through. */
+  uid: string;
+  /** A mutable label, and the partition's directory name under the memory
+   *  root. For display. */
   name: string;
   /** Absolute path of the repository's main working tree; empty for `global`. */
   repository_path: string;
@@ -109,7 +115,11 @@ export interface DistilResultOut {
  *  agent's settings. Whether it has fired is read from the audit log, one
  *  entry per fire (FR-022), not from here. */
 export interface DeliveryStatusOut {
-  agent: string;
+  /** Which agent this row is about, and what install/remove take. */
+  agent_uid: string;
+  /** The same agent's label, for the row's heading. Both travel, so a surface
+   *  never has to fetch the agent list to recover the other half. */
+  agent_name: string;
   installed: boolean;
   /** Coffer's own CLI invocation the hook runs. */
   command: string;

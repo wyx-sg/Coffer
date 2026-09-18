@@ -30,7 +30,7 @@ vi.mock("@/components/mcp/McpServersTable", () => ({
   }) => (
     <div data-testid="mcp-table" data-loading={isLoading ? "true" : "false"}>
       {resources.map((r) => (
-        <span key={r.name}>{r.name}</span>
+        <span key={r.uid}>{r.name}</span>
       ))}
     </div>
   ),
@@ -48,8 +48,10 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
-function resource(name: string, kind: string): ResourceOut {
-  return { name, kind, config: {} } as unknown as ResourceOut;
+/** A row carries both halves: the uid it is keyed and addressed by, and the
+ *  name the reader sees. */
+function resource(uid: string, name: string, kind: string): ResourceOut {
+  return { uid, name, kind, config: {} } as unknown as ResourceOut;
 }
 
 function stubQuery(opts: { data?: ResourceOut[]; isPending?: boolean; error?: unknown }) {
@@ -94,7 +96,12 @@ describe("ResourcesPage", () => {
   });
 
   test("renders the table (with the Add action) for the returned servers", () => {
-    stubQuery({ data: [resource("srv-a", "mcp_server"), resource("srv-b", "mcp_server")] });
+    stubQuery({
+      data: [
+        resource("u-srv-a", "srv-a", "mcp_server"),
+        resource("u-srv-b", "srv-b", "mcp_server"),
+      ],
+    });
     render(wrap(<ResourcesPage />));
     expect(screen.getByTestId("mcp-table")).toBeInTheDocument();
     expect(screen.getByText("srv-a")).toBeInTheDocument();

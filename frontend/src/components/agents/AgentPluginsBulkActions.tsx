@@ -23,28 +23,28 @@ import { agentPluginsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 
 export function AgentPluginsBulkActions({
-  agentName,
+  agentUid,
   rows,
   clear,
   canUninstall,
 }: {
-  agentName: string;
+  agentUid: string;
   rows: PluginOut[];
   clear: () => void;
   canUninstall: boolean;
 }) {
   const { t } = useTranslation();
   const [confirmUninstall, setConfirmUninstall] = useState(false);
-  const toggle = useBulkMutate({ invalidate: [agentPluginsKey(agentName)] });
-  const uninstall = useBulkMutate({ invalidate: [agentPluginsKey(agentName)] });
+  const toggle = useBulkMutate({ invalidate: [agentPluginsKey(agentUid)] });
+  const uninstall = useBulkMutate({ invalidate: [agentPluginsKey(agentUid)] });
 
   const setAll = async (enabled: boolean) => {
-    await toggle.run(rows, (p) => agentsApi.togglePlugin(agentName, p.id, enabled));
+    await toggle.run(rows, (p) => agentsApi.togglePlugin(agentUid, p.id, enabled));
     clear();
   };
 
   const uninstallAll = async () => {
-    await uninstall.run(rows, (p) => agentsApi.uninstallPlugin(agentName, p.id));
+    await uninstall.run(rows, (p) => agentsApi.uninstallPlugin(agentUid, p.id));
     setConfirmUninstall(false);
     clear();
   };

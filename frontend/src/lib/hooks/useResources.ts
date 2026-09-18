@@ -24,18 +24,21 @@ export function useResources(kind?: string) {
   });
 }
 
-export function useResource(kind: string, name: string) {
+/** One resource by uid. No kind argument: the uid names the row, and the row
+ *  says what kind it is (`ResourceOut.kind`). */
+export function useResource(uid: string) {
   return useQuery({
-    queryKey: resourceKey(kind, name),
+    queryKey: resourceKey(uid),
     queryFn: async (): Promise<ResourceOut> => {
       const client = getApiClient();
-      const { data, error } = await client.GET("/resources/{kind}/{name}", {
-        params: { path: { kind, name } },
+      const { data, error } = await client.GET("/resources/{uid}", {
+        params: { path: { uid } },
       });
       if (error) throwApiError(error, "RESOURCE_NOT_FOUND", "resource not found");
       if (!data) throw new ApiError("RESOURCE_NOT_FOUND", "empty resource response");
       return data;
     },
+    enabled: uid.length > 0,
   });
 }
 
@@ -46,7 +49,7 @@ export interface ResourceReach {
 }
 
 /**
- * `name → {enabled, scope}` for one kind.
+ * `uid → {enabled, scope}` for one kind.
  *
  * Some kinds are listed through a DEDICATED endpoint that carries only what is
  * read off disk (`/knowledge/collections`, `/providers`, `/memory/partitions`)
@@ -55,13 +58,18 @@ export interface ResourceReach {
  * `GET /resources?kind=…`: ONE extra request for the whole table, never one per
  * row, which is the same bargain the mcp-servers and skills lists strike by
  * carrying `scope` on their own row payload.
+ *
+ * Keyed on the uid, which every one of those dedicated payloads now carries:
+ * keying on the name would make the join depend on two lists having been read
+ * at the same instant, and a rename between them would silently drop a row's
+ * reach back to its default.
  */
 export function useKindReach(kind: string): Map<string, ResourceReach> {
   const { data } = useResources(kind);
   return useMemo(
     () =>
       new Map(
-        (data ?? []).map((r) => [r.name, { enabled: r.enabled, scope: r.scope ?? null }] as const),
+        (data ?? []).map((r) => [r.uid, { enabled: r.enabled, scope: r.scope ?? null }] as const),
       ),
     [data],
   );

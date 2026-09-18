@@ -38,12 +38,12 @@ import {
   useUnmanagedSkills,
 } from "@/lib/hooks/useAgents";
 
-export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
+export function UnmanagedSkillsSection({ agentUid }: { agentUid: string }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const unmanaged = useUnmanagedSkills(agentName);
-  const adopt = useAdoptUnmanagedSkill(agentName);
-  const remove = useDeleteUnmanagedSkill(agentName);
+  const unmanaged = useUnmanagedSkills(agentUid);
+  const adopt = useAdoptUnmanagedSkill(agentUid);
+  const remove = useDeleteUnmanagedSkill(agentUid);
   const { open } = useFsActions();
   const [deleteTarget, setDeleteTarget] = useState<UnmanagedSkillOut | null>(null);
 
@@ -166,7 +166,7 @@ export function UnmanagedSkillsSection({ agentName }: { agentName: string }) {
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
             <AgentUnmanagedSkillsBulkActions
-              agentName={agentName}
+              agentUid={agentUid}
               rows={selectedRows}
               clear={clear}
             />

@@ -88,8 +88,11 @@ export async function registerMcpServer(
 export async function deregisterMcpServer(name: string): Promise<void> {
   const { port, token } = readDaemonToken();
   try {
+    // The route addresses the uid; the test knows the name it registered.
+    const uid = await resolveResourceUid("mcp_server", name);
+    if (uid === null) return; // already gone — best-effort cleanup
     await fetch(
-      `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${name}`,
+      `http://127.0.0.1:${port}/api/v1/resources/${uid}`,
       {
         method: "DELETE",
         headers: { "X-Coffer-Token": token, "X-Coffer-Actor": "e2e-mcp" },
@@ -248,7 +251,7 @@ export function uniqueName(prefix: string): string {
 }
 
 /**
- * Poll `GET /resources/mcp_server/{name}/capabilities` until all
+ * Poll `GET /resources/mcp_server/{uid}/capabilities` until all
  * `expectedPrefixedNames` appear in the returned tools list, or the timeout
  * fires.  Throws if the precondition is not met in time.
  *
@@ -263,7 +266,9 @@ export async function waitForCapabilities(
   timeoutMs = 10_000,
 ): Promise<void> {
   const { port, token } = readDaemonToken();
-  const url = `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${serverName}/capabilities`;
+  const uid = await resolveResourceUid("mcp_server", serverName);
+  if (uid === null) throw new Error(`no mcp_server named ${serverName}`);
+  const url = `http://127.0.0.1:${port}/api/v1/resources/mcp_server/${uid}/capabilities`;
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
@@ -292,4 +297,28 @@ export async function waitForCapabilities(
     `waitForCapabilities(${serverName}) timed out after ${timeoutMs}ms — ` +
       `expected ${JSON.stringify(expectedPrefixedNames)} to appear in /capabilities`,
   );
+}
+
+/**
+ * Resolve a resource NAME to the uid every route now addresses it by.
+ *
+ * A resource's identity is an opaque uid (ADR
+ * resource-identity-is-an-immutable-uid); a test knows the name it registered,
+ * so it looks the uid up the same way the CLI does — through the one route
+ * allowed to find a resource by its label. Returns null when nothing matches,
+ * so a cleanup path can stay best-effort.
+ */
+export async function resolveResourceUid(
+  kind: string,
+  name: string,
+): Promise<string | null> {
+  const { token, port } = readDaemonToken();
+  const resp = await fetch(
+    `http://127.0.0.1:${port}/api/v1/resources?kind=${encodeURIComponent(kind)}` +
+      `&name=${encodeURIComponent(name)}`,
+    { headers: { "X-Coffer-Token": token } },
+  );
+  if (!resp.ok) return null;
+  const body = (await resp.json()) as { resources: Array<{ uid: string }> };
+  return body.resources[0]?.uid ?? null;
 }

@@ -33,6 +33,11 @@ function renderViewer(ui: ReactNode) {
   return render(ui, { wrapper: Wrapper });
 }
 
+// The viewer addresses its skill by uid — the file routes are
+// `/skills/{uid}/files/content`, and the skill's folder name is a label that a
+// rename moves. Nothing here reads it, so the fixture only needs the uid.
+const SKILL_UID = "sk-91c4";
+
 const { useSkillFileContent } = await import("@/lib/hooks/useSkills");
 const contentMock = vi.mocked(useSkillFileContent);
 
@@ -63,13 +68,13 @@ describe("SkillFileViewer", () => {
 
   test("renders a .md file as rendered Markdown, not raw text", () => {
     stubContent({ path: "SKILL.md", content: "# Heading\n\nbody" });
-    renderViewer(<SkillFileViewer name="s" path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
     expect(screen.getByRole("heading", { name: "Heading" })).toBeInTheDocument();
   });
 
   test("reads by default: Edit is offered, Save is not, and open/reveal stay", () => {
     stubContent({ path: "SKILL.md", content: "old" });
-    renderViewer(<SkillFileViewer name="s" path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
 
     expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
@@ -81,14 +86,14 @@ describe("SkillFileViewer", () => {
   test("editing and saving sends the content with the fingerprint it read", async () => {
     stubContent({ path: "SKILL.md", content: "old", fingerprint: "fp-1" });
     writeMock.mockResolvedValue({ fingerprint: "fp-2" } as never);
-    renderViewer(<SkillFileViewer name="s" path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
 
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "new body" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await vi.waitFor(() =>
-      expect(writeMock).toHaveBeenCalledWith("s", {
+      expect(writeMock).toHaveBeenCalledWith(SKILL_UID, {
         path: "SKILL.md",
         content: "new body",
         expected_fingerprint: "fp-1",
@@ -98,7 +103,7 @@ describe("SkillFileViewer", () => {
 
   test("Save is disabled until the text actually changes", () => {
     stubContent({ path: "SKILL.md", content: "old" });
-    renderViewer(<SkillFileViewer name="s" path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
   });
@@ -106,7 +111,7 @@ describe("SkillFileViewer", () => {
   test("a stale save is reported and the typed text survives", async () => {
     stubContent({ path: "SKILL.md", content: "old", fingerprint: "fp-1" });
     writeMock.mockRejectedValue(new ApiError("SKILL_FILE_STALE", "changed on disk"));
-    renderViewer(<SkillFileViewer name="s" path="SKILL.md" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
 
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "my work" } });
@@ -119,7 +124,7 @@ describe("SkillFileViewer", () => {
 
   test("a truncated file stays read-only — a save would cut it short on disk", () => {
     stubContent({ path: "big.txt", content: "aaa", truncated: true });
-    renderViewer(<SkillFileViewer name="s" path="big.txt" />);
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="big.txt" />);
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
     expect(screen.getByText(/read-only/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();

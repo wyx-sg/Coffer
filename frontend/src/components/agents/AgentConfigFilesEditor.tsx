@@ -40,15 +40,16 @@ const DESCRIBED_KEYS = new Set([
 ]);
 
 interface Props {
-  name: string;
+  /** The agent whose config files these are. */
+  uid: string;
   /** Reports whether an unsaved draft is on screen, so the page can guard
    *  tab switches that would unmount this editor. */
   onDirtyChange?: (dirty: boolean) => void;
 }
 
-export function AgentConfigFilesEditor({ name, onDirtyChange }: Props) {
+export function AgentConfigFilesEditor({ uid, onDirtyChange }: Props) {
   const { t } = useTranslation();
-  const s = useConfigEditorState(name);
+  const s = useConfigEditorState(uid);
   const dirty = s.draft.dirty;
 
   useBeforeUnload(dirty);

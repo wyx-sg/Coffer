@@ -32,7 +32,7 @@ import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 export function SkillStatusCell({ skill }: { skill: SkillOut }) {
   return (
     <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-      <ScopeControl kind="skill" name={skill.name} enabled={skill.enabled} scope={skill.scope} />
+      <ScopeControl kind="skill" uid={skill.uid} enabled={skill.enabled} scope={skill.scope} />
     </div>
   );
 }
@@ -73,7 +73,7 @@ export function SkillsBulkActions({ skills, onDone }: { skills: SkillOut[]; onDo
   return (
     <>
       <BulkReachActions
-        rows={skills.map((s) => ({ kind: "skill", name: s.name }))}
+        rows={skills.map((s) => ({ kind: "skill", uid: s.uid }))}
         invalidate={[["skills"]]}
         onDone={onDone}
       />
@@ -82,7 +82,7 @@ export function SkillsBulkActions({ skills, onDone }: { skills: SkillOut[]; onDo
         description={t("skills.removeConfirmBody")}
         pending={bulk.isPending}
         onConfirm={async () => {
-          await bulk.run(skills, (s) => skillsApi.remove(s.name));
+          await bulk.run(skills, (s) => skillsApi.remove(s.uid));
           onDone();
         }}
       />

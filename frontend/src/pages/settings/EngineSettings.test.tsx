@@ -55,22 +55,39 @@ vi.mock("@/lib/hooks/useModelIntrospection", () => ({
 const { providersApi } = await import("@/lib/api/providers");
 const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
-const makeProvider = (overrides?: Partial<Provider>): Provider => ({
-  name: "acme",
-  protocol: "anthropic",
-  base_url: "https://gw/anthropic",
-  credential_ref: "provider/acme/key",
-  compatible_agents: ["claude_code"],
-  is_active: false,
-  internal_default: false,
-  transcribe_default: false,
-  models: [],
-  enabled: true,
-  description: null,
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-  ...overrides,
-});
+/** An opaque uid per fixture NAME. The connection dropdown carries the uid as
+ *  each option's VALUE and the name as its LABEL, and the mutation takes the
+ *  uid — so the two must be different strings, or an assertion on one of them
+ *  would pass against the other. */
+const UIDS: Record<string, string> = {
+  acme: "cn-31f0",
+  a: "cn-7ba2",
+  b: "cn-c94d",
+  A: "cn-1d6e",
+  B: "cn-8402",
+};
+const uidFor = (name: string) => UIDS[name] ?? "cn-unlisted";
+
+const makeProvider = (overrides?: Partial<Provider>): Provider => {
+  const name = overrides?.name ?? "acme";
+  return {
+    uid: uidFor(name),
+    name,
+    protocol: "anthropic",
+    base_url: "https://gw/anthropic",
+    credential_ref: "provider/acme/key",
+    compatible_agents: ["claude_code"],
+    is_active: false,
+    internal_default: false,
+    transcribe_default: false,
+    models: [],
+    enabled: true,
+    description: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+};
 
 // Radix Select: open via keyboard (jsdom has no pointer layout) then read/click
 // the rendered options.
@@ -198,8 +215,9 @@ describe("EngineSettings", () => {
 
     // the internal-engine section's connection dropdown sets "b" as the default
     openSelect(/^model provider$/i);
+    // Picked by the name on the option; sent as the uid behind it.
     fireEvent.click(screen.getByRole("option", { name: "b" }));
-    await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("b"));
+    await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith(uidFor("b")));
   });
 
   acceptance(
@@ -219,14 +237,15 @@ describe("EngineSettings", () => {
       );
 
       renderPage();
-      // The connection dropdown shows A as the current internal default.
+      // The connection dropdown shows A as the current internal default — the
+      // NAME, even though the value under it is A's uid.
       expect(await screen.findByRole("combobox", { name: /^model provider$/i })).toHaveTextContent(
         "A",
       );
       // Selecting B clears A on the backend (single-internal-default invariant).
       openSelect(/^model provider$/i);
       fireEvent.click(screen.getByRole("option", { name: "B" }));
-      await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith("B"));
+      await waitFor(() => expect(apiMock.setInternalDefault).toHaveBeenCalledWith(uidFor("B")));
     },
   );
 });

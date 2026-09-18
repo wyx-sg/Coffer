@@ -1285,7 +1285,8 @@
         "appId": "请输入 App ID",
         "appSecret": "请输入 App Secret",
         "signingSecret": "请输入 Signing Secret",
-        "websocketField": "WebSocket 投递不使用此项——请清空，或切换到 Webhook"
+        "websocketField": "WebSocket 投递不使用此项——请清空，或切换到 Webhook",
+        "agent": "请先注册一个 Agent —— 渠道必须指明它驱动的 Agent。"
       },
       "telegramHint": "BotFather 给你的机器人 token。",
       "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID、App Secret 和 Signing Secret。",
@@ -1300,7 +1301,9 @@
       "deliveryWebsocket": "WebSocket",
       "deliveryHint": "Webhook 需要一个公网可达地址和 Signing Secret；WebSocket 由机器人主动向 SeaTalk 建立一条出站连接，两者都不需要。同一个机器人同时只能用其中一种。",
       "websocketSdkNote": "WebSocket 需要把 SeaTalk 官方 Python SDK 放在 ~/.coffer/vendor（或 $COFFER_SEATALK_SDK_DIR）。它不在 PyPI 上，Coffer 无法随包分发——SDK 到位前该消息渠道不会启动。",
-      "websocketPortalNote": "同时要在 SeaTalk 开发者后台把该机器人的事件投递方式切到 WebSocket。后台的 Re-verify 只有在 Coffer 正持有连接时才能通过。"
+      "websocketPortalNote": "同时要在 SeaTalk 开发者后台把该机器人的事件投递方式切到 WebSocket。后台的 Re-verify 只有在 Coffer 正持有连接时才能通过。",
+      "agent": "默认 Agent",
+      "agentHint": "此渠道中的新会话都会在该 Agent 上开始。"
     },
     "edit": {
       "title": "编辑消息渠道",

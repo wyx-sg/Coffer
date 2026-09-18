@@ -120,7 +120,10 @@ export function ReachControl({
 
   const staged = draft ?? initialScope ?? RESTRICTED_START;
   const selected = staged.agents ?? [];
-  const registered = (agentsData ?? []).map((a) => a.name);
+  // The pick-list's vocabulary: what a tick writes (the uid) beside what it
+  // reads as (the name). Both, because a scope stores one and a person reads
+  // the other.
+  const registered = (agentsData ?? []).map((a) => ({ uid: a.uid, name: a.name }));
   const live = liveMode(mode, supportsScope, initialScope);
   // What reads as chosen: the staged choice, else the live state — `null` for
   // an untouched bulk panel, whose selection has no single reach.
@@ -154,10 +157,10 @@ export function ReachControl({
   // Ticking a row IS the pick of "only selected agents" — which is why the
   // rows stay on screen under the other choices: narrowing is one click from
   // where the user already is, not pick-the-radio-then-find.
-  const toggle = (name: string, checked: boolean) => {
+  const toggle = (uid: string, checked: boolean) => {
     const base = staged.agents ?? [];
     setChoice("restricted");
-    setDraft({ agents: checked ? [...base, name] : base.filter((entry) => entry !== name) });
+    setDraft({ agents: checked ? [...base, uid] : base.filter((entry) => entry !== uid) });
   };
 
   const choiceRow = (value: ReachMode, text: string, onPick: () => void) => (

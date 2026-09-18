@@ -1,5 +1,11 @@
 // frontend/src/lib/api/agents.ts — request helpers for /api/v1/agents/*
 //
+// Every route here is addressed by the agent's `uid`, never by its name: the
+// name is a label the user edits, and a request built from it would stop
+// resolving the moment they did (ADR resource-identity-is-an-immutable-uid).
+// The name still travels on the READ side — `AgentOut.name` is what a heading
+// and a table row show — so a caller that has an agent has both.
+//
 // Wire types are the agent-registry contract's generated schemas
 // (`specs/agent-registry/contracts/api.openapi.yaml` → `generated/agent-registry.ts`),
 // re-exported under the names the hooks and pages already import. Transport is
@@ -33,7 +39,7 @@ export interface ConfigFileInfo {
   files?: Schemas["DirChild"][] | null;
 }
 
-/** `GET /agents/{name}/config-files` — an inline shape in the contract. */
+/** `GET /agents/{uid}/config-files` — an inline shape in the contract. */
 export interface ConfigFileListOut {
   items: ConfigFileInfo[];
 }
@@ -55,6 +61,10 @@ export type McpInstallStatus = Schemas["McpInstallStatus"];
  * always present.
  */
 export interface AgentOut {
+  /** The agent Resource's immutable identity — what every route below takes,
+   *  and what every cross-resource reference to this agent holds (a scope's
+   *  agent list, a channel's `default_agent`, a skill binding). */
+  uid: string;
   name: string;
   type: AgentType;
   config_dir: string;
@@ -102,18 +112,22 @@ export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
 // agents-workspace.ts for the file-size budget; re-exported so existing
 // `from "@/lib/api/agents"` import paths keep working.
 export type {
+  AdoptedResource,
   AdoptMcpEntryBody,
   McpEntriesResponse,
   McpEntryOut,
   PluginOut,
   PluginsResponse,
+  SkillRefOut,
   UnmanagedSkillOut,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
 import type {
+  AdoptedResource,
   AdoptMcpEntryBody,
   McpEntriesResponse,
   PluginsResponse,
+  SkillRefOut,
   UnmanagedSkillsResponse,
 } from "./agents-workspace";
 
@@ -125,44 +139,44 @@ const childPath = (relpath: string) => relpath.split("/").map(enc).join("/");
 export const agentsApi = {
   list: () => call<AgentListOut>("/agents"),
   register: (body: AgentCreate) => call<AgentOut>("/agents", { method: "POST", body }),
-  get: (name: string) => call<AgentOut>(`/agents/${enc(name)}`),
-  patch: (name: string, body: AgentPatch) =>
-    call<AgentOut>(`/agents/${enc(name)}`, { method: "PATCH", body }),
-  remove: (name: string) => call<void>(`/agents/${enc(name)}`, { method: "DELETE" }),
+  get: (uid: string) => call<AgentOut>(`/agents/${enc(uid)}`),
+  patch: (uid: string, body: AgentPatch) =>
+    call<AgentOut>(`/agents/${enc(uid)}`, { method: "PATCH", body }),
+  remove: (uid: string) => call<void>(`/agents/${enc(uid)}`, { method: "DELETE" }),
   // Read-only discovery: installed-but-unregistered agents the user can add.
   candidates: () => call<AgentCandidatesOut>("/agents/candidates"),
 
   // Config files are read AND written in-app. A write carries the fingerprint
   // from the read that seeded the editor, so a file changed underneath the
   // editor is refused (409) rather than overwritten.
-  listConfigFiles: (name: string) => call<ConfigFileListOut>(`/agents/${enc(name)}/config-files`),
-  readConfigFile: (name: string, key: string) =>
-    call<ConfigFileContent>(`/agents/${enc(name)}/config-files/${enc(key)}`),
-  writeConfigFile: (name: string, key: string, body: ConfigFileWrite) =>
-    call<ConfigFileInfo>(`/agents/${enc(name)}/config-files/${enc(key)}`, {
+  listConfigFiles: (uid: string) => call<ConfigFileListOut>(`/agents/${enc(uid)}/config-files`),
+  readConfigFile: (uid: string, key: string) =>
+    call<ConfigFileContent>(`/agents/${enc(uid)}/config-files/${enc(key)}`),
+  writeConfigFile: (uid: string, key: string, body: ConfigFileWrite) =>
+    call<ConfigFileInfo>(`/agents/${enc(uid)}/config-files/${enc(key)}`, {
       method: "PUT",
       body,
     }),
 
-  mcpStatus: (name: string) => call<McpInstallStatus>(`/agents/${enc(name)}/mcp-install`),
-  mcpInstall: (name: string) =>
-    call<McpInstallStatus>(`/agents/${enc(name)}/mcp-install`, { method: "POST" }),
-  mcpUninstall: (name: string) =>
-    call<McpInstallStatus>(`/agents/${enc(name)}/mcp-install`, { method: "DELETE" }),
+  mcpStatus: (uid: string) => call<McpInstallStatus>(`/agents/${enc(uid)}/mcp-install`),
+  mcpInstall: (uid: string) =>
+    call<McpInstallStatus>(`/agents/${enc(uid)}/mcp-install`, { method: "POST" }),
+  mcpUninstall: (uid: string) =>
+    call<McpInstallStatus>(`/agents/${enc(uid)}/mcp-install`, { method: "DELETE" }),
 
   // MCP entries (specs agent-registry/005 workspace amendment)
-  mcpEntries: (name: string) => call<McpEntriesResponse>(`/agents/${enc(name)}/mcp-entries`),
+  mcpEntries: (uid: string) => call<McpEntriesResponse>(`/agents/${enc(uid)}/mcp-entries`),
   // Deletes the entry from the agent's own config file (a .bak is written by
   // the daemon). `source` names which config file the entry came from — an
   // entry name can repeat across sources.
-  removeMcpEntry: (name: string, entry: string, source?: string) => {
+  removeMcpEntry: (uid: string, entry: string, source?: string) => {
     const qs = source ? `?source=${enc(source)}` : "";
-    return call<void>(`/agents/${enc(name)}/mcp-entries/${enc(entry)}${qs}`, {
+    return call<void>(`/agents/${enc(uid)}/mcp-entries/${enc(entry)}${qs}`, {
       method: "DELETE",
     });
   },
-  adoptMcpEntry: (name: string, entry: string, body: AdoptMcpEntryBody) =>
-    call<{ kind: string; name: string }>(`/agents/${enc(name)}/mcp-entries/${enc(entry)}/adopt`, {
+  adoptMcpEntry: (uid: string, entry: string, body: AdoptMcpEntryBody) =>
+    call<AdoptedResource>(`/agents/${enc(uid)}/mcp-entries/${enc(entry)}/adopt`, {
       method: "POST",
       body,
     }),
@@ -170,33 +184,33 @@ export const agentsApi = {
   // Plugins (spec agent-registry, workspace amendment). Enable/disable
   // writes the agent's documented config surface; uninstall drops the entry
   // (Codex) or delegates to the agent's own CLI (Claude Code).
-  plugins: (name: string) => call<PluginsResponse>(`/agents/${enc(name)}/plugins`),
-  togglePlugin: (name: string, id: string, enabled: boolean) =>
-    call<void>(`/agents/${enc(name)}/plugins/${enc(id)}`, { method: "PATCH", body: { enabled } }),
-  uninstallPlugin: (name: string, id: string) =>
-    call<void>(`/agents/${enc(name)}/plugins/${enc(id)}`, { method: "DELETE" }),
+  plugins: (uid: string) => call<PluginsResponse>(`/agents/${enc(uid)}/plugins`),
+  togglePlugin: (uid: string, id: string, enabled: boolean) =>
+    call<void>(`/agents/${enc(uid)}/plugins/${enc(id)}`, { method: "PATCH", body: { enabled } }),
+  uninstallPlugin: (uid: string, id: string) =>
+    call<void>(`/agents/${enc(uid)}/plugins/${enc(id)}`, { method: "DELETE" }),
 
   // Config-file child (per-file inside a directory-backed config key).
-  readConfigChild: (name: string, key: string, relpath: string) =>
+  readConfigChild: (uid: string, key: string, relpath: string) =>
     call<ConfigFileContent>(
-      `/agents/${enc(name)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
+      `/agents/${enc(uid)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
     ),
-  writeConfigChild: (name: string, key: string, relpath: string, body: ConfigFileWrite) =>
+  writeConfigChild: (uid: string, key: string, relpath: string, body: ConfigFileWrite) =>
     call<ConfigFileInfo>(
-      `/agents/${enc(name)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
+      `/agents/${enc(uid)}/config-files/${enc(key)}/files/${childPath(relpath)}`,
       { method: "PUT", body },
     ),
 
   // Unmanaged skills (specs agent-registry/005 workspace amendment)
-  unmanagedSkills: (name: string) =>
-    call<UnmanagedSkillsResponse>(`/agents/${enc(name)}/unmanaged-skills`),
-  adoptUnmanagedSkill: (name: string, skill: string, location: string) =>
-    call<{ name: string }>(`/agents/${enc(name)}/unmanaged-skills/${enc(skill)}/adopt`, {
+  unmanagedSkills: (uid: string) =>
+    call<UnmanagedSkillsResponse>(`/agents/${enc(uid)}/unmanaged-skills`),
+  adoptUnmanagedSkill: (uid: string, skill: string, location: string) =>
+    call<SkillRefOut>(`/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}/adopt`, {
       method: "POST",
       body: { location },
     }),
-  deleteUnmanagedSkill: (name: string, skill: string, location: string) =>
-    call<void>(`/agents/${enc(name)}/unmanaged-skills/${enc(skill)}?location=${enc(location)}`, {
+  deleteUnmanagedSkill: (uid: string, skill: string, location: string) =>
+    call<void>(`/agents/${enc(uid)}/unmanaged-skills/${enc(skill)}?location=${enc(location)}`, {
       method: "DELETE",
     }),
 };

@@ -22,7 +22,7 @@ import { useRemoveSkill, useSkill } from "@/lib/hooks/useSkills";
 
 export function SkillDetailPage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const navigate = useNavigate();
   // When navigated here from an agent's Skills tab, location.state carries a
   // return target, so "← back" leads to that agent rather than the list.
@@ -32,7 +32,7 @@ export function SkillDetailPage() {
     : { to: "/skills", label: t("skills.detail.back") };
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "overview";
-  const { data: skill, isPending, error } = useSkill(name);
+  const { data: skill, isPending, error } = useSkill(uid);
   const remove = useRemoveSkill();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -82,7 +82,7 @@ export function SkillDetailPage() {
         title={skill.name}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ScopeControl kind="skill" name={skill.name} enabled={skill.enabled} />
+            <ScopeControl kind="skill" uid={skill.uid} enabled={skill.enabled} />
             <Button
               variant="outline"
               size="sm"
@@ -106,7 +106,7 @@ export function SkillDetailPage() {
         </TabsContent>
 
         <TabsContent value="files" className="pt-6">
-          <SkillFileTree name={skill.name} />
+          <SkillFileTree uid={skill.uid} />
         </TabsContent>
       </Tabs>
 
@@ -119,7 +119,7 @@ export function SkillDetailPage() {
         pending={remove.isPending}
         onConfirm={() =>
           // Close only on success; the hook toasts a failure.
-          remove.mutate(skill.name, {
+          remove.mutate(skill.uid, {
             onSuccess: () => {
               setDeleteOpen(false);
               navigate("/skills");

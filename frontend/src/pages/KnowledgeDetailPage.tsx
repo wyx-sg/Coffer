@@ -50,8 +50,17 @@ import { isKnowledgeLane, uploadFolderOf, type KnowledgeLane as Lane } from "@/l
 
 export function KnowledgeDetailPage() {
   const { t } = useTranslation();
-  const collection = useParams<{ name: string }>().name ?? "";
+  const uid = useParams<{ uid: string }>().uid ?? "";
   const [params, setParams] = useSearchParams();
+
+  // `enabled` is a generic Resource field, not on /knowledge/collections, so
+  // the control's required prop comes from the single-resource read — and it is
+  // the only reach state this kind has. The same read supplies the collection's
+  // NAME, which is what the file routes below need: a `path` names a place on
+  // disk, and a collection's directory is named after it. So this page holds
+  // both — the uid it is addressed by, and the name its trees are built from.
+  const resource = useResource(uid);
+  const collection = resource.data?.name ?? "";
 
   const tab = params.get("tab");
   const lane: Lane = isKnowledgeLane(tab) ? tab : "sources";
@@ -87,11 +96,6 @@ export function KnowledgeDetailPage() {
   // source.
   const uploadFolder = uploadFolderOf(collection, selected);
 
-  // `enabled` is a generic Resource field, not on /knowledge/collections, so
-  // the control's required prop comes from the single-resource read — and it is
-  // the only reach state this kind has.
-  const resource = useResource("knowledge", collection);
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -101,12 +105,8 @@ export function KnowledgeDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             {/* Passing no `scope` is what lets the control ask the server —
                 which is where the "no per-agent reach" answer comes from. */}
-            <ScopeControl
-              kind="knowledge"
-              name={collection}
-              enabled={resource.data?.enabled ?? true}
-            />
-            <KnowledgeCurateButton collection={collection} />
+            <ScopeControl kind="knowledge" uid={uid} enabled={resource.data?.enabled ?? true} />
+            <KnowledgeCurateButton collectionUid={uid} collectionName={collection} />
             <KnowledgeUploadButton collection={collection} folder={uploadFolder} />
           </div>
         }

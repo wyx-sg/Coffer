@@ -82,12 +82,12 @@ export function useKnowledgeFile(path: string | null) {
  * reads it off `mutation.error` and says a pass is already running in place,
  * where the click was, instead of the page saying it twice.
  */
-export function useCurateCollection(collection: string) {
+export function useCurateCollection(collectionUid: string) {
   const qc = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (source?: string | null) => curateCollection(collection, source),
+    mutationFn: (source?: string | null) => curateCollection(collectionUid, source),
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
       toast.success(t(`knowledge.detail.curateStatus.${result.status}`));
@@ -137,6 +137,8 @@ export function useUploadKnowledgeFile() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
+    // `collection` is the collection's NAME here, not its uid: an upload lands
+    // a file in a directory, and the directory is named after the collection.
     mutationFn: (vars: { collection: string; folder?: string | null; file: File }) =>
       uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),

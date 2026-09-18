@@ -9,7 +9,9 @@
 // they had already navigated past.
 //
 // Because the agent is fixed by the page, there is no picker here: the query
-// is `GET /memory/delivery?agent=<name>`, which answers for that one agent.
+// is `GET /memory/delivery?agent_uid=<uid>`, which answers for that one agent.
+// Each row carries the agent's name beside its uid, so the confirmation can
+// name the agent while every request is addressed to the uid.
 //
 // This card answers one question — is the hook written into that agent's
 // settings or not. Whether it has actually fired is a stream of events, not a
@@ -38,7 +40,7 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
   return (
     <div
       className="flex flex-wrap items-center justify-between gap-3"
-      data-testid={`memory-delivery-${status.agent}`}
+      data-testid={`memory-delivery-${status.agent_name}`}
     >
       <div className="min-w-0 space-y-1">
         <div className="flex items-center gap-2">
@@ -78,7 +80,7 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
           size="sm"
           className="shrink-0"
           disabled={busy}
-          onClick={() => install.mutate(status.agent)}
+          onClick={() => install.mutate(status.agent_uid)}
         >
           {t("memory.delivery.install")}
         </Button>
@@ -88,22 +90,22 @@ function DeliveryState({ status }: { status: DeliveryStatusOut }) {
         open={confirmingRemove}
         onOpenChange={setConfirmingRemove}
         title={t("memory.delivery.removeConfirmTitle")}
-        description={t("memory.delivery.removeConfirmDescription", { agent: status.agent })}
+        description={t("memory.delivery.removeConfirmDescription", { agent: status.agent_name })}
         confirmLabel={t("memory.delivery.remove")}
         variant="default"
         pending={remove.isPending}
         onConfirm={() => {
           setConfirmingRemove(false);
-          remove.mutate(status.agent);
+          remove.mutate(status.agent_uid);
         }}
       />
     </div>
   );
 }
 
-export function AgentMemoryDelivery({ agentName }: { agentName: string }) {
+export function AgentMemoryDelivery({ agentUid }: { agentUid: string }) {
   const { t } = useTranslation();
-  const { data, isPending, error } = useMemoryDelivery(agentName);
+  const { data, isPending, error } = useMemoryDelivery(agentUid);
   // The by-agent query answers for exactly one agent; anything else is the
   // daemon disagreeing with its own contract, and is treated as "no state".
   const status = data?.[0];

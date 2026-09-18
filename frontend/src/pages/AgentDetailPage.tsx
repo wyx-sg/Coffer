@@ -43,10 +43,10 @@ const DEFAULT_TAB = "overview";
 
 export function AgentDetailPage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: agent, isPending, error, refetch } = useAgent(name);
+  const { data: agent, isPending, error, refetch } = useAgent(uid);
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [configDirty, setConfigDirty] = useState(false);
@@ -108,7 +108,7 @@ export function AgentDetailPage() {
         subtitle={agent.description ?? undefined}
         actions={
           <div className="flex items-center gap-2">
-            <AgentMcpButton name={name} />
+            <AgentMcpButton uid={uid} />
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               <Pencil className="mr-1.5 size-3.5" /> {t("agents.edit")}
             </Button>
@@ -152,7 +152,7 @@ export function AgentDetailPage() {
           <AgentSkillsTab agent={agent} />
         </TabsContent>
         <TabsContent value="mcpServers" className="pt-6">
-          <AgentMcpServersTab agentName={name} />
+          <AgentMcpServersTab agent={agent} />
         </TabsContent>
         <TabsContent value="plugins" className="pt-6">
           <AgentPluginsTab agent={agent} />
@@ -161,10 +161,10 @@ export function AgentDetailPage() {
           <AgentMemoryTab agent={agent} />
         </TabsContent>
         <TabsContent value="conversations" className="pt-6">
-          <AgentConversationsTab name={name} />
+          <AgentConversationsTab uid={uid} />
         </TabsContent>
         <TabsContent value="config" className="pt-6">
-          <AgentConfigFilesEditor name={name} onDirtyChange={setConfigDirty} />
+          <AgentConfigFilesEditor uid={uid} onDirtyChange={setConfigDirty} />
         </TabsContent>
       </Tabs>
 
@@ -182,7 +182,8 @@ export function AgentDetailPage() {
       />
 
       <AgentDeleteDialog
-        name={name}
+        uid={uid}
+        name={agent.name}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onDeleted={() => navigate("/agents")}

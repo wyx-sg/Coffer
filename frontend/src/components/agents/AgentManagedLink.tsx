@@ -48,12 +48,12 @@ export function ManagedLinkRow({ title, hint, buttonLabel, onOpen }: ManagedLink
  * Coffer MCP is installed: until it is, the surface is unreachable, so the row
  * shows the "not installed" note instead of the link. */
 export function CofferGatewayRow({
-  agentName,
+  agentUid,
   notInstalledHint,
   ...link
-}: ManagedLinkProps & { agentName: string; notInstalledHint: string }) {
+}: ManagedLinkProps & { agentUid: string; notInstalledHint: string }) {
   const { t } = useTranslation();
-  const status = useAgentMcpStatus(agentName);
+  const status = useAgentMcpStatus(agentUid);
   const installed = status.data?.installed ?? false;
 
   if (installed) {
@@ -72,7 +72,7 @@ export function CofferGatewayRow({
 /** A CofferGatewayRow in its own Card — used standalone (e.g. the gateway-MCP
  * section), where it isn't sharing a box with sibling rows. */
 export function CofferGatewayCard(
-  props: ManagedLinkProps & { agentName: string; notInstalledHint: string },
+  props: ManagedLinkProps & { agentUid: string; notInstalledHint: string },
 ) {
   return (
     <Card className="p-4">

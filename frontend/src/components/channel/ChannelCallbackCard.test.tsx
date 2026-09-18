@@ -1,4 +1,11 @@
 // ChannelCallbackCard: composed public callback URL display + reachability test.
+//
+// The card takes the channel's `uid` and nothing else about its identity: it
+// renders no name, and the one request it makes (`POST /channels/{uid}/
+// callback-test`) is addressed by uid like every other resource route. The
+// fixture's uid is spelled nothing like the channel's name for that reason —
+// the callback path below still says "st", and an assertion that could be
+// satisfied by either string would prove neither.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
@@ -14,6 +21,9 @@ const { testChannelCallback } = await import("@/lib/api/channels");
 const testMock = vi.mocked(testChannelCallback);
 
 afterEach(() => vi.clearAllMocks());
+
+/** The channel this card is about — an opaque id, not the label "st". */
+const UID = "u-71b4ec08";
 
 const withUrl: CallbackInfo = {
   delivery: "webhook",
@@ -59,23 +69,23 @@ const websocket: CallbackInfo = {
 };
 
 test("shows the composed public callback URL with a copy button", () => {
-  render(<ChannelCallbackCard name="st" callback={withUrl} />);
+  render(<ChannelCallbackCard uid={UID} callback={withUrl} />);
   expect(screen.getByText("https://x.trycloudflare.com/seatalk/st")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /copy|复制/i })).toBeInTheDocument();
 });
 
 test("without a base URL, shows no public URL / copy button", () => {
-  render(<ChannelCallbackCard name="st" callback={withoutUrl} />);
+  render(<ChannelCallbackCard uid={UID} callback={withoutUrl} />);
   expect(screen.queryByText(/^https:\/\//)).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /copy|复制/i })).not.toBeInTheDocument();
 });
 
 test("shows the managed-tunnel row only when a tunnel is managed", () => {
-  const { rerender } = render(<ChannelCallbackCard name="st" callback={withUrl} />);
+  const { rerender } = render(<ChannelCallbackCard uid={UID} callback={withUrl} />);
   expect(screen.queryByText(/^Tunnel$|^隧道$/)).not.toBeInTheDocument();
   rerender(
     <ChannelCallbackCard
-      name="st"
+      uid={UID}
       callback={{ ...withUrl, tunnel_managed: true, tunnel_running: true }}
     />,
   );
@@ -84,7 +94,7 @@ test("shows the managed-tunnel row only when a tunnel is managed", () => {
 
 describe("websocket delivery", () => {
   test("shows the connection state instead of the callback URL and its rows", () => {
-    render(<ChannelCallbackCard name="st" callback={websocket} />);
+    render(<ChannelCallbackCard uid={UID} callback={websocket} />);
 
     expect(screen.getByText(/^Connected$/)).toBeInTheDocument();
     // No URL to register, nothing to probe, no listener or tunnel to report.
@@ -98,7 +108,7 @@ describe("websocket delivery", () => {
   test("a kicked connection reads as another process holding it, with the error text", () => {
     render(
       <ChannelCallbackCard
-        name="st"
+        uid={UID}
         callback={{
           ...websocket,
           websocket_state: "kicked",
@@ -113,7 +123,7 @@ describe("websocket delivery", () => {
 
   test("a missing SDK reads as a missing SDK, not as a generic failure", () => {
     render(
-      <ChannelCallbackCard name="st" callback={{ ...websocket, websocket_state: "sdk_missing" }} />,
+      <ChannelCallbackCard uid={UID} callback={{ ...websocket, websocket_state: "sdk_missing" }} />,
     );
 
     expect(screen.getByText(/SDK not found/i)).toBeInTheDocument();
@@ -123,11 +133,11 @@ describe("websocket delivery", () => {
 describe("reachability test button", () => {
   test("calls the endpoint and renders the result detail", async () => {
     testMock.mockResolvedValue({ ok: true, detail: "reachable — verified" });
-    render(<ChannelCallbackCard name="st" callback={withUrl} />);
+    render(<ChannelCallbackCard uid={UID} callback={withUrl} />);
 
     fireEvent.click(screen.getByRole("button", { name: /test|测试/i }));
 
-    await waitFor(() => expect(testMock).toHaveBeenCalledWith("st"));
+    await waitFor(() => expect(testMock).toHaveBeenCalledWith(UID));
     expect(await screen.findByText(/reachable — verified/)).toBeInTheDocument();
   });
 });

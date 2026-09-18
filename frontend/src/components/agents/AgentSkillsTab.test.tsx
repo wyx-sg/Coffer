@@ -12,6 +12,10 @@
 //     foreign-link badges and invalid reasons, adopt (disabled w/ hint when
 //     invalid or foreign), open-folder and delete-with-confirm actions
 //   - en/zh key parity for agents.skillsTab
+//
+// The unmanaged-skill routes are addressed by the agent's `uid`, so the fixture
+// agent's uid (`u-cc`) is deliberately not its name (`cc`) and every API
+// assertion below spells the uid.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -53,6 +57,7 @@ const { fsApi } = await import("@/lib/api/fs");
 const fs = vi.mocked(fsApi);
 
 const AGENT: AgentOut = {
+  uid: "u-cc",
   name: "cc",
   type: "claude_code",
   config_dir: "/x",
@@ -90,7 +95,7 @@ const UNMANAGED_FOREIGN: UnmanagedSkillOut = {
 
 function stub(unmanaged: UnmanagedSkillOut[] = []) {
   api.unmanagedSkills.mockResolvedValue({ items: unmanaged });
-  api.adoptUnmanagedSkill.mockResolvedValue({ name: "good" });
+  api.adoptUnmanagedSkill.mockResolvedValue({ uid: "u-good", name: "good" });
   api.deleteUnmanagedSkill.mockResolvedValue(undefined);
   fs.open.mockResolvedValue(undefined);
 }
@@ -122,7 +127,7 @@ describe("AgentSkillsTab", () => {
     // The read-only table (and its search box) is retired: it decided nothing
     // and duplicated the Skills page this tab already links to. With the
     // unmanaged section empty too, the tab carries no table at all.
-    await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("cc"));
+    await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("u-cc"));
     expect(screen.queryByPlaceholderText(en.skills.searchPlaceholder)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
@@ -161,7 +166,7 @@ describe("AgentSkillsTab", () => {
       renderTab();
 
       // Let the unmanaged query settle, then assert absence.
-      await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("cc"));
+      await waitFor(() => expect(api.unmanagedSkills).toHaveBeenCalledWith("u-cc"));
       expect(screen.queryByTestId("unmanaged-skills")).not.toBeInTheDocument();
     });
 
@@ -233,14 +238,14 @@ describe("AgentSkillsTab", () => {
       expect(await screen.findByText(en.agents.skillsTab.openFolderFailed)).toBeInTheDocument();
     });
 
-    test("adopt calls the API with the skill name and location", async () => {
+    test("adopt calls the API with the agent uid, skill name and location", async () => {
       stub([UNMANAGED_GOOD]);
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
       fireEvent.click(within(section).getByRole("button", { name: en.agents.skillsTab.adopt }));
       await waitFor(() =>
-        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("cc", "good", "skills"),
+        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "good", "skills"),
       );
     });
 
@@ -257,7 +262,7 @@ describe("AgentSkillsTab", () => {
 
       fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));
       await waitFor(() =>
-        expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("cc", "linked", "agents_dir"),
+        expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "linked", "agents_dir"),
       );
     });
 
@@ -272,7 +277,7 @@ describe("AgentSkillsTab", () => {
       fireEvent.click(within(bar).getByRole("button", { name: en.agents.skillsTab.adopt }));
 
       await waitFor(() =>
-        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("cc", "good", "skills"),
+        expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "good", "skills"),
       );
       // The foreign-link row is never adopted, so exactly one call fires.
       expect(api.adoptUnmanagedSkill).toHaveBeenCalledTimes(1);
@@ -292,9 +297,9 @@ describe("AgentSkillsTab", () => {
       fireEvent.click(within(dialog).getByRole("button", { name: en.common.delete }));
 
       await waitFor(() =>
-        expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("cc", "good", "skills"),
+        expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "good", "skills"),
       );
-      expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("cc", "linked", "agents_dir");
+      expect(api.deleteUnmanagedSkill).toHaveBeenCalledWith("u-cc", "linked", "agents_dir");
       expect(api.deleteUnmanagedSkill).toHaveBeenCalledTimes(2);
     });
   });

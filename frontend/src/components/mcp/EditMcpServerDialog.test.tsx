@@ -14,8 +14,12 @@ const getApiClientMock = vi.mocked(getApiClient);
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 
+// The uid is identity, the name is the label. They are deliberately different
+// strings here: the PATCH is addressed to the uid while the credential refs the
+// save mints still spell the NAME, and only distinct values can tell the two
+// apart.
 const stdioResource: ResourceOut = {
-  ref: "mcp_server:gh",
+  uid: "u-github",
   kind: "mcp_server",
   name: "gh",
   description: "GitHub MCP",
@@ -32,7 +36,7 @@ const stdioResource: ResourceOut = {
 };
 
 const noCredsResource: ResourceOut = {
-  ref: "mcp_server:fs",
+  uid: "u-filesystem",
   kind: "mcp_server",
   name: "fs",
   description: "Filesystem MCP",
@@ -254,6 +258,40 @@ describe("EditMcpServerDialog", () => {
     };
     expect(body.config.transport.credential_refs).toEqual({
       GITHUB_TOKEN: "gh.GITHUB_TOKEN",
+    });
+  });
+
+  test("PATCHes /resources/{uid} while the credential refs it mints spell the NAME", async () => {
+    // The two halves of the identity split meet in this one save: the request
+    // is routed by the uid (so it keeps resolving after a rename), and the ref
+    // written into the credential store keeps the `<name>.` spelling every
+    // already-stored ref uses — this dialog holds no plaintext to migrate them
+    // with, which is also why it offers no rename.
+    const patchMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
+    const postMock = vi.fn().mockResolvedValue({ data: {}, error: undefined });
+    getApiClientMock.mockReturnValue({
+      PATCH: patchMock,
+      POST: postMock,
+      DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap(<EditMcpServerDialog resource={stdioResource} />));
+    openDialog();
+
+    const passwordInputs = screen.getAllByPlaceholderText(/Leave blank to keep/i);
+    fireEvent.change(passwordInputs[0], { target: { value: "rotated" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(patchMock).toHaveBeenCalled());
+
+    // No kind segment: a uid already names exactly one row.
+    expect(patchMock).toHaveBeenCalledWith(
+      "/resources/{uid}",
+      expect.objectContaining({ params: { path: { uid: "u-github" } } }),
+    );
+    expect(postMock.mock.calls.find((c) => c[0] === "/credentials")?.[1].body).toEqual({
+      ref: "gh.GITHUB_TOKEN",
+      value: "rotated",
     });
   });
 });

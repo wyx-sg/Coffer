@@ -45,11 +45,12 @@ function TimeCell({ value }: { value: string | null }) {
 }
 
 interface Props {
-  /** Agent name — used as the route param for transcript queries. */
-  name: string;
+  /** The agent's uid — the route param every transcript query is addressed
+   *  by, and what this tab's own sub-page links are built from. */
+  uid: string;
 }
 
-export function AgentConversationsTab({ name }: Props) {
+export function AgentConversationsTab({ uid }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -61,7 +62,7 @@ export function AgentConversationsTab({ name }: Props) {
 
   const debouncedSearch = useDebouncedValue(search);
 
-  const { data, isPending, error } = useAgentTranscripts(name, {
+  const { data, isPending, error } = useAgentTranscripts(uid, {
     q: debouncedSearch.trim() || undefined,
     sort,
     order,
@@ -172,7 +173,7 @@ export function AgentConversationsTab({ name }: Props) {
           // page keyed by session_id would sometimes open the wrong one.
           onRowClick={(s) =>
             navigate(
-              `/agents/${encodeURIComponent(name)}/conversations?${new URLSearchParams({
+              `/agents/${encodeURIComponent(uid)}/conversations?${new URLSearchParams({
                 path: s.source_path,
               })}`,
             )

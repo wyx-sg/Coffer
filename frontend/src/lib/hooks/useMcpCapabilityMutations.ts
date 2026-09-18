@@ -9,7 +9,7 @@ import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 export type CapabilityType = "tool" | "resource" | "prompt";
 
 interface ToggleInput {
-  serverName: string;
+  serverUid: string;
   capabilityType: CapabilityType;
   capabilityKey: string;
 }
@@ -21,13 +21,13 @@ interface ToggleInput {
  */
 export const capabilitiesApi = {
   setEnabled: async (op: "enable" | "disable", input: ToggleInput): Promise<void> => {
-    const { serverName, capabilityType, capabilityKey } = input;
+    const { serverUid, capabilityType, capabilityKey } = input;
     const { error } = await getApiClient().POST(
-      `/resources/mcp_server/{name}/capabilities/{capability_type}/${op}` as
-        | "/resources/mcp_server/{name}/capabilities/{capability_type}/enable"
-        | "/resources/mcp_server/{name}/capabilities/{capability_type}/disable",
+      `/resources/mcp_server/{uid}/capabilities/{capability_type}/${op}` as
+        | "/resources/mcp_server/{uid}/capabilities/{capability_type}/enable"
+        | "/resources/mcp_server/{uid}/capabilities/{capability_type}/disable",
       {
-        params: { path: { name: serverName, capability_type: capabilityType } },
+        params: { path: { uid: serverUid, capability_type: capabilityType } },
         body: { capability_key: capabilityKey },
       },
     );
@@ -42,7 +42,7 @@ export function useEnableCapability() {
   return useMutation({
     mutationFn: (input: ToggleInput) => capabilitiesApi.setEnabled("enable", input),
     onSuccess: (_data, vars) => {
-      void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(vars.serverName) });
+      void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(vars.serverUid) });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });
@@ -55,7 +55,7 @@ export function useDisableCapability() {
   return useMutation({
     mutationFn: (input: ToggleInput) => capabilitiesApi.setEnabled("disable", input),
     onSuccess: (_data, vars) => {
-      void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(vars.serverName) });
+      void qc.invalidateQueries({ queryKey: mcpCapabilitiesKey(vars.serverUid) });
     },
     onError: (error) => toast.error(translateApiError(t, error)),
   });

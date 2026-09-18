@@ -29,6 +29,10 @@ const treeMock = vi.mocked(usePartitionFiles);
 const contentMock = vi.mocked(usePartitionFileContent);
 
 const BASE = "/Users/dev/.coffer/memory/coffer";
+// The partition's own identity — what `/memory/partitions/{uid}/files…` takes.
+// Its folder is still called "coffer", which is why the tree's ROOT node below
+// is named that and this constant is not.
+const PARTITION_UID = "mp-be27";
 
 function file(name: string, path: string): MemoryFileNode {
   return {
@@ -108,7 +112,7 @@ function stubContent(data: Partial<MemoryFileContentOut>) {
 function renderTree() {
   return render(
     <TooltipProvider>
-      <MemoryFileTree name="coffer" />
+      <MemoryFileTree uid={PARTITION_UID} />
     </TooltipProvider>,
   );
 }
@@ -135,7 +139,7 @@ describe("MemoryFileTree", () => {
     renderTree();
     fireEvent.click(screen.getByRole("button", { name: /worktree-development\.md/ }));
 
-    expect(contentMock).toHaveBeenCalledWith("coffer", "notes/worktree-development.md");
+    expect(contentMock).toHaveBeenCalledWith(PARTITION_UID, "notes/worktree-development.md");
     expect(screen.getByRole("heading", { name: "Worktrees" })).toBeInTheDocument();
     // FileActions offers real open/reveal on both surfaces (daemon-backed on web).
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
@@ -165,7 +169,7 @@ describe("MemoryFileTree", () => {
     fireEvent.click(screen.getByRole("button", { name: /\.raw/ }));
     fireEvent.click(screen.getByRole("button", { name: /3f2a91c4de55b071\.md/ }));
 
-    expect(contentMock).toHaveBeenCalledWith("coffer", ".raw/3f2a91c4de55b071.md");
+    expect(contentMock).toHaveBeenCalledWith(PARTITION_UID, ".raw/3f2a91c4de55b071.md");
     const notice = screen.getByTestId("memory-derived-notice");
     expect(notice).toHaveTextContent(/derived input/i);
     expect(notice).toHaveTextContent(/not Coffer's own writing/i);

@@ -32,14 +32,17 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+// The reach merge is keyed on the UID both lists carry, not on the name: keyed
+// on the name it would depend on the two reads happening at the same instant,
+// and a rename between them would report every row as enabled.
 vi.mock("@/lib/hooks/useResources", () => ({
   useKindReach: vi.fn(
     () =>
       new Map([
-        ["shopee", { enabled: true, scope: null }],
+        ["kn-8c1f", { enabled: true, scope: null }],
         // A scope left over from when the kind was scoped. The table must not
         // report it: with no scope declared, `enabled` is the whole answer.
-        ["personal", { enabled: false, scope: { agents: ["claude"], machines: null } }],
+        ["kn-3e70", { enabled: false, scope: { agents: ["u-claude"], machines: null } }],
       ]),
   ),
 }));
@@ -48,7 +51,7 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "claude" }] })),
+  useAgents: vi.fn(() => ({ data: [{ uid: "u-claude", name: "claude" }] })),
 }));
 const deleteMutate = vi.fn();
 const disableMutate = vi.fn();
@@ -71,9 +74,18 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
+// A collection carries both identities: the uid the row links to and the reach
+// merge is keyed on, and the name the cell prints — which is ALSO the
+// collection's directory name, and so what the file routes take.
 const ITEMS: CollectionOut[] = [
-  { name: "shopee", description: "internal notes", source_count: 23, topic_count: 9 },
-  { name: "personal", description: null, source_count: 4, topic_count: 0 },
+  {
+    uid: "kn-8c1f",
+    name: "shopee",
+    description: "internal notes",
+    source_count: 23,
+    topic_count: 9,
+  },
+  { uid: "kn-3e70", name: "personal", description: null, source_count: 4, topic_count: 0 },
 ];
 
 const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
@@ -127,7 +139,7 @@ describe("KnowledgeTable", () => {
     fireEvent.click(reachIn("shopee"));
     fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
 
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "knowledge", name: "shopee" });
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "knowledge", uid: "kn-8c1f" });
   });
 
   test("the column and its filter are headed Status, not Reach", () => {

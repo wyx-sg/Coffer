@@ -2,6 +2,10 @@
 //
 // TanStack Query binding for the read-only agent transcript list.
 // Stubs globalThis.fetch directly because the api module uses plain fetch.
+//
+// The agent is addressed by its `uid` here — both in the request path and in
+// the query key — so the fixture uid (`u-claude`) is deliberately not the
+// agent's label (`claude`).
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
@@ -41,13 +45,13 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("agentTranscriptsKey", () => {
   test("returns the expected hierarchical query key", () => {
-    expect(agentTranscriptsKey("claude")).toEqual(["agents", "claude", "conversations"]);
+    expect(agentTranscriptsKey("u-claude")).toEqual(["agents", "u-claude", "conversations"]);
   });
 
   test("extends the key with the params so each page caches independently", () => {
-    expect(agentTranscriptsKey("claude", { limit: 10, offset: 10 })).toEqual([
+    expect(agentTranscriptsKey("u-claude", { limit: 10, offset: 10 })).toEqual([
       "agents",
-      "claude",
+      "u-claude",
       "conversations",
       { limit: 10, offset: 10 },
     ]);
@@ -55,7 +59,7 @@ describe("agentTranscriptsKey", () => {
 });
 
 describe("useAgentTranscripts", () => {
-  test("fetches sessions from GET /api/v1/agents/{name}/transcripts", async () => {
+  test("fetches sessions from GET /api/v1/agents/{uid}/transcripts", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -63,7 +67,7 @@ describe("useAgentTranscripts", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useAgentTranscripts("claude"), {
+    const { result } = renderHook(() => useAgentTranscripts("u-claude"), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -75,7 +79,7 @@ describe("useAgentTranscripts", () => {
     // it (a doubled /api/v1/api/v1 hits no route → 404 NOT_FOUND).
     expect(url).not.toContain("/api/v1/api/v1");
     // Listing is paged (most-recent first) — the request carries limit/offset.
-    expect(url).toMatch(/\/api\/v1\/agents\/claude\/transcripts\?limit=\d+&offset=\d+$/);
+    expect(url).toMatch(/\/api\/v1\/agents\/u-claude\/transcripts\?limit=\d+&offset=\d+$/);
   });
 
   test("forwards search, sort and order as query params", async () => {
@@ -86,7 +90,7 @@ describe("useAgentTranscripts", () => {
 
     const { result } = renderHook(
       () =>
-        useAgentTranscripts("claude", {
+        useAgentTranscripts("u-claude", {
           limit: 10,
           offset: 20,
           q: "alpha",
@@ -104,7 +108,7 @@ describe("useAgentTranscripts", () => {
     expect(url).toContain("order=asc");
   });
 
-  test("is disabled when name is empty", () => {
+  test("is disabled when the uid is empty", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useAgentTranscripts(""), { wrapper: wrapper() });
@@ -117,7 +121,7 @@ describe("useAgentTranscripts", () => {
       "fetch",
       vi.fn().mockResolvedValue(jsonResponse(500, { error: { code: "ERR", message: "boom" } })),
     );
-    const { result } = renderHook(() => useAgentTranscripts("claude"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useAgentTranscripts("u-claude"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect((result.current.error as Error).message).toContain("boom");
   });

@@ -24,13 +24,13 @@
 // that is set. ReachControl's panel tells the user so; this file is why there
 // is one place to tell them.
 //
-// Data: GET/PUT /resources/{kind}/{name}/scope (useResourceScope /
+// Data: GET/PUT /resources/{uid}/scope (useResourceScope /
 // useUpdateResourceScope) plus POST .../enable|disable
 // (useEnableResource/useDisableResource). `useAgents()` supplies the vocabulary
 // the "inactive here" verdict is judged against — the agents registered on this
 // machine, which is the only "here" there is.
 //
-// The scope value names agents:
+// The scope value names agents by UID:
 //   null              → active for every agent
 //   {agents: [...]}   → only those agents
 //   {agents: []}      → dormant (it matches nobody)
@@ -91,8 +91,12 @@ import {
 import { isDormantHere, sameScope } from "@/lib/scope";
 
 interface Props {
+  /** Which kind this resource is. Not part of any request — the routes take the
+   *  uid alone — but it decides which of the per-kind list keys a write
+   *  refreshes, and whether the kind declares a scope at all. */
   kind: string;
-  name: string;
+  /** The resource this control is about. */
+  uid: string;
   enabled: boolean;
   /** Pre-fetched scope from a list payload (`null` = everywhere). Omit it to
    *  let the control fetch its own; `undefined` is "not supplied", never a
@@ -107,14 +111,14 @@ interface Props {
 
 export function ScopeControl({
   kind,
-  name,
+  uid,
   enabled,
   scope: presetScope,
   supportsScope: kindSupportsScope = true,
 }: Props) {
   const { t } = useTranslation();
   const prefetched = presetScope !== undefined;
-  const { data: fetchedScope } = useResourceScope(kind, name, !prefetched);
+  const { data: fetchedScope } = useResourceScope(uid, !prefetched);
   const scopeData: ResourceScope | undefined = prefetched
     ? {
         // No scope declared means no scope to report, whatever the row still
@@ -124,7 +128,7 @@ export function ScopeControl({
       }
     : fetchedScope;
   const { data: agentsData } = useAgents();
-  const update = useUpdateResourceScope(kind, name);
+  const update = useUpdateResourceScope(kind, uid);
   const enable = useEnableResource();
   const disable = useDisableResource();
 
@@ -137,7 +141,7 @@ export function ScopeControl({
   const mode: ReachMode = reachModeOf({ enabled, scope });
 
   const enableIfNeeded = () => {
-    if (!enabled) enable.mutate({ kind, name });
+    if (!enabled) enable.mutate({ kind, uid });
   };
 
   const commitScope = (staged: Scope) => {
@@ -171,7 +175,7 @@ export function ScopeControl({
     mode !== "disabled" &&
     isDormantHere(
       scope,
-      (agentsData ?? []).map((a) => a.name),
+      (agentsData ?? []).map((a) => a.uid),
     )
       ? t("scope.inactiveHereAgent")
       : undefined;
@@ -183,7 +187,7 @@ export function ScopeControl({
       busy={busy}
       initialScope={scope}
       note={note}
-      onDisabled={() => disable.mutate({ kind, name })}
+      onDisabled={() => disable.mutate({ kind, uid })}
       onEverywhere={() => {
         enableIfNeeded();
         if (scope !== null) update.mutate(null);

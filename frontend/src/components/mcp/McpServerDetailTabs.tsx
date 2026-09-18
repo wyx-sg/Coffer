@@ -13,7 +13,7 @@ import type { components } from "@/lib/api/types";
 type CapabilityListOut = components["schemas"]["CapabilityListOut"];
 
 interface Props {
-  serverName: string;
+  serverUid: string;
   capabilities: CapabilityListOut | undefined;
   capsError?: unknown;
   config: unknown;
@@ -45,7 +45,7 @@ function extractOverview(config: unknown): OverviewFields {
 }
 
 export function McpServerDetailTabs({
-  serverName,
+  serverUid,
   capabilities,
   capsError,
   config,
@@ -144,7 +144,7 @@ export function McpServerDetailTabs({
 
       <TabsContent value="tools" className="pt-6">
         <CapabilityList
-          serverName={serverName}
+          serverUid={serverUid}
           kind="tool"
           tools={capabilities?.tools}
           error={capsError}
@@ -152,7 +152,7 @@ export function McpServerDetailTabs({
       </TabsContent>
       <TabsContent value="resources" className="pt-6">
         <CapabilityList
-          serverName={serverName}
+          serverUid={serverUid}
           kind="resource"
           resources={capabilities?.resources}
           error={capsError}
@@ -160,14 +160,14 @@ export function McpServerDetailTabs({
       </TabsContent>
       <TabsContent value="prompts" className="pt-6">
         <CapabilityList
-          serverName={serverName}
+          serverUid={serverUid}
           kind="prompt"
           prompts={capabilities?.prompts}
           error={capsError}
         />
       </TabsContent>
       <TabsContent value="invocations" className="pt-6">
-        <InvocationsTable serverName={serverName} />
+        <InvocationsTable serverUid={serverUid} />
       </TabsContent>
     </Tabs>
   );

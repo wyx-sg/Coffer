@@ -21,20 +21,20 @@ interface RowDescriptor {
 }
 
 interface Props {
-  serverName: string;
+  serverUid: string;
   kind: CapabilityType;
   rows: RowDescriptor[];
   onDone: () => void;
 }
 
-export function CapabilityBulkActions({ serverName, kind, rows, onDone }: Props) {
+export function CapabilityBulkActions({ serverUid, kind, rows, onDone }: Props) {
   const { t } = useTranslation();
-  const bulk = useBulkMutate({ invalidate: [mcpCapabilitiesKey(serverName)] });
+  const bulk = useBulkMutate({ invalidate: [mcpCapabilitiesKey(serverUid)] });
 
   const runAll = async (op: "enable" | "disable") => {
     await bulk.run(rows, (row) =>
       capabilitiesApi.setEnabled(op, {
-        serverName,
+        serverUid,
         capabilityType: kind,
         capabilityKey: row.key,
       }),

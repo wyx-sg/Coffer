@@ -22,12 +22,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}": {
+    "/agents/{uid}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -67,12 +68,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/config-files": {
+    "/agents/{uid}/config-files": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -95,12 +97,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/config-files/{key}": {
+    "/agents/{uid}/config-files/{key}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Allowlisted config-file key (e.g. settings, global, instructions, config). */
                 key: string;
             };
@@ -138,12 +141,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/config-files/{key}/files/{relpath}": {
+    "/agents/{uid}/config-files/{key}/files/{relpath}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
                 /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
@@ -182,12 +186,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/mcp-entries": {
+    "/agents/{uid}/mcp-entries": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -209,12 +214,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/mcp-entries/{entry}": {
+    "/agents/{uid}/mcp-entries/{entry}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description MCP entry name as it appears in the agent's config file. */
                 entry: string;
             };
@@ -239,12 +245,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/mcp-entries/{entry}/adopt": {
+    "/agents/{uid}/mcp-entries/{entry}/adopt": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 entry: string;
             };
             cookie?: never;
@@ -271,12 +278,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/plugins": {
+    "/agents/{uid}/plugins": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -303,12 +311,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/plugins/{plugin_id}": {
+    "/agents/{uid}/plugins/{plugin_id}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
                 plugin_id: string;
             };
@@ -346,12 +355,13 @@ export interface paths {
         patch: operations["setAgentPluginEnabled"];
         trace?: never;
     };
-    "/agents/{name}/mcp-install": {
+    "/agents/{uid}/mcp-install": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -361,9 +371,17 @@ export interface paths {
         /**
          * Install Coffer's MCP server into this agent
          * @description Writes a `coffer` stdio MCP-server entry (command = absolute path to
-         *     coffer-mcp-shim) into the agent's MCP config file, atomically and with
-         *     a `.bak` backup. Idempotent — re-installing updates the entry in place.
-         *     Returns 422 if the coffer-mcp-shim binary cannot be resolved.
+         *     coffer-mcp-shim, argument `--agent-uid <uid>`) into the agent's MCP
+         *     config file, atomically and with a `.bak` backup. The shim reports
+         *     that uid on every call and the gateway matches it against each
+         *     resource's `scope.agents`, which is why the argument is the uid and
+         *     not the agent's name: this line is written once into a file Coffer
+         *     does not own and then read on every turn, so a label in it would stop
+         *     matching any scope the first time the user renamed the agent — and a
+         *     reference that resolves to nothing in an allow-list is the silent
+         *     widening this change exists to remove. Idempotent — re-installing
+         *     updates the entry in place. Returns 422 if the coffer-mcp-shim binary
+         *     cannot be resolved.
          */
         post: operations["installAgentMcp"];
         /**
@@ -376,12 +394,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/native-memory": {
+    "/agents/{uid}/native-memory": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -393,7 +412,7 @@ export interface paths {
          *     these: the agent detail page's Memory tab only opens or reveals the
          *     directory. Stores come back most populated first. An agent type with
          *     no native memory layout — and one whose projects directory is absent —
-         *     returns an empty list; an unknown agent name is 404.
+         *     returns an empty list; an unknown agent uid is 404.
          */
         get: operations["listAgentNativeMemory"];
         put?: never;
@@ -404,12 +423,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/transcripts": {
+    "/agents/{uid}/transcripts": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -435,12 +455,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/native-memory/files": {
+    "/agents/{uid}/native-memory/files": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -464,12 +485,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/native-memory/files/content": {
+    "/agents/{uid}/native-memory/files/content": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -492,12 +514,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agents/{name}/transcripts/session": {
+    "/agents/{uid}/transcripts/session": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -587,6 +610,12 @@ export interface components {
             wire_api?: string | null;
         };
         AgentOut: {
+            /**
+             * @description The agent Resource's immutable identity, and what every route in this document addressing an agent takes. It is also the value every cross-resource reference to this agent holds — a resource `scope`'s agent list, a channel's `default_agent`, a skill binding, the `--agent-uid` Coffer writes into the agent's own MCP and hook entries — so a client can compare those against this field directly, with nothing in between.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
+            /** @description A mutable label, unique among agents, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. For display. Note it is NOT `type`: `type` (`claude_code`, `codex`) is the product this agent is, fixed at registration, and the two were compared against each other for long enough to need a translation table — which the uid retires, because references now hold neither. */
             name: string;
             type: components["schemas"]["AgentType"];
             /** @description Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills. */
@@ -721,9 +750,16 @@ export interface components {
                 [key: string]: string;
             } | null;
         };
+        /** @description The resource adoption just created, in the three plain fields a resource has: `uid`, `kind`, `name`. All three, because the caller needs two different things from this response and they are not the same field — somewhere to go, and something to say. */
         AdoptedResource: {
+            /**
+             * @description The new resource's immutable identity — what the caller follows to `/resources/{uid}` and its kind's routes. A name would have been enough to look it up once and wrong to keep, and this is the one moment the client learns the uid of something it did not create by name.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
             /** @example mcp_server */
             kind: string;
+            /** @description The label it was registered under — which may not be the entry's own name, since `new_name` in the request overrides it after a collision. That is what makes it worth returning: it tells the user what the thing ended up being called. */
             name: string;
         };
         /** @description One installed plugin — derived at read time, never stored. */
@@ -1007,7 +1043,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1031,7 +1068,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1053,7 +1091,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1104,7 +1143,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1130,7 +1170,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Allowlisted config-file key (e.g. settings, global, instructions, config). */
                 key: string;
             };
@@ -1156,7 +1197,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Allowlisted config-file key (e.g. settings, global, instructions, config). */
                 key: string;
             };
@@ -1188,7 +1230,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
                 /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
@@ -1217,7 +1260,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
                 /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
@@ -1251,7 +1295,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
                 /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
@@ -1278,7 +1323,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1305,7 +1351,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description MCP entry name as it appears in the agent's config file. */
                 entry: string;
             };
@@ -1330,7 +1377,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 entry: string;
             };
             cookie?: never;
@@ -1369,7 +1417,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1393,7 +1442,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
                 plugin_id: string;
             };
@@ -1418,7 +1468,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
                 /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
                 plugin_id: string;
             };
@@ -1447,7 +1498,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1471,7 +1523,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1496,7 +1549,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1520,7 +1574,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1553,7 +1608,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1581,7 +1637,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1610,7 +1667,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -1639,7 +1697,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };

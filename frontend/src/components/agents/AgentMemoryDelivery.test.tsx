@@ -8,20 +8,43 @@
 //
 // The agent is fixed by the page, so this surface asks for one agent and shows
 // no picker; it must not re-introduce the list of agents it replaced.
+//
+// A delivery row carries both halves of the agent's identity and the card uses
+// each for one thing: the query and the install/remove requests are addressed
+// to `agent_uid`, while the card's testid and the removal confirmation read
+// `agent_name`. The fixtures keep the two apart on purpose.
 import { describe, expect, test, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { AgentMemoryDelivery } from "./AgentMemoryDelivery";
 import type { DeliveryStatusOut } from "@/lib/api/memoryTypes";
 
 vi.mock("@/lib/hooks/useMemory", () => ({
   useMemoryDelivery: vi.fn(),
-  useInstallDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useRemoveDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useInstallDelivery: vi.fn(),
+  useRemoveDelivery: vi.fn(),
 }));
 
-const { useMemoryDelivery } = await import("@/lib/hooks/useMemory");
+const { useMemoryDelivery, useInstallDelivery, useRemoveDelivery } =
+  await import("@/lib/hooks/useMemory");
 const deliveryMock = vi.mocked(useMemoryDelivery);
+const installMock = vi.mocked(useInstallDelivery);
+const removeMock = vi.mocked(useRemoveDelivery);
+
+/** Both mutations, stubbed; the returned spy is the install one, which the
+ *  install test asserts is addressed to the uid. */
+function stubMutations() {
+  const install = vi.fn();
+  installMock.mockReturnValue({
+    mutate: install,
+    isPending: false,
+  } as unknown as ReturnType<typeof useInstallDelivery>);
+  removeMock.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof useRemoveDelivery>);
+  return install;
+}
 
 function mockStatus(rows: DeliveryStatusOut[]) {
   deliveryMock.mockReturnValue({
@@ -32,9 +55,12 @@ function mockStatus(rows: DeliveryStatusOut[]) {
 }
 
 const INSTALLED: DeliveryStatusOut = {
-  agent: "claude_code",
+  agent_uid: "u-claude-code",
+  agent_name: "claude_code",
   installed: true,
-  command: "coffer memory context --agent claude_code",
+  // The hook the daemon writes names the agent by uid, so a rename cannot
+  // leave an installed hook pointing at nothing.
+  command: "coffer memory context --agent-uid u-claude-code",
   event: "SessionStart",
 };
 
@@ -42,9 +68,10 @@ describe("AgentMemoryDelivery", () => {
   test("asks only about the agent whose page this is, and shows no picker", () => {
     // The list-of-agents surface this replaced made the reader choose an agent
     // they had already navigated to; the agent is the page, so it is a prop.
+    stubMutations();
     mockStatus([INSTALLED]);
-    render(<AgentMemoryDelivery agentName="claude_code" />);
-    expect(deliveryMock).toHaveBeenCalledWith("claude_code");
+    render(<AgentMemoryDelivery agentUid="u-claude-code" />);
+    expect(deliveryMock).toHaveBeenCalledWith("u-claude-code");
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByText(/codex/i)).toBeNull();
   });
@@ -53,9 +80,19 @@ describe("AgentMemoryDelivery", () => {
     // Firing is a stream of events, reported in the audit log. A card that
     // guessed at it — "never fired" on a hook installed a minute ago — would
     // be alarming and wrong, which is why this surface no longer tries.
-    mockStatus([{ ...INSTALLED, agent: "codex", event: "UserPromptSubmit" }]);
-    render(<AgentMemoryDelivery agentName="codex" />);
+    stubMutations();
+    mockStatus([
+      {
+        ...INSTALLED,
+        agent_uid: "u-codex",
+        agent_name: "codex",
+        event: "UserPromptSubmit",
+      },
+    ]);
+    render(<AgentMemoryDelivery agentUid="u-codex" />);
 
+    // The card is found by the agent's NAME: a testid is a handle a person
+    // writes and reads, and the uid says nothing to either.
     const state = within(screen.getByTestId("memory-delivery-codex"));
     expect(state.getByText(/installed/i)).toBeInTheDocument();
     expect(state.queryByText(/never fired/i)).toBeNull();
@@ -63,20 +100,27 @@ describe("AgentMemoryDelivery", () => {
     expect(screen.queryByTestId("memory-delivery-warning-codex")).toBeNull();
   });
 
-  test("a not-installed agent offers Install, not Remove", () => {
+  test("a not-installed agent offers Install, and installs by uid", () => {
+    const install = stubMutations();
     mockStatus([{ ...INSTALLED, installed: false }]);
-    render(<AgentMemoryDelivery agentName="claude_code" />);
+    render(<AgentMemoryDelivery agentUid="u-claude-code" />);
 
-    expect(screen.getByRole("button", { name: /install/i })).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: /install/i });
+    expect(button).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /remove/i })).toBeNull();
+
+    // The row named the agent; the write is addressed to its uid.
+    fireEvent.click(button);
+    expect(install).toHaveBeenCalledWith("u-claude-code");
   });
 
   test("an agent type with no hook event says so rather than offering Install", () => {
     // `status(agent)` answers for the one agent asked about; a type delivery
     // cannot attach to yields nothing, and an Install button that could only
     // fail would be worse than a sentence.
+    stubMutations();
     mockStatus([]);
-    render(<AgentMemoryDelivery agentName="claude_code" />);
+    render(<AgentMemoryDelivery agentUid="u-claude-code" />);
 
     expect(screen.getByText(/no hook event/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /install/i })).toBeNull();

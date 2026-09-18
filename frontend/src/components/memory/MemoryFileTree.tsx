@@ -31,9 +31,9 @@ import { usePartitionFiles } from "@/lib/hooks/useMemory";
 import { isDerivedInput } from "@/lib/memory/derived";
 import { cn } from "@/lib/utils";
 
-export function MemoryFileTree({ name }: { name: string }) {
+export function MemoryFileTree({ uid }: { uid: string }) {
   const { t } = useTranslation();
-  const tree = usePartitionFiles(name);
+  const tree = usePartitionFiles(uid);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   return (
@@ -63,7 +63,7 @@ export function MemoryFileTree({ name }: { name: string }) {
       {/* Right: read-only content of the selected file. */}
       <div className="min-w-0">
         {selectedPath ? (
-          <MemoryFileViewer name={name} path={selectedPath} />
+          <MemoryFileViewer uid={uid} path={selectedPath} />
         ) : (
           <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
             {t("memory.files.selectFile")}

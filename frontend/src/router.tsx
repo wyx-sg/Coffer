@@ -1,8 +1,6 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { LegacyScopeRedirect } from "./components/LegacyScopeRedirect";
-import { LegacyMcpServerRedirect } from "./components/mcp/LegacyMcpServerRedirect";
 import { PageFallback } from "./components/PageFallback";
 import { AgentsPage } from "./pages/AgentsPage";
 import { ChannelsPage } from "./pages/ChannelsPage";
@@ -35,6 +33,13 @@ function lazyPage<K extends string>(
 // legacy URL still lands somewhere (rather than on "page not found") needs the
 // real route table under a memory router, and rebuilding it in the test would
 // prove nothing about this one.
+//
+// Every detail route is `:uid` — a resource's immutable identity — and not its
+// name. A name is a label the user edits, so a URL built from one stops
+// resolving the moment they do, and the page it names would 404 while the thing
+// it was about is still there (ADR resource-identity-is-an-immutable-uid).
+// Nothing translates an old name-based URL into a uid one: doing so would need
+// a lookup by name, which is the addressing this change removed.
 export const routes: RouteObject[] = [
   {
     path: "/",
@@ -45,18 +50,14 @@ export const routes: RouteObject[] = [
       { path: "chat/:id", element: lazyPage(() => import("./pages/ChatPage"), "ChatPage") },
       { path: "mcp-servers", element: <ResourcesPage /> },
       {
-        path: "mcp-servers/:name",
+        path: "mcp-servers/:uid",
         element: lazyPage(() => import("./pages/ResourceDetailPage"), "ResourceDetailPage"),
       },
-      // Legacy routes — this surface used to live at /resources, and the
-      // detail page carried a kind segment that only ever said `mcp_server`.
-      // Keep old bookmarks and links working by redirecting to the renamed
-      // paths.
-      { path: "mcp-servers/mcp_server/:name", element: <LegacyMcpServerRedirect /> },
+      // Legacy route — this surface used to live at /resources.
       { path: "resources", element: <Navigate to="/mcp-servers" replace /> },
       { path: "agents", element: <AgentsPage /> },
       {
-        path: "agents/:name",
+        path: "agents/:uid",
         element: lazyPage(() => import("./pages/AgentDetailPage"), "AgentDetailPage"),
       },
       // Detail pages reached by clicking a row on the agent's Memory /
@@ -65,21 +66,21 @@ export const routes: RouteObject[] = [
       // because both identities are absolute filesystem paths — a path segment
       // would have to survive encoding its own separators.
       {
-        path: "agents/:name/conversations",
+        path: "agents/:uid/conversations",
         element: lazyPage(() => import("./pages/AgentConversationPage"), "AgentConversationPage"),
       },
       {
-        path: "agents/:name/memory",
+        path: "agents/:uid/memory",
         element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
       },
       { path: "channels", element: <ChannelsPage /> },
       {
-        path: "channels/:name",
+        path: "channels/:uid",
         element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
       },
       { path: "skills", element: <SkillsPage /> },
       {
-        path: "skills/:name",
+        path: "skills/:uid",
         element: lazyPage(() => import("./pages/SkillDetailPage"), "SkillDetailPage"),
       },
       {
@@ -87,27 +88,30 @@ export const routes: RouteObject[] = [
         element: lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
       },
       {
-        path: "knowledge/:name",
+        path: "knowledge/:uid",
         element: lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
       },
       { path: "memory", element: lazyPage(() => import("./pages/MemoryPage"), "MemoryPage") },
       {
-        path: "memory/:name",
+        path: "memory/:uid",
         element: lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
       },
       { path: "sync", element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage") },
       { path: "model-providers", element: <ModelProvidersPage /> },
       {
-        path: "model-providers/:name",
+        path: "model-providers/:uid",
         element: lazyPage(() => import("./pages/ProviderDetailPage"), "ProviderDetailPage"),
       },
       // Legacy route — `knowledge_base` was a resource kind with its own
       // surface before it merged into the one Knowledge kind. Keep old
-      // bookmarks and links working by redirecting to the merged path.
-      // (`memory` used to redirect here too, before spec memory split it back
-      // out into its own kind and surface above.)
+      // bookmarks for the LIST working by redirecting to the merged path.
+      //
+      // There is deliberately no redirect for an individual collection. A
+      // detail URL is now built from the collection's uid, and an old link
+      // carries its name — translating one into the other would mean a lookup
+      // by name, which is exactly the addressing this change removed. Such a
+      // link lands on the list, from which the collection is one click away.
       { path: "knowledge-bases", element: <Navigate to="/knowledge" replace /> },
-      { path: "knowledge-bases/:name", element: <LegacyScopeRedirect /> },
       {
         path: "activity",
         element: lazyPage(() => import("./pages/activity/ActivityPage"), "ActivityPage"),

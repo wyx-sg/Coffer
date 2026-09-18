@@ -29,9 +29,9 @@ import type { NativeMemoryFileNode } from "@/lib/api/agentNativeMemory";
 import { useNativeMemoryFiles } from "@/lib/hooks/useAgentNativeMemory";
 import { cn } from "@/lib/utils";
 
-export function AgentMemoryStoreTree({ name, dir }: { name: string; dir: string }) {
+export function AgentMemoryStoreTree({ agentUid, dir }: { agentUid: string; dir: string }) {
   const { t } = useTranslation();
-  const tree = useNativeMemoryFiles(name, dir);
+  const tree = useNativeMemoryFiles(agentUid, dir);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   return (
@@ -61,7 +61,7 @@ export function AgentMemoryStoreTree({ name, dir }: { name: string; dir: string 
       {/* Right: read-only content of the selected file. */}
       <div className="min-w-0">
         {selectedPath ? (
-          <AgentMemoryStoreFileViewer name={name} dir={dir} path={selectedPath} />
+          <AgentMemoryStoreFileViewer agentUid={agentUid} dir={dir} path={selectedPath} />
         ) : (
           <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
             {t("agents.memoryStore.selectFile")}

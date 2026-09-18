@@ -10,7 +10,7 @@ type InvocationListOut = components["schemas"]["InvocationListOut"];
 export type InvocationStatusFilter = "ok" | "error" | "timeout" | "denied";
 
 interface UseMcpInvocationsArgs {
-  serverName: string;
+  serverUid: string;
   limit?: number;
   status?: InvocationStatusFilter;
   since?: string;
@@ -18,22 +18,22 @@ interface UseMcpInvocationsArgs {
 }
 
 export function useMcpInvocations({
-  serverName,
+  serverUid,
   limit = 50,
   status,
   since,
   enabled = true,
 }: UseMcpInvocationsArgs) {
   return useQuery({
-    queryKey: mcpInvocationsKey(serverName, { limit, status, since }),
+    queryKey: mcpInvocationsKey(serverUid, { limit, status, since }),
     queryFn: async (): Promise<InvocationListOut> => {
       const client = getApiClient();
       const query: Record<string, string | number> = { limit };
       if (status) query.status = status;
       if (since) query.since = since;
-      const { data, error } = await client.GET("/resources/mcp_server/{name}/invocations", {
+      const { data, error } = await client.GET("/resources/mcp_server/{uid}/invocations", {
         params: {
-          path: { name: serverName },
+          path: { uid: serverUid },
           query: query as never,
         },
       });

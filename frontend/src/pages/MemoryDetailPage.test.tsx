@@ -54,8 +54,12 @@ vi.mock("@/lib/hooks/useMemory", () => ({
   })),
   usePartitionFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
 }));
+// The page is addressed by uid and gets the partition's LABEL from this read —
+// the heading, and the name `/upkeep/runs` reports a pass under.
 vi.mock("@/lib/hooks/useResources", () => ({
-  useResource: vi.fn(() => ({ data: { enabled: true, scope: null } })),
+  useResource: vi.fn(() => ({
+    data: { uid: "mp-be27", kind: "memory", name: "coffer", enabled: true, scope: null },
+  })),
 }));
 const scopePut = vi.fn();
 vi.mock("@/lib/hooks/useScope", () => ({
@@ -77,9 +81,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <MemoryRouter initialEntries={["/memory/coffer"]}>
+        <MemoryRouter initialEntries={[`/memory/${PARTITION_UID}`]}>
           <Routes>
-            <Route path="/memory/:name" element={<MemoryDetailPage />} />
+            <Route path="/memory/:uid" element={<MemoryDetailPage />} />
           </Routes>
         </MemoryRouter>
       </TooltipProvider>
@@ -87,13 +91,23 @@ function renderPage() {
   );
 }
 
-const { useMemoryPartitions } = await import("@/lib/hooks/useMemory");
+const { useMemoryPartitions, useDistilPartition, usePartitionFiles } =
+  await import("@/lib/hooks/useMemory");
 const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
 const partitionsMock = vi.mocked(useMemoryPartitions);
 const runningMock = vi.mocked(useUpkeepRunning);
+const distilMock = vi.mocked(useDistilPartition);
+const filesMock = vi.mocked(usePartitionFiles);
+
+/** The two identities the page holds apart: the uid the URL carries and every
+ *  `/memory/partitions/{uid}/…` route takes, and the name the folder has — and
+ *  which is therefore what a running pass is reported under. */
+const PARTITION_UID = "mp-be27";
+const PARTITION_NAME = "coffer";
 
 const COFFER: PartitionOut = {
-  name: "coffer",
+  uid: PARTITION_UID,
+  name: PARTITION_NAME,
   repository_path: "/Users/dev/coffer",
   repository_key: "remote:github.com/wyx-sg/coffer",
   note_count: 1,
@@ -174,6 +188,17 @@ describe("MemoryDetailPage", () => {
     const button = screen.getByRole("button", { name: /distil/i });
     expect(button).not.toBeDisabled();
     expect(button.querySelector(".animate-spin")).toBeNull();
+  });
+
+  test("the uid addresses the partition; its name is what a running pass is named by", () => {
+    // Both routes under this page take the uid, and `/upkeep/runs` reports the
+    // folder being rewritten — which is named after the partition. So the page
+    // has to hold both, and this is the assertion that it does.
+    renderPage();
+
+    expect(distilMock).toHaveBeenCalledWith(PARTITION_UID);
+    expect(filesMock).toHaveBeenCalledWith(PARTITION_UID);
+    expect(runningMock).toHaveBeenCalledWith("memory", PARTITION_NAME);
   });
 
   test("offers the way back to the partitions list", () => {

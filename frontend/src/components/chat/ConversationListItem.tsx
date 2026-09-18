@@ -109,7 +109,14 @@ export function ConversationListItem({
       </button>
       {conversation.channel_binding != null && (
         <span className="shrink-0 rounded-xl border border-transparent bg-secondary px-1.5 py-0.5 text-xs font-medium text-secondary-foreground">
-          {t("chat.history.viaChannel", { channel: conversation.channel_binding.channel })}
+          {/* The binding stores the channel's uid and the name is resolved at
+              read time, so a channel since deleted has no name left. The uid is
+              then what the badge says: the conversation really did arrive over
+              a channel, and a blank badge would deny it. */}
+          {t("chat.history.viaChannel", {
+            channel:
+              conversation.channel_binding.channel ?? conversation.channel_binding.channel_uid,
+          })}
         </span>
       )}
       <span className="flex shrink-0 items-center">

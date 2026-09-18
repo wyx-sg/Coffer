@@ -45,7 +45,7 @@ vi.mock("@/lib/api/scope", () => ({
   scopeApi: { get: vi.fn(), put: vi.fn() },
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
+  useAgents: vi.fn(() => ({ data: [{ uid: "u-cc", name: "cc" }] })),
 }));
 
 // The dialog's introspection (test / fetch models) hits the network; stub the
@@ -63,22 +63,39 @@ const apiMock = providersApi as unknown as Record<string, ReturnType<typeof vi.f
 const resourceMock = resourcesApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 const scopeMock = scopeApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
-const makeProvider = (overrides?: Partial<Provider>): Provider => ({
-  name: "acme",
-  protocol: "anthropic",
-  base_url: "https://gw/anthropic",
-  credential_ref: "provider/acme/key",
-  compatible_agents: ["claude_code"],
-  is_active: false,
-  internal_default: false,
-  transcribe_default: false,
-  models: [],
-  enabled: true,
-  description: null,
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-  ...overrides,
-});
+/** One opaque uid per fixture NAME. The tests below reach for a row by the
+ *  label on screen, and then have to assert the identity the request carries —
+ *  which is a different string, deliberately: a uid that spelled its name would
+ *  let a request built from the label pass every assertion here. */
+const UIDS: Record<string, string> = {
+  acme: "cn-31f0",
+  official: "cn-7ba2",
+  agnes: "cn-c94d",
+  myconn: "cn-0e58",
+  "local-llm": "cn-6a11",
+};
+const uidFor = (name: string) => UIDS[name] ?? "cn-unlisted";
+
+const makeProvider = (overrides?: Partial<Provider>): Provider => {
+  const name = overrides?.name ?? "acme";
+  return {
+    uid: uidFor(name),
+    name,
+    protocol: "anthropic",
+    base_url: "https://gw/anthropic",
+    credential_ref: "provider/acme/key",
+    compatible_agents: ["claude_code"],
+    is_active: false,
+    internal_default: false,
+    transcribe_default: false,
+    models: [],
+    enabled: true,
+    description: null,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+};
 
 function renderPage() {
   const qc = new QueryClient({
@@ -335,10 +352,12 @@ describe("ModelProvidersPage", () => {
 
     fireEvent.click(reachIn("official"));
     fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
-    await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledWith("provider", "official"));
+    // The kind is gone from the route and the name never was on it: one uid
+    // names exactly one row.
+    await waitFor(() => expect(resourceMock.disable).toHaveBeenCalledWith(uidFor("official")));
     fireEvent.click(reachIn("agnes"));
     fireEvent.click(screen.getByRole("radio", { name: /every agent/i }));
-    await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledWith("provider", "agnes"));
+    await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledWith(uidFor("agnes")));
     // The control must not fall through to the row's navigation.
     expect(navigateMock).not.toHaveBeenCalled();
   });
@@ -349,7 +368,9 @@ describe("ModelProvidersPage", () => {
     await screen.findByText("acme");
 
     fireEvent.click(screen.getByText("https://gw/anthropic"));
-    expect(navigateMock).toHaveBeenCalledWith("/model-providers/acme");
+    // The detail route is keyed on the uid, so the row links to that and not to
+    // the label in the cell the user clicked.
+    expect(navigateMock).toHaveBeenCalledWith(`/model-providers/${uidFor("acme")}`);
   });
 
   test("the bulk reach control fans the chosen state out over the selection", async () => {
@@ -372,9 +393,13 @@ describe("ModelProvidersPage", () => {
     fireEvent.click(bar());
     fireEvent.click(screen.getByRole("radio", { name: /every agent/i }));
     await waitFor(() => expect(resourceMock.enable).toHaveBeenCalledTimes(2));
-    expect(resourceMock.enable.mock.calls.map((c) => c[1]).sort()).toEqual(["agnes", "official"]);
+    expect(resourceMock.enable.mock.calls.map((c) => c[0]).sort()).toEqual(
+      [uidFor("agnes"), uidFor("official")].sort(),
+    );
     await waitFor(() => expect(scopeMock.put).toHaveBeenCalledTimes(2));
-    expect(scopeMock.put.mock.calls.every((c) => c[2] === null)).toBe(true);
+    // `scopeApi.put(uid, scope)` — the kind segment is gone, so the scope is
+    // the SECOND argument.
+    expect(scopeMock.put.mock.calls.every((c) => c[1] === null)).toBe(true);
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     fireEvent.click(bar());
@@ -398,7 +423,9 @@ describe("ModelProvidersPage", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(apiMock.remove).toHaveBeenCalledTimes(2));
-    expect(apiMock.remove.mock.calls.map((c) => c[0]).sort()).toEqual(["agnes", "official"]);
+    expect(apiMock.remove.mock.calls.map((c) => c[0]).sort()).toEqual(
+      [uidFor("agnes"), uidFor("official")].sort(),
+    );
   });
 
   test("the per-row delete action confirms then removes that one connection", async () => {
@@ -409,11 +436,14 @@ describe("ModelProvidersPage", () => {
     renderPage();
     await screen.findByText("official");
 
+    // The action and the confirmation both name the connection; the request
+    // that follows is addressed to its uid.
     fireEvent.click(screen.getByRole("button", { name: "Delete: agnes" }));
     const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("agnes");
     fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(apiMock.remove).toHaveBeenCalledTimes(1));
-    expect(apiMock.remove).toHaveBeenCalledWith("agnes");
+    expect(apiMock.remove).toHaveBeenCalledWith(uidFor("agnes"));
     expect(navigateMock).not.toHaveBeenCalled();
   });
 

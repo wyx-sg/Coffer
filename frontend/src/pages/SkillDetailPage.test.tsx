@@ -35,7 +35,12 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
 const skillHooks = await import("@/lib/hooks/useSkills");
 const useSkillMock = vi.mocked(skillHooks.useSkill);
 
+// Both identities, kept apart: the uid is what the route carries and what the
+// disable below is addressed to, "hello" is only the heading.
+const SKILL_UID = "sk-0a3e";
+
 const LOCAL_SKILL: SkillOut = {
+  uid: SKILL_UID,
   name: "hello",
   description: "a greeting",
   source: { type: "local_import", original_path: "/tmp/hello" },
@@ -61,9 +66,9 @@ function renderAt() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/skills/hello"]}>
+      <MemoryRouter initialEntries={[`/skills/${SKILL_UID}`]}>
         <Routes>
-          <Route path="/skills/:name" element={<SkillDetailPage />} />
+          <Route path="/skills/:uid" element={<SkillDetailPage />} />
           <Route path="/skills" element={<div>skills list</div>} />
         </Routes>
       </MemoryRouter>
@@ -110,7 +115,7 @@ describe("SkillDetailPage", () => {
     renderAt();
     fireEvent.click(within(screen.getByTestId("scope-control")).getByRole("button"));
     fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", name: "hello" });
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", uid: SKILL_UID });
   });
 
   test("shows the load-failed card when the skill fails to load", () => {

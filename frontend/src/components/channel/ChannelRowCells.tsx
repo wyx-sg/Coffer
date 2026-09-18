@@ -2,7 +2,7 @@
 // The channels list's per-row cells.
 //
 // They live apart from ChannelsTable because they are the half that FETCHES:
-// each of these cells mounts the row's own `/channels/{name}/status` query (one
+// each of these cells mounts the row's own `/channels/{uid}/status` query (one
 // request per row, shared by all three through the query cache) while the table
 // itself is a pure arrangement of columns over the list payload it was handed.
 // Splitting on that seam keeps "what a row shows" readable without scrolling
@@ -20,14 +20,14 @@ import type { ResourceOut } from "@/lib/api/resources";
 
 /**
  * Live runtime health cell — the adapter `running` state from the same cached
- * /channels/{name}/status query the PairedCell uses. Mirrors the MCP-server
+ * /channels/{uid}/status query the PairedCell uses. Mirrors the MCP-server
  * surface's ServerHealthCell/HealthBadge: an outline Badge on the shared
  * status tokens, through the one running/stopped tone mapping the detail
  * page's Status card uses too (running -> ok, stopped -> warn).
  */
-export function HealthCell({ name }: { name: string }) {
+export function HealthCell({ uid }: { uid: string }) {
   const { t } = useTranslation();
-  const { data: status } = useChannelStatus(name);
+  const { data: status } = useChannelStatus(uid);
   if (!status) return <span className="text-muted-foreground">{t("common.emptyValue")}</span>;
   return (
     <Badge
@@ -41,9 +41,9 @@ export function HealthCell({ name }: { name: string }) {
 }
 
 /** Live "Paired · <name>" / "Not paired" cell — one status query per row. */
-export function PairedCell({ name }: { name: string }) {
+export function PairedCell({ uid }: { uid: string }) {
   const { t } = useTranslation();
-  const { data: status } = useChannelStatus(name);
+  const { data: status } = useChannelStatus(uid);
   if (!status) return <span className="text-muted-foreground">{t("common.emptyValue")}</span>;
   if (status.peer === null) {
     return <span className="text-muted-foreground">{t("channels.notPaired")}</span>;
@@ -64,10 +64,11 @@ export function PairedCell({ name }: { name: string }) {
  * and not a comparison this table should be making on its own.
  */
 export function MachineCell({ row }: { row: ResourceOut }) {
-  const { data: status } = useChannelStatus(row.name);
+  const { data: status } = useChannelStatus(row.uid);
   const configured = row.config.runs_on;
   return (
     <ChannelMachineSelect
+      uid={row.uid}
       name={row.name}
       config={row.config}
       runsOn={status?.runs_on ?? (typeof configured === "string" && configured ? configured : null)}

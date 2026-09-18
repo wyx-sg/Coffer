@@ -10,7 +10,11 @@
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";
-import { beforeEachInjectToken, readDaemonToken } from "./_helpers";
+import {
+  beforeEachInjectToken,
+  readDaemonToken,
+  resolveResourceUid,
+} from "./_helpers";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -122,8 +126,10 @@ acceptance(
       // 5. Disable the SKILL via the API — delivery is decided on the skill
       //    (enabled + scope), so disabling it reclaims every copy and the
       //    symlink disappears.
+      const skillUid = await resolveResourceUid("skill", skillName);
+      if (skillUid === null) throw new Error(`no skill named ${skillName}`);
       const disableResp = await fetch(
-        `http://127.0.0.1:${port}/api/v1/resources/skill/${skillName}/disable`,
+        `http://127.0.0.1:${port}/api/v1/resources/${skillUid}/disable`,
         {
           method: "POST",
           headers: {

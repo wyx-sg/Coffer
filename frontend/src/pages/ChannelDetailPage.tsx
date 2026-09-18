@@ -42,14 +42,14 @@ import { useResource } from "@/lib/hooks/useResources";
 
 export function ChannelDetailPage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const navigate = useNavigate();
-  const { data: resource, isPending, error } = useResource(CHANNEL_KIND, name);
+  const { data: resource, isPending, error } = useResource(uid);
   // Poll while the detail page is open so a pairing completed from the IM app
   // (or an adapter restart) shows up without a manual refresh.
-  const { data: status } = useChannelStatus(name, { poll: true });
-  const pairing = useIssuePairingCode(name);
-  const notify = useNotifyChannel(name);
+  const { data: status } = useChannelStatus(uid, { poll: true });
+  const pairing = useIssuePairingCode(uid);
+  const notify = useNotifyChannel(uid);
   const del = useDeleteResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -70,7 +70,9 @@ export function ChannelDetailPage() {
   if (error || !resource) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={name} />
+        {/* The channel could not be read, so there is no name to head the
+            page with — and a uid is not a name. The heading is the failure. */}
+        <PageHeader back={back} title={t("errors.RESOURCE_NOT_FOUND")} />
         <EmptyState
           icon={Radio}
           title={t("errors.RESOURCE_NOT_FOUND")}
@@ -104,7 +106,7 @@ export function ChannelDetailPage() {
             {/* The same reach control the list row and every other kind's
                 detail page carries; it fetches its own scope, since this page
                 renders one resource. */}
-            <ScopeControl kind={CHANNEL_KIND} name={name} enabled={resource.enabled} />
+            <ScopeControl kind={CHANNEL_KIND} uid={uid} enabled={resource.enabled} />
             <Button
               size="sm"
               variant="outline"
@@ -127,7 +129,12 @@ export function ChannelDetailPage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <ChannelStatusCard name={name} config={resource.config} status={status} />
+        <ChannelStatusCard
+          uid={uid}
+          name={resource.name}
+          config={resource.config}
+          status={status}
+        />
         <ChannelPairingCard
           code={pairing.data}
           isPending={pairing.isPending}
@@ -135,7 +142,7 @@ export function ChannelDetailPage() {
         />
       </div>
 
-      {status?.callback ? <ChannelCallbackCard name={name} callback={status.callback} /> : null}
+      {status?.callback ? <ChannelCallbackCard uid={uid} callback={status.callback} /> : null}
 
       <ChannelTestMessageCard
         hasPeer={status?.peer != null}
@@ -149,11 +156,11 @@ export function ChannelDetailPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={t("channels.deleteTitle")}
-        description={t("channels.deleteConfirm", { name })}
+        description={t("channels.deleteConfirm", { name: resource.name })}
         confirmLabel={t("common.delete")}
         pending={del.isPending}
         onConfirm={() => {
-          del.mutate({ kind: CHANNEL_KIND, name }, { onSuccess: () => navigate("/channels") });
+          del.mutate({ kind: CHANNEL_KIND, uid }, { onSuccess: () => navigate("/channels") });
         }}
       />
     </div>

@@ -6,7 +6,7 @@
 // free-text search narrows client-side. DataTable owns pagination and the
 // per-row expand chevron whose detail is the invocation's raw JSON record.
 //
-// One table, two scopes. With a `serverName` it is the Invocations tab on that
+// One table, two scopes. With a `serverUid` it is the Invocations tab on that
 // server's detail page; without one it is the Activity page's MCP calls tab —
 // every server's invocations, with a leading column naming the server each
 // went to. The columns are otherwise identical, so they live here once.
@@ -32,8 +32,8 @@ type InvocationOut = components["schemas"]["InvocationOut"];
 const CROSS_SERVER_LIMIT = 500;
 
 interface Props {
-  /** One server's calls; omitted, every server's. */
-  serverName?: string;
+  /** One server's calls, by uid; omitted, every server's. */
+  serverUid?: string;
   /** False while another tab is in front: no request, no discarded response. */
   enabled?: boolean;
 }
@@ -52,13 +52,26 @@ const DEFAULT_FILTERS: InvocationsFiltersState = {
 // collapse an expanded row (DataTable tracks expansion by this key).
 type InvocationRow = InvocationOut & { _id: string };
 
+/**
+ * What one row calls its server.
+ *
+ * `resource_name` is resolved at read time and is null when the uid behind the
+ * row resolves to nothing — a server since deleted, or the `coffer` sentinel
+ * its own built-in tools log under. The uid's own text is then the only thing
+ * the row can honestly say, and it is said rather than left blank: a call that
+ * really happened must not read as a call to nowhere.
+ */
+function serverLabel(inv: InvocationOut): string {
+  return inv.resource_name ?? inv.resource_uid;
+}
+
 /** Drop the synthetic _id so the raw log shows the daemon's record verbatim. */
 function stripId({ _id, ...record }: InvocationRow): InvocationOut {
   void _id;
   return record;
 }
 
-export function InvocationsTable({ serverName, enabled = true }: Props) {
+export function InvocationsTable({ serverUid, enabled = true }: Props) {
   const { t } = useTranslation();
   const [filters, setFilters] = useState<InvocationsFiltersState>(DEFAULT_FILTERS);
 
@@ -79,20 +92,20 @@ export function InvocationsTable({ serverName, enabled = true }: Props) {
   // gateway do" does not.
   const status = filters.status === "all" ? undefined : filters.status;
   const perServer = useMcpInvocations({
-    serverName: serverName ?? "",
+    serverUid: serverUid ?? "",
     status,
     since,
-    enabled: enabled && serverName !== undefined,
+    enabled: enabled && serverUid !== undefined,
   });
   const crossServer = useActivityInvocations({
     limit: CROSS_SERVER_LIMIT,
     status,
     since,
-    enabled: enabled && serverName === undefined,
+    enabled: enabled && serverUid === undefined,
   });
   // isLoading, not isPending: a disabled query stays "pending" forever, which
   // would leave a tab that is not in front stuck on the loading card.
-  const { data, isLoading, error, refetch } = serverName === undefined ? crossServer : perServer;
+  const { data, isLoading, error, refetch } = serverUid === undefined ? crossServer : perServer;
 
   const allRows = data?.invocations ?? [];
 
@@ -102,7 +115,7 @@ export function InvocationsTable({ serverName, enabled = true }: Props) {
   // Hooks run before any early return.
   const q = filters.search.trim().toLowerCase();
   const invocations = data?.invocations;
-  const crossServerScope = serverName === undefined;
+  const crossServerScope = serverUid === undefined;
   const rows = useMemo<InvocationRow[]>(() => {
     // Stamp _id from the position in the full fetched list first, so the
     // identity survives the client-side filters applied afterwards.
@@ -114,7 +127,7 @@ export function InvocationsTable({ serverName, enabled = true }: Props) {
       r = r.filter(
         (inv) =>
           inv.capability_key.toLowerCase().includes(q) ||
-          (crossServerScope && inv.resource_name.toLowerCase().includes(q)),
+          (crossServerScope && serverLabel(inv).toLowerCase().includes(q)),
       );
     }
     return r;
@@ -149,7 +162,7 @@ export function InvocationsTable({ serverName, enabled = true }: Props) {
             key: "server",
             header: t("mcp.invocations.header.server"),
             className: "w-40 break-words text-sm",
-            cell: (inv: InvocationRow) => inv.resource_name,
+            cell: (inv: InvocationRow) => serverLabel(inv),
           },
         ]
       : []),

@@ -2,6 +2,9 @@
 // Install is one click; uninstall asks first (it cuts the agent off from the
 // gateway); either success is confirmed with a toast. Failures toast from the
 // hook (covered in useAgents.test), so nothing renders inline here.
+//
+// Both controls take the agent's `uid` — the install route is addressed by it
+// — and neither renders the agent at all, so a uid is all they are given.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { ToastProvider } from "@/components/ui/toast";
@@ -40,7 +43,7 @@ describe("AgentMcpButton", () => {
       opts?.onSuccess?.(),
     );
     stub(false, mutate);
-    renderWithToasts(<AgentMcpButton name="cur" />);
+    renderWithToasts(<AgentMcpButton uid="u-cur" />);
     fireEvent.click(screen.getByRole("button", { name: /install coffer mcp/i }));
     expect(mutate).toHaveBeenCalledWith(true, expect.anything());
     expect(screen.getByRole("status")).toHaveTextContent(/coffer mcp installed/i);
@@ -48,7 +51,7 @@ describe("AgentMcpButton", () => {
 
   test("installed → Uninstall asks for confirmation before uninstalling", () => {
     const mutate = stub(true);
-    renderWithToasts(<AgentMcpButton name="cur" />);
+    renderWithToasts(<AgentMcpButton uid="u-cur" />);
     fireEvent.click(screen.getByRole("button", { name: /uninstall coffer mcp/i }));
     // Nothing happens until the dialog is confirmed.
     expect(mutate).not.toHaveBeenCalled();
@@ -60,7 +63,7 @@ describe("AgentMcpButton", () => {
 
   test("cancelling the uninstall dialog is a no-op", () => {
     const mutate = stub(true);
-    renderWithToasts(<AgentMcpButton name="cur" />);
+    renderWithToasts(<AgentMcpButton uid="u-cur" />);
     fireEvent.click(screen.getByRole("button", { name: /uninstall coffer mcp/i }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /cancel/i }));
     expect(mutate).not.toHaveBeenCalled();
@@ -70,16 +73,16 @@ describe("AgentMcpButton", () => {
 describe("AgentMcpStatusBadge", () => {
   test("reflects installed / not-installed", () => {
     stub(true);
-    const { rerender } = render(<AgentMcpStatusBadge name="cur" />);
+    const { rerender } = render(<AgentMcpStatusBadge uid="u-cur" />);
     expect(screen.getByText(/^installed$/i)).toBeInTheDocument();
     stub(false);
-    rerender(<AgentMcpStatusBadge name="cur" />);
+    rerender(<AgentMcpStatusBadge uid="u-cur" />);
     expect(screen.getByText(/not installed/i)).toBeInTheDocument();
   });
 
   test("shows a labelled placeholder while the status loads, not an ellipsis", () => {
     stub(false, vi.fn(), true);
-    render(<AgentMcpStatusBadge name="cur" />);
+    render(<AgentMcpStatusBadge uid="u-cur" />);
     expect(screen.queryByText("…")).not.toBeInTheDocument();
     expect(document.querySelector("[aria-label='Checking…']")).not.toBeNull();
   });

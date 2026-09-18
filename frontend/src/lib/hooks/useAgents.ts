@@ -42,11 +42,11 @@ export function useAgents() {
   });
 }
 
-export function useAgent(name: string) {
+export function useAgent(uid: string) {
   return useQuery({
-    queryKey: agentKey(name),
-    queryFn: () => agentsApi.get(name),
-    enabled: !!name,
+    queryKey: agentKey(uid),
+    queryFn: () => agentsApi.get(uid),
+    enabled: !!uid,
   });
 }
 
@@ -66,7 +66,7 @@ export function useRegisterAgent() {
 export function usePatchAgent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { name: string; body: AgentPatch }) => agentsApi.patch(vars.name, vars.body),
+    mutationFn: (vars: { uid: string; body: AgentPatch }) => agentsApi.patch(vars.uid, vars.body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: agentsKey });
     },
@@ -77,9 +77,9 @@ export function useRemoveAgent() {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
-    mutationFn: (name: string) => agentsApi.remove(name),
-    onSuccess: (_data, name) => {
-      qc.removeQueries({ queryKey: agentKey(name) });
+    mutationFn: (uid: string) => agentsApi.remove(uid),
+    onSuccess: (_data, uid) => {
+      qc.removeQueries({ queryKey: agentKey(uid) });
       qc.invalidateQueries({ queryKey: agentsKey });
     },
     onError,
@@ -97,40 +97,40 @@ export function useAgentCandidates(enabled: boolean) {
 
 // --- config files (spec agent-registry v2) ---
 
-export function useAgentConfigFiles(name: string) {
+export function useAgentConfigFiles(uid: string) {
   return useQuery({
-    queryKey: agentConfigFilesKey(name),
-    queryFn: async () => (await agentsApi.listConfigFiles(name)).items,
-    enabled: !!name,
+    queryKey: agentConfigFilesKey(uid),
+    queryFn: async () => (await agentsApi.listConfigFiles(uid)).items,
+    enabled: !!uid,
   });
 }
 
-export function useAgentConfigFile(name: string, key: string | null) {
+export function useAgentConfigFile(uid: string, key: string | null) {
   return useQuery({
-    queryKey: agentConfigFileKey(name, key ?? ""),
-    queryFn: () => agentsApi.readConfigFile(name, key as string),
-    enabled: !!name && !!key,
+    queryKey: agentConfigFileKey(uid, key ?? ""),
+    queryFn: () => agentsApi.readConfigFile(uid, key as string),
+    enabled: !!uid && !!key,
   });
 }
 
 // --- Coffer MCP install (spec agent-registry v2) ---
 
-export function useAgentMcpStatus(name: string) {
+export function useAgentMcpStatus(uid: string) {
   return useQuery({
-    queryKey: agentMcpInstallKey(name),
-    queryFn: () => agentsApi.mcpStatus(name),
-    enabled: !!name,
+    queryKey: agentMcpInstallKey(uid),
+    queryFn: () => agentsApi.mcpStatus(uid),
+    enabled: !!uid,
   });
 }
 
-export function useAgentMcpInstall(name: string) {
+export function useAgentMcpInstall(uid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
     mutationFn: (install: boolean) =>
-      install ? agentsApi.mcpInstall(name) : agentsApi.mcpUninstall(name),
+      install ? agentsApi.mcpInstall(uid) : agentsApi.mcpUninstall(uid),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: agentMcpInstallKey(name) });
+      qc.invalidateQueries({ queryKey: agentMcpInstallKey(uid) });
     },
     onError,
   });
@@ -138,22 +138,22 @@ export function useAgentMcpInstall(name: string) {
 
 // --- MCP entries (specs agent-registry/skill-manager workspace amendment) ---
 
-export function useAgentMcpEntries(name: string) {
+export function useAgentMcpEntries(uid: string) {
   return useQuery({
-    queryKey: agentMcpEntriesKey(name),
-    queryFn: () => agentsApi.mcpEntries(name),
-    enabled: !!name,
+    queryKey: agentMcpEntriesKey(uid),
+    queryFn: () => agentsApi.mcpEntries(uid),
+    enabled: !!uid,
   });
 }
 
-export function useRemoveMcpEntry(agentName: string) {
+export function useRemoveMcpEntry(agentUid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ entry, source }: { entry: string; source?: string }) =>
-      agentsApi.removeMcpEntry(agentName, entry, source),
+      agentsApi.removeMcpEntry(agentUid, entry, source),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: agentMcpEntriesKey(agentName) });
+      qc.invalidateQueries({ queryKey: agentMcpEntriesKey(agentUid) });
     },
     onError,
   });
@@ -161,13 +161,13 @@ export function useRemoveMcpEntry(agentName: string) {
 
 // No onError toast: the adopt dialog shows the failure inline, where the
 // name-conflict / secret hints it carries are actionable.
-export function useAdoptMcpEntry(agentName: string) {
+export function useAdoptMcpEntry(agentUid: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ entry, body }: { entry: string; body: AdoptMcpEntryBody }) =>
-      agentsApi.adoptMcpEntry(agentName, entry, body),
+      agentsApi.adoptMcpEntry(agentUid, entry, body),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: agentMcpEntriesKey(agentName) });
+      qc.invalidateQueries({ queryKey: agentMcpEntriesKey(agentUid) });
       qc.invalidateQueries({ queryKey: resourcesByKindKey("mcp_server") });
     },
   });
@@ -175,34 +175,34 @@ export function useAdoptMcpEntry(agentName: string) {
 
 // --- Plugins (spec agent-registry, workspace amendment) ---
 
-export function useAgentPlugins(name: string) {
+export function useAgentPlugins(uid: string) {
   return useQuery({
-    queryKey: agentPluginsKey(name),
-    queryFn: () => agentsApi.plugins(name),
-    enabled: !!name,
+    queryKey: agentPluginsKey(uid),
+    queryFn: () => agentsApi.plugins(uid),
+    enabled: !!uid,
   });
 }
 
-export function useTogglePlugin(agentName: string) {
+export function useTogglePlugin(agentUid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      agentsApi.togglePlugin(agentName, id, enabled),
+      agentsApi.togglePlugin(agentUid, id, enabled),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: agentPluginsKey(agentName) });
+      qc.invalidateQueries({ queryKey: agentPluginsKey(agentUid) });
     },
     onError,
   });
 }
 
-export function useUninstallPlugin(agentName: string) {
+export function useUninstallPlugin(agentUid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
-    mutationFn: ({ id }: { id: string }) => agentsApi.uninstallPlugin(agentName, id),
+    mutationFn: ({ id }: { id: string }) => agentsApi.uninstallPlugin(agentUid, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: agentPluginsKey(agentName) });
+      qc.invalidateQueries({ queryKey: agentPluginsKey(agentUid) });
     },
     onError,
   });
@@ -210,51 +210,51 @@ export function useUninstallPlugin(agentName: string) {
 
 // --- Config-file children (specs agent-registry/skill-manager workspace amendment) — read-only ---
 
-export function useAgentConfigChild(name: string, key: string, relpath: string) {
+export function useAgentConfigChild(uid: string, key: string, relpath: string) {
   return useQuery({
-    queryKey: agentConfigChildKey(name, key, relpath),
-    queryFn: () => agentsApi.readConfigChild(name, key, relpath),
-    enabled: !!name && !!key && !!relpath,
+    queryKey: agentConfigChildKey(uid, key, relpath),
+    queryFn: () => agentsApi.readConfigChild(uid, key, relpath),
+    enabled: !!uid && !!key && !!relpath,
   });
 }
 
 // --- Unmanaged skills (specs agent-registry/skill-manager workspace amendment) ---
 
-export function useUnmanagedSkills(name: string) {
+export function useUnmanagedSkills(uid: string) {
   return useQuery({
-    queryKey: agentUnmanagedSkillsKey(name),
-    queryFn: () => agentsApi.unmanagedSkills(name),
-    enabled: !!name,
+    queryKey: agentUnmanagedSkillsKey(uid),
+    queryFn: () => agentsApi.unmanagedSkills(uid),
+    enabled: !!uid,
   });
 }
 
 /** Invalidate what adopting or deleting an unmanaged skill changes: the
  *  unmanaged list, the managed skills list it may now appear in, and the
  *  agent itself (its skill counts). */
-function invalidateUnmanagedSkills(qc: ReturnType<typeof useQueryClient>, agentName: string) {
-  qc.invalidateQueries({ queryKey: agentUnmanagedSkillsKey(agentName) });
+function invalidateUnmanagedSkills(qc: ReturnType<typeof useQueryClient>, agentUid: string) {
+  qc.invalidateQueries({ queryKey: agentUnmanagedSkillsKey(agentUid) });
   qc.invalidateQueries({ queryKey: skillsKey });
-  qc.invalidateQueries({ queryKey: agentKey(agentName) });
+  qc.invalidateQueries({ queryKey: agentKey(agentUid) });
 }
 
-export function useAdoptUnmanagedSkill(agentName: string) {
+export function useAdoptUnmanagedSkill(agentUid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ skill, location }: { skill: string; location: string }) =>
-      agentsApi.adoptUnmanagedSkill(agentName, skill, location),
-    onSuccess: () => invalidateUnmanagedSkills(qc, agentName),
+      agentsApi.adoptUnmanagedSkill(agentUid, skill, location),
+    onSuccess: () => invalidateUnmanagedSkills(qc, agentUid),
     onError,
   });
 }
 
-export function useDeleteUnmanagedSkill(agentName: string) {
+export function useDeleteUnmanagedSkill(agentUid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
     mutationFn: ({ skill, location }: { skill: string; location: string }) =>
-      agentsApi.deleteUnmanagedSkill(agentName, skill, location),
-    onSuccess: () => invalidateUnmanagedSkills(qc, agentName),
+      agentsApi.deleteUnmanagedSkill(agentUid, skill, location),
+    onSuccess: () => invalidateUnmanagedSkills(qc, agentUid),
     onError,
   });
 }

@@ -28,10 +28,10 @@ type Tab = (typeof TABS)[number];
 
 export function ProviderDetailPage() {
   const { t } = useTranslation();
-  const { name = "" } = useParams<{ name: string }>();
+  const { uid = "" } = useParams<{ uid: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: provider, isPending, error } = useProvider(name);
+  const { data: provider, isPending, error } = useProvider(uid);
   const del = useDeleteProvider();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -52,7 +52,9 @@ export function ProviderDetailPage() {
   if (error || !provider) {
     return (
       <div className="space-y-6">
-        <PageHeader back={back} title={name} />
+        {/* The connection could not be read, so there is no name to head the
+            page with — and a uid is not a name. The heading is the failure. */}
+        <PageHeader back={back} title={t("settings.connections.detail.notFound")} />
         <EmptyState
           icon={Boxes}
           title={t("settings.connections.detail.notFound")}
@@ -101,7 +103,7 @@ export function ProviderDetailPage() {
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}
         onConfirm={() =>
-          del.mutate(provider.name, {
+          del.mutate(provider.uid, {
             onSuccess: () => {
               setDeleteOpen(false);
               navigate("/model-providers");

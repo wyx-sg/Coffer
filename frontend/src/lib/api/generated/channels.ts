@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/channels/{name}/pairing-code": {
+    "/api/v1/channels/{uid}/pairing-code": {
         parameters: {
             query?: never;
             header?: never;
@@ -21,7 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/channels/{name}/status": {
+    "/api/v1/channels/{uid}/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -38,7 +38,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/channels/{name}/notify": {
+    "/api/v1/channels/{uid}/notify": {
         parameters: {
             query?: never;
             header?: never;
@@ -55,7 +55,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/channels/{name}/callback-test": {
+    "/api/v1/channels/{uid}/callback-test": {
         parameters: {
             query?: never;
             header?: never;
@@ -77,7 +77,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/channels/{name}/events": {
+    "/api/v1/channels/{uid}/events": {
         parameters: {
             query?: never;
             header?: never;
@@ -110,6 +110,12 @@ export interface components {
             expires_at: string;
         };
         ChannelStatusOut: {
+            /**
+             * @description The channel resource's immutable identity — the same value the path takes, echoed back so a client that reached this status from a list can key its state on it without re-deriving anything.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
+            /** @description A mutable label, unique among channels. For display only; anything that must keep pointing at this channel holds the uid. */
             name: string;
             /** @enum {string} */
             channel_type: "telegram" | "seatalk";
@@ -204,7 +210,7 @@ export interface components {
         };
     };
     responses: {
-        /** @description No channel with this name */
+        /** @description No channel with this uid */
         NotFound: {
             headers: {
                 [name: string]: unknown;
@@ -215,8 +221,8 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Channel resource name (the `<name>` of `channel:<name>`) */
-        ChannelName: string;
+        /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+        ChannelUid: string;
     };
     requestBodies: never;
     headers: never;
@@ -229,8 +235,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Channel resource name (the `<name>` of `channel:<name>`) */
-                name: components["parameters"]["ChannelName"];
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
         };
@@ -253,8 +259,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Channel resource name (the `<name>` of `channel:<name>`) */
-                name: components["parameters"]["ChannelName"];
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
         };
@@ -277,8 +283,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Channel resource name (the `<name>` of `channel:<name>`) */
-                name: components["parameters"]["ChannelName"];
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
         };
@@ -314,8 +320,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Channel resource name (the `<name>` of `channel:<name>`) */
-                name: components["parameters"]["ChannelName"];
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
         };
@@ -338,8 +344,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Channel resource name (the `<name>` of `channel:<name>`) */
-                name: components["parameters"]["ChannelName"];
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
         };

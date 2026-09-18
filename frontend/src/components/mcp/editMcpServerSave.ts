@@ -6,11 +6,22 @@
 // so a rejected config never leaves the config pointing at a key that was
 // never stored, and brand-new refs are rolled back when that PATCH fails so a
 // rejected edit never orphans a secret.
+//
+// The PATCH is addressed to the server's uid, and so are the credential refs:
+// `mcp_server/<uuid4 hex>/<key>`, minted by `@/lib/credentialRef`. Nothing here
+// reads the server's NAME any more. It used to, twice — refs were built as
+// `<name>.<key>` and the orphan cleanup below decided which refs this server
+// owned by testing for that same `<name>.` prefix — and the pair of them made
+// the name a key into the encrypted store: rename the server and its own refs
+// stopped looking like its own. That was unreachable only while `mcp_server`
+// could not be renamed at all; rename is now a field on `PATCH
+// /resources/{uid}` for every kind, which is what reached it.
 import type { TFunction } from "i18next";
 
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
+import { isMintedCredentialRef, mintCredentialRef } from "@/lib/credentialRef";
 import type { CredRow } from "./CredentialRowEditor";
 import { withTimeouts, type Timeouts } from "./serverTimeouts";
 
@@ -88,7 +99,15 @@ export async function saveMcpServerEdit({
     const name = row.name.trim();
     if (name === "") continue;
     if (row.value !== "") {
-      const ref = `${resource.name}.${name}`;
+      // Rotating an existing row writes THROUGH its existing ref; only a row
+      // with no ref yet, or one whose key was renamed (so its ref's trailing
+      // label would lie), gets a freshly minted address. Minting on every
+      // rotation would move the secret, and a move crosses the sync remote as
+      // a delete plus an add of something the other machine cannot place.
+      const ref =
+        row.originalRef && row.originalName === name
+          ? row.originalRef
+          : mintCredentialRef("mcp_server", name);
       const { error: e } = await client.POST("/credentials", {
         body: { ref, value: row.value },
       });
@@ -105,8 +124,8 @@ export async function saveMcpServerEdit({
     ...((config.transport as Record<string, unknown>) ?? {}),
     credential_refs: credentialRefs,
   };
-  const { error: pe } = await client.PATCH("/resources/{kind}/{name}", {
-    params: { path: { kind: "mcp_server", name: resource.name } },
+  const { error: pe } = await client.PATCH("/resources/{uid}", {
+    params: { path: { uid: resource.uid } },
     body: {
       description: description.trim() || null,
       config: withTimeouts({ ...config, transport }, timeouts),
@@ -126,15 +145,17 @@ export async function saveMcpServerEdit({
     throwApiError(pe, "INTERNAL_ERROR", "update failed");
   }
 
-  // Clean up credential store entries this server no longer references —
-  // but only ones it owns (`<name>.` prefix); never a shared/manual ref.
-  // A failed cleanup must not roll back the successful PATCH above;
+  // Clean up credential store entries this server no longer references — but
+  // only ones Coffer minted for it, never a ref the user typed or pasted here
+  // to share one secret between two servers. Ownership is the ref's SHAPE, not
+  // the server's name: a minted ref carries a uuid nothing else produced, and
+  // it keeps meaning that after a rename, which the old `<name>.` prefix test
+  // did not. A failed cleanup must not roll back the successful PATCH above;
   // we log a warning and let the user re-trigger if needed.
   const newRefs = new Set(Object.values(credentialRefs));
-  const prefix = `${resource.name}.`;
   const orphanWarnings: string[] = [];
   for (const ref of Object.values(credentialRefsOf(resource.config))) {
-    if (!newRefs.has(ref) && ref.startsWith(prefix)) {
+    if (!newRefs.has(ref) && isMintedCredentialRef("mcp_server", ref)) {
       const { error: de } = await client.DELETE("/credentials/{ref}", {
         params: { path: { ref } },
       });

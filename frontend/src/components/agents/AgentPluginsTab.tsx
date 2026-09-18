@@ -23,9 +23,9 @@ import { useAgentPlugins, useTogglePlugin, useUninstallPlugin } from "@/lib/hook
 
 export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
-  const plugins = useAgentPlugins(agent.name);
-  const toggle = useTogglePlugin(agent.name);
-  const uninstall = useUninstallPlugin(agent.name);
+  const plugins = useAgentPlugins(agent.uid);
+  const toggle = useTogglePlugin(agent.uid);
+  const uninstall = useUninstallPlugin(agent.uid);
   const [uninstallTarget, setUninstallTarget] = useState<PluginOut | null>(null);
 
   const items = plugins.data?.items ?? [];
@@ -147,7 +147,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
               clearLabel: t("common.clear"),
               renderBulkActions: ({ selectedRows, clear }) => (
                 <AgentPluginsBulkActions
-                  agentName={agent.name}
+                  agentUid={agent.uid}
                   rows={selectedRows}
                   clear={clear}
                   canUninstall={canUninstall}

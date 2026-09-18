@@ -5,6 +5,9 @@
 // the user's own editor instead. Directory-backed config keys expand into child
 // files that open the same way, and a Coffer memory-projection block renders an
 // info annotation.
+//
+// The editor is given the agent's `uid` — every config-file read and write is
+// addressed by it — and renders no part of the agent, so that is all it takes.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -114,7 +117,7 @@ describe("AgentConfigFilesEditor", () => {
     stubFile('{"theme": "dark"}');
     stubChild(undefined);
 
-    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
     openSettings();
 
     // Content is shown in a read-only CodeMirror editor, never an editable field.
@@ -135,7 +138,7 @@ describe("AgentConfigFilesEditor", () => {
     stubFile('{"theme": "dark"}');
     stubChild(undefined);
 
-    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
     openSettings();
 
     // FileActions offers real open/reveal on both surfaces (daemon-backed on web):
@@ -164,7 +167,7 @@ describe("AgentConfigFilesEditor", () => {
     } as unknown as ReturnType<typeof useAgentConfigFiles>);
     stubChild(undefined);
 
-    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
 
     // exists=false → not surfaced in the viewer at all (the list API still
     // returns it for the REST/CLI write path; the UI just doesn't show it).
@@ -177,7 +180,7 @@ describe("AgentConfigFilesEditor", () => {
     stubFile("{}");
     stubChild(undefined);
 
-    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
 
     // Children hidden until the directory is expanded.
     expect(screen.queryByText("alpha.md")).not.toBeInTheDocument();
@@ -201,7 +204,7 @@ describe("AgentConfigFilesEditor", () => {
       folder_path: "/home/u/.claude/memories",
     });
 
-    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
     fireEvent.click(screen.getByText("Memory directory"));
     fireEvent.click(screen.getByText("alpha.md"));
 
@@ -215,7 +218,7 @@ describe("AgentConfigFilesEditor", () => {
     stubFile("# CLAUDE.md", { memory_block: true });
     stubChild(undefined);
 
-    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
     openSettings();
 
     expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();
@@ -227,7 +230,7 @@ describe("AgentConfigFilesEditor", () => {
     stubChild(undefined);
     const onDirtyChange = vi.fn();
 
-    renderEditor(<AgentConfigFilesEditor name="cc" onDirtyChange={onDirtyChange} />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" onDirtyChange={onDirtyChange} />);
     openSettings();
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: '{"theme": "light"}' } });
@@ -250,7 +253,7 @@ describe("AgentConfigFilesEditor", () => {
     stubChild(undefined);
     const onDirtyChange = vi.fn();
 
-    renderEditor(<AgentConfigFilesEditor name="cc" onDirtyChange={onDirtyChange} />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" onDirtyChange={onDirtyChange} />);
     openSettings();
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "changed" } });
@@ -272,7 +275,7 @@ describe("AgentConfigFilesEditor", () => {
       return e.defaultPrevented;
     };
 
-    renderEditor(<AgentConfigFilesEditor name="cc" />);
+    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
     openSettings();
     expect(fire()).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));

@@ -3,6 +3,11 @@
 // TanStack Query bindings for /agents. The `agentsApi` calls raw fetch
 // against `${getCofferBaseUrl()}/agents/*`, so we stub `globalThis.fetch`
 // rather than the typed `getApiClient` used elsewhere.
+//
+// Every route below is addressed by the agent's `uid`, never by its name, so
+// the fixtures carry both and deliberately disagree: the uid is `u-cur` and
+// the label is `cur`. A fixture whose uid spelled its name would let a hook
+// that still built its URL from the name pass this file unchanged.
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, renderHook, screen, waitFor } from "@testing-library/react";
@@ -63,6 +68,7 @@ describe("useAgents", () => {
       jsonResponse(200, {
         items: [
           {
+            uid: "u-cur",
             name: "cur",
             type: "codex",
             config_dir: "/home/u/.codex",
@@ -104,6 +110,7 @@ describe("useRegisterAgent", () => {
   test("POSTs the body and invalidates the agents query", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(201, {
+        uid: "u-cur",
         name: "cur",
         type: "codex",
         config_dir: "/home/u/.codex",
@@ -132,16 +139,16 @@ describe("useRegisterAgent", () => {
 describe("useRemoveAgent", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("DELETEs the named agent", async () => {
+  test("DELETEs the agent the uid names", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useRemoveAgent(), {
       wrapper: wrapper(),
     });
-    await result.current.mutateAsync("cur");
+    await result.current.mutateAsync("u-cur");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur$/);
     expect((init as RequestInit).method).toBe("DELETE");
   });
 });
@@ -149,9 +156,10 @@ describe("useRemoveAgent", () => {
 describe("useAgent", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("GETs the named agent", async () => {
+  test("GETs the agent the uid names", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
+        uid: "u-cur",
         name: "cur",
         type: "codex",
         config_dir: "/home/u/.codex",
@@ -161,13 +169,14 @@ describe("useAgent", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgent("cur"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useAgent("u-cur"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    // The request went to the uid; what came back is read by its name.
     expect(result.current.data?.name).toBe("cur");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur$/);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur$/);
   });
 
-  test("does not fetch when the name is empty", () => {
+  test("does not fetch when the uid is empty", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     renderHook(() => useAgent(""), { wrapper: wrapper() });
@@ -178,9 +187,10 @@ describe("useAgent", () => {
 describe("usePatchAgent", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("PATCHes the named agent with the body", async () => {
+  test("PATCHes the agent the uid names with the body", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
+        uid: "u-cur",
         name: "cur",
         type: "codex",
         config_dir: "/home/u/.codex",
@@ -191,9 +201,9 @@ describe("usePatchAgent", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => usePatchAgent(), { wrapper: wrapper() });
-    await result.current.mutateAsync({ name: "cur", body: { description: "updated" } });
+    await result.current.mutateAsync({ uid: "u-cur", body: { description: "updated" } });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur$/);
     expect((init as RequestInit).method).toBe("PATCH");
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ description: "updated" });
   });
@@ -209,10 +219,10 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgentConfigFiles("cur"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useAgentConfigFiles("u-cur"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.[0].key).toBe("settings.json");
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/cur\/config-files$/);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/config-files$/);
   });
 
   test("GETs a single config file when a key is selected, not before", async () => {
@@ -222,7 +232,7 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { result, rerender } = renderHook(
-      ({ key }: { key: string | null }) => useAgentConfigFile("cur", key),
+      ({ key }: { key: string | null }) => useAgentConfigFile("u-cur", key),
       { wrapper: wrapper(), initialProps: { key: null as string | null } },
     );
     expect(fetchMock).not.toHaveBeenCalled();
@@ -230,7 +240,7 @@ describe("useAgentConfigFiles / useAgentConfigFile", () => {
     rerender({ key: "settings.json" });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(String(fetchMock.mock.calls[0][0])).toMatch(
-      /\/agents\/cur\/config-files\/settings.json$/,
+      /\/agents\/u-cur\/config-files\/settings.json$/,
     );
   });
 });
@@ -241,10 +251,10 @@ describe("useAgentMcpStatus / useAgentMcpInstall", () => {
   test("GETs the MCP install status", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { installed: true }));
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgentMcpStatus("cur"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useAgentMcpStatus("u-cur"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/cur\/mcp-install$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur\/mcp-install$/);
     expect((init as RequestInit).method).toBe("GET");
   });
 
@@ -253,14 +263,14 @@ describe("useAgentMcpStatus / useAgentMcpInstall", () => {
     // `call` reads every 2xx body (it does not swallow a second read).
     const fetchMock = vi.fn().mockImplementation(() => jsonResponse(200, { installed: true }));
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgentMcpInstall("cur"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useAgentMcpInstall("u-cur"), { wrapper: wrapper() });
 
     await result.current.mutateAsync(true);
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("POST");
 
     await result.current.mutateAsync(false);
     expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("DELETE");
-    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/agents\/cur\/mcp-install$/);
+    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/agents\/u-cur\/mcp-install$/);
   });
 });
 
@@ -291,17 +301,17 @@ describe("useAgentCandidates", () => {
 describe("useAgentMcpEntries", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("GETs /agents/:name/mcp-entries and caches under the correct key", async () => {
+  test("GETs /agents/:uid/mcp-entries and caches under the correct key", async () => {
     const payload = { items: [], parse_errors: [] };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, payload));
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgentMcpEntries("my-agent"), {
+    const { result } = renderHook(() => useAgentMcpEntries("u-my-agent"), {
       wrapper: wrapper(),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(payload);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/my-agent\/mcp-entries$/);
+    expect(String(url)).toMatch(/\/agents\/u-my-agent\/mcp-entries$/);
     expect((init as RequestInit).method).toBe("GET");
   });
 });
@@ -313,18 +323,20 @@ describe("useAdoptMcpEntry", () => {
     // Stub fetch: first call is the mutation POST, then any re-fetch for mcp-entries
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { kind: "mcp_server", name: "my-server" }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, { uid: "u-my-server", kind: "mcp_server", name: "my-server" }),
+      )
       // Subsequent re-fetches return empty lists (from invalidation)
       .mockResolvedValue(jsonResponse(200, { items: [], parse_errors: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useAdoptMcpEntry("my-agent"), {
+    const { result } = renderHook(() => useAdoptMcpEntry("u-my-agent"), {
       wrapper: wrapper(),
     });
     await result.current.mutateAsync({ entry: "my-server", body: {} });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/my-agent\/mcp-entries\/my-server\/adopt$/);
+    expect(String(url)).toMatch(/\/agents\/u-my-agent\/mcp-entries\/my-server\/adopt$/);
     expect((init as RequestInit).method).toBe("POST");
   });
 });
@@ -336,13 +348,13 @@ describe("useTogglePlugin", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useTogglePlugin("my-agent"), {
+    const { result } = renderHook(() => useTogglePlugin("u-my-agent"), {
       wrapper: wrapper(),
     });
     await result.current.mutateAsync({ id: "plugin-1", enabled: true });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/my-agent\/plugins\/plugin-1$/);
+    expect(String(url)).toMatch(/\/agents\/u-my-agent\/plugins\/plugin-1$/);
     expect((init as RequestInit).method).toBe("PATCH");
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({ enabled: true });
   });
@@ -355,12 +367,12 @@ describe("useUninstallPlugin", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useUninstallPlugin("my-agent"), {
+    const { result } = renderHook(() => useUninstallPlugin("u-my-agent"), {
       wrapper: wrapper(),
     });
     await result.current.mutateAsync({ id: "plugin-1" });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/my-agent\/plugins\/plugin-1$/);
+    expect(String(url)).toMatch(/\/agents\/u-my-agent\/plugins\/plugin-1$/);
     expect((init as RequestInit).method).toBe("DELETE");
   });
 });
@@ -371,17 +383,17 @@ describe("useAdoptUnmanagedSkill", () => {
   test("on success, invalidates unmanaged-skills and skills list", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse(200, { name: "my-skill" }))
+      .mockResolvedValueOnce(jsonResponse(200, { uid: "u-my-skill", name: "my-skill" }))
       .mockResolvedValue(jsonResponse(200, { items: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useAdoptUnmanagedSkill("my-agent"), {
+    const { result } = renderHook(() => useAdoptUnmanagedSkill("u-my-agent"), {
       wrapper: wrapper(),
     });
     await result.current.mutateAsync({ skill: "my-skill", location: "global" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/my-agent\/unmanaged-skills\/my-skill\/adopt$/);
+    expect(String(url)).toMatch(/\/agents\/u-my-agent\/unmanaged-skills\/my-skill\/adopt$/);
     expect((init as RequestInit).method).toBe("POST");
   });
 });
@@ -403,17 +415,21 @@ describe("mutation failures are never silent", () => {
   }
 
   test.each([
-    ["useRemoveAgent", () => useRemoveAgent(), "cur"],
-    ["useAgentMcpInstall", () => useAgentMcpInstall("cur"), true],
-    ["useUninstallPlugin", () => useUninstallPlugin("cur"), { id: "p1" }],
-    ["useTogglePlugin", () => useTogglePlugin("cur"), { id: "p1", enabled: true }],
-    ["useRemoveMcpEntry", () => useRemoveMcpEntry("cur"), { entry: "e" }],
+    ["useRemoveAgent", () => useRemoveAgent(), "u-cur"],
+    ["useAgentMcpInstall", () => useAgentMcpInstall("u-cur"), true],
+    ["useUninstallPlugin", () => useUninstallPlugin("u-cur"), { id: "p1" }],
+    ["useTogglePlugin", () => useTogglePlugin("u-cur"), { id: "p1", enabled: true }],
+    ["useRemoveMcpEntry", () => useRemoveMcpEntry("u-cur"), { entry: "e" }],
     [
       "useDeleteUnmanagedSkill",
-      () => useDeleteUnmanagedSkill("cur"),
+      () => useDeleteUnmanagedSkill("u-cur"),
       { skill: "s", location: "l" },
     ],
-    ["useAdoptUnmanagedSkill", () => useAdoptUnmanagedSkill("cur"), { skill: "s", location: "l" }],
+    [
+      "useAdoptUnmanagedSkill",
+      () => useAdoptUnmanagedSkill("u-cur"),
+      { skill: "s", location: "l" },
+    ],
   ])("%s toasts the server message when the request fails", async (_name, useHook, vars) => {
     vi.stubGlobal(
       "fetch",

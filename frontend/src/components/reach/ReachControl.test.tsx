@@ -19,6 +19,11 @@
 // The third is the machine-local line: reach does not sync, and this panel is
 // the only place a user is told so. A user who assumed it synced would set
 // reach once and never understand why the other machine ignored it.
+//
+// A scope stores agent UIDS and a person reads agent NAMES, so the fixtures
+// below carry both, deliberately unalike: a tick writes the uid, the row is
+// labelled and found by the name, and a fixture where the two coincided could
+// not tell one from the other.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -29,7 +34,19 @@ vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
 
 const agentHooks = await import("@/lib/hooks/useAgents");
 
-function seed(agents: { name: string }[] = [{ name: "claude" }, { name: "codex" }]) {
+/** The agents registered on this machine: the uid a scope stores, beside the
+ *  name the pick-list prints. */
+const CLAUDE = "u-agent-7f21";
+const CODEX = "u-agent-be04";
+/** A uid in a stored scope that no registered agent answers to. */
+const GHOST = "u-agent-0000";
+
+const AGENTS = [
+  { uid: CLAUDE, name: "claude" },
+  { uid: CODEX, name: "codex" },
+];
+
+function seed(agents: { uid: string; name: string }[] = AGENTS) {
   vi.mocked(agentHooks.useAgents).mockReturnValue({
     data: agents,
   } as unknown as ReturnType<typeof agentHooks.useAgents>);
@@ -41,6 +58,7 @@ const handlers = () => ({
   onRestricted: vi.fn(),
 });
 
+/** A scope, as the wire spells it: agent UIDS, never names. */
 const only = (agents: string[] | null): Scope => ({ agents });
 
 /** The one button: there is exactly one, and its text is the state. */
@@ -51,6 +69,9 @@ const choice = (label: RegExp) => screen.getByRole("radio", { name: label });
 /** Dismissing the panel is what commits the staged choice. */
 const closePanel = () =>
   fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+/** One agent's row, found the way the DOM labels it — by the NAME the user
+ *  reads, even though ticking it writes the uid. */
+const agentRow = (name: string) => within(screen.getByTestId(`scope-agent-${name}`));
 
 function mount(mode: ReachMode | null, props: Partial<Parameters<typeof ReachControl>[0]> = {}) {
   const h = handlers();
@@ -78,19 +99,19 @@ describe("the button says what the reach is", () => {
 
   test("a restricted scope is reported as a count of agents", () => {
     seed();
-    mount("restricted", { initialScope: only(["claude", "codex"]) });
+    mount("restricted", { initialScope: only([CLAUDE, CODEX]) });
     expect(trigger()).toHaveTextContent(/2 agents/i);
   });
 
   test("one agent is counted in the singular", () => {
     seed();
-    mount("restricted", { initialScope: only(["claude"]) });
+    mount("restricted", { initialScope: only([CLAUDE]) });
     expect(trigger()).toHaveTextContent(/^1 agent/i);
   });
 
   test("disabled reads as disabled", () => {
     seed();
-    mount("disabled", { initialScope: only(["claude"]) });
+    mount("disabled", { initialScope: only([CLAUDE]) });
     expect(trigger()).toHaveTextContent(/disabled/i);
   });
 
@@ -187,9 +208,9 @@ describe("disabled is its own choice, never inferred", () => {
     // selection and fires the disable endpoint; "I cleared the list to re-pick"
     // is a scope reaching nobody. Fusing them would destroy the first.
     seed();
-    const h = mount("restricted", { initialScope: only(["claude"]) });
+    const h = mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
-    fireEvent.click(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"));
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
     closePanel();
     expect(h.onRestricted).toHaveBeenCalledWith(only([]));
     expect(h.onDisabled).not.toHaveBeenCalled();
@@ -207,10 +228,10 @@ describe("disabled is its own choice, never inferred", () => {
     // Disabling leaves the scope untouched so re-enabling restores it; showing
     // the remembered selection is the plainest statement that it survived.
     seed();
-    mount("disabled", { initialScope: only(["claude"]) });
+    mount("disabled", { initialScope: only([CLAUDE]) });
     openPanel();
     expect(choice(/^disabled$/i)).toBeChecked();
-    expect(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox")).toBeChecked();
+    expect(agentRow("claude").getByRole("checkbox")).toBeChecked();
     expect(screen.queryByText(/dormant/i)).not.toBeInTheDocument();
   });
 });
@@ -246,7 +267,7 @@ describe("the panel says reach is machine-local", () => {
     // The note is about THIS resource and is the more urgent; the standing
     // fact is one click away inside the panel.
     seed();
-    mount("restricted", { initialScope: only(["claude"]), note: "Inactive here" });
+    mount("restricted", { initialScope: only([CLAUDE]), note: "Inactive here" });
     expect(trigger()).toHaveAttribute("title", "Inactive here");
   });
 
@@ -254,7 +275,7 @@ describe("the panel says reach is machine-local", () => {
     // Amber is reserved for a scope that currently reaches nobody. A standing
     // fact rendered in the same colour would read as a fault every time.
     seed();
-    mount("restricted", { initialScope: only(["claude"]) });
+    mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
     expect(screen.getByTestId("reach-machine-local").className).toContain("text-muted-foreground");
     expect(screen.getByTestId("reach-machine-local").className).not.toContain("status-warn");
@@ -276,20 +297,20 @@ describe("the panel stages the choice, then commits once on close", () => {
     const h = mount("everywhere");
     openPanel();
     fireEvent.click(choice(/only selected agents/i));
-    fireEvent.click(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"));
-    fireEvent.click(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox"));
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
+    fireEvent.click(agentRow("codex").getByRole("checkbox"));
     expect(h.onRestricted).not.toHaveBeenCalled();
 
     closePanel();
     expect(h.onRestricted).toHaveBeenCalledOnce();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["claude", "codex"]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE, CODEX]));
   });
 
   test("a whole-value choice closes the panel and writes on the way out, once", () => {
     // It commits as the panel goes, not while it is open: a write under an open
     // popover refetched the list and moved the row it is anchored to.
     seed();
-    const h = mount("restricted", { initialScope: only(["claude"]) });
+    const h = mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
     fireEvent.click(choice(/every agent/i));
     expect(h.onEverywhere).toHaveBeenCalledOnce();
@@ -305,7 +326,7 @@ describe("the panel stages the choice, then commits once on close", () => {
     // on an already-disabled resource — a real audit event for a glance — and
     // the consumer has no "same value" to dedupe that against.
     seed();
-    const h = mount("disabled", { initialScope: only(["claude"]) });
+    const h = mount("disabled", { initialScope: only([CLAUDE]) });
     openPanel();
     closePanel();
     expect(h.onDisabled).not.toHaveBeenCalled();
@@ -318,20 +339,21 @@ describe("the panel stages the choice, then commits once on close", () => {
     // consumer's seed never is), so a deliberate pick always reports;
     // ScopeControl is the one that drops a write matching what is stored.
     seed();
-    const h = mount("restricted", { initialScope: only(["claude"]) });
+    const h = mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
     fireEvent.click(choice(/only selected agents/i));
     closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["claude"]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE]));
   });
 
   test("the agent axis is a pick-list of what is registered, never free text", () => {
-    // A mistyped name would match nothing, which makes the resource dormant
-    // silently rather than failing — so the names are never typed.
+    // A typed uid would match nothing, which makes the resource dormant
+    // silently rather than failing — so it is never typed: the user picks a
+    // name and the list supplies the uid behind it.
     seed();
-    mount("restricted", { initialScope: only(["claude"]) });
+    mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
-    const row = within(screen.getByTestId("scope-agent-codex"));
+    const row = agentRow("codex");
     expect(row.getByText("codex")).toBeInTheDocument();
     expect(row.getByRole("checkbox")).toBeInTheDocument();
     expect(
@@ -349,30 +371,28 @@ describe("the panel stages the choice, then commits once on close", () => {
     openPanel();
     expect(choice(/every agent/i)).toBeChecked();
 
-    fireEvent.click(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox"));
+    fireEvent.click(agentRow("codex").getByRole("checkbox"));
     expect(choice(/only selected agents/i)).toBeChecked();
     expect(choice(/every agent/i)).not.toBeChecked();
 
     closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["codex"]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CODEX]));
     expect(h.onEverywhere).not.toHaveBeenCalled();
   });
 
   test("the pick-list opens on `initialScope`", () => {
     seed();
-    mount("restricted", { initialScope: only(["claude"]) });
+    mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
-    expect(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox")).toBeChecked();
-    expect(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox")).not.toBeChecked();
+    expect(agentRow("claude").getByRole("checkbox")).toBeChecked();
+    expect(agentRow("codex").getByRole("checkbox")).not.toBeChecked();
   });
 
   test("no seed is what a bulk write opens on — a fresh intent, nothing ticked", () => {
     seed();
     mount(null);
     openPanel();
-    expect(
-      within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"),
-    ).not.toBeChecked();
+    expect(agentRow("claude").getByRole("checkbox")).not.toBeChecked();
   });
 
   test("choosing 'only selected agents' from 'every agent' starts dormant", () => {
@@ -399,28 +419,31 @@ describe("the panel stages the choice, then commits once on close", () => {
     expect(h.onRestricted).toHaveBeenCalledWith(only([]));
   });
 
-  test("a seeded agent that is not registered here still renders, badged", () => {
-    // Dropping it would rewrite the user's scope behind their back, and a name
-    // can legally be scoped in before that agent is registered here.
-    seed([{ name: "claude" }]);
-    const h = mount("restricted", { initialScope: only(["ghost"]) });
+  test("a seeded agent uid nothing registered answers to still renders, badged", () => {
+    // Dropping it would rewrite the user's scope behind their back — the write
+    // below would go out narrower than what is stored — and a uid may
+    // legitimately be scoped in before that agent is registered on this
+    // machine. There is no name to print for it, so it prints as itself: the
+    // row is keyed on the uid, because that IS its label here.
+    seed([{ uid: CLAUDE, name: "claude" }]);
+    const h = mount("restricted", { initialScope: only([GHOST]) });
     openPanel();
-    const row = within(screen.getByTestId("scope-agent-ghost"));
-    expect(row.getByText("ghost")).toBeInTheDocument();
+    const row = agentRow(GHOST);
+    expect(row.getByText(GHOST)).toBeInTheDocument();
     expect(row.getByText(/not registered/i)).toBeInTheDocument();
     expect(row.getByRole("checkbox")).toBeChecked();
     fireEvent.click(choice(/only selected agents/i));
     closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["ghost"]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([GHOST]));
   });
 
-  test("ticking an agent preserves the unregistered names already seeded", () => {
-    seed([{ name: "claude" }]);
-    const h = mount("restricted", { initialScope: only(["ghost"]) });
+  test("ticking an agent preserves the unresolved uids already seeded", () => {
+    seed([{ uid: CLAUDE, name: "claude" }]);
+    const h = mount("restricted", { initialScope: only([GHOST]) });
     openPanel();
-    fireEvent.click(within(screen.getByTestId("scope-agent-claude")).getByRole("checkbox"));
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
     closePanel();
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["ghost", "claude"]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([GHOST, CLAUDE]));
   });
 
   test("with no agent registered and none seeded, the agent axis says so", () => {
@@ -434,7 +457,7 @@ describe("the panel stages the choice, then commits once on close", () => {
     // One button carrying the whole answer would otherwise read "1 agent" —
     // perfectly healthy-looking — while reaching nobody on this machine.
     seed();
-    mount("restricted", { initialScope: only(["claude"]), note: "Inactive here" });
+    mount("restricted", { initialScope: only([CLAUDE]), note: "Inactive here" });
     expect(trigger()).toHaveAttribute("title", "Inactive here");
     expect(trigger().className).toContain("status-warn");
     openPanel();
@@ -443,7 +466,7 @@ describe("the panel stages the choice, then commits once on close", () => {
 
   test("without a note the button is not coloured", () => {
     seed();
-    mount("restricted", { initialScope: only(["claude"]) });
+    mount("restricted", { initialScope: only([CLAUDE]) });
     expect(trigger().className).not.toContain("status-warn");
   });
 
@@ -461,10 +484,10 @@ describe("the panel stages the choice, then commits once on close", () => {
     openPanel();
     expect(screen.queryByRole("button", { name: /^done$/i })).not.toBeInTheDocument();
     fireEvent.click(choice(/only selected/i));
-    fireEvent.click(within(screen.getByTestId("scope-agent-codex")).getByRole("checkbox"));
+    fireEvent.click(agentRow("codex").getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: /^done$/i }));
     expect(h.onRestricted).toHaveBeenCalledTimes(1);
-    expect(h.onRestricted).toHaveBeenCalledWith(only(["codex"]));
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CODEX]));
     expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
     // Closing again (already closed) must not write a second time.
     closePanel();

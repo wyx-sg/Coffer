@@ -11,20 +11,21 @@
 // apply that consumes it and to the test that was already named after it; the
 // two paths shared this file without sharing anything but the two definitions
 // below — `ChannelPlan`, the shape both produce, and `channelSecretRef`, which
-// has to mint and re-find the same refs for both or a rotation would write to
-// a ref nothing reads.
+// mints the address a secret is stored at. A ref is no longer re-findable from
+// the channel's name, so a rotation must reuse the ref already in the config
+// (see `editChannel.ts`) rather than mint a second one nothing reads.
 import { z } from "zod";
 
 import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
+import { mintCredentialRef } from "@/lib/credentialRef";
 
-/**
- * The agent a newly-created channel routes to by default: a chat provider KEY
- * (`claude_code`, underscore) — what the turn orchestrator resolves by — not
- * the `claude-code` resource name, which passes registration but fails at turn
- * time with UNKNOWN_AGENT. The backend validates it against the live provider
- * registry (the old "builtin" pseudo-agent is retired); the edit dialog re-binds.
- */
-export const DEFAULT_AGENT = "claude_code";
+// There is no DEFAULT_AGENT constant any more. `default_agent` holds an agent
+// RESOURCE UID, which is minted per vault, so no constant can name one — and
+// the constant that used to sit here was the last place the frontend spelled a
+// second vocabulary for an agent (a chat provider key, `claude_code`, beside
+// the resource name `claude-code`). The add form now asks which registered
+// agent the channel drives, exactly as the edit form always did, and sends
+// that agent's uid.
 
 const ERR = "channels.dialog.errors";
 const channelNameSchema = z
@@ -92,19 +93,39 @@ export interface ChannelPlan {
   secrets: { ref: string; value: string }[];
 }
 
-/** Credential-store ref for one of a channel's secrets. */
-export function channelSecretRef(
-  name: string,
-  secret: "bot-token" | "app-secret" | "signing-secret" | "tunnel-token",
-): string {
-  return `channel/${name}/${secret}`;
+/**
+ * The same plan for a channel that already exists. It carries the `uid` the
+ * PATCH is addressed to, beside the `name` the toast reads out — a created
+ * channel has no uid yet, which is the whole difference between the two
+ * shapes and the reason they are not one optional field.
+ */
+export interface ChannelEditPlan extends ChannelPlan {
+  uid: string;
+}
+
+/** The secrets a channel can hold, and the logical key each one's ref ends in. */
+export type ChannelSecret = "bot-token" | "app-secret" | "signing-secret" | "tunnel-token";
+
+/**
+ * Mint the credential-store ref for one of a channel's secrets:
+ * `channel/<uuid4 hex>/<secret>`.
+ *
+ * It takes no name. It used to — `channel/<name>/<secret>` — and that made the
+ * channel's name a key into the encrypted store, so renaming a channel left its
+ * config citing an address that no longer described it. Renaming is now a field
+ * on `PATCH /resources/{uid}` for every kind, which is what reached the hazard;
+ * an opaque address is what closes it. See `@/lib/credentialRef`.
+ */
+export function channelSecretRef(secret: ChannelSecret): string {
+  return mintCredentialRef("channel", secret);
 }
 
 /**
  * Turn validated form values into the resource config plus the credential-store
  * writes. Pure (no network) — the config is fully built before any side
  * effect runs, mirroring AddMcpServerDialog's planServer. `runsOn` is passed in
- * for the same reason the values are: this function may not go looking for it.
+ * for the same reason the values are, and so is `defaultAgentUid`: this
+ * function may not go looking for either.
  *
  * Every created channel is BOUND, to the machine it was created from (spec
  * channels, "Where a channel runs"). A channel naming no machine means the
@@ -112,21 +133,25 @@ export function channelSecretRef(
  * and it runs nowhere — an unbound channel is a bot that never answers, which
  * is not a state a user should be able to fall into by filling in a form.
  */
-export function planChannel(values: AddChannelFormValues, runsOn: string): ChannelPlan {
+export function planChannel(
+  values: AddChannelFormValues,
+  runsOn: string,
+  defaultAgentUid: string,
+): ChannelPlan {
   if (values.channel_type === "telegram") {
-    const ref = channelSecretRef(values.name, "bot-token");
+    const ref = channelSecretRef("bot-token");
     return {
       name: values.name,
       config: {
         channel_type: "telegram" satisfies ChannelType,
         bot_token_ref: ref,
-        default_agent: DEFAULT_AGENT,
+        default_agent: defaultAgentUid,
         runs_on: runsOn,
       },
       secrets: [{ ref, value: values.bot_token }],
     };
   }
-  const appSecretRef = channelSecretRef(values.name, "app-secret");
+  const appSecretRef = channelSecretRef("app-secret");
   if (values.delivery === "websocket") {
     // No signing secret, no public URL, no tunnel: the bot dials out and the
     // register handshake (app id + app secret) authenticates the connection.
@@ -137,15 +162,15 @@ export function planChannel(values: AddChannelFormValues, runsOn: string): Chann
         delivery: "websocket" satisfies ChannelDelivery,
         app_id: values.app_id,
         app_secret_ref: appSecretRef,
-        default_agent: DEFAULT_AGENT,
+        default_agent: defaultAgentUid,
         runs_on: runsOn,
       },
       secrets: [{ ref: appSecretRef, value: values.app_secret }],
     };
   }
-  const signingSecretRef = channelSecretRef(values.name, "signing-secret");
+  const signingSecretRef = channelSecretRef("signing-secret");
   const tunnelToken = values.tunnel_token?.trim();
-  const tunnelTokenRef = channelSecretRef(values.name, "tunnel-token");
+  const tunnelTokenRef = channelSecretRef("tunnel-token");
   return {
     name: values.name,
     config: {
@@ -154,7 +179,7 @@ export function planChannel(values: AddChannelFormValues, runsOn: string): Chann
       app_id: values.app_id,
       app_secret_ref: appSecretRef,
       signing_secret_ref: signingSecretRef,
-      default_agent: DEFAULT_AGENT,
+      default_agent: defaultAgentUid,
       runs_on: runsOn,
       ...(values.public_base_url?.trim() ? { public_base_url: values.public_base_url.trim() } : {}),
       ...(tunnelToken ? { tunnel_token_ref: tunnelTokenRef } : {}),

@@ -34,13 +34,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/{name}": {
+    "/providers/{uid}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Provider profile name (unique within kind). */
-                name: string;
+                /** @description The connection Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -67,54 +67,13 @@ export interface paths {
         patch: operations["updateProvider"];
         trace?: never;
     };
-    "/providers/{name}/rename": {
+    "/providers/{uid}/activate": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Current connection name. */
-                name: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Rename a connection
-         * @description Moves a connection to a new name. This is NOT `PATCH /providers/{name}`:
-         *     PATCH edits a connection's CONFIG, while the name is its IDENTITY, and
-         *     three other places spell that identity out. A rename repoints all of
-         *     them in one operation:
-         *
-         *     - the `resources` row (unique on kind + name);
-         *     - the Fernet vault entry `provider/<name>/key`, when the connection
-         *       OWNS it and no other resource cites it (a shared or user-supplied
-         *       `credential_ref` is left alone);
-         *     - the `audit_log` rows recorded against the old name, so the history
-         *       stays reachable through the same `kind` + `name` filter;
-         *     - the projected native agent config of an ACTIVE connection — Claude
-         *       Code's `apiKeyHelper` (`coffer provider key --connection <name>`) and
-         *       Codex's `display_name` — so the agent keeps resolving a key.
-         *
-         *     Renaming to the current name is an idempotent no-op. A name another
-         *     connection already uses is rejected with 409 `RESOURCE_ALREADY_EXISTS`
-         *     and nothing is moved. Emits a `RESOURCE_RENAMED` audit event with
-         *     details `{from, to}` and returns the updated `ProviderOut`.
-         */
-        post: operations["renameProvider"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/providers/{name}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Provider profile name to activate. */
-                name: string;
+                /** @description The connection to activate, by uid. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -144,13 +103,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/{name}/internal-default": {
+    "/providers/{uid}/internal-default": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Connection name to set as the internal-engine default. */
-                name: string;
+                /** @description The connection to make the internal-engine default, by uid. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -177,13 +136,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/{name}/transcribe-default": {
+    "/providers/{uid}/transcribe-default": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Connection name to transcribe speech on. */
-                name: string;
+                /** @description The connection to transcribe speech on, by uid. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -244,23 +203,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/{name}/key": {
+    "/providers/{uid}/key": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Connection name whose key to resolve. */
-                name: string;
+                /** @description The connection whose key to resolve, by uid. */
+                uid: string;
             };
             cookie?: never;
         };
         /**
          * Resolve a specific connection's API key
-         * @description Returns the decrypted API key of the named connection. This is what Claude
-         *     Code's projected `apiKeyHelper = "coffer provider key --connection <name>"`
-         *     invokes, so the agent always reads exactly the activated connection's key
-         *     (no wire+active mismatch). Not audited — `apiKeyHelper` polls it frequently.
-         *     404 when the connection is absent or keyless (ollama).
+         * @description Returns the decrypted API key of one connection. This is what Claude
+         *     Code's projected
+         *     `apiKeyHelper = "coffer provider key --connection-uid <uid>"` invokes,
+         *     so the agent always reads exactly the activated connection's key (no
+         *     wire+active mismatch). By uid because that helper line is written once
+         *     into a file Coffer does not own and then read on every turn, for as
+         *     long as the connection lives — a name in it would stop resolving the
+         *     moment the user renamed the connection, and re-projecting on every
+         *     rename is what the provider-specific rename route used to be for. Not
+         *     audited — `apiKeyHelper` polls it frequently. 404 when the connection
+         *     is absent or keyless (ollama).
          */
         get: operations["connectionKey"];
         put?: never;
@@ -434,14 +399,19 @@ export interface components {
         Protocol: "anthropic" | "openai" | "ollama" | "unknown";
         /** @description A provider connection — a credentialed endpoint `{protocol, base_url, credential_ref}`. Never includes the raw secret. The model lives apart from the connection (spec provider-switching E3) and is chosen at the point of use. */
         ProviderOut: {
-            /** @description Connection name (unique within kind `provider`). */
+            /**
+             * @description The connection Resource's immutable identity, and what every route in this document addressing a connection takes — including the one the projected `apiKeyHelper` calls on every turn.
+             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+             */
+            uid: string;
+            /** @description A mutable label, unique within kind `provider`, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. Display only: nothing Coffer writes into another tool's config spells it any more, which is what let the provider-specific rename route go. */
             name: string;
             protocol: components["schemas"]["Protocol"];
             /** @description The upstream LLM endpoint URL. */
             base_url: string;
-            /** @description Fernet vault reference for the API key. Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`. Typically `provider/<name>/key` for an owned secret. Null for an ollama connection (no API key). */
+            /** @description Fernet vault reference for the API key. Pattern: `^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`. An opaque address — `provider/<random>/key` for a secret Coffer minted. Deliberately not derived from the connection's name: that made the name a key, so a rename had to move the secret too. Ownership is decided by citation count, never by the ref's shape, and refs already minted under the older `provider/<name>/key` spelling keep working as the plain strings they always were. Null for an ollama connection (no API key). */
             credential_ref: string | null;
-            /** @description READ-ONLY. The CONFIGURED agents this connection covers, derived from the resource's framework-level per-agent `scope` (ADR per-agent-resource-scope) intersected with the agent types Coffer knows. Empty for a keyless (ollama) connection, which covers no agent even in principle. It is deliberately NOT narrowed by `enabled` — that rides the same payload, so a client wanting the effective projection intersects the two itself, while a management surface can still render the agent list of a connection the user switched off. The projection writer is chosen by agent type, not protocol; the Agent Overview picker filters on this AND on `enabled`. To CHANGE it, edit the scope (`PUT /api/v1/resources/provider/{name}/scope`). */
+            /** @description READ-ONLY. The CONFIGURED agents this connection covers, derived from the resource's framework-level per-agent `scope` (ADR per-agent-resource-scope) intersected with the agent types Coffer knows. Empty for a keyless (ollama) connection, which covers no agent even in principle. It is deliberately NOT narrowed by `enabled` — that rides the same payload, so a client wanting the effective projection intersects the two itself, while a management surface can still render the agent list of a connection the user switched off. The projection writer is chosen by agent type, not protocol; the Agent Overview picker filters on this AND on `enabled`. To CHANGE it, edit the scope (`PUT /api/v1/resources/{uid}/scope`). */
             compatible_agents: components["schemas"]["AgentType"][];
             /** @description The curated set of models this connection OFFERS downstream — which of the endpoint's models the user intends to use, each with the modality saying WHICH KIND of model it is. EMPTY means no restriction (every model the endpoint serves), which is the default. Not a chosen model: the choice still happens at the point of use (spec provider-switching E3). Ids are opaque and passed verbatim to the vendor. The modality returned here is the STORED one — nothing re-derives it on read. */
             models: components["schemas"]["ProviderModel"][];
@@ -475,7 +445,7 @@ export interface components {
             /** @description Free text stored on the resource row. */
             description?: string | null;
         };
-        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong, and nothing keys off it for projection. Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/provider/{name}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching E3); `models` only curates which of the endpoint's models it offers. */
+        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong, and nothing keys off it for projection. Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/{uid}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching E3); `models` only curates which of the endpoint's models it offers. */
         ProviderPatchRequest: {
             protocol?: components["schemas"]["Protocol"];
             base_url?: string | null;
@@ -485,11 +455,6 @@ export interface components {
             models?: components["schemas"]["ProviderModel"][] | null;
             /** @description Free text stored on the resource row. */
             description?: string | null;
-        };
-        /** @description The connection's new name. Sent to a dedicated route rather than as a `ProviderPatch` field because the name is the connection's identity, not part of its config. */
-        ProviderRenameRequest: {
-            /** @description The name to move the connection to. Must not already be used by another connection (409). Equal to the current name ⇒ no-op. */
-            new_name: string;
         };
         /**
          * @description A coding agent a connection can project into.
@@ -658,8 +623,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Provider profile name (unique within kind). */
-                name: string;
+                /** @description The connection Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -683,8 +648,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Provider profile name (unique within kind). */
-                name: string;
+                /** @description The connection Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -706,8 +671,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Provider profile name (unique within kind). */
-                name: string;
+                /** @description The connection Resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -732,44 +697,13 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
-    renameProvider: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Current connection name. */
-                name: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProviderRenameRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProviderOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
     activateProvider: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Provider profile name to activate. */
-                name: string;
+                /** @description The connection to activate, by uid. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -794,8 +728,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Connection name to set as the internal-engine default. */
-                name: string;
+                /** @description The connection to make the internal-engine default, by uid. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -820,8 +754,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Connection name to transcribe speech on. */
-                name: string;
+                /** @description The connection to transcribe speech on, by uid. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -872,8 +806,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Connection name whose key to resolve. */
-                name: string;
+                /** @description The connection whose key to resolve, by uid. */
+                uid: string;
             };
             cookie?: never;
         };

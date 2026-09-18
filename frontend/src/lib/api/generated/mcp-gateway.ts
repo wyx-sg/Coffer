@@ -4,12 +4,13 @@
  */
 
 export interface paths {
-    "/resources/mcp_server/{name}/capabilities": {
+    "/resources/mcp_server/{uid}/capabilities": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -23,12 +24,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/mcp_server/{name}/capabilities/{capability_type}/enable": {
+    "/resources/mcp_server/{uid}/capabilities/{capability_type}/enable": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
                 capability_type: "tool" | "resource" | "prompt";
             };
             cookie?: never;
@@ -36,7 +38,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Enable a capability for the named MCP server. The capability_key is
+         * Enable a capability for the MCP server this uid names. The capability_key is
          *     carried in the request body (not the URL) so that keys containing '/'
          *     (resource URIs such as `file:///path`) route correctly.
          */
@@ -47,12 +49,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/mcp_server/{name}/capabilities/{capability_type}/disable": {
+    "/resources/mcp_server/{uid}/capabilities/{capability_type}/disable": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
                 capability_type: "tool" | "resource" | "prompt";
             };
             cookie?: never;
@@ -66,12 +69,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/mcp_server/{name}/refresh": {
+    "/resources/mcp_server/{uid}/refresh": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -85,12 +89,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/mcp_server/{name}/test": {
+    "/resources/mcp_server/{uid}/test": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -121,7 +126,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/mcp_server/{name}/invocations": {
+    "/resources/mcp_server/{uid}/invocations": {
         parameters: {
             query?: {
                 since?: string;
@@ -130,7 +135,8 @@ export interface paths {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -143,7 +149,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/resources/mcp_server/{name}/status": {
+    "/resources/mcp_server/{uid}/status": {
         parameters: {
             query?: never;
             header?: never;
@@ -175,7 +181,7 @@ export interface components {
             error: {
                 /** @example RESOURCE_NOT_FOUND */
                 code: string;
-                /** @example resource not found: mcp_server:filesystem */
+                /** @example resource not found: no mcp_server named 'filesystem' */
                 message: string;
                 details?: {
                     [key: string]: unknown;
@@ -256,6 +262,7 @@ export interface components {
             enabled: boolean;
         };
         CapabilityListOut: {
+            /** @description The server's label, for the page heading. It is resolved from the uid in the path, not the path segment echoed back — a capabilities page headed by a UUID would be unreadable. */
             server_name: string;
             tools: components["schemas"]["MCPToolView"][];
             resources: components["schemas"]["MCPResourceView"][];
@@ -276,8 +283,10 @@ export interface components {
         InvocationOut: {
             /** Format: date-time */
             timestamp: string;
-            /** @description Which upstream server the call went to. */
-            resource_name: string;
+            /** @description Which upstream server the call went to — the value actually recorded in the log, and what to filter or link by. Two forms are not resource uids and resolve to nothing: `coffer`, the sentinel Coffer's own built-in tools log under, and `deleted:<name>`, the marker given to rows whose server was already gone when the log was re-keyed from names to uids. */
+            resource_uid: string;
+            /** @description The same server's label, resolved at read time, so the timeline is readable without a client holding the whole resource list. Null when `resource_uid` resolves to no resource — a deleted server, or the built-in sentinel — which is where a client falls back to showing the uid's own text. Note the consequence of resolving rather than storing: a renamed server's past rows all read under its CURRENT name. That is the deliberate trade. The log is keyed by identity, so one server's history stays one history across a rename; the label is presentation, and presenting the name the user uses today beats presenting one they have already stopped using. */
+            resource_name: string | null;
             /** @enum {string} */
             capability_type: "tool" | "resource" | "prompt";
             capability_key: string;
@@ -347,7 +356,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -372,7 +382,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
                 capability_type: "tool" | "resource" | "prompt";
             };
             cookie?: never;
@@ -400,7 +411,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
                 capability_type: "tool" | "resource" | "prompt";
             };
             cookie?: never;
@@ -428,7 +440,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -453,7 +466,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -475,8 +489,8 @@ export interface operations {
     listAllMcpInvocations: {
         parameters: {
             query?: {
-                /** @description Narrow to one upstream server. */
-                name?: string;
+                /** @description Narrow to one upstream server, by the uid its rows were written under. Filtering by name was removed with the identity change: the log stores the uid, so a name filter would have to be resolved against today's labels — which would hide every row belonging to a server whose name has since changed, and silently hand a reused name the previous holder's history. The two reserved forms are filterable too: `coffer` for Coffer's own built-in tools, and `deleted:<name>` for rows whose server was already gone when the log was re-keyed. */
+                uid?: string;
                 since?: string;
                 limit?: number;
                 status?: "ok" | "error" | "timeout" | "denied";
@@ -508,7 +522,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };
@@ -532,7 +547,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                name: string;
+                /** @description The MCP server resource's immutable identity. */
+                uid: string;
             };
             cookie?: never;
         };

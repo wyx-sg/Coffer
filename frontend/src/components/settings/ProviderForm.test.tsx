@@ -27,6 +27,10 @@ function renderCreate(onSubmit = vi.fn()) {
 }
 
 const existing = (overrides?: Partial<Provider>): Provider => ({
+  // The form never sends the uid — it hands its caller a patch and, when the
+  // label changed, the new name — but a `Provider` carries one, so the fixture
+  // does too.
+  uid: "cn-31f0",
   name: "acme",
   protocol: "openai",
   base_url: "https://gw/v1",

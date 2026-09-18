@@ -97,7 +97,7 @@ export function MemoryPartitionsTable({
               query — it is a supplied value, not a missing one. */}
           <ScopeControl
             kind="memory"
-            name={r.name}
+            uid={r.uid}
             enabled={r.enabled}
             scope={null}
             supportsScope={false}
@@ -112,8 +112,8 @@ export function MemoryPartitionsTable({
       rows={rows}
       isLoading={isLoading}
       columns={columns}
-      rowKey={(r) => r.name}
-      onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.name)}`)}
+      rowKey={(r) => r.uid}
+      onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.uid)}`)}
       search={{
         accessor: (r) => `${r.name} ${r.repository_path}`,
         placeholder: t("memory.searchPlaceholder"),
@@ -129,7 +129,7 @@ export function MemoryPartitionsTable({
         clearLabel: t("common.clear"),
         renderBulkActions: ({ selectedRows, clear }) => (
           <BulkReachActions
-            rows={selectedRows.map((r) => ({ kind: "memory", name: r.name }))}
+            rows={selectedRows.map((r) => ({ kind: "memory", uid: r.uid }))}
             // Same two choices as the rows: enable or disable the lot, and no
             // scope write the server would refuse anyway.
             supportsScope={false}

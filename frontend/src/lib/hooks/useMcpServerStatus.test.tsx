@@ -26,7 +26,7 @@ describe("useMcpServerStatus", () => {
       GET: vi.fn().mockResolvedValue({ data: { status: "healthy" }, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpServerStatus("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpServerStatus("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBe("healthy");
   });
@@ -36,7 +36,7 @@ describe("useMcpServerStatus", () => {
       GET: vi.fn().mockResolvedValue({ data: { status: "unknown" }, error: undefined }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpServerStatus("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpServerStatus("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBeNull();
   });
@@ -49,7 +49,7 @@ describe("useMcpServerStatus", () => {
       }),
     } as unknown as ReturnType<typeof getApiClient>);
 
-    const { result } = renderHook(() => useMcpServerStatus("fs"), { wrapper: wrapper() });
+    const { result } = renderHook(() => useMcpServerStatus("u-filesystem"), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toBeNull();
   });
@@ -63,7 +63,10 @@ describe("useMcpServerStatus", () => {
     getApiClientMock.mockReturnValue({ GET: get } as unknown as ReturnType<typeof getApiClient>);
 
     const { result } = renderHook(
-      () => ({ status: useMcpServerStatus("fs"), runner: useMcpServerRunner("fs") }),
+      () => ({
+        status: useMcpServerStatus("u-filesystem"),
+        runner: useMcpServerRunner("u-filesystem"),
+      }),
       { wrapper: wrapper() },
     );
     await waitFor(() => expect(result.current.runner.isSuccess).toBe(true));

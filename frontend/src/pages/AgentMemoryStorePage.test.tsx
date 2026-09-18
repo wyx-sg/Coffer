@@ -8,6 +8,10 @@
 //
 // The two file hooks are mocked at the network boundary, as are the fs actions
 // (their own suite covers the transport).
+//
+// The agent half of the route is its `uid` (`/agents/:uid/memory`), so the
+// fixture route mounts a uid that is not the agent's name — the file reads and
+// the back link both have to spell it.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
@@ -86,10 +90,10 @@ function renderAt(search = `?dir=${encodeURIComponent(DIR)}&project=%2FUsers%2Fx
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/agents/claude/memory${search}`]}>
+      <MemoryRouter initialEntries={[`/agents/u-claude/memory${search}`]}>
         <Routes>
-          <Route path="/agents/:name/memory" element={<AgentMemoryStorePage />} />
-          <Route path="/agents/:name" element={<div>agent detail</div>} />
+          <Route path="/agents/:uid/memory" element={<AgentMemoryStorePage />} />
+          <Route path="/agents/:uid" element={<div>agent detail</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -103,7 +107,7 @@ describe("AgentMemoryStorePage", () => {
     stubTree();
     stubContent();
     renderAt();
-    expect(vi.mocked(hooks.useNativeMemoryFiles)).toHaveBeenCalledWith("claude", DIR);
+    expect(vi.mocked(hooks.useNativeMemoryFiles)).toHaveBeenCalledWith("u-claude", DIR);
     expect(screen.getByRole("heading", { name: "/Users/xing/Coffer" })).toBeInTheDocument();
     expect(screen.getByText(DIR)).toBeInTheDocument();
   });
@@ -119,7 +123,7 @@ describe("AgentMemoryStorePage", () => {
 
     fireEvent.click(screen.getByText("port-drift.md"));
     expect(vi.mocked(hooks.useNativeMemoryFileContent).mock.calls.at(-1)).toEqual([
-      "claude",
+      "u-claude",
       DIR,
       "port-drift.md",
     ]);
@@ -170,7 +174,7 @@ describe("AgentMemoryStorePage", () => {
     stubContent();
     renderAt();
     const back = screen.getByRole("link", { name: /back to/i });
-    expect(back).toHaveAttribute("href", "/agents/claude?tab=memory");
+    expect(back).toHaveAttribute("href", "/agents/u-claude?tab=memory");
     fireEvent.click(back);
     expect(screen.getByText("agent detail")).toBeInTheDocument();
   });

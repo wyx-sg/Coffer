@@ -97,7 +97,7 @@ export function ConnectionsTable({
       key: "reach",
       header: t("resources.cols.reach"),
       className: "whitespace-nowrap text-right",
-      cell: (p) => <ConnectionStatusCell provider={p} reach={reach.get(p.name)} />,
+      cell: (p) => <ConnectionStatusCell provider={p} reach={reach.get(p.uid)} />,
     },
     {
       key: "actions",
@@ -125,7 +125,7 @@ export function ConnectionsTable({
     },
     // The one reach filter every scoped list offers; `scope` is merged in from
     // the kind-wide reach query rather than carried on the provider row.
-    reachFilter(t, (p) => ({ enabled: p.enabled, scope: reach.get(p.name)?.scope })),
+    reachFilter(t, (p) => ({ enabled: p.enabled, scope: reach.get(p.uid)?.scope })),
   ];
 
   return (
@@ -133,14 +133,14 @@ export function ConnectionsTable({
       <DataTable
         rows={providers}
         columns={columns}
-        rowKey={(p) => p.name}
+        rowKey={(p) => p.uid}
         isLoading={isLoading}
         search={{
           accessor: (p) => `${p.name} ${p.base_url} ${p.description ?? ""}`,
           placeholder: t("settings.connections.searchPlaceholder"),
         }}
         filters={filters}
-        onRowClick={(p) => navigate(`/model-providers/${p.name}`)}
+        onRowClick={(p) => navigate(`/model-providers/${encodeURIComponent(p.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
           ariaSelectRow: (p) => `${t("common.bulk.selectRow")}: ${p.name}`,
@@ -162,7 +162,7 @@ export function ConnectionsTable({
         pending={del.isPending}
         onConfirm={() => {
           if (deleteTarget) {
-            del.mutate(deleteTarget.name, { onSuccess: () => setDeleteTarget(null) });
+            del.mutate(deleteTarget.uid, { onSuccess: () => setDeleteTarget(null) });
           }
         }}
       />

@@ -4,6 +4,11 @@
 // the channel's EXISTING credential ref BEFORE the config is PATCHed, a blank
 // secret field rotates nothing, and changing the bound agent PATCHes the full
 // config (refs preserved) with only default_agent changed.
+//
+// The PATCH is addressed to the channel's `uid`, and `default_agent` holds an
+// agent's `uid`. Every fixture below therefore spells its uid nothing like its
+// name — a fixture where the two agreed would let an assertion about the
+// address pass on the label, which is exactly the confusion the uid removes.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,30 +17,40 @@ import { EditChannelDialog } from "./EditChannelDialog";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-// The agent picker reads the turn platform's provider registry
-// (GET /agent-providers) — the same registry a turn resolves by — so it can
-// only offer real provider keys.
-vi.mock("@/lib/api/agentProviders", () => ({ agentProvidersApi: { list: vi.fn() } }));
+// The agent picker (AgentSelect) reads the registered AGENT RESOURCES. It used
+// to read the turn platform's provider registry, because the binding was a
+// provider key (`claude_code`) while the scope beside it held resource names —
+// two vocabularies for one thing. There is one now: the agent's uid.
+vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn() }));
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
-const { agentProvidersApi } = await import("@/lib/api/agentProviders");
-const listAgentsMock = vi.mocked(agentProvidersApi.list);
+const { useAgents } = await import("@/lib/hooks/useAgents");
+const useAgentsMock = vi.mocked(useAgents);
 
 function installApi(api: ApiClientMock) {
   getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
   return api;
 }
 
+/** The registered agents the picker offers, by name, and binds to, by uid. */
+const CLAUDE = { uid: "u-6c1d0b83", name: "claude-code" };
+const CODEX = { uid: "u-f04a927e", name: "codex" };
+
+/** The two channels edited below: a uid the PATCH is addressed to, a name the
+ *  credential refs and the toast spell. */
+const TG_UID = "u-3d9a1f77";
+const ST_UID = "u-c0be4512";
+
 const telegramResource = {
-  ref: "channel:tg",
+  uid: TG_UID,
   kind: "channel",
   name: "tg",
   enabled: true,
   config: {
     channel_type: "telegram",
     bot_token_ref: "channel/tg/bot-token",
-    default_agent: "claude_code",
+    default_agent: CLAUDE.uid,
   },
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
@@ -53,12 +68,9 @@ function renderDialog(resource = telegramResource) {
 }
 
 beforeEach(() => {
-  listAgentsMock.mockResolvedValue({
-    agents: [
-      { agent_key: "claude_code", display_name: "Claude Code", available: true },
-      { agent_key: "codex", display_name: "Codex", available: true },
-    ],
-  });
+  useAgentsMock.mockReturnValue({
+    data: [CLAUDE, CODEX],
+  } as unknown as ReturnType<typeof useAgents>);
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -68,16 +80,42 @@ function save() {
 }
 
 describe("EditChannelDialog", () => {
-  test("sources the agent picker from the chat provider registry, not the resource list", async () => {
-    // The bound agent is a chat provider key (claude_code, underscore). The
-    // picker must read the same registry the turn resolves by (agentProvidersApi.list
-    // → GET /chat/agents) so a re-bind can only ever pick a real provider key.
-    // The old useAgents() source served resource names (claude-code), which
-    // fail at turn time with UNKNOWN_AGENT.
-    installApi(mockApiClient());
+  test("offers the registered agents by NAME and re-binds by uid", async () => {
+    // One vocabulary, two sides of it. The menu is the agents this vault has,
+    // under the names their owner gave them; the config gets the uid, which is
+    // what keeps the binding pointing at the same agent after a relabel.
+    const api = installApi(mockApiClient());
     renderDialog();
 
-    await waitFor(() => expect(listAgentsMock).toHaveBeenCalled());
+    const picker = screen.getByRole("combobox", { name: /default agent/i });
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      CLAUDE.name,
+      CODEX.name,
+    ]);
+
+    fireEvent.click(screen.getByRole("option", { name: CODEX.name }));
+    save();
+
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+      .body.config;
+    expect(config.default_agent).toBe(CODEX.uid);
+  });
+
+  test("a binding this vault has no agent for is kept, and shown as the uid it is", () => {
+    // Dropping it would silently re-bind the channel to whichever agent sorts
+    // first. Showing the raw uid is the only thing that lets the owner see what
+    // the binding actually says and fix it.
+    installApi(mockApiClient());
+    renderDialog({
+      ...telegramResource,
+      config: { ...telegramResource.config, default_agent: "u-deadbeef" },
+    } as unknown as typeof telegramResource);
+
+    expect(screen.getByRole("combobox", { name: /default agent/i })).toHaveTextContent(
+      "u-deadbeef",
+    );
   });
 
   test("rotating the bot token writes the existing ref first, then PATCHes config", async () => {
@@ -94,13 +132,13 @@ describe("EditChannelDialog", () => {
       body: { ref: "channel/tg/bot-token", value: "999:rotated" },
     });
     await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    expect(api.PATCH).toHaveBeenCalledWith("/resources/{kind}/{name}", {
-      params: { path: { kind: "channel", name: "tg" } },
+    expect(api.PATCH).toHaveBeenCalledWith("/resources/{uid}", {
+      params: { path: { uid: TG_UID } },
       body: {
         config: {
           channel_type: "telegram",
           bot_token_ref: "channel/tg/bot-token",
-          default_agent: "claude_code",
+          default_agent: CLAUDE.uid,
         },
       },
     });
@@ -118,6 +156,7 @@ describe("EditChannelDialog", () => {
   test("seatalk: rotating the signing secret writes its existing ref before the PATCH", async () => {
     const api = installApi(mockApiClient());
     renderDialog({
+      uid: ST_UID,
       kind: "channel",
       name: "st",
       enabled: true,
@@ -126,7 +165,7 @@ describe("EditChannelDialog", () => {
         app_id: "app-1",
         app_secret_ref: "channel/st/app-secret",
         signing_secret_ref: "channel/st/signing-secret",
-        default_agent: "claude_code",
+        default_agent: CLAUDE.uid,
       },
     } as unknown as typeof telegramResource);
 
@@ -148,6 +187,7 @@ describe("EditChannelDialog", () => {
 
   describe("seatalk delivery method", () => {
     const webhookChannel = {
+      uid: ST_UID,
       kind: "channel",
       name: "st",
       enabled: true,
@@ -158,11 +198,12 @@ describe("EditChannelDialog", () => {
         signing_secret_ref: "channel/st/signing-secret",
         tunnel_token_ref: "channel/st/tunnel-token",
         public_base_url: "https://x.trycloudflare.com",
-        default_agent: "claude_code",
+        default_agent: CLAUDE.uid,
       },
     } as unknown as typeof telegramResource;
 
     const websocketChannel = {
+      uid: ST_UID,
       kind: "channel",
       name: "st",
       enabled: true,
@@ -171,7 +212,7 @@ describe("EditChannelDialog", () => {
         delivery: "websocket",
         app_id: "app-1",
         app_secret_ref: "channel/st/app-secret",
-        default_agent: "claude_code",
+        default_agent: CLAUDE.uid,
       },
     } as unknown as typeof telegramResource;
 
@@ -228,9 +269,17 @@ describe("EditChannelDialog", () => {
       save();
 
       await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      // The websocket channel dropped its signing-secret ref, so this mints a
+      // fresh one — opaque, and naming neither the channel nor its uid. The
+      // config has to cite the same address the secret was written to.
       expect(api.POST).toHaveBeenCalledWith("/credentials", {
-        body: { ref: "channel/st/signing-secret", value: "sig" },
+        body: {
+          ref: expect.stringMatching(/^channel\/[0-9a-f]{32}\/signing-secret$/),
+          value: "sig",
+        },
       });
+      const minted = (api.POST.mock.calls[0][1] as { body: { ref: string } }).body.ref;
+      expect(patchedConfig(api).signing_secret_ref).toBe(minted);
       expect(patchedConfig(api).delivery).toBe("webhook");
     });
   });

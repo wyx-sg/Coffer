@@ -13,7 +13,6 @@
 // control of its own. The description sits in the Configuration card rather than
 // here, so it is stated exactly once.
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Pencil, Trash2 } from "lucide-react";
 
@@ -27,7 +26,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Provider } from "@/lib/api/providers";
-import { useRenameProvider, useUpdateProvider } from "@/lib/hooks/useProviders";
+import { useUpdateProvider } from "@/lib/hooks/useProviders";
+import { useRenameResource } from "@/lib/hooks/useResourceMutations";
 
 export function ProviderDetailHeader({
   provider,
@@ -39,9 +39,8 @@ export function ProviderDetailHeader({
   deletePending: boolean;
 }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const update = useUpdateProvider();
-  const rename = useRenameProvider();
+  const rename = useRenameResource();
   const [editOpen, setEditOpen] = useState(false);
 
   const closeEdit = () => {
@@ -50,18 +49,27 @@ export function ProviderDetailHeader({
     rename.reset();
   };
 
-  /** Save the edit dialog. A changed NAME goes first and on its own route: a
-   *  name is a label, not config, and one already taken must fail BEFORE any of
-   *  this dialog's other edits land. The patch then addresses the connection by
-   *  whatever name it now has, and the page follows it — this route IS the
-   *  name, so staying put would leave the user on a URL that 404s. */
+  /** Save the edit dialog.
+   *
+   *  A changed NAME is an ordinary field edit now — the kind-agnostic
+   *  `PATCH /resources/{uid}` every kind renames through — rather than this
+   *  kind's own `POST /providers/{name}/rename`, which existed only because the
+   *  name was the connection's identity. It still goes FIRST, for the reason it
+   *  always did: a label already taken must fail before any of this dialog's
+   *  other edits land.
+   *
+   *  Nothing navigates afterwards. The URL is built from the uid, so a rename
+   *  does not change it — which is this change made visible: the page the user
+   *  is reading stays the page they are reading, and the old code's
+   *  `navigate(.../${next})` existed purely because the route WAS the name and
+   *  staying put would have left them on a URL that 404s. */
   const save = async (
     patch: Parameters<typeof update.mutateAsync>[0]["patch"],
     next: string | null,
   ) => {
     try {
-      if (next) await rename.mutateAsync({ name: provider.name, newName: next });
-      await update.mutateAsync({ name: next ?? provider.name, patch });
+      if (next) await rename.mutateAsync({ kind: "provider", uid: provider.uid, name: next });
+      await update.mutateAsync({ uid: provider.uid, patch });
     } catch {
       // Swallowed deliberately: the failure is already the mutation's state,
       // which the dialog renders inline (and the hook toasts). Letting it
@@ -69,7 +77,6 @@ export function ProviderDetailHeader({
       return;
     }
     closeEdit();
-    if (next) navigate(`/model-providers/${encodeURIComponent(next)}`, { replace: true });
   };
 
   return (
@@ -86,7 +93,7 @@ export function ProviderDetailHeader({
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ScopeControl kind="provider" name={provider.name} enabled={provider.enabled} />
+            <ScopeControl kind="provider" uid={provider.uid} enabled={provider.enabled} />
             <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
               <Pencil className="mr-1.5 size-3.5" /> {t("common.edit")}
             </Button>

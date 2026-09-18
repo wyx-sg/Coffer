@@ -8,6 +8,10 @@
 //   - claude_code agent hides Uninstall + shows hint text
 //   - parse_errors surface as an Alert banner
 //   - en/zh key parity for agents.workspace.pluginsTab
+//
+// Toggle and uninstall are addressed to the agent's `uid`, so the fixtures
+// below carry a uid that is not the agent's name and the API assertions spell
+// the uid rather than reaching for `.name`.
 import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
@@ -30,6 +34,7 @@ const { agentsApi } = await import("@/lib/api/agents");
 const api = vi.mocked(agentsApi);
 
 const CODEX_AGENT: AgentOut = {
+  uid: "u-codex-agent",
   name: "codex-agent",
   type: "codex",
   config_dir: "/home/u/.codex",
@@ -39,6 +44,7 @@ const CODEX_AGENT: AgentOut = {
 };
 
 const CLAUDE_AGENT: AgentOut = {
+  uid: "u-cc-agent",
   name: "cc-agent",
   type: "claude_code",
   config_dir: "/home/u/.claude",
@@ -145,7 +151,7 @@ describe("AgentPluginsTab", () => {
     // plugin-a is enabled (true) → toggling should flip to false.
     fireEvent.click(switches[0]);
     await waitFor(() =>
-      expect(api.togglePlugin).toHaveBeenCalledWith(CODEX_AGENT.name, PLUGIN_A.id, false),
+      expect(api.togglePlugin).toHaveBeenCalledWith(CODEX_AGENT.uid, PLUGIN_A.id, false),
     );
   });
 
@@ -183,7 +189,7 @@ describe("AgentPluginsTab", () => {
     // Confirm uninstall.
     fireEvent.click(within(dialog).getByRole("button", { name: /uninstall/i }));
     await waitFor(() =>
-      expect(api.uninstallPlugin).toHaveBeenCalledWith(CODEX_AGENT.name, PLUGIN_A.id),
+      expect(api.uninstallPlugin).toHaveBeenCalledWith(CODEX_AGENT.uid, PLUGIN_A.id),
     );
   });
 

@@ -5,8 +5,14 @@
 // styled confirmation dialog (no window.confirm). The type column shows the
 // product name, the config dir is home-relative (full path in a tooltip), and
 // an availability pill reflects the provider registry.
+//
+// Names and uids are two different things here and the fixtures keep them
+// apart (`cur` / `u-cur`): every cell the user reads spells the NAME, while
+// the delete request, the row key and the skill-binding lookup all spell the
+// UID. Fixtures whose uid echoed the name would let a lookup keyed on the
+// wrong one pass.
 
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -42,6 +48,8 @@ const { useRemoveAgent } = await import("@/lib/hooks/useAgents");
 const useRemoveAgentMock = vi.mocked(useRemoveAgent);
 const { useAgentProviders } = await import("@/lib/hooks/useAgentProviders");
 const useAgentProvidersMock = vi.mocked(useAgentProviders);
+const { useSkills } = await import("@/lib/hooks/useSkills");
+const useSkillsMock = vi.mocked(useSkills);
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -56,6 +64,7 @@ function wrap(ui: React.ReactNode) {
 
 const SAMPLE: AgentOut[] = [
   {
+    uid: "u-cur",
     name: "cur",
     type: "codex",
     config_dir: "/home/u/.codex",
@@ -64,6 +73,7 @@ const SAMPLE: AgentOut[] = [
     updated_at: "2026-05-22T00:00:00Z",
   },
   {
+    uid: "u-cc",
     name: "cc",
     type: "claude_code",
     config_dir: "/home/u/.claude",
@@ -82,6 +92,13 @@ function stubRemove(mutate = vi.fn()) {
 }
 
 describe("AgentTable", () => {
+  beforeEach(() => {
+    // clearAllMocks below wipes the factory's default return value, so every
+    // test that does not care about skill counts starts from "none delivered".
+    useSkillsMock.mockReturnValue({ data: [], isPending: false } as unknown as ReturnType<
+      typeof useSkills
+    >);
+  });
   afterEach(() => vi.clearAllMocks());
 
   test("renders one row per agent with a home-relative config directory", () => {
@@ -135,7 +152,32 @@ describe("AgentTable", () => {
     const dialog = screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
     expect(mutate).toHaveBeenCalled();
-    expect(mutate.mock.calls[0][0]).toBe("cur");
+    // The dialog named the agent, but the request is addressed to its uid.
+    expect(mutate.mock.calls[0][0]).toBe("u-cur");
+  });
+
+  test("counts delivered skills per agent uid, not per agent name", () => {
+    stubRemove();
+    // Two bindings for `cur`, one for `cc`. Each binding carries the agent's
+    // name as well, spelled wrong here on purpose: a count built from
+    // `agent_name` would put both rows at zero.
+    useSkillsMock.mockReturnValue({
+      data: [
+        {
+          bindings: [
+            { agent_uid: "u-cur", agent_name: "stale-label" },
+            { agent_uid: "u-cc", agent_name: "stale-label" },
+          ],
+        },
+        { bindings: [{ agent_uid: "u-cur", agent_name: "stale-label" }] },
+      ],
+      isPending: false,
+    } as unknown as ReturnType<typeof useSkills>);
+    render(<AgentTable agents={SAMPLE} />, { wrapper: wrap(null) });
+    const codexRow = screen.getByText("cur").closest("tr") as HTMLElement;
+    const claudeRow = screen.getByText("cc").closest("tr") as HTMLElement;
+    expect(within(codexRow).getByText("2")).toBeInTheDocument();
+    expect(within(claudeRow).getByText("1")).toBeInTheDocument();
   });
 
   test("cancelling the delete dialog is a no-op", () => {

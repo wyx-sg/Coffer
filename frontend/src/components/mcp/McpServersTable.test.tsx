@@ -36,8 +36,11 @@ vi.mock("@/lib/hooks/useScope", () => ({
   useResourceScope: vi.fn(() => ({ data: undefined })),
   useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
+// The agent vocabulary a scope is judged against. A scope names agent UIDS, so
+// the registered agent has to carry one — its name is only what a panel would
+// print.
 vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ name: "cc" }] })),
+  useAgents: vi.fn(() => ({ data: [{ uid: "u-claude-code", name: "cc" }] })),
 }));
 
 vi.mock("@/lib/hooks/useResourceMutations", () => {
@@ -74,9 +77,12 @@ function wrap(ui: React.ReactNode) {
   );
 }
 
+// Each row's uid is deliberately unlike its name: the row NAVIGATES by uid and
+// MUTATES by uid while showing the name, and equal strings would hide a cell
+// that used the wrong one.
 const SAMPLE: ResourceOut[] = [
   {
-    ref: "mcp_server:files",
+    uid: "u-local-files",
     kind: "mcp_server",
     name: "files",
     enabled: true,
@@ -87,7 +93,7 @@ const SAMPLE: ResourceOut[] = [
     updated_at: "2026-05-22T00:00:00Z",
   },
   {
-    ref: "mcp_server:web",
+    uid: "u-remote-web",
     kind: "mcp_server",
     name: "web",
     enabled: false,
@@ -99,11 +105,11 @@ const SAMPLE: ResourceOut[] = [
   },
   {
     // Enabled but scoped: the state the old on/off switch could not express.
-    ref: "mcp_server:notes",
+    uid: "u-notes-store",
     kind: "mcp_server",
     name: "notes",
     enabled: true,
-    scope: { agents: ["cc"] },
+    scope: { agents: ["u-claude-code"] },
     description: "Scoped to one agent",
     config: { transport: { type: "sse" } },
     created_at: "2026-05-22T00:00:00Z",
@@ -192,11 +198,17 @@ describe("McpServersTable", () => {
   test("each row's scope comes from the list payload — no per-row scope fetch", () => {
     render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
 
-    // Third argument is the query's `enabled` flag: false on every row.
+    // The hook now takes (uid, enabled) — the kind segment went with the
+    // route — so the `enabled` flag is the SECOND argument, and it is false on
+    // every row.
     expect(vi.mocked(useResourceScope).mock.calls.length).toBeGreaterThan(0);
     for (const call of vi.mocked(useResourceScope).mock.calls) {
-      expect(call[2]).toBe(false);
+      expect(call[1]).toBe(false);
     }
+    // And each row asks about its own uid, never its name.
+    expect(vi.mocked(useResourceScope).mock.calls.map((c) => c[0])).toEqual(
+      expect.arrayContaining(["u-local-files", "u-remote-web", "u-notes-store"]),
+    );
   });
 
   test("the scope control drives enable/disable, and never navigates the row", () => {
@@ -217,18 +229,19 @@ describe("McpServersTable", () => {
     // choice closes it and commits on the way out.
     fireEvent.click(reachIn("files"));
     fireEvent.click(choice(/^disabled$/i));
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "files" });
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "mcp_server", uid: "u-local-files" });
 
     fireEvent.click(reachIn("web"));
     fireEvent.click(choice(/every agent/i));
-    expect(enableMutate).toHaveBeenCalledWith({ kind: "mcp_server", name: "web" });
+    expect(enableMutate).toHaveBeenCalledWith({ kind: "mcp_server", uid: "u-remote-web" });
     // Neither the button nor the choice inside the portalled panel may reach
     // the row underneath it.
     expect(navigateMock).not.toHaveBeenCalled();
 
-    // …while the row itself still navigates.
+    // …while the row itself still navigates — to the UID, because the old
+    // name→uid redirect is gone and a name in the URL would resolve nothing.
     fireEvent.click(screen.getByText("Local filesystem access"));
-    expect(navigateMock).toHaveBeenCalledWith("/mcp-servers/files");
+    expect(navigateMock).toHaveBeenCalledWith("/mcp-servers/u-local-files");
   });
 
   test("the status filter narrows the rows by reach", () => {
