@@ -158,14 +158,20 @@ acceptance(
     } finally {
       // Best-effort teardown — leaks would compound across runs because the
       // e2e DB is shared.
-      await bestEffortDelete(
-        `http://127.0.0.1:${port}/api/v1/skills/${skillName}`,
-        token,
-      );
-      await bestEffortDelete(
-        `http://127.0.0.1:${port}/api/v1/agents/${agentName}`,
-        token,
-      );
+      // Both routes address the uid. A lookup that finds nothing is the
+      // resource already being gone, which is what this teardown wanted.
+      const doomedSkill = await resolveResourceUid("skill", skillName);
+      if (doomedSkill !== null)
+        await bestEffortDelete(
+          `http://127.0.0.1:${port}/api/v1/skills/${doomedSkill}`,
+          token,
+        );
+      const doomedAgent = await resolveResourceUid("agent", agentName);
+      if (doomedAgent !== null)
+        await bestEffortDelete(
+          `http://127.0.0.1:${port}/api/v1/agents/${doomedAgent}`,
+          token,
+        );
       try {
         fs.rmSync(skillSrc, { recursive: true, force: true });
         fs.rmSync(agentConfigDir, { recursive: true, force: true });
