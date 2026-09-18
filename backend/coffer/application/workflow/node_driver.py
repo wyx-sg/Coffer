@@ -155,6 +155,10 @@ class NodeDriver:
                 # calls back to the run and attempt that caused them (FR-035).
                 # The shape is the contract; do not decorate it.
                 run_context=f"{dispatch.run.id}/{attempt_id}",
+                # What this attempt was told to run on (FR-071). None leaves
+                # the agent's own configuration to decide, as it always did.
+                model=dispatch.model,
+                effort=dispatch.effort,
             )
         except asyncio.CancelledError:
             raise

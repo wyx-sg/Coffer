@@ -101,7 +101,13 @@ class TurnPlatformPort(ConversationPort, Protocol):
     """
 
     async def create_conversation(
-        self, *, agent_key: str, cwd: str, run_context: str | None = None
+        self,
+        *,
+        agent_key: str,
+        cwd: str,
+        run_context: str | None = None,
+        model: str | None = None,
+        effort: str | None = None,
     ) -> str:
         """Open a conversation and return its id.
 

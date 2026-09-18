@@ -33,6 +33,7 @@ from coffer.surfaces.http.workflow.dependencies import (
 )
 from coffer.surfaces.http.workflow.schemas import (
     AdhocTaskIn,
+    AssignmentIn,
     NodeActionIn,
     NodeAttemptOut,
     SayIn,
@@ -96,6 +97,36 @@ async def say_to_node(
     result = await nodes.say(run_id, node_key, text=body.text, actor=event_actor(actor))
     if result.attempt is None:  # pragma: no cover - every branch answers with an attempt
         raise IllegalTransition(f"run {run_id}", "say", node_key, ())
+    return attempt_out(result.attempt)
+
+
+@router.post("/runs/{run_id}/nodes/{node_key}/assignment", response_model=NodeAttemptOut)
+async def assign_node(
+    run_id: str,
+    node_key: str,
+    body: AssignmentIn,
+    nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> NodeAttemptOut:
+    """Choose who runs this task, on what, before it runs (FR-071).
+
+    Only before: once the turn is in flight the conversation owns these
+    settings and the task's own pickers write them there. Recorded on the
+    ATTEMPT, so a retry given a stronger model leaves the first attempt's row
+    still saying what it actually ran on.
+
+    No version: this decides nothing about where the run is.
+    """
+    result = await nodes.assign(
+        run_id,
+        node_key,
+        agent=body.agent,
+        model=body.model,
+        effort=body.effort,
+        actor=event_actor(actor),
+    )
+    if result.attempt is None:  # pragma: no cover - assign always answers with one
+        raise IllegalTransition(f"run {run_id}", "assign", node_key, ())
     return attempt_out(result.attempt)
 
 

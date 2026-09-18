@@ -78,6 +78,18 @@ export const workflowApi = {
   deleteRun: (runId: string) => call<void>(`/workflow/runs/${enc(runId)}`, { method: "DELETE" }),
 
   /**
+   * Choose who runs a task's next attempt, on what, at what effort (FR-071).
+   * All three are written verbatim: null clears the override and falls back to
+   * the workflow's own answer. Only before the task starts — once its turn is
+   * in flight the conversation owns these and the daemon answers 409.
+   */
+  assignNode: (runId: string, nodeKey: string, body: Schemas["AssignmentIn"]) =>
+    call<Schemas["NodeAttemptOut"]>(
+      `/workflow/runs/${enc(runId)}/nodes/${enc(nodeKey)}/assignment`,
+      { method: "POST", body },
+    ),
+
+  /**
    * Rewrite what a run is called and what it is for (FR-070). No `version`:
    * the optimistic lock guards the run's position, and a label moves it
    * nowhere — the status, the stage and the log come back untouched.

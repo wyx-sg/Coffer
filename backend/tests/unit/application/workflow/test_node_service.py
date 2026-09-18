@@ -508,3 +508,50 @@ async def test_each_task_is_given_its_own_number_of_tries() -> None:
     assert engine.types(run.id)[-1] == "run.failed"
     assert await engine.attempts.latest_attempt(run.id, "write_code") is not None
     assert (await engine.attempts.latest_attempt(run.id, "write_code")).attempt == 1
+
+
+@pytest.mark.acceptance(spec="workflow", scenario="a task is given a bigger model before it runs")
+async def test_a_task_is_given_a_bigger_model_before_it_runs(engine: Engine) -> None:
+    """FR-071: the choice is worth making before the task starts, which is the
+    one moment no conversation exists to make it in."""
+    run = await engine.started()
+
+    assigned = await engine.nodes.assign(
+        run.id, "draft_td", agent="codex", model="gpt-5-codex", effort="high"
+    )
+    assert assigned.attempt is not None
+    assert (assigned.attempt.agent, assigned.attempt.model) == ("codex", "gpt-5-codex")
+
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+
+    # The turn was dispatched on what it was assigned, not on the default —
+    # which is what the driver turns into the conversation it opens.
+    sent = engine.dispatcher.last
+    assert sent.agent_key == "codex"
+    assert sent.model == "gpt-5-codex"
+    assert sent.effort == "high"
+
+
+async def test_clearing_an_assignment_defers_rather_than_blanking(engine: Engine) -> None:
+    """FR-071: null means "ask the next rung", so a developer who changes their
+    mind gets the workflow's answer back rather than nothing at all."""
+    run = await engine.started()
+    await engine.nodes.assign(run.id, "draft_td", agent="codex", model="opus", effort=None)
+
+    cleared = await engine.nodes.assign(run.id, "draft_td", agent=None, model=None, effort=None)
+
+    assert cleared.attempt is not None
+    assert cleared.attempt.agent is None
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+    assert engine.dispatcher.last.agent_key == "claude_code"
+    assert engine.dispatcher.last.model is None
+
+
+async def test_a_task_that_has_started_is_the_conversations_to_configure(engine: Engine) -> None:
+    """FR-071: one setting, one writer. Once the turn is in flight the pickers
+    on the conversation own these, so this path refuses rather than competing."""
+    run = await engine.started()
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+
+    with pytest.raises(IllegalTransition):
+        await engine.nodes.assign(run.id, "draft_td", agent="codex", model=None, effort=None)

@@ -139,6 +139,13 @@ class WorkflowNodeAttemptModel(Base):
     conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     #: An ad-hoc task's own brief, written by the developer (FR-028).
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Who runs THIS attempt, on which model, thinking how hard (FR-071).
+    #: NULL means "what the template said", and the template's NULL means
+    #: "what the agent's own configuration projects" — one ladder, each rung
+    #: deferring to the next rather than inventing a default of its own.
+    agent: Mapped[str | None] = mapped_column(String, nullable=True)
+    model: Mapped[str | None] = mapped_column(String, nullable=True)
+    effort: Mapped[str | None] = mapped_column(String, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: ``interrupted`` | ``agent_error`` | ``missing_artifact`` | ``attempt_ceiling``
     failure_reason: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -18,6 +18,9 @@
 //
 // Every function returns a new config; nothing here mutates its argument.
 import type { TemplateConfig, TemplateEdge, TemplateNode, TemplateStage } from "@/lib/api/workflow";
+import { nodeKeyFor, stageKeyFor } from "@/lib/workflow/templateKeys";
+
+export { slugify } from "@/lib/workflow/templateKeys";
 
 /** Who does the work. Two values, because the engine only ever asked one
  *  question of this field: dispatch a turn, or stop and wait for a person. */
@@ -43,53 +46,6 @@ export const DEFAULT_ATTEMPT_CEILING = 3;
 /** What the task dialog edits — everything a node has except its identity. */
 export type NodeValues = Omit<TemplateNode, "key">;
 
-/** A lowercase slug the engine reads no meaning from — it is an identity, not
- *  a word (FR-003). Empty input still has to produce something addressable. */
-export function slugify(value: string, fallback: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return slug.length > 0 ? slug : fallback;
-}
-
-/** Make `candidate` unique against `taken` by suffixing, so a second "Review"
- *  is `review_2` rather than a refusal the developer has to decode. */
-function unique(candidate: string, taken: Set<string>): string {
-  if (!taken.has(candidate)) return candidate;
-  let n = 2;
-  while (taken.has(`${candidate}_${n}`)) n += 1;
-  return `${candidate}_${n}`;
-}
-
-function stageKeys(config: TemplateConfig, except?: string): Set<string> {
-  return new Set(config.stages.map((s) => s.key).filter((key) => key !== except));
-}
-
-/** Every node key in the template — the uniqueness scope is the WHOLE
- *  template, not the stage, because an event names a node by key alone. */
-function nodeKeys(config: TemplateConfig, except?: string): Set<string> {
-  return new Set(
-    config.stages.flatMap((s) => s.nodes.map((n) => n.key)).filter((key) => key !== except),
-  );
-}
-
-/** The key a stage with this name gets, leaving `except`'s own key free so a
- *  stage that is merely re-saved does not collide with itself. */
-function stageKeyFor(config: TemplateConfig, name: string, except?: string): string {
-  return unique(slugify(name, "stage"), stageKeys(config, except));
-}
-
-function nodeKeyFor(config: TemplateConfig, name: string, except?: string): string {
-  return unique(slugify(name, "task"), nodeKeys(config, except));
-}
-
-/** An existing node, as the task dialog edits it: everything but the key.
- *
- *  Written out rather than spread-minus-key, and typed, so that a field added
- *  to `TemplateNode` is a compile error here rather than a field the dialog
- *  silently drops on save. It also settles the optional ones to the same
- *  defaults `blankNode` uses, so the dialog never holds `undefined`. */
 export function nodeValues(node: TemplateNode): NodeValues {
   return {
     name: node.name,

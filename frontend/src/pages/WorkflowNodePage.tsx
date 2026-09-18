@@ -130,6 +130,9 @@ export function WorkflowNodePage() {
 
       <NodeWorkspace
         runId={run.id}
+        nodeKey={node.key}
+        assigned={latest}
+        templateAgent={node.agent}
         conversationId={latest?.conversation_id ?? null}
         attemptId={latest?.id}
         ownedHere={run.owned_here}

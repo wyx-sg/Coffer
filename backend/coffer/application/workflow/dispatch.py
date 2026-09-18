@@ -43,6 +43,10 @@ class NodeDispatch:
     attempt: AttemptRow
     agent_key: str
     workdir: str
+    #: What this attempt runs on (FR-071). ``None`` at either means the agent's
+    #: own configuration decides, which is what it did before any of this.
+    model: str | None = None
+    effort: str | None = None
     follow_up: str | None = None
 
     @property

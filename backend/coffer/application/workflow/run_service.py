@@ -357,9 +357,7 @@ class WorkflowRunService:
         clean = title.strip()
         if not clean:
             raise RunLabelInvalid("a run's title must not be empty")
-        updated = await self._runs.set_label(
-            run_id, title=clean, description=(description or None)
-        )
+        updated = await self._runs.set_label(run_id, title=clean, description=(description or None))
         # ``require_run`` just resolved it, so a miss here means it was deleted
         # between the two reads — the run the caller asked about is gone.
         return updated if updated is not None else run

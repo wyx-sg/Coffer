@@ -28,6 +28,19 @@ function isLive(detail: RunDetail | undefined): boolean {
  * running: a node completing and the next one opening is exactly the thing the
  * developer opened this page to watch, and nothing pushes it.
  */
+/** Choose who runs one task, on what, before it runs (FR-071). Invalidates the
+ *  run, because the task's row is where the answer is read back from. */
+export function useAssignNode(runId: string, nodeKey: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { agent: string | null; model: string | null; effort: string | null }) =>
+      workflowApi.assignNode(runId, nodeKey, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: workflowRunKey(runId) });
+    },
+  });
+}
+
 /** Rewrite a run's title and description (FR-070). Invalidates the run and
  *  the list, because both print the words that just changed. */
 export function useRelabelRun(runId: string) {

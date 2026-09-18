@@ -141,6 +141,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflow/runs/{run_id}/nodes/{node_key}/assignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose who runs this task, on what, before it runs.
+         * @description The agent, the model and the reasoning effort this task's next attempt
+         *     will use (FR-071). Recorded on the ATTEMPT, so a retry given a stronger
+         *     model leaves the first attempt's row still saying what it actually ran
+         *     on.
+         *
+         *     Only before it starts. Once the turn is in flight the conversation owns
+         *     these settings and the task's own pickers write them there; a task that
+         *     has started, finished or is waiting on an approval answers `409`.
+         *
+         *     All three are nullable and written verbatim: null CLEARS the override
+         *     and falls back to the task's own answer, whose null falls back to the
+         *     agent's own configuration. There is no `version` — this decides nothing
+         *     about where the run is.
+         */
+        post: operations["assignWorkflowNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workflow/runs/{run_id}/tasks": {
         parameters: {
             query?: never;
@@ -607,6 +639,16 @@ export interface components {
             updated_at?: string | null;
         };
         /**
+         * @description Who runs a task's next attempt, on what, at what effort (FR-071). All
+         *     three are written verbatim: null clears the override rather than
+         *     leaving it alone.
+         */
+        AssignmentIn: {
+            agent?: string | null;
+            model?: string | null;
+            effort?: string | null;
+        };
+        /**
          * @description A run's title and description. No `version`, deliberately: this changes
          *     no state the optimistic lock guards (FR-070).
          */
@@ -639,6 +681,11 @@ export interface components {
             /** @enum {string} */
             type: "ai" | "manual";
             skill?: string | null;
+            /**
+             * @description What the WORKFLOW says runs this task. Null means the run's own
+             *     default; an attempt may override it either way (FR-071).
+             */
+            agent?: string | null;
             /** @enum {string} */
             approval?: "never" | "always";
             /** @enum {string} */
@@ -664,6 +711,13 @@ export interface components {
             node_key: string;
             stage_key: string;
             attempt: number;
+            /**
+             * @description What THIS attempt was told to run on (FR-071). Null defers to the
+             *     task's own answer, whose null defers to the agent's configuration.
+             */
+            agent?: string | null;
+            model?: string | null;
+            effort?: string | null;
             /** @enum {string} */
             status: "pending" | "running" | "waiting_review" | "waiting_approval" | "completed" | "skipped" | "failed";
             conversation_id?: string | null;
@@ -1173,6 +1227,37 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    assignWorkflowNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id. */
+                run_id: components["parameters"]["RunId"];
+                /** @description The node's key in the template, or `adhoc:<slug>`. */
+                node_key: components["parameters"]["NodeKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignmentIn"];
+            };
+        };
+        responses: {
+            /** @description The attempt, carrying what it was assigned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeAttemptOut"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };

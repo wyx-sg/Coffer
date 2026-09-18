@@ -103,7 +103,7 @@ class CommandResult:
     """What an accepted command did: the run as it now stands, and the events
     it appended. The events are returned rather than looked up again because a
     caller reacting to a command — the advancer, a surface rendering a toast —
-    wants to know *which* thing happened, and "budget exceeded" versus "node
+    wants to know *which* thing happened, and "run failed" versus "node
     started" is exactly the distinction the run row cannot express."""
 
     run: RunRow
@@ -319,4 +319,3 @@ class RunCommands:
         completed = {k for k, row in latest.items() if row.status == NodeStatus.COMPLETED.value}
         skipped = {k for k, row in latest.items() if row.status == NodeStatus.SKIPPED.value}
         return completed, skipped
-

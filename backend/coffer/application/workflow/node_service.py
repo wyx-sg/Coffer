@@ -24,7 +24,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
-from coffer.application.workflow import node_reports, node_say, node_tasks
+from coffer.application.workflow import node_assignment, node_reports, node_say, node_tasks
 from coffer.application.workflow.commands import (
     DEFAULT_ACTOR,
     ENGINE_ACTOR,
@@ -310,6 +310,21 @@ class WorkflowNodeService:
     ) -> CommandResult:
         """Say something to one task, whatever state it is in (FR-068)."""
         return await node_say.say(self._ops, run_id, node_key, text=text, actor=actor)
+
+    async def assign(
+        self,
+        run_id: str,
+        node_key: str,
+        *,
+        agent: str | None,
+        model: str | None,
+        effort: str | None,
+        actor: EventActor = DEFAULT_ACTOR,
+    ) -> CommandResult:
+        """Choose who runs this task, on what, before it runs (FR-071)."""
+        return await node_assignment.assign(
+            self._ops, run_id, node_key, agent=agent, model=model, effort=effort, actor=actor
+        )
 
     # -- feedback edges and ad-hoc work -----------------------------------
 

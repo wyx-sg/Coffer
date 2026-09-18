@@ -152,6 +152,19 @@ class AttemptRepoPort(Protocol):
         """``None`` for a field means leave it alone, not set it null."""
         ...
 
+    async def set_assignment(
+        self,
+        attempt_id: str,
+        *,
+        agent: str | None,
+        model: str | None,
+        effort: str | None,
+    ) -> AttemptRow | None:
+        """Write all three VERBATIM: ``None`` clears the override and falls
+        back to the template (FR-071), which is the opposite of what ``None``
+        means to ``update_attempt``."""
+        ...
+
     async def latest_attempt(self, run_id: str, node_key: str) -> AttemptRow | None: ...
 
     async def attempt_by_conversation(self, conversation_id: str) -> AttemptRow | None:

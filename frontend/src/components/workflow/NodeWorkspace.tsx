@@ -35,6 +35,7 @@ import { PanelRight } from "lucide-react";
 import { AgentModelBar } from "@/components/chat/AgentModelBar";
 import { Button } from "@/components/ui/button";
 import { Composer } from "@/components/chat/Composer";
+import { NodeAssignmentBar } from "@/components/workflow/NodeAssignmentBar";
 import { NodeContextRail } from "@/components/workflow/NodeContextRail";
 import { NodeThread } from "@/components/workflow/NodeThread";
 import { TaskBrief } from "@/components/workflow/TaskBrief";
@@ -72,6 +73,12 @@ function remembered(): number {
 
 interface Props {
   runId: string;
+  /** Which task this is — the assignment is addressed to it by key. */
+  nodeKey: string;
+  /** What the attempt has been assigned so far, before it opens (FR-071). */
+  assigned?: { agent?: string | null; model?: string | null; effort?: string | null } | null;
+  /** What the workflow says when the attempt says nothing. */
+  templateAgent?: string | null;
   /** Null until the task has started; a manual task never gets one. */
   conversationId: string | null;
   attemptId: string | null | undefined;
@@ -91,6 +98,9 @@ interface Props {
 
 export function NodeWorkspace({
   runId,
+  nodeKey,
+  assigned,
+  templateAgent,
   conversationId,
   attemptId,
   ownedHere,
@@ -139,11 +149,25 @@ export function NodeWorkspace({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {agentKey === undefined ? null : (
+      {/* Two writers for one setting, never at once. Before the task starts
+          the answer lives on the attempt it will open with (FR-071); once it
+          has a conversation, the conversation holds it and the chat layer's
+          own bar is what writes it. */}
+      {agentKey !== undefined ? (
         <AgentModelBar
           conversationId={conversationId ?? ""}
           agentKey={agentKey}
           agentLabel={agentLabel ?? agentKey}
+          disabled={!ownedHere}
+        />
+      ) : started ? null : (
+        <NodeAssignmentBar
+          runId={runId}
+          nodeKey={nodeKey}
+          agent={assigned?.agent}
+          model={assigned?.model}
+          effort={assigned?.effort}
+          templateAgent={templateAgent}
           disabled={!ownedHere}
         />
       )}

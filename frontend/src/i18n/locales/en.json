@@ -737,13 +737,15 @@
     "WORKFLOW_RUN_TERMINAL": "This run has finished and takes no further commands",
     "WORKFLOW_NOT_THIS_MACHINE": "Another machine owns this run; it is read-only here",
     "WORKFLOW_ILLEGAL_TRANSITION": "That is not something this node can do right now",
-    "WORKFLOW_ATTEMPT_CEILING": "This node has been attempted as many times as the template allows",
+    "WORKFLOW_ATTEMPT_CEILING": "This task has been attempted as many times as it allows",
     "WORKFLOW_MISSING_ARTIFACT": "This node still owes a deliverable it declared",
     "WORKFLOW_TEMPLATE_INVALID": "The template was refused — check the field it names",
     "WORKFLOW_UNSAFE_PATH": "That path is not allowed inside a run's directory",
     "WORKFLOW_INPUT_NOT_FOUND": "That input is not mounted on this run",
     "WORKFLOW_REPO_MOUNT_FAILED": "The repository could not be checked out for this run — nothing was mounted",
-    "WORKFLOW_TEMPLATE_DISABLED": "This workflow is switched off; it starts no new runs. Runs already created from it keep going."
+    "WORKFLOW_TEMPLATE_DISABLED": "This workflow is switched off; it starts no new runs. Runs already created from it keep going.",
+    "RENAME_NOT_SUPPORTED": "This kind cannot be renamed here — its name is written out somewhere this move cannot reach",
+    "WORKFLOW_RUN_LABEL_INVALID": "A run must have a title"
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -1717,7 +1719,9 @@
         "waive": "Complete even though a required artifact was never written"
       },
       "startedAt": "Started {{at}}",
-      "finishedAt": "Finished {{at}}"
+      "finishedAt": "Finished {{at}}",
+      "runsOn": "Runs on",
+      "fromWorkflow": "From the workflow ({{agent}})"
     },
     "adhoc": {
       "add": "Add task",

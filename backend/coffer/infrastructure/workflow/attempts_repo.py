@@ -109,6 +109,36 @@ class WorkflowAttemptRepo:
             ).scalar_one_or_none()
             return row
 
+    async def set_assignment(
+        self,
+        attempt_id: str,
+        *,
+        agent: str | None,
+        model: str | None,
+        effort: str | None,
+    ) -> WorkflowNodeAttemptModel | None:
+        """Write who runs this attempt, on what, at what effort (FR-071).
+
+        Its own method rather than three more arguments on ``update_attempt``,
+        because it writes all three VERBATIM: ``None`` here means "clear it,
+        fall back to the template", which is the opposite of what ``None``
+        means there. Clearing an override has to be possible — the developer
+        who picked the bigger model for a task that has not started yet must be
+        able to change their mind before it does.
+        """
+        async with self._sm() as session:
+            await session.execute(
+                update(WorkflowNodeAttemptModel)
+                .where(WorkflowNodeAttemptModel.id == attempt_id)
+                .values(agent=agent, model=model, effort=effort)
+            )
+            await session.commit()
+            stmt = select(WorkflowNodeAttemptModel).where(WorkflowNodeAttemptModel.id == attempt_id)
+            row: WorkflowNodeAttemptModel | None = (
+                await session.execute(stmt)
+            ).scalar_one_or_none()
+            return row
+
     async def latest_attempt(self, run_id: str, node_key: str) -> WorkflowNodeAttemptModel | None:
         """The highest-numbered attempt at a node — the one that counts now."""
         async with self._sm() as session:

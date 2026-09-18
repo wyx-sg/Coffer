@@ -44,11 +44,25 @@ class FakePlatform:
         self.interrupted: list[str] = []
 
     async def create_conversation(
-        self, *, agent_key: str, cwd: str, run_context: str | None = None
+        self,
+        *,
+        agent_key: str,
+        cwd: str,
+        run_context: str | None = None,
+        model: str | None = None,
+        effort: str | None = None,
     ) -> str:
         if self.fail_create is not None:
             raise self.fail_create
-        self.created.append({"agent_key": agent_key, "cwd": cwd, "run_context": run_context})
+        self.created.append(
+            {
+                "agent_key": agent_key,
+                "cwd": cwd,
+                "run_context": run_context,
+                "model": model,
+                "effort": effort,
+            }
+        )
         return self.conversation_id
 
     async def start_turn(self, conversation_id: str, text: str) -> asyncio.Queue[AgentEvent | None]:
@@ -174,7 +188,15 @@ async def test_a_nodes_work_happens_in_a_conversation_in_the_runs_workdir() -> N
     await driver.run(make_dispatch())
 
     assert platform.created == [
-        {"agent_key": "claude_code", "cwd": "/repo", "run_context": "run-1/att-1"}
+        {
+            "agent_key": "claude_code",
+            "cwd": "/repo",
+            "run_context": "run-1/att-1",
+            # Nothing assigned it a model or an effort, so the agent's own
+            # configuration decides — as it always did (FR-071).
+            "model": None,
+            "effort": None,
+        }
     ]
     assert recorder.opened == [("att-1", "conv-1")]
     assert platform.turns == [("conv-1", "opening context for draft_td")]

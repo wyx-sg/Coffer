@@ -77,7 +77,13 @@ class ChatTurnPlatform:
         self._messages = messages
 
     async def create_conversation(
-        self, *, agent_key: str, cwd: str, run_context: str | None = None
+        self,
+        *,
+        agent_key: str,
+        cwd: str,
+        run_context: str | None = None,
+        model: str | None = None,
+        effort: str | None = None,
     ) -> str:
         # ``run_context`` is not passed here on purpose: it reaches the agent
         # through the environment at turn time, looked up from the attempt row
@@ -87,8 +93,18 @@ class ChatTurnPlatform:
         # ``owner`` is how it stays out of the developer's own chat list while
         # staying an ordinary conversation everywhere else (FR-030): this one
         # belongs to a run, and the chat layer needs to know nothing more.
+        # ``model`` and ``effort`` go in beside the working directory because
+        # that is where a conversation keeps them (FR-071) — the pickers on a
+        # task's page write the same two fields once it is running, so a task
+        # that was assigned a model opens already set to it rather than being
+        # corrected a moment later.
+        config: dict[str, Any] = {"cwd": cwd}
+        if model is not None:
+            config["model"] = model
+        if effort is not None:
+            config["effort"] = effort
         conv = await self._chat.create_conversation(
-            agent_key=agent_key, agent_config={"cwd": cwd}, owner=CONVERSATION_OWNER
+            agent_key=agent_key, agent_config=config, owner=CONVERSATION_OWNER
         )
         return conv.id
 

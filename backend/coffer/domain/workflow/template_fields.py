@@ -125,5 +125,3 @@ def as_attempt_ceiling(raw: Any, path: str, *, default: int) -> int:
     if value < 1:
         raise TemplateInvalid(path, "must be >= 1")
     return value
-
-

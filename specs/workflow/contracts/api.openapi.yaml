@@ -290,6 +290,46 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /api/v1/workflow/runs/{run_id}/nodes/{node_key}/assignment:
+    post:
+      tags: [workflow]
+      operationId: assignWorkflowNode
+      summary: Choose who runs this task, on what, before it runs.
+      description: |
+        The agent, the model and the reasoning effort this task's next attempt
+        will use (FR-071). Recorded on the ATTEMPT, so a retry given a stronger
+        model leaves the first attempt's row still saying what it actually ran
+        on.
+
+        Only before it starts. Once the turn is in flight the conversation owns
+        these settings and the task's own pickers write them there; a task that
+        has started, finished or is waiting on an approval answers `409`.
+
+        All three are nullable and written verbatim: null CLEARS the override
+        and falls back to the task's own answer, whose null falls back to the
+        agent's own configuration. There is no `version` — this decides nothing
+        about where the run is.
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - $ref: "#/components/parameters/NodeKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignmentIn"
+      responses:
+        "200":
+          description: The attempt, carrying what it was assigned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeAttemptOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /api/v1/workflow/runs/{run_id}/tasks:
     post:
       tags: [workflow]
@@ -1021,6 +1061,17 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time, nullable: true }
 
+    AssignmentIn:
+      type: object
+      description: |
+        Who runs a task's next attempt, on what, at what effort (FR-071). All
+        three are written verbatim: null clears the override rather than
+        leaving it alone.
+      properties:
+        agent: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        effort: { type: string, nullable: true }
+
     RunLabelIn:
       type: object
       required: [title]
@@ -1089,6 +1140,12 @@ components:
           type: string
           enum: [ai, manual]
         skill: { type: string, nullable: true }
+        agent:
+          type: string
+          nullable: true
+          description: |
+            What the WORKFLOW says runs this task. Null means the run's own
+            default; an attempt may override it either way (FR-071).
         approval:
           type: string
           enum: [never, always]
@@ -1134,6 +1191,14 @@ components:
         node_key: { type: string }
         stage_key: { type: string }
         attempt: { type: integer }
+        agent:
+          type: string
+          nullable: true
+          description: |
+            What THIS attempt was told to run on (FR-071). Null defers to the
+            task's own answer, whose null defers to the agent's configuration.
+        model: { type: string, nullable: true }
+        effort: { type: string, nullable: true }
         status:
           type: string
           enum:

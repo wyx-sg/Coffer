@@ -343,7 +343,14 @@ class NodeOps:
                 stage_key=stage_key,
                 node=node,
                 attempt=attempt,
-                agent_key=node.agent or await self.run_agent(run) or self._default_agent,
+                # One ladder (FR-071): this attempt's own answer, then the
+                # task's, then the run's, then this machine's default. Each
+                # rung defers to the next rather than inventing a default.
+                agent_key=(
+                    attempt.agent or node.agent or await self.run_agent(run) or self._default_agent
+                ),
+                model=attempt.model or node.model,
+                effort=attempt.effort or node.effort,
                 workdir=await self.node_workdir(run, node.key),
                 follow_up=follow_up,
             )

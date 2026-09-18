@@ -25,6 +25,10 @@ class RunRow(Protocol):
     template_ref: str | None
     template_snapshot: dict[str, Any]
     title: str
+    #: What the developer says this delivery is. A LABEL like the title:
+    #: neither is folded from the events, and both may be corrected after the
+    #: fact (FR-070).
+    description: str | None
     workdir: str
     machine_id: str
     status: str
@@ -64,6 +68,12 @@ class AttemptRow(Protocol):
     status: str
     conversation_id: str | None
     instructions: str | None
+    #: Who runs this attempt, on which model, at which effort (FR-071).
+    #: None defers to the template, whose None defers to the agent's own
+    #: configuration.
+    agent: str | None
+    model: str | None
+    effort: str | None
     summary: str | None
     failure_reason: str | None
     tokens: int

@@ -13,7 +13,7 @@ import pytest
 from coffer.domain.workflow.errors import IllegalTransition
 from coffer.domain.workflow.run import NodeAction, NodeStatus, RunStatus
 
-from .conftest import TEMPLATE, Engine, build_engine, with_ceiling, with_template
+from .conftest import TEMPLATE, Engine, build_engine, with_ceiling
 
 
 def _reviewed_coding_template(*, ceiling: int | None = None) -> dict:

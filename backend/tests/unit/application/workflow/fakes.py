@@ -70,6 +70,9 @@ class FakeAttempt:
     status: str = "pending"
     conversation_id: str | None = None
     instructions: str | None = None
+    agent: str | None = None
+    model: str | None = None
+    effort: str | None = None
     summary: str | None = None
     failure_reason: str | None = None
     tokens: int = 0
@@ -310,6 +313,21 @@ class FakeAttemptRepo:
                 setattr(row, name, value)
         return _copy(row)
 
+    async def set_assignment(
+        self,
+        attempt_id: str,
+        *,
+        agent: str | None,
+        model: str | None,
+        effort: str | None,
+    ) -> FakeAttempt | None:
+        row = self.rows.get(attempt_id)
+        if row is None:
+            return None
+        # Verbatim, including None: clearing an override is a real choice.
+        row.agent, row.model, row.effort = agent, model, effort
+        return _copy(row)
+
     async def latest_attempt(self, run_id: str, node_key: str) -> FakeAttempt | None:
         rows = [
             row for row in self.rows.values() if row.run_id == run_id and row.node_key == node_key
@@ -475,7 +493,13 @@ class FakeTurnPlatform:
         self.compactions: list[tuple[str, int, str]] = []
 
     async def create_conversation(
-        self, *, agent_key: str, cwd: str, run_context: str | None = None
+        self,
+        *,
+        agent_key: str,
+        cwd: str,
+        run_context: str | None = None,
+        model: str | None = None,
+        effort: str | None = None,
     ) -> str:
         conversation_id = f"conv-{len(self.conversations) + 1}"
         self.conversations.append(
@@ -484,6 +508,8 @@ class FakeTurnPlatform:
                 "agent_key": agent_key,
                 "cwd": cwd,
                 "run_context": run_context,
+                "model": model,
+                "effort": effort,
             }
         )
         return conversation_id

@@ -737,13 +737,15 @@
     "WORKFLOW_RUN_TERMINAL": "这个工作流已结束，不再接受任何命令",
     "WORKFLOW_NOT_THIS_MACHINE": "这个工作流属于另一台机器，在这里只读",
     "WORKFLOW_ILLEGAL_TRANSITION": "该节点当前不能执行这个操作",
-    "WORKFLOW_ATTEMPT_CEILING": "该节点的尝试次数已达模板允许的上限",
+    "WORKFLOW_ATTEMPT_CEILING": "这个任务已经用完了它自己允许的尝试次数",
     "WORKFLOW_MISSING_ARTIFACT": "该节点还欠一份它声明过的产物",
     "WORKFLOW_TEMPLATE_INVALID": "模板被拒绝——请检查它指出的字段",
     "WORKFLOW_UNSAFE_PATH": "运行目录里不允许这个路径",
     "WORKFLOW_INPUT_NOT_FOUND": "这个工作流上没有挂载该输入",
     "WORKFLOW_REPO_MOUNT_FAILED": "无法为这个工作流检出该仓库——什么都没有挂载",
-    "WORKFLOW_TEMPLATE_DISABLED": "这个工作流已停用，不能再创建新的运行。已经由它创建的运行不受影响。"
+    "WORKFLOW_TEMPLATE_DISABLED": "这个工作流已停用，不能再创建新的运行。已经由它创建的运行不受影响。",
+    "RENAME_NOT_SUPPORTED": "这类资源不能在这里改名——它的名字被写进了这次移动够不到的地方",
+    "WORKFLOW_RUN_LABEL_INVALID": "运行必须有标题"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -1717,7 +1719,9 @@
         "waive": "即使必需产物没有写出，也照样完成"
       },
       "startedAt": "开始于 {{at}}",
-      "finishedAt": "完成于 {{at}}"
+      "finishedAt": "完成于 {{at}}",
+      "runsOn": "由谁来跑",
+      "fromWorkflow": "跟随工作流（{{agent}}）"
     },
     "adhoc": {
       "add": "添加任务",
