@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
 from coffer.application.repos import AuditRepo
 from coffer.domain.audit import AuditEntry
-from coffer.domain.resource import ResourceRef
+from coffer.domain.resource import Resource
 
 _logger = logging.getLogger(__name__)
 
@@ -17,39 +16,28 @@ _logger = logging.getLogger(__name__)
 class AuditService:
     """Record + query audit entries.
 
-    ``record`` generates the timestamp and decomposes a ``ResourceRef`` so
-    callers don't repeat that. It also resolves the resource's stable row id,
-    which is what lets a rename leave the trail alone: the rows keep the name
-    the resource had when the event happened, and the id is what ties them
-    together. ``resolve_resource_id`` is injected rather than imported so this
-    service keeps its single dependency on ``AuditRepo`` — the resource side
-    already depends on this one.
+    ``record`` generates the timestamp and decomposes the ``Resource`` the
+    event is about, so callers don't repeat that. Each row keeps two different
+    things on purpose: ``resource_id`` ties the event to the resource, and
+    ``resource_kind``/``resource_name`` record the LABEL it carried at that
+    moment. That is what lets a rename leave the trail alone — the history says
+    what the thing was called when each event happened, and still reads as one
+    history.
+
+    The service used to be handed a resolver so it could look that id up from a
+    ``(kind, name)`` pair. It is handed the resource itself now, which is
+    neither a lookup nor a failure mode: the caller performing the mutation
+    already has the row.
     """
 
-    def __init__(
-        self,
-        repo: AuditRepo,
-        resolve_resource_id: Callable[[str, str], Awaitable[int | None]] | None = None,
-    ) -> None:
+    def __init__(self, repo: AuditRepo) -> None:
         self._repo = repo
-        self._resolve_resource_id = resolve_resource_id
-
-    async def _id_for(self, ref: ResourceRef | None) -> int | None:
-        if ref is None or self._resolve_resource_id is None:
-            return None
-        try:
-            return await self._resolve_resource_id(ref.kind, ref.name)
-        except Exception:
-            # An unresolvable id costs the row its stable pointer, not the
-            # event: the label still records what happened and to what.
-            _logger.debug("audit.resource_id_unresolved", exc_info=True)
-            return None
 
     async def record(
         self,
         event_type: str,
         *,
-        ref: ResourceRef | None = None,
+        resource: Resource | None = None,
         actor: str = "system",
         details: dict[str, Any] | None = None,
     ) -> None:
@@ -58,9 +46,9 @@ class AuditService:
                 id=None,
                 timestamp=datetime.now(tz=UTC),
                 event_type=event_type,
-                resource_id=await self._id_for(ref),
-                resource_kind=ref.kind if ref else None,
-                resource_name=ref.name if ref else None,
+                resource_id=resource.id if resource else None,
+                resource_kind=resource.kind if resource else None,
+                resource_name=resource.name if resource else None,
                 actor=actor,
                 details=details or {},
             )
@@ -83,7 +71,9 @@ class AuditService:
             event_type,
             extra={
                 "event": event_type,
-                "resource": str(ref) if ref else None,
+                "resource": resource.name if resource else None,
+                "resource_kind": resource.kind if resource else None,
+                "resource_uid": resource.uid if resource else None,
                 "actor": actor,
             },
         )
@@ -91,23 +81,23 @@ class AuditService:
     async def query(
         self,
         *,
+        resource: Resource | None = None,
         kind: str | None = None,
-        name: str | None = None,
         event_type: str | None = None,
         event_prefix: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
     ) -> list[AuditEntry]:
-        # Asking for one resource's history resolves its id first, so the trail
-        # comes back whole even if the resource has been renamed since — the
-        # rows themselves still carry whatever it was called at the time.
-        resource_id = None
-        if kind is not None and name is not None:
-            resource_id = await self._id_for(ResourceRef(kind, name))
+        """One resource's history, or a slice of everything.
+
+        Passing ``resource`` asks for that resource's trail and gets it whole,
+        including the rows written under a name it no longer has: the filter is
+        its id, not its current label. ``kind`` alone is the coarser filter the
+        activity page uses.
+        """
         return await self._repo.query(
             kind=kind,
-            name=name,
-            resource_id=resource_id,
+            resource_id=resource.id if resource else None,
             event_type=event_type,
             event_prefix=event_prefix,
             since=since,

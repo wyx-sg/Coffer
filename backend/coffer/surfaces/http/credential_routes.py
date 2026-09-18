@@ -131,9 +131,22 @@ async def delete_secret(
     """
     citations = await resources.find_credential_citations(ref)
     if citations:
-        names = [str(c) for c in citations]
-        exc = CredentialInUse(ref, names)
-        return error_response(exc.code, str(exc), {"references": names})
+        # The error composes the reference strings itself, from the rows. It is
+        # NOT given a list of strings built here: ``find_credential_citations``
+        # returns whole resources now, and rendering one with ``str()`` would
+        # put its entire config — credential refs included — into the response
+        # body of a request that was refused for naming a credential.
+        exc = CredentialInUse(ref, citations)
+        return error_response(
+            exc.code,
+            str(exc),
+            {
+                "references": exc.references,
+                # The uid rides along for a client that wants to link straight
+                # to the resource; the human-readable half stays the names.
+                "resources": [{"uid": c.uid, "kind": c.kind, "name": c.name} for c in citations],
+            },
+        )
     # to_thread: the sync store write blocks on SQLite's busy_timeout, which on
     # the event loop would deadlock against the loop's own aiosqlite writer.
     await asyncio.to_thread(store.delete, ref)

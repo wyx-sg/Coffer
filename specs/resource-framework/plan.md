@@ -6,7 +6,7 @@
 ## Summary
 
 The kind-agnostic core every other spec is built on: one `Resource` row shape
-with a `<kind>:<name>` identity, a `Kind` descriptor each kind contributes, one
+with an immutable `uid` identity, a `Kind` descriptor each kind contributes, one
 lifecycle service that validates / persists / audits / reacts, one per-agent
 reach with one pair of routes serving every kind, one audit log, one retention
 registry with a background prune, and one cross-kind read of the passes in
@@ -64,7 +64,7 @@ specs/resource-framework/
 ```text
 backend/coffer/
 ├── domain/
-│   ├── resource.py                   # Resource, ResourceRef, Kind
+│   ├── resource.py                   # Resource (uid identity), Kind
 │   ├── scope.py                      # Scope — the per-agent allow-list
 │   ├── audit.py                      # AuditEntry, AuditEventType
 │   ├── retention.py                  # RetentionPolicy

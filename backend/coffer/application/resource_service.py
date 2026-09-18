@@ -1,14 +1,23 @@
 """Kind-agnostic Resource CRUD service.
 
+Every resource is addressed by its **uid** — opaque, immutable, and the same
+value on every machine that holds it (ADR resource-identity-is-an-immutable-uid).
+``get_by_name`` is the one exception and exists for one job: resolving a label a
+human supplied, at the surface they supplied it to. Nothing inside the daemon
+should reach for it.
+
 The service is constructed with a dict of registered kinds; it never
 imports any kind-specific module. Each mutation is audited via
 AuditService. `delete` calls the kind's optional `on_delete` hook
 BEFORE persistence; a hook that raises aborts the deletion.
 
-Two mutation paths delegate to sibling ops modules to keep this file under
+Three mutation paths delegate to sibling ops modules to keep this file under
 the 400-LOC ceiling (mirroring `skill/service.py` + its `*_ops.py` satellites):
-`update_scope`'s body lives in `resource_scope_ops`, and `delete`'s
-credential-release step lives in `resource_delete_ops`.
+`update_scope`'s body lives in `resource_scope_ops`, `rename`'s in
+`resource_rename_ops`, and `delete`'s credential-release step in
+`resource_delete_ops`. The two pure adapters over a kind's config hooks live in
+`resource_kind_hooks`, where the delete path can reach them without importing
+back into this module.
 """
 
 from __future__ import annotations
@@ -17,6 +26,7 @@ import asyncio
 import builtins
 import inspect
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -24,6 +34,11 @@ from pydantic import ValidationError
 
 from coffer.application.audit_service import AuditService
 from coffer.application.repos import ResourceRepo
+from coffer.application.resource_kind_hooks import (
+    audit_safe_config,
+    check_name,
+    extract_credential_refs,
+)
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
     ConfigValidationError,
@@ -32,7 +47,7 @@ from coffer.domain.errors import (
     ResourceNotFound,
     UnknownKind,
 )
-from coffer.domain.resource import Kind, Resource, ResourceRef
+from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
 
 _logger = logging.getLogger(__name__)
@@ -52,30 +67,6 @@ class _CredentialStorePort(Protocol):
     def exists(self, ref: str) -> bool: ...
 
     def delete(self, ref: str) -> None: ...
-
-
-def _audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
-    """Return an audit-safe copy of ``config`` using the kind's redactor.
-
-    The kind-agnostic core knows nothing about where a given kind stores
-    secrets; each kind supplies its own ``audit_redactor`` (e.g. mcp_server
-    strips ``transport.env``/``headers``). Kinds without one audit their
-    config verbatim. See the resource-framework-upfront ADR / CODE-006.
-    """
-    if kind_def.audit_redactor is None:
-        return config
-    return kind_def.audit_redactor(config)
-
-
-def _extract_credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
-    """Return ``{key: credential_ref}`` for ``config`` using the kind's extractor.
-
-    Kinds without a ``credential_ref_extractor`` declare no credentials and are
-    not probed.
-    """
-    if kind_def.credential_ref_extractor is None:
-        return {}
-    return kind_def.credential_ref_extractor(config)
 
 
 class ResourceService:
@@ -104,7 +95,7 @@ class ResourceService:
         """
         if self._credentials is None:
             return
-        for _key, ref in _extract_credential_refs(kind_def, config).items():
+        for _key, ref in extract_credential_refs(kind_def, config).items():
             if await asyncio.to_thread(self._credentials.get, ref) is None:
                 raise CredentialMissing(ref)
 
@@ -159,7 +150,16 @@ class ResourceService:
         description: str | None = None,
         *,
         allow_lifecycle_kind: bool = False,
+        uid: str | None = None,
     ) -> Resource:
+        """Create a resource and mint its identity.
+
+        ``uid`` is supplied by exactly one caller — the sync applier, putting a
+        resource this vault has not seen before at the identity the other
+        machine already gave it. Every other path leaves it ``None`` and gets a
+        fresh random one, because minting a uid from anything a user can change
+        is what this whole design removed.
+        """
         kind_def = self._require_kind(kind)
         # CODE-REG: a kind that owns creation invariants beyond config
         # validation (skill master folder, agent on-disk detection) sets
@@ -169,21 +169,28 @@ class ResourceService:
         # artifact; the kind's dedicated service opts in explicitly.
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
             raise GenericCreateNotAllowed(kind)
-        # CODE-030: kind-specific name validation BEFORE any DB write (e.g.
-        # mcp_server reserves '__' as the tool/prompt namespace separator).
-        if kind_def.validate_name is not None:
-            try:
-                kind_def.validate_name(name)
-            except ValueError as e:
-                raise ConfigValidationError(str(e)) from e
+        check_name(kind_def, name)
         validated = self._validate_config(kind_def, config)
         # Kind-supplied semantic validation beyond shape, at REGISTRATION only
         # (e.g. a channel's workspace directories must exist on disk). Kept off
         # update_config so editing an unrelated field never re-probes the
         # filesystem and rejects the edit because a dir was since removed.
+        #
+        # Awaited if it returns an Awaitable, exactly as every other kind hook
+        # here is. It was synchronous until cross-resource references became
+        # uids: `channel` validates that its `default_agent` names a registered
+        # agent, and with a uid that is a question only the resource table can
+        # answer. Left synchronous, the kind had to drop the check at creation
+        # and keep it only on edit — so a channel could be CREATED bound to an
+        # agent that does not exist and would only fail later, at start time.
+        # The alternative — a kind returning a coroutine into a sync call — is
+        # worse than the gap it closes, because an unawaited coroutine is a
+        # validator that silently passes everything.
         if kind_def.validate_config is not None:
             try:
-                kind_def.validate_config(validated)
+                check = kind_def.validate_config(validated)
+                if inspect.isawaitable(check):
+                    await check
             except ValueError as e:
                 raise ConfigValidationError(str(e)) from e
         # Probe before any DB write — a missing credential must not leave a
@@ -193,7 +200,11 @@ class ResourceService:
         now = datetime.now(tz=UTC)
         created = await self._repo.create(
             Resource(
+                # 0 is the surrogate key's placeholder — the repo assigns it.
+                # The uid is NOT a placeholder: it is the identity, minted here
+                # so it is decided before anything is written.
                 id=0,
+                uid=uid or uuid.uuid4().hex,
                 kind=kind,
                 name=name,
                 description=description,
@@ -215,9 +226,9 @@ class ResourceService:
         )
         await self._audit.record(
             AuditEventType.RESOURCE_CREATED.value,
-            ref=created.ref,
+            resource=created,
             actor=actor,
-            details={"config": _audit_safe_config(kind_def, validated)},
+            details={"config": audit_safe_config(kind_def, validated)},
         )
         return created
 
@@ -228,98 +239,100 @@ class ResourceService:
     ) -> list[Resource]:
         return await self._repo.list(kind=kind, enabled=enabled)
 
-    async def get(self, ref: ResourceRef) -> Resource:
-        r = await self._repo.find(ref)
+    async def get(self, uid: str) -> Resource:
+        r = await self._repo.find(uid)
         if r is None:
-            raise ResourceNotFound(ref.kind, ref.name)
+            raise ResourceNotFound(uid)
         return r
 
-    async def find_credential_citations(self, credential_ref: str) -> builtins.list[ResourceRef]:
-        """Return the refs of every resource whose config cites ``credential_ref``.
+    async def get_by_name(self, kind: str, name: str) -> Resource:
+        """Resolve a LABEL a human supplied. The CLI's front door, and nothing
+        inside the daemon addresses a resource this way."""
+        self._require_kind(kind)
+        r = await self._repo.find_by_name(kind, name)
+        if r is None:
+            raise ResourceNotFound.named(kind, name)
+        return r
 
-        A credential lives in the encrypted store and is referenced only by its
-        ref from resource config (a channel's bot token, an mcp_server's auth
-        header, a model's API key). Deleting the credential out from under a
-        live resource silently breaks it, so the credential-delete route calls
-        this first and refuses (409) when the list is non-empty. Each kind that
-        stores secrets supplies a ``credential_ref_extractor``; kinds without
-        one cite nothing and are skipped.
+    async def find_by_name(self, kind: str, name: str) -> Resource | None:
+        return await self._repo.find_by_name(kind, name)
 
-        (The return type is spelled ``builtins.list`` because this class also
-        defines a ``list`` method, which shadows the builtin in annotations
-        appearing after it in the class body.)
+    async def find_credential_citations(self, credential_ref: str) -> builtins.list[Resource]:
+        """Every resource whose config cites ``credential_ref``.
+
+        (Spelled ``builtins.list`` because this class also defines a ``list``
+        method, which shadows the builtin in annotations appearing after it.)
+
+        Delegates to ``resource_delete_ops``, which is the other half of the
+        same question: this one answers "may this credential be deleted?" for
+        the credential route, and that one answers "is anything still citing
+        it?" after a resource goes away.
         """
-        citing: builtins.list[ResourceRef] = []
-        for resource in await self._repo.list():
-            kind_def = self._kinds.get(resource.kind)
-            if kind_def is None:
-                continue
-            refs = _extract_credential_refs(kind_def, resource.config).values()
-            if credential_ref in refs:
-                citing.append(resource.ref)
-        return citing
+        from coffer.application.resource_delete_ops import citations_of
+
+        return await citations_of(self, credential_ref)
 
     async def update_config(
         self,
-        ref: ResourceRef,
+        uid: str,
         new_config: dict[str, Any],
         actor: str,
         description: str | None = None,
         *,
         allow_lifecycle_kind: bool = False,
     ) -> Resource:
-        kind_def = self._require_kind(ref.kind)
+        before = await self.get(uid)
+        kind_def = self._require_kind(before.kind)
         # CODE-REG applies to updates too: a generic PATCH rewriting a
-        # lifecycle kind's config (e.g. a skill's name) would desync the row
-        # from the on-disk artifact its owning service maintains.
+        # lifecycle kind's config would desync the row from the on-disk
+        # artifact its owning service maintains.
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
-            raise GenericCreateNotAllowed(ref.kind)
+            raise GenericCreateNotAllowed(before.kind)
         validated = self._validate_config(kind_def, new_config)
         # Same register-time invariant: if the update introduces a credential
         # ref that does not exist in the credential store, fail before the DB write.
         await self._probe_credentials(kind_def, validated)
-        before = await self.get(ref)
         # Per-kind pre-write hook. Only ``channel`` supplies one: it
         # re-validates ``default_agent`` against the live agent registry and
         # the channel's own scope. May raise ``ConfigValidationError`` to
         # reject the update.
         if kind_def.on_update_config is not None:
-            hook_result = kind_def.on_update_config(ref, before.config, validated)
+            hook_result = kind_def.on_update_config(before, validated)
             if inspect.isawaitable(hook_result):
                 await hook_result
-        updated = await self._repo.update_config(ref, validated, description)
+        updated = await self._repo.update_config(uid, validated, description)
         await self._audit.record(
             AuditEventType.RESOURCE_UPDATED.value,
-            ref=ref,
+            resource=updated,
             actor=actor,
             details={
-                "before": _audit_safe_config(kind_def, before.config),
-                "after": _audit_safe_config(kind_def, validated),
+                "before": audit_safe_config(kind_def, before.config),
+                "after": audit_safe_config(kind_def, validated),
             },
         )
         return updated
 
-    async def set_enabled(self, ref: ResourceRef, enabled: bool, actor: str) -> Resource:
-        kind_def = self._require_kind(ref.kind)
-        before = await self.get(ref)
+    async def set_enabled(self, uid: str, enabled: bool, actor: str) -> Resource:
+        before = await self.get(uid)
+        kind_def = self._require_kind(before.kind)
         if before.enabled == enabled:
             return before  # idempotent — no audit, no hook
-        updated = await self._repo.set_enabled(ref, enabled)
+        updated = await self._repo.set_enabled(uid, enabled)
         event = AuditEventType.RESOURCE_ENABLED if enabled else AuditEventType.RESOURCE_DISABLED
-        await self._audit.record(event.value, ref=ref, actor=actor)
+        await self._audit.record(event.value, resource=updated, actor=actor)
         # Kind-level reconciliation, exactly as ``update_scope`` fires
-        # ``on_scope_changed``: AFTER persistence + audit, so a hook re-reading
-        # the resource sees the flag that triggered it. Fired only on a real
-        # transition (the idempotent early return above skips it).
+        # ``on_scope_changed``: AFTER persistence + audit, and handed the row
+        # carrying the flag that triggered it. Fired only on a real transition
+        # (the idempotent early return above skips it).
         if kind_def.on_enabled_changed is not None:
-            hook_result = kind_def.on_enabled_changed(ref)
+            hook_result = kind_def.on_enabled_changed(updated)
             if inspect.isawaitable(hook_result):
                 await hook_result
         return updated
 
     async def update_scope(
         self,
-        ref: ResourceRef,
+        uid: str,
         scope: Scope | None,
         *,
         actor: str,
@@ -331,41 +344,33 @@ class ResourceService:
         """
         from coffer.application.resource_scope_ops import update_scope as _update_scope
 
-        return await _update_scope(self, ref, scope, actor=actor)
+        return await _update_scope(self, uid, scope, actor=actor)
 
-    async def rename(self, ref: ResourceRef, new_name: str, actor: str) -> Resource:
-        """Move a resource to ``new_name``.
+    async def rename(self, uid: str, new_name: str, actor: str) -> Resource:
+        """Change a resource's LABEL.
 
-        Its own operation rather than an ``update_config`` on the name because
-        a name is not config — but all it does is move the row. The audit trail
-        needs no repointing: rows carry the resource's stable id, so history
-        follows it while each row keeps saying what the resource was called
-        when that event happened. The rename is recorded as its own event.
+        All this does is write one column. Nothing else in the vault has to be
+        repointed, because nothing else holds the name: cross-resource
+        references, the synced document and the audit trail all hold the uid,
+        and each audit row goes on saying what the resource was called when
+        that event happened. That is the whole of what making the uid the
+        identity bought, and it is why this is a field on ``PATCH`` for every
+        kind rather than one kind's private route.
+
+        Delegates to ``resource_rename_ops`` to keep this module under the
+        file-size limit; see that module for the order of operations.
         """
-        kind_def = self._require_kind(ref.kind)
-        # Same CODE-030 name check ``register`` applies, BEFORE any DB write.
-        if kind_def.validate_name is not None:
-            try:
-                kind_def.validate_name(new_name)
-            except ValueError as e:
-                raise ConfigValidationError(str(e)) from e
-        await self.get(ref)  # 404 for an absent resource, before anything moves
-        renamed = await self._repo.rename(ref, new_name)
-        await self._audit.record(
-            AuditEventType.RESOURCE_RENAMED.value,
-            ref=ResourceRef(ref.kind, new_name),
-            actor=actor,
-            details={"from": ref.name, "to": new_name},
-        )
-        return renamed
+        from coffer.application.resource_rename_ops import rename as _rename
 
-    async def delete(self, ref: ResourceRef, actor: str) -> None:
+        return await _rename(self, uid, new_name, actor)
+
+    async def delete(self, uid: str, actor: str) -> None:
         # Credential release (on successful delete) delegates to
         # resource_delete_ops to keep this module under the file-size limit.
         from coffer.application.resource_delete_ops import release_orphaned_credentials
 
-        kind_def = self._require_kind(ref.kind)
-        snapshot = await self.get(ref)  # raises ResourceNotFound if missing
+        snapshot = await self.get(uid)  # raises ResourceNotFound if missing
+        kind_def = self._require_kind(snapshot.kind)
         if kind_def.on_delete is not None:
             # CODE-033: await an async on_delete hook so side effects (e.g.
             # evicting live upstream connections, tearing down skill symlinks)
@@ -373,20 +378,20 @@ class ResourceService:
             # synchronously. A hook that raises aborts the deletion (propagates
             # to the caller). Otherwise a follow-up read inside the hook would
             # hit ResourceNotFound and the cleanup would be silently dropped.
-            result = kind_def.on_delete(ref)
+            result = kind_def.on_delete(snapshot)
             if inspect.isawaitable(result):
                 await result
-        await self._repo.delete(ref)
+        await self._repo.delete(uid)
         await release_orphaned_credentials(self, kind_def, snapshot.config, actor)
         await self._audit.record(
             AuditEventType.RESOURCE_DELETED.value,
-            ref=ref,
+            resource=snapshot,
             actor=actor,
             details={
                 "snapshot": {
                     "kind": snapshot.kind,
                     "name": snapshot.name,
-                    "config": _audit_safe_config(kind_def, snapshot.config),
+                    "config": audit_safe_config(kind_def, snapshot.config),
                     "enabled": snapshot.enabled,
                 }
             },

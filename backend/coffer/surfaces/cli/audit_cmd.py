@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Query the audit log")
 _console = Console()
@@ -32,7 +33,15 @@ def list_cmd(
         if kind is not None:
             params["kind"] = kind
         if name is not None:
-            params["name"] = name
+            # A NAME is what a person types; the route filters on the resource's
+            # IDENTITY, because a label cannot tell a renamed resource from a
+            # deleted one whose name was later reused. Resolving it here is what
+            # makes ``--kind X --name Y`` return Y's whole trail, including the
+            # rows written while it was called something else.
+            if kind is None:
+                typer.echo("--name needs --kind: a name is only unique within a kind", err=True)
+                raise typer.Exit(2)
+            params["resource_uid"] = resolve_uid(c, kind, name, verbose=verbose)
         if event_type is not None:
             params["event_type"] = event_type
         if since is not None:

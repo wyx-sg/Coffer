@@ -46,7 +46,9 @@ class ScopeOut(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    agents: list[str] | None = Field(default=None, examples=[["claude-code"]])
+    #: Agent resource UIDS, not names. A name-shaped example here would teach
+    #: the wrong vocabulary to everyone reading the generated client.
+    agents: list[str] | None = Field(default=None, examples=[["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"]])
 
     @classmethod
     def of(cls, scope: Scope | None) -> ScopeOut | None:
@@ -58,8 +60,11 @@ class ScopeOut(BaseModel):
 
 
 class ResourceOut(BaseModel):
-    ref: str = Field(examples=["mcp_server:filesystem"])
+    #: The identity. Immutable, opaque, and the same value on every machine
+    #: holding this resource — every route that addresses one takes this.
+    uid: str = Field(examples=["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"])
     kind: str
+    #: A mutable label, unique within ``kind``. Editable through PATCH.
     name: str
     description: str | None = None
     config: dict[str, Any]
@@ -80,6 +85,11 @@ class ResourceCreate(BaseModel):
 
 
 class ResourceUpdate(BaseModel):
+    #: Renaming is a field, not an operation. Absent means "leave the label
+    #: alone"; a value already taken within the kind is a 409.
+    name: str | None = Field(
+        default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$"
+    )
     description: str | None = None
     config: dict[str, Any] | None = None
 
@@ -117,6 +127,9 @@ class AuditEntryOut(BaseModel):
     timestamp: datetime
     event_type: str
     resource_kind: str | None = None
+    #: The label the resource carried WHEN THE EVENT HAPPENED, which is the
+    #: point of storing it: a renamed resource's history reads as the history
+    #: of a thing that was called different names at different times.
     resource_name: str | None = None
     actor: str
     details: dict[str, Any] | None = None
@@ -260,10 +273,22 @@ class McpTestResultOut(BaseModel):
 
 class InvocationOut(BaseModel):
     timestamp: datetime
-    #: Which upstream server the call went to. Required, not optional: the
-    #: cross-server timeline is unreadable without it, and the per-server
-    #: route knows it too.
-    resource_name: str
+    #: Which upstream server the call went to — the value actually recorded in
+    #: the log, and what to filter or link by. Required, not optional: the
+    #: cross-server timeline is unreadable without it, and the per-server route
+    #: knows it too. Two of its forms are not resource uids and resolve to
+    #: nothing: ``BUILTIN_SERVER_UID`` ("coffer"), the sentinel Coffer's own
+    #: built-in tools log under, and the ``DELETED_SERVER_UID_PREFIX`` form
+    #: ("deleted:<name>") given to rows whose server was already gone when the
+    #: log was re-keyed from names to uids.
+    resource_uid: str
+    #: The same server's label, resolved at read time by the route, so the
+    #: timeline is readable without a client holding the whole resource list.
+    #: Null when ``resource_uid`` resolves to no resource — a deleted server, or
+    #: the built-in sentinel — which is where a client falls back to showing the
+    #: uid's own text. Nullable but NOT defaulted: a projection that forgot to
+    #: resolve would otherwise silently emit null for every row.
+    resource_name: str | None
     capability_type: str = Field(pattern="^(tool|resource|prompt)$")
     capability_key: str
     duration_ms: int

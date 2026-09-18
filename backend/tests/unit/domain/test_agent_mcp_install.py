@@ -161,93 +161,112 @@ def test_toml_uninstall_noop_for_scalar_mcp_servers():
     assert tomlkit.parse(out)["mcp_servers"] == "coffer-ish"
 
 
-# --- self-reported agent identity (spec agent-registry FR-015 amended, Task 9) -------------
+# --- self-reported agent identity (spec agent-registry FR-015 amended) ------
 
 
-def test_entry_fields_command_map_with_agent_name():
+# The identity the shim reports is the agent's uid, never its name: the entry
+# is written once into a file Coffer does not otherwise revisit, and the
+# gateway matches it against the uids a scope holds.
+AGENT_UID = "4d5e6f708192a3b4c5d6e7f809a1b2c3"
+
+
+def test_entry_fields_command_map_with_agent_uid():
     from coffer.domain.agent.mcp_injection import McpEntryStyle
     from coffer.domain.agent.mcp_install import _entry_fields
 
-    assert _entry_fields(SHIM, McpEntryStyle.COMMAND_MAP, "my_agent") == {
+    assert _entry_fields(SHIM, McpEntryStyle.COMMAND_MAP, AGENT_UID) == {
         "command": SHIM,
-        "args": ["--agent", "my_agent"],
+        "args": ["--agent-uid", AGENT_UID],
     }
 
 
-def test_entry_fields_command_map_without_agent_name():
+def test_entry_fields_command_map_without_agent_uid():
     from coffer.domain.agent.mcp_injection import McpEntryStyle
     from coffer.domain.agent.mcp_install import _entry_fields
 
     assert _entry_fields(SHIM, McpEntryStyle.COMMAND_MAP, None) == {"command": SHIM}
-    # agent_name defaults to None when omitted entirely.
+    # agent_uid defaults to None when omitted entirely.
     assert _entry_fields(SHIM, McpEntryStyle.COMMAND_MAP) == {"command": SHIM}
 
 
-def test_json_command_map_entry_with_agent_name_carries_args():
-    out = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_name="my_agent")
+def test_json_command_map_entry_with_agent_uid_carries_args():
+    out = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_uid=AGENT_UID)
     data = json.loads(out)
     assert data["mcpServers"][COFFER_SERVER_KEY] == {
         "command": SHIM,
-        "args": ["--agent", "my_agent"],
+        "args": ["--agent-uid", AGENT_UID],
     }
     assert is_installed(ConfigFileFormat.JSON, out)
     assert installed_command(ConfigFileFormat.JSON, out) == SHIM
 
 
-def test_json_command_map_entry_without_agent_name_has_no_args_key():
-    """Backward compatible default: no agent_name ⇒ the pre-Task-9 shape,
-    unaffected by the new parameter."""
+def test_json_command_map_entry_without_agent_uid_has_no_args_key():
+    """A caller that does not know the agent writes the bare command entry,
+    unaffected by the identity parameter."""
     out = apply_install(ConfigFileFormat.JSON, "", SHIM)
     data = json.loads(out)
     assert data["mcpServers"][COFFER_SERVER_KEY] == {"command": SHIM}
     assert "args" not in data["mcpServers"][COFFER_SERVER_KEY]
 
 
-def test_toml_command_map_entry_with_agent_name_carries_args():
-    out = apply_install(ConfigFileFormat.TOML, "", SHIM, agent_name="codex")
+def test_toml_command_map_entry_with_agent_uid_carries_args():
+    out = apply_install(ConfigFileFormat.TOML, "", SHIM, agent_uid=AGENT_UID)
     doc = tomlkit.parse(out)
     entry = doc["mcp_servers"][COFFER_SERVER_KEY]
     assert entry["command"] == SHIM
-    assert list(entry["args"]) == ["--agent", "codex"]
+    assert list(entry["args"]) == ["--agent-uid", AGENT_UID]
     assert is_installed(ConfigFileFormat.TOML, out)
     assert installed_command(ConfigFileFormat.TOML, out) == SHIM
 
 
-def test_json_install_with_agent_name_is_idempotent_on_reinstall():
-    """Re-install (the migration path for pre-Task-9 entries, see module
-    docstring) replaces the entry in place — never duplicates it."""
-    once = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_name="my_agent")
-    twice = apply_install(ConfigFileFormat.JSON, once, SHIM, agent_name="my_agent")
+def test_json_install_with_agent_uid_is_idempotent_on_reinstall():
+    """Re-install (the upgrade path for entries written by an older Coffer, see
+    module docstring) replaces the entry in place — never duplicates it."""
+    once = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_uid=AGENT_UID)
+    twice = apply_install(ConfigFileFormat.JSON, once, SHIM, agent_uid=AGENT_UID)
     data = json.loads(twice)
     assert list(data["mcpServers"]).count(COFFER_SERVER_KEY) == 1
-    assert data["mcpServers"][COFFER_SERVER_KEY]["args"] == ["--agent", "my_agent"]
+    assert data["mcpServers"][COFFER_SERVER_KEY]["args"] == ["--agent-uid", AGENT_UID]
 
 
 def test_json_preexisting_entry_without_args_is_detected_as_installed():
-    """Regression: agents installed BEFORE this change wrote entries with no
-    ``args`` key at all. is_installed/installed_command must still report
+    """Regression: agents installed BEFORE the identity flag wrote entries with
+    no ``args`` key at all. is_installed/installed_command must still report
     them as installed (they key on COFFER_SERVER_KEY, not on ``args``) —
     re-install (not auto-migration) is the upgrade path to add the flag."""
     pre_existing = json.dumps({"mcpServers": {COFFER_SERVER_KEY: {"command": SHIM}}})
     assert is_installed(ConfigFileFormat.JSON, pre_existing)
     assert installed_command(ConfigFileFormat.JSON, pre_existing) == SHIM
 
-    # Re-install (the migration path) rewrites it with the agent flag, in place.
-    upgraded = apply_install(ConfigFileFormat.JSON, pre_existing, SHIM, agent_name="my_agent")
+    # Re-install (the upgrade path) rewrites it with the identity flag, in place.
+    upgraded = apply_install(ConfigFileFormat.JSON, pre_existing, SHIM, agent_uid=AGENT_UID)
     data = json.loads(upgraded)
     assert list(data["mcpServers"]).count(COFFER_SERVER_KEY) == 1
     assert data["mcpServers"][COFFER_SERVER_KEY] == {
         "command": SHIM,
-        "args": ["--agent", "my_agent"],
+        "args": ["--agent-uid", AGENT_UID],
     }
 
 
+def test_reinstall_replaces_a_name_shaped_entry_written_by_an_older_coffer():
+    """The one thing the rewrite has to get right: an entry left behind by the
+    version that reported ``--agent <name>`` must come back carrying the uid and
+    nothing else. Anything that merged the two arg lists would leave the gateway
+    a stale name it can no longer match against any scope."""
+    stale = json.dumps(
+        {"mcpServers": {COFFER_SERVER_KEY: {"command": SHIM, "args": ["--agent", "cc"]}}}
+    )
+    out = apply_install(ConfigFileFormat.JSON, stale, SHIM, agent_uid=AGENT_UID)
+    entry = json.loads(out)["mcpServers"][COFFER_SERVER_KEY]
+    assert entry == {"command": SHIM, "args": ["--agent-uid", AGENT_UID]}
+
+
 def test_json_entry_with_args_is_detected_as_installed_and_uninstall_removes_it():
-    """Regression: an entry that already carries ``args`` (post-Task-9 shape)
-    is still detected as installed, and uninstall still removes exactly it —
-    `_coffer_command`/`is_installed` key on `COFFER_SERVER_KEY`, unaffected by
-    the presence of an `args` list."""
-    installed = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_name="my_agent")
+    """Regression: an entry that already carries ``args`` is still detected as
+    installed, and uninstall still removes exactly it — `_coffer_command` /
+    `is_installed` key on `COFFER_SERVER_KEY`, unaffected by the presence of an
+    `args` list."""
+    installed = apply_install(ConfigFileFormat.JSON, "", SHIM, agent_uid=AGENT_UID)
     assert is_installed(ConfigFileFormat.JSON, installed)
     assert installed_command(ConfigFileFormat.JSON, installed) == SHIM
 

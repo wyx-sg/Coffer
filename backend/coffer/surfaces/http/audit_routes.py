@@ -8,9 +8,10 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from coffer.application.audit_service import AuditService
+from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEntry
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_audit_service
+from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.schemas import AuditEntryOut, AuditListOut
 
 router = APIRouter(
@@ -64,17 +65,31 @@ def _to_out(e: AuditEntry) -> AuditEntryOut:
 @router.get("", response_model=AuditListOut)
 async def list_audit(
     kind: str | None = Query(default=None),
-    name: str | None = Query(default=None),
+    resource_uid: str | None = Query(
+        default=None,
+        description=(
+            "One resource's whole trail, including the rows written while it "
+            "carried a different name. Filtering by name was removed with the "
+            "identity change: it could not tell a renamed resource from a "
+            "deleted one whose name was later reused, and rendered two "
+            "objects' histories as one."
+        ),
+    ),
     event_type: str | None = Query(default=None),
     event_prefix: str | None = Query(default=None),
     since: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     svc: AuditService = Depends(get_audit_service),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> AuditListOut:
     since_dt = _parse_since(since)
+    # 404 for an unknown uid rather than an empty list: "no such resource" and
+    # "that resource has no events" are different answers and the caller acts
+    # on them differently.
+    resource = await resources.get(resource_uid) if resource_uid is not None else None
     entries = await svc.query(
+        resource=resource,
         kind=kind,
-        name=name,
         event_type=event_type,
         event_prefix=event_prefix,
         since=since_dt,
