@@ -1912,7 +1912,6 @@
         "enabled": "状态"
       },
       "saving": "保存中…",
-      "flowHint": "阶段自上而下依次执行——顺序就是流程。点开某个阶段，就能看到它里面的任务；退回到更早阶段的路径标在旁边。",
       "editStage": "编辑阶段 {{name}}",
       "editStageTitle": "编辑阶段",
       "addStageDescription": "阶段是交付的一个步骤。它会带一个任务创建出来，之后可以改名、再添加。",
@@ -1933,11 +1932,14 @@
       "nodePosition": "执行位置",
       "nodePositionHint": "这个任务在本阶段里的执行位置；阶段内的任务按顺序执行。",
       "removeNode": "删除任务 {{name}}",
-      "openStage": "打开 {{name}}",
-      "backToStages": "全部阶段",
+      "stageCount_one": "{{count}} 个阶段",
+      "stageCount_other": "{{count}} 个阶段",
+      "deleteStageTitle": "删除阶段",
+      "deleteStageConfirm": "确定删除「{{name}}」？它里面的 {{count}} 个任务会一起删掉，退回到它的路径也会删掉。已经由这个工作流创建的运行冻结了自己的副本，不受影响。",
+      "deleteNodeTitle": "删除任务",
+      "deleteNodeConfirm": "确定删除「{{name}}」？已经由这个工作流创建的运行冻结了自己的副本，不受影响。",
       "taskCount_one": "{{count}} 个任务",
-      "taskCount_other": "{{count}} 个任务",
-      "edgeTitle": "{{reason}} 会把工作退回到 {{stage}}"
+      "taskCount_other": "{{count}} 个任务"
     },
     "context": {
       "description": "这次运行读什么、又产出了什么，都在这里。集合、文件、链接、仓库都可以在运行的任何阶段挂上来——之后开启的每个任务都会知道它的存在。产出的文件会随着任务写出而出现。",

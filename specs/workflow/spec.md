@@ -231,7 +231,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-052**: The run's own page MUST offer no controls that advance or alter the run. Every such action belongs to the node's conversation page, where what is being decided is in front of the developer.
 - **FR-059**: Templates and runs MUST be separate surfaces in the web UI: a template is a resource and MUST be reached where the other resource kinds are, and a run is operational state and MUST NOT be. Neither may be reachable only through the other.
 - **FR-060**: The template editor MUST NOT ask the developer for a stage's or a task's key. A key is an identity the engine reads no meaning from (FR-003), so it MUST be derived from the name, made unique, and rewritten through the feedback edges that named it in the same edit.
-- **FR-061**: The template editor MUST show a template as its SHAPE, read one depth at a time: the stages in the order they run with the edges that send work back drawn between them; a stage's tasks behind opening that stage; and a stage's and a task's own fields behind opening that stage or task.
+- **FR-061**: The template editor MUST show a template as its SHAPE — every stage in the order it runs, with the routes that send work back drawn between them — beside the tasks of the one stage being edited, and MUST keep a stage's and a task's own fields behind opening that stage or task. A run MUST show its own stages and tasks the same way, because it is the same shape with state on it.
 - **FR-062**: The template editor MUST write each edit as it is made and MUST NOT hold unsaved state. A stage's and a task's fields are saved from the dialog that holds them; adding, reordering and deleting save themselves.
 - **FR-066**: A disabled workflow MUST start no new runs, and the refusal MUST come from the daemon rather than from one client's list — a rule that lives only in the web UI is not a rule. Runs already created from it MUST be unaffected: they froze their own snapshot (FR-011), so switching a workflow off retires it from the menu and does not reach into work already under way.
 - **FR-065**: A mounted external reference MUST be reported with what it points at — Confluence, Jira, a Google doc — when that can be recognised from its address, and with nothing when it cannot. The node's context MUST carry it, so that "go and read this" resolves to one tool rather than a guess. It MUST be derived on read rather than stored, so a reference mounted before its provider was recognisable is recognised without a migration.
@@ -353,11 +353,11 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** the developer looks for the shape of work as opposed to a delivery of it
 - **Then** the template is listed among the vault's resources and the run is not, and neither list is reachable only through the other (FR-059, FR-001)
 
-### Scenario: the editor shows the shape one depth at a time
+### Scenario: the editor shows the whole flow beside the one stage being edited
 
 - **Given** a template of three stages, each with tasks, and an edge sending work back
 - **When** the editor is opened
-- **Then** it shows the stages and the edge between them and no task; opening a stage shows that stage's tasks and no other stage's; opening a task shows that task's fields (FR-061)
+- **Then** every stage is listed in order with the route back drawn between them, the tasks of one stage are shown and no other stage's are, and a task's fields appear only when that task is opened (FR-061)
 
 ### Scenario: a note the developer wrote is part of the run's context
 

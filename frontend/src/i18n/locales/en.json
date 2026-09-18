@@ -1912,7 +1912,6 @@
         "enabled": "State"
       },
       "saving": "Saving…",
-      "flowHint": "The stages run top to bottom — the order is the flow. Click a stage to see the tasks inside it; work sent back to an earlier stage is drawn beside them.",
       "editStage": "Edit stage {{name}}",
       "editStageTitle": "Edit stage",
       "addStageDescription": "A stage is a step of the delivery. It starts with one task, which you can rename and add to.",
@@ -1933,11 +1932,14 @@
       "nodePosition": "Runs at",
       "nodePositionHint": "Where in this stage the task runs; the stage's tasks run in order.",
       "removeNode": "Delete task {{name}}",
-      "openStage": "Open {{name}}",
-      "backToStages": "All stages",
+      "stageCount_one": "{{count}} stage",
+      "stageCount_other": "{{count}} stages",
+      "deleteStageTitle": "Delete stage",
+      "deleteStageConfirm": "Delete “{{name}}”? Its {{count}} task(s) go with it, and so does any route back to it. Runs already created from this workflow froze their own copy and are unaffected.",
+      "deleteNodeTitle": "Delete task",
+      "deleteNodeConfirm": "Delete “{{name}}”? Runs already created from this workflow froze their own copy and are unaffected.",
       "taskCount_one": "{{count}} task",
-      "taskCount_other": "{{count}} tasks",
-      "edgeTitle": "{{reason}} sends work back to {{stage}}"
+      "taskCount_other": "{{count}} tasks"
     },
     "context": {
       "description": "What this run reads and what it has produced, in one place. Mount a collection, a file, a link or a repository at any point in the run's life — every task that opens afterwards is told it is there. Produced files appear as the tasks write them.",

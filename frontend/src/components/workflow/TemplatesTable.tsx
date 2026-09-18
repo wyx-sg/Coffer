@@ -2,9 +2,15 @@
 // The template list: what each flow is called, what it is for, the stages it
 // runs IN ORDER, and whether it is enabled (FR-054).
 //
-// The stages column spells the order out — `Design → Coding → Testing` — rather
-// than counting them. The order is the flow (FR-005), so a count would hide the
-// one thing a reader is scanning the list for.
+// The stages column COUNTS them. It used to spell the order out — `Design →
+// Coding → Testing` — which is the shape of the flow and therefore the thing
+// worth knowing, except that a list is read by scanning down a column and a
+// six-stage chain is a paragraph in a cell. The shape is one click away, drawn
+// properly, on the workflow's own page; here the useful fact is how big it is.
+//
+// Searching still matches the names: a developer looking for "the one with a
+// Testing stage" is asking a question this column no longer shows but the
+// template still answers.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -21,9 +27,9 @@ interface Props {
   onDelete: (template: WorkflowTemplate) => void;
 }
 
-/** The stages in order, as one readable line. */
-function stageSummary(template: WorkflowTemplate): string {
-  return (template.config.stages ?? []).map((s) => s.name || s.key).join(" → ");
+/** The stage names, for the search box rather than for the eye. */
+function stageNames(template: WorkflowTemplate): string {
+  return (template.config.stages ?? []).map((s) => s.name || s.key).join(" ");
 }
 
 export function TemplatesTable({ templates, isLoading = false, onDelete }: Props) {
@@ -43,9 +49,11 @@ export function TemplatesTable({ templates, isLoading = false, onDelete }: Props
     {
       key: "description",
       header: t("workflow.templates.cols.description"),
-      className: "w-full min-w-[14rem]",
+      // `w-full max-w-0` is what lets the cell shrink far enough for `truncate`
+      // to fire: without the zero max-width it sizes to its content instead.
+      className: "w-full max-w-0",
       cell: (row) => (
-        <span className="text-muted-foreground">
+        <span className="block truncate text-muted-foreground">
           {row.description ?? row.config.description ?? t("common.emptyValue")}
         </span>
       ),
@@ -53,7 +61,12 @@ export function TemplatesTable({ templates, isLoading = false, onDelete }: Props
     {
       key: "stages",
       header: t("workflow.templates.cols.stages"),
-      cell: (row) => <span className="text-muted-foreground">{stageSummary(row)}</span>,
+      className: "whitespace-nowrap",
+      cell: (row) => (
+        <span className="text-muted-foreground">
+          {t("workflow.templates.stageCount", { count: (row.config.stages ?? []).length })}
+        </span>
+      ),
     },
     {
       key: "enabled",
@@ -98,7 +111,7 @@ export function TemplatesTable({ templates, isLoading = false, onDelete }: Props
       columns={columns}
       rowKey={(row) => row.name}
       search={{
-        accessor: (row) => `${row.name} ${row.description ?? ""} ${stageSummary(row)}`,
+        accessor: (row) => `${row.name} ${row.description ?? ""} ${stageNames(row)}`,
         placeholder: t("workflow.templates.searchPlaceholder"),
       }}
       onRowClick={(row) => navigate(`/workflows/${encodeURIComponent(row.name)}`)}

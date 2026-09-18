@@ -70,14 +70,27 @@ function wrap() {
 describe("WorkflowTemplatesPage", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("lists each template with its stages in order", () => {
+  test("lists each template and how big it is, not what is inside it", () => {
     stub({ templates: [template("delivery", ["Design", "Coding", "Testing"])] });
     render(wrap());
     expect(screen.getByRole("heading", { name: "Workflows" })).toBeInTheDocument();
     expect(screen.getByText("delivery")).toBeInTheDocument();
-    expect(screen.getByText("Design → Coding → Testing")).toBeInTheDocument();
+    // A list is read by scanning down a column; the chain is a paragraph in a
+    // cell, and the shape is drawn properly on the workflow's own page.
+    expect(screen.getByText("3 stages")).toBeInTheDocument();
+    expect(screen.queryByText(/Design → Coding/)).not.toBeInTheDocument();
     // Enabled is a switch, not a badge: two states, acted on from the list.
     expect(screen.getByRole("switch", { name: "Enabled: delivery" })).toBeChecked();
+  });
+
+  test("a stage name still finds its template in the search box", () => {
+    // The column stopped showing them; the template still answers for them.
+    stub({ templates: [template("delivery", ["Design", "Coding", "Testing"])] });
+    render(wrap());
+    fireEvent.change(screen.getByPlaceholderText("Search workflows…"), {
+      target: { value: "Coding" },
+    });
+    expect(screen.getByText("delivery")).toBeInTheDocument();
   });
 
   test("offers the create dialog from the empty state and from the header", () => {
