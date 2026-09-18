@@ -66,10 +66,16 @@ class ConversationModel(Base):
     # owner also drives from an IM channel; "has a binding" iff channel_name set.
     channel_name: Mapped[str | None] = mapped_column(String, nullable=True)
     peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Whose conversation this is. NULL is the developer's own — the only kind
+    # the chat list shows — and a name is the surface that owns it, which today
+    # is only ``workflow``. Chat needs no idea what that means: it lists the
+    # unowned ones, and everything else belongs to whoever put a name here.
+    owner: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_conversations_updated", "updated_at"),
         Index("idx_conversations_archived", "archived_at"),
+        Index("idx_conversations_owner", "owner"),
     )
 
 
@@ -137,6 +143,7 @@ class ConversationRepo:
             archived_at=_tz(row.archived_at) if row.archived_at else None,
             channel_name=row.channel_name,
             peer_chat_id=row.peer_chat_id,
+            owner=row.owner,
         )
 
     async def create(self, conversation: Conversation) -> Conversation:
@@ -149,6 +156,7 @@ class ConversationRepo:
                 updated_at=conversation.updated_at,
                 channel_name=conversation.channel_name,
                 peer_chat_id=conversation.peer_chat_id,
+                owner=conversation.owner,
             )
             session.add(row)
             await session.commit()
@@ -162,8 +170,11 @@ class ConversationRepo:
             return self._to_domain(row) if row else None
 
     async def list(self, *, archived: bool = False) -> list[Conversation]:
-        """Conversations newest first. ``archived=False`` (default) returns active
-        threads only; ``archived=True`` returns the archived ones."""
+        """The developer's OWN conversations, newest first — an owned one is
+        never listed (see ``ConversationModel.owner``). ``archived=False`` is
+        the active threads, ``archived=True`` the archived ones. Reading one by
+        id is untouched: a task's page opens the conversation it owns.
+        """
         async with self._sm() as session:
             stmt = select(ConversationModel).order_by(ConversationModel.updated_at.desc())
             stmt = stmt.where(
@@ -171,6 +182,7 @@ class ConversationRepo:
                 if archived
                 else ConversationModel.archived_at.is_(None)
             )
+            stmt = stmt.where(ConversationModel.owner.is_(None))
             rows = (await session.execute(stmt)).scalars().all()
             return [self._to_domain(r) for r in rows]
 

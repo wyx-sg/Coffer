@@ -57,6 +57,12 @@ logger = logging.getLogger(__name__)
 RUN_CONTEXT_ENV = "COFFER_RUN_CONTEXT"
 
 
+#: What a workflow task's conversation is owned by. One string, read by nobody
+#: but the chat list's "is this mine" test — a name rather than a boolean so a
+#: second surface that grows conversations of its own can say which it is.
+CONVERSATION_OWNER = "workflow"
+
+
 class ChatTurnPlatform:
     """``TurnPlatformPort`` over the conversation service and the orchestrator."""
 
@@ -78,7 +84,12 @@ class ChatTurnPlatform:
         # by ``conversation_env_lookup``. Carrying it in the conversation's
         # config as well would be a second copy of the same fact, and the copy
         # that matters is the one that survives a restart.
-        conv = await self._chat.create_conversation(agent_key=agent_key, agent_config={"cwd": cwd})
+        # ``owner`` is how it stays out of the developer's own chat list while
+        # staying an ordinary conversation everywhere else (FR-030): this one
+        # belongs to a run, and the chat layer needs to know nothing more.
+        conv = await self._chat.create_conversation(
+            agent_key=agent_key, agent_config={"cwd": cwd}, owner=CONVERSATION_OWNER
+        )
         return conv.id
 
     async def start_turn(self, conversation_id: str, text: str) -> asyncio.Queue[AgentEvent | None]:

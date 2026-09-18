@@ -139,6 +139,7 @@ class ChatService:
         agent_config: dict[str, Any] | None = None,
         channel_name: str | None = None,
         peer_chat_id: str | None = None,
+        owner: str | None = None,
     ) -> Conversation:
         """Create a conversation for the named agent.
 
@@ -150,6 +151,12 @@ class ChatService:
 
         An optional channel binding (``channel_name`` + ``peer_chat_id``) is the
         return address for relaying output back to an IM channel (spec channels).
+
+        ``owner`` names the surface this conversation belongs to, and only a
+        caller that is not the developer passes one. It keeps the conversation
+        out of the chat list without keeping it out of this table: a workflow
+        task's transcript is an ordinary transcript, read through this service
+        like any other, and that is the whole reason a task IS a conversation.
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 
@@ -162,6 +169,7 @@ class ChatService:
             updated_at=now,
             channel_name=channel_name,
             peer_chat_id=peer_chat_id,
+            owner=owner,
         )
         created = await self._conversations.create(conv)
 
