@@ -276,9 +276,9 @@ def take_feedback_edge(
 
     Raises:
         IllegalTransition: no edge leaves ``from_stage`` for ``reason``.
-        AttemptCeilingReached: this edge has fired the template's ceiling
-            already, so the run fails with that reason instead of sending work
-            back a fourth time (FR-026).
+        AttemptCeilingReached: this edge has fired its own ceiling already,
+            so the run fails with that reason instead of sending work back a
+            fourth time (FR-026).
     """
     edge = resolve_feedback_edge(template, from_stage, reason)
     if edge is None:
@@ -293,7 +293,7 @@ def take_feedback_edge(
     if target_stage is None:  # pragma: no cover - parse_template proves both ends exist
         raise IllegalTransition(f"stage {from_stage!r}", "unknown target", edge.to_stage, ())
 
-    firing = check_attempt_ceiling(task_key, firings_used, template.attempt_ceiling)
+    firing = check_attempt_ceiling(task_key, firings_used, edge.attempt_ceiling)
     return FeedbackOutcome(
         edge=edge,
         target=NodePosition(stage_key=target_stage.key, node_key=task_key),
@@ -304,10 +304,11 @@ def take_feedback_edge(
 def check_attempt_ceiling(node_key: str, attempts_used: int, ceiling: int) -> int:
     """The attempt number a retry would open, or a refusal at the ceiling.
 
-    Shared by the retry action and the feedback edge so both loops stop at the
-    same number — a ceiling honoured on one path and not the other is no
-    ceiling at all (FR-026). What is counted differs, and deliberately: a retry
-    counts one node's tries, an edge counts its own crossings.
+    Shared by the retry action and the feedback edge so both loops stop the
+    same way — a ceiling honoured on one path and not the other is no ceiling
+    at all (FR-026). What is counted differs, and deliberately: a retry counts
+    one task's tries against that task's ceiling, an edge counts its own
+    crossings against the edge's.
 
     Raises:
         AttemptCeilingReached: when the next attempt would exceed the ceiling.

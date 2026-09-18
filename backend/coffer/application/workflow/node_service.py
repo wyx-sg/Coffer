@@ -163,25 +163,6 @@ class WorkflowNodeService:
             raise IllegalTransition(
                 f"run {run.id}", run.status, "node.start", (RunStatus.RUNNING.value,)
             )
-        if ops.cmd.budget_exceeded(template, run):
-            # FR-018: reaching the budget pauses the run instead of starting the
-            # next node. Its own event type so the reason survives; an ordinary
-            # pause once folded.
-            return await ops.cmd.commit(
-                run,
-                [
-                    PendingEvent(
-                        event_type=EventType.RUN_BUDGET_EXCEEDED,
-                        stage_key=stage_key,
-                        node_key=node.key,
-                        payload={
-                            "token_budget": template.token_budget,
-                            "tokens_spent": run.tokens_spent,
-                        },
-                    )
-                ],
-                actor=actor,
-            )
         await ops.require_nothing_running(run.id, node.key)
 
         if attempt is None:

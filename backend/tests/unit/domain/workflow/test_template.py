@@ -26,8 +26,6 @@ def valid_config() -> dict[str, Any]:
     """The quickstart's three-stage template, which is a complete flow."""
     return {
         "description": "One repository, one change, design first",
-        "attempt_ceiling": 3,
-        "token_budget": 4_000_000,
         "stages": [
             {
                 "key": "design",
@@ -130,8 +128,7 @@ def test_omitted_fields_take_the_documented_defaults():
         }
     )
     node = template.stages[0].nodes[0]
-    assert template.attempt_ceiling == DEFAULT_ATTEMPT_CEILING
-    assert template.token_budget is None
+    assert node.attempt_ceiling == DEFAULT_ATTEMPT_CEILING
     assert template.edges == ()
     assert template.stages[0].optional is False
     assert node.approval is ApprovalPolicy.NEVER
@@ -346,12 +343,32 @@ REFUSALS: list[tuple[str, dict[str, Any], str]] = [
         _mutate(["stages", 0, "nodes", 0, "on_failure"], {"action": "stop", "after": 1}),
         "stages[0].nodes[0].on_failure.after",
     ),
-    ("attempt_ceiling zero", _mutate(["attempt_ceiling"], 0), "attempt_ceiling"),
-    ("attempt_ceiling negative", _mutate(["attempt_ceiling"], -3), "attempt_ceiling"),
-    ("attempt_ceiling not an integer", _mutate(["attempt_ceiling"], "3"), "attempt_ceiling"),
-    ("attempt_ceiling a bool", _mutate(["attempt_ceiling"], True), "attempt_ceiling"),
-    ("token_budget zero", _mutate(["token_budget"], 0), "token_budget"),
-    ("token_budget not an integer", _mutate(["token_budget"], 1.5), "token_budget"),
+    (
+        "a task's ceiling at zero",
+        _mutate(["stages", 0, "nodes", 0, "attempt_ceiling"], 0),
+        "stages[0].nodes[0].attempt_ceiling",
+    ),
+    (
+        "a task's ceiling negative",
+        _mutate(["stages", 0, "nodes", 0, "attempt_ceiling"], -3),
+        "stages[0].nodes[0].attempt_ceiling",
+    ),
+    (
+        "a task's ceiling not an integer",
+        _mutate(["stages", 0, "nodes", 0, "attempt_ceiling"], "3"),
+        "stages[0].nodes[0].attempt_ceiling",
+    ),
+    (
+        "a task's ceiling a bool",
+        _mutate(["stages", 0, "nodes", 0, "attempt_ceiling"], True),
+        "stages[0].nodes[0].attempt_ceiling",
+    ),
+    (
+        "a route's ceiling at zero",
+        _mutate(["edges", 0, "attempt_ceiling"], 0),
+        "edges[0].attempt_ceiling",
+    ),
+    ("a run-wide token budget", _mutate(["token_budget"], 4_000_000), "token_budget"),
     ("edges not a list", _mutate(["edges"], {"testing": "coding"}), "edges"),
     ("edge not an object", _mutate(["edges"], ["testing->coding"]), "edges[0]"),
     (

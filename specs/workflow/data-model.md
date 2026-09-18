@@ -16,8 +16,6 @@ which holds the whole definition:
 ```json
 {
   "description": "Requirement to release, one repository",
-  "attempt_ceiling": 3,
-  "token_budget": 4000000,
   "stages": [
     {
       "key": "design",
@@ -33,12 +31,20 @@ which holds the whole definition:
           "artifacts": [{ "name": "td.md", "required": true }],
           "approval": "never",
           "on_failure": { "action": "retry", "times": 1 },
-          "agent": null
+          "agent": null,
+          "attempt_ceiling": 3
         }
       ]
     }
   ],
-  "edges": [{ "from_stage": "testing", "to_stage": "coding", "reason": "code_issue" }]
+  "edges": [
+    {
+      "from_stage": "testing",
+      "to_stage": "coding",
+      "reason": "code_issue",
+      "attempt_ceiling": 3
+    }
+  ]
 }
 ```
 
@@ -49,14 +55,15 @@ JSON path of the offending field:
 |---|---|
 | `stages` | at least one; `key` unique within the template, lowercase slug |
 | `stages[].nodes` | at least one per stage; `key` unique **within the template**, not merely within the stage, because an event names a node by key alone |
-| `nodes[].type` | `ai` \| `coding` \| `notification` \| `manual` — the type decides whether a turn is dispatched at all (`manual` records a human step and never opens a conversation) |
+| `nodes[].type` | `ai` \| `manual` — the type decides whether a turn is dispatched at all (`manual` records a human step and never opens a conversation) |
 | `nodes[].skill` | `null`, or the name of a registered `skill` resource |
 | `nodes[].agent` | `null` (the run's default), or a registered agent inside the template's scope |
 | `nodes[].artifacts[].name` | a single path segment; no separators, no dots-only |
 | `nodes[].approval` | `never` \| `always` |
 | `nodes[].on_failure.action` | `stop` \| `continue` \| `retry`, with `times` ≥ 1 when `retry` |
 | `edges[]` | both stages exist; `to_stage` strictly earlier than `from_stage` — a forward edge is the default order and is not written |
-| `attempt_ceiling` | ≥ 1; the ceiling for any one node key's attempts AND for any one feedback edge's firings across a run (FR-026) |
+| `nodes[].attempt_ceiling` | ≥ 1, default 3; how many attempts THIS task may open across a run (FR-026) |
+| `edges[].attempt_ceiling` | ≥ 1, default 3; how many times THIS route may send work back — the work it creates is an ad-hoc task declared nowhere else (FR-026) |
 
 The engine reads no meaning from any `key` (FR-003). `design`, `coding`,
 `张三的阶段` are the same to it.
@@ -80,7 +87,7 @@ timestamps are UTC.
 | `current_stage_key` | TEXT nullable | projection |
 | `current_node_key` | TEXT nullable | projection |
 | `version` | INTEGER not null default 1 | optimistic lock (FR-015) |
-| `tokens_spent` | INTEGER not null default 0 | against the snapshot's `token_budget` (FR-018) |
+| `tokens_spent` | INTEGER not null default 0 | a readout of what the run has spent; nothing caps it (FR-026) |
 | `inputs` | JSON not null default `[]` | mounted inputs — `knowledge`, `file`, `note`, `link`, `repo` (FR-032, FR-069) |
 | `created_at` / `updated_at` | TIMESTAMP | |
 
@@ -116,7 +123,7 @@ Append-only: no row is ever updated or deleted while its run exists.
 Event types — a closed set, and the whole vocabulary:
 
 `run.created`, `run.started`, `run.paused`, `run.resumed`, `run.aborted`,
-`run.completed`, `run.failed`, `run.budget_exceeded`,
+`run.completed`, `run.failed`,
 `node.started`, `node.output_ready`, `node.feedback_submitted`,
 `node.completed`, `node.failed`, `node.retried`, `node.skipped`,
 `node.restored`, `node.adhoc_added`, `node.briefed`,

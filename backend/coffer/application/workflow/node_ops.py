@@ -253,7 +253,7 @@ class NodeOps:
         it carries the last attempt's brief forward, which is what a retry
         means: the same work, tried again.
         """
-        number = check_attempt_ceiling(node.key, attempt.attempt, template.attempt_ceiling)
+        number = check_attempt_ceiling(node.key, attempt.attempt, node.attempt_ceiling)
         opened = await self.open_attempt(
             run.id,
             stage_key,

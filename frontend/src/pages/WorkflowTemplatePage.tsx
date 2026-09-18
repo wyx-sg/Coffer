@@ -1,7 +1,12 @@
 // frontend/src/pages/WorkflowTemplatePage.tsx — spec workflow, FR-054..FR-056.
-// The workflow editor: the stages, the tasks inside them, where work is sent
-// back to, and the run-level ceiling and budget — authored as a map with a
-// dialog per thing, never in raw JSON.
+// The workflow editor: the stages, the tasks inside them, and where work is
+// sent back to — authored as a map with a dialog per thing, never in raw JSON.
+//
+// THERE IS NO SETTINGS TAB. It held three fields: a description, which the
+// header already shows and the Edit dialog now writes, and two run-wide
+// numbers that turned out to belong elsewhere — the attempt ceiling is each
+// task's own (FR-026) and the token budget is gone. A tab holding one field
+// that lives somewhere better is a second place to look for it.
 //
 // THERE IS NO SAVE BUTTON (FR-062). Every edit is written as it is made: a
 // dialog's own Save writes the task or the stage it holds, and adding,
@@ -15,7 +20,7 @@
 // the dialog holding that path puts the message on the control.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, Pencil, Trash2 } from "lucide-react";
 
 import { EmptyState } from "@/components/EmptyState";
@@ -24,9 +29,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplateFlow } from "@/components/workflow/TemplateFlow";
-import { TemplateSettings } from "@/components/workflow/TemplateSettings";
+import { TemplateRenameDialog } from "@/components/workflow/TemplateRenameDialog";
 import { WORKFLOW_TEMPLATE_KIND } from "@/lib/api/workflow";
 import { translateApiError } from "@/lib/api/errors";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
@@ -34,24 +38,17 @@ import { useTemplateEditor } from "@/lib/hooks/useTemplateEditor";
 import { useWorkflowTemplate } from "@/lib/hooks/useWorkflowTemplates";
 import { templateRefusal } from "@/lib/workflow/templateErrors";
 
-const TABS = ["flow", "settings"] as const;
-type Tab = (typeof TABS)[number];
-
 export function WorkflowTemplatePage() {
   const { t } = useTranslation();
   const { name = "" } = useParams<{ name: string }>();
-  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const { data: template, isPending, error } = useWorkflowTemplate(name);
   const editor = useTemplateEditor(name);
   const del = useDeleteResource();
   const [deleting, setDeleting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
 
   const refusal = templateRefusal(editor.error);
-  const raw = params.get("tab");
-  const tab: Tab = TABS.includes(raw as Tab) ? (raw as Tab) : "flow";
-  const setTab = (next: string) =>
-    setParams(next === "flow" ? {} : { tab: next }, { replace: true });
 
   const back = { to: "/workflows", label: t("workflow.templates.backToList") };
 
@@ -95,11 +92,7 @@ export function WorkflowTemplatePage() {
         }
         actions={
           <div className="flex items-center gap-2">
-            {/* To the settings tab, not to a dialog of its own: the
-                description lives there already, and a second field for it
-                would shadow the first. The name is not editable at all — the
-                resource API has no rename. */}
-            <Button variant="outline" size="sm" onClick={() => setTab("settings")}>
+            <Button variant="outline" size="sm" onClick={() => setRenaming(true)}>
               <Pencil className="mr-1 size-3.5" aria-hidden />
               {t("common.edit")}
             </Button>
@@ -114,6 +107,15 @@ export function WorkflowTemplatePage() {
             </Button>
           </div>
         }
+      />
+
+      <TemplateRenameDialog
+        template={template}
+        open={renaming}
+        onOpenChange={setRenaming}
+        // The URL carries the name, so a rename has to move the page with it
+        // or the next read is a 404 of the workflow that was just saved.
+        onRenamed={(next) => navigate(`/workflows/${encodeURIComponent(next)}`, { replace: true })}
       />
 
       <ConfirmDialog
@@ -140,18 +142,7 @@ export function WorkflowTemplatePage() {
         </p>
       ) : null}
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="flow">{t("workflow.templates.tabs.stages")}</TabsTrigger>
-          <TabsTrigger value="settings">{t("workflow.templates.tabs.settings")}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="flow" className="pt-6">
-          <TemplateFlow config={config} refusal={refusal} editor={editor} />
-        </TabsContent>
-        <TabsContent value="settings" className="pt-6">
-          <TemplateSettings config={config} refusal={refusal} editor={editor} />
-        </TabsContent>
-      </Tabs>
+      <TemplateFlow config={config} refusal={refusal} editor={editor} />
     </div>
   );
 }

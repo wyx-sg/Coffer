@@ -31,7 +31,6 @@ DOCUMENTED_EVENT_TYPES = {
     "run.aborted",
     "run.completed",
     "run.failed",
-    "run.budget_exceeded",
     "node.started",
     "node.output_ready",
     "node.feedback_submitted",
@@ -134,24 +133,10 @@ def test_the_fold_is_ordered_by_sequence_not_by_arrival():
         (EventType.RUN_ABORTED, RunStatus.ABORTED),
         (EventType.RUN_COMPLETED, RunStatus.COMPLETED),
         (EventType.RUN_FAILED, RunStatus.FAILED),
-        (EventType.RUN_BUDGET_EXCEEDED, RunStatus.PAUSED),
     ],
 )
 def test_each_run_event_projects_its_status(event_type: EventType, expected: RunStatus):
     assert project([_event(1, event_type)]).status is expected
-
-
-@pytest.mark.acceptance(spec="workflow", scenario="exceeding the token budget pauses the run")
-def test_exceeding_the_budget_leaves_the_run_paused():
-    """FR-018: the run pauses rather than continuing to spend, and the reason
-    survives as its own event type."""
-    projection = project(
-        [
-            _event(1, EventType.RUN_STARTED),
-            _event(2, EventType.RUN_BUDGET_EXCEEDED, payload={"budget": 4000000}),
-        ]
-    )
-    assert projection.status is RunStatus.PAUSED
 
 
 @pytest.mark.parametrize(

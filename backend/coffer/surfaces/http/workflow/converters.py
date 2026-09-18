@@ -70,12 +70,6 @@ def _frozen(run: RunRow) -> WorkflowTemplate | None:
         return None
 
 
-def token_budget_of(run: RunRow) -> int | None:
-    """The budget the run froze, read from its own snapshot (FR-010, FR-018)."""
-    template = _frozen(run)
-    return None if template is None else template.token_budget
-
-
 def _stage_name(template: WorkflowTemplate | None, stage_key: str | None) -> str | None:
     """What the developer CALLED the stage a run is at.
 
@@ -110,7 +104,6 @@ def run_out(run: RunRow, *, owned_here: bool) -> RunOut:
         current_stage_name=_stage_name(frozen, run.current_stage_key),
         current_node_key=run.current_node_key,
         tokens_spent=run.tokens_spent,
-        token_budget=None if frozen is None else frozen.token_budget,
         created_at=run.created_at,
         updated_at=run.updated_at,
     )

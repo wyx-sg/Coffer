@@ -30,13 +30,13 @@ const STAGE = (name: string) => ({ name, optional: false, sendBack: [] });
 
 /** Design → Coding → Testing, one task each, testing sending work back. */
 function threeStages(): TemplateConfig {
-  let config: TemplateConfig = { stages: [], edges: [], attempt_ceiling: 3 };
+  let config: TemplateConfig = { stages: [], edges: [] };
   config = addStage(config, STAGE("Tech Design"));
   config = addStage(config, STAGE("Coding"));
   config = addStage(config, {
     name: "Testing",
     optional: false,
-    sendBack: [{ reason: "code_issue", to_stage: "coding" }],
+    sendBack: [{ reason: "code_issue", to_stage: "coding", attempt_ceiling: 3 }],
   });
   return config;
 }
@@ -76,7 +76,12 @@ describe("keys are derived, never typed", () => {
     // The edge that pointed at `coding` points at the same stage, not at a
     // key that no longer exists.
     expect(config.edges).toEqual([
-      { from_stage: "testing", to_stage: "implementation", reason: "code_issue" },
+      {
+        from_stage: "testing",
+        to_stage: "implementation",
+        reason: "code_issue",
+        attempt_ceiling: 3,
+      },
     ]);
   });
 
@@ -117,7 +122,8 @@ describe("a stage always has a task", () => {
 
     expect(config.stages).toHaveLength(1);
     expect(config.stages[0].nodes).toHaveLength(1);
-    expect(config.attempt_ceiling).toBe(3);
+    // The ceiling is the TASK's now, not the template's.
+    expect(config.stages[0].nodes[0].attempt_ceiling).toBe(3);
   });
 
   test("removing a task leaves the others alone", () => {
@@ -139,12 +145,12 @@ describe("feedback edges", () => {
     let config = saveStage(threeStages(), 2, {
       name: "Testing",
       optional: false,
-      sendBack: [{ reason: "spec_issue", to_stage: "tech_design" }],
+      sendBack: [{ reason: "spec_issue", to_stage: "tech_design", attempt_ceiling: 3 }],
     });
     config = saveStage(config, 1, STAGE("Coding"));
 
     expect(sendBackOf(config, "testing")).toEqual([
-      { reason: "spec_issue", to_stage: "tech_design" },
+      { reason: "spec_issue", to_stage: "tech_design", attempt_ceiling: 3 },
     ]);
   });
 
@@ -152,7 +158,7 @@ describe("feedback edges", () => {
     const config = saveStage(threeStages(), 2, {
       name: "Testing",
       optional: false,
-      sendBack: [{ reason: "code_issue", to_stage: "" }],
+      sendBack: [{ reason: "code_issue", to_stage: "", attempt_ceiling: 3 }],
     });
 
     expect(config.edges).toEqual([]);

@@ -18,7 +18,6 @@ from coffer.domain.workflow.run import ApprovalStatus
 from .conftest import Repos
 
 SNAPSHOT = {
-    "attempt_ceiling": 3,
     "stages": [{"key": "design", "nodes": [{"key": "draft_td", "type": "ai"}]}],
 }
 ACTOR = {"actor_kind": "human", "actor_id": "owner", "source_surface": "web"}

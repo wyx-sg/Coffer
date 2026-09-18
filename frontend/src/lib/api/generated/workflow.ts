@@ -440,13 +440,6 @@ export interface components {
          */
         WorkflowTemplate: {
             description?: string | null;
-            /**
-             * @description How many attempts any one node may have, and how many times any one
-             *     feedback edge may fire, across a run (FR-026).
-             */
-            attempt_ceiling?: number;
-            /** @description Reaching it pauses the run rather than starting the next node (FR-018). */
-            token_budget?: number | null;
             stages: components["schemas"]["TemplateStage"][];
             /** @description Feedback edges only — the forward order is the array order (FR-005). */
             edges?: components["schemas"]["TemplateEdge"][];
@@ -480,6 +473,12 @@ export interface components {
             on_failure?: components["schemas"]["TemplateOnFailure"];
             /** @description Null means the run's default; must be inside the template's scope (FR-007). */
             agent?: string | null;
+            /**
+             * @description How many attempts this task may open across a run before the run
+             *     fails with that reason (FR-026). Absent means the default rather
+             *     than no ceiling.
+             */
+            attempt_ceiling?: number;
         };
         TemplateArtifact: {
             /** @description A single safe path segment — the file the node owes. */
@@ -498,6 +497,12 @@ export interface components {
             /** @description Strictly earlier than `from_stage` — a forward edge is the default order. */
             to_stage: string;
             reason: string;
+            /**
+             * @description How many times this route may send work back before the run fails
+             *     (FR-026). It belongs to the edge because the work it creates is an
+             *     ad-hoc task declared nowhere else.
+             */
+            attempt_ceiling?: number;
         };
         /**
          * @description A template and a title, and nothing else (FR-011). The working
@@ -577,8 +582,11 @@ export interface components {
              */
             current_stage_name?: string | null;
             current_node_key?: string | null;
+            /**
+             * @description What the run has spent so far. A readout, not a cap: a run is
+             *     bounded by each task's own attempt ceiling (FR-026).
+             */
             tokens_spent?: number;
-            token_budget?: number | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */

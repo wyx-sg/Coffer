@@ -17,7 +17,6 @@ coffer workflow template add small-change --file ./small-change.json
 ```json
 {
   "description": "One repository, one change, design first",
-  "attempt_ceiling": 3,
   "stages": [
     {
       "key": "design",

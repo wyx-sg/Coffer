@@ -105,4 +105,9 @@ def make_workflow_kind(
         generic_create_allowed=True,
         supports_scope=True,
         converges=True,
+        # A template may be renamed (FR-054). Nothing addresses it by name
+        # except a run's ``template_ref``, which is provenance and already
+        # dangles when the template is deleted — so a rename leaves it saying
+        # what the run was started from, which is what it was ever for.
+        supports_rename=True,
     )

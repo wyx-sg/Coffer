@@ -110,24 +110,20 @@ def as_enum[E: StrEnum](enum_cls: type[E], raw: Any, path: str, *, default: E | 
         ) from None
 
 
-def as_attempt_ceiling(raw: Any, *, default: int) -> int:
-    """The run-wide cap on one node's attempts (FR-026). Absent means the
-    default rather than "no ceiling" — a template without a ceiling is a
-    template that can loop all night."""
+def as_attempt_ceiling(raw: Any, path: str, *, default: int) -> int:
+    """The cap on how many attempts one task may open (FR-026).
+
+    Absent means the default rather than "no ceiling" — a task without one is
+    a task that can loop all night. ``path`` names the task, because that is
+    now where the number lives: there is no run-wide ceiling to fall back on,
+    and a refusal that said only ``attempt_ceiling`` would not say which of a
+    template's twelve tasks was wrong.
+    """
     if raw is None:
         return default
-    value = as_int(raw, "attempt_ceiling")
+    value = as_int(raw, path)
     if value < 1:
-        raise TemplateInvalid("attempt_ceiling", "must be >= 1")
+        raise TemplateInvalid(path, "must be >= 1")
     return value
 
 
-def as_token_budget(raw: Any) -> int | None:
-    """``None`` is a run with no budget; a number is the spend that pauses it
-    (FR-018). Zero is neither, so it is refused rather than read as either."""
-    if raw is None:
-        return None
-    value = as_int(raw, "token_budget")
-    if value < 1:
-        raise TemplateInvalid("token_budget", "must be >= 1 when set, or null for no budget")
-    return value

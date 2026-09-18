@@ -58,7 +58,6 @@ class EventType(StrEnum):
     RUN_ABORTED = "run.aborted"
     RUN_COMPLETED = "run.completed"
     RUN_FAILED = "run.failed"
-    RUN_BUDGET_EXCEEDED = "run.budget_exceeded"
     NODE_STARTED = "node.started"
     NODE_OUTPUT_READY = "node.output_ready"
     NODE_FEEDBACK_SUBMITTED = "node.feedback_submitted"
@@ -121,7 +120,6 @@ _STATUS_BY_EVENT: dict[EventType, RunStatus] = {
     # Exceeding the budget pauses the run rather than continuing to spend
     # (FR-018) — the event is its own type so the reason survives, but the
     # status it leaves behind is an ordinary pause.
-    EventType.RUN_BUDGET_EXCEEDED: RunStatus.PAUSED,
 }
 
 #: Events that move the run's position to the node they name. A node that

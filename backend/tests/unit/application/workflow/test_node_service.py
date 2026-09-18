@@ -26,7 +26,7 @@ from coffer.domain.workflow.run import (
     RunStatus,
 )
 
-from .conftest import TEMPLATE, Engine, build_engine, with_template
+from .conftest import TEMPLATE, Engine, build_engine, with_ceiling, with_template
 
 
 async def _running_first_node(engine: Engine) -> tuple[str, int]:
@@ -323,26 +323,6 @@ async def test_the_last_node_completing_completes_the_run(engine: Engine) -> Non
         await engine.nodes.act(run.id, "write_code", NodeAction.RETRY, version=result.run.version)
 
 
-@pytest.mark.acceptance(spec="workflow", scenario="exceeding the token budget pauses the run")
-async def test_the_token_budget_pauses_the_run_instead_of_starting_a_node(
-    engine: Engine,
-) -> None:
-    """FR-018: exceeding the budget pauses rather than continuing to spend."""
-    engine = build_engine({"delivery": with_template(token_budget=100)})
-    run = await engine.started()
-    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
-    spent = await engine.nodes.record_output(run.id, "draft_td", summary="drafted", tokens=150)
-    assert spent.run.tokens_spent == 150
-
-    result = await engine.nodes.act(
-        run.id, "write_code", NodeAction.START, version=spent.run.version
-    )
-
-    assert result.run.status == RunStatus.PAUSED.value
-    assert engine.types(run.id)[-1] == "run.budget_exceeded"
-    assert await engine.attempts.latest_attempt(run.id, "write_code") is None
-
-
 async def test_a_manual_node_never_completes_itself(engine: Engine) -> None:
     engine = build_engine(
         {
@@ -423,7 +403,7 @@ async def test_the_template_is_read_from_the_snapshot_not_the_resource(
 
 async def test_an_explicit_retry_stops_at_the_attempt_ceiling(engine: Engine) -> None:
     """FR-026: the ceiling is a wall, not a suggestion."""
-    engine = build_engine({"delivery": with_template(attempt_ceiling=1)})
+    engine = build_engine({"delivery": with_ceiling(1)})
     run_id, _version = await _running_first_node(engine)
     failed = await engine.nodes.record_failure(run_id, "draft_td", detail="boom")
 
@@ -481,3 +461,50 @@ async def test_a_start_refused_by_the_lock_leaves_the_node_startable(engine: Eng
     started = await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=current.version)
     assert started.attempt is not None
     assert started.attempt.status == NodeStatus.RUNNING.value
+
+
+@pytest.mark.acceptance(spec="workflow", scenario="each task is given its own number of tries")
+async def test_each_task_is_given_its_own_number_of_tries() -> None:
+    """FR-026: the limit belongs to the task, so two tasks in one workflow can
+    be allowed different numbers of them — the draft that is cheap to redo and
+    the step that must not be repeated are not the same judgement."""
+    ceilings = {"draft_td": 3, "write_code": 1}
+    stages = [
+        {
+            **stage,
+            "nodes": [
+                {
+                    **node,
+                    "attempt_ceiling": ceilings[node["key"]],
+                    # Both ask to be retried five times; each is capped by its
+                    # OWN ceiling and by nothing else.
+                    "on_failure": {"action": "retry", "times": 5},
+                }
+                for node in stage["nodes"]
+            ],
+        }
+        for stage in TEMPLATE["stages"]
+    ]
+    engine = build_engine({"delivery": with_template(stages=stages)})
+    run = await engine.started()
+
+    # The generous one: its failure opens a second attempt.
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+    failed = await engine.nodes.record_failure(run.id, "draft_td", detail="boom")
+    assert failed.run.status == RunStatus.RUNNING.value
+    second = await engine.attempts.latest_attempt(run.id, "draft_td")
+    assert second is not None
+    assert second.attempt == 2
+
+    current = await engine.run_repo.get_run(run.id)
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=current.version)
+    engine.artifacts.add(run.id, "draft_td", 2, "td.md")
+    done = await engine.nodes.record_output(run.id, "draft_td", summary="drafted")
+
+    # The strict one, in the same workflow: its first failure is its last.
+    await engine.nodes.act(run.id, "write_code", NodeAction.START, version=done.run.version)
+    stopped = await engine.nodes.record_failure(run.id, "write_code", detail="boom")
+    assert stopped.run.status == RunStatus.FAILED.value
+    assert engine.types(run.id)[-1] == "run.failed"
+    assert await engine.attempts.latest_attempt(run.id, "write_code") is not None
+    assert (await engine.attempts.latest_attempt(run.id, "write_code")).attempt == 1

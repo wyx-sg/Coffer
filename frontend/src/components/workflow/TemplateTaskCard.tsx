@@ -12,6 +12,12 @@
 // CHANGED. Nothing is invented for a field that is not set: a task with no
 // skill, no artifacts and the default failure behaviour says one line, which
 // is honest and still taller than a chip.
+//
+// THE WHOLE CARD OPENS IT. A card that looks like a thing and answers only to
+// a small button in its corner teaches the developer to aim; the Edit button
+// stays because it says what clicking does and because Delete beside it would
+// otherwise stand alone. Delete stops the click from reaching the card, which
+// is the one place the two would disagree.
 import { Pencil, ShieldQuestion, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -39,7 +45,16 @@ export function TemplateTaskCard({ node, onEdit, onDelete, canDelete, disabled =
   return (
     <div
       data-testid={`task-${node.key}`}
-      className="w-full space-y-2 rounded-md border border-border bg-background p-3"
+      role="button"
+      tabIndex={0}
+      aria-label={t("workflow.templates.editNode", { name: label })}
+      onClick={onEdit}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        onEdit();
+      }}
+      className="w-full cursor-pointer space-y-2 rounded-md border border-border bg-background p-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{label}</span>
@@ -68,7 +83,9 @@ export function TemplateTaskCard({ node, onEdit, onDelete, canDelete, disabled =
             required.length + optional.length === 0
               ? null
               : [
-                  ...required.map((name) => `${name}（${t("workflow.templates.artifactRequired")}）`),
+                  ...required.map(
+                    (name) => `${name}（${t("workflow.templates.artifactRequired")}）`,
+                  ),
                   ...optional,
                 ].join("、")
           }
@@ -88,7 +105,17 @@ export function TemplateTaskCard({ node, onEdit, onDelete, canDelete, disabled =
       ) : null}
 
       <div className="flex items-center gap-2 pt-1">
-        <Button type="button" variant="outline" size="sm" onClick={onEdit}>
+        {/* The card behind it already opens the dialog; letting the click
+            through would open it twice for one press. */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+        >
           <Pencil className="mr-1 size-3.5" aria-hidden />
           {t("common.edit")}
         </Button>
@@ -102,7 +129,11 @@ export function TemplateTaskCard({ node, onEdit, onDelete, canDelete, disabled =
                 className="text-muted-foreground hover:text-destructive"
                 disabled={!canDelete || disabled}
                 aria-label={t("workflow.templates.removeNode", { name: label })}
-                onClick={onDelete}
+                // Deleting must not also open what it is deleting.
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
               >
                 <Trash2 className="mr-1 size-3.5" aria-hidden />
                 {t("common.delete")}

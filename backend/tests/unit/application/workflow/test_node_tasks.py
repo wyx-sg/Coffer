@@ -13,19 +13,24 @@ import pytest
 from coffer.domain.workflow.errors import IllegalTransition
 from coffer.domain.workflow.run import NodeAction, NodeStatus, RunStatus
 
-from .conftest import TEMPLATE, Engine, build_engine, with_template
+from .conftest import TEMPLATE, Engine, build_engine, with_ceiling, with_template
 
 
-def _reviewed_coding_template() -> dict:
+def _reviewed_coding_template(*, ceiling: int | None = None) -> dict:
     """The default template, with the coding node stopping for a review.
 
     A feedback edge is taken by the developer looking at what the later stage
     produced, so the realistic shape is a node sitting in ``waiting_review`` —
     not one that has already completed, which would have completed the run.
+
+    ``ceiling`` caps the ROUTE back, which is where a send-back loop's limit
+    lives now (FR-026) — it is the edge, not the template, that declares the
+    ad-hoc task each crossing creates.
     """
-    stages = [dict(stage) for stage in TEMPLATE["stages"]]
+    base = TEMPLATE if ceiling is None else with_ceiling(ceiling)
+    stages = [dict(stage) for stage in base["stages"]]
     stages[1] = {**stages[1], "nodes": [{**stages[1]["nodes"][0], "approval": "always"}]}
-    return with_template(stages=stages)
+    return {**base, "stages": stages}
 
 
 async def _design_done_coding_in_review(engine: Engine) -> str:
@@ -156,7 +161,7 @@ async def test_an_unknown_reason_takes_no_edge() -> None:
 async def test_the_loop_stops_at_the_ceiling_by_failing_the_run() -> None:
     """FR-026: the crossing past the ceiling fails the run instead of sending
     work back one more time."""
-    engine = build_engine({"delivery": {**_reviewed_coding_template(), "attempt_ceiling": 1}})
+    engine = build_engine({"delivery": _reviewed_coding_template(ceiling=1)})
     run_id = await _design_done_coding_in_review(engine)
     current = await engine.run_repo.get_run(run_id)
     first = await engine.nodes.take_feedback(

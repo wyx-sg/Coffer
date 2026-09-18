@@ -41,6 +41,7 @@ function node(key: string, name: string, type: "ai" | "manual" = "ai") {
     approval: "never",
     on_failure: { action: "stop" },
     agent: null,
+    attempt_ceiling: 3,
   };
 }
 
@@ -48,7 +49,6 @@ function node(key: string, name: string, type: "ai" | "manual" = "ai") {
 function threeStages(): TemplateConfig {
   return {
     description: null,
-    attempt_ceiling: 3,
     stages: [
       {
         key: "tech_design",
@@ -69,7 +69,9 @@ function threeStages(): TemplateConfig {
         nodes: [node("verify", "Verify")],
       },
     ],
-    edges: [{ from_stage: "testing", to_stage: "coding", reason: "code_issue" }],
+    edges: [
+      { from_stage: "testing", to_stage: "coding", reason: "code_issue", attempt_ceiling: 3 },
+    ],
   } as TemplateConfig;
 }
 
@@ -98,15 +100,21 @@ let api: ApiClientMock;
  */
 function mount(config: TemplateConfig, { search = "" }: { search?: string } = {}) {
   let stored = config;
+  let storedName = "delivery";
   api.GET = vi
     .fn()
-    .mockImplementation(() => Promise.resolve({ data: resource(stored), error: undefined }));
+    .mockImplementation(() =>
+      Promise.resolve({ data: { ...resource(stored), name: storedName }, error: undefined }),
+    );
   api.PATCH = vi
     .fn()
-    .mockImplementation((_path: string, opts: { body: { config: TemplateConfig } }) => {
-      stored = opts.body.config;
-      return Promise.resolve({ data: undefined, error: undefined });
-    });
+    .mockImplementation(
+      (_path: string, opts: { body: { config: TemplateConfig; name?: string } }) => {
+        stored = opts.body.config;
+        if (opts.body.name !== undefined) storedName = opts.body.name;
+        return Promise.resolve({ data: undefined, error: undefined });
+      },
+    );
   getApiClientMock.mockReturnValue(api as unknown as ReturnType<typeof getApiClient>);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -184,14 +192,22 @@ describe("WorkflowTemplatePage", () => {
     },
   );
 
-  test("the route back is stated by the stage it leaves", async () => {
-    // In words, beside the tasks, where the reason can also be changed — not
-    // as a line in a gutter, which cost more width than it bought.
+  test("a stage says both where it sends work back to and what comes back to it", async () => {
+    // In words, beside the tasks, not as a line in a gutter — and in BOTH
+    // directions, because "why might this stage run again" is a different
+    // question from "what can this stage reject", and only the first explains
+    // a stage a developer finds alive after they thought it was finished.
     mount(threeStages());
+
     await openStage("testing");
-    const reason = await screen.findByText("code_issue");
-    // The reason and the stage it lands on, in one line.
-    expect(reason.parentElement).toHaveTextContent(/code_issue\s*→\s*Coding/);
+    expect(
+      await screen.findByText(/reports “code_issue”, work goes back to Coding/),
+    ).toBeInTheDocument();
+
+    await openStage("coding");
+    expect(
+      await screen.findByText(/Testing sends work back here when it reports “code_issue”/),
+    ).toBeInTheDocument();
   });
 
   acceptance("workflow", "the editor never asks for an identifier it can derive", async () => {
@@ -250,29 +266,6 @@ describe("WorkflowTemplatePage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Edit stage Testing" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByDisplayValue("code_issue")).toBeInTheDocument();
-  });
-
-  test("a second edit made before the first has come back builds on it", async () => {
-    // The settings fields save on blur and have no in-flight guard — you can
-    // leave one field and the next within a few milliseconds, long before the
-    // refetch that follows the first save has landed. With no draft, each edit
-    // is computed from what the cache HOLDS, so unless a save writes its own
-    // result there, the second edit is computed from the pre-save config and
-    // silently undoes the first.
-    mount(threeStages(), { search: "?tab=settings" });
-    const ceiling = await screen.findByLabelText("Attempt ceiling");
-    const budget = screen.getByLabelText("Token budget");
-
-    fireEvent.change(ceiling, { target: { value: "7" } });
-    fireEvent.blur(ceiling);
-    fireEvent.change(budget, { target: { value: "120000" } });
-    fireEvent.blur(budget);
-
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(2));
-    const config = written();
-    expect(config.token_budget).toBe(120000);
-    // The one that matters: the ceiling is still 7 and not back at 3.
-    expect(config.attempt_ceiling).toBe(7);
   });
 
   test("deleting a stage asks first, then writes the template without it", async () => {
@@ -349,4 +342,34 @@ describe("WorkflowTemplatePage", () => {
       expect(screen.getByRole("dialog")).toBeInTheDocument();
     },
   );
+
+  acceptance("workflow", "a workflow is renamed and re-described in place", async () => {
+    // FR-054: the two fields that are not part of the shape, edited where the
+    // shape is — not in a settings tab beside numbers that have moved onto
+    // the tasks they bound.
+    mount(threeStages());
+    await screen.findByRole("heading", { name: "delivery" });
+
+    // The header's Edit, not a task card's — the page has both, and only one
+    // of them is about the workflow itself.
+    const header = screen.getByRole("banner");
+    fireEvent.click(within(header).getByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), { target: { value: "release" } });
+    fireEvent.change(within(dialog).getByLabelText("Description"), {
+      target: { value: "One repository, design first" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    const [, options] = api.PATCH.mock.calls[0] as [
+      string,
+      { body: { name: string; description: string; config: TemplateConfig } },
+    ];
+    const body = options.body;
+    expect(body.name).toBe("release");
+    expect(body.description).toBe("One repository, design first");
+    // The shape came through untouched: a rename is not an edit of the flow.
+    expect(body.config.stages.map((s) => s.key)).toEqual(["tech_design", "coding", "testing"]);
+  });
 });

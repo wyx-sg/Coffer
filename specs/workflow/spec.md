@@ -171,7 +171,6 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-015**: Every mutating command MUST carry the caller's observed version, and a stale version MUST be refused with the run's current version and position rather than applied.
 - **FR-016**: The system MUST support the run signals `start`, `pause`, `resume` and `abort`; an aborted run MUST refuse every later mutating command.
 - **FR-017**: At most one node of a run MUST be running at any moment.
-- **FR-018**: A run MUST carry a token budget, and exceeding it MUST pause the run rather than continue spending.
 
 ### Nodes
 
@@ -182,7 +181,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-023**: A node that owes a required artifact and has not produced it MUST NOT complete; it MUST wait for the developer to supply it or waive it.
 - **FR-024**: A node failure MUST be handled by the node's declared failure behaviour: stop the run, continue to the next node, or retry up to a stated number of times.
 - **FR-025**: Taking a feedback edge MUST add a new task to the target stage carrying what was found, and MUST NOT reopen, retry or reset any node that already ran.
-- **FR-026**: A node's attempts and a feedback edge's firings MUST both be bounded by the template's ceiling; reaching either MUST fail the run with the reason rather than loop.
+- **FR-026**: Every task MUST declare how many attempts it may open, and every route that sends work back MUST declare how many times it may fire; reaching either MUST fail the run with the reason rather than loop. The limit MUST belong to the task and the route rather than to the workflow as a whole — a draft that is cheap to redo and a deploy that must not be tried twice are not the same judgement — and a task that names no limit MUST be given a default rather than an unbounded one.
 - **FR-027**: A node whose turn was interrupted by a daemon restart MUST be reported as failed with an `interrupted` reason, with its conversation preserved and readable.
 - **FR-028**: The developer MUST be able to add an ad-hoc task to any stage of a run at any time, writing its instructions themselves; it MUST be recorded, contextualised and attributed exactly as a template node is.
 
@@ -225,7 +224,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-044**: The system MUST expose templates, runs, nodes, approvals and events over the REST API.
 - **FR-045**: The web UI MUST list runs; show a run's stages and its tasks with their status; show what the run reads and what it has produced together in one list; open any task as its own conversation page; and let the developer decide that task's approvals from that page.
 - **FR-046**: The CLI MUST create, list, inspect, signal and abort runs, manage a run's inputs, act on a node, and decide approvals.
-- **FR-054**: The web UI MUST let the developer author a template: list templates, create one, and edit its stages and their order, the nodes in each stage and their order, each node's type, bound skill, instructions, declared artifacts, approval policy, failure behaviour and agent, the feedback edges between stages, and the run-level attempt ceiling and token budget.
+- **FR-054**: The web UI MUST let the developer author a template: list templates, create one, and edit its stages and their order, the nodes in each stage and their order, each node's type, bound skill, instructions, declared artifacts, approval policy, failure behaviour, agent and attempt ceiling, and the routes that send work back between stages with each route's own ceiling. The workflow's name and description MUST be editable in place, on the workflow's own page, rather than only at creation.
 - **FR-055**: A refusal from template validation MUST be shown against the field it names rather than as a whole-form error, since the refusal already carries the offending path (FR-006).
 - **FR-056**: The template editor MUST write through the same resource endpoint every other client uses; it MUST NOT have a write path of its own.
 - **FR-052**: The run's own page MUST offer no controls that advance or alter the run. Every such action belongs to the node's conversation page, where what is being decided is in front of the developer.
@@ -325,9 +324,21 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 ### Scenario: a loop between two stages stops at the attempt ceiling
 
-- **Given** a feedback edge that has fired the template's ceiling
+- **Given** a feedback edge that has fired its own ceiling
 - **When** it would send work back once more
 - **Then** the run fails with the reason instead of looping (FR-026)
+
+### Scenario: each task is given its own number of tries
+
+- **Given** a workflow whose drafting task may be tried three times and whose deploy task may be tried once
+- **When** each of them fails
+- **Then** the drafting task opens a second attempt and the deploy task fails the run, because the limit belongs to the task and not to the workflow (FR-026)
+
+### Scenario: a workflow is renamed and re-described in place
+
+- **Given** a workflow with stages and tasks already authored
+- **When** the developer edits its name and its description on its own page
+- **Then** both change, its stages and tasks are untouched, and the page follows it to the new name (FR-054)
 
 ### Scenario: a task is its own conversation, opened from the run
 
@@ -526,12 +537,6 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **Given** a run owned by another machine
 - **When** it is opened here
 - **Then** it is visible and its mutating commands are refused (FR-012)
-
-### Scenario: exceeding the token budget pauses the run
-
-- **Given** a run at its token budget
-- **When** the next node would start
-- **Then** the run pauses and says why, rather than starting it (FR-018)
 
 ## Success Criteria *(mandatory)*
 

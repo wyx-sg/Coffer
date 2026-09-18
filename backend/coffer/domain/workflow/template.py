@@ -28,7 +28,6 @@ from coffer.domain.workflow.template_fields import (
     as_object,
     as_optional_str,
     as_required_str,
-    as_token_budget,
     reject_unknown,
 )
 
@@ -100,7 +99,13 @@ class ArtifactSpec:
 
 @dataclass(frozen=True)
 class Node:
-    """One step: what to do, with which skill, on which agent, owing what."""
+    """One step: what to do, with which skill, on which agent, owing what.
+
+    ``attempt_ceiling`` is this task's own limit and nobody else's (FR-026).
+    It used to be one number for the whole template, which made the drafting
+    task that is cheap to re-run and the deploy task that must not be tried
+    twice share a cap that was wrong for one of them.
+    """
 
     key: str
     name: str
@@ -111,6 +116,7 @@ class Node:
     approval: ApprovalPolicy = ApprovalPolicy.NEVER
     on_failure: OnFailure = OnFailure()
     agent: str | None = None
+    attempt_ceiling: int = DEFAULT_ATTEMPT_CEILING
 
     @property
     def required_artifacts(self) -> tuple[ArtifactSpec, ...]:
@@ -132,11 +138,19 @@ class Stage:
 class FeedbackEdge:
     """An edge from a later stage back to an earlier one, with the reason that
     takes it (FR-005). A forward edge is the default order and is not written,
-    so every edge here is strictly backwards."""
+    so every edge here is strictly backwards.
+
+    ``attempt_ceiling`` bounds how many times this route may send work back
+    before the run stops (FR-026). It belongs to the edge because the work it
+    creates is an ad-hoc task that exists nowhere else in the template — the
+    edge is that task's declaration, so it is where the task's limit is
+    written.
+    """
 
     from_stage: str
     to_stage: str
     reason: str
+    attempt_ceiling: int = DEFAULT_ATTEMPT_CEILING
 
 
 @dataclass(frozen=True)
@@ -146,8 +160,6 @@ class WorkflowTemplate:
     stages: tuple[Stage, ...]
     edges: tuple[FeedbackEdge, ...] = ()
     description: str | None = None
-    attempt_ceiling: int = DEFAULT_ATTEMPT_CEILING
-    token_budget: int | None = None
 
     def stage(self, key: str) -> Stage | None:
         return next((s for s in self.stages if s.key == key), None)
@@ -192,17 +204,13 @@ def parse_template(
         TemplateInvalid: naming the JSON path of the offending field.
     """
     root = as_object(config, "")
-    reject_unknown(root, {"description", "attempt_ceiling", "token_budget", "stages", "edges"}, "")
+    reject_unknown(root, {"description", "stages", "edges"}, "")
 
     stages = _parse_stages(root, known_skills=known_skills, allowed_agents=allowed_agents)
     template = WorkflowTemplate(
         stages=stages,
         edges=_parse_edges(root.get("edges"), stages),
         description=as_optional_str(root.get("description"), "description"),
-        attempt_ceiling=as_attempt_ceiling(
-            root.get("attempt_ceiling"), default=DEFAULT_ATTEMPT_CEILING
-        ),
-        token_budget=as_token_budget(root.get("token_budget")),
     )
     return template
 
@@ -278,6 +286,7 @@ def _parse_nodes(
                 "approval",
                 "on_failure",
                 "agent",
+                "attempt_ceiling",
             },
             path,
         )
@@ -315,6 +324,11 @@ def _parse_nodes(
                 ),
                 on_failure=_parse_on_failure(obj.get("on_failure"), path),
                 agent=agent,
+                attempt_ceiling=as_attempt_ceiling(
+                    obj.get("attempt_ceiling"),
+                    f"{path}.attempt_ceiling",
+                    default=DEFAULT_ATTEMPT_CEILING,
+                ),
             )
         )
     return tuple(nodes)
@@ -372,7 +386,7 @@ def _parse_edges(raw: Any, stages: tuple[Stage, ...]) -> tuple[FeedbackEdge, ...
     for i, item in enumerate(raw):
         path = f"edges[{i}]"
         obj = as_object(item, path)
-        reject_unknown(obj, {"from_stage", "to_stage", "reason"}, path)
+        reject_unknown(obj, {"from_stage", "to_stage", "reason", "attempt_ceiling"}, path)
         from_stage = as_required_str(obj.get("from_stage"), f"{path}.from_stage")
         to_stage = as_required_str(obj.get("to_stage"), f"{path}.to_stage")
         if from_stage not in order:
@@ -392,6 +406,11 @@ def _parse_edges(raw: Any, stages: tuple[Stage, ...]) -> tuple[FeedbackEdge, ...
                 from_stage=from_stage,
                 to_stage=to_stage,
                 reason=as_required_str(obj.get("reason"), f"{path}.reason"),
+                attempt_ceiling=as_attempt_ceiling(
+                    obj.get("attempt_ceiling"),
+                    f"{path}.attempt_ceiling",
+                    default=DEFAULT_ATTEMPT_CEILING,
+                ),
             )
         )
     return tuple(edges)

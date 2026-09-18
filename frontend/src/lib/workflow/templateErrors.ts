@@ -28,9 +28,10 @@ export interface TemplateRefusal {
 }
 
 // `stages`/`edges` optionally indexed and followed by dotted (optionally
-// indexed) segments, or one of the two scalar run-level fields.
-const PATH_PATTERN =
-  /(?:stages|edges)(?:\[\d+\])?(?:\.[a-z_]+(?:\[\d+\])?)*|attempt_ceiling|token_budget/;
+// indexed) segments. There are no run-level scalar fields left to name: the
+// attempt ceiling is a task's and an edge's own, so it arrives inside one of
+// these two paths like every other field.
+const PATH_PATTERN = /(?:stages|edges)(?:\[\d+\])?(?:\.[a-z_]+(?:\[\d+\])?)*/;
 
 /**
  * The field a refusal names, or `null` when it names none — a transport
@@ -80,11 +81,4 @@ export function fieldErrorProps(
 ): { "aria-invalid"?: true; "aria-describedby"?: string } {
   if (messageFor(refusal, path) === undefined) return {};
   return { "aria-invalid": true, "aria-describedby": errorId(path) };
-}
-
-/** Which of the editor's tabs holds the refused field. An edge is refused
- *  against the STAGE it leaves — the edges are edited in that stage's dialog
- *  (FR-061), so "edges[0]" belongs on the flow tab like everything else. */
-export function tabForPath(path: string): "flow" | "settings" {
-  return path.startsWith("stages") || path.startsWith("edges") ? "flow" : "settings";
 }

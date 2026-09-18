@@ -752,16 +752,6 @@ components:
         description:
           type: string
           nullable: true
-        attempt_ceiling:
-          type: integer
-          minimum: 1
-          description: |
-            How many attempts any one node may have, and how many times any one
-            feedback edge may fire, across a run (FR-026).
-        token_budget:
-          type: integer
-          nullable: true
-          description: Reaching it pauses the run rather than starting the next node (FR-018).
         stages:
           type: array
           minItems: 1
@@ -825,6 +815,13 @@ components:
           type: string
           nullable: true
           description: Null means the run's default; must be inside the template's scope (FR-007).
+        attempt_ceiling:
+          type: integer
+          minimum: 1
+          description: |
+            How many attempts this task may open across a run before the run
+            fails with that reason (FR-026). Absent means the default rather
+            than no ceiling.
 
     TemplateArtifact:
       type: object
@@ -858,6 +855,13 @@ components:
           type: string
           description: Strictly earlier than `from_stage` — a forward edge is the default order.
         reason: { type: string }
+        attempt_ceiling:
+          type: integer
+          minimum: 1
+          description: |
+            How many times this route may send work back before the run fails
+            (FR-026). It belongs to the edge because the work it creates is an
+            ad-hoc task declared nowhere else.
 
     RunCreateIn:
       type: object
@@ -971,8 +975,11 @@ components:
             from and the developer never typed (FR-003, FR-060). Null when the
             snapshot no longer parses or no longer has that stage.
         current_node_key: { type: string, nullable: true }
-        tokens_spent: { type: integer }
-        token_budget: { type: integer, nullable: true }
+        tokens_spent:
+          type: integer
+          description: |
+            What the run has spent so far. A readout, not a cap: a run is
+            bounded by each task's own attempt ceiling (FR-026).
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time, nullable: true }
 

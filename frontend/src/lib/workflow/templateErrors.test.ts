@@ -5,7 +5,7 @@
 import { describe, expect, test } from "vitest";
 
 import { ApiError } from "@/lib/api/errors";
-import { errorId, tabForPath, templateRefusal } from "@/lib/workflow/templateErrors";
+import { errorId, templateRefusal } from "@/lib/workflow/templateErrors";
 
 describe("templateRefusal", () => {
   test("reads the path out of a message that leads with it", () => {
@@ -43,9 +43,12 @@ describe("templateRefusal", () => {
     });
   });
 
-  test("names the run-level fields too", () => {
-    const error = new ApiError("CONFIG_INVALID", "attempt_ceiling: must be >= 1");
-    expect(templateRefusal(error)?.path).toBe("attempt_ceiling");
+  test("names a task's own ceiling, which is where the number lives now", () => {
+    const error = new ApiError(
+      "CONFIG_INVALID",
+      "stages[0].nodes[1].attempt_ceiling: must be >= 1",
+    );
+    expect(templateRefusal(error)?.path).toBe("stages[0].nodes[1].attempt_ceiling");
   });
 
   test("is null when nothing names a field", () => {
@@ -55,13 +58,6 @@ describe("templateRefusal", () => {
   });
 });
 
-describe("tabForPath", () => {
-  test("sends a refused field to the tab that shows it", () => {
-    expect(tabForPath("stages[3].nodes[0].skill")).toBe("flow");
-    expect(tabForPath("edges[0].reason")).toBe("flow");
-    expect(tabForPath("token_budget")).toBe("settings");
-  });
-});
 
 test("a field's error id is derived from its path", () => {
   expect(errorId("stages[1].nodes[0].skill")).toBe("template-error-stages[1].nodes[0].skill");

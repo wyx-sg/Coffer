@@ -1871,9 +1871,9 @@
       "refused": "Refused: {{reason}}",
       "settings": "Run settings",
       "description": "Description",
-      "descriptionPlaceholder": "What does this flow deliver?",
-      "attemptCeiling": "Attempt ceiling",
-      "attemptCeilingHint": "How many attempts any one task may have across a run. A feedback loop stops here instead of spending the night.",
+      "descriptionPlaceholder": "What this flow delivers, in a sentence.",
+      "attemptCeiling": "Attempts",
+      "attemptCeilingHint": "How many times this task may be tried before the run stops. There is no unlimited.",
       "tokenBudget": "Token budget",
       "tokenBudgetHint": "Reaching it pauses the run rather than starting the next task. Leave blank for none.",
       "addStage": "Add stage",
@@ -1918,8 +1918,7 @@
       "edgeReasonPlaceholder": "code_issue",
       "removeEdge": "Remove the edge from {{from}} back to {{to}}",
       "tabs": {
-        "stages": "Stages",
-        "settings": "Settings"
+        "stages": "Stages"
       },
       "cols": {
         "name": "Workflow",
@@ -1955,7 +1954,16 @@
       "deleteNodeTitle": "Delete task",
       "deleteNodeConfirm": "Delete “{{name}}”? Runs already created from this workflow froze their own copy and are unaffected.",
       "taskCount_one": "{{count}} task",
-      "taskCount_other": "{{count}} tasks"
+      "taskCount_other": "{{count}} tasks",
+      "editTitle": "Edit workflow",
+      "editDescription": "What this flow is called and what it is for. Its stages and tasks are edited below.",
+      "nameField": "Name",
+      "descriptionField": "Description",
+      "editNode": "Edit task {{name}}",
+      "sendsBackTo": "Sends work back",
+      "sendsBackToLine": "When a task here reports “{{reason}}”, work goes back to {{stage}} — up to {{count}} times.",
+      "comesBackHere": "Work comes back here",
+      "comesBackHereLine": "{{stage}} sends work back here when it reports “{{reason}}”."
     },
     "context": {
       "description": "What this run reads and what it has produced, in one place. Mount a collection, a file, a link or a repository at any point in the run's life — every task that opens afterwards is told it is there. Produced files appear as the tasks write them.",

@@ -33,7 +33,6 @@ from coffer.infrastructure.workflow import paths
 from .conftest import Repos
 
 TEMPLATE: dict[str, Any] = {
-    "attempt_ceiling": 3,
     "stages": [
         {
             "key": "design",

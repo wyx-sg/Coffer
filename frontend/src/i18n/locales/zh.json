@@ -1871,9 +1871,9 @@
       "refused": "被拒绝：{{reason}}",
       "settings": "运行设置",
       "description": "描述",
-      "descriptionPlaceholder": "这条流程交付什么？",
-      "attemptCeiling": "尝试上限",
-      "attemptCeilingHint": "一次运行里任意一个任务最多尝试几次。回环会在这里停下，而不是跑一整夜。",
+      "descriptionPlaceholder": "一句话说明这条流程交付什么。",
+      "attemptCeiling": "尝试次数",
+      "attemptCeilingHint": "这个任务最多可以试几次，超过就让整个运行停下。没有「不限」这一档。",
       "tokenBudget": "Token 预算",
       "tokenBudgetHint": "用满后运行会暂停，而不是开始下一个任务。留空表示不限。",
       "addStage": "添加阶段",
@@ -1918,8 +1918,7 @@
       "edgeReasonPlaceholder": "code_issue",
       "removeEdge": "删除从 {{from}} 回到 {{to}} 的这条边",
       "tabs": {
-        "stages": "阶段",
-        "settings": "设置"
+        "stages": "阶段"
       },
       "cols": {
         "name": "工作流",
@@ -1955,7 +1954,16 @@
       "deleteNodeTitle": "删除任务",
       "deleteNodeConfirm": "确定删除「{{name}}」？已经由这个工作流创建的运行冻结了自己的副本，不受影响。",
       "taskCount_one": "{{count}} 个任务",
-      "taskCount_other": "{{count}} 个任务"
+      "taskCount_other": "{{count}} 个任务",
+      "editTitle": "编辑工作流",
+      "editDescription": "这条流程叫什么、是做什么的。阶段和任务在下方编辑。",
+      "nameField": "名称",
+      "descriptionField": "描述",
+      "editNode": "编辑任务 {{name}}",
+      "sendsBackTo": "把工作送回",
+      "sendsBackToLine": "这里的任务报告「{{reason}}」时，工作退回到 {{stage}}，最多 {{count}} 次。",
+      "comesBackHere": "工作会退回这里",
+      "comesBackHereLine": "{{stage}} 报告「{{reason}}」时，工作会退回这里。"
     },
     "context": {
       "description": "这次运行读什么、又产出了什么，都在这里。集合、文件、链接、仓库都可以在运行的任何阶段挂上来——之后开启的每个任务都会知道它的存在。产出的文件会随着任务写出而出现。",

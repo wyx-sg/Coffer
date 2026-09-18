@@ -130,6 +130,39 @@ export function useSaveWorkflowTemplate() {
   });
 }
 
+interface RenameInput extends SaveInput {
+  /** The new name. Equal to `name` means only the description changed. */
+  newName: string;
+}
+
+/** Rename a workflow and rewrite its description in one PATCH.
+ *
+ *  The description is written into the config as well as onto the resource,
+ *  because the page reads the config's (it is the one the editor maintains).
+ *  The daemon applies the config first and the name last, so a refused config
+ *  leaves the workflow where the caller can retry against it. */
+export function useRenameWorkflowTemplate() {
+  const invalidate = useInvalidateTemplates();
+  const mutation = useMutation({
+    mutationFn: ({ name, newName, description, config }: RenameInput) =>
+      resourcesApi.update(WORKFLOW_TEMPLATE_KIND, name, {
+        name: newName,
+        description,
+        config: { ...config, description: description || undefined } as unknown as Record<
+          string,
+          unknown
+        >,
+      }),
+    // Both names: the old key must stop serving a workflow that is no longer
+    // there, and the new one has nothing cached yet.
+    onSuccess: (_data, { name, newName }) => {
+      invalidate(name);
+      if (newName !== name) invalidate(newName);
+    },
+  });
+  return mutation;
+}
+
 /** Delete a template. A run froze its snapshot at creation, so this cannot
  *  strand one — `template_ref` is left dangling by design. */
 export function useDeleteWorkflowTemplate() {

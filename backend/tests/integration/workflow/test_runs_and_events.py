@@ -19,7 +19,6 @@ from coffer.infrastructure.workflow.repository import RunProjection
 from .conftest import Repos
 
 SNAPSHOT = {
-    "attempt_ceiling": 3,
     "stages": [{"key": "design", "nodes": [{"key": "draft_td", "type": "ai"}]}],
 }
 ACTOR = {"actor_kind": "human", "actor_id": "owner", "source_surface": "web"}
@@ -57,7 +56,6 @@ async def test_run_round_trips_with_its_frozen_snapshot(repos: Repos) -> None:
     assert row.template_ref == "workflow:delivery"
     # The snapshot is the thing the engine executes, so it must survive the
     # round trip structurally, not as a string that happens to look like JSON.
-    assert row.template_snapshot["attempt_ceiling"] == 3
     assert row.template_snapshot["stages"][0]["nodes"][0]["key"] == "draft_td"
     assert row.status == "draft"
     assert row.version == 1

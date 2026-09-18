@@ -37,7 +37,6 @@ from .fakes import (
 
 TEMPLATE: dict[str, Any] = {
     "description": "Two stages, one edge",
-    "attempt_ceiling": 3,
     "stages": [
         {
             "key": "design",
@@ -66,7 +65,14 @@ TEMPLATE: dict[str, Any] = {
             ],
         },
     ],
-    "edges": [{"from_stage": "coding", "to_stage": "design", "reason": "design_issue"}],
+    "edges": [
+        {
+            "from_stage": "coding",
+            "to_stage": "design",
+            "reason": "design_issue",
+            "attempt_ceiling": 3,
+        }
+    ],
 }
 
 
@@ -184,6 +190,20 @@ def engine() -> Engine:
 def with_template(**overrides: Any) -> dict[str, Any]:
     """The default template with top-level fields replaced."""
     return {**TEMPLATE, **overrides}
+
+
+def with_ceiling(ceiling: int) -> dict[str, Any]:
+    """The default template with EVERY task and every route capped at
+    ``ceiling``. The number is per-task now (FR-026), so a test that wants one
+    limit for the whole flow has to say it on each of them."""
+    return {
+        **TEMPLATE,
+        "stages": [
+            {**stage, "nodes": [{**node, "attempt_ceiling": ceiling} for node in stage["nodes"]]}
+            for stage in TEMPLATE["stages"]
+        ],
+        "edges": [{**edge, "attempt_ceiling": ceiling} for edge in TEMPLATE["edges"]],
+    }
 
 
 def inputs(*refs: RunInput) -> Sequence[RunInput]:

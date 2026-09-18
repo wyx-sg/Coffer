@@ -12,7 +12,7 @@ import pytest
 from coffer.domain.workflow.errors import AttemptCeilingReached, IllegalTransition
 from coffer.domain.workflow.run import NodeAction, NodeStatus
 
-from .conftest import TEMPLATE, Engine, build_engine, with_template
+from .conftest import TEMPLATE, Engine, build_engine, with_ceiling, with_template
 
 
 @pytest.mark.acceptance(spec="workflow", scenario="a task can be told something before it starts")
@@ -91,7 +91,7 @@ async def test_talking_to_a_completed_task_opens_its_next_attempt(engine: Engine
 
 async def test_reopening_by_talking_stops_at_the_same_ceiling() -> None:
     """FR-026: one ceiling, however the loop is spelled."""
-    engine = build_engine({"delivery": with_template(attempt_ceiling=1)})
+    engine = build_engine({"delivery": with_ceiling(1)})
     run = await engine.started()
     engine.artifacts.add(run.id, "draft_td", 1, "td.md")
     await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)

@@ -10,6 +10,12 @@
 // Only earlier stages are offered. A forward edge is the array order and is
 // never written (FR-005) — the editor has no way to draw one, and the daemon
 // refuses one if it ever arrives.
+//
+// Each route carries its OWN ceiling (FR-026). The work a route creates is an
+// ad-hoc task that exists nowhere else in the template, so the route is that
+// task's declaration and the only place its limit can be written — and a
+// review that may send work back three times is a different judgement from a
+// task that may be tried three times.
 import { useTranslation } from "react-i18next";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -24,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { TemplateStage } from "@/lib/api/workflow";
-import type { StageValues } from "@/lib/workflow/templateDraft";
+import { DEFAULT_ATTEMPT_CEILING, type StageValues } from "@/lib/workflow/templateDraft";
 
 interface Props {
   /** The stages this one may send work back to: strictly earlier ones. */
@@ -81,6 +87,26 @@ export function TemplateSendBack({ targets, value, onChange, stageName }: Props)
               </SelectContent>
             </Select>
           </div>
+          <div className="w-24 space-y-1">
+            <Label htmlFor={`send-back-ceiling-${i}`} className="text-xs">
+              {t("workflow.templates.attemptCeiling")}
+            </Label>
+            <Input
+              id={`send-back-ceiling-${i}`}
+              type="number"
+              min={1}
+              value={row.attempt_ceiling}
+              onChange={(e) =>
+                onChange(
+                  value.map((r, j) =>
+                    j === i
+                      ? { ...r, attempt_ceiling: Number(e.target.value) || DEFAULT_ATTEMPT_CEILING }
+                      : r,
+                  ),
+                )
+              }
+            />
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -101,7 +127,14 @@ export function TemplateSendBack({ targets, value, onChange, stageName }: Props)
         variant="outline"
         size="sm"
         onClick={() =>
-          onChange([...value, { reason: "", to_stage: targets[targets.length - 1].key }])
+          onChange([
+            ...value,
+            {
+              reason: "",
+              to_stage: targets[targets.length - 1].key,
+              attempt_ceiling: DEFAULT_ATTEMPT_CEILING,
+            },
+          ])
         }
       >
         <Plus className="mr-1 size-3.5" aria-hidden />

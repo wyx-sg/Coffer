@@ -164,10 +164,10 @@ async def _after_failure(
     behaviour = node.on_failure
     if behaviour.action is FailureAction.RETRY and attempt.attempt <= behaviour.times:
         try:
-            # The node's own ``times`` is not a second ceiling: the run-wide one
-            # still caps it, so a node told to retry five times inside a
-            # template that allows three attempts stops at three (FR-026).
-            number = check_attempt_ceiling(node.key, attempt.attempt, template.attempt_ceiling)
+            # The node's own ``times`` is not a second ceiling: its
+            # ``attempt_ceiling`` still caps it, so a task told to retry five
+            # times but allowed three attempts stops at three (FR-026).
+            number = check_attempt_ceiling(node.key, attempt.attempt, node.attempt_ceiling)
         except AttemptCeilingReached as exc:
             return [ops.run_failed(FailureReason.ATTEMPT_CEILING, stage_key, node.key, exc)]
         await ops.open_attempt(run.id, stage_key, node.key, number, attempt.instructions)

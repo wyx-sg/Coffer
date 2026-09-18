@@ -29,9 +29,16 @@ export const FAILURE_ACTIONS = ["stop", "continue", "retry"] as const;
 export interface StageValues {
   name: string;
   optional: boolean;
-  /** The feedback edges leaving this stage, as the dialog holds them. */
-  sendBack: { reason: string; to_stage: string }[];
+  /** The feedback edges leaving this stage, as the dialog holds them. Each
+   *  carries its own ceiling: the work an edge creates is an ad-hoc task
+   *  declared nowhere else, so the edge is where that task's limit lives. */
+  sendBack: { reason: string; to_stage: string; attempt_ceiling: number }[];
 }
+
+/** How many attempts a task gets when nobody has said. The daemon applies the
+ *  same number for an absent field; it is restated here so a new task shows a
+ *  figure rather than an empty box the developer has to guess the meaning of. */
+export const DEFAULT_ATTEMPT_CEILING = 3;
 
 /** What the task dialog edits — everything a node has except its identity. */
 export type NodeValues = Omit<TemplateNode, "key">;
@@ -93,6 +100,7 @@ export function nodeValues(node: TemplateNode): NodeValues {
     approval: node.approval ?? "never",
     on_failure: node.on_failure ?? { action: "stop" },
     agent: node.agent ?? null,
+    attempt_ceiling: node.attempt_ceiling ?? DEFAULT_ATTEMPT_CEILING,
   };
 }
 
@@ -107,6 +115,7 @@ export function blankNode(name = ""): NodeValues {
     approval: "never",
     on_failure: { action: "stop" },
     agent: null,
+    attempt_ceiling: DEFAULT_ATTEMPT_CEILING,
   };
 }
 
@@ -115,7 +124,7 @@ export function blankNode(name = ""): NodeValues {
  *  refused the moment it was written. */
 export function emptyTemplate(): TemplateConfig {
   return addStage(
-    { stages: [], edges: [], attempt_ceiling: 3 },
+    { stages: [], edges: [] },
     {
       name: "",
       optional: false,
@@ -179,7 +188,12 @@ export function addStage(config: TemplateConfig, values: StageValues): TemplateC
 function asEdges(fromStage: string, sendBack: StageValues["sendBack"]): TemplateEdge[] {
   return sendBack
     .filter((row) => row.to_stage.length > 0)
-    .map((row) => ({ from_stage: fromStage, to_stage: row.to_stage, reason: row.reason }));
+    .map((row) => ({
+      from_stage: fromStage,
+      to_stage: row.to_stage,
+      reason: row.reason,
+      attempt_ceiling: row.attempt_ceiling,
+    }));
 }
 
 /**
@@ -294,5 +308,9 @@ export function earlierStages(config: TemplateConfig, index: number): TemplateSt
 export function sendBackOf(config: TemplateConfig, stageKey: string): StageValues["sendBack"] {
   return (config.edges ?? [])
     .filter((edge) => edge.from_stage === stageKey)
-    .map((edge) => ({ reason: edge.reason, to_stage: edge.to_stage }));
+    .map((edge) => ({
+      reason: edge.reason,
+      to_stage: edge.to_stage,
+      attempt_ceiling: edge.attempt_ceiling ?? DEFAULT_ATTEMPT_CEILING,
+    }));
 }

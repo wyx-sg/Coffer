@@ -320,8 +320,3 @@ class RunCommands:
         skipped = {k for k, row in latest.items() if row.status == NodeStatus.SKIPPED.value}
         return completed, skipped
 
-    @staticmethod
-    def budget_exceeded(template: WorkflowTemplate, run: RunRow) -> bool:
-        """Whether the run has spent what it was given (FR-018)."""
-        budget = template.token_budget
-        return budget is not None and run.tokens_spent >= budget
