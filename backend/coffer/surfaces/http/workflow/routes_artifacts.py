@@ -16,7 +16,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from coffer.application.workflow.catalogue import regenerate_catalogue
+from coffer.application.workflow.context_composer import parse_inputs
 from coffer.application.workflow.ports import ArtifactStorePort, KnowledgeInputPort
+from coffer.application.workflow.promotion import references_markdown
 from coffer.application.workflow.run_service import WorkflowRunService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.workflow.converters import (
@@ -129,13 +131,22 @@ async def promote_artifacts(
     artifacts: ArtifactStorePort = Depends(get_workflow_artifact_store),  # noqa: B008
     knowledge: KnowledgeInputPort = Depends(get_workflow_knowledge_input),  # noqa: B008
 ) -> PromotionOut:
-    """Copy a run's artifacts into a knowledge collection (FR-043).
+    """Copy what a run is made of into a knowledge collection (FR-043).
+
+    Its artifacts, its uploaded files and its notes travel as files; the links,
+    collections and repositories it read travel as one ``references.md``,
+    because those are not the run's bytes to copy and "this delivery read that"
+    is the part worth keeping anyway.
 
     The collection is created if it is not there and added to if it is — which
     is the port's contract, not a branch taken here: the knowledge kind is
     behind a seam this package may not reach around.
     """
-    await runs.get_run(run_id)  # 404 for a run that is not there
+    run = await runs.get_run(run_id)  # 404 for a run that is not there
     destination = await knowledge.create_collection(body.collection)
-    copied = artifacts.collect_artifacts(run_id, destination)
+    copied = artifacts.collect_run_files(
+        run_id,
+        destination,
+        references=references_markdown(run.title, parse_inputs(run.inputs)),
+    )
     return PromotionOut(collection=body.collection, copied=copied)

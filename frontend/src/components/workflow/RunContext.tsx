@@ -60,7 +60,11 @@ export function RunContext({ runId, ownedHere, machine, enabled = true }: Props)
 
   const isLoading = inputs.isPending || artifacts.isPending;
   const rows = buildContextRows(inputs.data ?? [], artifacts.data?.items ?? []);
-  const hasArtifacts = rows.some((row) => row.origin === "produced");
+  // Anything at all, not only what an agent produced (FR-043). A delivery
+  // that has so far been given a PRD, a note and two links is one whose PRD,
+  // note and links are worth keeping — and waiting for an artifact greyed the
+  // button out for exactly the run the developer most wanted to save.
+  const hasSomething = rows.length > 0;
   const columns = useRunContextColumns({
     runId,
     ownedHere,
@@ -95,7 +99,7 @@ export function RunContext({ runId, ownedHere, machine, enabled = true }: Props)
           <Button
             size="sm"
             variant="outline"
-            disabled={!hasArtifacts}
+            disabled={!hasSomething}
             onClick={() => setPromoting(true)}
           >
             <FolderUp aria-hidden />

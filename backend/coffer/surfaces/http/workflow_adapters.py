@@ -349,8 +349,12 @@ class FileArtifactStore:
             # has produced nothing has nothing to describe.
             return ""
 
-    def collect_artifacts(self, run_id: str, destination: str) -> int:
-        return wf_artifacts.collect_artifacts(run_id, pathlib.Path(destination))
+    def collect_run_files(
+        self, run_id: str, destination: str, *, references: str | None = None
+    ) -> int:
+        return wf_artifacts.collect_run_files(
+            run_id, pathlib.Path(destination), references=references
+        )
 
     def read_file(self, run_id: str, rel_path: str) -> wf_files.RunFile | None:
         return wf_files.read_file(run_id, rel_path)

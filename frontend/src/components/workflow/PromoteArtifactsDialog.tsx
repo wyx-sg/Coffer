@@ -1,6 +1,14 @@
 // frontend/src/components/workflow/PromoteArtifactsDialog.tsx
-// Keep what a run produced: copy its files into a knowledge collection
+// Keep what a run is MADE OF: copy its files into a knowledge collection
 // (FR-043), so one delivery's output becomes the next delivery's input.
+//
+// Made of, not produced by. The artifacts travel, and so do the PRD somebody
+// attached and the note somebody wrote — a delivery that has so far only been
+// given a brief is one whose brief is worth keeping, and waiting for an agent
+// to write something greyed this out for exactly the run the developer most
+// wanted to save. What cannot travel is written down instead: a link is
+// somebody else's page, a collection is already in this vault, and a checkout
+// went with the run, so the collection gets the list of what was read.
 //
 // Two ways, because both are real: a delivery that stands on its own gets a
 // NEW collection, and one of a series — the third service migrated the same

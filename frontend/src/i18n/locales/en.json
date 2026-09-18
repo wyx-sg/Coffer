@@ -1811,8 +1811,8 @@
     "artifacts": {
       "promote": "Save to knowledge",
       "promoted": "Copied {{count}} files into {{collection}}.",
-      "promoteTitle": "Save these files to knowledge",
-      "promoteDescription": "The files this run produced are copied into a knowledge collection, so this delivery's output becomes the next one's input. The run's own directory is left untouched.",
+      "promoteTitle": "Save this run to knowledge",
+      "promoteDescription": "Everything this run is made of is copied into a knowledge collection: what its tasks produced, the files you uploaded and the notes you wrote. Links, collections and repositories are not copied — they are somebody else's, already here, or gone with the run — so they are written down as a list of what this delivery read. The run's own directory is left untouched.",
       "whereTo": "Where to save",
       "mode": {
         "new": "New collection",

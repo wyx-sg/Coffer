@@ -200,7 +200,13 @@ class ArtifactStorePort(Protocol):
 
     def read_catalogue(self, run_id: str) -> str: ...
 
-    def collect_artifacts(self, run_id: str, destination: str) -> int: ...
+    def collect_run_files(
+        self, run_id: str, destination: str, *, references: str | None = None
+    ) -> int:
+        """Copy what the run is MADE OF into ``destination`` (FR-043) — its
+        artifacts, its uploads and its notes — plus a ``references.md`` when
+        the caller supplies one. Returns how many files landed."""
+        ...
 
     def read_file(self, run_id: str, rel_path: str) -> RunFileView | None:
         """One file under the run's directory, for the UI's preview (FR-064).

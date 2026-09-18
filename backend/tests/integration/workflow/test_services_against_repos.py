@@ -119,8 +119,12 @@ class _Artifacts:
     def read_catalogue(self, run_id: str) -> str:
         return paths.catalog_path(run_id).read_text(encoding="utf-8")
 
-    def collect_artifacts(self, run_id: str, destination: str) -> int:
-        return artifact_store.collect_artifacts(run_id, pathlib.Path(destination))
+    def collect_run_files(
+        self, run_id: str, destination: str, *, references: str | None = None
+    ) -> int:
+        return artifact_store.collect_run_files(
+            run_id, pathlib.Path(destination), references=references
+        )
 
     def delete_run_dir(self, run_id: str) -> None:
         import shutil

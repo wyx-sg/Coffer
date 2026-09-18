@@ -11,7 +11,7 @@ import pathlib
 
 import pytest
 
-from coffer.infrastructure.workflow import artifacts, paths
+from coffer.infrastructure.workflow import artifacts, inputs, paths
 from coffer.infrastructure.workflow.paths import UnsafeWorkflowPath
 
 RUN = "0199c0de4a7b7f0e9b1e3c2d5a6f7081"
@@ -206,7 +206,7 @@ def test_collect_copies_every_attempt_and_leaves_the_run_alone(
     artifacts.write_artifact(RUN, "adhoc:fix", 1, "notes.md", "n")
     destination = tmp_path / "collection"
 
-    copied = artifacts.collect_artifacts(RUN, destination)
+    copied = artifacts.collect_run_files(RUN, destination)
 
     assert copied == 3
     assert sorted(p.name for p in destination.iterdir()) == [
@@ -218,3 +218,44 @@ def test_collect_copies_every_attempt_and_leaves_the_run_alone(
     assert (destination / "draft_td-1-td.md").read_text(encoding="utf-8") == "first"
     assert (destination / "draft_td-2-td.md").read_text(encoding="utf-8") == "second"
     assert len(artifacts.list_artifacts(RUN)) == 3
+
+
+def test_promotion_keeps_what_the_run_was_given_as_well_as_what_it_made(
+    isolated_workflow_root: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """FR-043: a PRD somebody attached and a note somebody wrote are as much a
+    record of the delivery as the design it produced — and a run whose agents
+    have not finished is exactly when the developer wants them kept."""
+    artifacts.write_artifact(RUN, "draft_td", 1, "td.md", "the design")
+    inputs.write_input(RUN, "prd.pdf", b"the brief")
+    inputs.write_input(RUN, "ops.md", b"# what ops said")
+    destination = tmp_path / "collection"
+
+    copied = artifacts.collect_run_files(RUN, destination, references="# References\n")
+
+    assert copied == 4
+    assert sorted(p.name for p in destination.iterdir()) == [
+        "draft_td-1-td.md",
+        "ops.md",
+        "prd.pdf",
+        "references.md",
+    ]
+    assert (destination / "prd.pdf").read_bytes() == b"the brief"
+    # And the run still has every one of them.
+    assert (paths.inputs_dir(RUN) / "prd.pdf").is_file()
+
+
+def test_a_name_the_collection_already_holds_is_not_overwritten(
+    isolated_workflow_root: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """A collection may hold another delivery's files, and a promotion that
+    silently replaced one would be the worst way to find that out."""
+    destination = tmp_path / "collection"
+    destination.mkdir()
+    (destination / "prd.pdf").write_bytes(b"somebody else's")
+    inputs.write_input(RUN, "prd.pdf", b"ours")
+
+    artifacts.collect_run_files(RUN, destination)
+
+    assert (destination / "prd.pdf").read_bytes() == b"somebody else's"
+    assert (destination / "prd-2.pdf").read_bytes() == b"ours"

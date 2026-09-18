@@ -408,6 +408,7 @@ class FakeArtifactStore:
         self.catalogues: dict[str, str] = {}
         self.created: list[str] = []
         self.deleted: list[str] = []
+        self.promoted: list[tuple[str, str, str | None]] = []
 
     def add(self, run_id: str, node_key: str, attempt: int, name: str) -> None:
         self.entries.setdefault(run_id, []).append(
@@ -434,8 +435,15 @@ class FakeArtifactStore:
     def read_catalogue(self, run_id: str) -> str:
         return self.catalogues.get(run_id, "")
 
-    def collect_artifacts(self, run_id: str, destination: str) -> int:
-        return len(self.entries.get(run_id, ()))
+    def collect_run_files(
+        self, run_id: str, destination: str, *, references: str | None = None
+    ) -> int:
+        # The references text is RECORDED rather than discarded: whether the
+        # route built one out of the run's inputs is the half of promotion this
+        # seam can prove, and the copying itself is proved against the real
+        # store.
+        self.promoted.append((run_id, destination, references))
+        return len(self.entries.get(run_id, ())) + (0 if references is None else 1)
 
     def delete_run_dir(self, run_id: str) -> None:
         self.deleted.append(run_id)

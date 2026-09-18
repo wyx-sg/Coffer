@@ -112,26 +112,76 @@ def list_artifacts(run_id: str) -> list[ArtifactEntry]:
     return entries
 
 
-def collect_artifacts(run_id: str, destination: pathlib.Path) -> int:
-    """Copy every artifact into ``destination``, and say how many landed.
+def collect_run_files(
+    run_id: str,
+    destination: pathlib.Path,
+    *,
+    references: str | None = None,
+) -> int:
+    """Copy what this run is MADE OF into ``destination``, and say how many
+    files landed.
 
-    This is the mechanical half of promotion (FR-043): the run directory is
-    left exactly as it was, and the copy is flat and self-describing, because
-    the collection that receives it has its own shape and nobody reading it
-    later would recognise ``3/`` as an attempt number. Two attempts at the same
-    name therefore keep both — the attempt is folded into the copied filename
-    rather than one overwriting the other.
+    The mechanical half of promotion (FR-043). The run directory is left
+    exactly as it was, and the copy is flat and self-describing, because the
+    collection that receives it has its own shape and nobody reading it later
+    would recognise ``3/`` as an attempt number.
+
+    Three kinds of thing travel, and the reason is the same for all three: what
+    a delivery is worth keeping is not only what its agents wrote.
+
+    * **Artifacts**, with the node and attempt folded into the name, so two
+      attempts at one artifact keep both rather than one overwriting the other.
+    * **Uploaded files and notes**, under their own names. A PRD somebody
+      attached and a note somebody wrote are as much a record of the delivery
+      as the design it produced — and a run whose agents have not finished is
+      exactly when the developer wants them kept.
+    * **``references.md``**, when the caller supplies one: the links, the
+      collections and the repositories this run read. They are not this run's
+      bytes to copy, so what is kept is the fact that it read them.
+
+    A name already taken in the destination gets a numeric suffix rather than
+    overwriting: the collection may hold another delivery's files, and a
+    promotion that silently replaced one would be the worst possible way to
+    find that out.
     """
     destination.mkdir(parents=True, exist_ok=True)
+    taken: set[str] = {entry.name for entry in destination.iterdir()}
     copied = 0
     for entry in list_artifacts(run_id):
         source = paths.artifact_path(run_id, entry.node_key, entry.attempt, entry.name)
         stem = pathlib.Path(entry.name).stem
         suffix = pathlib.Path(entry.name).suffix
         safe_node = entry.node_key.replace(":", "-")
-        shutil.copy2(source, destination / f"{safe_node}-{entry.attempt}-{stem}{suffix}")
+        name = _free_name(f"{safe_node}-{entry.attempt}-{stem}{suffix}", taken)
+        shutil.copy2(source, destination / name)
+        copied += 1
+
+    inputs_dir = paths.inputs_dir(run_id)
+    if inputs_dir.is_dir():
+        for source in sorted(inputs_dir.iterdir()):
+            if not source.is_file():
+                continue
+            shutil.copy2(source, destination / _free_name(source.name, taken))
+            copied += 1
+
+    if references is not None:
+        (destination / _free_name("references.md", taken)).write_text(references, encoding="utf-8")
         copied += 1
     return copied
+
+
+def _free_name(name: str, taken: set[str]) -> str:
+    """``name``, or the first ``name-2``, ``name-3`` nobody has yet. Mutates
+    ``taken`` so one pass over several sources cannot collide with itself."""
+    candidate = name
+    stem = pathlib.Path(name).stem
+    suffix = pathlib.Path(name).suffix
+    counter = 2
+    while candidate in taken:
+        candidate = f"{stem}-{counter}{suffix}"
+        counter += 1
+    taken.add(candidate)
+    return candidate
 
 
 def _attempt_of(name: str) -> int | None:

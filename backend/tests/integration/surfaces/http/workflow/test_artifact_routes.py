@@ -78,3 +78,39 @@ def test_a_finished_run_is_exactly_the_one_worth_promoting(surface: Surface) -> 
 def test_promoting_an_unknown_run_is_404(surface: Surface) -> None:
     response = surface.client.post(f"{_RUNS}/nope/promotion", json={"collection": "x"})
     assert response.status_code == 404
+
+
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a delivery that has produced nothing yet is still worth keeping"
+)
+def test_a_run_with_nothing_produced_still_promotes_what_it_was_given(
+    surface: Surface,
+) -> None:
+    """FR-043: a delivery that has so far only been given a brief is one whose
+    brief is worth keeping — the button must not wait for an agent."""
+    run = started_run(surface.client)
+    surface.client.post(
+        f"{_RUNS}/{run['id']}/inputs/uploads", files={"file": ("prd.pdf", b"the brief")}
+    )
+    surface.client.post(
+        f"{_RUNS}/{run['id']}/inputs/notes", json={"title": "ops", "text": "# what ops said"}
+    )
+    surface.client.post(
+        f"{_RUNS}/{run['id']}/inputs",
+        json={"kind": "link", "ref": "https://mycorp.atlassian.net/wiki/x", "label": "the TD"},
+    )
+
+    response = surface.client.post(
+        f"{_RUNS}/{run['id']}/promotion", json={"collection": "retry-fix"}
+    )
+
+    assert response.status_code == 201, response.text
+    # The link is not copied — it is somebody else's page — so what is kept is
+    # the fact that this delivery read it.
+    _run_id, _destination, references = surface.engine.artifacts.promoted[-1]
+    assert references is not None
+    assert "https://mycorp.atlassian.net/wiki/x" in references
+    assert "(confluence) — the TD" in references
+    # And the uploads are still the run's.
+    refs = [i["ref"] for i in surface.client.get(f"{_RUNS}/{run['id']}/inputs").json()["items"]]
+    assert "prd.pdf" in refs and "ops.md" in refs

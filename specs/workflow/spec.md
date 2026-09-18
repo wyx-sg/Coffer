@@ -218,7 +218,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 - **FR-041**: A node's artifacts MUST be files under the run's own directory, attributed to the node and attempt that wrote them.
 - **FR-042**: A run's directory MUST NOT be indexed, chunked or embedded — the files are the only copy.
-- **FR-043**: A finished run's artifacts MUST be promotable into a knowledge collection in one action, so a delivery's output becomes the next delivery's input.
+- **FR-043**: What a run is MADE OF MUST be promotable into a knowledge collection in one action, so a delivery's output becomes the next delivery's input. Its artifacts, its uploaded files and its notes MUST travel as files; the links, collections and repositories it read MUST travel as one written record of having been read, because those are not the run's bytes to copy. It MUST NOT wait for the run to produce anything: a delivery that has so far only been given a brief is one whose brief is worth keeping.
 
 ### Surfaces
 
@@ -514,6 +514,12 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **Given** a completed run with artifacts
 - **When** the developer promotes them
 - **Then** a knowledge collection holds those files and the run's directory is unchanged (FR-043, FR-042)
+
+### Scenario: a delivery that has produced nothing yet is still worth keeping
+
+- **Given** a running run with an uploaded file, a note and a link, and no artifact
+- **When** the developer saves it into a knowledge collection
+- **Then** the file and the note are copied there, the link is recorded as an address in a written reference, and the run's directory is unchanged (FR-043)
 
 ### Scenario: a run is read-only on a machine that does not own it
 

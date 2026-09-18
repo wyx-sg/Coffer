@@ -40,7 +40,9 @@ class FakeStore:
     def read_catalogue(self, run_id: str) -> str:
         return self.written[-1] if self.written else ""
 
-    def collect_artifacts(self, run_id: str, destination: str) -> int:
+    def collect_run_files(
+        self, run_id: str, destination: str, *, references: str | None = None
+    ) -> int:
         return 0
 
     def delete_run_dir(self, run_id: str) -> None: ...
