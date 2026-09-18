@@ -1,4 +1,4 @@
-"""/api/v1/agents/{name}/config-files and /mcp-install routes (spec agent-registry v2).
+"""/api/v1/agents/{uid}/config-files and /mcp-install routes (spec agent-registry v2).
 
 Config-file view + edit (list + read + write), directory-entry child files
 (read + write + delete under `/files/{relpath}`), and one-click Coffer-MCP
@@ -119,30 +119,30 @@ def _status_out(s: McpInstallStatus) -> McpInstallStatusOut:
     return McpInstallStatusOut(installed=s.installed, command=s.command)
 
 
-@router.get("/{name}/config-files", response_model=ConfigFileListOut)
+@router.get("/{uid}/config-files", response_model=ConfigFileListOut)
 async def list_config_files(
-    name: str,
+    uid: str,
     svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
 ) -> ConfigFileListOut:
-    items = await svc.list_files(name)
+    items = await svc.list_files(uid)
     return ConfigFileListOut(items=[_info_out(i) for i in items])
 
 
 # Child-file routes are registered BEFORE the bare `{key}` routes so the more
 # specific `/files/` path can never be captured by a `{key}` match.
-@router.get("/{name}/config-files/{key}/files/{relpath:path}", response_model=ConfigFileContentOut)
+@router.get("/{uid}/config-files/{key}/files/{relpath:path}", response_model=ConfigFileContentOut)
 async def read_config_dir_file(
-    name: str,
+    uid: str,
     key: str,
     relpath: str,
     svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
 ) -> ConfigFileContentOut:
-    return _content_out(await svc.read_child(name, key, relpath))
+    return _content_out(await svc.read_child(uid, key, relpath))
 
 
-@router.put("/{name}/config-files/{key}/files/{relpath:path}", response_model=ConfigFileInfoOut)
+@router.put("/{uid}/config-files/{key}/files/{relpath:path}", response_model=ConfigFileInfoOut)
 async def write_config_dir_file(
-    name: str,
+    uid: str,
     key: str,
     relpath: str,
     body: ConfigFileWrite,
@@ -151,7 +151,7 @@ async def write_config_dir_file(
 ) -> ConfigFileInfoOut:
     return _info_out(
         await svc.write_child(
-            name,
+            uid,
             key,
             relpath,
             body.content,
@@ -162,32 +162,32 @@ async def write_config_dir_file(
 
 
 @router.delete(
-    "/{name}/config-files/{key}/files/{relpath:path}",
+    "/{uid}/config-files/{key}/files/{relpath:path}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
 async def delete_config_dir_file(
-    name: str,
+    uid: str,
     key: str,
     relpath: str,
     svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> None:
-    await svc.delete_child(name, key, relpath, actor=actor)
+    await svc.delete_child(uid, key, relpath, actor=actor)
 
 
-@router.get("/{name}/config-files/{key}", response_model=ConfigFileContentOut)
+@router.get("/{uid}/config-files/{key}", response_model=ConfigFileContentOut)
 async def read_config_file(
-    name: str,
+    uid: str,
     key: str,
     svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
 ) -> ConfigFileContentOut:
-    return _content_out(await svc.read_file(name, key))
+    return _content_out(await svc.read_file(uid, key))
 
 
-@router.put("/{name}/config-files/{key}", response_model=ConfigFileInfoOut)
+@router.put("/{uid}/config-files/{key}", response_model=ConfigFileInfoOut)
 async def write_config_file(
-    name: str,
+    uid: str,
     key: str,
     body: ConfigFileWrite,
     svc: AgentConfigFileService = Depends(get_agent_config_file_service),  # noqa: B008
@@ -195,32 +195,32 @@ async def write_config_file(
 ) -> ConfigFileInfoOut:
     return _info_out(
         await svc.write_file(
-            name, key, body.content, expected_fingerprint=body.expected_fingerprint, actor=actor
+            uid, key, body.content, expected_fingerprint=body.expected_fingerprint, actor=actor
         )
     )
 
 
-@router.get("/{name}/mcp-install", response_model=McpInstallStatusOut)
+@router.get("/{uid}/mcp-install", response_model=McpInstallStatusOut)
 async def mcp_install_status(
-    name: str,
+    uid: str,
     svc: AgentMcpService = Depends(get_agent_mcp_service),  # noqa: B008
 ) -> McpInstallStatusOut:
-    return _status_out(await svc.status(name))
+    return _status_out(await svc.status(uid))
 
 
-@router.post("/{name}/mcp-install", response_model=McpInstallStatusOut)
+@router.post("/{uid}/mcp-install", response_model=McpInstallStatusOut)
 async def install_mcp(
-    name: str,
+    uid: str,
     svc: AgentMcpService = Depends(get_agent_mcp_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> McpInstallStatusOut:
-    return _status_out(await svc.install(name, actor=actor))
+    return _status_out(await svc.install(uid, actor=actor))
 
 
-@router.delete("/{name}/mcp-install", response_model=McpInstallStatusOut)
+@router.delete("/{uid}/mcp-install", response_model=McpInstallStatusOut)
 async def uninstall_mcp(
-    name: str,
+    uid: str,
     svc: AgentMcpService = Depends(get_agent_mcp_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> McpInstallStatusOut:
-    return _status_out(await svc.uninstall(name, actor=actor))
+    return _status_out(await svc.uninstall(uid, actor=actor))

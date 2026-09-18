@@ -66,11 +66,12 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /agents/{name}:
+  /agents/{uid}:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -132,11 +133,12 @@ paths:
               schema: { $ref: "#/components/schemas/AgentCandidatesOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /agents/{name}/config-files:
+  /agents/{uid}/config-files:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -165,11 +167,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/config-files/{key}:
+  /agents/{uid}/config-files/{key}:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
       - in: path
         name: key
@@ -227,11 +230,12 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /agents/{name}/config-files/{key}/files/{relpath}:
+  /agents/{uid}/config-files/{key}/files/{relpath}:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
       - in: path
         name: key
@@ -307,11 +311,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /agents/{name}/mcp-entries:
+  /agents/{uid}/mcp-entries:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -333,11 +338,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/mcp-entries/{entry}:
+  /agents/{uid}/mcp-entries/{entry}:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
       - in: path
         name: entry
@@ -369,11 +375,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /agents/{name}/mcp-entries/{entry}/adopt:
+  /agents/{uid}/mcp-entries/{entry}/adopt:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
       - in: path
         name: entry
@@ -417,11 +424,12 @@ paths:
               schema: { $ref: "#/components/schemas/ErrorOut" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /agents/{name}/plugins:
+  /agents/{uid}/plugins:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -448,11 +456,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/plugins/{plugin_id}:
+  /agents/{uid}/plugins/{plugin_id}:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
       - in: path
         name: plugin_id
@@ -504,11 +513,12 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /agents/{name}/mcp-install:
+  /agents/{uid}/mcp-install:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -528,9 +538,17 @@ paths:
       summary: Install Coffer's MCP server into this agent
       description: |
         Writes a `coffer` stdio MCP-server entry (command = absolute path to
-        coffer-mcp-shim) into the agent's MCP config file, atomically and with
-        a `.bak` backup. Idempotent — re-installing updates the entry in place.
-        Returns 422 if the coffer-mcp-shim binary cannot be resolved.
+        coffer-mcp-shim, argument `--agent-uid <uid>`) into the agent's MCP
+        config file, atomically and with a `.bak` backup. The shim reports
+        that uid on every call and the gateway matches it against each
+        resource's `scope.agents`, which is why the argument is the uid and
+        not the agent's name: this line is written once into a file Coffer
+        does not own and then read on every turn, so a label in it would stop
+        matching any scope the first time the user renamed the agent — and a
+        reference that resolves to nothing in an allow-list is the silent
+        widening this change exists to remove. Idempotent — re-installing
+        updates the entry in place. Returns 422 if the coffer-mcp-shim binary
+        cannot be resolved.
       responses:
         "200":
           description: Installed (or already installed)
@@ -554,11 +572,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/native-memory:
+  /agents/{uid}/native-memory:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -571,7 +590,7 @@ paths:
         these: the agent detail page's Memory tab only opens or reveals the
         directory. Stores come back most populated first. An agent type with
         no native memory layout — and one whose projects directory is absent —
-        returns an empty list; an unknown agent name is 404.
+        returns an empty list; an unknown agent uid is 404.
       responses:
         "200":
           description: OK
@@ -581,11 +600,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/transcripts:
+  /agents/{uid}/transcripts:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -642,11 +662,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/native-memory/files:
+  /agents/{uid}/native-memory/files:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -676,11 +697,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/native-memory/files/content:
+  /agents/{uid}/native-memory/files/content:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -714,11 +736,12 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/transcripts/session:
+  /agents/{uid}/transcripts/session:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
+        description: The agent Resource's immutable identity.
         schema: { type: string }
     get:
       tags: [agents]
@@ -851,6 +874,7 @@ components:
       type: object
       required:
         [
+          uid,
           name,
           type,
           config_dir,
@@ -861,7 +885,26 @@ components:
           updated_at,
         ]
       properties:
-        name: { type: string }
+        uid:
+          type: string
+          description: >-
+            The agent Resource's immutable identity, and what every route in
+            this document addressing an agent takes. It is also the value
+            every cross-resource reference to this agent holds — a resource
+            `scope`'s agent list, a channel's `default_agent`, a skill
+            binding, the `--agent-uid` Coffer writes into the agent's own
+            MCP and hook entries — so a client can compare those against this
+            field directly, with nothing in between.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        name:
+          type: string
+          description: >-
+            A mutable label, unique among agents, editable through the
+            kind-agnostic `PATCH /api/v1/resources/{uid}`. For display. Note it
+            is NOT `type`: `type` (`claude_code`, `codex`) is the product this
+            agent is, fixed at registration, and the two were compared against
+            each other for long enough to need a translation table — which the
+            uid retires, because references now hold neither.
         type: { $ref: "#/components/schemas/AgentType" }
         config_dir:
           {
@@ -1141,10 +1184,30 @@ components:
 
     AdoptedResource:
       type: object
-      required: [kind, name]
+      description: >-
+        The resource adoption just created, in the three plain fields a
+        resource has: `uid`, `kind`, `name`. All three, because the caller
+        needs two different things from this response and they are not the
+        same field — somewhere to go, and something to say.
+      required: [uid, kind, name]
       properties:
+        uid:
+          type: string
+          description: >-
+            The new resource's immutable identity — what the caller follows to
+            `/resources/{uid}` and its kind's routes. A name would have been
+            enough to look it up once and wrong to keep, and this is the one
+            moment the client learns the uid of something it did not create by
+            name.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
         kind: { type: string, example: mcp_server }
-        name: { type: string }
+        name:
+          type: string
+          description: >-
+            The label it was registered under — which may not be the entry's
+            own name, since `new_name` in the request overrides it after a
+            collision. That is what makes it worth returning: it tells the user
+            what the thing ended up being called.
 
     Plugin:
       type: object

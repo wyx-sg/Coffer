@@ -17,8 +17,8 @@ caller asking about one partition or one collection filters the list; it never
 needs a lookup route, and it gets the rest of the picture for free.
 
 Read-only. A pass is started by the kind's own route (``POST
-/api/v1/memory/partitions/{name}/distil``, ``POST
-/api/v1/knowledge/collections/{name}/curate``), each of which refuses a second
+/api/v1/memory/partitions/{uid}/distil``, ``POST
+/api/v1/knowledge/collections/{uid}/curate``), each of which refuses a second
 concurrent pass over the same target with ``UPKEEP_ALREADY_RUNNING`` (409).
 """
 

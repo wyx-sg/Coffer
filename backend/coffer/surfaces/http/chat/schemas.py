@@ -114,7 +114,12 @@ class ChannelBindingOut(BaseModel):
     present iff the conversation has a channel binding.
     """
 
-    channel: str
+    #: The channel's identity — what a client follows to reach the channel.
+    channel_uid: str
+    #: The channel's label, resolved at read time. None when the channel has
+    #: since been deleted: the conversation keeps its binding (it really did
+    #: come from a channel), but there is no longer a name to show for it.
+    channel: str | None
     chat_id: str
 
 

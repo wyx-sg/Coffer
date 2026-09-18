@@ -59,6 +59,13 @@ from coffer.surfaces.http.sync_contributions import SyncContributions
 _log = logging.getLogger(__name__)
 
 
+#: Registry key for the process-wide supervisor (step 4). A session id is a
+#: UUID, so this cannot collide with one, and the lifecycle hooks walk the
+#: registry rather than a list of sessions — they need every supervisor holding
+#: a live upstream, not every session.
+_PROCESS_SUPERVISOR_KEY = "__process__"
+
+
 @dataclass(frozen=True)
 class McpWiring:
     """What the MCP kind hands back to the lifespan.
@@ -90,7 +97,7 @@ def wire_mcp_kind(
     inv_repo = MCPInvocationRepo(sm)
     health_repo = MCPServerHealthRepo(sm)
 
-    # 2. Per-session supervisor registry (used for the on_delete hook + factory)
+    # 2. Per-session supervisor registry (used for the lifecycle hooks + factory)
     session_supervisors: dict[str, SubprocessSupervisor] = {}
 
     # 3. Build the on_delete-aware Kind and register it
@@ -111,6 +118,19 @@ def wire_mcp_kind(
         supervisor=process_supervisor,
         preferences=prefs_repo,
     )
+    # Registered under a reserved key that no session id can collide with, so
+    # the kind's lifecycle hooks can reach it.
+    #
+    # It was absent from this registry, and the consequence was a leak nothing
+    # reported: this supervisor spawns real upstream subprocesses for the
+    # capability-management routes, so deleting a server left one of its
+    # connections live and unreachable — the hook walked every session's
+    # supervisor and never this one. The gap was invisible while it only
+    # affected deletion, because the row was gone and nobody looked again.
+    # Making rename available to every kind gave the same gap a second, louder
+    # way to bite (a renamed server would answer under its new name while an
+    # orphaned subprocess held the old one), which is what turned it up.
+    session_supervisors[_PROCESS_SUPERVISOR_KEY] = process_supervisor
 
     # 5. Build the per-session MCPGatewaySession factory
     def mcp_session_factory(session_id: str) -> MCPGatewaySession:

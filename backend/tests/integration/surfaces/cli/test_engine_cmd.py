@@ -98,7 +98,10 @@ def test_engine_model_show_set_clear(engine_cli_daemon):
         },
     )
     assert created.status_code == 201, created.text
-    assert http.post("/providers/acme/internal-default").status_code == 200
+    # The connection is addressed by the identity its creation minted, not by
+    # the label the body named it with (ADR resource-identity-is-an-immutable-uid).
+    uid = created.json()["uid"]
+    assert http.post(f"/providers/{uid}/internal-default").status_code == 200
 
     # Nothing chosen yet: the terminal says so in words rather than printing a
     # blank line the reader has to interpret.

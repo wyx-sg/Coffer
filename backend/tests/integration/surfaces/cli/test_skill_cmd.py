@@ -9,6 +9,14 @@ kinds are wired with the same cross-kind on_delete hook the production
 daemon uses, then route ``_cli_client.client_or_exit`` to a Starlette
 ``TestClient`` against that app.
 
+Booting the *whole* app is what keeps these tests working now that every verb
+resolves the name it was given through ``GET /resources?kind=&name=`` before it
+addresses ``/skills/{uid}`` or ``/agents/{uid}/...``
+(ADR resource-identity-is-an-immutable-uid): an app mounting only the skill and
+agent routers could no longer answer the first of those two requests. The verbs
+still TAKE names — that is the point of resolving here rather than asking a
+person to type a uid — so nothing below passes one.
+
 The skill-manager spec §User Story 7 — every CLI verb mirrors the REST surface.
 """
 
@@ -192,6 +200,91 @@ def test_skill_list_table_default(skill_cli_daemon):
     assert "hello-cli" in result.output
 
 
+def _agent_uid(name: str) -> str:
+    """The uid of the registered agent called ``name``, read back through the CLI.
+
+    Tests need it to assert what is STORED, which is never what is printed —
+    ``coffer resource show`` is the one verb that puts a uid on screen, exactly
+    so a script (or a test) can act on a row it found by name.
+    """
+    r = _runner.invoke(cli_app, ["resource", "show", "agent", name, "--json"])
+    assert r.exit_code == 0, r.output
+    return str(json.loads(_extract_json(r.output))["uid"])
+
+
+def test_skill_scope_prints_agent_names_while_storing_uids(skill_cli_daemon, monkeypatch):
+    """The Scope column is agent NAMES; the stored scope is agent UIDS.
+
+    This is the whole reason ``skill_cmd._agent_names`` fetches the agent
+    listing at all. A scope holds uids because that is what a cross-resource
+    reference is now (ADR resource-identity-is-an-immutable-uid), and a uid is
+    an address, not information: if the translation silently regressed, both
+    ``list`` and ``show`` would print a column of hex that matches nothing the
+    user ever typed, and no other test would notice. So the assertion is made
+    from both ends — the JSON body carries the uid, the rendered output carries
+    the name and NOT the uid.
+    """
+    monkeypatch.setenv("COLUMNS", "200")  # don't let rich wrap the Scope cell apart
+    _register_agent(skill_cli_daemon, "cur")
+    src = skill_cli_daemon / "src"
+    _write_skill_folder(src, name="scoped-1")
+    assert _runner.invoke(cli_app, ["skill", "import", str(src)]).exit_code == 0
+
+    uid = _agent_uid("cur")
+    # `scope set` takes the agent NAME too, and resolves it on the way in.
+    r = _runner.invoke(cli_app, ["scope", "set", "skill", "scoped-1", "--agents", "cur"])
+    assert r.exit_code == 0, r.output
+
+    # What was stored: the uid, not the name.
+    shown_json = _runner.invoke(cli_app, ["skill", "show", "scoped-1", "--json"])
+    assert shown_json.exit_code == 0, shown_json.output
+    assert json.loads(_extract_json(shown_json.output))["scope"]["agents"] == [uid]
+
+    # What is printed: the name, and nowhere the uid.
+    shown = _runner.invoke(cli_app, ["skill", "show", "scoped-1"])
+    assert shown.exit_code == 0, shown.output
+    assert "scope:       agents: cur" in shown.output
+    assert uid not in shown.output
+
+    listed = _runner.invoke(cli_app, ["skill", "list"])
+    assert listed.exit_code == 0, listed.output
+    assert "agents: cur" in listed.output
+    assert uid not in listed.output
+
+
+def test_skill_scope_prints_an_unmatched_uid_verbatim(skill_cli_daemon, monkeypatch):
+    """A scope entry no agent answers to is shown as-is, not dropped.
+
+    A stored scope may legitimately name an agent this machine does not have
+    (the vault converges across machines; the scope is per-machine). Hiding
+    such an entry would make the printed reach NARROWER than the one the daemon
+    applies, so ``_scope_label`` falls back to the raw uid. Written through the
+    HTTP surface because ``coffer scope set`` deliberately refuses a name that
+    resolves to nothing — the only way to hold an unmatched uid is to already
+    have one.
+    """
+    monkeypatch.setenv("COLUMNS", "200")
+    _register_agent(skill_cli_daemon, "cur")
+    src = skill_cli_daemon / "src"
+    _write_skill_folder(src, name="scoped-2")
+    assert _runner.invoke(cli_app, ["skill", "import", str(src)]).exit_code == 0
+
+    stray = "00000000000000000000000000000000"
+    c, _info = _cli_client.client_or_exit()
+    skill_uid = c.get("/resources", params={"kind": "skill", "name": "scoped-2"}).json()[
+        "resources"
+    ][0]["uid"]
+    put = c.put(
+        f"/resources/{skill_uid}/scope",
+        json={"scope": {"agents": [_agent_uid("cur"), stray]}},
+    )
+    assert put.status_code == 200, put.text
+
+    shown = _runner.invoke(cli_app, ["skill", "show", "scoped-2"])
+    assert shown.exit_code == 0, shown.output
+    assert f"scope:       agents: cur, {stray}" in shown.output
+
+
 # ---------------------------------------------------------------------------
 # skill import
 # ---------------------------------------------------------------------------
@@ -202,8 +295,9 @@ def test_skill_import_success(skill_cli_daemon):
     _write_skill_folder(src, name="imp-1")
     result = _runner.invoke(cli_app, ["skill", "import", str(src)])
     assert result.exit_code == 0, result.output
-    assert "imported" in result.output
-    assert "imp-1" in result.output
+    # The echo lost the ``<kind>:<name>`` form along with the string identity
+    # the ADR deletes; the kind survives as a plain word.
+    assert "imported: skill imp-1" in result.output
 
 
 def test_skill_import_invalid_folder_exits_2(skill_cli_daemon):
@@ -242,8 +336,17 @@ def test_skill_show_json(skill_cli_daemon):
 
 
 def test_skill_show_not_found(skill_cli_daemon):
+    """A name nobody holds exits 4 — from the lookup, not from ``/skills``.
+
+    Same exit code the 404 branch used to produce, but the refusal now happens
+    one step earlier, in ``_resolve.resolve``, before a uid exists to address a
+    route with. The message is asserted because it is the part that changed: it
+    names the kind and the exact string typed, which is the whole reason the
+    resolution is done at the surface the person is standing at.
+    """
     result = _runner.invoke(cli_app, ["skill", "show", "ghost"])
     assert result.exit_code == 4, result.output
+    assert "no skill named 'ghost'" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -297,15 +400,17 @@ def test_skill_rm_force(skill_cli_daemon):
     _runner.invoke(cli_app, ["skill", "import", str(src)])
     r = _runner.invoke(cli_app, ["skill", "rm", "rm-1", "--force"])
     assert r.exit_code == 0, r.output
-    assert "removed" in r.output
+    assert "removed: skill rm-1" in r.output
     # And the show is gone.
     show = _runner.invoke(cli_app, ["skill", "show", "rm-1"])
     assert show.exit_code == 4
 
 
 def test_skill_rm_not_found(skill_cli_daemon):
+    """Deleting a name nobody holds is refused by the lookup, before any DELETE."""
     r = _runner.invoke(cli_app, ["skill", "rm", "ghost", "--force"])
     assert r.exit_code == 4, r.output
+    assert "no skill named 'ghost'" in r.output
 
 
 def test_skill_rm_without_force_aborts(skill_cli_daemon):
@@ -344,8 +449,10 @@ def test_skill_unmanaged_list_json(skill_cli_daemon):
 
 
 def test_skill_unmanaged_agent_not_found(skill_cli_daemon):
+    """The AGENT argument resolves too, and an unknown one names its own kind."""
     r = _runner.invoke(cli_app, ["skill", "unmanaged", "ghost"])
     assert r.exit_code == 4, r.output
+    assert "no agent named 'ghost'" in r.output
 
 
 def test_skill_adopt_unmanaged(skill_cli_daemon):
@@ -355,7 +462,7 @@ def test_skill_adopt_unmanaged(skill_cli_daemon):
 
     r = _runner.invoke(cli_app, ["skill", "adopt", "cur", "adopt-me", "--location", "skills"])
     assert r.exit_code == 0, r.output
-    assert "adopted: skill:adopt-me" in r.output
+    assert "adopted: skill adopt-me" in r.output
 
     # The skill is now managed (visible in `skill show`) and no longer unmanaged.
     show = _runner.invoke(cli_app, ["skill", "show", "adopt-me"])
@@ -375,7 +482,7 @@ def test_skill_rm_unmanaged(skill_cli_daemon):
 
     r = _runner.invoke(cli_app, ["skill", "rm-unmanaged", "cur", "junk-skill", "--force"])
     assert r.exit_code == 0, r.output
-    assert "deleted" in r.output
+    assert "deleted: unmanaged skill junk-skill (agent cur)" in r.output
     assert not folder.exists()
 
 

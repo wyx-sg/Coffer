@@ -21,8 +21,8 @@ from httpx import ASGITransport, AsyncClient
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.pairing import PairingManager
-from coffer.application.channel.ports import ChannelPeer
 from coffer.application.channel.service import ChannelService
+from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.envelopes import SentMessage
 from coffer.infrastructure.channel.persistence import (
@@ -41,6 +41,13 @@ from coffer.surfaces.http.channel_routes import set_channel_service
 
 _TOKEN = "test-token"
 _PAIRING_ALPHABET = set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+#: The agent a channel routes to, as its config now spells one: an agent UID.
+#: Opaque on purpose — it is not an agent type, not an agent key and not a name,
+#: and a value that looked like any of those would re-introduce the second
+#: vocabulary this change removed. No agent is registered in this fixture, which
+#: the channel kind reads as "registry unavailable, cannot validate" and lets
+#: through; what is under test here is that the surface REPORTS the binding.
+_ROUTED_AGENT_UID = "3c1d5a90b2e74f6881ac0d4e5f7b2a13"
 
 
 class _StubAdapter:
@@ -86,6 +93,11 @@ class _Ctx:
     threads: ChannelThreadConversationRepo
     pairing: PairingManager
     resources: ResourceService
+    # The two identities the routes take. The integer ids beside them are the
+    # surrogate PK the peer/thread tables hold — internal, never on the wire —
+    # so both spellings are kept: a test pairs by ``*_id`` and calls by ``*_uid``.
+    tg_uid: str = ""
+    st_uid: str = ""
     tg_id: int = 0
     st_id: int = 0
     extra: dict[str, Any] = field(default_factory=dict)
@@ -144,6 +156,8 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
         threads=threads,
         pairing=pairing,
         resources=resources,
+        tg_uid=tg.uid,
+        st_uid=st.uid,
         tg_id=tg.id,
         st_id=st.id,
     )
@@ -172,7 +186,7 @@ async def _pair(ctx: _Ctx, resource_id: int, *, chat_id: str = "emp-1") -> None:
 
 async def test_channel_routes_require_token(ctx: _Ctx) -> None:
     async with _client(ctx.app, token=None) as c:
-        r = await c.get("/api/v1/channels/tg/status")
+        r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")
     assert r.status_code == 401
     assert r.json()["error"]["code"] == "UNAUTHENTICATED"
 
@@ -193,7 +207,7 @@ async def test_unknown_channel_is_404_on_every_route(ctx: _Ctx) -> None:
 
 async def test_pairing_code_returns_8_char_code_with_expiry(ctx: _Ctx) -> None:
     async with _client(ctx.app) as c:
-        r = await c.post("/api/v1/channels/tg/pairing-code")
+        r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/pairing-code")
     assert r.status_code == 200
     body = r.json()
     assert len(body["code"]) == 8
@@ -205,9 +219,13 @@ async def test_pairing_code_returns_8_char_code_with_expiry(ctx: _Ctx) -> None:
 
 async def test_status_telegram_defaults(ctx: _Ctx) -> None:
     async with _client(ctx.app) as c:
-        r = await c.get("/api/v1/channels/tg/status")
+        r = await c.get(f"/api/v1/channels/{ctx.tg_uid}/status")
     assert r.status_code == 200
     assert r.json() == {
+        # Both travel: the uid is what a surface addresses the channel by, the
+        # name is what it shows. A status that carried only the label would
+        # leave every client that has to call back needing a second lookup.
+        "uid": ctx.tg_uid,
         "name": "tg",
         "channel_type": "telegram",
         "enabled": True,
@@ -232,11 +250,12 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
     ctx.runtime.adapters["st"] = _StubAdapter()
     await _pair(ctx, ctx.st_id)
     async with _client(ctx.app) as c:
-        issued = await c.post("/api/v1/channels/st/pairing-code")
+        issued = await c.post(f"/api/v1/channels/{ctx.st_uid}/pairing-code")
         assert issued.status_code == 200
-        r = await c.get("/api/v1/channels/st/status")
+        r = await c.get(f"/api/v1/channels/{ctx.st_uid}/status")
     assert r.status_code == 200
     body = r.json()
+    assert body["uid"] == ctx.st_uid
     assert body["name"] == "st"
     assert body["channel_type"] == "seatalk"
     assert body["enabled"] is True
@@ -248,7 +267,10 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
     assert body["callback"] == {
         "delivery": "webhook",
         "port": 8787,
-        "path": "/seatalk/st",
+        # The public callback path spells the UID. It is registered by hand on
+        # SeaTalk's portal and never re-read, so the one thing it may not
+        # contain is a label the owner is invited to change (``callback_path``).
+        "path": f"/seatalk/{ctx.st_uid}",
         "listener_running": True,
         "public_base_url": None,
         "public_callback_url": None,
@@ -277,7 +299,7 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
         {
             "channel_type": "telegram",
             "bot_token_ref": "channel/mg/bot",
-            "default_agent": "claude_code",
+            "default_agent": _ROUTED_AGENT_UID,
         },
         actor="test",
     )
@@ -289,11 +311,11 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
     listed = {r.name: r for r in await ctx.resources.list(kind="channel")}
     assert "mg" in listed
     assert listed["mg"].enabled is True  # status
-    assert listed["mg"].config["default_agent"] == "claude_code"  # agent
+    assert listed["mg"].config["default_agent"] == _ROUTED_AGENT_UID  # agent
 
     # The per-channel status supplies the live health + paired owner.
     async with _client(ctx.app) as c:
-        r = await c.get("/api/v1/channels/mg/status")
+        r = await c.get(f"/api/v1/channels/{mg.uid}/status")
     assert r.status_code == 200
     body = r.json()
     assert body["enabled"] is True  # status
@@ -307,7 +329,7 @@ async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:
     ctx.runtime.adapters["tg"] = adapter
     await _pair(ctx, ctx.tg_id, chat_id="555")
     async with _client(ctx.app) as c:
-        r = await c.post("/api/v1/channels/tg/notify", json={"text": "build green"})
+        r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "build green"})
     assert r.status_code == 200
     assert r.json() == {"sent": True}
     assert adapter.sent == [("555", "build green")]
@@ -316,7 +338,7 @@ async def test_notify_delivers_to_paired_peer(ctx: _Ctx) -> None:
 async def test_notify_unpaired_channel_is_409(ctx: _Ctx) -> None:
     ctx.runtime.adapters["tg"] = _StubAdapter()
     async with _client(ctx.app) as c:
-        r = await c.post("/api/v1/channels/tg/notify", json={"text": "hi"})
+        r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "hi"})
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "CHANNEL_NOT_PAIRED"
 
@@ -324,14 +346,14 @@ async def test_notify_unpaired_channel_is_409(ctx: _Ctx) -> None:
 async def test_notify_with_adapter_down_is_409(ctx: _Ctx) -> None:
     await _pair(ctx, ctx.tg_id)  # paired, but no adapter running
     async with _client(ctx.app) as c:
-        r = await c.post("/api/v1/channels/tg/notify", json={"text": "hi"})
+        r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": "hi"})
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "CHANNEL_NOT_RUNNING"
 
 
 async def test_notify_rejects_empty_text(ctx: _Ctx) -> None:
     async with _client(ctx.app) as c:
-        r = await c.post("/api/v1/channels/tg/notify", json={"text": ""})
+        r = await c.post(f"/api/v1/channels/{ctx.tg_uid}/notify", json={"text": ""})
     assert r.status_code == 422
     assert r.json()["error"]["code"] == "CONFIG_INVALID"
 
@@ -345,7 +367,7 @@ async def test_events_ingest_reaches_the_adapter(ctx: _Ctx) -> None:
         "event": {"employee_code": "emp-1", "message": {"tag": "text", "text": {"content": "hi"}}},
     }
     async with _client(ctx.app) as c:
-        r = await c.post("/api/v1/channels/st/events", json=envelope)
+        r = await c.post(f"/api/v1/channels/{ctx.st_uid}/events", json=envelope)
     assert r.status_code == 200
     assert r.json() == {"accepted": True}
     # Processing is scheduled in the background so the listener's tight
@@ -359,6 +381,8 @@ async def test_events_ingest_reaches_the_adapter(ctx: _Ctx) -> None:
 
 async def test_events_with_adapter_down_is_409(ctx: _Ctx) -> None:
     async with _client(ctx.app) as c:
-        r = await c.post("/api/v1/channels/st/events", json={"event_type": "x", "event": {}})
+        r = await c.post(
+            f"/api/v1/channels/{ctx.st_uid}/events", json={"event_type": "x", "event": {}}
+        )
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "CHANNEL_NOT_RUNNING"

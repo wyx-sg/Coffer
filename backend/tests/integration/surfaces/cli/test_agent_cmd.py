@@ -10,6 +10,17 @@ wrapping that app. This mirrors the strategy used by
 ``test_resource_cmd.py`` and keeps the CLI verbs talking to the same HTTP
 routes the desktop UI consumes — which is the spec scenario "CLI surface
 mirrors REST operations".
+
+"Tiny" now means two routers, not one. Every ``coffer agent`` verb takes a
+NAME and resolves it to the uid the routes address
+(ADR resource-identity-is-an-immutable-uid), and that resolution is
+``GET /resources?kind=agent&name=`` — the framework's shared route, on a
+different router from ``/agents``. An app serving only ``agent_router`` would
+fail every name-taking command before it ever reached an agent route, and it
+would fail with a 404 that *looks* like "no such agent", which is the sort of
+green-for-the-wrong-reason a fixture should never be able to produce. So the
+app mounts ``resource_router`` too, over the same ``ResourceService`` the
+``AgentService`` is built on — the same shape ``test_provider_cmd.py`` uses.
 """
 
 from __future__ import annotations
@@ -48,6 +59,8 @@ from coffer.surfaces.http.agent_dependencies import (
 )
 from coffer.surfaces.http.agent_routes import router as agent_router
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.dependencies import get_resource_service
+from coffer.surfaces.http.resource_routes import router as resource_router
 
 _runner = CliRunner()
 _TOKEN = "test-token-agent-cli"
@@ -55,7 +68,7 @@ _TOKEN = "test-token-agent-cli"
 
 @pytest.fixture
 def agent_cli_daemon(tmp_path, monkeypatch):
-    """In-process daemon with the agent router; patches `client_or_exit`."""
+    """In-process daemon with the agent + resource routers; patches `client_or_exit`."""
     monkeypatch.setenv("HOME", str(tmp_path))
     db_url = f"sqlite+aiosqlite:///{tmp_path / 'c.db'}"
     engine = create_async_engine_with_pragmas(db_url)
@@ -76,8 +89,16 @@ def agent_cli_daemon(tmp_path, monkeypatch):
     app = FastAPI()
     err_handlers.register(app)
     app.include_router(agent_router)
+    # Name → uid resolution lives on the framework's resource router, and every
+    # `coffer agent` verb that takes a name goes through it first, so it is as
+    # load-bearing here as `/agents` itself. The SAME ResourceService instance
+    # the AgentService was built on: two would each have their own DB session
+    # and the resolver would look for an agent in a registry nothing registered
+    # into.
+    app.include_router(resource_router)
     app.dependency_overrides[get_agent_service] = lambda: agent_svc
     app.dependency_overrides[get_auto_detect_service] = lambda: detect_svc
+    app.dependency_overrides[get_resource_service] = lambda: resource_svc
 
     set_active_token(_TOKEN)
 
@@ -193,7 +214,7 @@ def test_agent_add_success(agent_cli_daemon):
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "registered" in result.output
+    assert "registered: agent cur" in result.output
 
 
 def test_agent_add_without_name_uses_per_type_default(agent_cli_daemon):
@@ -203,7 +224,10 @@ def test_agent_add_without_name_uses_per_type_default(agent_cli_daemon):
     config_dir.mkdir()
     result = _runner.invoke(cli_app, ["agent", "add", "codex", "--config-dir", str(config_dir)])
     assert result.exit_code == 0, result.output
-    assert "registered: agent:codex" in result.output
+    # `agent codex`, not `agent:codex`: the `<kind>:<name>` string form is gone
+    # with the identity it used to be (ADR resource-identity-is-an-immutable-uid),
+    # and the echo now just names the kind and the label separately.
+    assert "registered: agent codex" in result.output
     # The agent is listed under the derived name.
     listed = _runner.invoke(cli_app, ["agent", "list", "--json"])
     names = [i["name"] for i in json.loads(listed.output)]
@@ -255,6 +279,12 @@ def test_agent_show_existing_text(agent_cli_daemon):
     assert "name: cur" in result.output
     assert "type: codex" in result.output
     assert f"config_dir: {config_dir}" in result.output
+    # `show` is the one place the uid is printed, and it sits between the label
+    # and the rest so a reader meets the two identities together — the name they
+    # typed and the uid everything else addresses
+    # (ADR resource-identity-is-an-immutable-uid).
+    keys = [line.split(":", 1)[0] for line in result.output.splitlines() if ":" in line]
+    assert keys[:3] == ["name", "uid", "type"], result.output
 
 
 def test_agent_show_existing_json(agent_cli_daemon):
@@ -271,11 +301,51 @@ def test_agent_show_existing_json(agent_cli_daemon):
     assert data["type"] == "codex"
     assert data["config_dir"] == str(config_dir)
     assert "skill_dir" not in data
+    # A script reading `--json` must be able to keep hold of the agent across a
+    # later rename, which the name cannot do and the uid can.
+    assert data["uid"]
+
+
+def test_agent_show_prints_the_uid_the_daemon_reports(agent_cli_daemon):
+    """The uid `show` prints is the one the resolution route answers with.
+
+    There are two spellings of "which agent" in play now — the name a person
+    types and the uid every route takes — and exactly one thing they may
+    denote. So this asserts the join: the value `agent show cur` prints must be
+    the value `GET /resources?kind=agent&name=cur` reports, that being the one
+    route allowed to find a resource by its label and the one every `coffer
+    agent` verb resolves through. If the two ever drift, the whole command tree
+    is quietly operating on an agent other than the one that was named, and
+    nothing else in this file would notice.
+    """
+    _add_codex(agent_cli_daemon)
+    shown = _runner.invoke(cli_app, ["agent", "show", "cur"])
+    assert shown.exit_code == 0, shown.output
+    printed = [
+        line.split(": ", 1)[1] for line in shown.output.splitlines() if line.startswith("uid: ")
+    ]
+
+    # Asked of the daemon directly rather than through a second CLI verb: the
+    # claim is that the CLI agrees with the daemon, so the daemon's answer has
+    # to be read without the CLI in the middle. `client_or_exit` is the
+    # fixture's patched-in TestClient.
+    client, _info = _cli_client.client_or_exit()
+    r = client.get("/resources", params={"kind": "agent", "name": "cur"})
+    assert r.status_code == 200, r.text
+    assert printed == [res["uid"] for res in r.json()["resources"]]
 
 
 def test_agent_show_not_found(agent_cli_daemon):
+    """An unheld name fails at resolution, before any agent route is reached.
+
+    Same exit code as when `/agents/{uid}` used to 404 on the name, but the
+    message now comes from ``_resolve`` and names what was looked for — which
+    is the point of resolving up front instead of letting a later request 404
+    on a uid the user never typed and cannot connect back to what they did.
+    """
     result = _runner.invoke(cli_app, ["agent", "show", "ghost"])
     assert result.exit_code == 4, result.output
+    assert "no agent named 'ghost'" in (result.output + (result.stderr or ""))
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +364,10 @@ def test_agent_edit_config_dir(agent_cli_daemon):
     )
     result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--config-dir", str(new)])
     assert result.exit_code == 0, result.output
-    assert "updated" in result.output
+    # The echo reports the label the user gave, not the uid it resolved to: the
+    # uid is an address, and echoing one back would answer a question nobody
+    # asked in a vocabulary nobody typed.
+    assert "updated: agent cur" in result.output
     # And the new config_dir was actually persisted.
     show = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
     data = json.loads(show.output)
@@ -328,8 +401,10 @@ def test_agent_edit_description(agent_cli_daemon):
 
 
 def test_agent_edit_not_found(agent_cli_daemon):
+    """Resolution runs before the PATCH, so an unheld name never reaches it."""
     result = _runner.invoke(cli_app, ["agent", "edit", "ghost", "--description", "x"])
     assert result.exit_code == 4
+    assert "no agent named 'ghost'" in (result.output + (result.stderr or ""))
 
 
 # ---------------------------------------------------------------------------
@@ -346,15 +421,19 @@ def test_agent_rm_force(agent_cli_daemon):
     )
     result = _runner.invoke(cli_app, ["agent", "rm", "cur", "--force"])
     assert result.exit_code == 0, result.output
-    assert "removed" in result.output
-    # Subsequent show returns 404 -> exit 4.
+    assert "removed: agent cur" in result.output
+    # The name now holds nothing, so the next `show` stops at resolution — the
+    # same exit 4 the deleted-uid 404 used to produce, from one step earlier.
     show = _runner.invoke(cli_app, ["agent", "show", "cur"])
     assert show.exit_code == 4
+    assert "no agent named 'cur'" in (show.output + (show.stderr or ""))
 
 
 def test_agent_rm_not_found(agent_cli_daemon):
+    """Resolution runs before the DELETE, so an unheld name never reaches it."""
     result = _runner.invoke(cli_app, ["agent", "rm", "ghost", "--force"])
     assert result.exit_code == 4
+    assert "no agent named 'ghost'" in (result.output + (result.stderr or ""))
 
 
 def test_agent_rm_without_force_aborts(agent_cli_daemon):
@@ -367,6 +446,9 @@ def test_agent_rm_without_force_aborts(agent_cli_daemon):
     )
     result = _runner.invoke(cli_app, ["agent", "rm", "cur"], input="n\n")
     assert result.exit_code == 1
+    # The prompt names the agent the way the user does. It is also asked BEFORE
+    # the name is resolved, which is why it can quote a label and no uid.
+    assert "Really remove agent cur?" in result.output
     # The agent must still exist.
     show = _runner.invoke(cli_app, ["agent", "show", "cur"])
     assert show.exit_code == 0
@@ -552,7 +634,9 @@ def test_mcp_adopt_with_secret(workspace_cli):
         cli_app, ["agent", "mcp", "adopt", "cx", "fetcher", "--secret", f"API_TOKEN={ref}"]
     )
     assert r.exit_code == 0, r.output
-    assert "adopted: mcp_server:fetcher" in r.output
+    # Kind and label, side by side — the `mcp_server:fetcher` string form went
+    # away with the identity it used to be.
+    assert "adopted: mcp_server fetcher" in r.output
     # The secret value landed in the encrypted credential store, keyed by the
     # ref — read it back through the CLI (audited daemon read).
     r = _runner.invoke(cli_app, ["credentials", "get", ref, "--show"])
@@ -620,7 +704,7 @@ def test_plugin_uninstall_force_and_prompt(workspace_cli):
 # ---------------------------------------------------------------------------
 # agent edit — the model binding (spec provider-switching E3)
 #
-# PATCH /agents/{name} has carried `model` / `fast_model` / `wire_api` since the
+# PATCH /agents/{uid} has carried `model` / `fast_model` / `wire_api` since the
 # per-agent binding landed, and the projector reads exactly those fields
 # (`application/provider/projector.py`). Until these options existed a
 # terminal-only user could activate a connection and never bind a model to it,

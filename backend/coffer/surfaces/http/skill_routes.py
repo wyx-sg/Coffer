@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, Response, status
 from pydantic import BaseModel, Field
 
 from coffer.application.skill.service import SkillService
 from coffer.domain.resource import Resource
 from coffer.domain.skill.binding import BindingState, LinkMode
 from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.drift import DriftEntry
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.schemas import ScopeOut
 from coffer.surfaces.http.skill_dependencies import get_skill_service
@@ -41,8 +41,14 @@ class SkillBindingOut(BaseModel):
     Internal delivery bookkeeping surfaced read-only: there is no per-binding
     toggle any more, so a row here simply means "delivered". Which agents get a
     row is decided by ``SkillOut.enabled`` + ``SkillOut.scope``.
+
+    Both halves of the agent's identity ride along: ``agent_uid`` is what a
+    client follows to that agent, ``agent_name`` is what it prints. A delivery
+    is a fact about an agent row, so it keeps pointing at the same agent when
+    the user renames it (ADR resource-identity-is-an-immutable-uid).
     """
 
+    agent_uid: str
     agent_name: str
     last_linked_at: datetime | None = None
     last_link_path: str | None = None
@@ -50,6 +56,9 @@ class SkillBindingOut(BaseModel):
 
 
 class SkillOut(BaseModel):
+    # Identity first, label second — ``/api/v1/skills/{uid}`` is what every
+    # other route here takes (ADR resource-identity-is-an-immutable-uid).
+    uid: str
     name: str
     description: str
     source: dict[str, Any]
@@ -71,6 +80,20 @@ class SkillListOut(BaseModel):
 
 
 class DriftEntryOut(BaseModel):
+    """One disagreement between what Coffer delivered and what is on disk.
+
+    By NAME, and deliberately so even now that ``DriftEntry`` carries uids:
+    an entry is a finding about a PATH in a workspace, and two of the five
+    kinds (``missing_master``, ``orphan_master``) are precisely the case where
+    no resource stands behind the name — there would be nothing to put in a uid
+    field. The report is read and acted on as a whole through
+    ``POST /skills/repair``, never used to address one resource, so a uid here
+    would be an identity nobody follows. The uids on the domain entry exist for
+    the repair pass, which re-delivers against them so a skill renamed between
+    verify and repair is still the skill that gets repaired; that is an
+    internal guarantee, not a field of this report.
+    """
+
     skill_name: str
     agent_name: str
     kind: str
@@ -98,41 +121,41 @@ def _actor(x_coffer_actor: str | None = Header(default=None)) -> str:
     return x_coffer_actor or "api"
 
 
-# Skill names appear in URL path segments and become on-disk folder names
-# under ``~/.coffer/skills/<name>/`` via ``MasterStore.paths_for``. The same
-# regex as ``ResourceRef`` (``^[a-zA-Z0-9_.\-]+$``, ≤64 chars) is enforced
-# at the surface to catch path-traversal attempts (``..``, ``/``, ``\``)
-# and reject them with 422 BEFORE the value reaches the filesystem layer.
-_SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9_.\-]+$")
-_SKILL_NAME_MAX = 64
+# There is no surface-level name guard here any more. It existed because a
+# skill's NAME was the URL path segment and also its folder name under
+# ``~/.coffer/skills/<name>/``, so a traversal attempt (``..``, ``/``, ``\``)
+# arriving in the path had to be refused before it reached the filesystem. The
+# path segment is now a uid the daemon minted, and a name only ever enters
+# through ``ResourceService``, which validates it once for every kind
+# (ADR resource-identity-is-an-immutable-uid). A second copy of that rule here
+# would be a rule nothing can violate, kept alive for a route shape that is
+# gone.
 
 
-def _validate_skill_name(name: str) -> str:
-    if not name or len(name) > _SKILL_NAME_MAX or not _SKILL_NAME_RE.match(name):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "error": {
-                    "code": "INVALID_NAME",
-                    "message": (
-                        f"invalid skill name: must match {_SKILL_NAME_RE.pattern} "
-                        f"and be ≤{_SKILL_NAME_MAX} chars"
-                    ),
-                }
-            },
-        )
-    return name
+async def _agents_by_id(svc: SkillService) -> dict[int, Resource]:
+    """Build an agent-row-id -> agent map once per request (avoids an N+1).
+
+    Keyed on the integer row id because that is what a binding stores as its
+    foreign key; the uid and the name both come off the row it finds.
+    """
+    return {a.id: a for a in await svc.list_agents()}
 
 
-async def _agents_by_id(svc: SkillService) -> dict[int, str]:
-    """Build an agent-id -> name map once per request (avoids an N+1)."""
-    return {a.id: a.name for a in await svc.list_agents()}
+def _drift_out(e: DriftEntry) -> DriftEntryOut:
+    """One drift entry on the wire — used by both verify and repair."""
+    return DriftEntryOut(
+        skill_name=e.skill_name,
+        agent_name=e.agent_name,
+        kind=e.kind.value,
+        target_path=e.target_path,
+        suggested_remedy=e.suggested_remedy,
+    )
 
 
 async def _to_skill_out(
     svc: SkillService,
     r: Resource,
-    agents_by_id: dict[int, str],
+    agents_by_id: dict[int, Resource],
     *,
     bindings_by_skill: dict[int, list[BindingState]] | None = None,
 ) -> SkillOut:
@@ -143,8 +166,9 @@ async def _to_skill_out(
     if bindings_by_skill is not None:
         bindings = bindings_by_skill.get(r.id, [])
     else:
-        bindings = await svc.bindings_for(r.name)
+        bindings = await svc.bindings_for(r.uid)
     return SkillOut(
+        uid=r.uid,
         name=r.name,
         description=cfg.skill_md_description,
         source=cfg.source.model_dump(mode="json"),
@@ -157,16 +181,27 @@ async def _to_skill_out(
         updated_at=r.updated_at,
         # Only live deliveries: a spent binding row (reclaimed copy) is
         # bookkeeping, not something the agent holds.
-        bindings=[
-            SkillBindingOut(
-                agent_name=agents_by_id.get(b.agent_resource_id, str(b.agent_resource_id)),
-                last_linked_at=b.last_linked_at,
-                last_link_path=b.last_link_path,
-                link_mode=b.link_mode,
-            )
-            for b in bindings
-            if b.enabled
-        ],
+        bindings=[_binding_out(b, agents_by_id) for b in bindings if b.enabled],
+    )
+
+
+def _binding_out(b: BindingState, agents_by_id: dict[int, Resource]) -> SkillBindingOut:
+    """One delivery row on the wire.
+
+    A binding whose agent row has gone is still reported, because the row is
+    evidence that a copy was delivered somewhere and dropping it would make the
+    delivery list quietly shorter than the truth. It is rendered with the
+    integer FK in both fields, which is what the surface has: there is no uid to
+    invent for a row that is no longer there.
+    """
+    agent = agents_by_id.get(b.agent_resource_id)
+    fallback = str(b.agent_resource_id)
+    return SkillBindingOut(
+        agent_uid=agent.uid if agent else fallback,
+        agent_name=agent.name if agent else fallback,
+        last_linked_at=b.last_linked_at,
+        last_link_path=b.last_link_path,
+        link_mode=b.link_mode,
     )
 
 
@@ -198,24 +233,22 @@ async def import_skill(
     return await _to_skill_out(svc, r, await _agents_by_id(svc))
 
 
-@router.get("/{name}", response_model=SkillOut)
+@router.get("/{uid}", response_model=SkillOut)
 async def get_skill(
-    name: str,
+    uid: str,
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
 ) -> SkillOut:
-    name = _validate_skill_name(name)
-    r = await svc.get_skill(name)
+    r = await svc.get_skill(uid)
     return await _to_skill_out(svc, r, await _agents_by_id(svc))
 
 
-@router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def delete_skill(
-    name: str,
+    uid: str,
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> Response:
-    name = _validate_skill_name(name)
-    await svc.remove(name=name, actor=actor)
+    await svc.remove(uid=uid, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -224,18 +257,7 @@ async def verify_skills(
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
 ) -> DriftReportOut:
     report = await svc.verify()
-    return DriftReportOut(
-        entries=[
-            DriftEntryOut(
-                skill_name=e.skill_name,
-                agent_name=e.agent_name,
-                kind=e.kind.value,
-                target_path=e.target_path,
-                suggested_remedy=e.suggested_remedy,
-            )
-            for e in report.entries
-        ]
-    )
+    return DriftReportOut(entries=[_drift_out(e) for e in report.entries])
 
 
 @router.post("/repair", response_model=RepairReportOut)
@@ -245,26 +267,6 @@ async def repair_skills(
 ) -> RepairReportOut:
     result = await svc.repair_drift(actor=actor)
     return RepairReportOut(
-        remediated=[
-            DriftEntryOut(
-                skill_name=e.skill_name,
-                agent_name=e.agent_name,
-                kind=e.kind.value,
-                target_path=e.target_path,
-                suggested_remedy=e.suggested_remedy,
-            )
-            for e in result.remediated
-        ],
-        remaining=DriftReportOut(
-            entries=[
-                DriftEntryOut(
-                    skill_name=e.skill_name,
-                    agent_name=e.agent_name,
-                    kind=e.kind.value,
-                    target_path=e.target_path,
-                    suggested_remedy=e.suggested_remedy,
-                )
-                for e in result.remaining.entries
-            ]
-        ),
+        remediated=[_drift_out(e) for e in result.remediated],
+        remaining=DriftReportOut(entries=[_drift_out(e) for e in result.remaining.entries]),
     )

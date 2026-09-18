@@ -25,7 +25,7 @@ tags:
   - name: agents
     description: >-
       Per-agent workspace skill operations (unmanaged scan / adopt / delete);
-      mounted under /agents/{name} but owned by this spec (FR-016..FR-018).
+      mounted under /agents/{uid} but owned by this spec (FR-016..FR-018).
 
 paths:
   /skills:
@@ -68,12 +68,16 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /skills/{name}:
+  /skills/{uid}:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
         schema: { type: string }
+        description: >-
+          The skill Resource's immutable identity. Not its name: a skill's name
+          is also its master folder under `~/.coffer/skills/` and the name of
+          every delivered link, all of which move when it is renamed.
     get:
       tags: [skills]
       operationId: getSkill
@@ -95,12 +99,16 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /skills/{name}/files:
+  /skills/{uid}/files:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
         schema: { type: string }
+        description: >-
+          The skill Resource's immutable identity. Not its name: a skill's name
+          is also its master folder under `~/.coffer/skills/` and the name of
+          every delivered link, all of which move when it is renamed.
     get:
       tags: [skills]
       operationId: listSkillFiles
@@ -115,12 +123,16 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
-  /skills/{name}/files/content:
+  /skills/{uid}/files/content:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
         schema: { type: string }
+        description: >-
+          The skill Resource's immutable identity. Not its name: a skill's name
+          is also its master folder under `~/.coffer/skills/` and the name of
+          every delivered link, all of which move when it is renamed.
     get:
       tags: [skills]
       operationId: readSkillFile
@@ -194,13 +206,15 @@ paths:
               schema: { $ref: "#/components/schemas/RepairReport" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /agents/{name}/unmanaged-skills:
+  /agents/{uid}/unmanaged-skills:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
         schema: { type: string }
-        description: Agent name (kind `agent`, spec agent-registry).
+        description: >-
+          The agent Resource's immutable uid (kind `agent`, spec
+          agent-registry) whose workspace to scan.
     get:
       tags: [agents]
       operationId: listUnmanagedSkills
@@ -227,12 +241,18 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/unmanaged-skills/{skill}:
+  /agents/{uid}/unmanaged-skills/{skill}:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
         schema: { type: string }
+        description: >-
+          The agent Resource's immutable uid. Note the asymmetry in this path:
+          the agent is addressed by uid because it IS a resource, while
+          `{skill}` is a bare folder name — an unmanaged folder has no resource
+          and so no uid to be addressed by. That is exactly what adopting one
+          gives it.
       - in: path
         name: skill
         required: true
@@ -257,12 +277,18 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /agents/{name}/unmanaged-skills/{skill}/adopt:
+  /agents/{uid}/unmanaged-skills/{skill}/adopt:
     parameters:
       - in: path
-        name: name
+        name: uid
         required: true
         schema: { type: string }
+        description: >-
+          The agent Resource's immutable uid. Note the asymmetry in this path:
+          the agent is addressed by uid because it IS a resource, while
+          `{skill}` is a bare folder name — an unmanaged folder has no resource
+          and so no uid to be addressed by. That is exactly what adopting one
+          gives it.
       - in: path
         name: skill
         required: true
@@ -362,6 +388,7 @@ components:
       type: object
       required:
         [
+          uid,
           name,
           description,
           source,
@@ -374,7 +401,20 @@ components:
           bindings,
         ]
       properties:
-        name: { type: string }
+        uid:
+          type: string
+          description: >-
+            The skill Resource's immutable identity, and what every route
+            addressing this skill takes.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        name:
+          type: string
+          description: >-
+            A mutable label, unique among skills, editable through the
+            kind-agnostic `PATCH /api/v1/resources/{uid}`. It is also the
+            skill's master folder name and the name of every link delivered
+            into an agent's workspace, so a rename moves those with it —
+            `master_path` on the response after a rename is the new one.
         description: { type: string }
         source: { $ref: "#/components/schemas/SkillSource" }
         enabled: { type: boolean }
@@ -396,8 +436,8 @@ components:
         means every agent; `[]` matches nothing, i.e. dormant. Shape is shared
         with every other kind — it is the resource framework's scope, not a
         skill-specific one — so it MUST stay identical to `ScopeOut` in
-        `specs/mcp-gateway/contracts/api.openapi.yaml` and to `ScopeOut` in
-        `backend/coffer/surfaces/http/schemas.py`. It was previously declared
+        `specs/resource-framework/contracts/api.openapi.yaml` and to `ScopeOut`
+        in `backend/coffer/surfaces/http/schemas.py`. It was previously declared
         here as a bare `string[]`, which is the agent list one level down; the
         wire has always carried the object.
       required: [agents]
@@ -405,20 +445,42 @@ components:
       properties:
         agents:
           type: array
+          description: >-
+            Agent resource UIDS, not names. A scope is a reference to another
+            resource and a name is a label its owner may change; while this
+            held names, renaming an agent silently emptied every scope naming
+            it — which for a skill means it stops being delivered to the agent
+            the user picked, with nothing said.
           items: { type: string }
           nullable: true
-          example: [claude-code]
+          example: [9f2c1a7b4e8d4c1fa0b3d5e6f7081920]
       nullable: true
 
     SkillBindingOut:
       type: object
-      required: [agent_name]
+      required: [agent_uid, agent_name]
       description: >-
         Internal delivery bookkeeping, not a user-facing toggle: a row means
         this agent currently holds a delivered copy of the skill. Delivery is
         decided by the skill's own enabled flag and scope.
       properties:
-        agent_name: { type: string }
+        agent_uid:
+          type: string
+          description: >-
+            Which agent holds the copy. A uid because a binding is a STORED
+            pointer at another resource — the row is a foreign key into
+            `resources` and outlives any number of renames on either side — so
+            the wire form of that pointer has to be the identity, not a label
+            that was merely current when the row was written.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        agent_name:
+          type: string
+          description: >-
+            The same agent's label, resolved at read time. Carried beside the
+            uid and not instead of it: the bindings list is rendered as a line
+            of agent names under a skill, and a row of UUIDs tells the reader
+            nothing. Both, because this one object answers a machine's question
+            and a person's at once.
         last_linked_at: { type: string, format: date-time, nullable: true }
         last_link_path: { type: string, nullable: true }
         link_mode:
@@ -429,6 +491,14 @@ components:
     DriftEntry:
       type: object
       required: [skill_name, agent_name, kind, suggested_remedy]
+      description: >-
+        One disagreement between what Coffer believes it delivered and what is
+        on disk. Reported by NAME, not by uid, and deliberately so: an entry is
+        a finding about a path in a workspace, and two of the five kinds
+        (`missing_master`, `orphan_master`) describe precisely the case where
+        no resource stands behind the name — there is no uid to report. The
+        report is read and acted on as a whole through `POST /skills/repair`,
+        never used to address one resource.
       properties:
         skill_name: { type: string }
         agent_name: { type: string }
@@ -545,10 +615,22 @@ components:
 
     SkillRefOut:
       type: object
-      required: [name]
+      description: >-
+        The skill resource adoption just created, named both ways: the uid to
+        navigate to it with, the name to say which folder became it.
+      required: [uid, name]
       properties:
+        uid:
+          type: string
+          description: >-
+            The new skill Resource's immutable identity — what the caller
+            follows to `GET /skills/{uid}`.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
         name:
-          { type: string, description: "Name of the adopted skill resource." }
+          type: string
+          description: >-
+            The adopted skill's label, which is the folder name it was adopted
+            under.
 
     SkillFileContentOut:
       type: object

@@ -1,7 +1,7 @@
 """``coffer agent transcripts`` / ``transcript`` — an agent's local conversations.
 
 CLI parity for the web Conversations tab, which has two surfaces and so does
-this: ``transcripts`` lists the sessions (``GET /agents/{name}/transcripts``) and
+this: ``transcripts`` lists the sessions (``GET /agents/{uid}/transcripts``) and
 ``transcript`` renders one of them (``.../transcripts/session``), taking the
 absolute ``source_path`` the listing printed. Read-only, both of them.
 
@@ -20,6 +20,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._resolve import resolve_uid
 
 _console = Console()
 
@@ -58,10 +59,8 @@ def transcripts(
         params["q"] = query
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}/transcripts", params=params)
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.get(f"/agents/{uid}/transcripts", params=params)
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     if output_json:
@@ -100,10 +99,8 @@ def transcript(
     params: dict[str, Any] = {"path": path, "limit": limit, "offset": offset}
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}/transcripts/session", params=params)
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.get(f"/agents/{uid}/transcripts/session", params=params)
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     if output_json:

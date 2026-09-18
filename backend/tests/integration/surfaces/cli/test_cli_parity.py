@@ -42,7 +42,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # _OPTION_ONLY_GROUPS asserts instead — so the empty set here is a
     # narrowed claim, not an unchecked hole.
     "open": set(),
-    "resource": {"list", "show", "enable", "disable", "delete"},
+    # ``rename`` is here, on the KIND-AGNOSTIC group, because that is where
+    # renaming now lives: the name is a label on every resource, so moving
+    # it is one command for all nine kinds rather than a per-kind route
+    # only ``provider`` ever grew (ADR resource-identity-is-an-immutable-uid).
+    "resource": {"list", "show", "rename", "enable", "disable", "delete"},
     "scope": {"show", "set", "clear"},
     "audit": {"list"},
     "retention": {"list", "set", "prune-now"},
@@ -114,7 +118,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "provider": {
         "add",
         "edit",
-        "rename",
+        # No "rename": it moved to the kind-agnostic group, where it covers
+        # every kind instead of this one.
         "rm",
         "list",
         "show",
@@ -169,12 +174,12 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # The model an agent answers with is a FIELD of the agent, so it is bound
     # by the verb that edits the agent rather than by a command of its own —
     # which means the subcommand oracle above cannot see it and this is the
-    # only place that claims it. It mirrors PATCH /api/v1/agents/{name}, whose
+    # only place that claims it. It mirrors PATCH /api/v1/agents/{uid}, whose
     # `model` / `fast_model` / `wire_api` the projector reads.
     "agent edit": {"--model", "--fast-model", "--clear-fast-model", "--wire-api"},
     # Same shape, one kind over: a connection's wire is a FIELD of the
     # connection, corrected on the verb that edits it. `PATCH
-    # /api/v1/providers/{name}` carries `protocol`, and the CLI could not send
+    # /api/v1/providers/{uid}` carries `protocol`, and the CLI could not send
     # it while its own help called the field immutable.
     "provider edit": {"--protocol", "--base-url", "--secret"},
 }
@@ -192,6 +197,11 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
 #: `coffer provider rename` and `coffer provider edit --protocol`. That is the
 #: standing limitation of this module: it can prove the tree matches the table,
 #: and it cannot see an operation the CLI never grew.
+#:
+#: `coffer provider rename` has since been REMOVED again, and its absence is
+#: not a gap: renaming became a field on the kind-agnostic update, so
+#: `coffer resource rename provider <name> <new>` serves it — and serves the
+#: other eight kinds, which never had a rename at all.
 #:
 #: If a UI operation ever ships without a CLI counterpart again, write the
 #: exemption back the same way: a name, the reason, and an assertion that the

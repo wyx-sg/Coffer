@@ -233,7 +233,13 @@ def mcp_daemon(tmp_path: Any, monkeypatch: Any) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def _register_server(name: str = "fs", transport: str = "stdio") -> None:
+def _register_server(name: str = "fs", transport: str = "stdio") -> str:
+    """Register a server and hand back its uid.
+
+    Every caller that seeds a row keyed on identity — a preference, an
+    invocation — needs it, and a uid is minted rather than chosen, so it can
+    only come from the registration that made it.
+    """
     from coffer.surfaces.cli import _client as _cli_client
 
     client, _ = _cli_client.client_or_exit()
@@ -257,6 +263,7 @@ def _register_server(name: str = "fs", transport: str = "stdio") -> None:
         json={"kind": "mcp_server", "name": name, "config": config},
     )
     assert r.status_code == 201, r.text
+    return str(r.json()["uid"])
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +274,7 @@ def _register_server(name: str = "fs", transport: str = "stdio") -> None:
 def test_mcp_add_stdio(mcp_daemon: Any) -> None:
     result = _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat -n"])
     assert result.exit_code == 0, result.output
-    assert "registered: mcp_server:fs" in result.output
+    assert "registered: mcp_server fs" in result.output
 
 
 def test_mcp_add_http(mcp_daemon: Any) -> None:
@@ -284,7 +291,7 @@ def test_mcp_add_http(mcp_daemon: Any) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "registered: mcp_server:remote" in result.output
+    assert "registered: mcp_server remote" in result.output
 
 
 def test_mcp_add_both_flags_exits_2(mcp_daemon: Any) -> None:
@@ -436,10 +443,12 @@ def test_mcp_list_table(mcp_daemon: Any) -> None:
 
 
 def test_mcp_show_existing(mcp_daemon: Any) -> None:
-    _register_server()
+    uid = _register_server()
     result = _runner.invoke(app, ["mcp", "show", "fs"])
     assert result.exit_code == 0, result.output
-    assert "mcp_server:fs" in result.output
+    # Name AND uid: `show` is where a person goes for the address itself.
+    assert "name:     fs" in result.output
+    assert uid in result.output
 
 
 def test_mcp_show_json(mcp_daemon: Any) -> None:
@@ -464,7 +473,7 @@ def test_mcp_remove_with_force(mcp_daemon: Any) -> None:
     _register_server()
     result = _runner.invoke(app, ["mcp", "remove", "fs", "--force"])
     assert result.exit_code == 0, result.output
-    assert "removed: mcp_server:fs" in result.output
+    assert "removed: mcp_server fs" in result.output
 
     result2 = _runner.invoke(app, ["mcp", "show", "fs"])
     assert result2.exit_code == 4
@@ -484,7 +493,7 @@ def test_mcp_refresh(mcp_daemon: Any) -> None:
     _register_server()
     result = _runner.invoke(app, ["mcp", "refresh", "fs"])
     assert result.exit_code == 0, result.output
-    assert "refreshed: mcp_server:fs" in result.output
+    assert "refreshed: mcp_server fs" in result.output
 
 
 def test_mcp_refresh_not_found(mcp_daemon: Any) -> None:
@@ -523,7 +532,7 @@ def test_mcp_tool_list_table(mcp_daemon: Any) -> None:
 
 def test_mcp_tool_enable_disable(mcp_daemon: Any) -> None:
     """Disable/enable a tool via CLI — unconditional assertions after seeding the pref row."""
-    _register_server()
+    uid = _register_server()
 
     # Seed the capability preference row directly via the DB so disable/enable can proceed.
     # The prefs table row is created by CapabilityDiscovery.insert() — we replicate that here
@@ -542,13 +551,13 @@ def test_mcp_tool_enable_disable(mcp_daemon: Any) -> None:
     async def _seed() -> int:
         sm2 = session_maker(engine)
         prefs = MCPCapabilityPreferenceRepo(sm2)
-        # Find the resource id for "fs"
+        # The preference rows are keyed on the surrogate id, which the uid the
+        # registration minted is what finds.
         from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
 
         repo = SqlAlchemyResourceRepo(sm2)
-        from coffer.domain.resource import ResourceRef
 
-        resource = await repo.find(ResourceRef("mcp_server", "fs"))
+        resource = await repo.find(uid)
         assert resource is not None, "resource 'fs' not found in DB"
         now = datetime.now(tz=UTC)
         await prefs.insert(resource.id, "tool", "read_file", True, now, now)
@@ -575,11 +584,10 @@ def test_mcp_resource_enable_disable_uri_with_slashes(mcp_daemon: Any) -> None:
     file:///etc/hosts). The CLI must send it in the request body, not the URL
     path — the old path-style route can't match multi-segment keys and 404s.
     """
-    _register_server()
+    uid = _register_server()
 
     from datetime import UTC, datetime
 
-    from coffer.domain.resource import ResourceRef
     from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
     from coffer.infrastructure.persistence.engine import (
         create_async_engine_with_pragmas,
@@ -594,7 +602,7 @@ def test_mcp_resource_enable_disable_uri_with_slashes(mcp_daemon: Any) -> None:
     async def _seed() -> None:
         sm2 = session_maker(engine)
         repo = SqlAlchemyResourceRepo(sm2)
-        resource = await repo.find(ResourceRef("mcp_server", "fs"))
+        resource = await repo.find(uid)
         assert resource is not None
         now = datetime.now(tz=UTC)
         await MCPCapabilityPreferenceRepo(sm2).insert(resource.id, "resource", uri, True, now, now)
@@ -628,7 +636,7 @@ def test_mcp_invocations_empty(mcp_daemon: Any) -> None:
 
 
 def test_mcp_invocations_table(mcp_daemon: Any) -> None:
-    _register_server()
+    uid = _register_server()
 
     # Seed an invocation row so the table renders real content (not an empty
     # table that a bare exit_code check would still pass).
@@ -648,7 +656,7 @@ def test_mcp_invocations_table(mcp_daemon: Any) -> None:
             MCPInvocation(
                 id=None,
                 timestamp=datetime.now(tz=UTC),
-                resource_name="fs",
+                resource_uid=uid,
                 capability_type="tool",
                 capability_key="read_file",
                 duration_ms=12,
@@ -696,8 +704,8 @@ def test_mcp_add_bad_credential_format_exits_2(mcp_daemon: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _seed_invocations() -> None:
-    """Seed three invocation rows (two ok, one error) for server 'fs'."""
+def _seed_invocations(uid: str) -> None:
+    """Seed two invocation rows (one ok, one error) under the server's uid."""
     from datetime import UTC, datetime
 
     from coffer.domain.mcp.capability import MCPInvocation
@@ -716,7 +724,7 @@ def _seed_invocations() -> None:
             MCPInvocation(
                 id=None,
                 timestamp=now,
-                resource_name="fs",
+                resource_uid=uid,
                 capability_type="tool",
                 capability_key="read_file",
                 duration_ms=5,
@@ -729,7 +737,7 @@ def _seed_invocations() -> None:
             MCPInvocation(
                 id=None,
                 timestamp=now,
-                resource_name="fs",
+                resource_uid=uid,
                 capability_type="tool",
                 capability_key="write_file",
                 duration_ms=7,
@@ -747,8 +755,7 @@ def _seed_invocations() -> None:
 
 def test_mcp_invocations_json_shape(mcp_daemon: Any) -> None:
     """`--json` returns an object whose sole top-level key is `invocations`."""
-    _register_server()
-    _seed_invocations()
+    _seed_invocations(_register_server())
     result = _runner.invoke(app, ["mcp", "invocations", "fs", "--json"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -760,8 +767,7 @@ def test_mcp_invocations_json_shape(mcp_daemon: Any) -> None:
 
 def test_mcp_invocations_status_filter(mcp_daemon: Any) -> None:
     """`--status error` filters server-side to only the error row."""
-    _register_server()
-    _seed_invocations()
+    _seed_invocations(_register_server())
     result = _runner.invoke(app, ["mcp", "invocations", "fs", "--status", "error", "--json"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -773,8 +779,7 @@ def test_mcp_invocations_status_filter(mcp_daemon: Any) -> None:
 
 def test_mcp_invocations_since_passed_through(mcp_daemon: Any) -> None:
     """A `--since` far in the future filters out every seeded row."""
-    _register_server()
-    _seed_invocations()
+    _seed_invocations(_register_server())
     result = _runner.invoke(
         app,
         ["mcp", "invocations", "fs", "--since", "2999-01-01T00:00:00+00:00", "--json"],
@@ -791,18 +796,27 @@ def test_mcp_invocations_limit_validation_exits_2(mcp_daemon: Any) -> None:
     assert result.exit_code == 2, result.output
 
 
-def test_mcp_invocations_not_found_exits_4(monkeypatch: pytest.MonkeyPatch) -> None:
-    """When the invocations endpoint 404s, the CLI maps it to exit 4."""
+def test_mcp_invocations_route_404_exits_4(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When the invocations ROUTE itself 404s, the CLI maps it to exit 4.
+
+    The name resolves here — the stub answers the lookup — so this exercises
+    the branch a bare "no such server" no longer reaches: the server existed
+    when the CLI asked for its uid and did not when it asked for its calls.
+    """
     from fastapi import APIRouter, HTTPException
 
     from coffer.infrastructure.daemon.pid_lock import DaemonInfo
     from coffer.surfaces.http import errors as _err
     from coffer.surfaces.http.auth import set_active_token as _set_token
 
-    router = APIRouter(prefix="/api/v1/resources/mcp_server")
+    router = APIRouter(prefix="/api/v1")
 
-    @router.get("/{name}/invocations")
-    async def _inv(name: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+    @router.get("/resources")
+    async def _resolve(kind: str, name: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+        return {"resources": [{"uid": "uid-ghost", "kind": kind, "name": name}]}
+
+    @router.get("/resources/mcp_server/{uid}/invocations")
+    async def _inv(uid: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
         raise HTTPException(status_code=404, detail="not found")
 
     stub_app = FastAPI()
@@ -855,9 +869,10 @@ def test_mcp_remove_declined_confirmation_exits_1(mcp_daemon: Any) -> None:
 
 
 def _patch_test_route(monkeypatch: Any, *, ok: bool) -> None:
-    """Mount a tiny app whose POST /{name}/test returns a canned result and
-    whose 404 is driven by a known-vs-unknown server name. Rewires
-    ``client_or_exit`` to point the CLI at it."""
+    """Mount a tiny app that answers the name→uid lookup for a known server
+    and whose POST /{uid}/test returns a canned result. An unknown name never
+    reaches /test at all now — it stops at the lookup, which returns no match.
+    Rewires ``client_or_exit`` to point the CLI at it."""
     from fastapi import APIRouter
 
     from coffer.infrastructure.daemon.pid_lock import DaemonInfo
@@ -865,15 +880,18 @@ def _patch_test_route(monkeypatch: Any, *, ok: bool) -> None:
     from coffer.surfaces.http.auth import set_active_token as _set_token
     from coffer.surfaces.http.schemas import McpTestResultOut
 
-    _known = {"fs"}
-    router = APIRouter(prefix="/api/v1/resources/mcp_server", tags=["mcp"])
+    _known = {"fs": "uid-fs"}
+    router = APIRouter(prefix="/api/v1", tags=["mcp"])
 
-    @router.post("/{name}/test", response_model=McpTestResultOut)
-    async def _test(name: str) -> McpTestResultOut:  # type: ignore[no-untyped-def]
-        if name not in _known:
-            from fastapi import HTTPException
+    @router.get("/resources")
+    async def _resolve(kind: str, name: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+        uid = _known.get(name)
+        if uid is None:
+            return {"resources": []}
+        return {"resources": [{"uid": uid, "kind": kind, "name": name}]}
 
-            raise HTTPException(status_code=404, detail="not found")
+    @router.post("/resources/mcp_server/{uid}/test", response_model=McpTestResultOut)
+    async def _test(uid: str) -> McpTestResultOut:  # type: ignore[no-untyped-def]
         if ok:
             return McpTestResultOut(ok=True, latency_ms=42, protocol_version="2025-06-18")
         return McpTestResultOut(ok=False, latency_ms=9, error_message="upstream down")
@@ -920,6 +938,9 @@ def test_mcp_test_fail_exit_7(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_mcp_test_not_found_exit_4(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unknown NAME now fails at the lookup, not at /test — the CLI names
+    what the user typed rather than 404ing on a uid they never saw."""
     _patch_test_route(monkeypatch, ok=True)
     result = _runner.invoke(app, ["mcp", "test", "ghost"])
     assert result.exit_code == 4, result.output
+    assert "no mcp_server named 'ghost'" in (result.output + (result.stderr or ""))

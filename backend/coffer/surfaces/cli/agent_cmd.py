@@ -1,19 +1,26 @@
-"""coffer agent ... commands."""
+"""coffer agent ... commands.
+
+Every command takes the agent's NAME and resolves it once, through ``_resolve``,
+to the uid the routes address (ADR resource-identity-is-an-immutable-uid): the
+round trip is paid at the surface a human stands at, not by teaching the daemon
+a second way to be addressed.
+"""
 
 from __future__ import annotations
 
 import json as _json
 from typing import Any
 
-import click
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import agent_config_cmd as _config
 from coffer.surfaces.cli import agent_native_memory_cmd as _native_memory
 from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
 from coffer.surfaces.cli import agent_workspace_cmd as _workspace
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage registered AI agents")
 config_app = typer.Typer(help="View and edit an agent's config files")
@@ -79,7 +86,7 @@ def add(
         r = c.post("/agents", json=body)
         _cli_client.check(r, verbose=verbose)
         registered = r.json().get("name", name) if r.content else name
-    typer.echo(f"registered: agent:{registered}")
+    typer.echo(f"registered: agent {registered}")
 
 
 @app.command("show")
@@ -92,16 +99,16 @@ def show(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}")
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "agent", name, verbose=verbose)
+        r = c.get(f"/agents/{uid}")
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
     else:
-        for k in ("name", "type", "config_dir"):
+        # The uid is shown here and nowhere else — a detail view is where a
+        # reader looks for the value the agent's own config file cites.
+        for k in ("name", "uid", "type", "config_dir"):
             typer.echo(f"{k}: {data[k]}")
         # The model binding is what the projector actually writes into the
         # agent's native config, so `show` is where a terminal-only user reads
@@ -164,12 +171,10 @@ def edit(
         body["wire_api"] = wire_api
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.patch(f"/agents/{name}", json=body)
-        if r.status_code == 404:
-            typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "agent", name, verbose=verbose)
+        r = c.patch(f"/agents/{uid}", json=body)
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"updated: agent:{name}")
+    typer.echo(f"updated: agent {name}")
 
 
 @app.command("rm")
@@ -179,17 +184,15 @@ def rm(
     force: bool = typer.Option(False, "--force", "-f"),
 ) -> None:
     """Remove an agent (re-discoverable on the next scan — removal isn't permanent)."""
-    if not force and not typer.confirm(f"Really remove agent:{name}?"):
+    if not force and not typer.confirm(f"Really remove agent {name}?"):
         raise typer.Exit(1)
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/agents/{name}")
-        if r.status_code == 404:
-            typer.echo("not found", err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "agent", name, verbose=verbose)
+        r = c.delete(f"/agents/{uid}")
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"removed: agent:{name}")
+    typer.echo(f"removed: agent {name}")
 
 
 @app.command("detect")
@@ -222,107 +225,11 @@ def detect(
 
 
 # --- coffer agent config ... -------------------------------------------------
+# The commands themselves live in two siblings (backend file-size cap): whole
+# files in ``agent_config_cmd``, directory-entry children in
+# ``agent_workspace_cmd``. Both attach onto this typer, below.
 
 app.add_typer(config_app, name="config")
-
-
-def _not_found_exit(r: Any) -> None:
-    if r.status_code == 404:
-        typer.echo(r.json().get("error", {}).get("message", "not found"), err=True)
-        raise typer.Exit(4)
-
-
-@config_app.command("ls")
-def config_ls(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
-) -> None:
-    """List an agent's curated config files."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get(f"/agents/{name}/config-files")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=verbose)
-    items = r.json()["items"]
-    if output_json:
-        typer.echo(_json.dumps(items, indent=2))
-        return
-    table = Table(title=f"Config files — {name}")
-    for col in ("Key", "Format", "Path", "Exists"):
-        table.add_column(col)
-    for it in items:
-        table.add_row(it["key"], it["format"], it["path"], "✓" if it["exists"] else "")
-    _console.print(table)
-
-
-@config_app.command("cat")
-def config_cat(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    key: str = typer.Argument(..., help="Config-file key (e.g. settings, config, memory)"),
-) -> None:
-    """Print one config file's content."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get(f"/agents/{name}/config-files/{key}")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=verbose)
-    typer.echo(r.json()["content"], nl=False)
-
-
-@config_app.command("edit")
-def config_edit(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    key: str = typer.Argument(..., help="Config-file key (e.g. settings, config, memory)"),
-    from_file: str | None = typer.Option(
-        None,
-        "--from-file",
-        help="Read the new content from PATH instead of opening $EDITOR (non-interactive).",
-    ),
-) -> None:
-    """Edit one config file. Opens $EDITOR on its current content, or use --from-file.
-
-    On save, Coffer validates the content against the file's format (malformed
-    JSON/TOML is rejected and the on-disk file is left unchanged), writes it
-    atomically, and keeps a `<path>.bak` of the prior version.
-    """
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        # Fetch current content (also resolves unknown agent/key -> exit 4).
-        r = c.get(f"/agents/{name}/config-files/{key}")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=verbose)
-        current = r.json()["content"]
-
-        if from_file is not None:
-            import pathlib
-
-            try:
-                content = pathlib.Path(from_file).read_text(encoding="utf-8")
-            except OSError as e:
-                typer.echo(f"cannot read {from_file}: {e}", err=True)
-                raise typer.Exit(1) from e
-        else:
-            # click.edit (typer has no `edit`): opens $EDITOR with the current
-            # content; returns None if the user made no changes / aborted.
-            edited = click.edit(current, extension=f".{key}")
-            if edited is None:
-                typer.echo("no changes", err=True)
-                raise typer.Exit(0)
-            content = edited
-
-        w = c.put(f"/agents/{name}/config-files/{key}", json={"content": content})
-        _not_found_exit(w)
-        if w.status_code == 422:
-            typer.echo(w.json().get("error", {}).get("message", "invalid content"), err=True)
-            raise typer.Exit(2)
-        _cli_client.check(w, verbose=verbose)
-    typer.echo(f"saved: {key} (a .bak was kept)")
 
 
 # --- coffer agent mcp ... ----------------------------------------------------
@@ -340,8 +247,8 @@ def mcp_status(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/agents/{name}/mcp-install")
-        _not_found_exit(r)
+        uid = resolve_uid(c, "agent", name, verbose=verbose)
+        r = c.get(f"/agents/{uid}/mcp-install")
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
@@ -361,10 +268,10 @@ def mcp_install(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/agents/{name}/mcp-install")
-        _not_found_exit(r)
+        uid = resolve_uid(c, "agent", name, verbose=verbose)
+        r = c.post(f"/agents/{uid}/mcp-install")
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"installed Coffer MCP into agent:{name} ({r.json().get('command')})")
+    typer.echo(f"installed Coffer MCP into agent {name} ({r.json().get('command')})")
 
 
 @mcp_app.command("uninstall")
@@ -376,15 +283,16 @@ def mcp_uninstall(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/agents/{name}/mcp-install")
-        _not_found_exit(r)
+        uid = resolve_uid(c, "agent", name, verbose=verbose)
+        r = c.delete(f"/agents/{uid}/mcp-install")
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"removed Coffer MCP from agent:{name}")
+    typer.echo(f"removed Coffer MCP from agent {name}")
 
 
 # --- workspace subcommands (mcp entries/plugins/dir configs) -----------------
 # Implemented in agent_workspace_cmd.py to keep this file under the size cap.
 
+_config.attach(config_app)
 _workspace.attach(app, config_app=config_app, mcp_app=mcp_app)
 
 # --- native-memory read command (agent_native_memory_cmd.py, same reason) ---

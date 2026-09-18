@@ -1,8 +1,14 @@
-"""HTTP coverage for GET /api/v1/agents/{name}/transcripts and .../session.
+"""HTTP coverage for GET /api/v1/agents/{uid}/transcripts and .../session.
 
 HOME is redirected at ``tmp_path``, so the registered agent's config dir — and
 every transcript the reader walks — lives inside the test's own temp tree. The
 user's real ``~/.claude`` / ``~/.codex`` is never read.
+
+Both routes address the agent by its immutable ``uid`` (ADR
+resource-identity-is-an-immutable-uid), never by the label the user typed, so
+every test here takes the uid straight off the registration response rather than
+re-spelling the name in the URL. The ``path`` query parameter is untouched by
+that change: it is a filesystem path the listing handed back, not an identity.
 """
 
 from __future__ import annotations
@@ -18,6 +24,11 @@ from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
 TOKEN = "test-token-transcripts"
+
+#: A well-formed uid that no resource in these tests was ever minted with. It is
+#: uid-shaped on purpose: the route must 404 because nothing answers to this
+#: identity, not because the string could not be an identity in the first place.
+ABSENT_UID = "3f2b1c0d4e5a6b7c8d9e0f1a2b3c4d5e"
 
 
 def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
@@ -73,8 +84,16 @@ def _write_codex_session(
     (sessions_dir / f"rollout-{sid}.jsonl").write_text("\n".join(lines), encoding="utf-8")
 
 
-def _register_codex_with_transcripts(c: TestClient, tmp_path: pathlib.Path) -> pathlib.Path:
-    """Register a codex agent named ``cx`` holding three transcript sessions."""
+def _register_codex_with_transcripts(
+    c: TestClient, tmp_path: pathlib.Path
+) -> tuple[str, pathlib.Path]:
+    """Register a codex agent labelled ``cx`` holding three transcript sessions.
+
+    Returns ``(uid, sessions_dir)``: the uid the registration minted — which is
+    what the transcript routes are addressed by — and the directory the three
+    ``.jsonl`` files were written into, so a caller can name one of them in the
+    ``path`` query parameter.
+    """
     codex_dir = tmp_path / ".codex"
     codex_dir.mkdir(exist_ok=True)
     (codex_dir / "config.toml").write_text("", encoding="utf-8")
@@ -105,7 +124,7 @@ def _register_codex_with_transcripts(c: TestClient, tmp_path: pathlib.Path) -> p
     )
     r = c.post("/api/v1/agents", json={"type": "codex", "name": "cx"})
     assert r.status_code == 201, r.text
-    return sessions
+    return r.json()["uid"], sessions
 
 
 @pytest.fixture
@@ -115,8 +134,8 @@ def client(tmp_path: pathlib.Path, monkeypatch) -> TestClient:
 
 
 def test_lists_sessions_newest_activity_first(client: TestClient, tmp_path: pathlib.Path) -> None:
-    sessions = _register_codex_with_transcripts(client, tmp_path)
-    r = client.get("/api/v1/agents/cx/transcripts")
+    uid, sessions = _register_codex_with_transcripts(client, tmp_path)
+    r = client.get(f"/api/v1/agents/{uid}/transcripts")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["total"] == 3
@@ -133,8 +152,8 @@ def test_lists_sessions_newest_activity_first(client: TestClient, tmp_path: path
 
 
 def test_no_message_text_crosses_the_wire(client: TestClient, tmp_path: pathlib.Path) -> None:
-    _register_codex_with_transcripts(client, tmp_path)
-    body = client.get("/api/v1/agents/cx/transcripts").json()
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
+    body = client.get(f"/api/v1/agents/{uid}/transcripts").json()
     assert set(body["sessions"][0]) == {
         "session_id",
         "title",
@@ -151,15 +170,15 @@ def test_no_message_text_crosses_the_wire(client: TestClient, tmp_path: pathlib.
     scenario="browse an agent's transcript history with title, search, and sort",
 )
 def test_search_filters_by_title_or_project(client: TestClient, tmp_path: pathlib.Path) -> None:
-    _register_codex_with_transcripts(client, tmp_path)
-    body = client.get("/api/v1/agents/cx/transcripts", params={"q": "beta"}).json()
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
+    body = client.get(f"/api/v1/agents/{uid}/transcripts", params={"q": "beta"}).json()
     assert body["total"] == 1
     assert body["sessions"][0]["session_id"] == "b"
 
 
 def test_project_filter_is_exact(client: TestClient, tmp_path: pathlib.Path) -> None:
-    _register_codex_with_transcripts(client, tmp_path)
-    body = client.get("/api/v1/agents/cx/transcripts", params={"project": "/proj/alpha"}).json()
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
+    body = client.get(f"/api/v1/agents/{uid}/transcripts", params={"project": "/proj/alpha"}).json()
     assert {s["session_id"] for s in body["sessions"]} == {"a", "c"}
 
 
@@ -168,9 +187,9 @@ def test_project_filter_is_exact(client: TestClient, tmp_path: pathlib.Path) -> 
     scenario="browse an agent's transcript history with title, search, and sort",
 )
 def test_sort_and_order_are_honoured(client: TestClient, tmp_path: pathlib.Path) -> None:
-    _register_codex_with_transcripts(client, tmp_path)
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
     body = client.get(
-        "/api/v1/agents/cx/transcripts", params={"sort": "started_at", "order": "asc"}
+        f"/api/v1/agents/{uid}/transcripts", params={"sort": "started_at", "order": "asc"}
     ).json()
     assert [s["session_id"] for s in body["sessions"]] == ["a", "b", "c"]
 
@@ -182,9 +201,9 @@ def test_sort_and_order_are_honoured(client: TestClient, tmp_path: pathlib.Path)
 def test_pagination_pages_against_the_matched_total(
     client: TestClient, tmp_path: pathlib.Path
 ) -> None:
-    _register_codex_with_transcripts(client, tmp_path)
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
     body = client.get(
-        "/api/v1/agents/cx/transcripts",
+        f"/api/v1/agents/{uid}/transcripts",
         params={"sort": "started_at", "order": "asc", "limit": 1, "offset": 1},
     ).json()
     assert body["total"] == 3
@@ -197,28 +216,36 @@ def test_agent_with_no_transcripts_lists_empty(client: TestClient, tmp_path: pat
     codex_dir = tmp_path / ".codex"
     codex_dir.mkdir(exist_ok=True)
     (codex_dir / "config.toml").write_text("", encoding="utf-8")
-    assert client.post("/api/v1/agents", json={"type": "codex", "name": "cx"}).status_code == 201
-    body = client.get("/api/v1/agents/cx/transcripts").json()
+    r = client.post("/api/v1/agents", json={"type": "codex", "name": "cx"})
+    assert r.status_code == 201, r.text
+    body = client.get(f"/api/v1/agents/{r.json()['uid']}/transcripts").json()
     assert body == {"sessions": [], "total": 0, "limit": 100, "offset": 0}
 
 
 def test_unknown_agent_is_404(client: TestClient) -> None:
-    r = client.get("/api/v1/agents/nope/transcripts")
+    """A uid no agent answers to is 404 — not an empty listing.
+
+    Nothing was registered in this test, so the lookup the service does before
+    it touches the filesystem is the thing under assertion.
+    """
+    r = client.get(f"/api/v1/agents/{ABSENT_UID}/transcripts")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 def test_bad_sort_value_is_422(client: TestClient, tmp_path: pathlib.Path) -> None:
-    _register_codex_with_transcripts(client, tmp_path)
-    r = client.get("/api/v1/agents/cx/transcripts", params={"sort": "title"})
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
+    r = client.get(f"/api/v1/agents/{uid}/transcripts", params={"sort": "title"})
     assert r.status_code == 422
 
 
 def test_requires_a_token(tmp_path: pathlib.Path, monkeypatch) -> None:
+    """The token is refused before the uid is ever looked up, so no agent is
+    registered here: 401 must not depend on the uid naming anything."""
     app = _app(tmp_path, monkeypatch, 8720)
     set_active_token(TOKEN)
     with TestClient(app) as anon:
-        r = anon.get("/api/v1/agents/cx/transcripts")
+        r = anon.get(f"/api/v1/agents/{ABSENT_UID}/transcripts")
     assert r.status_code == 401
 
 
@@ -233,7 +260,7 @@ def test_warm_pass_fills_the_sidecar_and_audits_nothing(
     """The worker is wired into the lifespan, warms the reader the listing uses,
     and stays a cache pass: FR-048 lets no workspace listing audit, this one
     included."""
-    _register_codex_with_transcripts(client, tmp_path)
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
     sidecar = paths.transcript_summaries_path()
     # The worker's first sweep is a created task, not an awaited one, so it may
     # reach its target list before the agent above was registered or after it:
@@ -254,7 +281,7 @@ def test_warm_pass_fills_the_sidecar_and_audits_nothing(
     assert len(client.get("/api/v1/audit").json()["entries"]) == before
 
     # The listing is served from what the warm pass parsed — same reader, one cache.
-    body = client.get("/api/v1/agents/cx/transcripts").json()
+    body = client.get(f"/api/v1/agents/{uid}/transcripts").json()
     assert [s["session_id"] for s in body["sessions"]] == ["a", "c", "b"]
 
 
@@ -295,10 +322,12 @@ def test_warm_pass_rebuilds_a_sidecar_deleted_under_a_hot_cache(
 )
 def test_reads_one_session_as_turns(client: TestClient, tmp_path: pathlib.Path) -> None:
     """The summary the row showed, plus the turns that row deliberately omitted."""
-    sessions = _register_codex_with_transcripts(client, tmp_path)
+    uid, sessions = _register_codex_with_transcripts(client, tmp_path)
+    # ``path`` stays a filesystem path — it is the source_path the listing gave,
+    # not an identity, so the uid change leaves it exactly as it was.
     path = str(sessions / "rollout-a.jsonl")
 
-    r = client.get("/api/v1/agents/cx/transcripts/session", params={"path": path})
+    r = client.get(f"/api/v1/agents/{uid}/transcripts/session", params={"path": path})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["session_id"] == "a"
@@ -322,7 +351,7 @@ def test_session_read_scrubs_secrets_and_bounds_the_window(
     client: TestClient, tmp_path: pathlib.Path
 ) -> None:
     """A prompt is exactly where a pasted key would be, and a file is huge."""
-    sessions = _register_codex_with_transcripts(client, tmp_path)
+    uid, sessions = _register_codex_with_transcripts(client, tmp_path)
     _write_codex_session(
         sessions,
         sid="s",
@@ -334,7 +363,7 @@ def test_session_read_scrubs_secrets_and_bounds_the_window(
     path = str(sessions / "rollout-s.jsonl")
 
     body = client.get(
-        "/api/v1/agents/cx/transcripts/session", params={"path": path, "limit": 1}
+        f"/api/v1/agents/{uid}/transcripts/session", params={"path": path, "limit": 1}
     ).json()
     assert "sk-abcdefghijklmnopqrstuvwx" not in body["messages"][0]["text"]
     assert "[redacted]" in body["messages"][0]["text"]
@@ -344,7 +373,7 @@ def test_session_read_scrubs_secrets_and_bounds_the_window(
 
     # …and offset walks the rest of them.
     rest = client.get(
-        "/api/v1/agents/cx/transcripts/session", params={"path": path, "offset": 1}
+        f"/api/v1/agents/{uid}/transcripts/session", params={"path": path, "offset": 1}
     ).json()
     assert [m["role"] for m in rest["messages"]] == ["assistant"]
     assert rest["offset"] == 1
@@ -358,18 +387,18 @@ def test_session_read_refuses_a_path_outside_the_agents_transcripts(
     client: TestClient, tmp_path: pathlib.Path
 ) -> None:
     """The listing's source_path is the only authority the caller has."""
-    _register_codex_with_transcripts(client, tmp_path)
+    uid, _sessions = _register_codex_with_transcripts(client, tmp_path)
     outsider = tmp_path / "elsewhere.jsonl"
     outsider.write_text('{"type": "message", "role": "user", "content": "hi"}\n', encoding="utf-8")
 
-    r = client.get("/api/v1/agents/cx/transcripts/session", params={"path": str(outsider)})
+    r = client.get(f"/api/v1/agents/{uid}/transcripts/session", params={"path": str(outsider)})
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "NOT_FOUND"
 
     # A file that WOULD be contained but is gone gives the same answer, so the
     # difference cannot be used to probe what exists outside the sessions dir.
     missing = client.get(
-        "/api/v1/agents/cx/transcripts/session",
+        f"/api/v1/agents/{uid}/transcripts/session",
         params={"path": str(tmp_path / ".codex" / "sessions" / "nope.jsonl")},
     )
     assert missing.status_code == 404
@@ -377,10 +406,10 @@ def test_session_read_refuses_a_path_outside_the_agents_transcripts(
 
 def test_session_read_emits_no_audit_event(client: TestClient, tmp_path: pathlib.Path) -> None:
     """FR-048: a workspace listing does not audit, nor does reading one of its rows."""
-    sessions = _register_codex_with_transcripts(client, tmp_path)
+    uid, sessions = _register_codex_with_transcripts(client, tmp_path)
     before = len(client.get("/api/v1/audit").json()["entries"])
     client.get(
-        "/api/v1/agents/cx/transcripts/session",
+        f"/api/v1/agents/{uid}/transcripts/session",
         params={"path": str(sessions / "rollout-a.jsonl")},
     )
     assert len(client.get("/api/v1/audit").json()["entries"]) == before

@@ -3,14 +3,20 @@
 spec agent-registry FR-044/FR-046 require every agent-workspace op to exist on BOTH REST and CLI;
 this verb wraps the one read-only route:
 
-  ``GET /agents/{name}/native-memory`` → ``native-memory``
+  ``GET /agents/{uid}/native-memory`` → ``native-memory``
+
+The verb still TAKES a name; the route is addressed by uid
+(ADR resource-identity-is-an-immutable-uid). Each invocation is therefore two
+requests: ``GET /resources?kind=agent&name=<name>`` to turn the typed name into
+a uid, then the native-memory route under that uid.
 
 The native-memory service needs on-disk project trees and decoded slugs to
 produce a non-trivial result, which is awkward to set up deterministically in a
 CLI test. So — like the rest of the CLI suite — we stub the HTTP layer: a tiny
-fake client returns canned ``GET`` responses, and ``_client.client_or_exit`` is
-monkeypatched to hand it back. No daemon, no disk: the test exercises only the
-CLI's request shaping, ``--json`` handling and table rendering.
+fake client returns canned ``GET`` responses, serves the name lookup from a
+``name -> uid`` registry, and ``_client.client_or_exit`` is monkeypatched to
+hand it back. No daemon, no disk: the test exercises only the CLI's request
+shaping, ``--json`` handling and table rendering.
 """
 
 from __future__ import annotations
@@ -27,6 +33,10 @@ from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
 
 _runner = CliRunner()
+
+#: The uid the fake registry hands back for the agent named ``cc``. Opaque on
+#: purpose — nothing in the CLI may derive it from the name.
+CC_UID = "b82d7e5a31f44c6d9a0e5b7c2d13f486"
 
 
 class _FakeResponse:
@@ -53,10 +63,18 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    """Records GET calls and replays canned responses keyed by path."""
+    """Records GET calls and replays canned responses keyed by path.
 
-    def __init__(self, get_map: dict[str, _FakeResponse]):
+    It also stands in for the resource registry, since the command's first
+    request is always the name → uid lookup. ``agents`` is the ``name -> uid``
+    table that ``GET /resources?kind=agent&name=`` is answered from; a name
+    missing from it yields the empty match list a real daemon would return,
+    which is how a test says "no such agent".
+    """
+
+    def __init__(self, get_map: dict[str, _FakeResponse], agents: dict[str, str]):
         self._get_map = get_map
+        self._agents = agents
         self.calls: list[tuple[str, str, Any]] = []
 
     def __enter__(self) -> _FakeClient:
@@ -67,11 +85,22 @@ class _FakeClient:
 
     def get(self, path: str, **kw: Any) -> _FakeResponse:
         self.calls.append(("GET", path, kw))
+        if path == "/resources":
+            return self._resolve(kw.get("params") or {})
         return self._get_map[path]
 
+    def _resolve(self, params: dict[str, Any]) -> _FakeResponse:
+        """The name → uid lookup, shaped exactly like the real list route."""
+        name = params.get("name")
+        uid = self._agents.get(str(name))
+        matches = [] if uid is None else [{"uid": uid, "kind": params.get("kind"), "name": name}]
+        return _FakeResponse(200, {"resources": matches})
 
-def _install(monkeypatch, *, get_map=None) -> _FakeClient:
-    client = _FakeClient(get_map or {})
+
+def _install(monkeypatch, *, get_map=None, agents=None) -> _FakeClient:
+    """Install the fake client. ``agents`` defaults to the one agent the
+    happy-path tests use; pass ``{}`` for a registry that holds nobody."""
+    client = _FakeClient(get_map or {}, {"cc": CC_UID} if agents is None else agents)
     info = DaemonInfo(
         version=1,
         pid=1,
@@ -91,13 +120,18 @@ def test_native_memory_json(monkeypatch):
         {"project": "lib", "path": None, "memory_dir": "/x/.claude/q/m", "item_count": 0},
     ]
     client = _install(
-        monkeypatch, get_map={"/agents/cc/native-memory": _FakeResponse(200, {"items": items})}
+        monkeypatch,
+        get_map={f"/agents/{CC_UID}/native-memory": _FakeResponse(200, {"items": items})},
     )
 
     result = _runner.invoke(cli_app, ["agent", "native-memory", "cc", "--json"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == items
-    assert client.calls == [("GET", "/agents/cc/native-memory", {})]
+    # Two calls, in order: resolve the typed name, then read under the uid.
+    assert client.calls == [
+        ("GET", "/resources", {"params": {"kind": "agent", "name": "cc"}}),
+        ("GET", f"/agents/{CC_UID}/native-memory", {}),
+    ]
 
 
 def test_native_memory_table(monkeypatch):
@@ -106,7 +140,8 @@ def test_native_memory_table(monkeypatch):
         {"project": "demo", "path": "/x/demo", "memory_dir": "/x/.claude/p/m", "item_count": 3},
     ]
     _install(
-        monkeypatch, get_map={"/agents/cc/native-memory": _FakeResponse(200, {"items": items})}
+        monkeypatch,
+        get_map={f"/agents/{CC_UID}/native-memory": _FakeResponse(200, {"items": items})},
     )
 
     result = _runner.invoke(cli_app, ["agent", "native-memory", "cc"])
@@ -119,7 +154,10 @@ def test_native_memory_table(monkeypatch):
 
 def test_native_memory_empty(monkeypatch):
     """An empty store list prints the friendly placeholder, not an empty table."""
-    _install(monkeypatch, get_map={"/agents/cc/native-memory": _FakeResponse(200, {"items": []})})
+    _install(
+        monkeypatch,
+        get_map={f"/agents/{CC_UID}/native-memory": _FakeResponse(200, {"items": []})},
+    )
 
     result = _runner.invoke(cli_app, ["agent", "native-memory", "cc"])
     assert result.exit_code == 0, result.output
@@ -127,19 +165,20 @@ def test_native_memory_empty(monkeypatch):
 
 
 def test_native_memory_unknown_agent_exits_4(monkeypatch):
-    """A 404 from the daemon exits 4 with the server's message on stderr."""
-    _install(
-        monkeypatch,
-        get_map={
-            "/agents/ghost/native-memory": _FakeResponse(
-                404, {"error": {"code": "RESOURCE_NOT_FOUND", "message": "agent 'ghost' not found"}}
-            )
-        },
-    )
+    """A name nobody holds exits 4 before the native-memory route is touched.
+
+    Same exit code as before, different source: the refusal used to be a 404
+    from the route and is now the name → uid lookup finding nothing
+    (``_resolve.resolve``). The message is asserted because that is the part
+    that actually changed — it names the kind and the string the user typed,
+    which a 404 on an opaque uid could not.
+    """
+    client = _install(monkeypatch, agents={})
 
     result = _runner.invoke(cli_app, ["agent", "native-memory", "ghost"])
     assert result.exit_code == 4, result.output
-    assert "not found" in result.output
+    assert "no agent named 'ghost'" in result.output
+    assert client.calls == [("GET", "/resources", {"params": {"kind": "agent", "name": "ghost"}})]
 
 
 def test_native_memory_is_registered():

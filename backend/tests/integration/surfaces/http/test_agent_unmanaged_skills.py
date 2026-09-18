@@ -1,4 +1,11 @@
-"""HTTP coverage for /api/v1/agents/{name}/unmanaged-skills (spec skill-manager FR-016/023)."""
+"""HTTP coverage for /api/v1/agents/{uid}/unmanaged-skills (spec skill-manager FR-016/023).
+
+The agent is addressed by its immutable ``uid``
+(ADR resource-identity-is-an-immutable-uid); ``{skill}`` beside it is a
+DIRECTORY name on disk, not a Coffer resource, so it stays a name here — the
+folder has no resource row to have a uid. Adoption is the moment one is
+minted, which is why the adopt assertions below check the uid it returns.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +18,11 @@ from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
 TOKEN = "test-token-unmanaged"
+
+# A well-formed uid that no resource holds. The 404 tests use this rather than a
+# name-shaped string so they exercise the lookup a real client's request would:
+# "this uid is unknown", not "this is not a uid at all".
+UNKNOWN_UID = "0" * 32
 
 
 def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
@@ -46,7 +58,12 @@ def _write_skill_folder(folder: pathlib.Path, *, name: str) -> pathlib.Path:
 
 
 def _register_agent(c: TestClient, tmp_path: pathlib.Path) -> str:
-    """Register a claude_code agent 'ag' with a local config_dir and return its name."""
+    """Register a claude_code agent 'ag' with a local config_dir; return its uid.
+
+    The uid comes straight off the registration response — that is the only
+    moment it is handed out, and it is what every route below addresses the
+    agent by. The name 'ag' is kept purely so failures read legibly.
+    """
     agent_dir = tmp_path / "agent-cfg"
     agent_dir.mkdir(exist_ok=True)
     r = c.post(
@@ -54,7 +71,7 @@ def _register_agent(c: TestClient, tmp_path: pathlib.Path) -> str:
         json={"type": "claude_code", "name": "ag", "config_dir": str(agent_dir)},
     )
     assert r.status_code == 201, r.text
-    return "ag"
+    return r.json()["uid"]
 
 
 # ---------------------------------------------------------------------------
@@ -66,11 +83,11 @@ def test_list_unmanaged_returns_valid_skill(tmp_path, monkeypatch):
     """A skill folder placed directly in <config_dir>/skills is listed as valid."""
     app = _app(tmp_path, monkeypatch, 59970)
     with _client(app) as c:
-        name = _register_agent(c, tmp_path)
+        uid = _register_agent(c, tmp_path)
         skills_dir = tmp_path / "agent-cfg" / "skills"
         _write_skill_folder(skills_dir / "my-skill", name="my-skill")
 
-        r = c.get(f"/api/v1/agents/{name}/unmanaged-skills")
+        r = c.get(f"/api/v1/agents/{uid}/unmanaged-skills")
         assert r.status_code == 200, r.text
         items = r.json()["items"]
         assert len(items) == 1
@@ -86,7 +103,7 @@ def test_list_unmanaged_excludes_managed_link(tmp_path, monkeypatch):
     """A skill adopted into the master store appears as managed, not unmanaged."""
     app = _app(tmp_path, monkeypatch, 59980)
     with _client(app) as c:
-        name = _register_agent(c, tmp_path)
+        uid = _register_agent(c, tmp_path)
         skills_dir = tmp_path / "agent-cfg" / "skills"
 
         # Place two unmanaged folders; adopt one of them.
@@ -94,13 +111,13 @@ def test_list_unmanaged_excludes_managed_link(tmp_path, monkeypatch):
         _write_skill_folder(skills_dir / "skill-b", name="skill-b")
 
         r = c.post(
-            f"/api/v1/agents/{name}/unmanaged-skills/skill-a/adopt",
+            f"/api/v1/agents/{uid}/unmanaged-skills/skill-a/adopt",
             json={"location": "skills"},
         )
         assert r.status_code == 201, r.text
 
         # Only skill-b should appear as unmanaged now.
-        r = c.get(f"/api/v1/agents/{name}/unmanaged-skills")
+        r = c.get(f"/api/v1/agents/{uid}/unmanaged-skills")
         assert r.status_code == 200, r.text
         items = r.json()["items"]
         names = [i["name"] for i in items]
@@ -117,40 +134,50 @@ def test_adopt_unmanaged_skill_201(tmp_path, monkeypatch):
     """Adopting an unmanaged skill creates a master copy and a managed symlink."""
     app = _app(tmp_path, monkeypatch, 59990)
     with _client(app) as c:
-        name = _register_agent(c, tmp_path)
+        uid = _register_agent(c, tmp_path)
         skills_dir = tmp_path / "agent-cfg" / "skills"
         _write_skill_folder(skills_dir / "skill-x", name="skill-x")
 
         r = c.post(
-            f"/api/v1/agents/{name}/unmanaged-skills/skill-x/adopt",
+            f"/api/v1/agents/{uid}/unmanaged-skills/skill-x/adopt",
             json={"location": "skills"},
         )
         assert r.status_code == 201, r.text
-        assert r.json()["name"] == "skill-x"
+        adopted = r.json()
+        assert adopted["name"] == "skill-x"
+        # The adopt response is the ONLY moment the caller learns the new
+        # skill's uid, and that uid is the only value that still addresses it
+        # once the user renames it — so the response has to carry one, and it
+        # has to be the real thing, not a placeholder.
+        assert adopted["uid"]
 
         # The original folder is gone; a managed symlink replaced it.
         link_path = skills_dir / "skill-x"
         assert link_path.is_symlink(), "original should be replaced with a symlink"
 
+        # The returned uid addresses the adopted skill.
+        r = c.get(f"/api/v1/skills/{adopted['uid']}")
+        assert r.status_code == 200, r.text
+        assert r.json()["name"] == "skill-x"
+
         # The skill appears in the global skills list.
         r = c.get("/api/v1/skills")
         assert r.status_code == 200, r.text
-        names = [s["name"] for s in r.json()["items"]]
-        assert "skill-x" in names
+        assert adopted["uid"] in [s["uid"] for s in r.json()["items"]]
 
 
 def test_adopt_invalid_skill_422(tmp_path, monkeypatch):
     """Adopting a folder without SKILL.md returns 422 UNMANAGED_SKILL_INVALID."""
     app = _app(tmp_path, monkeypatch, 60000)
     with _client(app) as c:
-        name = _register_agent(c, tmp_path)
+        uid = _register_agent(c, tmp_path)
         skills_dir = tmp_path / "agent-cfg" / "skills"
         # Create a folder WITHOUT SKILL.md.
         bad = skills_dir / "bad-skill"
         bad.mkdir(parents=True)
 
         r = c.post(
-            f"/api/v1/agents/{name}/unmanaged-skills/bad-skill/adopt",
+            f"/api/v1/agents/{uid}/unmanaged-skills/bad-skill/adopt",
             json={"location": "skills"},
         )
         assert r.status_code == 422, r.text
@@ -166,12 +193,12 @@ def test_delete_unmanaged_skill_204(tmp_path, monkeypatch):
     """DELETE removes the unmanaged folder from disk."""
     app = _app(tmp_path, monkeypatch, 60010)
     with _client(app) as c:
-        name = _register_agent(c, tmp_path)
+        uid = _register_agent(c, tmp_path)
         skills_dir = tmp_path / "agent-cfg" / "skills"
         _write_skill_folder(skills_dir / "del-me", name="del-me")
 
         r = c.delete(
-            f"/api/v1/agents/{name}/unmanaged-skills/del-me",
+            f"/api/v1/agents/{uid}/unmanaged-skills/del-me",
             params={"location": "skills"},
         )
         assert r.status_code == 204, r.text
@@ -184,21 +211,25 @@ def test_delete_unmanaged_skill_204(tmp_path, monkeypatch):
 
 
 def test_list_unmanaged_unknown_agent_404(tmp_path, monkeypatch):
-    """Listing unmanaged skills for an unknown agent returns 404."""
+    """Listing unmanaged skills for an unknown agent uid returns 404."""
     app = _app(tmp_path, monkeypatch, 60020)
     with _client(app) as c:
-        r = c.get("/api/v1/agents/ghost/unmanaged-skills")
+        r = c.get(f"/api/v1/agents/{UNKNOWN_UID}/unmanaged-skills")
         assert r.status_code == 404, r.text
 
 
 def test_adopt_unknown_skill_404(tmp_path, monkeypatch):
-    """Adopting a non-existent skill name returns 404 UNMANAGED_SKILL_NOT_FOUND."""
+    """Adopting a non-existent skill name returns 404 UNMANAGED_SKILL_NOT_FOUND.
+
+    The agent uid resolves; it is the skill FOLDER that does not exist, so the
+    404 must be the skill's and not the agent's.
+    """
     app = _app(tmp_path, monkeypatch, 60030)
     with _client(app) as c:
-        _register_agent(c, tmp_path)
+        uid = _register_agent(c, tmp_path)
 
         r = c.post(
-            "/api/v1/agents/ag/unmanaged-skills/no-such-skill/adopt",
+            f"/api/v1/agents/{uid}/unmanaged-skills/no-such-skill/adopt",
             json={"location": "skills"},
         )
         assert r.status_code == 404, r.text
@@ -209,10 +240,10 @@ def test_delete_unknown_skill_404(tmp_path, monkeypatch):
     """Deleting a non-existent unmanaged skill returns 404 UNMANAGED_SKILL_NOT_FOUND."""
     app = _app(tmp_path, monkeypatch, 60040)
     with _client(app) as c:
-        _register_agent(c, tmp_path)
+        uid = _register_agent(c, tmp_path)
 
         r = c.delete(
-            "/api/v1/agents/ag/unmanaged-skills/no-such-skill",
+            f"/api/v1/agents/{uid}/unmanaged-skills/no-such-skill",
             params={"location": "skills"},
         )
         assert r.status_code == 404, r.text

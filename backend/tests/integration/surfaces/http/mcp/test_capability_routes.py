@@ -18,7 +18,7 @@ from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.supervisor import SubprocessSupervisor
 from coffer.application.resource_service import ResourceService
 from coffer.domain.mcp.server_config import MCPServerConfig
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind
 from coffer.domain.scope import Scope
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
@@ -103,8 +103,14 @@ async def _build_app(
     resources: list[str] | None = None,
     prompts: list[str] | None = None,
     server_name: str = "fs",
-) -> tuple[FastAPI, Any, ResourceService, MCPCapabilityPreferenceRepo, SubprocessSupervisor]:
-    """Build a fully-wired FastAPI app for capability route tests."""
+) -> tuple[FastAPI, Any, ResourceService, MCPCapabilityPreferenceRepo, SubprocessSupervisor, str]:
+    """Build a fully-wired FastAPI app for capability route tests.
+
+    Hands back the registered server's ``uid`` alongside everything else,
+    because that is what its routes are addressed by now
+    (ADR resource-identity-is-an-immutable-uid) and no test can spell one
+    itself — a uid is minted, not chosen.
+    """
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -131,7 +137,7 @@ async def _build_app(
     _prompts = prompts or []
 
     config = _stdio_config_with_resources_prompts(_tools, _resources, _prompts)
-    await rsvc.register(kind="mcp_server", name=server_name, config=config, actor="test")
+    server = await rsvc.register(kind="mcp_server", name=server_name, config=config, actor="test")
 
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
 
@@ -162,21 +168,21 @@ async def _build_app(
     app.dependency_overrides[get_health_repo] = lambda: health_repo
     app.dependency_overrides[get_credential_store] = lambda: _InMemoryCredentialStore()
 
-    return app, engine, rsvc, prefs_repo, supervisor
+    return app, engine, rsvc, prefs_repo, supervisor, server.uid
 
 
 @pytest.fixture
 async def client_and_ctx(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Yield (client, engine, rsvc, prefs_repo, supervisor)."""
+    """Yield (client, engine, rsvc, prefs_repo, supervisor, uid)."""
     _with_in_memory(monkeypatch)
-    app, engine, rsvc, prefs_repo, supervisor = await _build_app(tmp_path)
+    app, engine, rsvc, prefs_repo, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport,
         base_url="http://test",
         headers={"X-Coffer-Token": "test-token"},
     ) as client:
-        yield client, engine, rsvc, prefs_repo, supervisor
+        yield client, engine, rsvc, prefs_repo, supervisor, uid
 
     await supervisor.dispose()
     with suppress(BaseException):
@@ -194,7 +200,7 @@ async def test_list_capabilities_returns_tools_resources_prompts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(
         tmp_path,
         tools=["read_file", "write_file"],
         resources=["file:///tmp/a.txt"],
@@ -207,7 +213,7 @@ async def test_list_capabilities_returns_tools_resources_prompts(
             base_url="http://test",
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 200, r.text
             body = r.json()
             assert body["server_name"] == "fs"
@@ -259,7 +265,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
     )
-    await rsvc.register(
+    toolsonly = await rsvc.register(
         kind="mcp_server",
         name="toolsonly",
         config={
@@ -312,7 +318,7 @@ async def test_list_capabilities_tools_only_upstream_method_not_found(
             base_url="http://test",
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
-            r = await client.get("/api/v1/resources/mcp_server/toolsonly/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{toolsonly.uid}/capabilities")
             assert r.status_code == 200, r.text
             body = r.json()
             tool_names = {t["prefixed_name"] for t in body["tools"]}
@@ -330,10 +336,11 @@ async def test_list_capabilities_returns_404_for_unknown_server(
 ) -> None:
     client, *_ = client_and_ctx
     r = await client.get("/api/v1/resources/mcp_server/nonexistent/capabilities")
-    # An unregistered server makes get_or_spawn raise ResourceNotFound (NOT
-    # UpstreamUnavailable), which the route does not catch → the global handler
-    # maps it to a deterministic 404. Pin the exact code + error envelope so a
-    # regression that swallowed it into a 503/500 would be caught.
+    # A uid nothing answers to is rejected by require_mcp_server BEFORE any
+    # upstream work — the ResourceNotFound it raises (NOT UpstreamUnavailable)
+    # reaches the global handler, which maps it to a deterministic 404. Pin the
+    # exact code + error envelope so a regression that swallowed it into a
+    # 503/500 would be caught.
     assert r.status_code == 404, r.text
     assert "error" in r.json()
 
@@ -368,7 +375,7 @@ async def test_list_capabilities_times_out_on_hung_upstream(
             await asyncio.sleep(30)
             return []
 
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     app.dependency_overrides[get_capability_discovery] = lambda: _HangingDiscovery()
     transport = ASGITransport(app=app)
     try:
@@ -378,7 +385,7 @@ async def test_list_capabilities_times_out_on_hung_upstream(
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             start = asyncio.get_event_loop().time()
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             elapsed = asyncio.get_event_loop().time() - start
             assert r.status_code == 503, r.text
             assert elapsed < 5.0, f"route hung for {elapsed:.1f}s instead of failing fast"
@@ -401,7 +408,7 @@ async def test_list_capabilities_falls_back_to_cached_prefs_when_upstream_unavai
     from coffer.domain.errors import UpstreamUnavailable
 
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(
         tmp_path, tools=["read_file", "write_file"]
     )
     transport = ASGITransport(app=app)
@@ -412,12 +419,12 @@ async def test_list_capabilities_falls_back_to_cached_prefs_when_upstream_unavai
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             # A first live list populates the persisted preferences...
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 200, r.text
             assert r.json()["from_cache"] is False
             # ...disable one tool so we can prove the flag survives the fallback.
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/disable",
                 json={"capability_key": "write_file"},
             )
             assert r.status_code == 204, r.text
@@ -435,7 +442,7 @@ async def test_list_capabilities_falls_back_to_cached_prefs_when_upstream_unavai
 
             app.dependency_overrides[get_capability_discovery] = lambda: _FailingDiscovery()
 
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 200, r.text
             body = r.json()
             assert body["from_cache"] is True
@@ -460,7 +467,7 @@ async def test_list_capabilities_upstream_unavailable_without_cache_still_errors
     from coffer.domain.errors import UpstreamUnavailable
 
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path, tools=["read_file"])
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path, tools=["read_file"])
     transport = ASGITransport(app=app)
 
     class _FailingDiscovery:
@@ -481,7 +488,7 @@ async def test_list_capabilities_upstream_unavailable_without_cache_still_errors
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             # No prior successful list → no persisted rows → error surfaces.
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 503, r.text
     finally:
         await supervisor.dispose()
@@ -494,7 +501,7 @@ async def test_list_capabilities_requires_auth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(
@@ -502,7 +509,7 @@ async def test_list_capabilities_requires_auth(
             base_url="http://test",
             headers={"X-Coffer-Token": "wrong"},
         ) as client:
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 401
     finally:
         await supervisor.dispose()
@@ -521,7 +528,7 @@ async def test_enable_disable_capability_flips_preference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(
@@ -530,12 +537,12 @@ async def test_enable_disable_capability_flips_preference(
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             # First list to populate preferences
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 200
 
             # Disable write_file
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/disable",
                 json={"capability_key": "write_file"},
             )
             assert r.status_code == 204, r.text
@@ -544,7 +551,7 @@ async def test_enable_disable_capability_flips_preference(
             # The management endpoint returns every capability with its
             # enabled flag so the UI can show and re-enable disabled ones;
             # only the gateway's client-facing list hides disabled tools.
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 200
             tools_by_name = {t["prefixed_name"]: t for t in r.json()["tools"]}
             assert tools_by_name["fs__write_file"]["enabled"] is False
@@ -552,13 +559,13 @@ async def test_enable_disable_capability_flips_preference(
 
             # Re-enable write_file
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/enable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/enable",
                 json={"capability_key": "write_file"},
             )
             assert r.status_code == 204, r.text
 
             # Invalidate cache and re-list — write_file is enabled again
-            r = await client.post("/api/v1/resources/mcp_server/fs/refresh")
+            r = await client.post(f"/api/v1/resources/mcp_server/{uid}/refresh")
             assert r.status_code == 200
             tools_by_name = {t["prefixed_name"]: t for t in r.json()["tools"]}
             assert tools_by_name["fs__write_file"]["enabled"] is True
@@ -573,7 +580,7 @@ async def test_enable_unknown_capability_returns_404(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(
@@ -583,7 +590,7 @@ async def test_enable_unknown_capability_returns_404(
         ) as client:
             # Enable before discovery has ever run → preference row doesn't exist
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/enable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/enable",
                 json={"capability_key": "nonexistent_tool"},
             )
             assert r.status_code == 404
@@ -598,7 +605,7 @@ async def test_disable_unknown_capability_returns_404(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(
@@ -607,7 +614,7 @@ async def test_disable_unknown_capability_returns_404(
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             r = await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/disable",
                 json={"capability_key": "ghost_tool"},
             )
             assert r.status_code == 404
@@ -627,7 +634,7 @@ async def test_refresh_invalidates_cache_and_returns_fresh_list(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(
@@ -636,20 +643,20 @@ async def test_refresh_invalidates_cache_and_returns_fresh_list(
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             # Initial list
-            r = await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
             assert r.status_code == 200
             assert len(r.json()["tools"]) == 2  # read_file + write_file
 
             # Disable one tool
             await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/disable",
                 json={"capability_key": "write_file"},
             )
 
             # Refresh: invalidates cache, re-queries, re-applies preferences.
             # Both tools come back; the disabled preference persists through
             # the refresh and surfaces as enabled=false (not filtered out).
-            r = await client.post("/api/v1/resources/mcp_server/fs/refresh")
+            r = await client.post(f"/api/v1/resources/mcp_server/{uid}/refresh")
             assert r.status_code == 200
             tools_by_name = {t["prefixed_name"]: t for t in r.json()["tools"]}
             assert tools_by_name["fs__write_file"]["enabled"] is False
@@ -670,7 +677,7 @@ async def test_test_endpoint_healthy_server_returns_ok(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(
@@ -678,7 +685,7 @@ async def test_test_endpoint_healthy_server_returns_ok(
             base_url="http://test",
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
-            r = await client.post("/api/v1/resources/mcp_server/fs/test")
+            r = await client.post(f"/api/v1/resources/mcp_server/{uid}/test")
             assert r.status_code == 200, r.text
             body = r.json()
             assert body["ok"] is True
@@ -712,7 +719,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
     )
-    await rsvc.register(
+    bad = await rsvc.register(
         kind="mcp_server",
         name="bad",
         config={
@@ -757,7 +764,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
             base_url="http://test",
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
-            r = await client.post("/api/v1/resources/mcp_server/bad/test")
+            r = await client.post(f"/api/v1/resources/mcp_server/{bad.uid}/test")
             assert r.status_code == 200, r.text
             body = r.json()
             assert body["ok"] is False
@@ -765,7 +772,7 @@ async def test_test_endpoint_unreachable_server_returns_ok_false(
             assert len(body["error_message"]) > 0
 
             # T7: verify persisted health reflects the failure
-            r_status = await client.get("/api/v1/resources/mcp_server/bad/status")
+            r_status = await client.get(f"/api/v1/resources/mcp_server/{bad.uid}/status")
             assert r_status.status_code == 200, r_status.text
             assert r_status.json()["status"] == "failing", (
                 f"Expected 'failing' after failed /test, got: {r_status.json()}"
@@ -805,7 +812,8 @@ async def test_enable_capability_creates_audit_event(
         audit=audit,
     )
     config = _stdio_config("read_file", "write_file")
-    await rsvc.register(kind="mcp_server", name="fs", config=config, actor="test")
+    server = await rsvc.register(kind="mcp_server", name="fs", config=config, actor="test")
+    uid = server.uid
 
     prefs_repo = MCPCapabilityPreferenceRepo(sm)
     supervisor = SubprocessSupervisor(
@@ -839,11 +847,11 @@ async def test_enable_capability_creates_audit_event(
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             # Populate prefs
-            await client.get("/api/v1/resources/mcp_server/fs/capabilities")
+            await client.get(f"/api/v1/resources/mcp_server/{uid}/capabilities")
 
             # Disable → audit event
             await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/disable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/disable",
                 json={"capability_key": "write_file"},
             )
             events = await audit.query(event_type="capability_disabled")
@@ -852,7 +860,7 @@ async def test_enable_capability_creates_audit_event(
 
             # Enable → audit event
             await client.post(
-                "/api/v1/resources/mcp_server/fs/capabilities/tool/enable",
+                f"/api/v1/resources/mcp_server/{uid}/capabilities/tool/enable",
                 json={"capability_key": "write_file"},
             )
             events = await audit.query(event_type="capability_enabled")
@@ -872,18 +880,18 @@ async def test_enable_capability_creates_audit_event(
 async def test_server_status_unknown_then_healthy(client_and_ctx) -> None:
     """Status is `unknown` before discovery, `healthy` once capabilities
     have been persisted — derived from the DB, no upstream spawn."""
-    client, _engine, rsvc, prefs_repo, _ = client_and_ctx
+    client, _engine, rsvc, prefs_repo, _sup, uid = client_and_ctx
 
-    r0 = await client.get("/api/v1/resources/mcp_server/fs/status")
+    r0 = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
     assert r0.status_code == 200
     assert r0.json()["status"] == "unknown"
 
     # Persisting a discovered capability flips the server to healthy.
-    resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
+    resource = await rsvc.get(uid)
     now = datetime.now(tz=UTC)
     await prefs_repo.insert(resource.id, "tool", "read_file", True, now, now)
 
-    r1 = await client.get("/api/v1/resources/mcp_server/fs/status")
+    r1 = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
     assert r1.json()["status"] == "healthy"
 
 
@@ -897,12 +905,14 @@ async def test_test_endpoint_records_orphan_pid_under_server_name(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """POST /{name}/test must pass server_name to StdioUpstreamConnection so
-    orphan PID files are keyed by server name, not the default 'upstream'."""
+    """POST /{uid}/test must pass the resolved server NAME to
+    StdioUpstreamConnection so orphan PID files are keyed by server name, not
+    the default 'upstream' — and not by the uid in the path, which would tell
+    whoever finds the file nothing."""
     import unittest.mock as mock
 
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path, server_name="myserver")
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path, server_name="myserver")
     transport = ASGITransport(app=app)
 
     captured: list[str] = []
@@ -940,7 +950,7 @@ async def test_test_endpoint_records_orphan_pid_under_server_name(
                 base_url="http://test",
                 headers={"X-Coffer-Token": "test-token"},
             ) as client:
-                r = await client.post("/api/v1/resources/mcp_server/myserver/test")
+                r = await client.post(f"/api/v1/resources/mcp_server/{uid}/test")
                 assert r.status_code == 200, r.text
         finally:
             await supervisor.dispose()
@@ -964,7 +974,7 @@ async def test_test_endpoint_persists_health_and_status_reflects_it(
     GET /{name}/status returns 'healthy' after a successful test (without
     relying solely on invocation history)."""
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
 
     try:
@@ -974,17 +984,17 @@ async def test_test_endpoint_persists_health_and_status_reflects_it(
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
             # Before test: status is unknown (fresh server, no caps or invocations)
-            r0 = await client.get("/api/v1/resources/mcp_server/fs/status")
+            r0 = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
             assert r0.status_code == 200
             assert r0.json()["status"] == "unknown"
 
             # Run the /test endpoint — it should succeed and persist healthy state
-            r_test = await client.post("/api/v1/resources/mcp_server/fs/test")
+            r_test = await client.post(f"/api/v1/resources/mcp_server/{uid}/test")
             assert r_test.status_code == 200, r_test.text
             assert r_test.json()["ok"] is True
 
             # After successful test: status must be 'healthy' from persisted state
-            r1 = await client.get("/api/v1/resources/mcp_server/fs/status")
+            r1 = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
             assert r1.status_code == 200
             assert r1.json()["status"] == "healthy", (
                 f"Expected 'healthy' after successful /test, got: {r1.json()}"
@@ -1005,15 +1015,13 @@ async def test_test_endpoint_ignores_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Scope is per-AGENT and enforced at the gateway, which knows the
-    calling session's identity. POST /{name}/test is a management route with
+    calling session's identity. POST /{uid}/test is a management route with
     no such identity, so it does not gate on scope: the owner testing a server
     they registered reaches it whatever agents it is scoped to."""
     _with_in_memory(monkeypatch)
-    app, engine, rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
 
-    await rsvc.update_scope(
-        ResourceRef("mcp_server", "fs"), Scope(agents=["some-other-agent"]), actor="test"
-    )
+    await rsvc.update_scope(uid, Scope(agents=["some-other-agent"]), actor="test")
 
     transport = ASGITransport(app=app)
     try:
@@ -1022,7 +1030,7 @@ async def test_test_endpoint_ignores_scope(
             base_url="http://test",
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
-            r = await client.post("/api/v1/resources/mcp_server/fs/test")
+            r = await client.post(f"/api/v1/resources/mcp_server/{uid}/test")
             assert r.status_code == 200, r.text
             body = r.json()
             assert body["ok"] is True
@@ -1042,14 +1050,14 @@ async def test_get_server_status_failing_branch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """GET /{name}/status must return 'failing' when the latest invocation has
+    """GET /{uid}/status must return 'failing' when the latest invocation has
     status != 'ok' and there is no persisted health record."""
     from datetime import UTC, datetime
 
     from coffer.domain.mcp.capability import MCPInvocation
 
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
 
     # Obtain the invocation repo to seed data directly
@@ -1059,12 +1067,13 @@ async def test_get_server_status_failing_branch(
     sm = session_maker(engine)  # type: ignore[arg-type]
     inv_repo = MCPInvocationRepo(sm)
 
-    # Seed a non-ok invocation for server "fs"
+    # Seed a non-ok invocation for the server, under its uid — which is what
+    # the log is keyed on, so the status route finds it across a rename too.
     await inv_repo.insert(
         MCPInvocation(
             id=None,
             timestamp=datetime.now(tz=UTC),
-            resource_name="fs",
+            resource_uid=uid,
             capability_type="tool",
             capability_key="read_file",
             duration_ms=10,
@@ -1080,7 +1089,7 @@ async def test_get_server_status_failing_branch(
             base_url="http://test",
             headers={"X-Coffer-Token": "test-token"},
         ) as client:
-            r = await client.get("/api/v1/resources/mcp_server/fs/status")
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
             assert r.status_code == 200, r.text
             assert r.json()["status"] == "failing", (
                 f"Expected 'failing' with non-ok last invocation, got: {r.json()}"
@@ -1127,7 +1136,7 @@ async def test_test_endpoint_http_transport(
             repo=SqlAlchemyResourceRepo(sm),
             audit=audit,
         )
-        await rsvc.register(
+        http_svc = await rsvc.register(
             kind="mcp_server",
             name="http_svc",
             config={"transport": {"type": "http", "url": f"http://127.0.0.1:{port}/mcp"}},
@@ -1167,7 +1176,7 @@ async def test_test_endpoint_http_transport(
                 base_url="http://test",
                 headers={"X-Coffer-Token": "test-token"},
             ) as client:
-                r = await client.post("/api/v1/resources/mcp_server/http_svc/test")
+                r = await client.post(f"/api/v1/resources/mcp_server/{http_svc.uid}/test")
                 assert r.status_code == 200, r.text
                 body = r.json()
                 assert body["ok"] is True, f"HTTP-transport /test failed: {body}"
@@ -1190,11 +1199,11 @@ async def test_refresh_unknown_server_returns_404(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """POST /api/v1/resources/mcp_server/{name}/refresh for an unregistered
-    server name must return HTTP 404 with envelope code RESOURCE_NOT_FOUND.
+    """POST /api/v1/resources/mcp_server/{uid}/refresh for a uid no server
+    answers to must return HTTP 404 with envelope code RESOURCE_NOT_FOUND.
     """
     _with_in_memory(monkeypatch)
-    app, engine, _rsvc, _prefs, supervisor = await _build_app(tmp_path)
+    app, engine, _rsvc, _prefs, supervisor, _uid = await _build_app(tmp_path)
     transport = ASGITransport(app=app)
     try:
         async with AsyncClient(
@@ -1225,21 +1234,21 @@ async def test_refresh_unknown_server_returns_404(
 async def test_status_reports_missing_runner(client_and_ctx, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """A stdio server whose launcher does not resolve on this machine reports
     `missing_runner` instead of a bare failing state with no cause."""
-    client, _engine, rsvc, _prefs, _sup = client_and_ctx
+    client, _engine, rsvc, _prefs, _sup, uid = client_and_ctx
 
     # The fixture server's command (python) resolves: no missing runner.
-    r = await client.get("/api/v1/resources/mcp_server/fs/status")
+    r = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
     assert r.json()["missing_runner"] is None
 
     # A server referencing a launcher that is absent here.
     from coffer.application.mcp import runner_detect
 
     monkeypatch.setattr(runner_detect.shutil, "which", lambda _c: None)
-    await rsvc.register(
+    synced = await rsvc.register(
         kind="mcp_server",
         name="synced",
         config={"transport": {"type": "stdio", "command": "uvx", "args": ["mcp-atlassian"]}},
         actor="test",
     )
-    r = await client.get("/api/v1/resources/mcp_server/synced/status")
+    r = await client.get(f"/api/v1/resources/mcp_server/{synced.uid}/status")
     assert r.json()["missing_runner"] == "uvx"

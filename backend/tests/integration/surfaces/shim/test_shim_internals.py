@@ -29,68 +29,92 @@ from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.shim.bootstrap import _inject_meta
 from coffer.surfaces.shim.main import _Bridge, _parse_args
 
+# Opaque uuid4 hex, as Coffer writes it into an agent's native MCP entry.
+_CC_UID = "9f2c41a0b7d94e6a8c1f35b2d07ae914"
+_CODEX_UID = "3b7e08d1c4f2456ab90d61ea5c2f7d38"
 
-def test_inject_meta_stamps_cwd_and_agent(monkeypatch):
+
+def test_inject_meta_stamps_cwd_and_agent_uid(monkeypatch):
     """spec mcp-gateway FR-004: the shim reports its launch cwd at the initialize handshake so
     the daemon can resolve the per-project memory store. spec mcp-gateway FR-013
-    (amended): when a ``--agent`` name is known, it rides the same ``_meta``
-    bag under ``coffer/agent``."""
+    (amended): when an ``--agent-uid`` is known, it rides the same ``_meta``
+    bag under ``coffer/agent-uid``."""
     monkeypatch.setattr("os.getcwd", lambda: "/work/my-repo")
     envelope: dict[str, Any] = {"method": "initialize", "params": {"protocolVersion": "x"}}
-    _inject_meta(envelope, "claude_code")
+    _inject_meta(envelope, _CC_UID)
     assert envelope["params"]["_meta"]["coffer/cwd"] == "/work/my-repo"
-    assert envelope["params"]["_meta"]["coffer/agent"] == "claude_code"
+    assert envelope["params"]["_meta"]["coffer/agent-uid"] == _CC_UID
 
 
-def test_inject_meta_without_agent_omits_agent_key(monkeypatch):
+def test_inject_meta_without_agent_uid_omits_agent_key(monkeypatch):
     """Also the params/_meta-absent path: both bags are created on the way in."""
     monkeypatch.setattr("os.getcwd", lambda: "/p")
     envelope: dict[str, Any] = {"method": "initialize"}
     _inject_meta(envelope, None)
     assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
-    assert "coffer/agent" not in envelope["params"]["_meta"]
+    assert "coffer/agent-uid" not in envelope["params"]["_meta"]
 
 
 def test_inject_meta_default_agent_arg_is_none(monkeypatch):
-    """Calling with no agent argument at all behaves like ``agent=None``."""
+    """Calling with no agent argument at all behaves like ``agent_uid=None``."""
     monkeypatch.setattr("os.getcwd", lambda: "/p")
     envelope: dict[str, Any] = {"method": "initialize"}
     _inject_meta(envelope)
+    assert "coffer/agent-uid" not in envelope["params"]["_meta"]
+
+
+def test_inject_meta_never_stamps_the_retired_name_shaped_key(monkeypatch):
+    """The gateway stopped reading ``coffer/agent``; nothing may keep writing it,
+    or a mixed fleet would have two spellings of one fact on the wire."""
+    monkeypatch.setattr("os.getcwd", lambda: "/p")
+    envelope: dict[str, Any] = {"method": "initialize"}
+    _inject_meta(envelope, _CC_UID)
     assert "coffer/agent" not in envelope["params"]["_meta"]
 
 
 def test_inject_meta_preserves_existing_meta_keys(monkeypatch):
     monkeypatch.setattr("os.getcwd", lambda: "/p")
     envelope: dict[str, Any] = {"params": {"_meta": {"other": "keep"}}}
-    _inject_meta(envelope, "codex")
+    _inject_meta(envelope, _CODEX_UID)
     assert envelope["params"]["_meta"]["other"] == "keep"
     assert envelope["params"]["_meta"]["coffer/cwd"] == "/p"
-    assert envelope["params"]["_meta"]["coffer/agent"] == "codex"
+    assert envelope["params"]["_meta"]["coffer/agent-uid"] == _CODEX_UID
 
 
 # --------------------------------------------------------------------------- #
-# --agent CLI arg parsing (Task 9)                                             #
+# --agent-uid CLI arg parsing                                                  #
 # --------------------------------------------------------------------------- #
 
 
-def test_parse_args_reads_agent_flag():
-    ns = _parse_args(["--agent", "claude_code"])
-    assert ns.agent == "claude_code"
+def test_parse_args_reads_agent_uid_flag():
+    ns = _parse_args(["--agent-uid", _CC_UID])
+    assert ns.agent_uid == _CC_UID
 
 
-def test_parse_args_defaults_agent_to_none_when_absent():
+def test_parse_args_defaults_agent_uid_to_none_when_absent():
     ns = _parse_args([])
-    assert ns.agent is None
+    assert ns.agent_uid is None
+
+
+def test_parse_args_ignores_the_retired_name_shaped_flag():
+    """An entry written by an older Coffer still spells it ``--agent <name>``.
+    It is discarded, not honoured: the gateway matches what we report against a
+    scope holding uids, so a name could only match nothing — or, worse, match
+    the wrong resource later. Reporting nothing makes the session unidentified,
+    which is strictly less access, never more (ADR
+    resource-identity-is-an-immutable-uid)."""
+    ns = _parse_args(["--agent", "claude_code"])
+    assert ns.agent_uid is None
 
 
 def test_parse_args_tolerates_unknown_extra_args():
     """The shim must stay maximally compatible with whatever a client's MCP
     server launch config passes — unrecognized flags must not crash it."""
-    ns = _parse_args(["--agent", "codex", "--some-other-flag", "value", "positional"])
-    assert ns.agent == "codex"
+    ns = _parse_args(["--agent-uid", _CODEX_UID, "--some-other-flag", "value", "positional"])
+    assert ns.agent_uid == _CODEX_UID
 
 
-def _make_bridge(port: int = 18765, agent: str | None = None) -> _Bridge:
+def _make_bridge(port: int = 18765, agent_uid: str | None = None) -> _Bridge:
     info = DaemonInfo(
         version=1,
         pid=12345,
@@ -99,7 +123,7 @@ def _make_bridge(port: int = 18765, agent: str | None = None) -> _Bridge:
         started_at=_dt.datetime.now(tz=_dt.UTC),
         binary_path="/usr/bin/python3",
     )
-    return _Bridge(info, agent=agent)
+    return _Bridge(info, agent_uid=agent_uid)
 
 
 def _patch_pump_stdin_with_reader(
@@ -454,17 +478,17 @@ async def test_pump_stdin_attaches_session_header_on_subsequent_requests(
 
 
 # --------------------------------------------------------------------------- #
-# --agent identity threaded onto the initialize handshake (Task 9)            #
+# --agent-uid identity threaded onto the initialize handshake                 #
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_pump_stdin_stamps_agent_onto_initialize_envelope(
+async def test_pump_stdin_stamps_agent_uid_onto_initialize_envelope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A `_Bridge` constructed with `agent=...` stamps `coffer/agent` into the
-    outgoing `initialize` POST body."""
-    bridge = _make_bridge(agent="claude_code")
+    """A `_Bridge` constructed with `agent_uid=...` stamps `coffer/agent-uid`
+    into the outgoing `initialize` POST body."""
+    bridge = _make_bridge(agent_uid=_CC_UID)
     posted: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -490,22 +514,23 @@ async def test_pump_stdin_stamps_agent_onto_initialize_envelope(
         await bridge._pump_stdin(client)
 
     assert len(posted) == 1
-    assert posted[0]["params"]["_meta"]["coffer/agent"] == "claude_code"
+    assert posted[0]["params"]["_meta"]["coffer/agent-uid"] == _CC_UID
 
     # The cached replay envelope (used to re-establish a session after a
     # daemon restart, see _replay_initialize) must carry the same stamp —
     # it's cached from the already-mutated envelope, not re-derived later.
     assert bridge._init_envelope is not None
-    assert bridge._init_envelope["params"]["_meta"]["coffer/agent"] == "claude_code"
+    assert bridge._init_envelope["params"]["_meta"]["coffer/agent-uid"] == _CC_UID
 
 
 @pytest.mark.asyncio
-async def test_pump_stdin_without_agent_omits_agent_meta_key(
+async def test_pump_stdin_without_agent_uid_omits_agent_meta_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A `_Bridge` constructed without an agent name (the pre-Task-9 shape)
-    stamps only the launch cwd — no `coffer/agent` key at all."""
-    bridge = _make_bridge()  # agent=None
+    """A `_Bridge` that was told no identity — a hand-configured entry, or one an
+    older Coffer wrote with the discarded ``--agent <name>`` — stamps only the
+    launch cwd. The gateway then treats the session as unidentified."""
+    bridge = _make_bridge()  # agent_uid=None
     posted: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -526,6 +551,7 @@ async def test_pump_stdin_without_agent_omits_agent_meta_key(
         await bridge._pump_stdin(client)
 
     assert len(posted) == 1
+    assert "coffer/agent-uid" not in posted[0]["params"]["_meta"]
     assert "coffer/agent" not in posted[0]["params"]["_meta"]
     assert "coffer/cwd" in posted[0]["params"]["_meta"]
 

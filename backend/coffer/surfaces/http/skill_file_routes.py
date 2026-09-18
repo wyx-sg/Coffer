@@ -1,8 +1,12 @@
-"""/api/v1/skills/{name}/files* — skill master-folder viewer + editor.
+"""/api/v1/skills/{uid}/files* — skill master-folder viewer + editor.
 
 Split out of ``skill_routes.py`` (component size cap): the file-tree, single-file
-read, and single-file write endpoints plus their wire schemas. Shares the skill
-name/actor guards with the main skills router.
+read, and single-file write endpoints plus their wire schemas. Shares the actor
+header dependency with the main skills router.
+
+The skill is addressed by ``{uid}``; the ``path`` query parameter is still a
+relative path inside the master folder and is still checked by ``file_ops``,
+which is where the traversal guard belongs — it is the layer that touches disk.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from coffer.application.skill import content_ops, file_ops
 from coffer.application.skill.service import SkillService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.skill_dependencies import get_skill_service
-from coffer.surfaces.http.skill_routes import _actor, _validate_skill_name
+from coffer.surfaces.http.skill_routes import _actor
 
 router = APIRouter(
     prefix="/api/v1/skills",
@@ -113,32 +117,34 @@ def _content_out(result: file_ops.FileContent, root: pathlib.Path) -> SkillFileC
 # ---------- routes ----------
 
 
-@router.get("/{name}/files", response_model=SkillFileTreeOut)
+@router.get("/{uid}/files", response_model=SkillFileTreeOut)
 async def list_skill_files(
-    name: str,
+    uid: str,
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
 ) -> SkillFileTreeOut:
     """Return the skill's master folder as a read-only file tree."""
-    name = _validate_skill_name(name)
     # 404 if the skill isn't registered (raises ResourceNotFound → 404).
-    await svc.get_skill(name)
+    skill = await svc.get_skill(uid)
 
-    master = pathlib.Path(svc.master_path(name)).resolve()
+    # ``master_path`` takes the NAME, not the uid: the master store's folder on
+    # disk is ``~/.coffer/skills/<name>/``, and a rename moves it there through
+    # the kind's ``on_rename`` hook. So the uid finds the row and the row's
+    # current name says where its bytes are.
+    master = pathlib.Path(svc.master_path(skill.name)).resolve()
     root = file_ops.build_file_tree(master)
     return SkillFileTreeOut(root=_node_to_out(root, master))
 
 
-@router.get("/{name}/files/content", response_model=SkillFileContentOut)
+@router.get("/{uid}/files/content", response_model=SkillFileContentOut)
 async def read_skill_file(
-    name: str,
+    uid: str,
     path: str = Query(min_length=1),
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
 ) -> SkillFileContentOut:
     """Read a single file's contents from the skill's master folder."""
-    name = _validate_skill_name(name)
-    await svc.get_skill(name)  # 404 if the skill isn't registered.
+    skill = await svc.get_skill(uid)  # 404 if the skill isn't registered.
 
-    master = pathlib.Path(svc.master_path(name)).resolve()
+    master = pathlib.Path(svc.master_path(skill.name)).resolve()
     try:
         result = file_ops.read_skill_file(master, path)
     except ValueError as exc:
@@ -155,9 +161,9 @@ async def read_skill_file(
     return _content_out(result, master)
 
 
-@router.put("/{name}/files/content", response_model=SkillFileContentOut)
+@router.put("/{uid}/files/content", response_model=SkillFileContentOut)
 async def write_skill_file(
-    name: str,
+    uid: str,
     body: SkillFileWriteRequest,
     svc: SkillService = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
@@ -168,11 +174,11 @@ async def write_skill_file(
     ``SkillFileStale`` propagates to the shared error handler as 409
     ``SKILL_FILE_STALE`` with the file left untouched.
     """
-    name = _validate_skill_name(name)
+    skill = await svc.get_skill(uid)  # 404 before anything is written.
     try:
         result = await content_ops.write_skill_file(
             svc,
-            name=name,
+            uid=uid,
             relpath=body.path,
             content=body.content,
             expected_fingerprint=body.expected_fingerprint,
@@ -186,5 +192,5 @@ async def write_skill_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"no such file in skill: {body.path}",
         ) from exc
-    master = pathlib.Path(svc.master_path(name)).resolve()
+    master = pathlib.Path(svc.master_path(skill.name)).resolve()
     return _content_out(result, master)

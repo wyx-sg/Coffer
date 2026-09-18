@@ -31,7 +31,10 @@ _EXPECTED_ROUTES = {
     ("GET", "/api/v1/knowledge/file"),
     ("PUT", "/api/v1/knowledge/file"),
     ("DELETE", "/api/v1/knowledge/file"),
-    ("POST", "/api/v1/knowledge/collections/{name}/curate"),
+    # The collection by its uid — a pass runs for minutes and must keep meaning
+    # the same collection across a rename. The file routes above stay
+    # name-addressed on purpose: their arguments are filesystem paths.
+    ("POST", "/api/v1/knowledge/collections/{uid}/curate"),
     ("POST", "/api/v1/knowledge/upload"),
 }
 

@@ -125,7 +125,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
     from coffer.application.mcp.supervisor import SubprocessSupervisor
     from coffer.application.resource_service import ResourceService
     from coffer.domain.mcp.server_config import MCPServerConfig
-    from coffer.domain.resource import Kind, ResourceRef
+    from coffer.domain.resource import Kind
     from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
     from coffer.infrastructure.mcp.persistence import (
         MCPCapabilityPreferenceRepo,
@@ -181,7 +181,7 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
     )
-    await rsvc.register(
+    fs = await rsvc.register(
         kind="mcp_server",
         name="fs",
         config={
@@ -244,9 +244,10 @@ async def test_tool_disabled_returns_403_envelope(tmp_path, monkeypatch):
                 headers={"Mcp-Session-Id": session_id},
             )
 
-            # Disable read_file via prefs
-            resource = await rsvc.get(ResourceRef("mcp_server", "fs"))
-            await prefs.set_enabled(resource.id, "tool", "read_file", False)
+            # Disable read_file via prefs. The preference table is joined by
+            # the integer surrogate key, which is what ``register`` already
+            # handed back — no lookup, and nothing that a label could shift.
+            await prefs.set_enabled(fs.id, "tool", "read_file", False)
 
             # Try calling the disabled tool
             r = await client.post(
@@ -312,7 +313,10 @@ def _err_app():
 @pytest.mark.parametrize(
     ("exc_factory", "expected_status", "expected_code"),
     [
-        (lambda e: e.ResourceNotFound("mcp_server", "missing"), 404, "RESOURCE_NOT_FOUND"),
+        # ``ResourceNotFound`` takes ONE subject now — whatever the caller
+        # actually asked for. ``.named()`` is the label path's phrasing, used
+        # here because a lookup by uid has no name to report.
+        (lambda e: e.ResourceNotFound.named("mcp_server", "missing"), 404, "RESOURCE_NOT_FOUND"),
         (lambda e: e.ResourceAlreadyExists("mcp_server", "dup"), 409, "RESOURCE_ALREADY_EXISTS"),
         (lambda e: e.UnknownKind("widget"), 400, "UNKNOWN_KIND"),
         (lambda e: e.ConfigValidationError("bad config"), 422, "CONFIG_INVALID"),

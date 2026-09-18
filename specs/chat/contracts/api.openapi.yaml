@@ -428,9 +428,23 @@ components:
 
     ChannelBindingOut:
       type: object
-      required: [channel, chat_id]
+      required: [channel_uid, channel, chat_id]
       properties:
-        channel: { type: string, description: The channel resource name. }
+        channel_uid:
+          type: string
+          description: >-
+            The channel's identity. The conversation row stores this, not the
+            name, so a renamed channel keeps its conversations — and a client
+            follows it to reach the channel.
+        channel:
+          type: string
+          nullable: true
+          description: >-
+            The channel's current label, resolved when this is read rather than
+            stored, so it says what the channel is called now. Null when the
+            channel has since been deleted: the conversation keeps its binding —
+            it really did arrive over a channel — and there is simply no name
+            left to show for it.
         chat_id:
           type: string
           description: The IM chat id used as the return address.

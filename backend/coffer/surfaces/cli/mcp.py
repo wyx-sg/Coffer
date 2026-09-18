@@ -8,6 +8,11 @@ invocations) plus the convenience `add` flag for transport parsing.
 Capability curation sub-commands (tool/resource/prompt) live in
 `_mcp_caps.py` and are wired in here to keep this file under the
 project's 400-line limit.
+
+Every command still takes the server's NAME, because that is what a person
+knows; the uid the daemon addresses it by is looked up once per command
+through ``_resolve`` and never asked of the user
+(ADR resource-identity-is-an-immutable-uid).
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._mcp_caps import prompt_app, resource_app, tool_app
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage MCP servers and their capabilities")
 _console = Console()
@@ -98,7 +104,7 @@ def add(
             typer.echo(f"config invalid: {r.json()['error']}", err=True)
             raise typer.Exit(6)
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"registered: mcp_server:{name}")
+    typer.echo(f"registered: mcp_server {name}")
 
 
 @app.command("remove")
@@ -109,16 +115,16 @@ def remove(
 ) -> None:
     """Delete an MCP server registration."""
     verbose = (ctx.obj or {}).get("verbose", False)
-    if not force and not typer.confirm(f"Really delete mcp_server:{name}?"):
+    if not force and not typer.confirm(f"Really delete mcp_server {name}?"):
         raise typer.Exit(1)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/resources/mcp_server/{name}")
-        if r.status_code == 404:
-            typer.echo(f"mcp_server:{name} not found", err=True)
-            raise typer.Exit(4)
+        # Deletion is kind-agnostic — there is no MCP-specific delete route —
+        # so this goes to /resources/{uid} like every other kind's.
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+        r = c.delete(f"/resources/{uid}")
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"removed: mcp_server:{name}")
+    typer.echo(f"removed: mcp_server {name}")
 
 
 @app.command("list")
@@ -162,16 +168,18 @@ def show(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/resources/mcp_server/{name}")
-        if r.status_code == 404:
-            typer.echo(f"mcp_server:{name} not found", err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+        r = c.get(f"/resources/{uid}")
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
-    typer.echo(f"ref:      {data['ref']}")
+    # The uid is shown here, unlike in `list`, because `show` is the one place
+    # a person goes when they need the address itself — to hand it to a script,
+    # or to read a log line that carries one.
+    typer.echo(f"name:     {data['name']}")
+    typer.echo(f"uid:      {data['uid']}")
     typer.echo(f"enabled:  {data['enabled']}")
     typer.echo(f"config:   {_json.dumps(data['config'], indent=2)}")
 
@@ -185,12 +193,10 @@ def refresh(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/resources/mcp_server/{name}/refresh")
-        if r.status_code == 404:
-            typer.echo(f"mcp_server:{name} not found", err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+        r = c.post(f"/resources/mcp_server/{uid}/refresh")
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"refreshed: mcp_server:{name}")
+    typer.echo(f"refreshed: mcp_server {name}")
 
 
 @app.command("test")
@@ -202,10 +208,8 @@ def test_cmd(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/resources/mcp_server/{name}/test")
-        if r.status_code == 404:
-            typer.echo(f"mcp_server:{name} not found", err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+        r = c.post(f"/resources/mcp_server/{uid}/test")
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     if data["ok"]:
@@ -233,10 +237,8 @@ def invocations(
     if since is not None:
         params["since"] = since
     with c:
-        r = c.get(f"/resources/mcp_server/{name}/invocations", params=params)
-        if r.status_code == 404:
-            typer.echo(f"mcp_server:{name} not found", err=True)
-            raise typer.Exit(4)
+        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+        r = c.get(f"/resources/mcp_server/{uid}/invocations", params=params)
         _cli_client.check(r, verbose=verbose)
     data = r.json()["invocations"]
     if output_json:

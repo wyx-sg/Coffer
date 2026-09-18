@@ -121,9 +121,10 @@ def test_mcp_capability_route_works_after_register(
             headers=_HEADERS,
         )
         assert r.status_code == 201
+        uid = r.json()["uid"]
 
         # Capability list — may succeed (200) or 500 on anyio/py3.14 cancel bug.
-        r = c.get("/api/v1/resources/mcp_server/fs/capabilities", headers=_HEADERS)
+        r = c.get(f"/api/v1/resources/mcp_server/{uid}/capabilities", headers=_HEADERS)
         # Route is mounted and the dependency chain is wired: we get back either
         # the capability list (200) or an upstream-error (500/503) — never 404/405.
         assert r.status_code != 404, "capability route not mounted"

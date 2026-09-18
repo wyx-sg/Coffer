@@ -19,6 +19,12 @@ from pydantic import BaseModel, Field
 
 
 class CollectionOut(BaseModel):
+    #: The collection's identity — what the curate route and every other
+    #: collection-addressed route take. Carried on the list payload so a page
+    #: can act on a row it has just rendered without a second lookup.
+    uid: str
+    #: A mutable label, and also the name of the directory on disk. Editable
+    #: through PATCH, which moves the directory with it.
     name: str
     #: First paragraph of the collection's ``README.md`` (FR-011).
     description: str
@@ -87,6 +93,12 @@ class FileWrite(BaseModel):
     #: the source already at that path. Neither names the ``sources/`` segment
     #: — the service adds it, so no caller can aim a write at ``topics/`` by
     #: spelling a path (FR-013, FR-021).
+    #:
+    #: Both are *filesystem* values and both stay names: the collection's name
+    #: IS its directory under the knowledge root, so a uid here would be turned
+    #: straight back into this string before a single byte could be written.
+    #: The collection's uid addresses the collection itself — ``curate`` — and
+    #: nothing on this route.
     collection: str | None = None
     folder: str | None = None
     path: str | None = None
@@ -106,6 +118,10 @@ class CurationOut(BaseModel):
     #: with nothing pending, is an ordinary state of the feature and not a
     #: fault of the request (FR-029).
     status: str
+    #: The collection's NAME, not its uid. The caller sent the uid and still
+    #: holds it; what a pass report adds is something to render — "curated
+    #: shopee" — and that is the label (spec knowledge's contract,
+    #: ``CurationOut.collection``).
     collection: str
     #: The source the pass took, when it took one.
     source: str = ""

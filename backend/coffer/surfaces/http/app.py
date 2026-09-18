@@ -39,7 +39,7 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
 from coffer.application.diagnostics import register_diagnostics_builtin_tools
 from coffer.application.resource_service import ResourceService
-from coffer.domain.resource import Kind, ResourceRef
+from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.logging.setup import configure_logging
@@ -150,17 +150,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     audit_repo = SqlAlchemyAuditRepo(sm)
     resource_repo = SqlAlchemyResourceRepo(sm)
 
-    async def _resolve_resource_id(kind: str, name: str) -> int | None:
-        """The stable row id behind a ``<kind>:<name>``, for the audit trail.
-
-        Injected rather than imported so ``AuditService`` keeps its one
-        dependency: the resource side already depends on audit, and the
-        reverse import would close the loop.
-        """
-        found = await resource_repo.find(ResourceRef(kind, name))
-        return found.id if found else None
-
-    audit = AuditService(audit_repo, resolve_resource_id=_resolve_resource_id)
+    # No resolver is injected any more. ``AuditService.record`` is handed the
+    # ``Resource`` the event is about, and every caller performing a mutation
+    # already has that row — so the id it stores is read off it rather than
+    # looked back up from a label that may since have changed.
+    audit = AuditService(audit_repo)
     resource_svc = ResourceService(
         kinds=app.state.kinds,
         repo=resource_repo,
@@ -192,7 +186,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # and the daemon log both lost their human reader, so the reader is the
     # agent and the way in is a tool it already holds.
     register_diagnostics_builtin_tools(
-        builtin_tools, audit_repo=audit_repo, log_path=lambda: log_dir() / "daemon.log"
+        builtin_tools,
+        audit_repo=audit_repo,
+        log_path=lambda: log_dir() / "daemon.log",
+        # The tool's filter names a resource the way the agent asking knows it —
+        # a kind and a name. Resolving it here is what lets the query key on the
+        # resource's identity instead, so "what happened to X" answers with X's
+        # whole history rather than the slice that happened to carry its current
+        # label. Without this the tool refuses the filter rather than silently
+        # answering a different question.
+        find_resource=resource_svc.find_by_name,
     )
 
     # Every resource kind, in dependency order (see kind_wiring).
@@ -212,7 +215,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # BuiltinToolRegistry (knowledge + skill + MCP tools); the session factory
     # and the agent service are the kinds' own results.
     chat = wire_chat(
-        sm, kinds.mcp.session_factory, credential_store, kinds.agent_skill.agent_service
+        sm,
+        kinds.mcp.session_factory,
+        credential_store,
+        kinds.agent_skill.agent_service,
+        resource_svc,
     )
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
@@ -335,8 +342,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Dispose the built-in agent's chat gateway session first (best-effort);
         # its on_dispose callback removes its entry from session_supervisors.
         await _best_effort("chat_gateway_session", chat.gateway_session.dispose())
-        # Dispose MCP supervisors (best-effort)
-        await _best_effort("process_supervisor", kinds.mcp.process_supervisor.dispose())
+        # Dispose MCP supervisors (best-effort). The process-wide supervisor is
+        # IN this registry now — it has to be, or the kind's delete and rename
+        # hooks cannot reach the upstreams it holds — so the loop covers it and
+        # the separate call it used to get would only dispose it twice.
         for session_id, sup in list(kinds.mcp.session_supervisors.items()):
             await _best_effort(f"session_supervisor[{session_id}]", sup.dispose())
         kinds.mcp.session_supervisors.clear()

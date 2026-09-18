@@ -1,4 +1,12 @@
-"""HTTP coverage for /api/v1/agents/{name}/mcp-entries and /plugins."""
+"""HTTP coverage for /api/v1/agents/{uid}/mcp-entries and /plugins.
+
+The agent is addressed by its immutable ``uid``
+(ADR resource-identity-is-an-immutable-uid), taken off the registration
+response the helpers below already make. The ``{entry}`` and ``{plugin_id}``
+segments beside it deliberately stay names: they identify a stanza in the
+agent's OWN config file and an installed plugin, neither of which is a Coffer
+resource, so neither has a uid to be addressed by.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +24,10 @@ from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
 TOKEN = "test-token-ws"
+
+# A well-formed uid no resource holds — so the 404 test below exercises "this
+# uid is unknown" rather than "this is not a uid at all".
+UNKNOWN_UID = "0" * 32
 
 SECRET_VALUE = "supersecret-value-31337"
 PLAIN_VALUE = "plain-value-xyz"
@@ -77,8 +89,13 @@ def fake_keyring(monkeypatch) -> dict[str, str]:
     return store
 
 
-def _register_codex(c: TestClient, tmp_path: pathlib.Path, config_text: str = CODEX_CONFIG) -> None:
-    """Register a codex agent named ``cx`` with the standard fixture config.toml."""
+def _register_codex(c: TestClient, tmp_path: pathlib.Path, config_text: str = CODEX_CONFIG) -> str:
+    """Register a codex agent named ``cx``; return the uid routes address it by.
+
+    Registration is the only moment the uid is handed out, so every test takes
+    it from here rather than re-deriving it — the name ``cx`` survives only as
+    the label a person would read.
+    """
     codex_dir = tmp_path / ".codex"
     codex_dir.mkdir(exist_ok=True)
     (codex_dir / "config.toml").write_text(config_text, encoding="utf-8")
@@ -86,10 +103,11 @@ def _register_codex(c: TestClient, tmp_path: pathlib.Path, config_text: str = CO
     (codex_dir / "plugins" / "cache" / "m1" / "p1").mkdir(parents=True, exist_ok=True)
     r = c.post("/api/v1/agents", json={"type": "codex", "name": "cx"})
     assert r.status_code == 201, r.text
+    return r.json()["uid"]
 
 
-def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> None:
-    """Register a claude_code agent named ``cc`` with MCP + plugin fixtures.
+def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> str:
+    """Register a claude_code agent named ``cc``; return its uid.
 
     The MCP entry ``dup`` appears in BOTH ~/.claude.json and settings.json so
     source-ambiguity rules can be exercised; ``solo`` exists only globally.
@@ -128,6 +146,7 @@ def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> None:
     )
     r = c.post("/api/v1/agents", json={"type": "claude_code", "name": "cc"})
     assert r.status_code == 201, r.text
+    return r.json()["uid"]
 
 
 # ---------------------------------------------------------------------------
@@ -139,9 +158,9 @@ def _register_claude(c: TestClient, tmp_path: pathlib.Path) -> None:
 def test_list_mcp_entries(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59800)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
 
-        r = c.get("/api/v1/agents/cx/mcp-entries")
+        r = c.get(f"/api/v1/agents/{uid}/mcp-entries")
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["parse_errors"] == []
@@ -171,10 +190,10 @@ def test_list_mcp_entries(tmp_path, monkeypatch):
 def test_remove_mcp_entry(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59810)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         config = tmp_path / ".codex" / "config.toml"
 
-        r = c.delete("/api/v1/agents/cx/mcp-entries/fetcher")
+        r = c.delete(f"/api/v1/agents/{uid}/mcp-entries/fetcher")
         assert r.status_code == 204, r.text
         data = tomllib.loads(config.read_text(encoding="utf-8"))
         assert "fetcher" not in data["mcp_servers"]
@@ -183,7 +202,7 @@ def test_remove_mcp_entry(tmp_path, monkeypatch):
         assert bak.exists()
         assert "fetcher" in bak.read_text(encoding="utf-8")
 
-        r = c.get("/api/v1/agents/cx/mcp-entries")
+        r = c.get(f"/api/v1/agents/{uid}/mcp-entries")
         assert "fetcher" not in [e["name"] for e in r.json()["items"]]
 
 
@@ -197,13 +216,13 @@ def test_concurrent_removals_from_one_file_do_not_clobber_each_other(tmp_path, m
     """
     app = _app(tmp_path, monkeypatch, 59818)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         config = tmp_path / ".codex" / "config.toml"
         before = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]
         assert {"fetcher", "search"} <= set(before)
 
         for entry in ("fetcher", "search"):
-            assert c.delete(f"/api/v1/agents/cx/mcp-entries/{entry}").status_code == 204
+            assert c.delete(f"/api/v1/agents/{uid}/mcp-entries/{entry}").status_code == 204
 
         after = tomllib.loads(config.read_text(encoding="utf-8"))["mcp_servers"]
         assert "fetcher" not in after
@@ -216,9 +235,9 @@ def test_concurrent_removals_from_one_file_do_not_clobber_each_other(tmp_path, m
 def test_parse_error_degrades_listing(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59840)
     with _client(app) as c:
-        _register_codex(c, tmp_path, config_text="not [valid toml ===")
+        uid = _register_codex(c, tmp_path, config_text="not [valid toml ===")
 
-        r = c.get("/api/v1/agents/cx/mcp-entries")
+        r = c.get(f"/api/v1/agents/{uid}/mcp-entries")
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["items"] == []
@@ -231,19 +250,29 @@ def test_parse_error_degrades_listing(tmp_path, monkeypatch):
 def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59850)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         ref = "mcp.fetcher.API_TOKEN"
 
         r = c.post(
-            "/api/v1/agents/cx/mcp-entries/fetcher/adopt",
+            f"/api/v1/agents/{uid}/mcp-entries/fetcher/adopt",
             json={"secrets": {"API_TOKEN": ref}},
         )
         assert r.status_code == 201, r.text
-        assert r.json() == {"kind": "mcp_server", "name": "fetcher"}
+        adopted = r.json()
+        assert adopted["kind"] == "mcp_server"
+        assert adopted["name"] == "fetcher"
+        # Adoption is the moment the new resource's uid is minted, and this
+        # response is the only place the caller ever sees it. It is also the
+        # only value that still addresses the resource after the user renames
+        # it, so a client that means to open what it just adopted must keep
+        # this and not the label beside it.
+        assert adopted["uid"]
 
-        # The mcp_server resource exists and carries a ref, never the value.
-        r = c.get("/api/v1/resources/mcp_server/fetcher")
+        # The mcp_server resource exists and carries a ref, never the value —
+        # fetched by the uid the adoption just returned.
+        r = c.get(f"/api/v1/resources/{adopted['uid']}")
         assert r.status_code == 200, r.text
+        assert r.json()["name"] == "fetcher"
         transport = r.json()["config"]["transport"]
         assert transport["credential_refs"] == {"API_TOKEN": ref}
         assert SECRET_VALUE not in r.text
@@ -263,7 +292,7 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
 def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59860)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         config = tmp_path / ".codex" / "config.toml"
         before = config.read_bytes()
 
@@ -278,7 +307,7 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
         assert r.status_code == 201, r.text
 
         r = c.post(
-            "/api/v1/agents/cx/mcp-entries/fetcher/adopt",
+            f"/api/v1/agents/{uid}/mcp-entries/fetcher/adopt",
             json={"secrets": {"API_TOKEN": "mcp.fetcher.API_TOKEN"}},
         )
         assert r.status_code == 409, r.text
@@ -295,11 +324,11 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
 def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59870)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         config = tmp_path / ".codex" / "config.toml"
         before = config.read_bytes()
 
-        r = c.post("/api/v1/agents/cx/mcp-entries/fetcher/adopt", json={})
+        r = c.post(f"/api/v1/agents/{uid}/mcp-entries/fetcher/adopt", json={})
         assert r.status_code == 422, r.text
         err = r.json()["error"]
         assert err["code"] == "ADOPT_SECRET_UNRESOLVED"
@@ -308,7 +337,7 @@ def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
 
         # With the mapping supplied the adoption succeeds.
         r = c.post(
-            "/api/v1/agents/cx/mcp-entries/fetcher/adopt",
+            f"/api/v1/agents/{uid}/mcp-entries/fetcher/adopt",
             json={"secrets": {"API_TOKEN": "mcp.fetcher.API_TOKEN"}},
         )
         assert r.status_code == 201, r.text
@@ -320,7 +349,7 @@ def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
 def test_adopt_failure_rolls_back(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59880)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         config = tmp_path / ".codex" / "config.toml"
         before = config.read_bytes()
 
@@ -333,7 +362,7 @@ def test_adopt_failure_rolls_back(tmp_path, monkeypatch, fake_keyring):
 
         monkeypatch.setattr(ConfigFileStore, "write_text_atomic", _stale)
         r = c.post(
-            "/api/v1/agents/cx/mcp-entries/fetcher/adopt",
+            f"/api/v1/agents/{uid}/mcp-entries/fetcher/adopt",
             json={"secrets": {"API_TOKEN": "mcp.fetcher.API_TOKEN"}},
         )
         assert r.status_code == 409, r.text
@@ -341,22 +370,26 @@ def test_adopt_failure_rolls_back(tmp_path, monkeypatch, fake_keyring):
 
         # Agent config byte-identical; the half-created resource rolled back.
         assert config.read_bytes() == before
-        r = c.get("/api/v1/resources/mcp_server/fetcher")
-        assert r.status_code == 404
+        # Nothing was adopted, so there is no uid to look the resource up by —
+        # the label query is the one route that answers "does a resource with
+        # this name exist?", and here the answer has to be no.
+        r = c.get("/api/v1/resources", params={"kind": "mcp_server", "name": "fetcher"})
+        assert r.status_code == 200, r.text
+        assert r.json()["resources"] == []
 
 
 def test_mcp_entries_unknown_agent_404(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59890)
     with _client(app) as c:
-        r = c.get("/api/v1/agents/ghost/mcp-entries")
+        r = c.get(f"/api/v1/agents/{UNKNOWN_UID}/mcp-entries")
         assert r.status_code == 404
 
 
 def test_mcp_entries_unknown_entry_404(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59900)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
-        r = c.delete("/api/v1/agents/cx/mcp-entries/nope")
+        uid = _register_codex(c, tmp_path)
+        r = c.delete(f"/api/v1/agents/{uid}/mcp-entries/nope")
         assert r.status_code == 404
         assert r.json()["error"]["code"] == "MCP_ENTRY_NOT_FOUND"
 
@@ -364,14 +397,14 @@ def test_mcp_entries_unknown_entry_404(tmp_path, monkeypatch):
 def test_mcp_entry_source_ambiguous_without_source_param(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59910)
     with _client(app) as c:
-        _register_claude(c, tmp_path)
+        uid = _register_claude(c, tmp_path)
         # "dup" lives in BOTH ~/.claude.json and settings.json.
-        r = c.delete("/api/v1/agents/cc/mcp-entries/dup")
+        r = c.delete(f"/api/v1/agents/{uid}/mcp-entries/dup")
         assert r.status_code == 422
         assert r.json()["error"]["code"] == "MCP_ENTRY_SOURCE_AMBIGUOUS"
 
         # Naming the source disambiguates.
-        r = c.delete("/api/v1/agents/cc/mcp-entries/dup", params={"source": "settings"})
+        r = c.delete(f"/api/v1/agents/{uid}/mcp-entries/dup", params={"source": "settings"})
         assert r.status_code == 204, r.text
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
         assert "dup" not in settings["mcpServers"]
@@ -390,9 +423,9 @@ def test_mcp_entry_source_ambiguous_without_source_param(tmp_path, monkeypatch):
 def test_list_plugins(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59920)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
 
-        r = c.get("/api/v1/agents/cx/plugins")
+        r = c.get(f"/api/v1/agents/{uid}/plugins")
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["parse_errors"] == []
@@ -413,9 +446,9 @@ def test_list_plugins(tmp_path, monkeypatch):
 def test_plugin_cache_missing_flagged(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59960)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
 
-        r = c.get("/api/v1/agents/cx/plugins")
+        r = c.get(f"/api/v1/agents/{uid}/plugins")
         by_id = {p["id"]: p for p in r.json()["items"]}
         # p2 has no cache dir on disk — reported, not repaired.
         assert by_id["p2@m1"]["cache_present"] is False
@@ -428,18 +461,18 @@ def test_toggle_claude_plugin_writes_settings_only(tmp_path, monkeypatch):
     inventory is byte-identical afterwards — Coffer never writes it."""
     app = _app(tmp_path, monkeypatch, 59930)
     with _client(app) as c:
-        _register_claude(c, tmp_path)
+        uid = _register_claude(c, tmp_path)
         installed = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
         installed_before = installed.read_bytes()
 
-        r = c.patch("/api/v1/agents/cc/plugins/q1@mk", json={"enabled": False})
+        r = c.patch(f"/api/v1/agents/{uid}/plugins/q1@mk", json={"enabled": False})
         assert r.status_code == 204, r.text
 
         settings = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
         assert settings["enabledPlugins"]["q1@mk"] is False
         assert installed.read_bytes() == installed_before
 
-        r = c.get("/api/v1/agents/cc/plugins")
+        r = c.get(f"/api/v1/agents/{uid}/plugins")
         by_id = {p["id"]: p for p in r.json()["items"]}
         assert by_id["q1@mk"]["enabled"] is False
 
@@ -447,9 +480,9 @@ def test_toggle_claude_plugin_writes_settings_only(tmp_path, monkeypatch):
 def test_toggle_codex_plugin_writes_config(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59935)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
 
-        r = c.patch("/api/v1/agents/cx/plugins/p2@m1", json={"enabled": True})
+        r = c.patch(f"/api/v1/agents/{uid}/plugins/p2@m1", json={"enabled": True})
         assert r.status_code == 204, r.text
         data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
         assert data["plugins"]["p2@m1"]["enabled"] is True
@@ -461,10 +494,10 @@ def test_toggle_codex_plugin_writes_config(tmp_path, monkeypatch):
 def test_toggle_unknown_codex_plugin_404(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59937)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         before = (tmp_path / ".codex" / "config.toml").read_bytes()
 
-        r = c.patch("/api/v1/agents/cx/plugins/ghost@m1", json={"enabled": False})
+        r = c.patch(f"/api/v1/agents/{uid}/plugins/ghost@m1", json={"enabled": False})
         assert r.status_code == 404, r.text
         assert r.json()["error"]["code"] == "PLUGIN_NOT_FOUND"
         assert (tmp_path / ".codex" / "config.toml").read_bytes() == before
@@ -475,17 +508,17 @@ def test_uninstall_codex_plugin(tmp_path, monkeypatch):
     """Codex uninstall drops the config entry and deletes the cache dir."""
     app = _app(tmp_path, monkeypatch, 59940)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
+        uid = _register_codex(c, tmp_path)
         cache_dir = tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p1"
         assert cache_dir.is_dir()
 
-        r = c.delete("/api/v1/agents/cx/plugins/p1@m1")
+        r = c.delete(f"/api/v1/agents/{uid}/plugins/p1@m1")
         assert r.status_code == 204, r.text
         data = tomllib.loads((tmp_path / ".codex" / "config.toml").read_text(encoding="utf-8"))
         assert "p1@m1" not in data.get("plugins", {})
         assert not cache_dir.exists()
 
-        r = c.get("/api/v1/agents/cx/plugins")
+        r = c.get(f"/api/v1/agents/{uid}/plugins")
         assert [p["id"] for p in r.json()["items"]] == ["p2@m1"]
 
 
@@ -497,7 +530,7 @@ def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
     neither the internal inventory nor settings.json itself."""
     app = _app(tmp_path, monkeypatch, 59950)
     with _client(app) as c:
-        _register_claude(c, tmp_path)
+        uid = _register_claude(c, tmp_path)
         installed = tmp_path / ".claude" / "plugins" / "installed_plugins.json"
         settings = tmp_path / ".claude" / "settings.json"
         installed_before, settings_before = installed.read_bytes(), settings.read_bytes()
@@ -512,7 +545,7 @@ def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
             )[1],
         )
 
-        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
+        r = c.delete(f"/api/v1/agents/{uid}/plugins/q1@mk")
         assert r.status_code == 204, r.text
         assert calls == [["claude", "plugin", "uninstall", "q1@mk"]]
         assert installed.read_bytes() == installed_before
@@ -522,14 +555,14 @@ def test_uninstall_claude_plugin_via_cli(tmp_path, monkeypatch):
 def test_claude_plugin_cli_failure_is_422(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59952)
     with _client(app) as c:
-        _register_claude(c, tmp_path)
+        uid = _register_claude(c, tmp_path)
         monkeypatch.setattr("shutil.which", lambda _exe: "/usr/bin/claude")
         monkeypatch.setattr(
             "subprocess.run",
             lambda *a, **k: types.SimpleNamespace(returncode=1, stdout="", stderr="no such plugin"),
         )
 
-        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
+        r = c.delete(f"/api/v1/agents/{uid}/plugins/q1@mk")
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "PLUGIN_UNINSTALL_FAILED"
         assert "no such plugin" in r.json()["error"]["message"]
@@ -544,22 +577,22 @@ def test_reject_claude_uninstall_no_cli(tmp_path, monkeypatch):
     affordance rather than offering a button that cannot work."""
     app = _app(tmp_path, monkeypatch, 59955)
     with _client(app) as c:
-        _register_claude(c, tmp_path)
+        uid = _register_claude(c, tmp_path)
         settings = tmp_path / ".claude" / "settings.json"
         before = settings.read_bytes()
 
         monkeypatch.setattr("shutil.which", lambda _exe: None)
 
-        r = c.delete("/api/v1/agents/cc/plugins/q1@mk")
+        r = c.delete(f"/api/v1/agents/{uid}/plugins/q1@mk")
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "PLUGIN_UNINSTALL_UNSUPPORTED"
         assert settings.read_bytes() == before
-        assert c.get("/api/v1/agents/cc/plugins").json()["can_uninstall"] is False
+        assert c.get(f"/api/v1/agents/{uid}/plugins").json()["can_uninstall"] is False
 
 
 def test_codex_listing_reports_uninstall_available(tmp_path, monkeypatch):
     """Codex edits its own documented config, so uninstall needs no CLI."""
     app = _app(tmp_path, monkeypatch, 59957)
     with _client(app) as c:
-        _register_codex(c, tmp_path)
-        assert c.get("/api/v1/agents/cx/plugins").json()["can_uninstall"] is True
+        uid = _register_codex(c, tmp_path)
+        assert c.get(f"/api/v1/agents/{uid}/plugins").json()["can_uninstall"] is True

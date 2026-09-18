@@ -41,7 +41,7 @@ class ProviderCreate(BaseModel):
     connection has no key, so supply neither. WHICH agents the connection
     projects into is not set here: the new connection starts on the wire's own
     default scope and is re-targeted through the framework's scope surface
-    (``PUT /api/v1/resources/provider/{name}/scope``), the same one every scoped
+    (``PUT /api/v1/resources/{uid}/scope``), the same one every scoped
     kind uses. ``models`` curates which of the endpoint's models this connection
     offers downstream, each with its modality (``None`` ⇒ empty ⇒ no restriction)."""
 
@@ -81,18 +81,6 @@ class ProviderPatch(BaseModel):
     description: str | None = None
 
 
-class ProviderRename(BaseModel):
-    """Move a connection to a new name.
-
-    Separate from ``ProviderPatch`` because the name is the connection's
-    IDENTITY, not part of its config: the vault ref it owns, its audit trail and
-    the agent config it is projected into all spell the name out, so changing it
-    is an operation of its own rather than another optional patch field.
-    """
-
-    new_name: str = Field(min_length=1, max_length=64)
-
-
 class ProviderOut(BaseModel):
     """An LLM connection as returned by the API (no secret).
 
@@ -112,8 +100,16 @@ class ProviderOut(BaseModel):
     because they are separate models and neither falls back to the other; and
     ``is_active`` marks the one currently projected. A connection may carry any
     combination.
+
+    ``uid`` is the connection's identity and what every route here takes; the
+    ``name`` beside it is the label, free to change through
+    ``PATCH /api/v1/resources/{uid}`` without anything downstream noticing. That
+    is the whole reason this kind no longer owns a rename operation of its own:
+    the projected ``apiKeyHelper`` cites the uid, so a rename rewrites nothing
+    (ADR resource-identity-is-an-immutable-uid).
     """
 
+    uid: str
     name: str
     protocol: Protocol
     base_url: str

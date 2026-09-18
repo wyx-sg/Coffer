@@ -2,13 +2,16 @@
 
 Split out of ``main.py`` so that module stays focused on the ``_Bridge`` stdio↔
 HTTP/SSE pump. These free functions cover everything the bridge needs *around*
-a live connection: discovering (and if necessary spawning) the daemon, wiring
-the shim's diagnostic log to a file, and stamping the launch cwd into the
-``initialize`` handshake.
+a live connection: parsing the shim's own launch flags, discovering (and if
+necessary spawning) the daemon, wiring the shim's diagnostic log to a file, and
+stamping the launch cwd and the agent identity into the ``initialize``
+handshake. The flag and the ``_meta`` key it turns into live next to each other
+here on purpose — they are two halves of one fact and drifted apart once.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import logging
@@ -31,17 +34,51 @@ _DAEMON_BOOT_TIMEOUT = 10  # seconds
 
 #: MCP-reserved extension key the daemon reads the launch cwd from.
 _CWD_META_KEY = "coffer/cwd"
-#: MCP-reserved extension key the daemon reads the shim's self-reported
-#: ``--agent`` identity from (spec mcp-gateway FR-013, amended).
-_AGENT_META_KEY = "coffer/agent"
+#: MCP-reserved extension key the daemon reads the shim's self-reported agent
+#: identity from (spec mcp-gateway FR-013, amended). The value is the agent
+#: resource's **uid**, which is why the key is not the older ``coffer/agent``:
+#: that one carried a name, the gateway no longer reads it, and giving the same
+#: key a new meaning would leave an old shim's stale name being matched against
+#: a scope that now holds uids (ADR resource-identity-is-an-immutable-uid).
+_AGENT_UID_META_KEY = "coffer/agent-uid"
 
 
-def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
-    """Stamp the shim's launch cwd — and, when known, its ``--agent`` identity
-    — into an ``initialize`` envelope's ``params._meta`` so the daemon can
-    resolve the per-project memory scope and which resources are active for
-    this agent. The agent key is omitted entirely when no name was given (an
-    unnamed shim launch, or a client that hasn't been re-installed yet)."""
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse the shim's own CLI args — the self-reported agent identity.
+
+    ``--agent-uid <uid>`` is what Coffer writes into an agent's native MCP config
+    (``domain.agent.mcp_install``). It carries the agent resource's **uid**
+    because this string outlives the edit that renames the agent — the entry is
+    written once into a file Coffer does not otherwise touch — and because the
+    gateway matches what we report against the uids a resource's ``scope`` holds
+    (ADR resource-identity-is-an-immutable-uid).
+
+    The name-shaped ``--agent`` that preceded it is NOT accepted, and
+    ``allow_abbrev=False`` is what makes that true rather than merely tidy:
+    argparse takes any unambiguous PREFIX of a long option, and ``--agent`` is a
+    prefix of ``--agent-uid``. Left on, every entry an older Coffer wrote would
+    report the agent's NAME as its uid, and the gateway would compare that label
+    against a list of uids — the silent mismatch this change exists to remove.
+    Discarded instead, such a shim reports nothing and its session is
+    unidentified: strictly less access, never more, and re-installing fixes it.
+
+    The shim is spawned by an MCP client's server-launch config, which may
+    already pass other flags we don't know about — ``parse_known_args`` and
+    discarding the rest keeps the shim maximally compatible rather than
+    crashing on an unrecognized flag.
+    """
+    parser = argparse.ArgumentParser(prog="coffer-mcp-shim", add_help=False, allow_abbrev=False)
+    parser.add_argument("--agent-uid", dest="agent_uid", default=None)
+    namespace, _unknown = parser.parse_known_args(argv)
+    return namespace
+
+
+def _inject_meta(envelope: dict[str, Any], agent_uid: str | None = None) -> None:
+    """Stamp the shim's launch cwd — and, when known, its ``--agent-uid``
+    identity — into an ``initialize`` envelope's ``params._meta`` so the daemon
+    can resolve the per-project memory scope and which resources are active for
+    this agent. The agent key is omitted entirely when no uid was given (a
+    hand-configured shim, or a client whose entry Coffer has not written)."""
     params = envelope.get("params")
     if not isinstance(params, dict):
         params = {}
@@ -52,8 +89,8 @@ def _inject_meta(envelope: dict[str, Any], agent: str | None = None) -> None:
         params["_meta"] = meta
     with contextlib.suppress(OSError):
         meta[_CWD_META_KEY] = os.getcwd()
-    if agent:
-        meta[_AGENT_META_KEY] = agent
+    if agent_uid:
+        meta[_AGENT_UID_META_KEY] = agent_uid
 
 
 def _setup_shim_log() -> None:

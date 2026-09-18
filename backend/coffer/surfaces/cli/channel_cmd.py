@@ -11,6 +11,7 @@ from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._options import ExitCode
+from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage messaging channels (Telegram, SeaTalk)")
 _console = Console()
@@ -82,7 +83,11 @@ def register(
         "--delivery",
         help="SeaTalk event delivery: webhook (public callback URL) | websocket (no public URL)",
     ),
-    default_agent: str = typer.Option("claude_code", "--agent", help="Default agent key"),
+    default_agent: str = typer.Option(
+        ...,
+        "--agent",
+        help="Name of the agent this channel drives by default (required)",
+    ),
     agent_config: str | None = typer.Option(
         None, "--agent-config", help="Default agent config as JSON"
     ),
@@ -100,7 +105,13 @@ def register(
     rare enough to be an error state rather than a routine one.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
-    config: dict[str, Any] = {"channel_type": channel_type, "default_agent": default_agent}
+    # The channel stores the agent's UID, so a rename cannot silently unbind it
+    # — but a person types a NAME, so it is resolved here, once, like every
+    # other label this CLI takes. It is required rather than defaulted because
+    # a uid is minted per vault: no constant can stand for "the usual agent",
+    # and the old ``claude_code`` default was a fiction — there was never an
+    # agent behind it, so a channel created with it simply routed nowhere.
+    config: dict[str, Any] = {"channel_type": channel_type}
     if agent_config is not None:
         try:
             config["default_agent_config"] = _json.loads(agent_config)
@@ -145,11 +156,12 @@ def register(
         # A new channel is created unscoped, so an enabled one starts here and
         # may drive every registered agent (ADR per-agent-resource-scope).
         # Narrowing the agents it may drive is a later, separate edit —
-        # ``coffer scope set channel:<name> --agents <keys>`` — not something
+        # ``coffer scope set channel <name> --agents <names>`` — not something
         # register has to ask about.
+        config["default_agent"] = resolve_uid(c, "agent", default_agent, verbose=verbose)
         r = c.post("/resources", json={"kind": "channel", "name": name, "config": config})
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"registered: channel:{name}")
+    typer.echo(f"registered: channel {name}")
 
 
 @app.command("pair")
@@ -161,7 +173,8 @@ def pair(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/channels/{name}/pairing-code")
+        uid = resolve_uid(c, "channel", name, verbose=verbose)
+        r = c.post(f"/channels/{uid}/pairing-code")
         _cli_client.check(r, verbose=verbose)
     body = r.json()
     typer.echo(f"pairing code: {body['code']}")
@@ -182,7 +195,8 @@ def status(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/channels/{name}/status")
+        uid = resolve_uid(c, "channel", name, verbose=verbose)
+        r = c.get(f"/channels/{uid}/status")
         _cli_client.check(r, verbose=verbose)
     body = r.json()
     if output_json:
@@ -264,13 +278,14 @@ def bind(
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/resources/channel/{name}")
+        uid = resolve_uid(c, "channel", name, verbose=verbose)
+        r = c.get(f"/resources/{uid}")
         _cli_client.check(r, verbose=verbose)
         config = dict(r.json().get("config") or {})
         config["runs_on"] = machine_id if machine_id else _this_machine_id(c, verbose=verbose)
-        r = c.patch(f"/resources/channel/{name}", json={"config": config})
+        r = c.patch(f"/resources/{uid}", json={"config": config})
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"channel:{name} runs on {config['runs_on']}")
+    typer.echo(f"channel {name} runs on {config['runs_on']}")
 
 
 @app.command("notify")
@@ -294,6 +309,7 @@ def notify(
     if chat:
         body["chat_id"] = chat
     with c:
-        r = c.post(f"/channels/{name}/notify", json=body)
+        uid = resolve_uid(c, "channel", name, verbose=verbose)
+        r = c.post(f"/channels/{uid}/notify", json=body)
         _cli_client.check(r, verbose=verbose)
     typer.echo("sent")

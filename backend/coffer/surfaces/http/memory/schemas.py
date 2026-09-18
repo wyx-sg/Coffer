@@ -32,6 +32,18 @@ class PartitionOut(BaseModel):
     permanent partitions (FR-014, FR-015).
     """
 
+    #: The partition Resource's immutable identity, and what every route under
+    #: ``/partitions/{uid}/…`` takes. It is deliberately NOT the resolution
+    #: key: a working directory resolves to a partition through
+    #: ``repository_key``, which two clones of one repository derive
+    #: identically on different machines. The uid answers "which row", the
+    #: repository key answers "which partition is this directory in", and
+    #: collapsing them would be one field answering two questions.
+    uid: str
+    #: A mutable label — ``global`` or a project slug — which is also the
+    #: partition's directory name under the memory root, so a rename moves the
+    #: directory with it. For display; anything that has to keep pointing at
+    #: this partition holds ``uid``.
     name: str
     repository_key: str
     repository_path: str
@@ -237,7 +249,15 @@ class DeliveryStatusOut(BaseModel):
     crying wolf on its own normal state (FR-033, FR-039).
     """
 
-    agent: str
+    #: Which agent this row is about, and what the install and remove routes
+    #: take — so a surface rendering this list acts on a row directly.
+    agent_uid: str
+    #: The same agent's label, for the row's heading. Beside the uid rather
+    #: than instead of it, for the reason an audit row carries
+    #: ``resource_name`` beside ``resource_id``: the list has to be both
+    #: readable and actionable, and a client given only one of the two would
+    #: have to fetch the agent list to recover the other.
+    agent_name: str
     installed: bool
     command: str
     event: str
@@ -256,10 +276,16 @@ class ContextQuery(BaseModel):
     """
 
     cwd: str = Field(default="")
-    #: The calling agent's registered name — who fired, for ``record_fired``
-    #: below. It does not shape the payload: every enabled partition is
-    #: composed for every agent.
-    agent: str | None = None
+    #: The calling agent's uid — who fired, for ``record_fired`` below. It does
+    #: not shape the payload: every enabled partition is composed for every
+    #: agent.
+    #:
+    #: A uid rather than a name because of who sends it: the hook command
+    #: Coffer wrote into that agent's settings file at install time and does
+    #: not rewrite. A name baked into that command would attribute fires to
+    #: nobody the first time the agent was relabelled, so there is one spelling
+    #: here and it is the one that cannot change.
+    agent_uid: str | None = None
     #: Omitted or null uses the server's default ceiling.
     ceiling_tokens: int | None = None
     #: Whether serving this payload counts as a real delivery (FR-033). The

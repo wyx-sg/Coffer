@@ -23,7 +23,8 @@ from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.chat.turn_runner import DEFAULT_TURN_IDLE_TIMEOUT_SECONDS
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.targets import projection_targets
-from coffer.domain.errors import CredentialMissing
+from coffer.application.resource_service import ResourceService
+from coffer.domain.errors import CredentialMissing, ResourceNotFound
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
 from coffer.infrastructure.agent.claude_binary_models import ClaudeBinaryModelDiscovery
@@ -76,6 +77,7 @@ def _turn_idle_timeout() -> float | None:
     return seconds if seconds > 0 else None
 
 
+@dataclass(frozen=True)
 class _ActiveProviderModels:
     """``ActiveProviderModelsPort`` over the provider kind — the composition-root
     half of the catalogue's provider question.
@@ -96,15 +98,25 @@ class _ActiveProviderModels:
     by every turn that tried them (spec provider-switching FR-032).
     """
 
+    #: Held rather than resolved lazily like the provider service: a
+    #: connection's reach names agent UIDS, so answering a question about an
+    #: agent TYPE needs the agent registry, and that is a plain dependency.
+    resources: ResourceService
+
     async def curated_models(self, agent_key: str) -> list[str] | None:
         try:
-            resources = await get_provider_service().list()
+            connections = await get_provider_service().list()
+            # A connection's reach is now an allow-list of agent UIDS, so
+            # answering "does it cover this agent TYPE" means asking which
+            # registered agents it reaches and what type each of those is. The
+            # rows are fetched once, not per connection.
+            agents = await self.resources.list(kind="agent")
         except Exception:
             # Nothing is wired yet, or the provider kind is unhappy: a catalogue
             # read degrades to "no active provider", never to an error.
             _log.debug("agent.catalogue.provider_lookup_failed", exc_info=True)
             return None
-        for resource in resources:
+        for resource in connections:
             try:
                 cfg = ProviderConfig.model_validate(resource.config)
             except ValueError:
@@ -113,7 +125,7 @@ class _ActiveProviderModels:
                 _log.debug("agent.catalogue.provider_config_invalid", extra={"name": resource.name})
                 continue
             if cfg.is_active and any(
-                t.value == agent_key for t in projection_targets(resource, cfg)
+                t.value == agent_key for t in projection_targets(resource, cfg, agents)
             ):
                 return cfg.model_ids(Modality.TEXT)
         return None
@@ -142,6 +154,7 @@ def wire_chat(
     mcp_session_factory: McpSessionFactory,
     credential_store: EncryptedCredentialStore,
     agent_service: AgentService,
+    resource_service: ResourceService,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec channels) into the running app.
 
@@ -174,7 +187,22 @@ def wire_chat(
 
     # 4. The agent-provider registry — the platform seam (chat_provider_wiring:
     #    adding an agent is one more register() call there).
-    registry = build_agent_provider_registry(conv_repo, _credential_resolver)
+    async def _channel_name(channel_uid: str) -> str | None:
+        """The channel's current label, for the system-prompt line naming it.
+
+        A conversation stores the channel's UID, so this is the read-time half
+        of that split: the binding survives a rename and the model is told what
+        the channel is called now. ``None`` for a channel that has since been
+        deleted — the turn still came from a channel, it just has no name left.
+        """
+        try:
+            return (await resource_service.get(channel_uid)).name
+        except ResourceNotFound:
+            return None
+
+    registry = build_agent_provider_registry(
+        conv_repo, _credential_resolver, resolve_channel_name=_channel_name
+    )
 
     # 5. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(
@@ -234,7 +262,7 @@ def wire_chat(
                 NativeConfigModelDiscovery(),
             ]
         ),
-        provider_models=_ActiveProviderModels(),
+        provider_models=_ActiveProviderModels(resources=resource_service),
     )
 
     # 9. Register dependency providers. The catalogue is published twice on

@@ -1,8 +1,17 @@
-"""End-to-end HTTP coverage for /api/v1/skills/* (spec agent-registry)."""
+"""End-to-end HTTP coverage for /api/v1/skills/* (spec agent-registry).
+
+Every route that addresses one skill takes its ``uid`` — the immutable identity
+the daemon minted — never its name (ADR resource-identity-is-an-immutable-uid).
+So these tests read the uid off the response that created the resource (import,
+or agent registration) and address it with that from then on. The one place a
+name may still find a resource is ``GET /api/v1/resources?kind=...&name=...``,
+the label->identity front door the CLI uses — not a second way to address.
+"""
 
 from __future__ import annotations
 
 import pathlib
+import re
 import textwrap
 
 import pytest
@@ -45,6 +54,19 @@ def _write_skill_folder(folder: pathlib.Path, *, name: str) -> pathlib.Path:
     return folder
 
 
+def _skill_uid_by_name(c: TestClient, name: str) -> str:
+    """Resolve a skill's label to its uid the only way a surface may.
+
+    ``GET /api/v1/resources?kind=skill&name=<name>`` is the single route that
+    finds a resource by what it is called; everything else takes the uid.
+    """
+    r = c.get("/api/v1/resources", params={"kind": "skill", "name": name})
+    assert r.status_code == 200, r.text
+    matches = r.json()["resources"]
+    assert len(matches) == 1, matches
+    return matches[0]["uid"]
+
+
 @pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
 def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
     """End-to-end HTTP coverage — the surface both desktop and CLI consume."""
@@ -64,6 +86,9 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
             json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
+        # The agent's uid is what every reference to it is written with here
+        # on: its own routes, the scope allow-list, the binding rows reported.
+        agent_uid = r.json()["uid"]
 
         # list skills — empty, because every skill here is one the user
         # imported. Coffer no longer seeds one of its own: the knowledge skill
@@ -79,7 +104,14 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         assert r.status_code == 201, r.text
         skill = r.json()
         assert skill["name"] == "hello-world"
+        # Identity and label are two fields now: the uid is a minted uuid4 hex,
+        # deliberately not derived from the name, so a rename cannot move it.
+        uid = skill["uid"]
+        assert re.fullmatch(r"[0-9a-f]{32}", uid), uid
+        # A binding carries both halves of the agent: the uid a client follows,
+        # the name it prints.
         assert [b["agent_name"] for b in skill["bindings"]] == ["cur"]
+        assert [b["agent_uid"] for b in skill["bindings"]] == [agent_uid]
         # Delivery is decided by these two fields and nothing else.
         assert skill["enabled"] is True
         assert skill["scope"] is None
@@ -88,9 +120,13 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         link = agent_config_dir / "skills" / "hello-world"
         assert link.exists()
 
-        # get
-        r = c.get("/api/v1/skills/hello-world")
+        # get — by uid, and ONLY by uid. The name still names the master folder
+        # on disk (the link above) but addresses nothing over HTTP, and no
+        # compatibility shim answers for it.
+        r = c.get(f"/api/v1/skills/{uid}")
         assert r.status_code == 200
+        assert (r.json()["uid"], r.json()["name"]) == (uid, "hello-world")
+        assert c.get("/api/v1/skills/hello-world").status_code == 404
 
         # verify — no drift
         r = c.post("/api/v1/skills/verify")
@@ -102,26 +138,22 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         # nothing is reachable there: an unrouted path answers 404 or 405
         # depending on the Starlette version, and which one is not the point.
         for gone in ("enable", "disable"):
-            r = c.post(f"/api/v1/skills/hello-world/{gone}", json={"agent_name": "cur"})
+            r = c.post(f"/api/v1/skills/{uid}/{gone}", json={"agent_uid": agent_uid})
             assert r.status_code in (404, 405), f"{gone} still routes: {r.status_code}"
 
-        # scope the skill away from the agent — the copy is reclaimed
-        r = c.put(
-            "/api/v1/resources/skill/hello-world/scope",
-            json={"scope": {"agents": []}},
-        )
+        # scope the skill away from the agent — the copy is reclaimed. The
+        # allow-list holds agent UIDS: a scope references another resource, and
+        # a name is the one part of that reference the user may change.
+        r = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": []}})
         assert r.status_code == 200, r.text
         assert r.json()["scope"] == {"agents": []}
         assert not link.exists()
-        assert c.get("/api/v1/skills/hello-world").json()["bindings"] == []
+        assert c.get(f"/api/v1/skills/{uid}").json()["bindings"] == []
 
         # scope it back in — redelivered
-        r = c.put(
-            "/api/v1/resources/skill/hello-world/scope",
-            json={"scope": {"agents": ["cur"]}},
-        )
+        r = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [agent_uid]}})
         assert r.status_code == 200, r.text
-        assert r.json()["scope"] == {"agents": ["cur"]}
+        assert r.json()["scope"] == {"agents": [agent_uid]}
         assert link.exists()
 
         # a stale client still sending the withdrawn machine axis is REFUSED,
@@ -130,26 +162,24 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         # point was to narrow, which is the one direction a write must never
         # take by accident.
         r = c.put(
-            "/api/v1/resources/skill/hello-world/scope",
+            f"/api/v1/resources/{uid}/scope",
             json={"scope": {"agents": None, "machines": ["a3f21c9e4b7d2610"]}},
         )
         assert r.status_code == 422, r.text
-        assert c.get("/api/v1/resources/skill/hello-world/scope").json()["scope"] == {
-            "agents": ["cur"]
-        }
+        assert c.get(f"/api/v1/resources/{uid}/scope").json()["scope"] == {"agents": [agent_uid]}
         assert link.exists()
 
         # disabling the skill resource reclaims it; re-enabling redelivers
-        assert c.post("/api/v1/resources/skill/hello-world/disable").status_code == 200
+        assert c.post(f"/api/v1/resources/{uid}/disable").status_code == 200
         assert not link.exists()
-        assert c.post("/api/v1/resources/skill/hello-world/enable").status_code == 200
+        assert c.post(f"/api/v1/resources/{uid}/enable").status_code == 200
         assert link.exists()
 
         # delete
-        r = c.delete("/api/v1/skills/hello-world")
+        r = c.delete(f"/api/v1/skills/{uid}")
         assert r.status_code == 204
         assert not link.exists()
-        r = c.get("/api/v1/skills/hello-world")
+        r = c.get(f"/api/v1/skills/{uid}")
         assert r.status_code == 404
 
 
@@ -173,21 +203,25 @@ def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatc
             json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
+        agent_uid = r.json()["uid"]
 
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
         assert r.status_code == 201, r.text
+        uid = r.json()["uid"]
         link = agent_config_dir / "skills" / "hello-world"
         assert link.exists(), "skill should be delivered to the agent on import"
 
         # Delete the agent — the cross-kind on_delete hook must cascade.
-        r = c.delete("/api/v1/agents/cur")
+        r = c.delete(f"/api/v1/agents/{agent_uid}")
         assert r.status_code == 204, r.text
 
         # The per-agent symlink is torn down...
         assert not link.exists(), "agent delete must remove its delivered skill link"
-        # ...and the skill no longer lists a binding for the deleted agent.
-        r = c.get("/api/v1/skills/hello-world")
+        # ...and the skill no longer lists a binding for the deleted agent. The
+        # uid makes that airtight: a name can be reused by a later agent row.
+        r = c.get(f"/api/v1/skills/{uid}")
         assert r.status_code == 200
+        assert all(b["agent_uid"] != agent_uid for b in r.json()["bindings"])
         assert all(b["agent_name"] != "cur" for b in r.json()["bindings"])
 
 
@@ -198,7 +232,9 @@ def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatc
 def test_404_envelope_shape_for_missing_skill(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59610)
     with _client(app) as c:
-        r = c.get("/api/v1/skills/does-not-exist")
+        # A well-formed uid that was never minted — the path segment is an
+        # identity now, so "missing" means "no resource carries this uid".
+        r = c.get("/api/v1/skills/00000000000000000000000000000000")
         assert r.status_code == 404
         body = r.json()
         assert "error" in body
@@ -236,6 +272,7 @@ def test_reimport_with_overwrite_replaces(tmp_path, monkeypatch):
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
         assert r.status_code == 201, r.text
         first_hash = r.json()["version_hash"]
+        first_uid = r.json()["uid"]
 
         # Modify the skill content so version_hash changes.
         (src / "SKILL.md").write_text(
@@ -258,10 +295,23 @@ def test_reimport_with_overwrite_replaces(tmp_path, monkeypatch):
         skill = r.json()
         assert skill["name"] == "dup"
         assert skill["version_hash"] != first_hash
+        # An overwrite is an UPDATE of the same resource, so its identity has to
+        # survive it — the row keeps its uid, and with it every binding,
+        # delivered symlink and audit row citing it. A fresh uid here would mean
+        # the re-import quietly produced a different skill.
+        assert skill["uid"] == first_uid
 
 
 def test_skill_repair_route(tmp_path, monkeypatch):
-    """POST /skills/repair re-delivers MISSING_LINK and leaves REPLACED_WITH_REGULAR intact."""
+    """POST /skills/repair re-delivers MISSING_LINK and leaves REPLACED_WITH_REGULAR intact.
+
+    Also pins what a drift entry is made of — the one report on this surface
+    that stayed on NAMES while every route moved to uids. An entry is a finding
+    about a path in a workspace, and ``orphan_master`` below is exactly the case
+    where no resource stands behind the name. The report is acted on as a whole
+    through ``POST /skills/repair``, never used to address one resource, so the
+    uids that repair re-delivers against stay on the domain entry.
+    """
     app = _app(tmp_path, monkeypatch, 59630)
     agent_config_dir = tmp_path / "agent-cfg"
     agent_config_dir.mkdir()
@@ -275,9 +325,11 @@ def test_skill_repair_route(tmp_path, monkeypatch):
             json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
+        agent_uid = r.json()["uid"]
 
         r = c.post("/api/v1/skills/import", json={"path": str(src)})
         assert r.status_code == 201, r.text
+        uid = r.json()["uid"]
 
         link = agent_config_dir / "skills" / "fix-me"
         assert link.exists()
@@ -297,17 +349,52 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         foreign_link.mkdir()
         (foreign_link / "file.txt").write_text("foreign content")
 
+        # And a master folder no resource row claims — ORPHAN_MASTER, the one
+        # drift kind with no identity on either side.
+        (tmp_path / ".coffer" / "skills" / "adopted-by-nobody").mkdir(parents=True)
+
+        # Verify first: the report a client reads before deciding to repair.
+        r = c.post("/api/v1/skills/verify")
+        assert r.status_code == 200, r.text
+        entries = r.json()["entries"]
+
+        missing = next(e for e in entries if e["skill_name"] == "fix-me")
+        assert missing["agent_name"] == "cur"
+        # The entry is exactly these five fields — no uid rides along, so a
+        # client cannot start addressing one entry out of the report.
+        fields = {"skill_name", "agent_name", "kind", "target_path", "suggested_remedy"}
+        assert set(missing) == fields
+        # What it prints is a LABEL, not an address: the name does not resolve
+        # against a skill route, and a client that wants the resource behind it
+        # goes the one way a name may still find one — the resources lookup.
+        assert c.get(f"/api/v1/skills/{missing['skill_name']}").status_code == 404
+        assert _skill_uid_by_name(c, missing["skill_name"]) == uid
+
+        orphan = next(e for e in entries if e["kind"] == "orphan_master")
+        # A folder on disk with no row behind it: nothing to look up at all,
+        # which is why the report is in names and why repair skips the kind.
+        assert orphan["skill_name"] == "adopted-by-nobody"
+        lookup = c.get("/api/v1/resources", params={"kind": "skill", "name": orphan["skill_name"]})
+        assert lookup.json()["resources"] == [], lookup.text
+
         # Call repair.
         r = c.post("/api/v1/skills/repair")
         assert r.status_code == 200, r.text
         body = r.json()
 
-        # The MISSING_LINK should be remediated.
-        assert any(e["skill_name"] == "fix-me" for e in body["remediated"]), body
+        # The MISSING_LINK should be remediated, re-delivered to the agent the
+        # entry names — whose uid the restored delivery row still records.
+        remediated = next(e for e in body["remediated"] if e["skill_name"] == "fix-me")
+        assert remediated["agent_name"] == "cur"
+        bindings = c.get(f"/api/v1/skills/{uid}").json()["bindings"]
+        assert [b["agent_uid"] for b in bindings] == [agent_uid]
         # The link is restored.
         assert link.exists()
 
         # The REPLACED_WITH_REGULAR should remain (manual action needed).
-        assert any(e["skill_name"] == "foreign" for e in body["remaining"]["entries"]), body
+        remaining = body["remaining"]["entries"]
+        assert any(e["skill_name"] == "foreign" for e in remaining), body
         # Foreign dir is untouched.
         assert (foreign_link / "file.txt").exists()
+        # The orphan is still there too: it was never repairable.
+        assert any(e["kind"] == "orphan_master" for e in remaining), body

@@ -32,7 +32,7 @@ from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.scan import scan_locations
-from coffer.domain.resource import Resource, ResourceRef
+from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 from coffer.infrastructure.agent.plugin_bundle import FsPluginDetailReader
@@ -139,28 +139,28 @@ def wire_agent_and_skill_kinds(
     #
     # `on_config_dir_changed` re-delivers the agent's skills when its config
     # dir moves (skill_svc is constructed above, so the callback is available).
-    async def _agent_on_config_dir_changed(agent_name: str) -> None:
-        await skill_svc.relink_for_agent(agent_name)
+    async def _agent_on_config_dir_changed(agent_uid: str) -> None:
+        await skill_svc.relink_for_agent(agent_uid)
 
     # A newly registered agent gets everything the delivery predicate grants
     # it right now (FR-012a).
-    async def _agent_reconcile_skill_delivery(agent_name: str) -> None:
-        await skill_svc.apply_scope_for_agent(agent_name, actor="system")
+    async def _agent_reconcile_skill_delivery(agent_uid: str) -> None:
+        await skill_svc.apply_scope_for_agent(agent_uid, actor="system")
 
     # actor="sync": delivery failures surface in the run's errors (retried on
     # every import) instead of growing the audit log unboundedly. Reused below
     # by the sync post-import hook AND by both skill-kind hooks — one
     # reconciliation, several triggers.
-    async def _sync_skill_reconcile(agent_name: str) -> list[str]:
-        return await skill_svc.apply_scope_for_agent(agent_name, actor="sync")
+    async def _sync_skill_reconcile(agent_uid: str) -> list[str]:
+        return await skill_svc.apply_scope_for_agent(agent_uid, actor="sync")
 
     # The SKILL kind's two post-write hooks (ADR per-agent-resource-scope). The `agent` kind carries
     # no scope of its own, so only a skill's own edit triggers these — and
     # either half of the predicate (``enabled`` or ``scope``) can gain or lose
     # any agent, so every registered agent's delivery is re-reconciled.
-    async def _skill_delivery_changed(ref: ResourceRef) -> None:
+    async def _skill_delivery_changed(_skill: Resource) -> None:
         for row in await resource_svc.list(kind="agent"):
-            await _sync_skill_reconcile(row.name)
+            await _sync_skill_reconcile(row.uid)
 
     # Config-file view/edit + one-click Coffer-MCP install (spec agent-registry v2).
     config_file_store = ConfigFileStore()
@@ -221,18 +221,18 @@ def wire_agent_and_skill_kinds(
     # ``plugin_sync_state``).
     sync.state_providers.append(AgentPluginSyncState(resource_svc, agent_plugin_svc))
 
-    async def _agent_on_delete(ref: ResourceRef) -> None:
+    async def _agent_on_delete(agent: Resource) -> None:
         # Awaited by ResourceService.delete BEFORE the agent row is removed,
         # so binding-row lookups inside ``cleanup_bindings_for_agent`` still
         # resolve and every per-agent symlink is torn down. A fire-and-forget
         # implementation would race the row delete and find nothing to clean.
-        await skill_svc.cleanup_bindings_for_agent(ref)
+        await skill_svc.cleanup_bindings_for_agent(agent)
 
-    async def _agent_enabled_changed(ref: ResourceRef) -> None:
+    async def _agent_enabled_changed(agent: Resource) -> None:
         # Disabling an agent reclaims its delivered skills; enabling it puts
         # back whatever the skills' own ``enabled`` + ``scope`` grant. Same
         # per-agent reconciliation both ways, so the reclaim is reversible.
-        await skill_svc.apply_scope_for_agent(agent_name=ref.name, actor="system")
+        await skill_svc.apply_scope_for_agent(agent_uid=agent.uid, actor="system")
 
     agent_kind = make_agent_kind(
         on_delete=_agent_on_delete,
@@ -240,6 +240,11 @@ def wire_agent_and_skill_kinds(
     )
     skill_kind = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
+        # A skill's name IS its master folder, so the rename hook is what moves
+        # it — and re-points every delivered link at the new one. Passed
+        # positionally and required, so this composition root cannot forget it
+        # and leave renames stranding folders.
+        skill_svc.move_master_folder,
         on_scope_changed=_skill_delivery_changed,
         on_enabled_changed=_skill_delivery_changed,
     )
