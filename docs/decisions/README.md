@@ -86,7 +86,8 @@ section that future readers most often want — don't skip it.>
 | --- | --- | --- |
 | [`resource-framework-upfront`](resource-framework-upfront.md) | Resource Framework Designed Upfront | Accepted |
 | [`code-layout-layer-first`](code-layout-layer-first.md) | Code Layout — Layer-First with Kind Subdirectories | Accepted |
-| [`resource-identifier-format`](resource-identifier-format.md) | Resource Identifier Format — `<kind>:<name>`, Not URN | Accepted |
+| [`resource-identifier-format`](resource-identifier-format.md) | Resource Identifier Format — `<kind>:<name>`, Not URN | Superseded |
+| [`resource-identity-is-an-immutable-uid`](resource-identity-is-an-immutable-uid.md) | Resource Identity Is an Immutable `uid`, Not the Name | Accepted |
 | [`capability-state-model`](capability-state-model.md) | MCP Capability State — Preferences in DB, List Live-Queried From Upstream | Accepted |
 | [`session-subprocess-model`](session-subprocess-model.md) | One Upstream Subprocess Set Per Downstream Client Session | Accepted |
 | [`daemon-detect-or-spawn`](daemon-detect-or-spawn.md) | Daemon Detect-or-Spawn Pattern | Accepted |

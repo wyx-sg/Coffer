@@ -4,7 +4,7 @@ Four core concepts underpin how Coffer works. Understanding them helps you reaso
 
 ## Resource kind
 
-Every user-managed entity in Coffer is a **Resource** identified by `<kind>:<name>`. The resource framework unifies identity, lifecycle (register / update / enable / disable / delete), audit, and schema validation across all kinds.
+Every user-managed entity in Coffer is a **Resource** identified by an immutable `uid` — an opaque value minted once and never reused, the same on every machine your vault syncs with. Its **name** is a label you can change at any time — `coffer resource rename <kind> <name> <new-name>`, for any kind — and renaming keeps the resource's identity, so its reach, its credentials, its bindings and its history all follow it. The resource framework unifies identity, lifecycle (register / update / enable / disable / delete), audit, and schema validation across all kinds.
 
 Seven kinds ship today:
 

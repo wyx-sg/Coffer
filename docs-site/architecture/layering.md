@@ -22,7 +22,7 @@ Arrows show the allowed import direction. `surfaces` may import `application`; `
 
 ### domain/
 
-The domain layer contains the kind-agnostic entities and protocols that define what Coffer manages at the conceptual level. This includes `resource.py` (the Resource entity, `ResourceRef`, and the frozen `Kind` record every kind's factory returns), `audit.py` (the `AuditEventType` enum and the `AuditEntry` record), `errors.py` (the canonical error hierarchy), and one subdirectory per kind for that kind's value objects — `mcp/` (tool schemas, capability descriptors, session state models), `agent/`, `skill/`, `knowledge/`, `memory/`, `provider/`, `channel/` — plus the cross-cutting `chat/` and `sync/`.
+The domain layer contains the kind-agnostic entities and protocols that define what Coffer manages at the conceptual level. This includes `resource.py` (the Resource entity — its immutable `uid`, its `kind` and its mutable `name` label — the label-validation rule every write path shares, and the frozen `Kind` record every kind's factory returns), `audit.py` (the `AuditEventType` enum and the `AuditEntry` record), `errors.py` (the canonical error hierarchy), and one subdirectory per kind for that kind's value objects — `mcp/` (tool schemas, capability descriptors, session state models), `agent/`, `skill/`, `knowledge/`, `memory/`, `provider/`, `channel/` — plus the cross-cutting `chat/` and `sync/`.
 
 ::: warning Absolute invariant
 `domain/` may NOT import from `infrastructure/`, `surfaces/`, or any external SDK. No SQLAlchemy, no FastAPI, no `keyring`, no `httpx` — none of these appear anywhere in the domain layer. If a domain entity needs to validate a URL, it uses Python's standard library. If it needs to represent a credential, it holds a string reference, not a keychain handle.
@@ -91,7 +91,7 @@ The full directory tree:
 ```
 backend/coffer/
 ├── domain/                       # kind-agnostic entities + kind protocol
-│   ├── resource.py               # Resource, Kind (frozen record each factory returns), ResourceRef
+│   ├── resource.py               # Resource (uid + mutable name), Kind (frozen record each factory returns)
 │   ├── audit.py
 │   ├── errors.py
 │   ├── mcp/                      # MCP-specific value objects

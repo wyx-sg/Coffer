@@ -32,7 +32,13 @@ Design the Resource framework as **core domain** in spec `mcp-gateway`:
 
 - `Resource` is a top-level domain entity with kind-agnostic identity
   (`<kind>:<name>`), lifecycle (register / update / enable / disable / delete),
-  audit, and per-kind config validation.
+  audit, and per-kind config validation. [The identity is now an immutable
+  `uid` and the name is a mutable label —
+  [Resource Identity Is an Immutable `uid`](resource-identity-is-an-immutable-uid.md),
+  which wholly supersedes Resource Identifier Format. That it is *kind-agnostic*,
+  which is what this decision turned on, is unchanged; if anything the change
+  bears it out, since making rename a framework field rather than one kind's
+  private endpoint is exactly the mechanical plug-in this ADR argued for.]
 - The framework unifies **identity + lifecycle + audit + metadata**. It does
   **not** unify behaviour — invocation semantics differ per kind.
 - The MCP gateway is the first concrete kind plugged into this framework, not

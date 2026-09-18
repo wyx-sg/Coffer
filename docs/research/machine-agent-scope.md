@@ -14,6 +14,17 @@
 > so `scope` names agents and nothing else. Read the ADR for the shipped shape;
 > what follows is the record of how the machine axis was arrived at, matrix
 > included.
+>
+> **Since 2026-09-18**, one more thing below is out of date, and it is a
+> spelling rather than a shape. A resource's external identity is no longer
+> `<kind>:<name>` but an immutable `uid`
+> ([Resource Identity Is an Immutable `uid`](../decisions/resource-identity-is-an-immutable-uid.md)),
+> so: the scope's agent list holds agent **uids**, not agent names, and an
+> unmatched entry (below, "entries referencing unknown … agent names") is an
+> unknown uid; `<kind>:<name>` in the CLI sketch is not a form anything accepts
+> — the CLI takes a kind and a name as separate arguments and resolves them to
+> a uid at the surface. The design questions this note was actually
+> investigating are untouched by that.
 
 Design note for generalizing machine identity (spec vault-sync, and the since-removed
 machine-identity ADR) into a

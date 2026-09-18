@@ -11,7 +11,7 @@ A collection is a resource named `knowledge:<name>` and the directory `~/.coffer
 ```bash
 coffer knowledge create handbook --description "Company onboarding docs"
 coffer knowledge collections
-coffer resource delete knowledge:handbook     # collection lifecycle is a Resource concern
+coffer resource delete knowledge handbook     # collection lifecycle is a Resource concern
 ```
 
 A collection describes itself in its own `README.md`, which sits at the collection root outside both lanes. That first paragraph is the description — it is read off disk on every listing, never copied into the database, and it is what the skill Coffer delivers to your agents draws on. A collection that fails to describe itself is a collection an agent never recognises.
@@ -19,8 +19,8 @@ A collection describes itself in its own `README.md`, which sits at the collecti
 A collection carries **no per-agent reach**: every enabled collection is served to every agent, and switching one off is the only way to take it out of what Coffer serves.
 
 ```bash
-coffer resource disable knowledge:handbook
-coffer resource enable knowledge:handbook
+coffer resource disable knowledge handbook
+coffer resource enable knowledge handbook
 ```
 
 It could once be activated for some agents and not others. That was withdrawn, because it never authorized anything: what Coffer hands an agent is a catalogue of absolute paths into a directory that agent can already grep, so leaving a collection out of one agent's catalogue prevented a mistaken read at best and nothing at all at worst. Switching a collection off is a **delivery** gate for the same reason — a disabled collection is one no skill names, not one no process can open.
@@ -127,7 +127,7 @@ Everything above lives under one group, `coffer knowledge`:
 | Files       | `ls` · `read` · `write` · `delete` · `upload` |
 | Curation    | `curate`                                     |
 
-Deleting a collection is a Resource operation: `coffer resource delete knowledge:<name>`. So is switching one off: `coffer resource disable knowledge:<name>`.
+Deleting a collection is a Resource operation: `coffer resource delete knowledge <name>`. So is switching one off: `coffer resource disable knowledge <name>`.
 
 ## The REST surface
 

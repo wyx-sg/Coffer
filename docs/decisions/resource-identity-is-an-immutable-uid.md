@@ -38,9 +38,8 @@ Four consequences accumulated in the code, each one a patch over the same hole:
    The other six kinds offer no rename; the user deletes and re-creates, paying
    the same cascade locally.
 3. **The name has to satisfy a URL segment and a filename**, so the label the
-   user sees is constrained to `^[a-zA-Z0-9_.-]+$` and 64 characters. A
-   knowledge collection cannot be called 账号系统架构 for reasons that have
-   nothing to do with knowledge collections.
+   user sees is constrained to `^[a-zA-Z0-9_.-]+$` and 64 characters — a rule
+   the identity imposed, not the label.
 4. **Cross-resource references hold names, so the same agent needs two of them.**
    `application/channel/agent_vocabulary.py` exists solely to translate between
    an agent's registry name (`claude-code`) and its agent key (`claude_code`)
@@ -131,10 +130,16 @@ a second way to address a resource, kept alive forever to serve a bookmark.
 
 - A rename converges as a rename. The cascade, the credential release and the
   sort-order dependence in §Context 1 all stop being reachable.
-- Rename becomes available to all kinds for free, because it is no longer an
-  operation — it is a field.
-- The name is released from the URL and filename character set, so labels can be
-  whatever the user wants to read.
+- Rename becomes available to all kinds. For the four config-only kinds it is
+  free — a field on `PATCH`. The three file-backed kinds get an `on_rename`
+  hook, because their name is also a directory on disk and it has to move with
+  them; that hook is the whole of what rename costs anywhere.
+- The URL half of the character-set tax is gone. The rule itself **stays** for
+  now, because `skill`, `knowledge` and `memory` each turn a name into a
+  directory, and relaxing it framework-wide would buy free-form names for four
+  kinds while three kept the old rule — a worse inconsistency than the uniform
+  one. Freeing those three means decoupling their directory from their name,
+  which is its own change.
 - `agent_vocabulary.py` is deleted: with uids on both sides there is one
   vocabulary.
 - The audit log's `resource_id` stops being the only place that knew the truth
