@@ -248,16 +248,29 @@ export interface components {
              */
             overwrite: boolean;
         };
-        SkillSource: components["schemas"]["LocalImportSource"];
+        SkillSource: components["schemas"]["LocalImportSource"] | components["schemas"]["BuiltinSource"];
         LocalImportSource: {
-            /** @enum {string} */
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
             type: "local_import";
             original_path: string;
+        };
+        /** @description Coffer generated this skill. It carries no provenance fields at all: the master folder is rewritten from the running build at every start, so nothing about where it came from would still be true tomorrow — and a skill's config converges to the user's other machines, where anything machine-specific would never settle. */
+        BuiltinSource: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "builtin";
         };
         SkillOut: {
             name: string;
             description: string;
             source: components["schemas"]["SkillSource"];
+            /** @description True for a skill Coffer generates and owns: its master folder is rewritten from the running build at every boot, so DELETE is refused with 409 `RESOURCE_PROTECTED`. Enabling, disabling and narrowing its scope stay available — those decide reach, which is the owner's to decide, while existence is not. */
+            builtin: boolean;
             enabled: boolean;
             scope: components["schemas"]["ScopeOut"];
             version_hash: string;

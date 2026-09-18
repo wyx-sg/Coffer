@@ -104,12 +104,12 @@ Two switches govern the unattended sweep, and both are read on every tick: wheth
 
 **There is no retrieval tool, and that is the design.** An audit of 448 Claude Code sessions after this corpus was built found that the delivered skill had never once been loaded and that no knowledge tool had ever been called. A tool an agent does not remember to call is not retrieval — and every agent Coffer supports already has `Read` and `Grep`, which need no remembering. So the layer's whole job is to put the right absolute paths in front of the model.
 
-It does that with a generated **skill**, written into each agent's own skill directory as `coffer-knowledge/SKILL.md`:
+It does that with **Coffer's own skill**, `coffer-guide` — one skill carrying both Coffer's manual and this catalogue, because a skill's description is resident in every session while its body costs nothing until a model opens it:
 
-- Its **frontmatter description** names the subjects your collections cover, in their READMEs' own words. That line is the only part of this layer always in a model's context, so it carries specifics a model can match — the version it replaces described the layer instead, and across those 448 sessions no model ever recognised it.
-- Its **body** carries the absolute knowledge root and, for every topic document, its path, title and description. Measured at ~5.2K tokens for 58 documents, and paid only when the model opens it. Once it has, it never has to guess what exists or what a file is called.
+- Its **frontmatter description** names Coffer's own tools and the subjects your collections cover, in their READMEs' own words. That line is the only part of this layer always in a model's context, so it carries specifics a model can match — the version it replaces described the layer instead, and across those 448 sessions no model ever recognised it.
+- Its **body** is Coffer's manual first, then the knowledge root and, for every topic document, its path, title and description. Measured at ~5.2K tokens for 58 documents, and paid only when the model opens it. Once it has, it never has to guess what exists or what a file is called.
 
-The file is Coffer's own output, rewritten whenever the catalogue moves — after a curation pass, or a collection being created, deleted, enabled or disabled. Editing it has no lasting effect. Each agent gets its own real copy rather than a link into one shared folder, so one can be re-rendered or removed without reaching through into another's.
+It is a real skill like any you import — you will find it on the Skills page, marked **built-in**, delivered into each agent by the same links as the rest. What makes it Coffer's is that Coffer writes it: the folder is rewritten at every start and whenever the catalogue moves, so editing it has no lasting effect and deleting it is refused. Disabling it, or narrowing which agents it reaches, stays yours.
 
 Nothing is pushed into a session. Knowledge is pulled; session-start delivery is [memory](/guide/memory)'s job, with its own ceiling and its own consent.
 

@@ -20,6 +20,8 @@ import { render, screen, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { acceptance } from "@/test/acceptance";
 import { SkillsTable } from "./SkillsTable";
 import type { SkillOut } from "@/lib/api/skills";
 
@@ -77,7 +79,9 @@ function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: PropsWithChildren) => (
     <QueryClientProvider client={qc}>
-      <MemoryRouter>{children ?? ui}</MemoryRouter>
+      <TooltipProvider>
+        <MemoryRouter>{children ?? ui}</MemoryRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }
@@ -109,6 +113,7 @@ const SAMPLE: SkillOut[] = [
     name: "hello-skill",
     description: "Greets the user",
     source: { type: "local_import", original_path: "/tmp/hello" },
+    builtin: false,
     enabled: true,
     scope: null,
     version_hash: "abc123def456",
@@ -129,6 +134,7 @@ const SAMPLE: SkillOut[] = [
     name: "git-skill",
     description: "From a repo",
     source: { type: "local_import", original_path: "/tmp/git-skill" },
+    builtin: false,
     enabled: false,
     scope: null,
     version_hash: "999888777666",
@@ -143,6 +149,7 @@ const SAMPLE: SkillOut[] = [
     name: "scoped-skill",
     description: "Only for cc",
     source: { type: "local_import", original_path: "/tmp/scoped" },
+    builtin: false,
     enabled: true,
     scope: { agents: ["cc"] },
     version_hash: "111222333444",
@@ -153,6 +160,25 @@ const SAMPLE: SkillOut[] = [
     bindings: [],
   },
 ];
+
+// Coffer's own generated skill. The UI reads the `builtin` FLAG, never the
+// source discriminator — which is why the source here is the ordinary one the
+// hand-written `SkillSource` union still models: nothing in this table looks at
+// it, and a row is Coffer's because the daemon says so on its own field.
+const BUILTIN: SkillOut = {
+  name: "coffer-guide",
+  description: "Coffer's own manual",
+  source: { type: "local_import", original_path: "" },
+  builtin: true,
+  enabled: true,
+  scope: null,
+  version_hash: "aaabbbcccddd",
+  master_path: "/master/coffer-guide",
+  last_synced_from_source_at: null,
+  created_at: "2026-05-22T00:00:00Z",
+  updated_at: "2026-05-22T00:00:00Z",
+  bindings: [],
+};
 
 describe("SkillsTable", () => {
   afterEach(() => vi.clearAllMocks());
@@ -305,5 +331,63 @@ describe("SkillsTable", () => {
     const dialog = screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
     expect(mutate).not.toHaveBeenCalled();
+  });
+
+  test("Coffer's own skill wears the Built-in badge; the user's skills do not", () => {
+    stubHooks();
+    render(<SkillsTable skills={[...SAMPLE, BUILTIN]} />, { wrapper: wrap(null) });
+
+    expect(within(rowFor("coffer-guide")).getByTestId("skill-builtin-badge")).toHaveTextContent(
+      /built-in/i,
+    );
+    // One badge in the whole table: it marks the exception, not every row.
+    expect(screen.getAllByTestId("skill-builtin-badge")).toHaveLength(1);
+    expect(within(rowFor("hello-skill")).queryByTestId("skill-builtin-badge")).toBeNull();
+  });
+
+  acceptance(
+    "skill-manager",
+    "the skills surface marks the built-in skill and offers no delete",
+    () => {
+      const mutate = stubHooks();
+      render(<SkillsTable skills={[...SAMPLE, BUILTIN]} />, { wrapper: wrap(null) });
+
+      // Marked as Coffer's, and the only row that is.
+      expect(within(rowFor("coffer-guide")).getByTestId("skill-builtin-badge")).toBeInTheDocument();
+      // Neither door to a delete is open: not the row's button, and not the
+      // bulk bar, which cannot select the row in the first place.
+      expect(screen.getByRole("button", { name: /delete coffer-guide/i })).toBeDisabled();
+      expect(within(rowFor("coffer-guide")).queryByRole("checkbox")).toBeNull();
+      // And reach is untouched — existence is Coffer's, reach is the owner's.
+      expect(within(rowFor("coffer-guide")).getByTestId("scope-control")).toBeInTheDocument();
+      expect(mutate).not.toHaveBeenCalled();
+    },
+  );
+
+  test("a built-in skill's delete is disabled, and clicking it opens nothing", () => {
+    const mutate = stubHooks();
+    render(<SkillsTable skills={[...SAMPLE, BUILTIN]} />, { wrapper: wrap(null) });
+
+    const del = screen.getByRole("button", { name: /delete coffer-guide/i });
+    expect(del).toBeDisabled();
+    fireEvent.click(del);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mutate).not.toHaveBeenCalled();
+
+    // …while an ordinary skill's delete is untouched.
+    expect(screen.getByRole("button", { name: /delete hello-skill/i })).toBeEnabled();
+  });
+
+  test("a built-in skill has no checkbox, so bulk delete cannot reach it", () => {
+    stubHooks();
+    render(<SkillsTable skills={[...SAMPLE, BUILTIN]} />, { wrapper: wrap(null) });
+
+    expect(within(rowFor("coffer-guide")).queryByRole("checkbox")).toBeNull();
+    expect(within(rowFor("hello-skill")).getByRole("checkbox")).toBeInTheDocument();
+
+    // Select-all takes the three ordinary rows and leaves Coffer's own out of
+    // the selection the bulk bar acts on.
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+    expect(screen.getByText(/3 selected/i)).toBeInTheDocument();
   });
 });

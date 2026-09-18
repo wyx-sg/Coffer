@@ -22,12 +22,13 @@ per-agent reach (FR-010).
 **The agent does not retrieve through Coffer.** The gateway exposes exactly one
 knowledge tool, `coffer__write`; `list`, `grep`, `read`, `search` and `delete`
 are gone. An agent reads `topics/` with its own `Read` and `Grep`, at absolute
-paths carried by a **generated skill** whose description names the subjects the
-enabled collections cover and whose body is the whole catalogue. The skill is
-written per agent — real bytes in each agent's own directory rather than a link
-into one master — but its text is the same for every one of them: a disabled
-collection appears in none of the copies, and an enabled one in all of them
-(FR-010, FR-035).
+paths carried by **Coffer's own generated skill**, `coffer-guide`, whose
+description names the subjects the enabled collections cover and whose body is
+Coffer's manual followed by the whole catalogue. That skill is an ordinary
+`skill` Resource — one master folder, one row, one link per agent — so this
+layer renders its text and the skill kind does the writing and the delivering.
+One rendering serves every agent: a disabled collection appears in none of what
+an agent reads, and an enabled one in all of it (FR-010, FR-034, FR-035).
 
 One entrance exists beside the filesystem. A document — a PDF, a docx, a
 spreadsheet — is uploaded from the Knowledge page or forwarded to a Coffer
@@ -57,8 +58,8 @@ installation behind it.
 
 Standard layer rules. The domain holds value objects that describe what is on
 disk and nothing that describes a row; the application holds the service, the
-one tool, the ingest service, the curation pass and the skill rendering and
-delivery; infrastructure owns paths, the file tree, frontmatter, the ripgrep
+one tool, the ingest service, the curation pass and the guide skill's text —
+rendering only, since the writing belongs to the skill kind; infrastructure owns paths, the file tree, frontmatter, the ripgrep
 adapter and the converters. PyYAML lives only in
 `infrastructure/knowledge/frontmatter.py`, `markitdown` only in
 `infrastructure/knowledge/converters/`, and path construction only in
@@ -94,9 +95,11 @@ backend/coffer/
 │   ├── curate_tools.py             # its four tools: list_topics, read_topic,
 │   │                               # write_topic, retire_topic. None reaches sources/
 │   ├── curate_worker.py            # interval sweep, owner-machine gated, on by default
-│   ├── skill_render.py             # pure text: description + catalogue body
-│   └── skill_delivery.py           # writes each agent's own copy; removes a stale
-│                                   # shared master rather than writing through it
+│   ├── guide_render.py             # pure text: the `coffer-guide` SKILL.md —
+│   │                               # description + manual + catalogue body. Its
+│   │                               # output must be byte-identical across machines
+│   └── skill_assets/               # coffer-guide.md, the hand-written half of the
+│                                   # body, shipped as package data
 ├── infrastructure/knowledge/
 │   ├── paths.py                    # the sole owner of path construction, the two
 │   │                               # lane names, and the traversal guard
@@ -121,9 +124,13 @@ backend/coffer/
     │                               # round). The in-flight claim itself is the
     │                               # kind-agnostic UPKEEP_RUNS registry
     ├── http/knowledge_wiring.py    # composition: the service, ingest, the one tool,
-    │                               # skill delivery, app.state.kinds["knowledge"]
+    │                               # app.state.kinds["knowledge"]
+    ├── http/guide_wiring.py        # the one place the renderer above and the skill
+    │                               # kind's BuiltinSkillSeed are joined — the two
+    │                               # kinds may not import each other. Run at boot
+    │                               # and after every curation pass
     ├── http/curation_wiring.py     # the langgraph adapter, the switch read per tick,
-    │                               # and the re-delivery a finished pass arms
+    │                               # and the guide refresh a finished pass arms
     └── cli/knowledge_cmd.py        # `coffer knowledge …` — one module
 ```
 
@@ -170,12 +177,15 @@ frontend/src/
   collection in view, a manual curation trigger, and open-in-editor and reveal on
   a file and its folder
   ([Daemon Proxies File Actions](../../docs/decisions/daemon-proxies-os-file-actions.md)).
-- **Delivery**: a generated `coffer-knowledge` skill written as **real bytes into
-  each registered agent's own `<config_dir>/skills/`** — not a skill-manager
-  Resource, and not a symlink into one master, because its content differs by
-  which collections that agent may see (FR-034, FR-035). It is re-rendered
-  whenever the catalogue changes, and delivery never raises: a failure leaves the
-  corpus readable at paths a person can still hand an agent. No hook, no session
+- **Delivery**: the catalogue rides Coffer's own `coffer-guide` skill, which is an
+  ordinary `skill` Resource — one master folder under `~/.coffer/skills/`, one
+  row, one link per agent, delivered by spec skill-manager's own predicate and
+  machinery (FR-034, FR-035). This layer renders the text (`guide_render.py`);
+  `application/skill/builtin_seed.py` writes it, and `surfaces/http/guide_wiring.py`
+  is the one place the two are joined. It is re-rendered
+  whenever the catalogue changes, and a render or write that fails never raises:
+  the previous master stays exactly where it was, and the
+  corpus stays readable at paths a person can still hand an agent. No hook, no session
   injection, no write into any agent's memory files.
 
 ## Curation
@@ -218,10 +228,10 @@ together so the switch means *on, here* rather than merely *on*: two machines
 curating one corpus produce two different documents that git merges cleanly.
 Only one pass per collection runs at a time, whoever asked — a manual trigger
 arriving mid-pass is refused (`UPKEEP_ALREADY_RUNNING`, 409) and the sweep skips
-that collection rather than waiting behind it (FR-030). A finished pass re-runs
-skill delivery, because a topic document no catalogue names is one no agent can
-find — and the worker re-delivers on **every** tick, outside the enabled check,
-because a collection created, deleted, enabled or disabled changes what each
+that collection rather than waiting behind it (FR-030). A finished pass refreshes
+the guide skill, because a topic document no catalogue names is one no agent can
+find — and the worker refreshes on **every** tick, outside the enabled check,
+because a collection created, deleted, enabled or disabled changes what every
 agent must be told even on a machine that is not the curation owner (FR-035).
 
 ## Migration
@@ -244,7 +254,12 @@ the switch on and the owner to this machine (FR-044), rewrites `knowledge_tidied
 audit rows to `knowledge_curated` — the event has a writer still, so the history
 stays readable under the name the code now uses — and retires the shared
 `coffer-knowledge` skill Resource, its bindings and its master folder, so no
-agent is left holding a stale shared copy beside its generated one. `downgrade`
+agent was left holding a stale shared copy beside the per-agent one that
+delivery then wrote. A later migration finishes the job: with the catalogue
+moved into `coffer-guide`, it sweeps each registered agent's own skill directory
+and removes what that per-agent delivery left, recognising Coffer's own by the
+symlink or the `SKILL.md`/`README.md` pair it always wrote and leaving anything
+else alone (FR-034). `downgrade`
 raises, and no compatibility shim is left behind anywhere. Details in
 [`data-model.md`](./data-model.md).
 
@@ -255,7 +270,8 @@ raises, and no compatibility shim is left behind anywhere. Details in
 | **Curation is an unattended rewriter, and it is on by default.** Nothing diffs a pass's output before it lands. | `sources/` is the entire safety net, and unlike `.history/` it is a real one: nothing but a person writes there, so the material every topic is derived from survives any pass. Recovery is re-running curation, not reading back a revision. The eight-write bound and the one-pass-per-collection lock are what keep a bad pass small. |
 | **`topics/` is empty until the first pass runs**, and stays empty where no internal connection is configured. | Accepted, and it is the reason the switch defaults on and the migration seeds it. The layer has acquired a hard dependency on the internal model that it did not have; a no-model pass reports `no_model` and leaves the watermark unset, so the corpus curates itself the day a connection is configured rather than staying dark. |
 | **Whether a generated skill makes agents reach for the layer is still unproven.** A delivered skill describing the *layer* demonstrably did not: across 448 sessions it was never loaded. | The change is not "deliver a skill" but what the skill says — its description now names the corpus's subjects, which is the thing a model can match, and its body removes every guess by listing every document. Losing the read tools also loses the invocation record that would have measured it; the replacement is the agents' own transcripts, which Coffer already reads and which are retroactive. |
-| **Per-agent skill copies must be reconciled.** A shared master needed one write; N agents need N. | Delivery is idempotent, re-armed by every catalogue change, and replaces a stale symlink rather than writing through it. A failure is logged per agent and never propagates: this must not be able to fail a boot or a pass. |
+| **The catalogue now lives in a skill this layer does not own.** Its text is rendered here and written, delivered and reclaimed by the skill kind, across a boundary the two kinds may not import across. | The join is one composition-root module and the seam is a string of Markdown, so neither kind learns about the other. The seed is idempotent — an unchanged catalogue writes nothing — and a failure at either end is logged and swallowed: this must not be able to fail a boot or a pass. |
+| **The rendered skill is different on every machine, and cannot not be.** It is rendered from the enabled collections, and `enabled` is machine-local reach — so two machines with the same files render different text, and while both halves of a skill converged they overwrote each other every round, forever. | The artifact does not converge at all (spec [vault-sync](../vault-sync/spec.md) FR-093): the `skill` kind declares its own generated row derived, and the mirrored `skills/` tree leaves that folder alone in both directions. Determinism stays as a rule with a smaller job (FR-047) — same build, same catalogue, same bytes — so an unchanged boot writes, audits and delivers nothing. |
 | **No semantic matching anywhere**, including in candidate selection. | Accepted, with a ceiling: it works while the catalogue fits in a skill body — ~5.2K tokens for 58 documents. Past that the answer is a real semantic stack built for that need, not the one removed here, which was never configured. |
 | **Migration is destructive and one-way.** The lane agents read comes back empty, and a corpus the user wrote by hand returns in a machine's words. | Deliberate, and paid for with the backup taken before the first file moves. This is the cost the user accepted in exchange for the 343 broken references going away. |
 | **Nothing here is a security boundary.** An agent with shell tools can read any file under the root. | Stated as such on every surface (FR-012): `enabled` decides what Coffer *delivers*, never what a process can open. Real isolation would need a separate vault or filesystem permissions, and is out of scope. The per-agent reach that once sat in front of this row is gone — an allow-list withholding a path from a reader who already has the root was an authorization in name only (FR-010). |

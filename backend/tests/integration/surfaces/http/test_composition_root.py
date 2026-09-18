@@ -33,12 +33,12 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         # /resources (token required; a fresh vault has none)
         r = c.get("/api/v1/resources", headers=headers)
         assert r.status_code == 200
-        # Empty is the right answer, not a broken route: Coffer no longer seeds
-        # a skill Resource of its own. The knowledge skill is rendered per agent
-        # and written straight into that agent's own skill directory (spec
-        # knowledge FR-035), so it is not a Resource anyone can list — and a
-        # fresh install has made nothing else.
-        assert r.json()["resources"] == []
+        # One row, and it is Coffer's own skill (spec knowledge FR-034): the
+        # manual it seeds for itself at every boot. The user has made nothing,
+        # so anything else here would be a route returning someone else's rows.
+        assert [(x["kind"], x["name"]) for x in r.json()["resources"]] == [
+            ("skill", "coffer-guide")
+        ]
 
         # /audit (token required)
         r = c.get("/api/v1/audit", headers=headers)

@@ -5,10 +5,11 @@ imports any kind-specific module. Each mutation is audited via
 AuditService. `delete` calls the kind's optional `on_delete` hook
 BEFORE persistence; a hook that raises aborts the deletion.
 
-Two mutation paths delegate to sibling ops modules to keep this file under
-the 400-LOC ceiling (mirroring `skill/service.py` + its `*_ops.py` satellites):
-`update_scope`'s body lives in `resource_scope_ops`, and `delete`'s
-credential-release step lives in `resource_delete_ops`.
+Three sibling ops modules keep this file under the 400-LOC ceiling (mirroring
+`skill/service.py` + its `*_ops.py` satellites): `update_scope`'s body lives in
+`resource_scope_ops`, `delete`'s credential-release step in
+`resource_delete_ops`, and every question about what a kind *declares* — what
+converges, what redacts, what cites a credential — in `resource_kind_ops`.
 """
 
 from __future__ import annotations
@@ -17,11 +18,13 @@ import asyncio
 import builtins
 import inspect
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from pydantic import ValidationError
 
+from coffer.application import resource_kind_ops
 from coffer.application.audit_service import AuditService
 from coffer.application.repos import ResourceRepo
 from coffer.domain.audit import AuditEventType
@@ -54,30 +57,6 @@ class _CredentialStorePort(Protocol):
     def delete(self, ref: str) -> None: ...
 
 
-def _audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
-    """Return an audit-safe copy of ``config`` using the kind's redactor.
-
-    The kind-agnostic core knows nothing about where a given kind stores
-    secrets; each kind supplies its own ``audit_redactor`` (e.g. mcp_server
-    strips ``transport.env``/``headers``). Kinds without one audit their
-    config verbatim. See the resource-framework-upfront ADR / CODE-006.
-    """
-    if kind_def.audit_redactor is None:
-        return config
-    return kind_def.audit_redactor(config)
-
-
-def _extract_credential_refs(kind_def: Kind, config: dict[str, Any]) -> dict[str, str]:
-    """Return ``{key: credential_ref}`` for ``config`` using the kind's extractor.
-
-    Kinds without a ``credential_ref_extractor`` declare no credentials and are
-    not probed.
-    """
-    if kind_def.credential_ref_extractor is None:
-        return {}
-    return kind_def.credential_ref_extractor(config)
-
-
 class ResourceService:
     def __init__(
         self,
@@ -104,7 +83,7 @@ class ResourceService:
         """
         if self._credentials is None:
             return
-        for _key, ref in _extract_credential_refs(kind_def, config).items():
+        for _key, ref in resource_kind_ops.credential_refs(kind_def, config).items():
             if await asyncio.to_thread(self._credentials.get, ref) is None:
                 raise CredentialMissing(ref)
 
@@ -114,22 +93,12 @@ class ResourceService:
         return self._kinds[kind]
 
     def converges(self, kind: str) -> bool:
-        """Whether this kind's rows travel to the sync remote (spec vault-sync).
+        """Whether this kind's rows travel to the sync remote (spec vault-sync)."""
+        return resource_kind_ops.converges(self._kinds, kind)
 
-        Public for the same reason ``supports_scope`` is: the sync layer has to
-        ask, and the answer belongs to the kind.
-
-        An unregistered kind answers **True**, which is the conservative answer
-        and not the obvious one. This flag exists only to withhold, so a kind
-        nobody has declared anything about must keep whatever behaviour it had:
-        an unknown kind arriving in a document still reaches
-        ``register`` and is still refused there by name (``UnknownKind``).
-        Answering False would have turned that named refusal into a silent skip
-        — a document quietly doing nothing is exactly what a converge round
-        must not produce.
-        """
-        kind_def = self._kinds.get(kind)
-        return kind_def.converges if kind_def is not None else True
+    def converges_row(self, kind: str, config: Mapping[str, Any]) -> bool:
+        """Whether **this one row** travels to the sync remote (spec vault-sync)."""
+        return resource_kind_ops.converges_row(self._kinds, kind, config)
 
     def supports_scope(self, kind: str) -> bool:
         """Whether the kind carries a per-agent activation scope (ADR per-agent-resource-scope).
@@ -217,7 +186,7 @@ class ResourceService:
             AuditEventType.RESOURCE_CREATED.value,
             ref=created.ref,
             actor=actor,
-            details={"config": _audit_safe_config(kind_def, validated)},
+            details={"config": resource_kind_ops.audit_safe_config(kind_def, validated)},
         )
         return created
 
@@ -254,7 +223,7 @@ class ResourceService:
             kind_def = self._kinds.get(resource.kind)
             if kind_def is None:
                 continue
-            refs = _extract_credential_refs(kind_def, resource.config).values()
+            refs = resource_kind_ops.credential_refs(kind_def, resource.config).values()
             if credential_ref in refs:
                 citing.append(resource.ref)
         return citing
@@ -293,8 +262,8 @@ class ResourceService:
             ref=ref,
             actor=actor,
             details={
-                "before": _audit_safe_config(kind_def, before.config),
-                "after": _audit_safe_config(kind_def, validated),
+                "before": resource_kind_ops.audit_safe_config(kind_def, before.config),
+                "after": resource_kind_ops.audit_safe_config(kind_def, validated),
             },
         )
         return updated
@@ -366,6 +335,10 @@ class ResourceService:
 
         kind_def = self._require_kind(ref.kind)
         snapshot = await self.get(ref)  # raises ResourceNotFound if missing
+        if kind_def.validate_delete is not None:
+            # Pre-write guard: refuses BEFORE on_delete tears anything down,
+            # so a refused delete leaves the resource exactly as it was.
+            kind_def.validate_delete(snapshot)
         if kind_def.on_delete is not None:
             # CODE-033: await an async on_delete hook so side effects (e.g.
             # evicting live upstream connections, tearing down skill symlinks)
@@ -386,7 +359,7 @@ class ResourceService:
                 "snapshot": {
                     "kind": snapshot.kind,
                     "name": snapshot.name,
-                    "config": _audit_safe_config(kind_def, snapshot.config),
+                    "config": resource_kind_ops.audit_safe_config(kind_def, snapshot.config),
                     "enabled": snapshot.enabled,
                 }
             },

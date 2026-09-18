@@ -687,6 +687,7 @@
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "该连接正在启用中，无法更改协议格式——请先让相关 agent 切回自带登录，再修改协议，然后重新启用",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "RESOURCE_NOT_FOUND": "资源未找到",
+    "RESOURCE_PROTECTED": "该资源由 Coffer 管理，无法删除",
     "SCOPE_INVALID": "该资源类型不支持此生效范围设置",
     "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim 二进制。请安装 Coffer 使 shim 位于 PATH 上，或设置 COFFER_MCP_SHIM_PATH。",
     "SKILL_DIR_NOT_WRITABLE": "技能目录不可写——请检查目录权限",
@@ -953,6 +954,9 @@
   "skills": {
     "degradedBadge": "已复制",
     "degradedTooltip": "当前文件系统不支持符号链接，Coffer 向至少一个 Agent 下发了副本。在重新投递之前，这些 Agent 不会看到主技能的后续修改。",
+    "builtinBadge": "内置",
+    "builtinTooltip": "Coffer 自行生成该技能，并在每次启动时重写它，因此无法在此编辑或删除。你仍可以停用它，或收窄它触达的 agent。",
+    "builtinDeleteHint": "Coffer 管理该技能，并在每次启动时重写它，因此无法删除。可以改为停用它，或收窄它的触达范围。",
     "title": "技能",
     "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的 Agent。",
     "loadFailed": "加载技能失败",
@@ -981,7 +985,8 @@
       "tabs": {
         "overview": "概览",
         "files": "文件"
-      }
+      },
+      "sourceBuiltin": "由 Coffer 生成"
     },
     "files": {
       "tree": "文件",

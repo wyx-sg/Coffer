@@ -11,6 +11,14 @@ import { formatDateTime } from "@/lib/utils";
 
 export function SkillOverview({ skill }: { skill: SkillOut }) {
   const { t } = useTranslation();
+  // Whether this is Coffer's own skill is the read model's answer (`builtin`),
+  // not something each client re-derives from the source variant — the table
+  // already reads the flag, and the two must never disagree.
+  //
+  // Which path to show is a separate question, and only the `local_import`
+  // variant carries one, so it needs its own narrowing rather than a cast:
+  // "a skill Coffer generates has no source path" is exactly what `null` says.
+  const sourcePath = skill.source.type === "local_import" ? skill.source.original_path : null;
   return (
     <Card>
       <CardContent className="space-y-4 py-6">
@@ -19,7 +27,12 @@ export function SkillOverview({ skill }: { skill: SkillOut }) {
         ) : null}
         <dl className="grid gap-y-3 text-sm sm:grid-cols-[12rem_1fr]">
           <dt className="text-muted-foreground">{t("skills.source")}</dt>
-          <dd className="font-mono text-xs">{skill.source.original_path}</dd>
+          <dd
+            className={skill.builtin ? "text-xs" : "font-mono text-xs"}
+            data-testid="skill-detail-source"
+          >
+            {skill.builtin ? t("skills.detail.sourceBuiltin") : (sourcePath ?? "—")}
+          </dd>
 
           <dt className="text-muted-foreground">{t("skills.detail.versionHash")}</dt>
           <dd className="font-mono text-xs">{skill.version_hash.slice(0, 12)}</dd>
