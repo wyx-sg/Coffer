@@ -77,11 +77,22 @@ const GONE: PartitionOut = {
 };
 
 describe("MemoryPage", () => {
-  test("with no partitions it still renders the table, header row and all", () => {
-    // The whole point: the page's shape must not depend on whether it has
-    // data. An empty vault gets the table's own empty row, not a bare
-    // sentence standing where the table would be.
+  test("an empty vault gets the welcome every other first-run surface gives", () => {
+    // Skills, knowledge, agents, channels and providers all greet a developer
+    // who has nothing yet; Memory showing a bare table instead made it the one
+    // page that explained itself least at the moment it mattered most.
     stubPartitions([]);
+    renderPage();
+
+    expect(screen.getByText("Nothing distilled yet")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // The one next step is READ, not Add — nothing here is user-created — and
+    // it is offered once, not twice.
+    expect(screen.getAllByRole("button", { name: /Read from agents/i })).toHaveLength(1);
+  });
+
+  test("once a partition exists the page is the table", () => {
+    stubPartitions([COFFER]);
     renderPage();
 
     const table = screen.getByRole("table");
@@ -89,9 +100,6 @@ describe("MemoryPage", () => {
       .getAllByRole("columnheader")
       .map((h) => h.textContent);
     expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes", "Reach"]));
-
-    // The empty state is a row INSIDE that table, not a card replacing it.
-    expect(within(table).getByText(/no partitions yet/i)).toBeInTheDocument();
   });
 
   test("the read-from-agents affordance stays reachable from the empty state", () => {

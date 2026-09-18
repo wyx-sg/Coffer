@@ -1155,6 +1155,22 @@
       "distil": "Distil",
       "distilHint": "Turns this partition's new raw entries into Coffer's own notes — merging into a note, opening a new one, or retiring one into RETIRED.md — and rewrites the index.",
       "distilDone": "Distil pass finished."
+    },
+    "welcome": {
+      "title": "Nothing distilled yet",
+      "body": "Your agents already know things — which service owns what, the trap you hit last month, how this repo is built. They keep that in their own native memories, in their own formats. Coffer reads those and distils them into notes of its own: one file per subject, filed by repository, plus a global partition about you rather than about a project.",
+      "featureRead": {
+        "title": "Read, never written",
+        "body": "Coffer only ever reads an agent's own memory. Nothing here is written back into it."
+      },
+      "featureShape": {
+        "title": "One subject, one file",
+        "body": "Filed by repository, with a global partition for what is true of you rather than of a project."
+      },
+      "featureOneWay": {
+        "title": "It keeps itself current",
+        "body": "Coffer re-reads on its own schedule. The button is only for when you want it now."
+      }
     }
   },
   "chat": {
