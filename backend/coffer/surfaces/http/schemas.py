@@ -80,6 +80,11 @@ class ResourceCreate(BaseModel):
 
 
 class ResourceUpdate(BaseModel):
+    #: A new name for this resource. Absent leaves it alone; present on a kind
+    #: that does not support renaming is a 409, not a silent no-op. The URL
+    #: still names the resource being edited, so this is the new label rather
+    #: than a second way to address it.
+    name: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$")
     description: str | None = None
     config: dict[str, Any] | None = None
 

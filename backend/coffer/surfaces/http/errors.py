@@ -25,6 +25,7 @@ _STATUS: dict[str, int] = {
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
     "GENERIC_CREATE_NOT_ALLOWED": 409,
+    "RENAME_NOT_SUPPORTED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
     "SCOPE_INVALID": 422,  # per-agent activation scope (ADR per-agent-resource-scope)
@@ -165,6 +166,7 @@ _STATUS: dict[str, int] = {
     # workflow exists, so it is a conflict with its state rather than a bad
     # request — the same answer shape as a terminal run.
     "WORKFLOW_TEMPLATE_DISABLED": 409,
+    "WORKFLOW_RUN_LABEL_INVALID": 422,
     # A template whose config does not validate, and a node completed without
     # the artifact it owes: both are the request being refused, and both name
     # the field or the file in ``details.reason``.

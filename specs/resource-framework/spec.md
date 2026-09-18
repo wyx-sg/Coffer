@@ -164,6 +164,13 @@ scenario in this section is referenced by at least one test marked
 - **Then** each write is persisted, audited as a scope update, and followed by the kind's own post-write reaction,
 - **And** a kind that supports no reach rejects a non-null scope, as does a payload carrying a property the scope schema does not define.
 
+### Scenario: a resource is given a different name
+
+- **Given** a resource of a kind that declares it may be renamed,
+- **When** the user gives it a new name,
+- **Then** it is reachable under the new name with its config, reach and enabled state intact, the old name resolves to nothing, and the change is audited against the same row id it always had,
+- **And** a name already taken within that kind is refused, a kind that declares no rename is refused, and submitting the name it already has changes nothing.
+
 ### Scenario: command line covers every visual operation
 
 - **Given** the daemon is running,
@@ -209,6 +216,7 @@ scenario in this section is referenced by at least one test marked
 - **FR-003**: Creation is a per-kind seam and MUST stay one. The kind-agnostic create route MUST accept only kinds that declare themselves creatable through it, and MUST refuse a kind that owns a creation invariant beyond config validation — a skill's master folder, an agent's on-disk detection — so that such a kind is registered through its own surface, which can hold that invariant. There is deliberately no `coffer resource create`: a generic create would have to guess a config shape it cannot know. What this spec owns is everything that happens to a resource once a kind has made one.
 - **FR-004**: System MUST carry a framework-level per-agent reach on every resource — one allow-list of agents, `null` meaning every agent, `[]` meaning none ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)) — and MUST serve it for every kind through one kind-agnostic pair of routes rather than per kind, reporting whether the kind supports reach at all so a client can render the right control without knowing the kinds itself. A non-null reach on a kind that declares none, and a payload carrying a property the schema does not define, MUST both be refused rather than stored or silently widened — a client still sending a withdrawn axis means "only there", and keeping what is left would store "every agent". A reach write MUST be audited and MUST fire the kind's post-write reaction, so delivery and reclaim stay in step with the edit. *Enforcing* reach is each kind's own seam at its own choke point; this spec owns the value, its validation and its write path.
 - **FR-005**: Deleting a resource MUST run the kind's own cleanup hook while the resource can still be resolved, and a hook that fails MUST abort the deletion rather than leave a half-deleted thing. Rows a kind owns MUST cascade; history MUST NOT — the audit log and the invocation log outlive the resource they describe. Credentials that no remaining resource cites MUST be released, and a failure to release MUST NOT turn an already-completed deletion into a caller-facing error; the store behind those refs is spec credentials'.
+- **FR-010**: A resource's name is a LABEL the person chose, and the system MUST let them change it in place for any kind that can bear the change, keeping the resource's identity, its config, its reach, its enabled state and its audit trail. A kind whose name is written out somewhere the move cannot reach — into another tool's configuration, into a folder on disk — MUST declare that the kind-agnostic surface may not rename it; that attempt MUST be refused rather than half-applied, and the kind's own surface, which repairs what it knows about, MUST be the one that moves it. Renaming to a name already taken within the kind MUST be refused, and renaming to the name it already has MUST change nothing and record nothing.
 
 **Audit**
 

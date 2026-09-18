@@ -1,4 +1,6 @@
 # backend/tests/integration/surfaces/http/test_resource_routes.py
+import sqlite3
+
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -38,6 +40,15 @@ async def _client(tmp_path):
             name="fake_kind",
             display_name="Fake",
             config_schema=_FakeConfig,
+        ),
+        # A kind that may be renamed and one that may not, because FR-010 is
+        # half about the refusal.
+        "nameable": Kind(
+            name="nameable",
+            display_name="Nameable",
+            config_schema=_FakeConfig,
+            supports_rename=True,
+            supports_scope=True,
         ),
     }
     repo = SqlAlchemyResourceRepo(sm)
@@ -382,4 +393,70 @@ async def test_register_with_present_credential_succeeds(tmp_path):
             },
         )
         assert r.status_code == 201, r.text
+    await engine.dispose()
+
+
+def _renames(tmp_path) -> list[tuple[str, str]]:
+    """Every `resource_renamed` entry, as (kind, name-at-the-time)."""
+    with sqlite3.connect(tmp_path / "c.db") as db:
+        rows = db.execute(
+            "SELECT resource_kind, resource_name FROM audit_log "
+            "WHERE event_type = 'resource_renamed' ORDER BY id"
+        ).fetchall()
+    return [(kind, name) for kind, name in rows]
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="a resource is given a different name",
+)
+async def test_a_resource_is_given_a_different_name(tmp_path):
+    """FR-010: the name is a label, so it moves and nothing else does."""
+    c, engine = await _client(tmp_path)
+    async with c:
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "nameable", "name": "draft", "config": {"foo": 1}, "description": "hi"},
+        )
+        await c.put("/api/v1/resources/nameable/draft/scope", json={"scope": {"agents": ["a"]}})
+        await c.post("/api/v1/resources/nameable/draft/disable")
+
+        r = await c.patch("/api/v1/resources/nameable/draft", json={"name": "release"})
+        assert r.status_code == 200, r.text
+        assert r.json()["ref"] == "nameable:release"
+
+        # Everything that was not the name came with it.
+        moved = (await c.get("/api/v1/resources/nameable/release")).json()
+        assert moved["config"] == {"foo": 1, "bar": "default"}
+        assert moved["description"] == "hi"
+        assert moved["enabled"] is False
+        assert moved["scope"] == {"agents": ["a"]}
+        assert (await c.get("/api/v1/resources/nameable/draft")).status_code == 404
+
+        # The trail is against the ROW, which never moved. Read straight out
+        # of the table: this app mounts the resource router only.
+        assert _renames(tmp_path) == [("nameable", "release")]
+
+        # A name already taken, and a kind that declares no rename.
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "nameable", "name": "taken", "config": {"foo": 2}},
+        )
+        clash = await c.patch("/api/v1/resources/nameable/release", json={"name": "taken"})
+        assert clash.status_code == 409
+        assert clash.json()["error"]["code"] == "RESOURCE_ALREADY_EXISTS"
+
+        await c.post(
+            "/api/v1/resources",
+            json={"kind": "fake_kind", "name": "fixed", "config": {"foo": 3}},
+        )
+        refused = await c.patch("/api/v1/resources/fake_kind/fixed", json={"name": "moved"})
+        assert refused.status_code == 409
+        assert refused.json()["error"]["code"] == "RENAME_NOT_SUPPORTED"
+
+        # The name it already has is a no-op, not a second audit entry.
+        same = await c.patch("/api/v1/resources/nameable/release", json={"name": "release"})
+        assert same.status_code == 200
+        assert len(_renames(tmp_path)) == 1
     await engine.dispose()

@@ -42,7 +42,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # _OPTION_ONLY_GROUPS asserts instead — so the empty set here is a
     # narrowed claim, not an unchecked hole.
     "open": set(),
-    "resource": {"list", "show", "enable", "disable", "delete"},
+    "resource": {"list", "show", "enable", "disable", "delete", "rename"},
     "scope": {"show", "set", "clear"},
     "audit": {"list"},
     "retention": {"list", "set", "prune-now"},

@@ -89,17 +89,33 @@ async def update_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ResourceOut:
-    if body.config is None:
+    # An ABSENT field leaves what is stored alone; the service takes a whole
+    # resource and would otherwise write a null over it. That mattered the
+    # moment a PATCH could carry only a name: renaming a workflow was quietly
+    # erasing its description, because the body said nothing about one.
+    sent = body.model_fields_set
+    if "config" not in sent and "description" not in sent:
         existing = await svc.get(ResourceRef(kind, name))
-        config = existing.config
+        config, description = existing.config, existing.description
+    elif "config" not in sent:
+        existing = await svc.get(ResourceRef(kind, name))
+        config, description = existing.config, body.description
+    elif "description" not in sent:
+        existing = await svc.get(ResourceRef(kind, name))
+        config, description = body.config or {}, existing.description
     else:
-        config = body.config
+        config, description = body.config or {}, body.description
     r = await svc.update_config(
         ResourceRef(kind, name),
         new_config=config,
         actor=actor,
-        description=body.description,
+        description=description,
     )
+    # The rename comes LAST, so a refused config leaves the name alone: one
+    # PATCH that renamed a resource and then rejected its config would have
+    # moved the thing the caller was about to retry against.
+    if body.name is not None:
+        r = await svc.rename(ResourceRef(kind, name), body.name, actor=actor)
     return _to_out(r)
 
 
