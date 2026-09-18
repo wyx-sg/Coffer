@@ -120,6 +120,7 @@ def build_engine(
     templates: dict[str, dict[str, Any]] | None = None,
     *,
     machine_id: str = "machine-a",
+    known_agents: tuple[str, ...] = (),
 ) -> Engine:
     run_repo = FakeRunRepo()
     events = FakeEventRepo()
@@ -154,6 +155,9 @@ def build_engine(
             machine=machine,
             audit=audit,
             default_agent="claude_code",
+            # Empty by default: "not checked here", so a test that says nothing
+            # about agents drives the engine without an agent registry behind it.
+            known_agents=lambda: known_agents,
             dispatcher=dispatcher,
             clock=clock,
         ),

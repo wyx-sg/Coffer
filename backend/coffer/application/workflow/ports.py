@@ -100,6 +100,16 @@ class TurnPlatformPort(ConversationPort, Protocol):
     being copied anywhere.
     """
 
+    def known_agents(self) -> tuple[str, ...]:
+        """Every registered agent key (FR-071).
+
+        Here so a task can be ASSIGNED an agent that exists: without it a typo
+        is accepted, waits until the task starts, and surfaces as a failed
+        attempt with an agent error rather than as a refusal at the moment it
+        was made.
+        """
+        ...
+
     async def create_conversation(
         self,
         *,

@@ -25,7 +25,13 @@ from typing import Any
 
 from coffer.application.workflow.ports import ArtifactStorePort, AttemptRow
 from coffer.domain.workflow.run import ADHOC_KEY_PREFIX, NodeStatus
-from coffer.domain.workflow.template import ApprovalPolicy, Node, NodeType, WorkflowTemplate
+from coffer.domain.workflow.template import (
+    DEFAULT_ATTEMPT_CEILING,
+    ApprovalPolicy,
+    Node,
+    NodeType,
+    WorkflowTemplate,
+)
 from coffer.domain.workflow.transitions import NodePosition
 
 #: Statuses in which a node has finished having things happen to it. A failed
@@ -142,6 +148,12 @@ def adhoc_node(node_key: str, payload: Mapping[str, Any]) -> Node:
     name = payload.get("name")
     agent = payload.get("agent")
     instructions = payload.get("instructions")
+    # The ceiling the task was created with (FR-026). A task created before the
+    # ceiling moved onto tasks recorded none, and the default is what it was
+    # capped at then too — the workflow-wide number this replaced was 3 unless
+    # a template said otherwise, and a template that said otherwise had its
+    # number written onto this event by the same migration.
+    ceiling = payload.get("attempt_ceiling")
     return Node(
         key=node_key,
         name=name if isinstance(name, str) and name else node_key,
@@ -149,6 +161,11 @@ def adhoc_node(node_key: str, payload: Mapping[str, Any]) -> Node:
         instructions=instructions if isinstance(instructions, str) else None,
         approval=ApprovalPolicy.NEVER,
         agent=agent if isinstance(agent, str) and agent else None,
+        attempt_ceiling=(
+            ceiling
+            if isinstance(ceiling, int) and not isinstance(ceiling, bool) and ceiling >= 1
+            else DEFAULT_ATTEMPT_CEILING
+        ),
     )
 
 

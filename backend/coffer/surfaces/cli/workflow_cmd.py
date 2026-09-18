@@ -281,13 +281,17 @@ def relabel_run(
     title: str = typer.Option(..., "--title", help="What this delivery is called"),
     description: str | None = typer.Option(None, "--description", "-d"),
 ) -> None:
-    """Rewrite what a run is called and what it is for. Moves nothing else."""
+    """Rewrite what a run is called and what it is for. Moves nothing else.
+
+    A ``--title`` on its own leaves the description alone: the body omits the
+    field rather than sending a null, which the daemon reads as "clear it".
+    """
     c, _info = _cli_client.client_or_exit()
+    body: dict[str, Any] = {"title": title}
+    if description is not None:
+        body["description"] = description
     with c:
-        r = c.patch(
-            f"/workflow/runs/{run_id}",
-            json={"title": title, "description": description},
-        )
+        r = c.patch(f"/workflow/runs/{run_id}", json=body)
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(f"relabelled run {run_id}")
 

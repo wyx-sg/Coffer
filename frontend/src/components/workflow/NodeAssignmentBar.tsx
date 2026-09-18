@@ -75,6 +75,14 @@ export function NodeAssignmentBar({
       effort: next.effort === undefined ? (effort ?? null) : next.effort,
     });
 
+  // Changing the AGENT clears the model and the effort. A model id belongs to
+  // one agent's catalogue — `gpt-5-codex` means nothing to Claude Code — so
+  // carrying it across would hand the new agent a model it cannot run, and the
+  // failure would arrive when the task started rather than when the choice was
+  // made.
+  const chooseAgent = (next: string | null) =>
+    assign.mutate({ agent: next, model: null, effort: null });
+
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card/50 px-4 py-2">
       <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
@@ -85,7 +93,7 @@ export function NodeAssignmentBar({
       <Select
         value={current ?? INHERIT}
         disabled={busy}
-        onValueChange={(next) => commit({ agent: next === INHERIT ? null : next })}
+        onValueChange={(next) => chooseAgent(next === INHERIT ? null : next)}
       >
         <SelectTrigger className="h-8 w-[12rem]" aria-label={t("workflow.templates.agent")}>
           <SelectValue />

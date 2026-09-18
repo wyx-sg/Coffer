@@ -745,7 +745,8 @@
     "WORKFLOW_REPO_MOUNT_FAILED": "无法为这个工作流检出该仓库——什么都没有挂载",
     "WORKFLOW_TEMPLATE_DISABLED": "这个工作流已停用，不能再创建新的运行。已经由它创建的运行不受影响。",
     "RENAME_NOT_SUPPORTED": "这类资源不能在这里改名——它的名字被写进了这次移动够不到的地方",
-    "WORKFLOW_RUN_LABEL_INVALID": "运行必须有标题"
+    "WORKFLOW_RUN_LABEL_INVALID": "运行必须有标题",
+    "WORKFLOW_UNKNOWN_AGENT": "这台机器上没有叫这个名字的 agent"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",

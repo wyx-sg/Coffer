@@ -89,28 +89,35 @@ async def update_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ResourceOut:
-    # An ABSENT field leaves what is stored alone; the service takes a whole
-    # resource and would otherwise write a null over it. That mattered the
-    # moment a PATCH could carry only a name: renaming a workflow was quietly
-    # erasing its description, because the body said nothing about one.
+    # An ABSENT field leaves what is stored alone. The service takes a WHOLE
+    # resource, so anything this route does not carry forward it writes a null
+    # over — which a PATCH that can now say only `{"name": ...}` would turn
+    # into a silent erasure of the description beside it.
+    #
+    # An explicit null is "leave it alone" too, and not "make it empty". The
+    # config is a document a kind's own schema owns; a client that wanted it
+    # emptied would say `{}`, and one that said null is a client that filled in
+    # a field it had no value for.
     sent = body.model_fields_set
-    if "config" not in sent and "description" not in sent:
+    edits_config = "config" in sent and body.config is not None
+    edits_description = "description" in sent
+
+    # A rename ALONE touches no config, so it runs no config write. Rewriting
+    # the stored config back over itself is not a no-op: it re-validates, it
+    # re-probes every credential the config cites, it fires the kind's update
+    # hook and it records a `resource_updated` with identical before and after.
+    # A rename refused because a credential this resource mentions has since
+    # been deleted is a refusal about something the caller did not touch.
+    if edits_config or edits_description:
         existing = await svc.get(ResourceRef(kind, name))
-        config, description = existing.config, existing.description
-    elif "config" not in sent:
-        existing = await svc.get(ResourceRef(kind, name))
-        config, description = existing.config, body.description
-    elif "description" not in sent:
-        existing = await svc.get(ResourceRef(kind, name))
-        config, description = body.config or {}, existing.description
+        r = await svc.update_config(
+            ResourceRef(kind, name),
+            new_config=body.config if body.config is not None else existing.config,
+            actor=actor,
+            description=body.description if edits_description else existing.description,
+        )
     else:
-        config, description = body.config or {}, body.description
-    r = await svc.update_config(
-        ResourceRef(kind, name),
-        new_config=config,
-        actor=actor,
-        description=description,
-    )
+        r = await svc.get(ResourceRef(kind, name))
     # The rename comes LAST, so a refused config leaves the name alone: one
     # PATCH that renamed a resource and then rejected its config would have
     # moved the thing the caller was about to retry against.

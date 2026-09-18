@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from coffer.domain.workflow.errors import IllegalTransition
+from coffer.domain.workflow.errors import AttemptCeilingReached, IllegalTransition
 from coffer.domain.workflow.run import NodeAction, NodeStatus, RunStatus
 
 from .conftest import TEMPLATE, Engine, build_engine, with_ceiling
@@ -296,3 +296,30 @@ async def test_a_pending_task_holds_the_run_open(engine: Engine) -> None:
     position = await engine.nodes.next_position(run.id)
     assert position is not None
     assert position.node_key == "adhoc:tell-the-team"
+
+
+async def test_a_sent_back_task_gets_the_routes_ceiling_not_a_default() -> None:
+    """FR-026: the route declares the task it creates, so its limit is that
+    task's limit — an ad-hoc task falling back to the default would hand the
+    fix three tries inside a workflow that allows one."""
+    template = _reviewed_coding_template()
+    template = {
+        **template,
+        "edges": [{**edge, "attempt_ceiling": 1} for edge in template["edges"]],
+    }
+    engine = build_engine({"delivery": template})
+    run_id = await _design_done_coding_in_review(engine)
+    current = await engine.run_repo.get_run(run_id)
+    await engine.nodes.take_feedback(
+        run_id, from_stage="coding", reason="design_issue", note="wrong", version=current.version
+    )
+
+    task_key = "adhoc:design-issue"
+    await engine.nodes.act(
+        run_id, task_key, NodeAction.START, version=(await engine.run_repo.get_run(run_id)).version
+    )
+    failed = await engine.nodes.record_failure(run_id, task_key, detail="boom")
+
+    # One try, because the route said one — not three, because nobody said.
+    with pytest.raises(AttemptCeilingReached):
+        await engine.nodes.act(run_id, task_key, NodeAction.RETRY, version=failed.run.version)

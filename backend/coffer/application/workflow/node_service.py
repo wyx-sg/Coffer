@@ -69,6 +69,7 @@ class WorkflowNodeService:
         machine: MachineIdPort,
         audit: AuditPort,
         default_agent: str,
+        known_agents: Callable[[], tuple[str, ...]] = tuple,
         dispatcher: NodeDispatcher | None = None,
         clock: Callable[[], datetime] = utcnow,
     ) -> None:
@@ -80,6 +81,7 @@ class WorkflowNodeService:
             machine=machine,
             audit=audit,
             default_agent=default_agent,
+            known_agents=known_agents,
             dispatcher=dispatcher,
             clock=clock,
         )

@@ -34,6 +34,7 @@ from coffer.application.workflow.ports import (
     EventRepoPort,
     RunRow,
 )
+from coffer.application.workflow.run_label_ops import KEEP as _KEEP
 from coffer.application.workflow.run_service import WorkflowRunService
 from coffer.domain.workflow.events import EventType
 from coffer.domain.workflow.run import (
@@ -192,7 +193,14 @@ async def relabel_run(
     about the work. No ``version``: the optimistic lock guards the position,
     and this moves the run nowhere.
     """
-    run = await runs.relabel_run(run_id, title=body.title, description=body.description)
+    # An ABSENT description leaves what is stored alone; an explicit null
+    # clears it. `--title` on its own must not erase the words someone wrote
+    # about the delivery a week ago.
+    run = await runs.relabel_run(
+        run_id,
+        title=body.title,
+        description=body.description if "description" in body.model_fields_set else _KEEP,
+    )
     return run_out(run, owned_here=runs.owned_here(run))
 
 

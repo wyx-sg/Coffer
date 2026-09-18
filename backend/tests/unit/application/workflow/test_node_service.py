@@ -16,6 +16,7 @@ from coffer.domain.workflow.errors import (
     IllegalTransition,
     NotThisMachine,
     RunTerminal,
+    UnknownWorkflowAgent,
     WorkflowVersionConflict,
 )
 from coffer.domain.workflow.run import (
@@ -555,3 +556,21 @@ async def test_a_task_that_has_started_is_the_conversations_to_configure(engine:
 
     with pytest.raises(IllegalTransition):
         await engine.nodes.assign(run.id, "draft_td", agent="codex", model=None, effort=None)
+
+
+async def test_an_agent_this_machine_does_not_have_is_refused_when_it_is_chosen() -> None:
+    """FR-071: refused at the moment of the choice.
+
+    Left to the driver, a typed agent key waits until the task starts and then
+    surfaces as a failed attempt with an agent error — attributed to the work
+    rather than to the typo, hours after the developer could have fixed it.
+    """
+    engine = build_engine({"delivery": TEMPLATE}, known_agents=("claude_code", "codex"))
+    run = await engine.started()
+
+    with pytest.raises(UnknownWorkflowAgent):
+        await engine.nodes.assign(run.id, "draft_td", agent="codxe", model=None, effort=None)
+
+    # And nothing was written: the task still runs on the workflow's answer.
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+    assert engine.dispatcher.last.agent_key == "claude_code"

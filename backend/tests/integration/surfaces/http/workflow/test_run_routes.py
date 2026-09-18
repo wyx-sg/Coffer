@@ -339,3 +339,24 @@ def test_relabelling_a_run_another_machine_owns_is_refused(surface: Surface) -> 
     response = surface.client.patch(f"{_RUNS}/{run['id']}", json={"title": "mine now"})
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "WORKFLOW_NOT_THIS_MACHINE"
+
+
+def test_retitling_a_run_leaves_the_description_it_was_not_given(surface: Surface) -> None:
+    """FR-070: a body that says nothing about the description says nothing —
+    it does not say "empty". `--title` on its own must not erase the words
+    someone wrote about this delivery a week ago."""
+    run = create_run(surface.client)
+    first = surface.client.patch(
+        f"{_RUNS}/{run['id']}", json={"title": "a", "description": "the words"}
+    )
+    assert first.status_code == 200, first.text
+
+    second = surface.client.patch(f"{_RUNS}/{run['id']}", json={"title": "b"})
+    assert second.status_code == 200, second.text
+    got = surface.client.get(f"{_RUNS}/{run['id']}")
+    assert got.status_code == 200, got.text
+    assert got.json()["run"]["description"] == "the words"
+
+    # An explicit null is the other answer, and still available.
+    surface.client.patch(f"{_RUNS}/{run['id']}", json={"title": "b", "description": None})
+    assert surface.client.get(f"{_RUNS}/{run['id']}").json()["run"]["description"] is None

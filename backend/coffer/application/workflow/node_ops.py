@@ -27,7 +27,7 @@ from coffer.application.workflow.commands import (
     template_of,
     utcnow,
 )
-from coffer.application.workflow.dispatch import NodeDispatch, NodeDispatcher
+from coffer.application.workflow.dispatch import NodeDispatcher
 from coffer.application.workflow.kind import KIND_WORKFLOW
 from coffer.application.workflow.node_walk import Walk, adhoc_node, walk_run
 from coffer.application.workflow.ports import (
@@ -93,6 +93,7 @@ class NodeOps:
         machine: MachineIdPort,
         audit: AuditPort,
         default_agent: str,
+        known_agents: Callable[[], tuple[str, ...]] = tuple,
         dispatcher: NodeDispatcher | None = None,
         clock: Callable[[], datetime] = utcnow,
     ) -> None:
@@ -104,7 +105,16 @@ class NodeOps:
         )
         self._audit = audit
         self._default_agent = default_agent
+        # Which agents this machine has, for a choice made before a task starts
+        # (FR-071). The empty default means "not checked here" — the same
+        # convention ``parse_template``'s ``allowed_agents=None`` uses, so a
+        # test can drive the engine without an agent registry behind it.
+        self._known_agents = known_agents
         self._dispatcher = dispatcher
+
+    def known_agents(self) -> tuple[str, ...]:
+        """Every agent this machine has, or ``()`` for "not checked here"."""
+        return self._known_agents()
 
     def set_dispatcher(self, dispatcher: NodeDispatcher) -> None:
         self._dispatcher = dispatcher
@@ -252,6 +262,13 @@ class NodeOps:
         ``instructions`` overrides what the new attempt opens with. Left alone
         it carries the last attempt's brief forward, which is what a retry
         means: the same work, tried again.
+
+        The assignment carries forward for the same reason (FR-071): a
+        developer who said "run this task on the bigger model" said it about
+        the TASK, not about attempt 1, and an automatic retry that quietly went
+        back to the workflow's agent would undo the choice without telling
+        anyone. The earlier attempt's own row is untouched and still records
+        what it actually ran on.
         """
         number = check_attempt_ceiling(node.key, attempt.attempt, node.attempt_ceiling)
         opened = await self.open_attempt(
@@ -260,6 +277,9 @@ class NodeOps:
             node.key,
             number,
             attempt.instructions if instructions is None else instructions,
+            agent=attempt.agent,
+            model=attempt.model,
+            effort=attempt.effort,
         )
         return await self.cmd.commit(
             run,
@@ -282,14 +302,27 @@ class NodeOps:
         node_key: str,
         number: int,
         instructions: str | None = None,
+        *,
+        agent: str | None = None,
+        model: str | None = None,
+        effort: str | None = None,
     ) -> AttemptRow:
-        return await self.attempts.insert_attempt(
+        row = await self.attempts.insert_attempt(
             attempt_id=uuid4().hex,
             run_id=run_id,
             stage_key=stage_key,
             node_key=node_key,
             attempt=number,
             instructions=instructions,
+        )
+        # Written after the insert rather than through it: ``insert_attempt``
+        # reads ``None`` as "leave it", and here every one of the three is a
+        # real answer including ``None`` (FR-071).
+        if agent is None and model is None and effort is None:
+            return row
+        return (
+            await self.attempts.set_assignment(row.id, agent=agent, model=model, effort=effort)
+            or row
         )
 
     async def closing_events(
@@ -329,53 +362,22 @@ class NodeOps:
         attempt: AttemptRow,
         follow_up: str | None,
     ) -> None:
-        """Hand the work to the driver, after the state is committed.
+        """Hand the work to the driver; see ``node_dispatch_ops``."""
+        from coffer.application.workflow.node_dispatch_ops import dispatch as _dispatch
 
-        After, not before: the driver reports back into the node service, and a
-        report that arrived before the ``node.started`` event was written would
-        be refused for acting on a node that had not started.
-        """
-        if self._dispatcher is None:
-            return
-        await self._dispatcher(
-            NodeDispatch(
-                run=run,
-                stage_key=stage_key,
-                node=node,
-                attempt=attempt,
-                # One ladder (FR-071): this attempt's own answer, then the
-                # task's, then the run's, then this machine's default. Each
-                # rung defers to the next rather than inventing a default.
-                agent_key=(
-                    attempt.agent or node.agent or await self.run_agent(run) or self._default_agent
-                ),
-                model=attempt.model or node.model,
-                effort=attempt.effort or node.effort,
-                workdir=await self.node_workdir(run, node.key),
-                follow_up=follow_up,
-            )
-        )
+        await _dispatch(self, run, stage_key, node, attempt, follow_up)
 
     async def run_agent(self, run: RunRow) -> str | None:
-        """The run's default agent, as ``run.created`` recorded it.
+        """The run's default agent; see ``node_dispatch_ops``."""
+        from coffer.application.workflow.node_dispatch_ops import run_agent as _run_agent
 
-        There is no column for it: the run's own creation event is the record,
-        which keeps the answer in the log with everything else about the run.
-        """
-        for row in await self.cmd.domain_events(run.id):
-            if row.event_type is EventType.RUN_CREATED:
-                return optional_str(row.payload.get("agent"))
-        return None
+        return await _run_agent(self, run)
 
     async def node_workdir(self, run: RunRow, node_key: str) -> str:
-        """The run's working directory (FR-019), unless an ad-hoc task named
-        another — which is how work in a second repository is expressed."""
-        if not node_key.startswith(ADHOC_KEY_PREFIX):
-            return run.workdir
-        for row in await self.cmd.domain_events(run.id):
-            if row.event_type is EventType.NODE_ADHOC_ADDED and row.node_key == node_key:
-                return optional_str(row.payload.get("workdir")) or run.workdir
-        return run.workdir
+        """Where this task's work happens; see ``node_dispatch_ops``."""
+        from coffer.application.workflow.node_dispatch_ops import node_workdir as _workdir
+
+        return await _workdir(self, run, node_key)
 
     async def audit_finished(self, result: CommandResult) -> None:
         """FR-040's coarse record: this vault finished a run it was running."""
@@ -388,7 +390,3 @@ class NodeOps:
             resource_name=result.run.id,
             detail={"status": result.run.status, "title": result.run.title},
         )
-
-
-def optional_str(value: Any) -> str | None:
-    return value if isinstance(value, str) and value else None

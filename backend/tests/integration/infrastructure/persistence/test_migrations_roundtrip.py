@@ -163,7 +163,9 @@ HEAD_REVISION = "0093"
 # ``workflow_runs`` plus its cascading ``workflow_events``,
 # ``workflow_node_attempts`` and ``workflow_approvals`` (spec workflow); a
 # template needs no table of its own, so nothing else is added and the four are
-# dropped together by the same revision's downgrade. 0091 is DATA-only too: it
+# dropped together by the same revision's downgrade. 0090 adds a nullable
+# ``owner`` to ``conversations`` so a workflow task's conversation stays out of
+# the developer's own chat list. 0091 is DATA-only too: it
 # moves a workflow's attempt ceiling down onto its tasks and its routes, in the
 # resource's config AND in every run's frozen snapshot, because the parser now
 # refuses the root field and a snapshot left behind would strand its run.

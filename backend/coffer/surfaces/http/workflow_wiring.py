@@ -188,7 +188,10 @@ def wire_workflow_kind(
 
     # 2. The adapters that bridge to the other kinds (workflow_adapters).
     platform = ChatTurnPlatform(
-        chat=chat.chat_service, orchestrator=chat.orchestrator, messages=MessageRepo(sm)
+        chat=chat.chat_service,
+        orchestrator=chat.orchestrator,
+        messages=MessageRepo(sm),
+        registry=chat.registry,
     )
     summariser = LlmSummariser(
         models=InternalModel(provider),
@@ -230,6 +233,7 @@ def wire_workflow_kind(
         machine=ThisMachine(),
         audit=audit_port,
         default_agent=DEFAULT_RUN_AGENT,
+        known_agents=platform.known_agents,
     )
     # The driver reports every outcome to the node service, and the node
     # service dispatches through the driver. ``driver_for`` wires all three

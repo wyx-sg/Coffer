@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from coffer.application.workflow.commands import CommandResult, template_of
 from coffer.application.workflow.node_ops import NodeOps
-from coffer.domain.workflow.errors import IllegalTransition
+from coffer.domain.workflow.errors import IllegalTransition, UnknownWorkflowAgent
 from coffer.domain.workflow.events import EventActor
 from coffer.domain.workflow.run import NodeStatus
 
@@ -67,6 +67,16 @@ async def assign(
     ops.cmd.guard(run, "node.assign", None)
     template = template_of(run)
     node, stage_key = await ops.node_of(run, template, node_key)
+
+    # An empty string is not a choice, it is an empty box: read it as "defer",
+    # the same as absent, rather than storing a value nothing can resolve.
+    agent, model, effort = (agent or None), (model or None), (effort or None)
+    known = ops.known_agents()
+    if agent is not None and known and agent not in known:
+        # Refused HERE rather than at the moment the task starts. Left to the
+        # driver, a typed agent key becomes a failed attempt with an agent
+        # error hours later, attributed to the work rather than to the choice.
+        raise UnknownWorkflowAgent(agent, known)
 
     row = await ops.attempts.latest_attempt(run_id, node.key)
     if row is None:

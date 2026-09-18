@@ -167,6 +167,7 @@ _STATUS: dict[str, int] = {
     # request — the same answer shape as a terminal run.
     "WORKFLOW_TEMPLATE_DISABLED": 409,
     "WORKFLOW_RUN_LABEL_INVALID": 422,
+    "WORKFLOW_UNKNOWN_AGENT": 422,
     # A template whose config does not validate, and a node completed without
     # the artifact it owes: both are the request being refused, and both name
     # the field or the file in ``details.reason``.

@@ -745,7 +745,8 @@
     "WORKFLOW_REPO_MOUNT_FAILED": "The repository could not be checked out for this run — nothing was mounted",
     "WORKFLOW_TEMPLATE_DISABLED": "This workflow is switched off; it starts no new runs. Runs already created from it keep going.",
     "RENAME_NOT_SUPPORTED": "This kind cannot be renamed here — its name is written out somewhere this move cannot reach",
-    "WORKFLOW_RUN_LABEL_INVALID": "A run must have a title"
+    "WORKFLOW_RUN_LABEL_INVALID": "A run must have a title",
+    "WORKFLOW_UNKNOWN_AGENT": "No agent by that name on this machine"
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",

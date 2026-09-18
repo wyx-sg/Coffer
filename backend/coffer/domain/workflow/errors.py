@@ -148,6 +148,22 @@ class TemplateDisabled(WorkflowError):  # noqa: N818
         self.template = template
 
 
+class UnknownWorkflowAgent(WorkflowError):  # noqa: N818
+    """A task was assigned an agent this machine does not have (FR-071).
+
+    Refused when the choice is MADE. Left to the moment the task starts, a
+    typed agent key becomes a failed attempt with an agent error hours later,
+    attributed to the work rather than to the typo.
+    """
+
+    code = "WORKFLOW_UNKNOWN_AGENT"
+
+    def __init__(self, agent: str, known: tuple[str, ...]) -> None:
+        super().__init__(f"no agent named {agent!r}; this machine has: {', '.join(known)}")
+        self.agent = agent
+        self.known = known
+
+
 class RunLabelInvalid(WorkflowError):  # noqa: N818
     """A run was asked to be called nothing at all (FR-070).
 

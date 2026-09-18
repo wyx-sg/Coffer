@@ -15,13 +15,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import pathlib
-import shutil
 from collections.abc import Sequence
 from typing import Any
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.service import ChannelService
+from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.knowledge.service import KnowledgeService
@@ -34,9 +33,10 @@ from coffer.domain.errors import CofferError
 from coffer.domain.resource import ResourceRef
 from coffer.infrastructure.chat.persistence import MessageRepo
 from coffer.infrastructure.sync.identity import resolve_identity
-from coffer.infrastructure.workflow import artifacts as wf_artifacts
-from coffer.infrastructure.workflow import files as wf_files
-from coffer.infrastructure.workflow import paths as wf_paths
+
+#: Re-exported: which file an adapter lives in is this package's business, not
+#: the composition root's.
+from coffer.surfaces.http.workflow_artifact_adapter import FileArtifactStore
 
 __all__ = [
     "ChatTurnPlatform",
@@ -67,14 +67,26 @@ class ChatTurnPlatform:
     """``TurnPlatformPort`` over the conversation service and the orchestrator."""
 
     def __init__(
-        self, *, chat: ChatService, orchestrator: TurnOrchestrator, messages: MessageRepo
+        self,
+        *,
+        chat: ChatService,
+        orchestrator: TurnOrchestrator,
+        messages: MessageRepo,
+        registry: AgentProviderRegistry,
     ) -> None:
         self._chat = chat
         self._orchestrator = orchestrator
+        # The registry, so a task can be ASSIGNED an agent that exists: the
+        # chat service resolves one at creation and raises then, which is far
+        # too late for a choice made before the task starts (FR-071).
+        self._registry = registry
         # Compaction deletes messages, and deleting is the one thing the chat
         # SERVICE does not expose — it has no business doing so for an ordinary
         # conversation. The composition root may reach the repo; this is why.
         self._messages = messages
+
+    def known_agents(self) -> tuple[str, ...]:
+        return tuple(self._registry.agent_keys())
 
     async def create_conversation(
         self,
@@ -337,57 +349,3 @@ def conversation_env_lookup(attempts: Any) -> Any:
         return {RUN_CONTEXT_ENV: f"{attempt.run_id}/{attempt.id}"}
 
     return lookup
-
-
-class FileArtifactStore:
-    """``ArtifactStorePort`` over the run directory's module-level functions.
-
-    The infrastructure exposes functions rather than a class — path handling has
-    no state worth holding — so the object the engine's port wants is assembled
-    here. ``delete_run_dir`` is the one operation with no function behind it,
-    because deleting a tree is the only thing in this file that is destructive
-    and it belongs beside the guard that decides what a run directory is.
-    """
-
-    def run_dir(self, run_id: str) -> str:
-        return str(wf_paths.run_dir(run_id))
-
-    def workspace_dir(self, run_id: str) -> str:
-        """The run's own working directory — what every node's conversation
-        runs in, and what a mounted repository is checked out into (FR-053)."""
-        return str(wf_paths.workspace_dir(run_id))
-
-    def ensure_run_dirs(self, run_id: str) -> None:
-        wf_artifacts.ensure_run_dirs(run_id)
-
-    def list_artifacts(self, run_id: str) -> Sequence[wf_artifacts.ArtifactEntry]:
-        return wf_artifacts.list_artifacts(run_id)
-
-    def write_catalogue(self, run_id: str, markdown: str) -> None:
-        path = wf_paths.catalog_path(run_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(markdown, encoding="utf-8")
-
-    def read_catalogue(self, run_id: str) -> str:
-        try:
-            return wf_paths.catalog_path(run_id).read_text(encoding="utf-8")
-        except OSError:
-            # Absent is not an error: the catalogue is generated, and a run that
-            # has produced nothing has nothing to describe.
-            return ""
-
-    def collect_run_files(
-        self, run_id: str, destination: str, *, references: str | None = None
-    ) -> int:
-        return wf_artifacts.collect_run_files(
-            run_id, pathlib.Path(destination), references=references
-        )
-
-    def read_file(self, run_id: str, rel_path: str) -> wf_files.RunFile | None:
-        return wf_files.read_file(run_id, rel_path)
-
-    def read_bytes(self, run_id: str, rel_path: str) -> tuple[bytes, str] | None:
-        return wf_files.read_bytes(run_id, rel_path)
-
-    def delete_run_dir(self, run_id: str) -> None:
-        shutil.rmtree(wf_paths.run_dir(run_id), ignore_errors=True)

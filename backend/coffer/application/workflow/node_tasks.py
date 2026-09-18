@@ -28,6 +28,7 @@ from coffer.application.workflow.ports import RunRow
 from coffer.domain.workflow.errors import AttemptCeilingReached, IllegalTransition
 from coffer.domain.workflow.events import EventActor, EventType
 from coffer.domain.workflow.run import FailureReason
+from coffer.domain.workflow.template import DEFAULT_ATTEMPT_CEILING
 from coffer.domain.workflow.transitions import take_feedback_edge
 
 
@@ -87,6 +88,10 @@ async def take_feedback(
         agent=None,
         workdir=None,
         actor=actor,
+        # The route's own ceiling. It declares this task, so its limit is the
+        # task's limit too — otherwise a workflow that allows one try at a
+        # deploy would hand the fix it sent back three.
+        attempt_ceiling=outcome.edge.attempt_ceiling,
         extra={
             "cause": "feedback_edge",
             "reason": reason,
@@ -148,6 +153,7 @@ async def _add_task(
     agent: str | None,
     workdir: str | None,
     actor: EventActor,
+    attempt_ceiling: int = DEFAULT_ATTEMPT_CEILING,
     extra: dict[str, Any] | None = None,
 ) -> CommandResult:
     """The attempt row and the event that make an ad-hoc task exist.
@@ -176,6 +182,11 @@ async def _add_task(
                     "instructions": instructions,
                     "agent": agent,
                     "workdir": workdir,
+                    # How many tries this task gets (FR-026). Recorded HERE
+                    # because an ad-hoc task exists nowhere else: the walk
+                    # rebuilds it from this event, so a number left out is a
+                    # number that silently becomes the default.
+                    "attempt_ceiling": attempt_ceiling,
                     **(extra or {}),
                 },
             )

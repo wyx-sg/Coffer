@@ -23,11 +23,6 @@ function isLive(detail: RunDetail | undefined): boolean {
   return detail?.run.status === "running";
 }
 
-/**
- * One run with its stages, nodes and latest attempts. Polls while the run is
- * running: a node completing and the next one opening is exactly the thing the
- * developer opened this page to watch, and nothing pushes it.
- */
 /** Choose who runs one task, on what, before it runs (FR-071). Invalidates the
  *  run, because the task's row is where the answer is read back from. */
 export function useAssignNode(runId: string, nodeKey: string) {
@@ -55,6 +50,11 @@ export function useRelabelRun(runId: string) {
   });
 }
 
+/**
+ * One run with its stages, nodes and latest attempts. Polls while the run is
+ * running: a node completing and the next one opening is exactly the thing the
+ * developer opened this page to watch, and nothing pushes it.
+ */
 export function useWorkflowRun(runId: string) {
   return useQuery({
     queryKey: workflowRunKey(runId),
