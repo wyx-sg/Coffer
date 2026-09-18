@@ -256,8 +256,9 @@ class ContextQuery(BaseModel):
     """
 
     cwd: str = Field(default="")
-    #: The calling agent's registered name, which is what the per-agent scope is
-    #: evaluated against (FR-013).
+    #: The calling agent's registered name — who fired, for ``record_fired``
+    #: below. It does not shape the payload: every enabled partition is
+    #: composed for every agent.
     agent: str | None = None
     #: Omitted or null uses the server's default ceiling.
     ceiling_tokens: int | None = None

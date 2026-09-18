@@ -1,8 +1,15 @@
 // frontend/src/pages/MemoryDetailPage.tsx
 //
 // Detail surface for ONE partition: the folder it is on disk, plus the two
-// acts that belong to the partition as a whole — where it reaches
+// acts that belong to the partition as a whole — whether it is served at all
 // (ScopeControl) and the distil pass.
+//
+// There is no per-agent reach here, and nothing on this page arranges that:
+// the control passes no `scope`, so it asks the server, and the `memory` kind
+// answers `supports_scope: false` — one enable/disable choice, no agent list.
+// Memory is aggregated from every agent's own notes and served back to every
+// agent; an enabled partition reaches all of them and a disabled one reaches
+// nobody.
 //
 // Nothing here acts on an individual note, and that is the rule rather than an
 // omission (FR-037). A partition is a folder of derived Markdown: `MEMORY.md`,
@@ -37,7 +44,7 @@ export function MemoryDetailPage() {
 
   // `enabled` is a generic Resource field (not on the dedicated partitions
   // endpoint), so ScopeControl's required prop comes from the single-resource
-  // read; the repository path and whether it still resolves DO live on the
+  // read — the only reach state this kind has; the repository path and whether it still resolves DO live on the
   // dedicated endpoint, so those are read from there rather than reaching into
   // the resource's untyped `config`.
   const resource = useResource("memory", partition);

@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0092"
+HEAD_REVISION = "0093"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -153,11 +153,20 @@ HEAD_REVISION = "0092"
 # 0080 is DATA-only too: it rewrites a ``runs_on`` that cannot be a machine id
 # (the retired axis wrote ULIDs into the same key) to this machine, so a vault
 # carrying that fossil does not upgrade into a channel bound to nobody real —
-# no DDL, table/column set unchanged at head. 0085 CREATEs the four workflow
-# execution tables — ``workflow_runs`` plus its cascading ``workflow_events``,
+# no DDL, table/column set unchanged at head. 0088 is DATA-only as well: it
+# NULLs ``resources.scope_json`` for every ``kind='knowledge'`` and
+# ``kind='memory'`` row, because those two kinds stop declaring reach — the one
+# revision here that widens on purpose, and its docstring argues why that is
+# safe for these two kinds and for no others; no DDL, table/column set
+# unchanged at head, and its downgrade writes nothing because the cleared
+# values cannot be recovered. 0089 CREATEs the four workflow execution tables —
+# ``workflow_runs`` plus its cascading ``workflow_events``,
 # ``workflow_node_attempts`` and ``workflow_approvals`` (spec workflow); a
 # template needs no table of its own, so nothing else is added and the four are
-# dropped together by the same revision's downgrade.
+# dropped together by the same revision's downgrade. 0091 is DATA-only too: it
+# moves a workflow's attempt ceiling down onto its tasks and its routes, in the
+# resource's config AND in every run's frozen snapshot, because the parser now
+# refuses the root field and a snapshot left behind would strand its run.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

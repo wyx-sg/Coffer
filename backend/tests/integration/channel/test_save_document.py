@@ -11,10 +11,10 @@ was just sent here", never a second copy of the bytes (those still live only
 at the path the transport downloaded them to, read once, at save time, through
 the ingest service).
 
-The collection is always confirmed: a name that is both typed AND visible is
-used outright (the owner already confirmed it by typing it); anything else
-falls back to a selection card, reusing the same mechanism `/agent`/`/model`
-already render — never a second one.
+The collection is always confirmed: a name that is both typed AND an existing
+collection is used outright (the owner already confirmed it by typing it);
+anything else falls back to a selection card, reusing the same mechanism
+`/agent`/`/model` already render — never a second one.
 """
 
 from __future__ import annotations
@@ -77,8 +77,10 @@ async def test_named_existing_collection_saves_directly(env: ChannelEnv, tmp_pat
     assert call["collection"] == "research"
     assert call["filename"] == "note.txt"
     assert call["data"] == b"hello world"
+    # "user", not the thread's agent: the person forwarded the document, and
+    # no agent identity is threaded through `/save` at all — a collection is
+    # not narrowed per agent, so there is nothing for one to decide.
     assert call["actor"] == "user"
-    assert call["agent"] == "builtin"  # the channel's default_agent
     # The confirmation names the title, the collection, and the path — never a
     # stack trace, and never silence.
     assert any("note.txt" in text and "research" in text for _chat, text in adapter.sent)

@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import pathlib
-from logging.config import fileConfig
+import sys
 
 from alembic import context
 from sqlalchemy.engine import Connection
@@ -22,11 +23,33 @@ from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import create_async_engine_with_pragmas
 
 cfg = context.config
-if cfg.config_file_name is not None:
-    # disable_existing_loggers=False: fileConfig's default (True) silently
-    # disables every already-imported application logger when the daemon runs
-    # migrations at startup, swallowing e.g. the chat turn-error WARNING.
-    fileConfig(cfg.config_file_name, disable_existing_loggers=False)
+
+# Alembic's generated env.py calls ``logging.config.fileConfig`` here. Coffer's
+# deliberately does not, and ``alembic.ini`` carries no logging sections for it
+# to read.
+#
+# fileConfig *replaces* the root logger's handlers. When the daemon runs
+# migrations at startup (``surfaces.http.migrations_runner``), that tore out the
+# rotating ``daemon.log`` handler and the JSON formatter
+# ``infrastructure.logging.setup`` had installed seconds earlier and put
+# alembic's own ``%(levelname)-5.5s [%(name)s] %(message)s`` console handler in
+# their place — so the daemon's log format silently depended on whether a
+# migration had run yet this boot, and every line written afterwards lost its
+# timestamp. Logging belongs to whoever owns the process; for the daemon that is
+# ``configure_logging``, and a library called from inside it does not get to
+# decide.
+#
+# Alembic's own records need no configuration to be seen: they are ordinary
+# stdlib records on the ``alembic.*`` loggers, so they propagate to the root
+# logger the daemon already configured and land in ``daemon.log`` as JSON with
+# ``logger: alembic.runtime.migration`` — which is what "Context impl
+# SQLiteImpl." and "Will assume non-transactional DDL." are.
+#
+# The one caller that owns no logging configuration is the bare ``alembic``
+# CLI. It gets a plain stderr handler, so a developer running a migration by
+# hand still watches "Running upgrade …" go by.
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
 target_metadata = Base.metadata
 

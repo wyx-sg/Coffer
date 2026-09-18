@@ -7,8 +7,8 @@ a channel attachment (FR-018). Nothing here changes what a source is: the
 output of :meth:`IngestService.ingest` must be indistinguishable from a file a
 person put there by hand, so it goes through
 :meth:`KnowledgeService.write_source` rather than touching the filesystem
-itself — the same audit event, the same frontmatter, the same scope
-enforcement as any other write.
+itself — the same audit event, the same frontmatter, the same lane rule as any
+other write.
 
 Two things this module owns that ``write_source`` does not need to think about:
 
@@ -148,7 +148,6 @@ class IngestService:
         data: bytes,
         folder: str | None = None,
         actor: str,
-        agent: str | None = None,
     ) -> IngestedDocument:
         """Convert ``data`` (named ``filename``) into a source file.
 
@@ -159,17 +158,17 @@ class IngestService:
         Raises ``UploadTooLarge`` over the size ceiling, ``UnsupportedDocument``
         (``domain.knowledge.converter``) for a type no converter handles,
         ``EmptyConversion`` when a converter ran and produced no text, and
-        whatever ``KnowledgeService.write_source`` raises for an unauthorized
-        or otherwise invalid target — in every one of those cases nothing is
+        whatever ``KnowledgeService.write_source`` raises for an unknown or
+        otherwise invalid target — in every one of those cases nothing is
         written, converted or kept (FR-019).
         """
         if len(data) > MAX_UPLOAD_BYTES:
             raise UploadTooLarge(len(data), MAX_UPLOAD_BYTES)
 
-        # The same enforcement point `write_source` itself uses
-        # (FR-010/FR-012): calling it here, before conversion, refuses an
-        # unauthorized upload without first paying for the conversion.
-        await self._knowledge.require_visible(collection, agent)
+        # The same check `write_source` itself makes, run here and up front so
+        # a name that is not a collection is refused without first paying for
+        # the conversion.
+        await self._knowledge.require_enabled(collection)
 
         conversion = await self._registry.convert(data, filename)
         # FR-019: a converter that succeeds but extracts nothing (an image-only
@@ -189,7 +188,6 @@ class IngestService:
             folder=folder or None,
             actor_kind=ACTOR_USER,
             actor=actor,
-            agent=agent,
         )
 
         # A Markdown upload converts by passthrough, so the "original" would be

@@ -5,7 +5,10 @@ feature being restated:
 
 * an answer is a **path**, a title and a description — never a body, because
   the caller is a local process that reads files;
-* it spans only the partitions the calling agent's scope allows;
+* it spans every **enabled** partition, for whoever asks — a partition used
+  to carry a per-agent reach that defaulted to the agents it had been
+  aggregated from, which is how an agent came to be refused every note about
+  the repository it was working in;
 * **a retired note never comes back.** The previous version filtered nothing,
   so 11 facts that had been marked superseded — and were correctly withheld
   from delivery — were still answerable here as if current. The mechanism now
@@ -29,16 +32,14 @@ from coffer.infrastructure.memory import paths as memory_paths
 
 
 class _FakeMemory:
-    def __init__(self, notes: dict[str, list[Note]], *, visible: Sequence[str] | None = None):
+    def __init__(self, notes: dict[str, list[Note]], *, enabled: Sequence[str] | None = None):
         self._notes = notes
-        self._visible = list(visible) if visible is not None else sorted(notes)
+        self._enabled = list(enabled) if enabled is not None else sorted(notes)
 
-    async def visible_partitions(self, agent: str | None) -> list[str]:
-        return list(self._visible)
+    async def enabled_partitions(self) -> list[str]:
+        return list(self._enabled)
 
-    async def list_notes(self, partition: str, *, agent: str | None = None) -> list[Note]:
-        if agent is not None and partition not in self._visible:
-            return []
+    async def list_notes(self, partition: str) -> list[Note]:
         return list(self._notes.get(partition, []))
 
 
@@ -128,16 +129,21 @@ async def test_an_answer_carries_no_score_no_mode_and_no_reason() -> None:
 @pytest.mark.acceptance(
     spec="memory", scenario="recall answers with locations, and never with a retired note"
 )
-async def test_recall_spans_only_the_partitions_the_calling_agent_may_see() -> None:
+async def test_recall_spans_only_the_enabled_partitions() -> None:
+    """``enabled`` is the only thing that can keep a note out of an answer.
+
+    The narrowing that used to sit here was per-agent and nobody had chosen
+    it, so it is gone: this asserts the switch the developer *does* set.
+    """
     service = _service(
         {
-            "coffer": [_note("visible", "coffer", body="a shared phrase")],
-            "other": [_note("hidden", "other", body="a shared phrase")],
+            "coffer": [_note("served", "coffer", body="a shared phrase")],
+            "other": [_note("switched-off", "other", body="a shared phrase")],
         },
-        visible=["coffer"],
+        enabled=["coffer"],
     )
 
-    outcome = await service.recall("a shared phrase", agent="codex")
+    outcome = await service.recall("a shared phrase")
 
     assert [n.partition for n in outcome.notes] == ["coffer"]
 

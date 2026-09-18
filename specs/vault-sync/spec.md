@@ -355,11 +355,15 @@ guards are normative.
   construction the vault's state immediately before the apply. Rollback MUST be
   the same machinery run backwards — applying `M..L`. The most recent **ten**
   snapshots MUST be kept.
-- **FR-066**: A round whose diff would delete more than **20%** of the documents
-  in an area, or **20 or more** documents in one area, MUST NOT proceed. Both
-  thresholds are fixed and MUST NOT be configurable.
+- **FR-066**: A round that would **lose** more than **20%** of the documents in
+  an area, or **20 or more** documents in one area, MUST NOT proceed. Both
+  thresholds are fixed and MUST NOT be configurable, and nothing — no caller, no
+  migration, no relocation of the layout — may skip the guard rather than
+  satisfy it. What counts as a loss is FR-090.
 - **FR-067**: A tripped breaker MUST be recorded as needing confirmation, the
   surfaces MUST list what it would remove, and the user accepts or rejects it.
+  What is outstanding is a question about one diff, which is why a later round
+  re-derives it rather than repeating it (FR-091, FR-092).
 - **FR-068**: The guard MUST run in **both directions** — over what the round
   would apply to the vault, and equally over what the round's own export would
   publish as a deletion. The second direction is what stops a vault that lost
@@ -368,10 +372,37 @@ guards are normative.
 - **FR-069**: On the apply side the guard MUST run over everything the round is
   about to apply — the incoming diff **and** the retry set, since a held path
   the tree has since dropped is absorbed as a deletion.
+- **FR-090**: The guard MUST count what a round **loses**, not what it deletes.
+  A deletion whose content reappears at another path **in the same area of the
+  same diff** is a **move**: it MUST NOT count towards either threshold, and it
+  MUST NOT appear in the list a hold puts in front of the user, because a
+  document that turned up under another name was not removed. The pairing MUST
+  be on content and never on name similarity — a deletion whose content cannot
+  be shown to reappear counts, so a wiped disk, a failed restore or a stray
+  `rm -rf` is held exactly as before. A relocation that also *rewrites* its
+  documents is not a move and is held; the empty document is never paired,
+  since every empty file has identical content by construction.
+- **FR-091**: A round MUST re-derive its diff even while a confirmation is
+  outstanding, and MUST **release** the hold where the direction it was raised
+  for no longer breaches. A latch is an unanswered question about one diff, not
+  a state a vault sits in: a vault held on a question that no longer arises
+  MUST converge again without anyone answering it. A diff that still breaches
+  MUST stay held, and re-deriving it MUST NOT move the moment the user was
+  asked.
+- **FR-092**: One outstanding confirmation MUST be **one** recorded round and
+  one line in the daemon log, however many times the timer re-derives it: the
+  round that first reported it is re-stamped rather than joined by a second,
+  and no further audit event is written. The surfaces MUST still show the
+  confirmation as outstanding and still offer its answers, and answering it
+  MUST produce a further round of its own.
 
 Neither guard replaces the diff-based apply; they bound the damage of a defect
 in it. A machine joining as new has no deletions in either direction and is
 unaffected.
+
+FR-090 to FR-092 are numbered out of order because ids are identities here and
+are never renumbered; all three belong to this section and were added after the
+two defects they answer were measured on a live vault.
 
 ## Unattended rewriters
 
@@ -464,9 +495,10 @@ reported as a conflict.
   it runs), reject, and, on a `publish` hold, rebuild-from-remote. Only the round
   the vault is **currently** waiting on may carry them: `POST /sync/confirm` acts
   on the vault's present pending state rather than on a round named in the
-  request, so rows keep `awaiting_confirmation` as their outcome forever — the
-  timer re-raises one unanswered situation as a new round each pass, and
-  answering it produces a further round rather than rewriting the held ones.
+  request. There is exactly one such row, because one outstanding confirmation
+  is one recorded round (FR-092) — the timer re-stamps it rather than adding
+  another each pass — and answering it produces a further round rather than
+  rewriting the held one, whose outcome stays `awaiting_confirmation`.
 - **FR-086**: A **conflict** MUST stay a banner above the table, because its
   paths have to be resolved with the user's own git in a working tree the table
   has no column for.
@@ -654,6 +686,34 @@ reported as a conflict.
 - **Then** nothing is applied, the round is recorded as awaiting confirmation
   with the list of documents it would remove, and `coffer sync confirm` applies
   it while rejecting it leaves the vault untouched.
+
+### Scenario: a re-layout publishes without asking
+
+- **Given** a vault whose knowledge documents have all been moved into a
+  subdirectory, so the diff carries a deletion and an addition of identical
+  content for nearly every document in the area,
+- **When** a round runs,
+- **Then** the guard does not hold it, the round publishes unattended, the other
+  machine absorbs the move with no confirmation of its own, and a deletion in
+  the same round that no addition received is still held and listed on its own.
+
+### Scenario: a hold is released once its diff no longer breaches
+
+- **Given** a vault held at the deletion guard whose documents have since come
+  back, so the diff that raised the hold no longer breaches it,
+- **When** the next round runs,
+- **Then** the hold is released without anyone answering it, the round converges
+  normally, and nothing is left waiting on the user.
+
+### Scenario: an unanswered confirmation is reported once, not once a tick
+
+- **Given** a vault held at the deletion guard and a timer that runs a round
+  every interval,
+- **When** several rounds run with nobody answering,
+- **Then** the history holds **one** round for it rather than one per tick, the
+  audit log holds one event, the Sync page still shows the confirmation as
+  outstanding with the moment it was raised, and answering it produces a further
+  round.
 
 ### Scenario: a round can be rolled back
 

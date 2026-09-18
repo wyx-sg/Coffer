@@ -490,31 +490,43 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     assert data["partition"] == partition
 
 
-def test_context_scope_enforcement_does_not_leak_an_out_of_scope_partition(
+def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
     client, tmp_path
 ) -> None:
-    """The one route a real agent's own session reaches must be scope-checked
-    (FR-013): an agent outside a partition's scope must never be served its
-    notes, even when its own cwd resolves to that partition."""
+    """FR-013 at the wire: the partition reaches every agent, not its sources.
+
+    The notes here were aggregated from ``cc`` alone, and ``outsider`` — a
+    Codex agent that contributed not one entry — opens a session in the same
+    repository and is served the same payload. This route used to narrow by
+    the partition's per-agent reach, which aggregation had defaulted to the
+    agents it read from, so this exact request came back **empty**: on the
+    maintainer's own vault a Codex session in the Coffer repository was served
+    no project memory at all. Nobody chose that, and it defeated the point of
+    aggregating several agents' memory into one place.
+    """
     partition = _distilled(client, tmp_path)
     _register_agent(client, "outsider", agent_type="codex")
     repository = tmp_path / "coffer"
 
-    # Default scope from aggregation is {"cc"} (FR-013) — confirm "outsider"
-    # is excluded, then compose context for it against the SAME cwd.
+    # The kind carries no reach any more, and the framework's own scope route
+    # says so rather than reporting an empty narrowing.
     scope = client.get(f"/api/v1/resources/memory/{partition}/scope").json()
-    assert scope["scope"] == {"agents": ["cc"]}
+    assert scope["supports_scope"] is False
+    assert scope["scope"] is None
 
-    data = client.post(
+    served = client.post(
         "/api/v1/memory/context", json={"agent": "outsider", "cwd": str(repository)}
     ).json()
+    to_a_source = client.post(
+        "/api/v1/memory/context", json={"agent": "cc", "cwd": str(repository)}
+    ).json()
 
-    # `partition` says which partition this cwd maps to, not what is visible —
-    # the leak this guards against is in the TEXT.
-    assert data["partition"] == partition
-    assert "python-lockfile" not in data["text"]
-    assert data["notes_included"] == 0
-    assert data["text"] == ""
+    assert served["partition"] == partition
+    assert "`python-lockfile.md`" in served["text"]
+    assert served["notes_included"] > 0
+    # Byte-identical: the caller's name decides nothing about the payload. It
+    # travels for ``record_fired`` — who fired — and for nothing else.
+    assert served["text"] == to_a_source["text"]
 
 
 def test_context_for_a_directory_in_no_repository_is_global(client, tmp_path) -> None:

@@ -3,9 +3,19 @@
 // The partitions list: one row per repository partition plus `global`, each one
 // a `memory` Resource (spec memory FR-010). A row carries what a partition
 // has — its name, the repository it is keyed on, how many notes it holds —
-// plus the reach control every scoped Resource gets (ScopeControl), exactly as
-// the mcp-servers and skills lists render it per row, and a bulk bar applying
-// that same reach choice to the whole selection.
+// plus the status control every Resource gets (ScopeControl), and a bulk bar
+// applying that same choice to the whole selection.
+//
+// A partition carries NO PER-AGENT REACH. The `memory` kind declares no scope
+// (the backend answers `supports_scope: false` and refuses a scope write):
+// memory is aggregated from every agent's own notes and served back to every
+// agent, so cutting a partition per agent would hide from one agent what it
+// wrote itself. `ScopeControl` and the bulk bar are therefore both told
+// `supportsScope={false}` and collapse to the two choices this kind has.
+//
+// The column survives that because `enabled` is a REAL gate, not a label: a
+// disabled partition is served to nobody. Only the header changes — it says
+// "Status", since enabled/disabled is the whole of what it reports.
 //
 // A partition is keyed on a REPOSITORY, not on a working directory: a worktree
 // and a second clone resolve to one partition (FR-014), so the column names the
@@ -14,12 +24,12 @@
 // partition is delivered to nobody, and deleting it is the developer's call and
 // nobody else's (FR-016).
 //
-// `enabled`/`scope` do not live on the dedicated partitions endpoint (it only
+// `enabled` does not live on the dedicated partitions endpoint (it only
 // carries what is read off disk: name, repository path and key, note count,
-// whether it still resolves) — they are generic Resource fields, so the caller
-// merges in `GET /resources?kind=memory` before rendering, mirroring how the
-// mcp-servers table already carries `scope` on its own row payload rather than
-// paying one GET per row.
+// whether it still resolves) — it is a generic Resource field, so the caller
+// merges in `GET /resources?kind=memory` before rendering, which is also what
+// keeps the row control off the per-resource query: one request for the table,
+// never one per row.
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -29,12 +39,12 @@ import { BulkReachActions } from "@/components/reach/BulkReachActions";
 import { ScopeControl } from "@/components/ScopeControl";
 import { memoryKey } from "@/lib/api/queryKeys";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
-import type { Scope } from "@/lib/hooks/useScope";
 import { reachFilter } from "@/lib/reachFilter";
 
 export interface MemoryPartitionRow extends PartitionOut {
+  /** The only Resource field this row needs: the kind declares no scope, so
+   *  enabled/disabled is the whole of a partition's status. */
   enabled: boolean;
-  scope: Scope | null;
 }
 
 export function MemoryPartitionsTable({
@@ -77,12 +87,21 @@ export function MemoryPartitionsTable({
       cell: (r) => <span className="tabular-nums">{r.note_count}</span>,
     },
     {
-      key: "reach",
-      header: t("resources.cols.reach"),
+      key: "status",
+      // Not "Reach": with no scope to narrow, the control reports one thing.
+      header: t("resources.cols.status"),
       className: "whitespace-nowrap text-right",
       cell: (r) => (
         <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-          <ScopeControl kind="memory" name={r.name} enabled={r.enabled} scope={r.scope} />
+          {/* `scope={null}` is what keeps the control off the per-resource
+              query — it is a supplied value, not a missing one. */}
+          <ScopeControl
+            kind="memory"
+            name={r.name}
+            enabled={r.enabled}
+            scope={null}
+            supportsScope={false}
+          />
         </div>
       ),
     },
@@ -99,10 +118,10 @@ export function MemoryPartitionsTable({
         accessor: (r) => `${r.name} ${r.repository_path}`,
         placeholder: t("memory.searchPlaceholder"),
       }}
-      filters={[reachFilter(t, (r: MemoryPartitionRow) => r)]}
+      filters={[reachFilter(t, (r: MemoryPartitionRow) => ({ ...r, scope: null }), false)]}
       // No bulk delete: a partition is aggregated from the agents' own
       // memories, never user-created, so there is nothing here to remove — the
-      // selection bar carries reach alone.
+      // selection bar carries the enable/disable choice alone.
       selection={{
         ariaSelectAll: t("common.bulk.selectAll"),
         ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
@@ -111,6 +130,9 @@ export function MemoryPartitionsTable({
         renderBulkActions: ({ selectedRows, clear }) => (
           <BulkReachActions
             rows={selectedRows.map((r) => ({ kind: "memory", name: r.name }))}
+            // Same two choices as the rows: enable or disable the lot, and no
+            // scope write the server would refuse anyway.
+            supportsScope={false}
             invalidate={[memoryKey]}
             onDone={clear}
           />

@@ -99,7 +99,10 @@ describe("MemoryPage", () => {
     const headers = within(table)
       .getAllByRole("columnheader")
       .map((h) => h.textContent);
-    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes", "Reach"]));
+    // "Status", not "Reach": the `memory` kind declares no per-agent scope, so
+    // the last column reports whether the partition is served and nothing else.
+    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes", "Status"]));
+    expect(headers).not.toContain("Reach");
   });
 
   test("the read-from-agents affordance stays reachable from the empty state", () => {

@@ -315,10 +315,12 @@ async def _current_card(
             current=agent_key, choices=routable_choices(binding, commands._agents), page=page
         )
     if kind == "collection":
-        # No conversation/model state to re-read — just the same visibility
-        # check `/save` itself makes (spec channels FR-014).
-        visible = await commands._collections.visible_collections(agent_key)
-        return collection_card(choices=visible, page=page) if visible else None
+        # No conversation/model state to re-read, and nothing agent-specific to
+        # ask either — a collection carries no per-agent reach, so this is the
+        # same whole-catalogue question `/save` itself asks (spec channels
+        # FR-014).
+        known = await commands._collections.enabled_collections()
+        return collection_card(choices=known, page=page) if known else None
     if kind not in ("model", "effort"):
         return None
     conversation_id = await ensure_conversation(

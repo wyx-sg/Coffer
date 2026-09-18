@@ -1,11 +1,13 @@
 """``coffer__write`` — the layer's only MCP tool (spec knowledge FR-033).
 
-Two things are worth pinning about it. It writes into ``sources/`` and never
+Three things are worth pinning about it. It writes into ``sources/`` and never
 into the curated lane, so an agent cannot reach past curation by naming a path.
-And when it is given a collection the caller may not write, it answers with the
-ones they may: a model that reached for the tool without having opened the
-delivered skill gets a correction instead of a dead end, and it discloses
-nothing the skill would not have (FR-010).
+When it is given a name that is not a collection, it answers with the ones that
+are: a model that reached for the tool without having opened the delivered
+skill gets a correction instead of a dead end, and it discloses nothing the
+skill would not have. And the session's agent identity reaches the audit entry
+and nothing else — it narrows no collection, because every enabled collection
+is writable by every agent.
 """
 
 from __future__ import annotations
@@ -19,12 +21,11 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.resource import Resource
-from coffer.domain.scope import Scope
 from coffer.infrastructure.knowledge import fs, paths
 
 
 class _Resources:
-    def __init__(self, rows: list[tuple[str, Scope | None]]) -> None:
+    def __init__(self, names: list[str]) -> None:
         now = datetime.now(tz=UTC)
         self._rows = [
             Resource(
@@ -36,9 +37,9 @@ class _Resources:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
-                scope=scope,
+                scope=None,
             )
-            for i, (name, scope) in enumerate(rows, start=1)
+            for i, name in enumerate(names, start=1)
         ]
 
     async def list(self, kind=None, enabled=None):  # type: ignore[no-untyped-def]
@@ -60,7 +61,7 @@ def handler(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     fs.create_collection_dir("personal")
     audit = _Audit()
     service = KnowledgeService(
-        resources=_Resources([("shopee", Scope(agents=["claude-code"])), ("personal", None)]),
+        resources=_Resources(["shopee", "personal"]),
         audit=audit,
     )
     registry = BuiltinToolRegistry()
@@ -91,23 +92,41 @@ async def test_a_write_lands_in_sources_and_is_audited(handler) -> None:  # type
 
 
 @pytest.mark.anyio
-async def test_an_unavailable_collection_names_the_available_ones(handler) -> None:  # type: ignore[no-untyped-def]
+async def test_an_unknown_collection_names_the_real_ones(handler) -> None:  # type: ignore[no-untyped-def]
     write, _ = handler
     with pytest.raises(ValueError) as raised:
         await write(
             {
                 "agent": "codex",
-                "collection": "shopee",
+                "collection": "nowhere",
                 "title": "t",
                 "description": "d",
             }
         )
     message = str(raised.value)
-    # `codex` is not activated for `shopee`, so it is told neither that the
-    # collection exists nor that it is forbidden — only what it may write.
-    assert "shopee" in message  # it named the collection, so it is quoted back
+    assert "nowhere" in message  # it named the collection, so it is quoted back
+    # Both real ones, and to either agent: the correction is the same list the
+    # delivered skill already carries, and it does not vary by caller.
+    assert "shopee" in message
     assert "personal" in message
-    assert "forbidden" not in message.lower()
+
+
+@pytest.mark.anyio
+async def test_every_agent_may_write_every_collection(handler) -> None:  # type: ignore[no-untyped-def]
+    """No agent axis is left: the identity in ``agent`` reaches the audit entry
+    and narrows nothing, so two different agents write the same collections."""
+    write, _ = handler
+    for agent in ("claude-code", "codex"):
+        for collection in ("shopee", "personal"):
+            answer = await write(
+                {
+                    "agent": agent,
+                    "collection": collection,
+                    "title": f"{agent} in {collection}",
+                    "description": "d",
+                }
+            )
+            assert answer["path"].startswith(f"{collection}/sources/")
 
 
 @pytest.mark.anyio

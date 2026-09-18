@@ -31,18 +31,20 @@ of this layer that sits in a model's context whether or not knowledge is ever
 touched. A collection that describes itself as "notes" is a collection nothing
 recognises.
 
-Only the agents a collection is scoped to can see it:
+Every enabled collection is served to every agent. Switching one off is the only
+gate:
 
 ```bash
-coffer scope set knowledge:shopee --agents claude_code
-coffer scope show knowledge:shopee
-coffer scope clear knowledge:shopee          # back to every agent
+coffer resource disable knowledge:shopee
+coffer resource enable knowledge:shopee
 ```
 
-The scope now decides what an agent is **told**, not what a tool returns: the
-skill Coffer writes into an unauthorized agent's directory does not mention the
-collection, its subjects, its catalogue or its path. That is non-disclosure, not
-access control — an agent holding a shell can still read the directory.
+That gate decides what an agent is **told**, not what a process can open: the
+skill Coffer writes into every agent's directory stops mentioning a disabled
+collection — its subjects, its catalogue and its paths all go with it — but an
+agent holding a shell can still read the directory. The per-agent form of this
+was withdrawn: it withheld a name from a reader who already had the root, which
+is not an authorization.
 
 Deleting a collection goes through the Resource framework, not a knowledge
 route — same lifecycle, audit and cascade as any other resource:

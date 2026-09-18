@@ -11,8 +11,8 @@ the surfaces answer with. Authority is [`spec.md`](./spec.md) and
 **This layer adds no table of its own** (FR-042). Notes, raw entries, the
 index and the retirement record are files; the only database presence a
 partition has is the row every Resource has, in the kind-agnostic `resources`
-table, carrying its name, its `enabled` flag, its per-agent `scope` and a
-one-field `config`.
+table, carrying its name, its `enabled` flag and a two-field `config` — the
+repository it was learned in, and nothing else.
 
 Everything under `~/.coffer/memory/` is **derived** (FR-019). Delete it, run
 aggregation and distil, and an **equivalent** set comes back: the same
@@ -77,7 +77,6 @@ A **partition** is a top-level directory under the memory root *and* one
 | `name` | the directory name, and the Resource's name | A readable slug from the repository's own name — `/home/dev/coffer` → `coffer`. A collision is resolved by prefixing a parent segment (`work-api` vs `personal-api`), never by an id (FR-014). |
 | `repository_key` | `Resource.config` | The identity a directory is resolved to. `remote:<host>/<path>` when the repository has an `origin` remote, so two clones agree; `path:<abs>` when it has none. Empty for `global`. |
 | `repository_path` | `Resource.config`, restated at the top of `MEMORY.md` | Absolute path of the repository's main working tree. Empty for `global`. |
-| `scope` | the Resource's own `scope` column | On creation, the set of agents the partition was aggregated from, so memory flows back to its sources with no setup step. Narrowing or widening it afterwards is the developer's, and a later pass never overwrites it (FR-013). |
 | `enabled` | the Resource's own column | The framework's, not this layer's. |
 | `note_count` | counted from `notes/` at call time | Never stored. |
 | `unresolvable` | computed at call time | True when `repository_path` no longer exists on disk. Surfaced rather than hidden, because an orphaned partition is delivered to nobody and the developer is the only one who can decide to delete it (FR-016). |

@@ -1,11 +1,18 @@
 // frontend/src/components/memory/MemoryPartitionsTable.test.tsx
 //
 // The partitions list: each row carries the repository it is keyed on, its note
-// count and the same ScopeControl the mcp-servers/skills lists render per row
-// (spec memory FR-037/FR-013) — ONE button whose label states the partition's
-// reach, opening a panel where the states are the choices. ScopeControl's own
-// hooks are mocked, mirroring `components/mcp/McpServersTable.test.tsx` — this
-// suite only exercises the table.
+// count and the status control every Resource gets (spec memory FR-037/FR-013)
+// — ONE button whose label says whether the partition is served, opening a
+// panel where the states are the choices. ScopeControl's own hooks are mocked,
+// mirroring `components/mcp/McpServersTable.test.tsx` — this suite only
+// exercises the table.
+//
+// The load-bearing assertion added since: this kind offers NO PER-AGENT REACH.
+// Memory is aggregated from every agent's own notes and served back to every
+// agent, so the panel must not put an agent list in front of anyone — the
+// server refuses a scope write for `memory`, and a UI that asks anyway is a UI
+// that asks for a 422. What it must keep is the enable/disable choice, because
+// THAT gate is real: a disabled partition is served to nobody.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -22,10 +29,11 @@ vi.mock("@/lib/hooks/useScope", () => ({
 vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [{ name: "claude_code" }] })),
 }));
-vi.mock("@/lib/hooks/useResourceMutations", () => {
-  const stub = () => ({ mutate: vi.fn(), isPending: false });
-  return { useEnableResource: vi.fn(stub), useDisableResource: vi.fn(stub) };
-});
+const disableMutate = vi.fn();
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDisableResource: vi.fn(() => ({ mutate: disableMutate, isPending: false })),
+}));
 
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -46,7 +54,6 @@ const ROWS: MemoryPartitionRow[] = [
     note_count: 12,
     unresolvable: false,
     enabled: true,
-    scope: null,
   },
   {
     name: "coffer",
@@ -57,8 +64,9 @@ const ROWS: MemoryPartitionRow[] = [
     repository_key: "remote:github.com/wyx-sg/coffer",
     note_count: 34,
     unresolvable: false,
-    enabled: true,
-    scope: { agents: ["claude_code"] },
+    // Disabled, which is the one thing this column reports — and the one thing
+    // that stops a partition being served.
+    enabled: false,
   },
 ];
 
@@ -70,7 +78,6 @@ const GONE: MemoryPartitionRow = {
   note_count: 3,
   unresolvable: true,
   enabled: true,
-  scope: null,
 };
 
 describe("MemoryPartitionsTable", () => {
@@ -103,36 +110,65 @@ describe("MemoryPartitionsTable", () => {
     expect(screen.queryByTestId("partition-unresolvable-badge")).toBeNull();
   });
 
-  test("the reach control appears per partition", () => {
+  const controlIn = (name: string) =>
+    within(
+      within(screen.getByText(name).closest("tr") as HTMLElement).getByTestId("scope-control"),
+    ).getByRole("button");
+
+  test("the status control appears per partition and reports the enable gate", () => {
     render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
-    const controls = screen.getAllByTestId("scope-control");
-    expect(controls).toHaveLength(ROWS.length);
-    // The scoped partition's button reports the scope it is in: a count of the
-    // agents it reaches. WHICH agents those are lives in the panel the button
-    // opens, not in the row.
-    const cofferRow = within(screen.getByText("coffer").closest("tr") as HTMLElement);
-    expect(within(cofferRow.getByTestId("scope-control")).getByRole("button")).toHaveTextContent(
-      /^1 agent$/i,
-    );
-    // …and the unscoped one says so in the same one place.
-    const globalRow = within(screen.getByText("global").closest("tr") as HTMLElement);
-    expect(within(globalRow.getByTestId("scope-control")).getByRole("button")).toHaveTextContent(
-      /^every agent$/i,
-    );
+    expect(screen.getAllByTestId("scope-control")).toHaveLength(ROWS.length);
+    // The whole answer this kind has: served, or not. Not "Every agent" — that
+    // name only means something beside a narrower one, and there is none here.
+    expect(controlIn("global")).toHaveTextContent(/^enabled$/i);
+    expect(controlIn("coffer")).toHaveTextContent(/^disabled$/i);
   });
 
-  test("selecting rows reveals the same reach control over the whole selection", () => {
+  test("no per-agent reach is offered for a partition", () => {
+    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
+    fireEvent.click(controlIn("global"));
+
+    expect(screen.queryByRole("radio", { name: /only selected/i })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /claude_code/i })).toBeNull();
+    // Two choices, both of them about the gate that is real.
+    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
+  });
+
+  test("the enable gate still writes — it is the one control this column has", () => {
+    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
+    fireEvent.click(controlIn("global"));
+    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
+
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "memory", name: "global" });
+  });
+
+  test("the column and its filter are headed Status, not Reach", () => {
+    // (Which two options the filter offers is pinned in
+    // `lib/reachFilter.test.ts` — a Radix Select's list is not in the DOM until
+    // it opens.)
+    render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
+    expect(screen.getByRole("columnheader", { name: /^status$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /^reach$/i })).toBeNull();
+    expect(screen.getByRole("combobox", { name: /^status$/i })).toBeInTheDocument();
+  });
+
+  test("selecting rows reveals the same control over the whole selection", () => {
     render(<MemoryPartitionsTable rows={ROWS} />, { wrapper: wrap(null) });
     expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     const bar = within(screen.getByTestId("bulk-reach-control"));
     // The same one-button control the rows carry; it names the action rather
-    // than a state, because a mixed selection has no single reach to report.
+    // than a state, because a mixed selection has no single one to report.
     const trigger = bar.getByRole("button");
-    expect(trigger).toHaveTextContent(/set reach/i);
     fireEvent.click(trigger);
-    expect(screen.getByRole("radio", { name: /every agent/i })).toBeInTheDocument();
+    // And the same two choices as the rows — no agent list over a selection
+    // either, since no scope write would be accepted for any of them.
+    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /only selected/i })).toBeNull();
     // No bulk delete: a partition is aggregated from the agents' own memories,
     // never user-created, so there is nothing here to remove.
     expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();

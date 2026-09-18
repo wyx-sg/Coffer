@@ -11,6 +11,7 @@ the seven steps** — the part of this design that is load-bearing — stays in
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -22,7 +23,12 @@ from coffer.application.sync.ports import (
     VaultApplyPort,
 )
 from coffer.domain.error_base import CofferError
-from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus, PendingConfirmation
+from coffer.domain.sync.convergence import (
+    ConvergeRun,
+    ConvergeStatus,
+    GuardDirection,
+    PendingConfirmation,
+)
 from coffer.domain.sync.diff import ChangeStatus, DeletionGuard, DiffSummary, DocChange
 from coffer.domain.sync.manifest import MANIFEST_PATH, refuse_if_too_new
 from coffer.domain.sync.models import ExportSummary
@@ -52,14 +58,101 @@ def commit_message(summary: ExportSummary) -> str:
     return f"coffer: {counts}" if counts else "coffer"
 
 
-def held_run(started: datetime, pending: PendingConfirmation) -> ConvergeRun:
+def held_run(
+    started: datetime, pending: PendingConfirmation, *, already_reported: bool = False
+) -> ConvergeRun:
     """A round stopped at the deletion guard, waiting on the user."""
     return ConvergeRun(
         status=ConvergeStatus.AWAITING_CONFIRMATION,
         started_at=started,
         finished_at=datetime.now(tz=UTC),
         pending=pending,
+        hold_already_reported=already_reported,
     )
+
+
+def _same_question(before: PendingConfirmation, now: PendingConfirmation) -> bool:
+    """Whether two holds put the same question to the user.
+
+    Direction, remote tip, breaches and paths — everything the surfaces show
+    and everything a confirmation would authorise. The local commit is
+    deliberately not compared: it is *how* a confirmation resumes, not what it
+    is about, and it moves whenever the vault does while the question stands.
+    """
+    return (
+        before.direction is now.direction
+        and before.remote_tip == now.remote_tip
+        and before.breaches == now.breaches
+        and before.paths == now.paths
+    )
+
+
+async def hold_round(
+    mirror: GitMirrorPort,
+    state: ConvergenceStatePort,
+    *,
+    branch: str,
+    started: datetime,
+    direction: GuardDirection,
+    commit: str,
+    diff: DiffSummary,
+    breaches: list[tuple[str, int, int]],
+) -> ConvergeRun:
+    """Step 4's refusal: record what the guard stopped and wait on the user.
+
+    A round re-derives its diff every time (spec vault-sync FR-091), so a
+    question the user has not answered yet arrives here again on every tick —
+    and the second arrival is not news. Whatever hold this vault is already
+    carrying is read back here and compared: the same question is stored as the
+    same hold, keeping the moment the user was asked, and the run is marked as
+    already reported so the recording coalesces onto the one row and the log
+    says it once (FR-092).
+
+    The commit *is* refreshed, because it is the revision a confirmation would
+    resume from and the vault may have moved under a question that did not.
+    """
+    outstanding = await state.pending()
+    pending = PendingConfirmation(
+        direction=direction,
+        commit=commit,
+        remote_tip=await remote_tip(mirror, branch),
+        breaches=tuple(breaches),
+        # What the round would remove, which is not every deleted path: a
+        # document whose content reappears elsewhere in the same diff moved,
+        # and the guard does not count it, so the user is not asked about it.
+        paths=diff.lost_paths(),
+        raised_at=datetime.now(tz=UTC),
+    )
+    again = outstanding is not None and _same_question(outstanding, pending)
+    if again and outstanding is not None:
+        pending = dataclasses.replace(pending, raised_at=outstanding.raised_at)
+    await state.set_pending(pending)
+    return held_run(started, pending, already_reported=again)
+
+
+async def release_hold(state: ConvergenceStatePort, direction: GuardDirection) -> None:
+    """Drop an outstanding hold whose guard direction now passes.
+
+    The latch records a decision about a specific diff, and this round has just
+    re-derived that diff and found nothing over the threshold in the direction
+    the hold was raised for. The reason the user was asked is gone, so the
+    question goes with it and the round carries on — which is how a vault held
+    by a defect that has since been fixed unsticks itself instead of waiting
+    for someone to notice and press a button.
+
+    Only the direction that passed. A hold raised on the publish side says
+    nothing about what the remote has since dropped, and a round that has
+    cleared one guard has not yet reached the other.
+    """
+    outstanding = await state.pending()
+    if outstanding is None or outstanding.direction is not direction:
+        return
+    _logger.info(
+        "converge: releasing the %s hold raised at %s; its diff no longer breaches the guard",
+        direction.value,
+        outstanding.raised_at.isoformat(),
+    )
+    await state.set_pending(None)
 
 
 def failed_run(started: datetime, error: str) -> ConvergeRun:

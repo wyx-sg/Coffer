@@ -16,9 +16,15 @@
 // preview; with no index behind the files, that edit is live on the very next
 // read with nothing to reconcile.
 //
-// Reach (ScopeControl) lives in the header, as on every other scoped Resource's
-// detail page: which agents this collection is exposed to is a property of the
+// Whether the collection is served at all (ScopeControl) lives in the header,
+// where every other kind's detail page carries it: it is a property of the
 // collection, not of the file open in the pane.
+//
+// It is one choice there, not a per-agent one, and nothing on this page
+// arranges that: the control passes no `scope`, so it asks the server, and the
+// `knowledge` kind answers `supports_scope: false` — enable or disable, no
+// agent list. An enabled collection is named in every agent's delivered skill;
+// a disabled one is named in none.
 //
 // The lane and the open file both live in the URL (`?tab=`, `?file=`), so a
 // reload or a shared link comes back to the same document — addressable state
@@ -82,7 +88,8 @@ export function KnowledgeDetailPage() {
   const uploadFolder = uploadFolderOf(collection, selected);
 
   // `enabled` is a generic Resource field, not on /knowledge/collections, so
-  // the reach control's required prop comes from the single-resource read.
+  // the control's required prop comes from the single-resource read — and it is
+  // the only reach state this kind has.
   const resource = useResource("knowledge", collection);
 
   return (
@@ -92,8 +99,8 @@ export function KnowledgeDetailPage() {
         title={collection}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {/* Reach sits in the header, exactly as every other kind's detail
-                page carries it; passing no `scope` lets it fetch its own. */}
+            {/* Passing no `scope` is what lets the control ask the server —
+                which is where the "no per-agent reach" answer comes from. */}
             <ScopeControl
               kind="knowledge"
               name={collection}

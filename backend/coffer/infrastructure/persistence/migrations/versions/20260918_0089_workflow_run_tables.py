@@ -42,8 +42,8 @@ Idempotent in both directions: each table is created only when absent and
 dropped only when present, because this runs at daemon startup and the
 roundtrip suite stamps back and replays the tail of the chain.
 
-Revision ID: 0088
-Revises: 0087
+Revision ID: 0089
+Revises: 0088
 Create Date: 2026-09-17
 """
 
@@ -55,8 +55,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy import inspect
 
-revision: str = "0088"
-down_revision: str | None = "0087"
+revision: str = "0089"
+down_revision: str | None = "0088"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

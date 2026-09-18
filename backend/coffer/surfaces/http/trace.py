@@ -14,6 +14,12 @@ This middleware is the missing writer. It is the seam that makes
 ``X-Coffer-Trace`` value can grep the daemon log for that id and find the
 records the request produced, instead of guessing from timestamps.
 
+The processor half took a second fix to become real. It ran only for records
+logged through structlog's own API, which nothing in Coffer ever used, so the
+id reached the response header and never the log file it was meant to be
+grepped in. ``infrastructure.logging.setup`` now runs that same processor over
+every stdlib record, which is what puts a ``trace_id`` on every line.
+
 A client may supply its own ``X-Coffer-Trace`` request header — the CLI and the
 MCP shim both make several calls on one user action, and a shared id makes them
 one story in the log. Anything a client sends is untrusted, so it is length-capped

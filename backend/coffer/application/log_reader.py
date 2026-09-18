@@ -6,18 +6,32 @@ timeline). Both need the same three decisions — read from the tail, keep an
 unparseable line rather than drop it, and treat "unparseable" as error-level —
 so they live here rather than being copied into a surface.
 
-**The file is not one format.** Coffer's own structlog writes JSON, but that
-is a minority of the lines: the daemon's root handler picks up alembic's
-``%(levelname)-5.5s [%(name)s] %(message)s`` formatter once a migration runs,
-uvicorn writes ``ERROR:    …``, an upstream MCP server writes rich-rendered
-and ``LEVEL - logger - message`` lines, and the cloudflared child process the
-daemon respawns writes zerolog (``2026-09-14T06:29:20Z INF … key=value``) into
-the same file. A reader that only understood structlog JSON left the time,
-level and logger columns empty for ~99% of the file and dumped the whole line
-into the message column, which is the bug this module now exists to not have.
-So every format the file actually carries is normalised onto the same four
-keys — ``timestamp`` / ``level`` / ``logger`` / ``event`` — and a line that
-still matches none of them is kept verbatim as ``raw``.
+**The file is not one format**, and it never can be: ``daemon.log`` is also
+where a detached daemon's stdout and stderr are redirected, so every child
+process the daemon holds open a pipe to ends up writing into it in its own
+shape.
+
+*What Coffer itself writes* is one format, as of the day
+:mod:`coffer.infrastructure.logging.setup` stopped formatting the fields off
+its own records: a JSON object per line, keyed ``timestamp`` / ``level`` /
+``logger`` / ``event``, for every record on every logger inside the daemon
+process — its own modules, the MCP SDK's, asyncio's, and alembic's. That is
+the shape :func:`_structured` tries first.
+
+*What other processes write* is theirs to decide, and the rest of the parsers
+below are the ones that have actually been observed in the file: uvicorn's
+``ERROR:    …`` (it configures its own three loggers and keeps them off the
+root), an upstream MCP server's rich panels and ``LEVEL - logger - message``
+lines, and the zerolog of the cloudflared child a tunnel respawns
+(``2026-09-14T06:29:20Z INF … key=value``). ``_BRACKETED`` is the one parser
+kept for lines nothing writes any more: it reads the alembic-formatter shape
+the daemon used to produce, and a log file written before that was fixed holds
+them by the thousand inside the tail this module reads.
+
+Everything is normalised onto the same four keys, and a line that matches none
+of them is kept verbatim as ``raw`` — a reader that only understood Coffer's
+JSON left the time, level and logger columns empty and dumped the whole line
+into the message column, which is the bug this module exists to not have.
 
 Pure: no I/O beyond reading the path it is handed, and no knowledge of who is
 asking.
@@ -42,8 +56,9 @@ TAIL_BYTES = 512 * 1024
 #: log viewer that renders `ESC[31m` as the text "[31m" is broken either way.
 _ANSI = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))")
 
-#: Every level token any of the writers below spells, onto structlog's own
-#: lowercase vocabulary — so one badge vocabulary serves the whole file.
+#: Every level token any of the writers below spells, onto the lowercase
+#: vocabulary Coffer's own lines use — so one badge vocabulary serves the whole
+#: file.
 #: The 5-character truncations come from ``%(levelname)-5.5s``; the
 #: 3-character ones from zerolog.
 _LEVELS = {
@@ -80,7 +95,7 @@ def normalise_level(raw: str) -> str:
     """One level name from whatever a line called it.
 
     ``_LEVELS`` is the same table the parsers use, so a level read off a
-    zerolog line and one read off structlog's JSON land on the same word.
+    zerolog line and one read off Coffer's own JSON land on the same word.
     Returns ``""`` for anything the table does not know.
     """
     token = raw.strip()
@@ -111,7 +126,12 @@ _ZEROLOG = re.compile(
     r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"
     r"\s+(?P<level>[A-Z]{3})\s+(?P<event>.*)$"
 )
-# stdlib logging under alembic's formatter: `WARNI [coffer.chat.codex] …`
+# The daemon's own records, back when alembic's fileConfig had re-pointed the
+# root handler at `%(levelname)-5.5s [%(name)s] %(message)s`:
+# `WARNI [coffer.chat.codex] …`. Nothing writes this shape any more — the
+# formatter is the daemon's own now, and env.py no longer calls fileConfig —
+# but a log file written before that fix still holds these, so reading one
+# must not regress into three empty columns per line.
 _BRACKETED = re.compile(r"^(?P<level>[A-Z]{4,9})\s+\[(?P<logger>[^\]\s]+)\]\s+(?P<event>.*)$")
 # another common stdlib formatter: `WARNING - mcp_atlassian.utils.toolsets - …`
 _DASHED = re.compile(r"^(?P<level>[A-Z]{4,9})\s+-\s+(?P<logger>[\w.\-]+)\s+-\s+(?P<event>.*)$")
@@ -202,10 +222,10 @@ def _structured(line: str) -> dict[str, Any] | None:
 def parse_log_line(line: str) -> dict[str, Any]:
     """One line as a record: the writer's fields where we can read them.
 
-    A structlog line arrives as its own dict; every other writer's line is
-    normalised onto ``timestamp`` / ``level`` / ``logger`` / ``event``. A line
-    that fits none of them is kept whole as ``{"raw": …}`` rather than dropped
-    — it is often the most interesting line in the file.
+    One of Coffer's own lines arrives as its own dict; every other writer's
+    line is normalised onto ``timestamp`` / ``level`` / ``logger`` / ``event``.
+    A line that fits none of them is kept whole as ``{"raw": …}`` rather than
+    dropped — it is often the most interesting line in the file.
     """
     clean = strip_ansi(line).rstrip()
     return _structured(clean) or {"raw": clean}

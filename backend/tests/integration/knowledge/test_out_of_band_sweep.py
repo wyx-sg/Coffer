@@ -32,7 +32,7 @@ _DROPPED = "The account gateway owns the session cache.\n"
 
 
 class _Resources:
-    """Just enough ``ResourceService`` for ``visible_collections``."""
+    """Just enough ``ResourceService`` for ``enabled_collections``."""
 
     def __init__(self, names: list[str]) -> None:
         now = datetime.now(tz=UTC)

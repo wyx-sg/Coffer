@@ -6,9 +6,23 @@ as it is a Resource row, so ``generic_create_allowed`` is False and
 (``allow_lifecycle_kind=True``, CODE-REG) rather than the generic
 ``POST /resources`` path being able to conjure a directory-less row.
 
-``supports_scope`` is True because per-agent delivery is the entire reason a
-partition is a Resource at all (spec memory FR-013) — without it there would
-be nothing for the framework's scope to narrow.
+``supports_scope`` is left at the Kind default of False, and a partition is a
+Resource for three other things: its lifecycle (it is created by a pass and
+deleted through the framework's own route), the repository identity its config
+carries (FR-014), and its ``enabled`` flag — which is now the only gate on
+what gets served.
+
+It used to carry the framework's per-agent reach, and the reach was never
+chosen: ``MemoryService._register_partition`` seeded it with "the agents this
+partition was aggregated from", so on the maintainer's own vault the
+``coffer`` partition came out scoped to ``claude-code`` alone — Codex, working
+in the Coffer repository every day, was served no project memory whatsoever —
+while the ``account*`` partitions came out scoped to ``codex`` and Claude Code
+got nothing from them. That default defeated the layer's whole purpose: memory
+aggregated from several agents exists precisely so each of them can read what
+the others learned. It was never a boundary either, because a note is a file
+the agent is handed the path to. So the reach is gone rather than
+re-defaulted, and every enabled partition is served to every agent (FR-013).
 
 ``converges`` is False, and this is the only kind that sets it (spec memory
 FR-019). A partition row is derived from the agents installed on THIS machine,
@@ -56,6 +70,5 @@ def make_memory_kind(service: MemoryService) -> Kind:
         config_schema=MemoryPartitionConfig,
         on_delete=_on_delete,
         generic_create_allowed=False,
-        supports_scope=True,
         converges=False,
     )

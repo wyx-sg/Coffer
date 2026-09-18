@@ -11,6 +11,7 @@ import pytest
 from coffer.domain.sync.diff import (
     DEFAULT_DELETION_FLOOR,
     DEFAULT_DELETION_SHARE,
+    EMPTY_BLOB,
     ChangeStatus,
     DeletionGuard,
     DiffSummary,
@@ -236,3 +237,117 @@ def test_an_iterator_of_changes_is_consumed_once_and_still_scored() -> None:
     guard = DeletionGuard(share=0.2, floor=20)
     changes = iter(_deletions("knowledge", 9))
     assert guard.breached_areas(changes, {"knowledge": 10}) == [("knowledge", 9, 10)]
+
+
+# --- moves are not losses (spec vault-sync FR-090) --------------------------
+
+
+def _relayout(count: int, *, from_dir: str = "", to_dir: str = "sources/") -> list[DocChange]:
+    """``count`` knowledge documents moved, as git reports a move: the delete
+    and the add of identical content, paired by nothing but that content."""
+    changes = []
+    for i in range(count):
+        blob = f"{i:040x}"
+        changes.append(DocChange(f"knowledge/c/{from_dir}d{i}.md", ChangeStatus.DELETED, blob=blob))
+        changes.append(DocChange(f"knowledge/c/{to_dir}d{i}.md", ChangeStatus.ADDED, blob=blob))
+    return changes
+
+
+def test_a_relayout_of_almost_every_document_does_not_breach() -> None:
+    """The bug this exists for: the knowledge two-lane rewrite moved 56 of 58
+    documents into a subdirectory, and the round sat held for a day."""
+    guard = DeletionGuard()
+    assert guard.breached_areas(_relayout(56), {"knowledge": 58}) == []
+
+
+def test_the_same_scale_of_deletion_without_the_additions_still_breaches() -> None:
+    """The other half of the pair, and the one that must not change: 56 of 58
+    documents deleted with nothing receiving their content is a loss."""
+    guard = DeletionGuard()
+    lost = [c for c in _relayout(56) if c.status is ChangeStatus.DELETED]
+    assert guard.breached_areas(lost, {"knowledge": 58}) == [("knowledge", 56, 58)]
+
+
+def test_a_deletion_with_no_content_id_counts() -> None:
+    """A path reconstructed from the retry set carries no content id, and a
+    deletion that cannot be shown to be a move is counted as a loss."""
+    guard = DeletionGuard()
+    assert guard.breached_areas(_deletions("knowledge", 25), {"knowledge": 30}) == [
+        ("knowledge", 25, 30)
+    ]
+
+
+def test_a_move_that_also_edits_the_document_is_not_a_move() -> None:
+    """Content, never resemblance. A document that arrived somewhere else with
+    different bytes is asked about, because nothing here can tell it from a
+    deletion standing beside an unrelated addition."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = [
+        DocChange("knowledge/c/d0.md", ChangeStatus.DELETED, blob="a" * 40),
+        DocChange("knowledge/c/sources/d0.md", ChangeStatus.ADDED, blob="b" * 40),
+    ]
+    assert guard.breached_areas(changes, {"knowledge": 1}) == [("knowledge", 1, 1)]
+
+
+def test_a_move_onto_a_path_the_diff_modified_is_still_a_move() -> None:
+    """The destination may be an addition or a modification: a relocation that
+    lands on a path that already existed still put the content somewhere."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = [
+        DocChange("knowledge/c/d0.md", ChangeStatus.DELETED, blob="a" * 40),
+        DocChange("knowledge/c/sources/d0.md", ChangeStatus.MODIFIED, blob="a" * 40),
+    ]
+    assert guard.breached_areas(changes, {"knowledge": 1}) == []
+
+
+def test_two_identical_documents_collapsing_into_one_are_both_excused() -> None:
+    """Set membership, not a one-to-one matching. The guard protects content,
+    and the content of a duplicate is still in the vault."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = [
+        DocChange("knowledge/c/one.md", ChangeStatus.DELETED, blob="a" * 40),
+        DocChange("knowledge/c/two.md", ChangeStatus.DELETED, blob="a" * 40),
+        DocChange("knowledge/c/merged.md", ChangeStatus.ADDED, blob="a" * 40),
+    ]
+    assert guard.breached_areas(changes, {"knowledge": 3}) == []
+
+
+def test_a_move_that_crosses_areas_is_not_a_move() -> None:
+    """The guard's unit is the area, so a knowledge document whose bytes turn
+    up under ``skills/`` has still left the area the share is measured over."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = [
+        DocChange("knowledge/c/d0.md", ChangeStatus.DELETED, blob="a" * 40),
+        DocChange("skills/d0/SKILL.md", ChangeStatus.ADDED, blob="a" * 40),
+    ]
+    assert guard.breached_areas(changes, {"knowledge": 1}) == [("knowledge", 1, 1)]
+
+
+def test_one_added_empty_file_cannot_excuse_deleting_every_empty_document() -> None:
+    """Every empty file has identical content by construction rather than by
+    provenance, so the empty blob never pairs anything."""
+    guard = DeletionGuard()
+    changes = [
+        *(
+            DocChange(f"knowledge/c/d{i}.md", ChangeStatus.DELETED, blob=EMPTY_BLOB)
+            for i in range(25)
+        ),
+        DocChange("knowledge/c/placeholder.md", ChangeStatus.ADDED, blob=EMPTY_BLOB),
+    ]
+    assert guard.breached_areas(changes, {"knowledge": 30}) == [("knowledge", 25, 30)]
+
+
+def test_a_relayout_beside_a_real_deletion_is_held_for_the_deletion_alone() -> None:
+    """The counts and the path list the user is shown are the losses, so 56
+    relocations do not pad the 25 deletions the guard actually stopped."""
+    guard = DeletionGuard()
+    lost = [
+        # A content id no addition in this diff carries: these bytes are gone.
+        DocChange(f"knowledge/c/gone{i}.md", ChangeStatus.DELETED, blob=f"f{i:039x}")
+        for i in range(25)
+    ]
+    summary = DiffSummary.of([*_relayout(56), *lost])
+
+    assert guard.breached_areas(summary.vault_changes, {"knowledge": 81}) == [("knowledge", 25, 81)]
+    assert summary.lost_paths() == tuple(sorted(c.path for c in lost))
+    assert len(summary.paths(ChangeStatus.DELETED)) == 81

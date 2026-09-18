@@ -18,10 +18,11 @@ only ``sources/`` — ``topics/`` is curation's to write and no one else's
 (FR-013, FR-021), so a request aiming at a topic path is refused by the
 path layer rather than by a check each handler remembers to make.
 
-These routes are the *user's* surface and therefore unscoped: per-agent
-authorization (FR-010) governs what an agent is told through delivery, not
-what the person who owns the vault sees in their own UI. ``upload`` follows
-the same rule — it takes no ``agent``.
+**No handler here takes an agent, and neither does the service.** A collection
+carries no per-agent reach: every enabled one is served to every agent and to
+the person who owns the vault, so there is nothing for a caller identity to
+narrow. ``enabled`` is the whole of the gate, and it is the registry's, applied
+the same way on every surface.
 
 Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``
 — including ``UploadTooLarge`` (FR-019), which ``IngestService`` itself raises

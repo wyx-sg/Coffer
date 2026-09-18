@@ -47,13 +47,14 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
         query = args.get("query")
         if not isinstance(query, str) or not query.strip():
             raise ValueError("'query' must be a non-empty string")
-        # Written by the gateway from the session handshake, never by the
-        # caller — it is not in the schema below on purpose.
-        agent = args.get("agent")
-        outcome = await recall_service.recall(
-            query.strip(),
-            agent=agent.strip() if isinstance(agent, str) and agent.strip() else None,
-        )
+        # ``args`` still arrives with an ``agent`` the gateway wrote from the
+        # session handshake — it does that for every builtin, generically —
+        # and this tool ignores it. It used to narrow the scan to that agent's
+        # per-agent scope on the partitions, which nobody had chosen: the
+        # scope defaulted to whichever agents a partition was aggregated
+        # from, so an agent could be refused every note about the repository
+        # it was working in. Recall spans every enabled partition now.
+        outcome = await recall_service.recall(query.strip())
         return {
             "notes": [
                 {

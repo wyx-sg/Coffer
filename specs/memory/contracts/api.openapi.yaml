@@ -33,20 +33,18 @@ info:
     partition their main checkout contributes to; a working directory inside no
     repository gets no partition at all (FR-015).
 
-    ## These routes are the owner's view, and are unscoped
+    ## Nothing here is filtered per agent
 
-    Like knowledge's REST surface, `list_partitions` / `list_notes` /
-    `get_note` / `list_retired` / the file family are the *person's* own view of
-    their own vault and are therefore not filtered by a Resource's per-agent
-    scope.
+    A partition carries no per-agent reach (FR-013): every **enabled**
+    partition is served to every agent, on `POST /context` and on
+    `coffer__recall` alike — so the owner's own view through
+    `list_partitions` / `list_notes` / `get_note` / `list_retired` / the file
+    family is the same corpus an agent's session reaches, not a wider one.
 
-    Scope **is** enforced on the one route a real agent's session reaches —
-    `POST /context`, which composes over the partitions that agent is
-    authorized for — and on `coffer__recall`, which this surface does not
-    expose at all (FR-034). Note what scope can and cannot do here: the payload
+    `enabled` is the only gate, and note what it can and cannot do: the payload
     `POST /context` returns names an absolute directory, and an agent handed a
-    path can open the file. Scope governs **what Coffer serves**, not what a
-    process on this machine can read (FR-046).
+    path can open the file. It governs **what Coffer serves**, not what a
+    process on this machine can read.
 
     ## The file family is read-only, and that is the design
 
@@ -304,11 +302,11 @@ paths:
         than a couple of scalar filters (knowledge's `search` is a `POST` for
         the same reason). Nothing here changes the memory tree.
 
-        This is the one route a real agent's own session reaches, and it is
-        therefore the one that enforces the calling agent's per-agent scope
-        (FR-013). `record_fired` is what the installed hook sets; a management
-        surface previewing the payload leaves it false so it never records a
-        fire that did not happen (FR-033).
+        This is the one route a real agent's own session reaches. It composes
+        over every enabled partition, whichever agent is asking (FR-013).
+        `record_fired` is what the installed hook sets; a management surface
+        previewing the payload leaves it false so it never records a fire that
+        did not happen (FR-033).
       requestBody:
         required: true
         content:
@@ -667,8 +665,8 @@ components:
           type: [string, "null"]
           default: null
           description: |
-            The calling agent's registered name. It is what the per-agent scope
-            is evaluated against (FR-013).
+            The calling agent's registered name. It narrows nothing — it is
+            what a recorded fire names as its actor (FR-033).
         ceiling_tokens:
           type: [integer, "null"]
           default: null

@@ -1,15 +1,22 @@
 // frontend/src/components/knowledge/KnowledgeTable.test.tsx
 //
 // The collections list. It had drifted from the other tables in three ways the
-// user could see: no reach control in the status column, a delete that was a
-// bare icon with no label, and a count header narrow enough to wrap one
-// character per line. All three are asserted here — and the count is now two
-// counts, because a collection is two lanes and one total would hide a
-// collection curation has not reached yet.
+// user could see: no status control in that column, a delete that was a bare
+// icon with no label, and a count header narrow enough to wrap one character
+// per line. All three are asserted here — and the count is now two counts,
+// because a collection is two lanes and one total would hide a collection
+// curation has not reached yet.
 //
-// `enabled`/`scope` are not on /knowledge/collections, so the table merges them
-// in from `GET /resources?kind=knowledge` — one request for the table, never one
-// per row, which is what useKindReach is stubbed to stand in for.
+// The load-bearing assertion added since: this kind offers NO PER-AGENT REACH.
+// Every enabled collection is served to every agent, so the control must not
+// put an agent list in front of anyone — the server refuses a scope write for
+// `knowledge`, and a UI that asks anyway is a UI that asks for a 422. What it
+// must keep is the enable/disable choice, because THAT gate is real: a disabled
+// collection appears in no agent's delivered skill.
+//
+// `enabled` is not on /knowledge/collections, so the table merges it in from
+// `GET /resources?kind=knowledge` — one request for the table, never one per
+// row, which is what useKindReach is stubbed to stand in for.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -30,7 +37,9 @@ vi.mock("@/lib/hooks/useResources", () => ({
     () =>
       new Map([
         ["shopee", { enabled: true, scope: null }],
-        ["personal", { enabled: true, scope: { agents: ["claude"], machines: null } }],
+        // A scope left over from when the kind was scoped. The table must not
+        // report it: with no scope declared, `enabled` is the whole answer.
+        ["personal", { enabled: false, scope: { agents: ["claude"], machines: null } }],
       ]),
   ),
 }));
@@ -42,14 +51,12 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgents: vi.fn(() => ({ data: [{ name: "claude" }] })),
 }));
 const deleteMutate = vi.fn();
-vi.mock("@/lib/hooks/useResourceMutations", () => {
-  const stub = () => ({ mutate: vi.fn(), isPending: false });
-  return {
-    useEnableResource: vi.fn(stub),
-    useDisableResource: vi.fn(stub),
-    useDeleteResource: vi.fn(() => ({ mutate: deleteMutate, isPending: false })),
-  };
-});
+const disableMutate = vi.fn();
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDisableResource: vi.fn(() => ({ mutate: disableMutate, isPending: false })),
+  useDeleteResource: vi.fn(() => ({ mutate: deleteMutate, isPending: false })),
+}));
 vi.mock("@/lib/api/resources", () => ({
   resourcesApi: { enable: vi.fn(), disable: vi.fn(), remove: vi.fn() },
 }));
@@ -71,9 +78,9 @@ const ITEMS: CollectionOut[] = [
 
 const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
 
-/** The row's ONE reach button — its text is the collection's current reach.
- *  (Reach used to be three buttons per row; it is one whose label is the
- *  answer, opening a panel where the states are the choices.) */
+/** The row's ONE status button — its text is whether the collection is served.
+ *  (It used to be three buttons per row; it is one whose label is the answer,
+ *  opening a panel where the states are the choices.) */
 const reachIn = (name: string) =>
   within(within(rowFor(name)).getByTestId("scope-control")).getByRole("button");
 
@@ -88,14 +95,50 @@ describe("KnowledgeTable", () => {
     expect(screen.getByText("internal notes")).toBeInTheDocument();
   });
 
-  test("the status column is the same reach control every other kind's row has", () => {
+  test("the status column reports the enable gate, and nothing about agents", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
     expect(screen.getAllByTestId("scope-control")).toHaveLength(ITEMS.length);
 
-    // One button per row, and its label states that collection's reach — the
-    // merged-in `enabled`/`scope`, read back off the control.
-    expect(reachIn("shopee")).toHaveTextContent(/^every agent$/i);
-    expect(reachIn("personal")).toHaveTextContent(/^1 agent$/i);
+    // One button per row, and its label is the whole answer this kind has:
+    // served, or not. Not "Every agent" — that name only means something
+    // beside a narrower one, and there is no narrower one here.
+    expect(reachIn("shopee")).toHaveTextContent(/^enabled$/i);
+    // Even though this row still carries a stored scope naming one agent.
+    expect(reachIn("personal")).toHaveTextContent(/^disabled$/i);
+  });
+
+  test("no per-agent reach is offered for a collection", () => {
+    // Every enabled collection is served to every agent (the `knowledge` kind
+    // declares no scope and the server refuses a scope write), so the panel
+    // must not offer an agent list at all.
+    render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
+    fireEvent.click(reachIn("shopee"));
+
+    expect(screen.queryByRole("radio", { name: /only selected agents/i })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: /claude/i })).toBeNull();
+    // Two choices, both of them about the gate that is real.
+    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
+  });
+
+  test("the enable gate still writes — it is the one control this column has", () => {
+    render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
+    fireEvent.click(reachIn("shopee"));
+    fireEvent.click(screen.getByRole("radio", { name: /^disabled$/i }));
+
+    expect(disableMutate).toHaveBeenCalledWith({ kind: "knowledge", name: "shopee" });
+  });
+
+  test("the column and its filter are headed Status, not Reach", () => {
+    // Renaming the header is the honest half of withdrawing reach: the column
+    // reports one thing now. (Which two options the filter offers is pinned in
+    // `lib/reachFilter.test.ts` — a Radix Select's list is not in the DOM
+    // until it opens.)
+    render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
+    expect(screen.getByRole("columnheader", { name: /^status$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /^reach$/i })).toBeNull();
+    expect(screen.getByRole("combobox", { name: /^status$/i })).toBeInTheDocument();
   });
 
   test("each lane is counted in its own column", () => {
@@ -131,15 +174,18 @@ describe("KnowledgeTable", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  test("selecting rows reveals the bulk reach control and a bulk delete", () => {
+  test("selecting rows reveals the bulk status control and a bulk delete", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
     expect(screen.queryByTestId("bulk-reach-control")).toBeNull();
 
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
     // The same one-button control the rows carry; it names the action rather
-    // than a state, because a mixed selection has no single reach.
+    // than a state, because a mixed selection has no single answer. For this
+    // kind the action is "set status" and not "set reach": a collection has no
+    // per-agent reach, so the panel behind the button offers only on and off.
     const bar = within(screen.getByTestId("bulk-reach-control"));
-    expect(bar.getByRole("button")).toHaveTextContent(/set reach/i);
+    expect(bar.getByRole("button")).toHaveTextContent(/set status/i);
+    expect(bar.getByRole("button")).not.toHaveTextContent(/reach/i);
     expect(screen.getByRole("button", { name: /^delete$/i })).toBeInTheDocument();
   });
 });

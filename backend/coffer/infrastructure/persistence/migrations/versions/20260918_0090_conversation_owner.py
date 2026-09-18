@@ -19,8 +19,8 @@ before this column existed would be indistinguishable from a chat one, and
 there is no vault holding one — the `workflow` kind ships in the same release
 as this column.
 
-Revision ID: 0089
-Revises: 0088
+Revision ID: 0090
+Revises: 0089
 """
 
 from __future__ import annotations
@@ -28,8 +28,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0089"
-down_revision = "0088"
+revision = "0090"
+down_revision = "0089"
 branch_labels = None
 depends_on = None
 

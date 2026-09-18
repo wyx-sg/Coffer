@@ -2,10 +2,17 @@
 //
 // Wiring smoke test for one partition's detail page: the way back, the header
 // (name + the repository it is keyed on, and whether that repository is still
-// there), the reach control, and the file browser standing where the fact list
+// there), the status control, and the file browser standing where the fact list
 // used to. Data hooks are mocked, mirroring KnowledgeDetailPage.test.tsx.
+//
+// Unlike the list, this page passes NO prefetched scope, so the control asks
+// the server — and the `memory` kind answers `supports_scope: false`. That is
+// the whole of how the per-agent panel disappears here: no prop, no special
+// case on the page, just the answer honoured. The scope hook is stubbed with
+// that answer so the test proves the page honours it rather than that someone
+// remembered to pass a flag.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -50,9 +57,11 @@ vi.mock("@/lib/hooks/useMemory", () => ({
 vi.mock("@/lib/hooks/useResources", () => ({
   useResource: vi.fn(() => ({ data: { enabled: true, scope: null } })),
 }));
+const scopePut = vi.fn();
 vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: vi.fn(() => ({ data: undefined })),
-  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  // What the server answers for `memory`: no per-agent scope to set.
+  useResourceScope: vi.fn(() => ({ data: { scope: null, supports_scope: false } })),
+  useUpdateResourceScope: vi.fn(() => ({ mutate: scopePut, isPending: false })),
 }));
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
 vi.mock("@/lib/hooks/useResourceMutations", () => {
@@ -103,13 +112,28 @@ describe("MemoryDetailPage", () => {
     stubPartitions([COFFER]);
   });
 
-  test("renders the repository it is keyed on, the reach control and its files", () => {
+  test("renders the repository it is keyed on, the status control and its files", () => {
     renderPage();
 
     expect(screen.getByRole("heading", { name: "coffer" })).toBeInTheDocument();
     expect(screen.getByText("/Users/dev/coffer")).toBeInTheDocument();
     expect(screen.getByTestId("scope-control")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
+  });
+
+  test("the header control offers no per-agent reach, because the server has none", () => {
+    renderPage();
+    const control = within(screen.getByTestId("scope-control")).getByRole("button");
+    // Its label is the state, and the state is just "served or not".
+    expect(control).toHaveTextContent(/^enabled$/i);
+
+    fireEvent.click(control);
+    expect(screen.queryByRole("radio", { name: /only selected/i })).toBeNull();
+    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
+    expect(screen.getByRole("radio", { name: /^enabled$/i })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^disabled$/i })).toBeInTheDocument();
+    // And nothing here ever PUTs a scope the server would refuse.
+    expect(scopePut).not.toHaveBeenCalled();
   });
 
   test("a partition whose repository is gone says so in its header", () => {

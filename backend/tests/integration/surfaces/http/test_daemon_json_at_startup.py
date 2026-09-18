@@ -9,6 +9,7 @@ while ``/daemon/status`` reported ``ready``.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,19 +28,26 @@ def _point_at(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_unreadable_daemon_json_fails_startup(tmp_path: Path, monkeypatch, capfd) -> None:
+async def test_unreadable_daemon_json_fails_startup(tmp_path: Path, monkeypatch, caplog) -> None:
     path = _point_at(tmp_path, monkeypatch)
     path.write_text("{not json")
     app = create_app()
-    with pytest.raises(RuntimeError, match=r"daemon\.json .* unreadable"):
+    with (
+        caplog.at_level(logging.ERROR),
+        pytest.raises(RuntimeError, match=r"daemon\.json .* unreadable"),
+    ):
         async with app.router.lifespan_context(app):
             pass
-    # The daemon's own logging config owns the handlers (it does not propagate
-    # to caplog), so read the ERROR line off the stderr it writes to.
-    err = capfd.readouterr().err
-    assert "ERROR" in err and "daemon.json" in err and "unreadable" in err, (
-        "the fault must be logged at ERROR, not only raised"
-    )
+    # Asserted on the record, not on a rendered line. This used to grep the
+    # daemon's stderr for the word "ERROR", which the daemon's own formatter no
+    # longer writes (a line states `"level": "error"`) — and which a message
+    # merely mentioning an error would have satisfied anyway. The record is
+    # what the requirement is about: the fault must be logged at error level,
+    # not only raised.
+    faults = [r for r in caplog.records if "daemon.json" in r.getMessage()]
+    assert faults, "the fault must be logged, not only raised"
+    assert [r.levelname for r in faults] == ["ERROR"]
+    assert "unreadable" in faults[0].getMessage()
 
 
 @pytest.mark.asyncio

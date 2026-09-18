@@ -46,11 +46,9 @@ export function MemoryPage() {
     const byName = new Map((resources ?? []).map((r) => [r.name, r]));
     return (partitions ?? []).map((p) => {
       const resource = byName.get(p.name);
-      return {
-        ...p,
-        enabled: resource?.enabled ?? true,
-        scope: resource?.scope ?? null,
-      };
+      // `enabled` alone: the `memory` kind declares no per-agent scope, so
+      // there is no second Resource field for a row to carry.
+      return { ...p, enabled: resource?.enabled ?? true };
     });
   }, [partitions, resources]);
 

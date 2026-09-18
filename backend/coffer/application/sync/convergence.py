@@ -48,11 +48,12 @@ from coffer.application.sync.convergence_ops import (
     breached,
     commit_message,
     failed_run,
-    held_run,
+    hold_round,
     is_inapplicable,
     outstanding_holds,
     reconcile,
     refuse_newer_layout,
+    release_hold,
     remote_tip,
     snapshot,
 )
@@ -127,13 +128,14 @@ class ConvergeRound(BackwardsMixin):
         remote still stands where the hold was raised. A "yes, publish my
         deletions" is not a "yes, apply whatever the remote dropped", and it is
         not a standing permission that survives the remote moving.
+
+        A hold this vault is already carrying is deliberately **not**
+        short-circuited on. It is an unanswered question about one diff, so the
+        round re-derives that diff, releases the hold where the breach is gone
+        (``release_hold``) and otherwise re-states the same question rather
+        than raising a fresh one (``hold_round``).
         """
         started = datetime.now(tz=UTC)
-
-        pending = await self._state.pending()
-        if pending is not None and confirmed is None:
-            return held_run(started, pending)
-
         pointer, join = await self._base(join_choice, token=token)
 
         # The fetch happens HERE, before anything compares against the remote.
@@ -160,6 +162,7 @@ class ConvergeRound(BackwardsMixin):
         )
         if breach:
             return await self._hold(started, GuardDirection.PUBLISH, local, published, breach)
+        await release_hold(self._state, GuardDirection.PUBLISH)
 
         # --- 2 merge -------------------------------------------------------
         try:
@@ -195,6 +198,7 @@ class ConvergeRound(BackwardsMixin):
         )
         if breach:
             return await self._hold(started, GuardDirection.APPLY, merged, everything, breach)
+        await release_hold(self._state, GuardDirection.APPLY)
         await snapshot(self._mirror, local)
 
         # --- 5 apply -------------------------------------------------------
@@ -342,8 +346,8 @@ class ConvergeRound(BackwardsMixin):
         raw = await self._mirror.diff_paths(base, head)
         return DiffSummary.of(
             [
-                DocChange(path, _STATUS_TO_CHANGE[status])
-                for status, path in raw
+                DocChange(path, _STATUS_TO_CHANGE[status], blob=blob or None)
+                for status, path, blob in raw
                 if status in _STATUS_TO_CHANGE
             ]
         )
@@ -381,13 +385,14 @@ class ConvergeRound(BackwardsMixin):
         diff: DiffSummary,
         breaches: list[tuple[str, int, int]],
     ) -> ConvergeRun:
-        pending = PendingConfirmation(
+        """Step 4's refusal, with the remote and this vault's state to hand."""
+        return await hold_round(
+            self._mirror,
+            self._state,
+            branch=self._branch,
+            started=started,
             direction=direction,
             commit=commit,
-            remote_tip=await remote_tip(self._mirror, self._branch),
-            breaches=tuple(breaches),
-            paths=diff.paths(ChangeStatus.DELETED),
-            raised_at=datetime.now(tz=UTC),
+            diff=diff,
+            breaches=breaches,
         )
-        await self._state.set_pending(pending)
-        return held_run(started, pending)

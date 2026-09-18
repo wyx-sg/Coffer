@@ -9,12 +9,12 @@ ever called. The question was never which retrieval mechanism to expose: a
 tool an agent does not remember to call is not retrieval. Every agent Coffer
 supports already has `Read` and `Grep`, which need no remembering, so the
 layer's job narrows to putting the right absolute paths in front of the model —
-which the per-agent skill does, catalogue and all (FR-037).
+which the delivered skill does, catalogue and all (FR-037).
 
 **Why writing keeps one.** A write is the one operation where the agent
-genuinely needs Coffer rather than a filesystem: which collection it may write,
-which lane the file belongs in, what frontmatter it carries, and the audit
-entry naming who wrote it are all this layer's to decide. It is also the only
+genuinely needs Coffer rather than a filesystem: which collections exist, which
+lane the file belongs in, what frontmatter it carries, and the audit entry
+naming who wrote it are all this layer's to decide. It is also the only
 remaining place an invocation is recorded.
 
 The tool's description is one of exactly two places this layer is always in a
@@ -51,9 +51,11 @@ def _agent(args: dict[str, Any]) -> str | None:
     """The session's agent identity, or ``None`` when it reported none.
 
     Set by the gateway, never by the caller: it is absent from the tool's input
-    schema and overwritten on every call (spec mcp-gateway FR-013). ``None``
-    means "unidentified caller", which the service answers with the collections
-    scoped to every agent — not with all of them.
+    schema and overwritten on every call (spec mcp-gateway FR-013). It narrows
+    nothing — every enabled collection is writable by every agent — and is read
+    for exactly one reason: the audit entry naming who wrote the file. ``None``
+    becomes :data:`_ANONYMOUS_ACTOR` there, because an unattributed write is
+    still worth recording.
     """
     return _text(args.get("agent")) or None
 
@@ -91,18 +93,16 @@ def register_knowledge_builtin_tools(
                 collection=_required(args, "collection"),
                 folder=_text(args.get("folder")) or None,
                 actor=agent or _ANONYMOUS_ACTOR,
-                agent=agent,
             )
         except CollectionNotFound as exc:
-            # Name the collections this caller may write. It is not a second
-            # retrieval surface: it discloses exactly what this agent's own
-            # delivered skill already lists (FR-010), and it turns a dead end
-            # into a correction for a model that reached for the tool without
-            # having opened the skill.
-            visible = await svc.visible_collections(agent)
+            # Name the enabled collections. It is not a second retrieval
+            # surface: it discloses exactly what the delivered skill already
+            # lists, and it turns a dead end into a correction for a model that
+            # reached for the tool without having opened the skill.
+            enabled = await svc.enabled_collections()
             raise ValueError(
                 f"no collection named {exc.name!r} is available to you. "
-                + (f"You may write to: {', '.join(visible)}." if visible else "You have none.")
+                + (f"You may write to: {', '.join(enabled)}." if enabled else "You have none.")
             ) from exc
         return {
             **_payload(written),
@@ -138,7 +138,7 @@ def register_knowledge_builtin_tools(
                         "type": "string",
                         "description": (
                             "Which collection to file it under. The "
-                            "coffer-knowledge skill names the ones you may write."
+                            "coffer-knowledge skill names them all."
                         ),
                     },
                     "title": {

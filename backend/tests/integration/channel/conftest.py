@@ -512,20 +512,19 @@ class FakeIngestedDocument:
 
 
 class FakeCollectionCatalog:
-    """In-memory ``CollectionCatalogPort``: a fixed visible-collections list,
-    exactly like the real ``KnowledgeService.visible_collections`` but with no
+    """In-memory ``CollectionCatalogPort``: a fixed collection list, exactly
+    like the real ``KnowledgeService.enabled_collections`` but with no
     knowledge kind behind it (the channel core never imports one — import-linter
     contract 5f)."""
 
     def __init__(self, names: Sequence[str] = ()) -> None:
         self.names = list(names)
-        # Every agent this fake was asked about, positionally aligned with the
-        # answer returned — so a test can assert `/save` resolved visibility
-        # against the thread's OWN agent, not a hardcoded one.
-        self.calls: list[str | None] = []
+        #: How many times `/save` asked. It takes no agent and the answer does
+        #: not vary, so the count is all there is to observe.
+        self.calls = 0
 
-    async def visible_collections(self, agent: str | None) -> list[str]:
-        self.calls.append(agent)
+    async def enabled_collections(self) -> list[str]:
+        self.calls += 1
         return list(self.names)
 
 
@@ -547,7 +546,6 @@ class FakeIngestService:
         data: bytes,
         directory: str | None = None,
         actor: str,
-        agent: str | None = None,
     ) -> FakeIngestedDocument:
         self.calls.append(
             {
@@ -556,7 +554,6 @@ class FakeIngestService:
                 "data": data,
                 "directory": directory,
                 "actor": actor,
-                "agent": agent,
             }
         )
         if self.fails_with is not None:
