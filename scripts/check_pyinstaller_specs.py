@@ -13,10 +13,18 @@ That is how `coffer.spec` went on carrying
 `coffer/application/knowledge/skill_assets` for the whole time the knowledge
 skill had been rendered in code instead of shipped as a file.
 
+A second silence sits in the same files: the `EXE(...)` run-time options
+freeze `-X utf8` in, and nothing that runs before a release notices when one
+spec loses it. An unfrozen interpreter in the C locale turns UTF-8 mode on by
+itself, so dev and CI behave as if the option were there; only the shipped
+binary, started from Finder or launchd with no `LANG`, falls back to ASCII and
+fails on the first file whose text is not ASCII.
+
 Checks, for each `backend/*.spec`:
 
   1. The `Analysis([...])` entry script exists.
   2. Every source path in `datas=[...]` exists.
+  3. The `EXE(...)` run-time options carry `("X utf8", None, "OPTION")`.
 
 Both are resolved from `backend/`, which is where the specs' own paths are
 relative to and where `scripts/build_binaries.sh` runs PyInstaller.
@@ -82,6 +90,42 @@ def declared_paths(spec: Path) -> list[str]:
     return paths
 
 
+UTF8_OPTION = "X utf8"
+
+
+def _exe_call(tree: ast.Module) -> ast.Call | None:
+    """The spec's `EXE(...)` call, or None when it has none."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "EXE":
+            return node
+    return None
+
+
+def freezes_utf8_mode(spec: Path) -> bool:
+    """Whether `spec` passes `-X utf8` to the frozen interpreter.
+
+    PyInstaller takes run-time options as `(flag, None, "OPTION")` triples in a
+    list positional argument of `EXE(...)`; which position it sits in depends on
+    how many TOCs the spec passes first, so every list argument is searched
+    rather than one index.
+    """
+    call = _exe_call(ast.parse(spec.read_text(encoding="utf-8")))
+    if call is None:
+        return False
+
+    for argument in call.args:
+        if not isinstance(argument, ast.List):
+            continue
+        for entry in argument.elts:
+            if (
+                isinstance(entry, ast.Tuple)
+                and entry.elts
+                and _string(entry.elts[0]) == UTF8_OPTION
+            ):
+                return True
+    return False
+
+
 def main() -> int:
     specs = sorted(BACKEND.glob("*.spec"))
     if not specs:
@@ -95,13 +139,22 @@ def main() -> int:
             checked += 1
             if not (BACKEND / path).exists():
                 stale.append(f"{spec.name}: names '{path}', which does not exist under backend/")
+        if not freezes_utf8_mode(spec):
+            stale.append(
+                f"{spec.name}: its EXE(...) run-time options are missing "
+                f'("{UTF8_OPTION}", None, "OPTION"), so the frozen binary reads text as '
+                "ASCII wherever the environment has no UTF-8 locale"
+            )
 
     if stale:
         for line in stale:
             print(line, file=sys.stderr)
         return 1
 
-    print(f"check_pyinstaller_specs: OK — {len(specs)} spec(s), {checked} path(s) all present")
+    print(
+        f"check_pyinstaller_specs: OK — {len(specs)} spec(s), {checked} path(s) all present, "
+        "all freezing UTF-8 mode"
+    )
     return 0
 
 
