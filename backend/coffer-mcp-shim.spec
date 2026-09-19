@@ -67,7 +67,14 @@ exe = EXE(
     a.binaries,
     a.zipfiles,
     a.datas,
-    [],
+    # Run the frozen interpreter in UTF-8 mode (PEP 540). A frozen binary
+    # started without LANG/LC_CTYPE -- every launch from Finder, the Dock or
+    # launchd, and the desktop shell's own daemon spawn -- otherwise defaults
+    # text I/O to ASCII, so reading a skill's metadata, a workflow template or
+    # any other file whose text is not ASCII fails. Development and CI never
+    # reproduce it: there the C locale coerces UTF-8 mode on by itself, so the
+    # unfrozen interpreter already behaves the way this option asks for.
+    [("X utf8", None, "OPTION")],
     name="coffer-mcp-shim",
     debug=False,
     strip=False,
