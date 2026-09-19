@@ -21,6 +21,7 @@ from typing import Protocol
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
+from coffer.application.binary_deploy import user_bin_dir
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
 from coffer.domain.agent.descriptor import descriptor_for
@@ -39,6 +40,29 @@ from coffer.domain.workspace_errors import McpInstallUnsupported
 _SHIM_BINARY = "coffer-mcp-shim"
 
 
+def _stable_path(candidate: pathlib.Path) -> str:
+    """``candidate``, named the way it stays true across upgrades.
+
+    A frozen build lands in ``~/.coffer/bin/<version>/`` with the public names
+    symlinked into it, and a deploy prunes all but the last few version
+    directories (see ``binary_deploy``). Every branch below reaches the shim by
+    a path that resolves into the current version directory -- ``which`` finds
+    the public symlink, and a CLI started through that symlink has the version
+    directory as ``sys.executable``'s parent. Writing the resolved path into an
+    agent's config file pins it to a directory that a later upgrade deletes, so
+    whenever the candidate is the deployed shim its public name is returned
+    instead. Anything else -- a venv console script, an override pointing
+    somewhere of its own -- is resolved as before.
+    """
+    public = user_bin_dir() / _SHIM_BINARY
+    try:
+        if public.exists() and public.resolve() == candidate.resolve():
+            return str(public)
+    except OSError:
+        pass
+    return str(candidate.resolve())
+
+
 def default_shim_resolver() -> str:
     """Resolve an absolute path to the ``coffer-mcp-shim`` binary.
 
@@ -48,22 +72,24 @@ def default_shim_resolver() -> str:
     place console scripts — found via ``sysconfig`` even when the venv's bin is
     off ``PATH`` and ``sys.executable`` is a symlink to the base interpreter),
     then the bundled binary next to the running executable (PyInstaller dist).
-    Raises ``ShimNotFound`` if none resolve.
+    Whichever branch answers, the deployed shim is named by its public
+    ``~/.coffer/bin/coffer-mcp-shim`` rather than the version directory behind
+    it (see :func:`_stable_path`). Raises ``ShimNotFound`` if none resolve.
     """
     override = os.environ.get("COFFER_MCP_SHIM_PATH")
     if override and pathlib.Path(override).exists():
-        return str(pathlib.Path(override).resolve())
+        return _stable_path(pathlib.Path(override))
     found = shutil.which(_SHIM_BINARY)
     if found:
-        return str(pathlib.Path(found).resolve())
+        return _stable_path(pathlib.Path(found))
     scripts_dir = sysconfig.get_path("scripts")
     if scripts_dir:
         installed = pathlib.Path(scripts_dir) / _SHIM_BINARY
         if installed.exists():
-            return str(installed.resolve())
+            return _stable_path(installed)
     bundled = pathlib.Path(sys.executable).resolve().parent / _SHIM_BINARY
     if bundled.exists():
-        return str(bundled)
+        return _stable_path(bundled)
     raise ShimNotFound(_SHIM_BINARY)
 
 
