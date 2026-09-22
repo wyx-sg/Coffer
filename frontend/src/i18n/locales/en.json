@@ -67,7 +67,8 @@
     "search": "Search"
   },
   "picker": {
-    "browse": "Browse…"
+    "browse": "Browse…",
+    "noFile": "No file chosen"
   },
   "folderPicker": {
     "title": "Choose a folder",
@@ -104,6 +105,8 @@
     "channels": "Channels",
     "activity": "Activity",
     "chat": "Chat",
+    "runs": "Runs",
+    "workflows": "Workflows",
     "modelProviders": "Model providers",
     "sync": "Sync"
   },
@@ -345,7 +348,11 @@
       "sync_rolled_back": "Rolled a converge round back",
       "sync_run": "Ran a converge round",
       "token_rotated": "Access token rotated",
-      "knowledge_curated": "Derived the {{resource}} documents from its sources"
+      "knowledge_curated": "Derived the {{resource}} documents from its sources",
+      "workflow_run_started": "Started workflow run {{resource}}",
+      "workflow_run_finished": "Workflow run {{resource}} finished",
+      "workflow_approval_decided": "Decided an approval on workflow run {{resource}}",
+      "workflow_tool_call_gated": "Held a write from workflow run {{resource}} for approval"
     },
     "capType": {
       "tool": "tool",
@@ -743,7 +750,21 @@
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time — retry, or raise its request timeout",
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection",
     "KNOWLEDGE_CURATION_BOUND": "One curation pass may only rewrite a handful of documents. The rest continue on the next pass.",
-    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "A curated document may not name another knowledge file — file names change when the collection is reorganised."
+    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "A curated document may not name another knowledge file — file names change when the collection is reorganised.",
+    "WORKFLOW_ERROR": "The workflow could not do that",
+    "WORKFLOW_VERSION_CONFLICT": "The run changed while you were looking at it — reload and try again",
+    "WORKFLOW_RUN_TERMINAL": "This run has finished and takes no further commands",
+    "WORKFLOW_NOT_THIS_MACHINE": "Another machine owns this run; it is read-only here",
+    "WORKFLOW_ILLEGAL_TRANSITION": "That is not something this node can do right now",
+    "WORKFLOW_ATTEMPT_CEILING": "This task has been attempted as many times as it allows",
+    "WORKFLOW_MISSING_ARTIFACT": "This node still owes a deliverable it declared",
+    "WORKFLOW_TEMPLATE_INVALID": "The template was refused — check the field it names",
+    "WORKFLOW_UNSAFE_PATH": "That path is not allowed inside a run's directory",
+    "WORKFLOW_INPUT_NOT_FOUND": "That input is not mounted on this run",
+    "WORKFLOW_REPO_MOUNT_FAILED": "The repository could not be checked out for this run — nothing was mounted",
+    "WORKFLOW_TEMPLATE_DISABLED": "This workflow is switched off; it starts no new runs. Runs already created from it keep going.",
+    "WORKFLOW_RUN_LABEL_INVALID": "A run must have a title",
+    "WORKFLOW_UNKNOWN_AGENT": "No agent by that name on this machine"
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -1636,6 +1657,418 @@
     "title": "Sync",
     "toast": {
       "roundDone": "Round finished: {{status}} (+{{added}} ~{{modified}} −{{deleted}})"
+    }
+  },
+  "workflow": {
+    "title": "Runs",
+    "subtitle": "Deliveries Coffer is carrying: each run advances through the stages its workflow defines, in its own working directory.",
+    "loadFailed": "Failed to load runs",
+    "noMatches": "No runs match your search.",
+    "searchPlaceholder": "Search runs…",
+    "backToRuns": "Back to runs",
+    "notFound": "This run no longer exists",
+    "deleteTitle": "Delete run",
+    "deleteConfirm": "Delete \"{{title}}\"? Its events, attempts, approvals and run directory go with it. The node conversations are ordinary conversations and stay.",
+    "empty": {
+      "title": "No runs yet",
+      "body": "A run is one delivery: you pick a workflow, name what is being delivered, and it advances through that workflow's stages on its own — each task opening its own conversation with an agent, leaving its deliverable behind, and stopping at an approval before anything reaches the outside world."
+    },
+    "cols": {
+      "title": "Run",
+      "template": "Workflow",
+      "status": "Status",
+      "position": "Where it is",
+      "lastMoved": "Last moved",
+      "owner": "Advanced by"
+    },
+    "filters": {
+      "allStatuses": "Any status"
+    },
+    "owner": {
+      "thisMachine": "This machine",
+      "otherMachine": "Read-only — {{machine}} advances this run"
+    },
+    "notThisMachine": "{{machine}} owns this run. Open it there to act on it.",
+    "runStatus": {
+      "draft": "Draft",
+      "running": "Running",
+      "paused": "Paused",
+      "completed": "Completed",
+      "aborted": "Aborted",
+      "failed": "Failed"
+    },
+    "nodeStatus": {
+      "pending": "Pending",
+      "running": "Running",
+      "waiting_review": "Waiting for review",
+      "waiting_approval": "Waiting for approval",
+      "completed": "Completed",
+      "skipped": "Skipped",
+      "failed": "Failed"
+    },
+    "run": {
+      "tokens": "{{spent}} tokens spent",
+      "editTitle": "Edit run",
+      "editDescription": "What this delivery is called and what it is. Its stages and tasks are not edited here.",
+      "titleField": "Title",
+      "descriptionField": "Description",
+      "descriptionPlaceholder": "What this delivery is, now that the work has shown it."
+    },
+    "tabs": {
+      "flow": "Stages",
+      "context": "Context"
+    },
+    "stage": {
+      "here": "Here now",
+      "optional": "Optional"
+    },
+    "node": {
+      "attempt": "Attempt {{count}}",
+      "unplanned": "Unplanned",
+      "openConversation": "Open conversation",
+      "types": {
+        "ai": "AI",
+        "manual": "Manual"
+      },
+      "failure": {
+        "interrupted": "Interrupted by a daemon restart — its conversation is intact; retry opens a new attempt.",
+        "agent_error": "The agent failed during this attempt.",
+        "missing_artifact": "A required artifact was never written.",
+        "attempt_ceiling": "The attempt ceiling was reached."
+      },
+      "actions": {
+        "start": "Start",
+        "feedback": "Send feedback",
+        "complete": "Complete",
+        "retry": "Retry",
+        "skip": "Skip",
+        "restore": "Restore"
+      },
+      "feedback": {
+        "title": "Send feedback to this node",
+        "description": "Feedback opens a new attempt with what you wrote as its instruction. Say what should be different.",
+        "placeholder": "What should this node do differently?"
+      },
+      "complete": {
+        "title": "Complete this node",
+        "description": "Marks the node done and hands the run to the next one.",
+        "waive": "Complete even though a required artifact was never written"
+      },
+      "startedAt": "Started {{at}}",
+      "finishedAt": "Finished {{at}}",
+      "runsOn": "Runs on",
+      "fromWorkflow": "From the workflow ({{agent}})"
+    },
+    "adhoc": {
+      "add": "Add task",
+      "title": "Add an unplanned task",
+      "description": "The task joins this stage as a node, opens with the same shared context as any node the template planned, and leaves its artifacts in the same place.",
+      "nameLabel": "Task name",
+      "instructionsLabel": "Instructions",
+      "instructionsPlaceholder": "What should this task do? You are writing the node's brief.",
+      "workdirLabel": "Working directory (optional)",
+      "workdirPlaceholder": "Leave blank to use the run's own directory",
+      "submit": "Add task"
+    },
+    "approval": {
+      "sectionLabel": "Approvals this task is waiting on",
+      "sectionTitle": "{{count}} waiting for your decision",
+      "title": "{{tool}} is waiting for approval",
+      "nodeAction": "A node action",
+      "expiresAt": "Expires {{at}} — after that the held call fails rather than executing.",
+      "payloadLabel": "Exactly what will execute",
+      "approve": "Approve",
+      "reject": "Reject",
+      "decidedAt": "Decided {{at}}",
+      "approveTitle": "Approve {{tool}}?",
+      "approveDescription": "The held call resumes and reaches the upstream system once. A comment is optional.",
+      "commentLabel": "Comment (optional)",
+      "commentPlaceholder": "Anything the node should know",
+      "rememberRead": "Remember {{tool}} as read-only, so it is not held again",
+      "rejectTitle": "Reject {{tool}}?",
+      "rejectDescription": "The held call fails with your reason, and the node can act on it. A reason is required.",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "Why should this not go through?",
+      "status": {
+        "pending": "Pending",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "expired": "Expired",
+        "superseded": "Superseded"
+      }
+    },
+    "nodeConversation": {
+      "backToRun": "Back to the run",
+      "notFound": "This task is not part of this run",
+      "subtitle": "{{run}} · {{stage}} · {{type}}",
+      "threadLabel": "Task conversation",
+      "threadEmpty": "Nothing said yet.",
+      "readOnly": "This run is advanced by another machine, so this conversation is read-only here.",
+      "notStartedTitle": "This task has not started",
+      "notStartedBody": "Nothing has run here yet, so there is no transcript. What you write below becomes its brief: the task reads it when the run reaches it.",
+      "byHandTitle": "This step is done by hand",
+      "byHandBody": "There is no conversation here: a person does this work, not an agent. What you write below joins its instructions."
+    },
+    "inputs": {
+      "dialogTitle": "Add to this run's context",
+      "dialogDescription": "An input is LISTED to every task that opens afterwards, never pasted into it — a collection can be larger than the whole context budget, and a task is an agent with a filesystem.",
+      "kindLabel": "Kind",
+      "kinds": {
+        "knowledge": "Knowledge",
+        "file": "File",
+        "link": "Link",
+        "repo": "Repository",
+        "note": "Note"
+      },
+      "refLabels": {
+        "knowledge": "Collection",
+        "file": "File",
+        "link": "URL",
+        "repo": "Repository path",
+        "note": "Title"
+      },
+      "refPlaceholders": {
+        "knowledge": "team-docs",
+        "link": "https://…",
+        "repo": "/Users/you/src/account-service",
+        "note": "What is this note about?"
+      },
+      "hints": {
+        "knowledge": "A collection in this vault's knowledge. The tasks are told its name and read it themselves.",
+        "file": "The file is stored under this run's own directory, so a task can open it from the working directory it runs in.",
+        "link": "Just the address. Coffer does not fetch it — the task opens it if it can reach it.",
+        "repo": "A path to a local git repository. Coffer checks it out into this run's own directory on a branch of the run's own, so nothing here can write in your working copy.",
+        "note": "Something you write yourself, in markdown. Every task is told it is your own words, and you can keep editing it while the run goes."
+      },
+      "chooseFile": "Choose a file…",
+      "submit": "Add",
+      "uploading": "Uploading…",
+      "remove": "Remove",
+      "removeTitle": "Remove this?",
+      "removeConfirm": "\"{{ref}}\" stops being listed to the tasks that open afterwards. The collection or link itself is untouched — the run never owned it.",
+      "removeFileConfirm": "\"{{ref}}\" stops being listed to the tasks that open afterwards, and its uploaded bytes go with it.",
+      "removeRepoConfirm": "\"{{ref}}\" stops being listed to the tasks that open afterwards, and the checkout the run was given goes with it. The repository it came from — its branches and its working tree — is untouched.",
+      "descriptionLabel": "Description (optional)",
+      "descriptionPlaceholder": "What this is, in a few words",
+      "pickCollection": "Pick a collection",
+      "noCollections": "This vault has no knowledge collections yet.",
+      "noCollectionMatches": "No collection matches.",
+      "removeHint": "Stop listing this to the tasks that open afterwards",
+      "providers": {
+        "confluence": "Confluence",
+        "jira": "Jira",
+        "google_docs": "Google Doc",
+        "google_sheets": "Google Sheet",
+        "google_slides": "Google Slides",
+        "google_drive": "Google Drive",
+        "github": "GitHub",
+        "gitlab": "GitLab",
+        "figma": "Figma",
+        "notion": "Notion",
+        "slack": "Slack"
+      },
+      "removeNoteConfirm": "Delete the note “{{ref}}”? Its file goes with it."
+    },
+    "artifacts": {
+      "promote": "Save to knowledge",
+      "promoted": "Copied {{count}} files into {{collection}}.",
+      "promoteTitle": "Save this run to knowledge",
+      "promoteDescription": "Everything this run is made of is copied into a knowledge collection: what its tasks produced, the files you uploaded and the notes you wrote. Links, collections and repositories are not copied — they are somebody else's, already here, or gone with the run — so they are written down as a list of what this delivery read. The run's own directory is left untouched.",
+      "whereTo": "Where to save",
+      "mode": {
+        "new": "New collection",
+        "existing": "Add to an existing one"
+      },
+      "newLabel": "Name",
+      "newPlaceholder": "account-buffer-table",
+      "existingLabel": "Collection",
+      "existingPlaceholder": "Pick a collection",
+      "existingHint": "The files are added alongside what is already there; nothing in it is replaced."
+    },
+    "create": {
+      "action": "New run",
+      "title": "Create a run",
+      "description": "A run freezes a snapshot of the workflow it starts from, so editing that workflow afterwards leaves this run alone. Coffer gives it a working directory of its own, and it starts in draft — mount what it should read on its page, then start its first task.",
+      "templateLabel": "Workflow",
+      "templatePlaceholder": "Pick a workflow",
+      "titleLabel": "Title",
+      "submit": "Create run",
+      "noneEnabled": "Every workflow is switched off. Enable one to start a run from it."
+    },
+    "templates": {
+      "title": "Workflows",
+      "subtitle": "The shapes of work this vault knows how to run. A run freezes the workflow it started from, so editing one here leaves every run that is already going alone.",
+      "backToList": "Back to workflows",
+      "loadFailed": "Failed to load workflows",
+      "notFound": "This workflow no longer exists",
+      "searchPlaceholder": "Search workflows…",
+      "noMatches": "No workflows match your search.",
+      "emptyTitle": "No workflows yet",
+      "emptyBody": "A workflow is the shape of a delivery: the stages it goes through in order, the tasks in each, what each task runs and what it owes. Write one here and every run of it starts from the same shape.",
+      "create": "New workflow",
+      "createTitle": "Create a workflow",
+      "createDescription": "It starts as one stage with one task — rename them and add the rest in the editor.",
+      "createSubmit": "Create workflow",
+      "nameLabel": "Name",
+      "namePlaceholder": "delivery",
+      "deleteTitle": "Delete workflow",
+      "deleteConfirm": "Delete \"{{name}}\"? Runs already created from it froze their own copy and keep going.",
+      "refused": "Refused: {{reason}}",
+      "settings": "Run settings",
+      "description": "Description",
+      "descriptionPlaceholder": "What this flow delivers, in a sentence.",
+      "attemptCeiling": "Attempts",
+      "attemptCeilingHint": "How many times this task may be tried before the run stops. There is no unlimited.",
+      "tokenBudget": "Token budget",
+      "tokenBudgetHint": "Reaching it pauses the run rather than starting the next task. Leave blank for none.",
+      "addStage": "Add stage",
+      "stageName": "Stage",
+      "stageNamePlaceholder": "Tech design",
+      "optional": "Optional",
+      "removeStage": "Remove stage {{name}}",
+      "addNode": "Add task",
+      "nodeName": "Task",
+      "nodeNamePlaceholder": "Draft the technical design",
+      "nodeType": "Type",
+      "skill": "Skill",
+      "noSkill": "No skill",
+      "agent": "Agent",
+      "defaultAgent": "The run's default",
+      "stale": "{{name}} — no longer registered",
+      "staleHint": "This template names something the vault no longer has. The save will be refused until it is replaced.",
+      "instructions": "Instructions",
+      "instructionsPlaceholder": "Added on top of the skill, for what is specific to this flow.",
+      "approval": "Approval",
+      "approvals": {
+        "never": "Never ask",
+        "always": "Always ask"
+      },
+      "onFailure": "On failure",
+      "failure": {
+        "stop": "Stop the run",
+        "continue": "Carry on",
+        "retry": "Retry"
+      },
+      "retryTimes": "Retries",
+      "artifacts": "Artifacts",
+      "noArtifacts": "This task owes no files.",
+      "addArtifact": "Add artifact",
+      "artifactName": "Artifact {{index}} name",
+      "artifactPlaceholder": "td.md",
+      "artifactRequired": "Required",
+      "removeArtifact": "Remove artifact {{name}}",
+      "addEdge": "Add feedback edge",
+      "edgeTo": "Back to",
+      "edgeReason": "Reason",
+      "edgeReasonPlaceholder": "code_issue",
+      "removeEdge": "Remove the edge from {{from}} back to {{to}}",
+      "tabs": {
+        "stages": "Stages"
+      },
+      "cols": {
+        "name": "Workflow",
+        "description": "Description",
+        "stages": "Stages",
+        "enabled": "State"
+      },
+      "saving": "Saving…",
+      "editStage": "Edit stage {{name}}",
+      "editStageTitle": "Edit stage",
+      "addStageDescription": "A stage is a step of the delivery. It starts with one task, which you can rename and add to.",
+      "editStageDescription": "What this stage is called, whether a run may skip it, and where it sends work back to.",
+      "optionalHint": "A run may skip this stage instead of stopping when it has nothing to do here.",
+      "lastStage": "A workflow needs at least one stage.",
+      "lastNode": "A stage needs at least one task. Delete the stage instead.",
+      "editNodeTitle": "Edit task",
+      "nodeDescription": "One task in {{stage}}: what it runs, what it owes, and what happens when it fails.",
+      "sendBack": "Sends work back",
+      "sendBackHint": "When something here says an earlier stage has to be redone, the run goes back to it and carries on from there. Without one it only ever moves forward.",
+      "sendsBack": "{{reason}} → back to {{stage}}",
+      "anyReason": "on feedback",
+      "enabledAria": "Enabled: {{name}}",
+      "positionOption": "{{position}} of {{count}}",
+      "stagePosition": "Runs at",
+      "stagePositionHint": "The order is the flow: this stage runs after the ones before it and before the ones after it.",
+      "nodePosition": "Runs at",
+      "nodePositionHint": "Where in this stage the task runs; the stage's tasks run in order.",
+      "removeNode": "Delete task {{name}}",
+      "stageCount_one": "{{count}} stage",
+      "stageCount_other": "{{count}} stages",
+      "deleteStageTitle": "Delete stage",
+      "deleteStageConfirm": "Delete “{{name}}”? Its {{count}} task(s) go with it, and so does any route back to it. Runs already created from this workflow froze their own copy and are unaffected.",
+      "deleteNodeTitle": "Delete task",
+      "deleteNodeConfirm": "Delete “{{name}}”? Runs already created from this workflow froze their own copy and are unaffected.",
+      "taskCount_one": "{{count}} task",
+      "taskCount_other": "{{count}} tasks",
+      "editTitle": "Edit workflow",
+      "editDescription": "What this flow is called and what it is for. Its stages and tasks are edited below.",
+      "nameField": "Name",
+      "descriptionField": "Description",
+      "editNode": "Edit task {{name}}",
+      "sendsBackTo": "Sends work back",
+      "sendsBackToLine": "When a task here reports “{{reason}}”, work goes back to {{stage}} — up to {{count}} times.",
+      "comesBackHere": "Work comes back here",
+      "comesBackHereLine": "{{stage}} sends work back here when it reports “{{reason}}”."
+    },
+    "context": {
+      "description": "What this run reads and what it has produced, in one place. Mount a collection, a file, a link or a repository at any point in the run's life — every task that opens afterwards is told it is there. Produced files appear as the tasks write them.",
+      "searchPlaceholder": "Search this run's context…",
+      "noMatches": "Nothing here matches your search.",
+      "emptyTitle": "Nothing here yet",
+      "emptyBody": "A run with nothing mounted starts every task from nothing but its workflow. Mount the PRD, the ticket or the repository, and every task opens knowing about it.",
+      "cols": {
+        "kind": "Kind",
+        "name": "Name",
+        "where": "Where",
+        "size": "Size",
+        "origin": "Origin"
+      },
+      "artifact": "Artifact",
+      "producedBy": "{{node}} · {{attempt}}",
+      "origin": {
+        "label": "Origin",
+        "all": "Everything",
+        "produced": "Produced",
+        "added": "Added"
+      },
+      "add": "Add",
+      "added": "Added",
+      "notText": "These bytes are not text, so there is nothing to show here. The file is on disk under the run's own directory.",
+      "truncated": "The head of a longer file — open it on disk to read the rest.",
+      "reveal": "Show in the file manager",
+      "backToRun": "Back to the run",
+      "fileNotFound": "This file is not there",
+      "notTextTitle": "Nothing to show",
+      "backToList": "Back to the list",
+      "resize": "Drag to resize the context panel"
+    },
+    "sendBack": {
+      "action": "Send back",
+      "title": "Send this back to {{stage}}",
+      "description": "A task describing what you found joins that stage and runs next. Nothing that already passed is reopened — it answered a different question, and it keeps its answer.",
+      "reasonLabel": "Reason",
+      "reasonOption": "{{reason}} — back to {{stage}}",
+      "noteLabel": "What is wrong",
+      "notePlaceholder": "You are writing the brief of the task that will fix it. What did you find, and where?",
+      "submit": "Send back to {{stage}}",
+      "ceiling": "This send-back has been used as many times as the workflow allows, so the run failed instead of going round again."
+    },
+    "brief": {
+      "label": "Task brief",
+      "queuedTitle": "What this task has been told"
+    },
+    "notes": {
+      "subtitle": "Your own words, part of this run's context. Every task is told so.",
+      "edit": "Edit",
+      "save": "Save note",
+      "editorLabel": "Note",
+      "placeholder": "Markdown. Whatever you want this delivery to know that nothing else told it.",
+      "pasteHint": "Paste a screenshot and it is stored with the run.",
+      "pasting": "Storing the image…",
+      "emptyTitle": "Nothing written yet",
+      "emptyBody": "This note is empty. Edit it to say what you want every task to know.",
+      "notFound": "This note is not part of this run",
+      "asFile": "Read as a file — inputs/{{ref}}"
     }
   }
 }

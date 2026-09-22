@@ -170,6 +170,31 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # an operator most needs.
     "engine timeout": {"show", "set", "default"},
     "engine transcribe-model": {"show", "set", "clear"},
+    # spec workflow. Approvals sit at the top of the group rather than under a
+    # sub-group of their own: `coffer workflow approve <id>` is what a person
+    # reaches for when a notification says something is waiting.
+    "workflow": {"approvals", "approve", "reject", "run", "node", "template"},
+    "workflow run": {
+        "abort",
+        "artifacts",
+        "create",
+        "delete",
+        "events",
+        "inputs",
+        "list",
+        "pause",
+        "promote",
+        "relabel",
+        "resume",
+        "show",
+        "start",
+    },
+    # There is no `run say`: a run has no conversation of its own (FR-030), so
+    # redirecting one is said in the task's own conversation through the chat
+    # surface, not through a command here.
+    "workflow run inputs": {"add", "list", "rm", "upload"},
+    "workflow node": {"act", "add"},
+    "workflow template": {"add", "list", "rm", "show", "update"},
 }
 
 #: The groups whose surface is options rather than subcommands. Each is
@@ -207,7 +232,7 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
 #: `coffer provider rename` has since been REMOVED again, and its absence is
 #: not a gap: renaming became a field on the kind-agnostic update, so
 #: `coffer resource rename provider <name> <new>` serves it — and serves the
-#: other kinds, which never had a rename at all.
+#: other eight kinds, which never had a rename at all.
 #:
 #: If a UI operation ever ships without a CLI counterpart again, write the
 #: exemption back the same way: a name, the reason, and an assertion that the

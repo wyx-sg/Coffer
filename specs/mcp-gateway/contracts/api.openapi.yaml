@@ -370,6 +370,16 @@ components:
           { type: integer, default: 30, minimum: 5, maximum: 120 }
         request_timeout_seconds:
           { type: integer, default: 120, minimum: 5, maximum: 1800 }
+        tool_write_class:
+          type: object
+          default: {}
+          additionalProperties:
+            type: string
+            enum: [read, write]
+          description: |
+            Per-tool write-class judgements, keyed by this server's own
+            unprefixed tool name. A tool absent from the map is treated as
+            write-class by the workflow gate (spec workflow FR-036).
 
     MCPToolView:
       type: object

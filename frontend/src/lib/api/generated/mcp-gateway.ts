@@ -230,6 +230,15 @@ export interface components {
             spawn_timeout_seconds: number;
             /** @default 120 */
             request_timeout_seconds: number;
+            /**
+             * @description Per-tool write-class judgements, keyed by this server's own
+             *     unprefixed tool name. A tool absent from the map is treated as
+             *     write-class by the workflow gate (spec workflow FR-036).
+             * @default {}
+             */
+            tool_write_class: {
+                [key: string]: "read" | "write";
+            };
         };
         MCPToolView: {
             /** @example filesystem__read_file */

@@ -38,29 +38,37 @@ class AuditService:
         event_type: str,
         *,
         resource: Resource | None = None,
+        subject: tuple[str, str] | None = None,
         actor: str = "system",
         details: dict[str, Any] | None = None,
     ) -> None:
-        """File one audit row.
+        """File one audit row. ``resource`` and ``subject`` are alternatives.
 
         ``resource`` is a row in ``resources``, and passing the whole object is
         what lets this file its **id** alongside the label — which is what makes
         the history survive a rename, and what makes "this resource's history"
         a question about one object rather than about a name two objects may
-        have worn in turn. It is optional because some events name no resource
-        at all: the row then records the event and its actor and joins to
-        nothing, which is the truth about it. There is deliberately no way to
-        audit a resource by label alone — the moment there is one, something
-        will use it, and that resource's history splits at the next rename.
+        have worn in turn.
+
+        ``subject`` is for an event about something that is NOT a resource — a
+        workflow run, a node attempt — which has no id in that table to file.
+        Its ``(kind, name)`` is recorded as plain text, and the row joins to
+        nothing, which is the truth about it. Kept a separate parameter rather
+        than letting a caller hand over two loose strings for either case: the
+        moment a resource can be audited by label alone, something will audit
+        one that way, and its history splits at the next rename.
         """
+        if resource is not None and subject is not None:
+            raise ValueError("record() takes a resource or a subject, not both")
+        kind, name = subject if subject is not None else (None, None)
         await self._repo.insert(
             AuditEntry(
                 id=None,
                 timestamp=datetime.now(tz=UTC),
                 event_type=event_type,
                 resource_id=resource.id if resource else None,
-                resource_kind=resource.kind if resource else None,
-                resource_name=resource.name if resource else None,
+                resource_kind=resource.kind if resource else kind,
+                resource_name=resource.name if resource else name,
                 actor=actor,
                 details=details or {},
             )
@@ -83,8 +91,8 @@ class AuditService:
             event_type,
             extra={
                 "event": event_type,
-                "resource": resource.name if resource else None,
-                "resource_kind": resource.kind if resource else None,
+                "resource": resource.name if resource else name,
+                "resource_kind": resource.kind if resource else kind,
                 "resource_uid": resource.uid if resource else None,
                 "actor": actor,
             },

@@ -47,16 +47,17 @@ from coffer.application.mcp.gateway_builtin import (
     inject_session_context,
     run_tool_search,
 )
+from coffer.application.mcp.gateway_gate import ToolCallGatePort, gated_upstream_call
 from coffer.application.mcp.gateway_handlers import (
     handle_prompts_get,
     handle_resources_read,
-    handle_tools_call,
 )
 from coffer.application.mcp.gateway_instructions import build_initialize_result
 from coffer.application.mcp.gateway_notifications import forward_upstream_notification
 from coffer.application.mcp.gateway_parsing import (
     _extract_agent_uid,
     _extract_cwd,
+    _extract_run,
 )
 from coffer.application.mcp.gateway_recovery import DegradedTracker
 from coffer.application.mcp.gateway_scope import enabled_mcp_servers
@@ -100,6 +101,7 @@ class MCPGatewaySession:
         on_dispose: Callable[[], None] | None = None,
         builtin_tools: BuiltinToolRegistry | None = None,
         tiering: TieringConfig | None = None,
+        tool_gate: ToolCallGatePort | None = None,
     ) -> None:
         self.id = session_id or str(uuid.uuid4())
         self._resources = resource_service
@@ -143,6 +145,12 @@ class MCPGatewaySession:
         # created from an agent's cwd at read time). The shim still stamps it
         # and this still threads it, so the behaviour outlives its requirement.
         self._session_cwd: str | None = None
+        # FR-035: the workflow run + node attempt whose turn this session
+        # serves, reported by the shim (params._meta["coffer/run"]).
+        self._session_run: str | None = None
+        # The gate that holds a run's write-class upstream calls. None here and
+        # None above are the same promise, read from two sides: see gateway_gate.
+        self._tool_gate = tool_gate
         # Track which servers we've subscribed to notifications on so we
         # only attach the handler once per (session, server) pair.
         self._notification_subscriptions: set[str] = set()
@@ -186,11 +194,18 @@ class MCPGatewaySession:
         # The identity scope is evaluated against: the shim's self-reported
         # agent uid, when it stamped one (params._meta["coffer/agent-uid"]).
         self._session_agent_uid = _extract_agent_uid(params)
+        self._session_run = _extract_run(params)
         self._initialized = True
         # Tool tiering: the instructions field is the only channel into the client's
         # system prompt. On the first handshake nothing has been listed yet, so
         # hidden_count is 0 and the tiering paragraph is omitted.
         return build_initialize_result(hidden_count=self.last_hidden_count)
+
+    @property
+    def run_context(self) -> str | None:
+        """The run identity this session's calls are attributable to, or None
+        (FR-035). Read-only: only the handshake sets it."""
+        return self._session_run
 
     # --- Request dispatch ---
 
@@ -301,6 +316,8 @@ class MCPGatewaySession:
                 **self._log_ctx,
             )
         if self._builtin.is_builtin(name):
+            # Never gated: a built-in reaches the developer's own vault, not
+            # the outside world (ADR workflow-gates-tool-calls).
             params = await self._inject_session_context(name, params)
             return await dispatch_builtin_tool(
                 prefixed_name=name,
@@ -308,7 +325,9 @@ class MCPGatewaySession:
                 builtin=self._builtin,
                 **self._log_ctx,
             )
-        return await self._dispatch_handler(handle_tools_call, params)
+        return await gated_upstream_call(
+            params, self._tool_gate, self._session_run, self._dispatch_handler
+        )
 
     async def _inject_session_context(
         self, prefixed_name: str, params: dict[str, Any]

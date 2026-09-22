@@ -86,6 +86,11 @@ from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_contributions import SyncContributions
+from coffer.surfaces.http.workflow_adapters import conversation_env_lookup
+from coffer.surfaces.http.workflow_wiring import (
+    build_attempt_repo,
+    start_workflow,
+)
 
 
 def _db_url() -> str:
@@ -217,6 +222,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_store,
         kinds.agent_skill.agent_service,
         resource_svc,
+        # The lookup that gives a node's agent its run identity (workflow FR-035).
+        conversation_env_lookup(build_attempt_repo(sm)),
     )
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
     # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
@@ -234,6 +241,21 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # knowledge kind's.
     channel_runtime = wire_channel_kind(
         app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
+    )
+
+    # The delivery engine: after chat and channels — see workflow_wiring.
+    workflow = await start_workflow(
+        app,
+        resource_svc=resource_svc,
+        audit=audit,
+        sm=sm,
+        chat=chat,
+        knowledge=kinds.knowledge.service,
+        skills=kinds.agent_skill.skill_service,
+        attempts=build_attempt_repo(sm),
+        gate_holder=kinds.mcp.tool_gate,
+        provider=kinds.provider.service,
+        credential_resolver=credential_resolver,
     )
 
     # One-time move of legacy OS-keychain secrets into the encrypted store
@@ -309,6 +331,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         await shutdown(
             Running(
                 workers=workers,
+                workflow=workflow,
                 channel_runtime=channel_runtime,
                 channel_runtime_task=channel_runtime_task,
                 reaper_task=reaper_task,

@@ -352,6 +352,101 @@ async def test_build_adapter_no_active_key_inherits_daemon_env(tmp_path: Any) ->
 
 
 # ---------------------------------------------------------------------------
+# build_adapter — per-conversation environment (spec workflow FR-035)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_conversation_env_layers_on_top_of_the_injected_key(tmp_path: Any) -> None:
+    """The run identity a node's turn reports rides the same subprocess env the
+    provider key already does, and must not displace it: a node's turn still
+    needs COFFER_PROVIDER_KEY, and the daemon environment under both."""
+    import asyncio
+
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, _ = _make_factory()
+    asked: list[str] = []
+
+    async def resolve_key() -> str | None:
+        return "sk-codex-abc"
+
+    async def lookup(conversation_id: str) -> dict[str, str] | None:
+        asked.append(conversation_id)
+        return {"COFFER_RUN_CONTEXT": "run_01J/att_07"}
+
+    provider = CodexAppServerProvider(
+        conversations=repo,
+        session_factory=factory,
+        resolve_key=resolve_key,
+        conversation_env=lookup,
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
+
+    assert asked == [conv.id]
+    assert factory.last_env is not None
+    assert factory.last_env["COFFER_RUN_CONTEXT"] == "run_01J/att_07"
+    assert factory.last_env["COFFER_PROVIDER_KEY"] == "sk-codex-abc"
+    assert "PATH" in factory.last_env
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_conversation_env_merges_with_os_environ_without_a_key(tmp_path: Any) -> None:
+    """With no active connection there is no env dict yet, so the overlay has
+    to build one from ``os.environ`` — ``create_subprocess_exec`` REPLACES the
+    environment, and a bare one-key dict would strip PATH from the subprocess."""
+    import asyncio
+
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, _ = _make_factory()
+
+    async def lookup(conversation_id: str) -> dict[str, str] | None:
+        return {"COFFER_RUN_CONTEXT": "run_01J/att_07"}
+
+    provider = CodexAppServerProvider(
+        conversations=repo, session_factory=factory, conversation_env=lookup
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
+
+    assert factory.last_env is not None
+    assert factory.last_env["COFFER_RUN_CONTEXT"] == "run_01J/att_07"
+    assert "PATH" in factory.last_env
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_conversation_env_lookup_returning_none_leaves_env_untouched(tmp_path: Any) -> None:
+    """An ordinary conversation launches codex exactly as it did before."""
+    import asyncio
+
+    repo, engine = await _repo(tmp_path)
+    conv = await repo.create(_conv())
+    factory, _ = _make_factory()
+
+    async def lookup(conversation_id: str) -> dict[str, str] | None:
+        return None
+
+    provider = CodexAppServerProvider(
+        conversations=repo, session_factory=factory, conversation_env=lookup
+    )
+    await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
+    adapter = await provider.build_adapter(conv.id)
+    await asyncio.wait_for(_collect(adapter, _user_turn("hi", conv.id)), timeout=5)
+
+    assert factory.last_env is None
+
+    await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
 # availability
 # ---------------------------------------------------------------------------
 

@@ -19,6 +19,7 @@ from coffer.domain.errors import CredentialMissing
 from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNameResolver,
+    ConversationEnv,
     MemoryContextComposer,
 )
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
@@ -40,6 +41,7 @@ def build_agent_provider_registry(
     credential_resolver: Callable[[str], str] | None = None,
     compose_memory_context: MemoryContextComposer | None = None,
     resolve_channel_name: ChannelNameResolver | None = None,
+    conversation_env: ConversationEnv | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
 
@@ -68,6 +70,14 @@ def build_agent_provider_registry(
     those services are constructed; wire it in from there once they exist.
     ``None`` here (the default) means no memory append at all, not a header
     with nothing under it.
+
+    ``conversation_env`` is the extra environment a conversation's agent process
+    is launched with, looked up per turn by conversation id. It exists for the
+    workflow kind: a node's turn is a conversation, and the run identity the MCP
+    gateway attributes its tool calls to travels there and nowhere else (spec
+    workflow FR-035). The real lookup is the workflow node driver's, supplied
+    one level up in ``wire_chat`` once that engine exists; ``None`` here means
+    every agent process inherits the daemon's environment as it always has.
     """
     registry = AgentProviderRegistry()
 
@@ -104,6 +114,7 @@ def build_agent_provider_registry(
             transcriber_factory=transcriber_factory,
             compose_memory_context=compose_memory_context,
             resolve_channel_name=resolve_channel_name,
+            conversation_env=conversation_env,
         ),
         display_name="Claude Code",
     )
@@ -134,6 +145,7 @@ def build_agent_provider_registry(
             list_models=_list_models,
             compose_memory_context=compose_memory_context,
             resolve_channel_name=resolve_channel_name,
+            conversation_env=conversation_env,
         ),
         display_name="Codex",
     )

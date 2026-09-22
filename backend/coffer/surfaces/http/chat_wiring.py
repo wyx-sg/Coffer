@@ -33,6 +33,7 @@ from coffer.infrastructure.agent.model_discovery import (
     ChainedModelDiscovery,
     NativeConfigModelDiscovery,
 )
+from coffer.infrastructure.chat.adapter_support import ConversationEnv
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
@@ -155,6 +156,7 @@ def wire_chat(
     credential_store: EncryptedCredentialStore,
     agent_service: AgentService,
     resource_service: ResourceService,
+    conversation_env: ConversationEnv | None = None,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec channels) into the running app.
 
@@ -200,10 +202,15 @@ def wire_chat(
         except ResourceNotFound:
             return None
 
+    # ``conversation_env`` is how a workflow node's turn carries its run
+    # identity into the agent process, and from there — through the shim — to
+    # the gateway's gate. ``None`` for every other deployment of this platform,
+    # in which case nothing about a turn's environment changes.
     registry = build_agent_provider_registry(
         conv_repo,
         _credential_resolver,
         resolve_channel_name=_channel_name,
+        conversation_env=conversation_env,
     )
 
     # 5. Application services + the agent-agnostic turn orchestrator.

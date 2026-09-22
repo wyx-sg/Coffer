@@ -31,9 +31,8 @@ class Conversation:
 
     ``owner`` says whose conversation this is. ``None`` is the developer's own,
     which is what the chat list shows; a name is the surface that owns it — a
-    thread another surface opened is not one of the developer's, however
-    ordinary its transcript is, and it stays readable through this layer like
-    any other.
+    workflow task's conversation belongs to its run (spec workflow, FR-030) and
+    is not one of the developer's threads, however ordinary its transcript is.
     """
 
     id: str

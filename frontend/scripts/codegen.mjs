@@ -48,6 +48,7 @@ export const CONTRACTS = [
   "resource-framework",
   "skill-manager",
   "vault-sync",
+  "workflow",
 ];
 
 /** Native-separator path segments for a spec id. */

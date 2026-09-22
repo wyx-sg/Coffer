@@ -11,10 +11,12 @@ import {
   Library,
   Radio,
   RefreshCw,
+  Route,
   Server,
   ScrollText,
   Settings as SettingsIcon,
   Sparkles,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -39,9 +41,11 @@ interface NavGroup {
  *   Resources.
  * - **Resources** — the assets agents draw on, one entry per resource kind
  *   that has a list UI: MCP servers, skills, knowledge, memory, model
- *   providers and channels. A channel is a credentialed transport the vault
- *   owns, so it belongs here rather than beside the agents that happen to
- *   answer on it.
+ *   providers, channels and workflows. A channel is a credentialed transport
+ *   the vault owns, so it belongs here rather than beside the agents that
+ *   happen to answer on it; a workflow is the SHAPE of a delivery, so it
+ *   belongs here while a run of one — operational state, one machine's, never
+ *   synced — belongs with the agents.
  * - **System** — cross-cutting tooling: Activity (the three records Coffer
  *   keeps, a tab and a table each) and Settings. Observability (system health
  *   / metrics) is a reserved future surface and is not Activity: a record of
@@ -61,13 +65,20 @@ const NAV_GROUPS: NavGroup[] = [
       // do with one of them.
       { to: "/agents", labelKey: "nav.agents", icon: Bot },
       { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
+      // A workflow RUN is operational state, not a vault asset (FR-011), so
+      // it does not belong under Resources with the kinds — the WORKFLOW it
+      // runs does, and is down there. A run sits beside Chat because both are
+      // things you do WITH an agent: a chat is one conversation you drive, a
+      // run is a delivery that drives itself.
+      { to: "/runs", labelKey: "nav.runs", icon: Route },
     ],
   },
   {
     // One entry per resource kind with a list UI — mcp_server, skill,
-    // knowledge, memory, provider, channel. Keeping that one-to-one is the
-    // whole rule; Model providers and Channels were the two that had drifted
-    // out of it.
+    // knowledge, memory, provider, channel, workflow. Keeping that one-to-one
+    // is the whole rule; Model providers and Channels were the two that had
+    // drifted out of it, and Workflows was the one that was missing, reached
+    // through the run list because the two had been built as one surface.
     labelKey: "nav.group.resources",
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server },
@@ -76,6 +87,7 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/memory", labelKey: "nav.memory", icon: Brain },
       { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes },
       { to: "/channels", labelKey: "nav.channels", icon: Radio },
+      { to: "/workflows", labelKey: "nav.workflows", icon: Workflow },
     ],
   },
   {
