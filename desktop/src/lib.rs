@@ -29,6 +29,7 @@ mod restart;
 mod sidecar;
 mod spawn;
 mod sync_alert;
+mod sync_presentation;
 mod sync_watch;
 mod tray;
 

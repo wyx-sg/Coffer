@@ -119,6 +119,30 @@ describe("SyncAttentionBanner", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  test("stands down while sync is switched off", () => {
+    // Load-bearing. A disabled remote makes the daemon return a `disabled`
+    // round WITHOUT recording it, so `last_run` keeps whatever it last was —
+    // and a user who meets a hold by switching sync off rather than answering
+    // it would otherwise be told about that hold on every page for ever.
+    seed({
+      remote: { ...REMOTE, enabled: false } as SyncStatus["remote"],
+      last_run: round("awaiting_confirmation"),
+    });
+    const { container } = renderBanner();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  test("brings its own card and not its own fixed slot", () => {
+    // The slot is `FloatingBanners`, and it is shared. When this component
+    // owned an identical `fixed inset-x-0 top-4` wrapper of its own, it and
+    // DaemonOfflineBanner were drawn at the same coordinates and whichever
+    // painted second hid the other outright.
+    seed({ last_run: round("conflict") });
+    const { container } = renderBanner();
+    expect(container.querySelector(".fixed")).toBeNull();
+    expect(screen.getByTestId("sync-attention-banner")).toBeInTheDocument();
+  });
+
   test("stands down on the sync page itself, where the answer already is", () => {
     // Not a cosmetic call. The banner floats over the page, and on `/sync` it
     // would sit across the very row that carries the diff and the Confirm /

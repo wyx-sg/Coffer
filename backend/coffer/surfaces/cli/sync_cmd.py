@@ -247,7 +247,12 @@ def status(ctx: typer.Context) -> None:
         _console.print("no round yet")
         return
     _print_round(last)
-    if last.get("status") in _NEEDS_ATTENTION:
+    # Only while sync is actually on. A disabled remote makes a round return
+    # DISABLED without recording it, so ``last_run`` keeps whatever it last
+    # was; exiting non-zero on that would leave a vault whose sync the user
+    # deliberately switched off failing every check that asks, for ever.
+    remote = payload.get("remote") or {}
+    if remote.get("enabled") and last.get("status") in _NEEDS_ATTENTION:
         raise typer.Exit(code=1)
 
 

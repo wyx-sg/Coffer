@@ -59,7 +59,13 @@ export function SyncAttentionBanner() {
 
   const round = status?.last_run ?? null;
   if (onSyncPage) return null;
-  if (isError || !status?.configured || !status.remote || !round) return null;
+  // `enabled` is load-bearing, not belt and braces. A disabled remote makes
+  // `run_once` return a DISABLED round WITHOUT recording it, so `last_run`
+  // keeps whatever it last was — and a user who answers a hold by switching
+  // sync off rather than by answering it would otherwise be told about that
+  // hold on every page, for ever, with no way to clear it but to turn sync
+  // back on.
+  if (isError || !status?.configured || !status.remote?.enabled || !round) return null;
   if (!NEEDS_ATTENTION.includes(round.status)) return null;
 
   const held = round.status === "awaiting_confirmation";
@@ -76,28 +82,26 @@ export function SyncAttentionBanner() {
   // Same floating treatment as DaemonOfflineBanner: fixed and top-centered, so
   // it never shifts page content, and pointer-events pass through the gutter.
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-      <Alert
-        variant="warning"
-        className="pointer-events-auto w-full max-w-xl shadow-lg"
-        data-testid="sync-attention-banner"
-        data-round-status={round.status}
-      >
-        {held ? (
-          <PauseCircle className="size-4" aria-hidden />
-        ) : (
-          <AlertTriangle className="size-4" aria-hidden />
-        )}
-        <AlertTitle className="font-serif text-base">
-          {held ? t("sync.attention.heldTitle") : t("sync.attention.title")}
-        </AlertTitle>
-        <AlertDescription>
-          <p className="mb-3 text-foreground/80">{body}</p>
-          <Button asChild size="sm" variant="outline">
-            <Link to="/sync">{t("sync.attention.open")}</Link>
-          </Button>
-        </AlertDescription>
-      </Alert>
-    </div>
+    <Alert
+      variant="warning"
+      className="pointer-events-auto w-full max-w-xl shadow-lg"
+      data-testid="sync-attention-banner"
+      data-round-status={round.status}
+    >
+      {held ? (
+        <PauseCircle className="size-4" aria-hidden />
+      ) : (
+        <AlertTriangle className="size-4" aria-hidden />
+      )}
+      <AlertTitle className="font-serif text-base">
+        {held ? t("sync.attention.heldTitle") : t("sync.attention.title")}
+      </AlertTitle>
+      <AlertDescription>
+        <p className="mb-3 text-foreground/80">{body}</p>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/sync">{t("sync.attention.open")}</Link>
+        </Button>
+      </AlertDescription>
+    </Alert>
   );
 }

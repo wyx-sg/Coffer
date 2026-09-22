@@ -21,10 +21,8 @@ use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::discovery::{daemon_responds_ok, read_daemon_info};
-use crate::sync_alert::{
-    badge_rgba, next_action, notification_body, parse_sync_status, tray_label, AlertAction,
-    SyncSnapshot, NOTIFICATION_TITLE,
-};
+use crate::sync_alert::{next_action, parse_sync_status, AlertAction, SyncSnapshot};
+use crate::sync_presentation::{badge_rgba, notification_body, tray_label, NOTIFICATION_TITLE};
 use crate::tray::{base_tray_icon, TRAY_ID};
 
 /// The tray entry this module owns: a permanent route to the `/sync` page whose

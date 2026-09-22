@@ -28,6 +28,12 @@ pub const ATTENTION_STATUSES: [&str; 4] =
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SyncSnapshot {
     pub configured: bool,
+    /// Whether that remote is switched ON. Read separately from `configured`
+    /// because a disabled remote makes the daemon return a `disabled` round
+    /// WITHOUT recording it, so `last_run` keeps whatever it last was. Without
+    /// this a user who answers a held round by switching sync off instead of
+    /// answering it would keep a marked icon and a badged Dock for ever.
+    pub enabled: bool,
     /// `None` when no round has run yet — a configured remote that has not had
     /// its first round is not a fault.
     pub last_status: Option<String>,
@@ -39,6 +45,13 @@ pub struct SyncSnapshot {
 pub fn parse_sync_status(raw: &str) -> Option<SyncSnapshot> {
     let v: serde_json::Value = serde_json::from_str(raw).ok()?;
     let configured = v.get("configured")?.as_bool()?;
+    // Absent or malformed reads as OFF, which is the quiet direction: a body
+    // this shell cannot fully read must not be the thing that starts alerting.
+    let enabled = v
+        .get("remote")
+        .and_then(|r| r.get("enabled"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
     let last_status = v
         .get("last_run")
         .and_then(|run| run.get("status"))
@@ -46,6 +59,7 @@ pub fn parse_sync_status(raw: &str) -> Option<SyncSnapshot> {
         .map(str::to_owned);
     Some(SyncSnapshot {
         configured,
+        enabled,
         last_status,
     })
 }
@@ -56,8 +70,14 @@ pub fn parse_sync_status(raw: &str) -> Option<SyncSnapshot> {
 /// a fresh install, and the shell does nothing at all on those machines. It is
 /// also the reason removing a remote *clears* an alert rather than freezing it
 /// — the question the hold asked no longer has anyone to answer it.
+///
+/// A remote that is configured but **switched off** is the same answer for a
+/// sharper reason. The daemon returns a `disabled` round without recording it,
+/// so `last_run` keeps reporting whatever it last was; a user who meets a held
+/// round by turning sync off rather than by answering it would otherwise carry
+/// a marked tray icon and a badged Dock until they turned it back on.
 pub fn attention_status(snapshot: &SyncSnapshot) -> Option<&str> {
-    if !snapshot.configured {
+    if !snapshot.configured || !snapshot.enabled {
         return None;
     }
     let status = snapshot.last_status.as_deref()?;
@@ -93,98 +113,26 @@ pub fn next_action(notified: Option<&str>, snapshot: &SyncSnapshot) -> AlertActi
     }
 }
 
-/// One line, naming the product: it arrives in Notification Centre beside
-/// everything else on the machine.
-pub const NOTIFICATION_TITLE: &str = "Coffer sync needs you";
-
-/// What went wrong, in the terms the user has to act in. Each says what has
-/// stopped as well as what happened — "held" means nothing else will converge,
-/// and that is the part that cost four days.
-pub fn notification_body(status: &str) -> &'static str {
-    match status {
-        "awaiting_confirmation" => {
-            "A round is held for your confirmation. The vault will not converge \
-             again until you answer it."
-        }
-        "conflict" => {
-            "A round hit a conflict nothing could resolve. The vault is \
-             untouched and sync is stopped until you resolve it."
-        }
-        "push_failed" => {
-            "A round applied locally but could not push. This machine's \
-             changes are not on the remote yet."
-        }
-        "failed" => "The last round failed to run. The vault has stopped converging.",
-        // Unreachable through `next_action`, which only raises on the four
-        // above; a default keeps a daemon that grew a fifth status from being
-        // reported as nothing at all.
-        _ => "The last round needs your attention before sync can continue.",
-    }
-}
-
-/// The tray entry's label while a condition is outstanding. Short — it sits in
-/// a menu — and it names the condition, so the tray answers "which problem"
-/// without the window being opened.
-pub fn tray_label(status: &str) -> String {
-    let reason = match status {
-        "awaiting_confirmation" => "held for confirmation",
-        "conflict" => "conflict",
-        "push_failed" => "push failed",
-        "failed" => "run failed",
-        _ => status,
-    };
-    format!("Sync needs attention — {reason}")
-}
-
-/// The alert dot: a red disc inside a white ring, so it reads against both a
-/// light and a dark menu bar.
-const BADGE_FILL: [u8; 4] = [0xE5, 0x48, 0x4D, 0xFF];
-const BADGE_RING: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
-
-/// Paint the alert dot into the bottom-right of a straight-RGBA image.
-///
-/// Badging the icon the app already has beats shipping a second `.png`: the two
-/// cannot drift, and the mark lands in the same place whatever the base icon
-/// becomes. A buffer whose length does not match its declared size is returned
-/// untouched — a marked icon is worth having, a panicked tray thread is not.
-pub fn badge_rgba(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
-    let expected = (width as usize) * (height as usize) * 4;
-    if rgba.len() != expected || width == 0 || height == 0 {
-        return rgba.to_vec();
-    }
-    let mut out = rgba.to_vec();
-
-    // Three-sixteenths of the shorter side, floored at 2px: big enough to see
-    // in a 16pt menu bar, small enough to leave the icon recognisable.
-    let radius = ((width.min(height) * 3) / 16).max(2) as i64;
-    let ring = radius + (radius / 4).max(1);
-    let cx = width as i64 - ring - 1;
-    let cy = height as i64 - ring - 1;
-
-    for y in 0..height as i64 {
-        for x in 0..width as i64 {
-            let d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
-            let colour = if d2 <= radius * radius {
-                BADGE_FILL
-            } else if d2 <= ring * ring {
-                BADGE_RING
-            } else {
-                continue;
-            };
-            let i = ((y as usize) * (width as usize) + (x as usize)) * 4;
-            out[i..i + 4].copy_from_slice(&colour);
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A remote that is configured is also switched ON, which is what every
+    /// case below but the two that say otherwise means. The off case has its
+    /// own constructor rather than a third argument on twenty call sites.
     fn snapshot(configured: bool, status: Option<&str>) -> SyncSnapshot {
         SyncSnapshot {
             configured,
+            enabled: configured,
+            last_status: status.map(str::to_owned),
+        }
+    }
+
+    /// Configured, and switched off.
+    fn switched_off(status: Option<&str>) -> SyncSnapshot {
+        SyncSnapshot {
+            configured: true,
+            enabled: false,
             last_status: status.map(str::to_owned),
         }
     }
@@ -192,8 +140,31 @@ mod tests {
     // --- reading the daemon's answer ---
 
     #[test]
+    fn a_remote_switched_off_parses_as_not_enabled() {
+        let raw = r#"{"configured": true,
+                      "remote": {"url": "git@example:v.git", "enabled": false},
+                      "last_run": {"status": "awaiting_confirmation", "applied": {}},
+                      "machine_id": "m1", "machine_id_is_derived": false}"#;
+        assert_eq!(
+            parse_sync_status(raw),
+            Some(switched_off(Some("awaiting_confirmation")))
+        );
+    }
+
+    #[test]
+    fn a_body_without_the_enabled_field_reads_as_off() {
+        // The quiet direction. A body this shell cannot fully read must not be
+        // the thing that starts alerting.
+        let raw = r#"{"configured": true, "remote": {"url": "u"},
+                      "last_run": {"status": "failed"},
+                      "machine_id": "m1", "machine_id_is_derived": false}"#;
+        assert_eq!(parse_sync_status(raw).map(|s| s.enabled), Some(false));
+    }
+
+    #[test]
     fn parse_sync_status_reads_configured_and_last_status() {
-        let raw = r#"{"configured": true, "remote": {"url": "git@example:v.git"},
+        let raw = r#"{"configured": true,
+                      "remote": {"url": "git@example:v.git", "enabled": true},
                       "last_run": {"status": "awaiting_confirmation", "applied": {}},
                       "machine_id": "m1", "machine_id_is_derived": false}"#;
         assert_eq!(
@@ -204,7 +175,7 @@ mod tests {
 
     #[test]
     fn parse_sync_status_handles_a_remote_that_has_never_run() {
-        let raw = r#"{"configured": true, "remote": {}, "last_run": null,
+        let raw = r#"{"configured": true, "remote": {"enabled": true}, "last_run": null,
                       "machine_id": "m1", "machine_id_is_derived": false}"#;
         assert_eq!(parse_sync_status(raw), Some(snapshot(true, None)));
     }
@@ -250,6 +221,26 @@ mod tests {
         // even a stale `failed` round on a vault with no remote is not a
         // question anyone can answer.
         assert_eq!(attention_status(&snapshot(false, Some("failed"))), None);
+    }
+
+    #[test]
+    fn a_remote_switched_off_is_never_an_attention_state() {
+        // The bug this closes: a disabled remote makes the daemon return a
+        // `disabled` round WITHOUT recording it, so `last_run` keeps whatever
+        // it last was. A user who met a held round by switching sync off
+        // rather than by answering it kept a marked tray icon and a badged
+        // Dock until they switched it back on.
+        for status in ATTENTION_STATUSES {
+            assert_eq!(attention_status(&switched_off(Some(status))), None);
+        }
+        // And an alert already raised is CLEARED rather than frozen.
+        assert_eq!(
+            next_action(
+                Some("awaiting_confirmation"),
+                &switched_off(Some("awaiting_confirmation"))
+            ),
+            AlertAction::Clear
+        );
     }
 
     // --- the state machine: one notification per transition ---
@@ -345,51 +336,5 @@ mod tests {
 
     // --- what the user reads ---
 
-    #[test]
-    fn every_attention_status_has_its_own_body_and_label() {
-        let mut bodies: Vec<&str> = ATTENTION_STATUSES
-            .iter()
-            .map(|s| notification_body(s))
-            .collect();
-        assert!(bodies.iter().all(|b| !b.is_empty()));
-        bodies.sort_unstable();
-        bodies.dedup();
-        assert_eq!(
-            bodies.len(),
-            ATTENTION_STATUSES.len(),
-            "two statuses share a body"
-        );
-
-        for status in ATTENTION_STATUSES {
-            let label = tray_label(status);
-            assert!(label.starts_with("Sync needs attention — "), "{label}");
-            // The raw enum name never reaches the menu.
-            assert!(!label.contains('_'), "{label}");
-        }
-    }
-
     // --- the icon mark ---
-
-    #[test]
-    fn badge_rgba_paints_the_dot_in_the_bottom_right() {
-        let base = vec![0x11u8; 32 * 32 * 4];
-        let marked = badge_rgba(&base, 32, 32);
-        assert_eq!(marked.len(), base.len());
-        // Top-left is as far from the badge as a pixel gets: untouched.
-        assert_eq!(&marked[0..4], &[0x11, 0x11, 0x11, 0x11]);
-        // radius = 32*3/16 = 6, ring = 6 + 1 = 7, centre = (24, 24).
-        let at = |x: usize, y: usize| &marked[(y * 32 + x) * 4..(y * 32 + x) * 4 + 4];
-        assert_eq!(at(24, 24), BADGE_FILL, "centre should be the alert fill");
-        assert_eq!(at(24, 31), BADGE_RING, "the ring should surround the fill");
-    }
-
-    #[test]
-    fn badge_rgba_never_writes_outside_the_buffer_it_was_given() {
-        // Declared 32x32 but four pixels long — returned, not panicked on.
-        let short = vec![0u8; 16];
-        assert_eq!(badge_rgba(&short, 32, 32), short);
-        assert_eq!(badge_rgba(&[], 0, 0), Vec::<u8>::new());
-        // A 4x4 icon: the radius floors at 2 and every write stays in bounds.
-        assert_eq!(badge_rgba(&[0u8; 64], 4, 4).len(), 64);
-    }
 }

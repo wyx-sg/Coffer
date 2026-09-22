@@ -19,6 +19,7 @@ leaf substring rather than a whole path.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import pathlib
 import stat
 from collections.abc import Awaitable, Iterator
@@ -294,6 +295,30 @@ def test_status_exits_non_zero_while_a_round_is_held(fleet: Fleet) -> None:
     result = fleet.invoke("sync", "status")
 
     assert result.exit_code == 1, result.output
+    assert "awaiting_confirmation" in result.output
+
+
+def test_status_exits_zero_once_sync_is_switched_off(fleet: Fleet) -> None:
+    """Switching sync off is an answer too, and the exit code has to take it.
+
+    A disabled remote makes a round return ``disabled`` WITHOUT recording it,
+    so ``last_run`` keeps reporting the hold. Without this a user who met the
+    hold by turning sync off rather than by answering it would have every
+    check that asks fail for ever, with no way back but to turn it on again.
+    """
+    held = _hold_a_deletion(fleet)
+    assert "awaiting_confirmation" in held.output
+    assert fleet.invoke("sync", "status").exit_code == 1
+
+    remote = fleet.run(fleet.a.service().get_remote())
+    assert remote is not None
+    fleet.run(fleet.a.service().set_remote(dataclasses.replace(remote, enabled=False)))
+
+    result = fleet.invoke("sync", "status")
+
+    assert result.exit_code == 0, result.output
+    # The round it is still carrying has NOT been rewritten — only the
+    # question of whether anyone should be told about it has changed.
     assert "awaiting_confirmation" in result.output
 
 
