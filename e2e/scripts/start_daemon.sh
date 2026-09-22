@@ -52,4 +52,23 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # Prefer python3 over the python symlink (which may be a compiled binary on
 # some macOS setups rather than a shell wrapper).
 VENV_PYTHON="${REPO_ROOT}/.venv/bin/python3"
+
+# Serve THIS checkout's code. `coffer` is installed into the venv editable, so
+# `-m coffer...` otherwise resolves to whichever tree the venv was built in —
+# and in a git worktree `.venv` is a symlink to the main checkout's, which
+# means the daemon under test would be someone else's working copy while every
+# assertion in the suite passed. `spawnShim` in e2e/mcp/specs/_helpers.ts sets
+# the same variable for the same reason; this is the other half of it.
+export PYTHONPATH="${REPO_ROOT}/backend${PYTHONPATH:+:${PYTHONPATH}}"
+
+# Prove it rather than trust it. The failure this guards against is silent and
+# green — a suite that tests the wrong tree reports success — so the one thing
+# it must not do is keep going when the import lands somewhere unexpected.
+RESOLVED="$("${VENV_PYTHON}" -c 'import coffer, pathlib; print(pathlib.Path(coffer.__file__).parent.parent)')"
+if [ "${RESOLVED}" != "${REPO_ROOT}/backend" ]; then
+  echo "start_daemon.sh: refusing to start — coffer resolves to ${RESOLVED}," >&2
+  echo "  not ${REPO_ROOT}/backend. The suite would test a different checkout." >&2
+  exit 1
+fi
+
 exec "${VENV_PYTHON}" -m coffer.infrastructure.daemon.entry
