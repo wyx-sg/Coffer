@@ -31,16 +31,40 @@ function injectedGlobals(): InjectedGlobals {
   return window as unknown as InjectedGlobals;
 }
 
-export function getCofferBaseUrl(): string {
+/**
+ * Where the API is, or `null` when nothing has said yet.
+ *
+ * `null` is not a failure — it is the honest answer for a page that no daemon
+ * served and whose supplier has not arrived. The desktop shell's window is
+ * exactly that: its document comes from a `tauri://` asset origin, and the
+ * base URL reaches it over IPC a moment later. Falling back to that origin
+ * looked harmless and was the whole bug: `tauri://localhost/api/v1` is a URL
+ * the webview refuses to build a request from, so every query in the app
+ * failed with an unreadable transport error ("The string did not match the
+ * expected pattern") and the offline banner reported a perfectly healthy
+ * daemon as offline. Callers turn `null` into `DAEMON_NOT_READY`, which the
+ * banner already renders as "still starting — this clears itself".
+ *
+ * The origin fallback is kept for the hosts it is true for, and gated on the
+ * one fact that makes it true: an http(s) document was served by something,
+ * and the only thing that serves this bundle over http is the daemon.
+ */
+export function getCofferBaseUrl(): string | null {
   // 1. Vite dev server: the dev plugin reads ~/.coffer/daemon.json and injects
-  //    the running daemon's origin, because :5173 is not the daemon.
+  //    the running daemon's origin, because :5173 is not the daemon. The
+  //    desktop shell writes the same global once its handshake lands.
   const injected = injectedGlobals().__COFFER_BASE_URL__;
   if (injected) return injected;
   // 2. Explicit build/dev override.
   const fromVite = import.meta.env.VITE_COFFER_BASE_URL as string | undefined;
   if (fromVite) return fromVite;
   // 3. Served by the daemon — same origin.
-  return `${window.location.origin}/api/v1`;
+  const { origin } = window.location;
+  if (origin.startsWith("http://") || origin.startsWith("https://")) {
+    return `${origin}/api/v1`;
+  }
+  // 4. Nobody served this page and nobody has supplied an address yet.
+  return null;
 }
 
 export function getCofferToken(): string | null {

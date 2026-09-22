@@ -345,6 +345,7 @@
       "sync_rolled_back": "Rolled a converge round back",
       "sync_run": "Ran a converge round",
       "token_rotated": "Access token rotated",
+      "daemon_residency_updated": "Daemon residency changed",
       "knowledge_curated": "Derived the {{resource}} documents from its sources"
     },
     "capType": {
@@ -409,6 +410,17 @@
       "preferredEditorCustom": "Custom…",
       "preferredEditorCustomCommand": "Custom editor command",
       "preferredEditorCustomPlaceholder": "e.g. zed or /Applications/Zed.app"
+    },
+    "daemon": {
+      "title": "Coffer's daemon",
+      "autostart": "Start at login",
+      "autostartHelp": "Keep the daemon running whether or not Coffer is open, so an agent's first call of the day does not wait for it to start. It is restarted if it crashes.",
+      "autostartUnsupported": "Only available on macOS.",
+      "idle": "Stand down after",
+      "idleHelp": "How long the daemon keeps running with nothing using it. Whatever next needs it starts it again. Takes effect at the next daemon start.",
+      "idleHours_one": "{{count}} hour",
+      "idleHours_other": "{{count}} hours",
+      "idleNever": "Never"
     },
     "retention": {
       "title": "Data retention",
@@ -642,7 +654,6 @@
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
-      "reconnectFailed": "The daemon restarted, but the app could not reconnect to it: {{message}}. Quit and reopen Coffer.",
       "webRestartHint": "The browser can't restart it — run this in your terminal:"
     }
   },

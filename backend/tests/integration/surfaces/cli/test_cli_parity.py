@@ -34,8 +34,22 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # serves can be reached. It is listed here because it must not be dropped,
     # not because a card mirrors it. "restart" is how a change takes effect,
     # for the same reason a running daemon cannot move.
-    "daemon": {"start", "stop", "restart", "status", "rotate-token", "port"},
+    "daemon": {
+        "start",
+        "stop",
+        "restart",
+        "status",
+        "rotate-token",
+        "port",
+        # What starts the daemon and what ends it (spec daemon FR-028/FR-029).
+        # Both are reachable with no daemon running, which is the state
+        # "it was not running" is most often diagnosed from.
+        "idle",
+        "service",
+    },
     "daemon port": {"show", "set", "clear"},
+    "daemon idle": {"show", "set", "never"},
+    "daemon service": {"install", "uninstall", "status"},
     # `coffer open` is the one group with NO subcommands: it is a single action
     # (open the UI at the running daemon's origin), expressed as an
     # invoke_without_command callback. Its surface is its two options, which

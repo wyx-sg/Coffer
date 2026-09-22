@@ -107,6 +107,7 @@
     "credential_migrated",
     "credential_read",
     "credential_set",
+    "daemon_residency_updated",
     "internal_engine_model_set",
     "knowledge_curated",
     "knowledge_deleted",

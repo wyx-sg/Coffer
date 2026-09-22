@@ -13,6 +13,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DaemonResidencySettings } from "./DaemonResidencySettings";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -64,71 +65,76 @@ export function GeneralSettings() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("settings.general.title")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium">{t("settings.general.pageSize")}</p>
-            <p className="text-sm text-muted-foreground">{t("settings.general.pageSizeHelp")}</p>
-          </div>
-          <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
-            <SelectTrigger className="w-44" aria-label={t("settings.general.pageSize")}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <SelectItem key={n} value={String(n)}>
-                  {n}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium">{t("settings.general.preferredEditor")}</p>
-            <p className="text-sm text-muted-foreground">
-              {t("settings.general.preferredEditorHelp")}
-            </p>
-          </div>
-          <div className="flex w-44 shrink-0 flex-col gap-2">
-            <Select value={selected} onValueChange={pick}>
-              <SelectTrigger aria-label={t("settings.general.preferredEditor")}>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.general.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">{t("settings.general.pageSize")}</p>
+              <p className="text-sm text-muted-foreground">{t("settings.general.pageSizeHelp")}</p>
+            </div>
+            <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+              <SelectTrigger className="w-44" aria-label={t("settings.general.pageSize")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={DEFAULT_OPTION}>
-                  {t("settings.general.preferredEditorSystemDefault")}
-                </SelectItem>
-                {detected.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n}
                   </SelectItem>
                 ))}
-                <SelectItem value={CUSTOM_OPTION}>
-                  {t("settings.general.preferredEditorCustom")}
-                </SelectItem>
               </SelectContent>
             </Select>
-            {isCustom ? (
-              <Input
-                value={editor}
-                placeholder={t("settings.general.preferredEditorCustomPlaceholder")}
-                onChange={(e) => setEditor(e.target.value)}
-                onBlur={(e) => commitEditor(e.target.value.trim())}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                }}
-                aria-label={t("settings.general.preferredEditorCustomCommand")}
-              />
-            ) : null}
           </div>
-        </div>
-      </CardContent>
-    </Card>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">{t("settings.general.preferredEditor")}</p>
+              <p className="text-sm text-muted-foreground">
+                {t("settings.general.preferredEditorHelp")}
+              </p>
+            </div>
+            <div className="flex w-44 shrink-0 flex-col gap-2">
+              <Select value={selected} onValueChange={pick}>
+                <SelectTrigger aria-label={t("settings.general.preferredEditor")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT_OPTION}>
+                    {t("settings.general.preferredEditorSystemDefault")}
+                  </SelectItem>
+                  {detected.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={CUSTOM_OPTION}>
+                    {t("settings.general.preferredEditorCustom")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {isCustom ? (
+                <Input
+                  value={editor}
+                  placeholder={t("settings.general.preferredEditorCustomPlaceholder")}
+                  onChange={(e) => setEditor(e.target.value)}
+                  onBlur={(e) => commitEditor(e.target.value.trim())}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  aria-label={t("settings.general.preferredEditorCustomCommand")}
+                />
+              ) : null}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      {/* What starts Coffer's daemon and what ends it. A page about how the
+          app behaves is where a user looks for "why was it not running". */}
+      <DaemonResidencySettings />
+    </div>
   );
 }

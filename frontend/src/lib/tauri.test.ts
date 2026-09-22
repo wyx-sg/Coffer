@@ -13,6 +13,9 @@ import {
   isTauri,
   getDaemonInfo,
   connectToShellDaemon,
+  credentialDesktopHost,
+  handshakeRetryDelay,
+  HANDSHAKE_RETRY_DELAYS_MS,
   restartDaemon,
   daemonVersionMatches,
 } from "./tauri";
@@ -149,11 +152,83 @@ describe("connectToShellDaemon", () => {
 
   test("propagates the IPC failure and leaves the previous credentials alone", async () => {
     enterTauri();
-    invokeMock.mockRejectedValue(new Error("coffer-daemon did not become ready within 15s"));
+    invokeMock.mockRejectedValue(new Error("coffer-daemon did not become ready within 90s"));
 
     await expect(connectToShellDaemon()).rejects.toThrow(/did not become ready/);
     // Callers want different things from a failure, so it is re-thrown rather
     // than swallowed — and a half-applied handshake would be worse than none.
     expect(getCofferToken()).toBeNull();
+  });
+});
+
+describe("credentialDesktopHost", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    resetApiClient();
+  });
+
+  afterEach(() => {
+    leaveTauri();
+    const w = window as unknown as Record<string, unknown>;
+    delete w.__COFFER_BASE_URL__;
+    delete w.__COFFER_TOKEN__;
+  });
+
+  test("does nothing outside Tauri — the browser hosts are already credentialed", async () => {
+    leaveTauri();
+    const connect = vi.fn();
+    await credentialDesktopHost(vi.fn(), { connect });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  acceptance("desktop-app", "a handshake that misses is retried until it lands", async () => {
+    enterTauri();
+    // The shape of the bug: the daemon is a few seconds from serving, so the
+    // first attempts time out. Nothing about that should be permanent.
+    const connect = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("coffer-daemon did not become ready within 90s"))
+      .mockRejectedValueOnce(new Error("coffer-daemon did not become ready within 90s"))
+      .mockResolvedValueOnce(undefined);
+    const waited: number[] = [];
+    const onConnected = vi.fn();
+
+    await credentialDesktopHost(onConnected, {
+      connect,
+      wait: (ms) => {
+        waited.push(ms);
+        return Promise.resolve();
+      },
+    });
+
+    expect(connect).toHaveBeenCalledTimes(3);
+    // …and the page is repaired the moment one lands, with no user action.
+    expect(onConnected).toHaveBeenCalledTimes(1);
+    // Backing off rather than hammering: a daemon that is still unpacking
+    // itself is not helped by being asked again immediately.
+    expect(waited).toEqual([HANDSHAKE_RETRY_DELAYS_MS[0], HANDSHAKE_RETRY_DELAYS_MS[1]]);
+  });
+
+  test("stops asking once a connection lands", async () => {
+    enterTauri();
+    const connect = vi.fn().mockResolvedValue(undefined);
+    const wait = vi.fn().mockResolvedValue(undefined);
+
+    await credentialDesktopHost(vi.fn(), { connect, wait });
+
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(wait).not.toHaveBeenCalled();
+  });
+});
+
+describe("handshakeRetryDelay", () => {
+  test("backs off, then settles on the last delay forever", () => {
+    expect(handshakeRetryDelay(1)).toBe(HANDSHAKE_RETRY_DELAYS_MS[0]);
+    expect(handshakeRetryDelay(2)).toBe(HANDSHAKE_RETRY_DELAYS_MS[1]);
+    const last = HANDSHAKE_RETRY_DELAYS_MS[HANDSHAKE_RETRY_DELAYS_MS.length - 1];
+    expect(handshakeRetryDelay(HANDSHAKE_RETRY_DELAYS_MS.length)).toBe(last);
+    // There is no attempt after which the app gives up, so there is no
+    // attempt number without a delay.
+    expect(handshakeRetryDelay(999)).toBe(last);
   });
 });

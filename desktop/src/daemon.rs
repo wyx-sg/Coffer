@@ -7,19 +7,30 @@
 //! and the stop-then-start sequence — lives in `restart.rs`. This file owns
 //! the commands themselves and the credential handshake.
 
-use tauri::AppHandle;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use tauri::{AppHandle, Manager};
 
 use crate::discovery::{
     daemon_responds_ok, read_daemon_info, request_daemon_shutdown, wait_for_port_free,
 };
+use crate::ready::{base_url_for, ready_deadline, wait_for_daemon_ready, DAEMON_READY_TIMEOUT_SECS};
 use crate::resolve::{daemon_source, DaemonSource};
 use crate::restart::{record_restart_outcome, restart_rate_limit_refusal, stop_running_daemon};
 use crate::spawn::spawn_resolved_daemon;
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RestartResult {
     pub pid: u32,
     pub started: bool,
+    /// The replacement's connection, so the page does not have to ask for one.
+    /// Asking again is what used to start a SECOND daemon: the page called
+    /// `get_daemon_info` the instant this returned, before the daemon just
+    /// spawned had bound a port, and that command's cold-start branch spawned
+    /// a rival for it (FR-006/FR-007).
+    pub base_url: String,
+    pub token: String,
 }
 
 /// Rate-limit state for `restart_daemon`. We refuse calls that arrive less
@@ -36,8 +47,15 @@ const RESTART_MIN_INTERVAL_SECS: u64 = 5;
 ///   2. True restart: if `~/.coffer/daemon.json` lists a responsive daemon,
 ///      POST its token-gated /daemon/shutdown route and wait for the port
 ///      to free.
-///   3. Resolve (five-step chain) and spawn detached; return the PID.
-#[tauri::command]
+///   3. Resolve (five-step chain) and spawn detached.
+///   4. Wait for the replacement to answer, and return its connection with
+///      the PID — the caller installs it rather than handshaking again.
+///
+/// Declared `async` so the framework runs it off the main thread: steps 2-4
+/// block for seconds, and on the main thread that is a frozen window for the
+/// whole restart. The tray's own call already spawns a thread for this reason
+/// (`tray.rs`); the webview's had no such protection.
+#[tauri::command(async)]
 pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     use std::time::{Duration, Instant};
 
@@ -48,9 +66,10 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     // closing the double-spawn race. The blocking TCP probe (~250ms) + spawn
     // happen under the lock; that's acceptable for a rare, user-initiated
     // manual restart.
-    let mut guard = LAST_RESTART_AT
-        .lock()
-        .map_err(|e| format!("restart lock poisoned: {e}"))?;
+    // A panic under this lock must not make every later restart impossible:
+    // the state it guards is one timestamp, and a poisoned one is still a
+    // perfectly good timestamp. Recover it rather than refusing forever.
+    let mut guard = LAST_RESTART_AT.lock().unwrap_or_else(|e| e.into_inner());
 
     // (1) Rate-limit guard. We only CHECK here against the last *successful*
     // spawn — we do NOT record `now` yet. The timestamp is recorded only
@@ -86,8 +105,67 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     let pid = spawned?;
 
     log::info!("daemon restarted (pid {})", pid);
-    Ok(RestartResult { pid, started: true })
+
+    // Release before the wait. The lock exists to serialise the decision —
+    // rate limit, stop, spawn — and holding it through a ninety-second wait
+    // would block a tray restart, and a webview one on a runtime worker, for
+    // the whole of it. What it protects is already recorded: a second
+    // restart arriving now reads the timestamp above and is refused.
+    drop(guard);
+
+    // (4) Wait for it to serve, and hand its credentials back.
+    let Some((port, token)) = wait_for_daemon_ready(ready_deadline()) else {
+        let msg = format!(
+            "coffer-daemon (pid {pid}) was started but did not answer within {DAEMON_READY_TIMEOUT_SECS}s"
+        );
+        log::warn!("{msg}");
+        return Err(msg);
+    };
+    log::info!("daemon restarted and serving on port {port} (pid {pid})");
+    Ok(RestartResult {
+        pid,
+        started: true,
+        base_url: base_url_for(port),
+        token,
+    })
 }
+
+/// Show the main window, which the app opens hidden.
+///
+/// The window waits for a daemon rather than opening in front of one that is
+/// not there yet (spec desktop-app FR-001). Everything the UI can show before
+/// the handshake is a lie or an apology — a page whose every query answers
+/// "not ready", under a banner explaining why — and an application that opens
+/// like that reads as broken even when it is merely early. With the daemon
+/// resident (spec daemon, the login service) the wait is normally
+/// imperceptible; when it is not, a Dock icon bouncing is the honest signal.
+///
+/// Called on BOTH outcomes of the handshake, which is the part that must not
+/// be "tidied up": a window shown only on success is a window that never
+/// appears at all when no daemon can be started, and an invisible app cannot
+/// tell anyone why. On failure the window opens on the offline banner, which
+/// is the surface that explains it and offers the restart.
+///
+/// **Once per run.** The page retries a failed handshake for as long as the
+/// app is open, so this is reached again every time one misses — and showing
+/// and focusing a window that is already up would steal the user's focus
+/// every thirty seconds, then undo the close-to-tray they just performed.
+/// The first appearance is the handshake's to decide; after that the window
+/// belongs to the user and the tray.
+pub fn reveal_main_window(app: &AppHandle) {
+    if MAIN_WINDOW_REVEALED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        log::warn!("no main window to reveal");
+        return;
+    };
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
+/// Whether the launch reveal has already happened. See `reveal_main_window`.
+static MAIN_WINDOW_REVEALED: AtomicBool = AtomicBool::new(false);
 
 /// The version this app build expects the daemon to report. Sourced from the
 /// crate version (`Cargo.toml`) at compile time, never a hardcoded literal —
@@ -136,35 +214,60 @@ pub struct DaemonInfo {
 /// `__COFFER_BASE_URL__` before any API request.
 ///
 /// Detect-or-spawn runs through the five-step chain: a daemon we can take over
-/// is reused as-is; otherwise we spawn the binary the chain found and wait (up
-/// to ~15s) for it to publish `daemon.json` and answer.
-#[tauri::command]
+/// is reused as-is; otherwise we spawn the binary the chain found and wait
+/// (up to [`DAEMON_READY_TIMEOUT_SECS`]) for it to publish `daemon.json` and
+/// answer.
+///
+/// Every outcome is logged (FR-012). It used to be the one thing the shell
+/// did silently, and it is the one a user most needs an account of: a
+/// handshake that failed here left the page with no API address at all, and
+/// nothing in `~/.coffer/logs/daemon.log` said so.
+///
+/// Declared `async` so the framework runs it off the main thread — the
+/// cold-start branch blocks for as long as a daemon takes to boot, and on the
+/// main thread that is a frozen window for the whole of it.
+#[tauri::command(async)]
 pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
-    use std::thread::sleep;
-    use std::time::{Duration, Instant};
-
     let ready = |port: u16, token: String| DaemonInfo {
-        base_url: format!("http://127.0.0.1:{port}/api/v1"),
+        base_url: base_url_for(port),
         token,
     };
 
     // Step 1 of the chain short-circuits the whole cold start.
-    if let DaemonSource::Running { port, token } = daemon_source(&app)? {
-        return Ok(ready(port, token));
+    match daemon_source(&app) {
+        Ok(DaemonSource::Running { port, token }) => {
+            log::info!("handshake: attached to the daemon serving on port {port}");
+            reveal_main_window(&app);
+            return Ok(ready(port, token));
+        }
+        Ok(DaemonSource::Binary { .. }) => {}
+        Err(e) => {
+            log::warn!("handshake: no daemon and none to start: {e}");
+            reveal_main_window(&app);
+            return Err(e);
+        }
     }
 
     // Cold start: spawn the resolved binary, then poll until it answers.
-    spawn_resolved_daemon(&app)?;
-    let deadline = Instant::now() + Duration::from_secs(15);
-    while Instant::now() < deadline {
-        if let Some((port, token)) = read_daemon_info() {
-            if daemon_responds_ok(port) {
-                return Ok(ready(port, token));
-            }
-        }
-        sleep(Duration::from_millis(250));
+    let spawned = spawn_resolved_daemon(&app);
+    if spawned.is_err() {
+        reveal_main_window(&app);
     }
-    Err("coffer-daemon did not become ready within 15s".to_string())
+    spawned?;
+    let outcome = match wait_for_daemon_ready(ready_deadline()) {
+        Some((port, token)) => {
+            log::info!("handshake: spawned daemon is serving on port {port}");
+            Ok(ready(port, token))
+        }
+        None => {
+            let msg =
+                format!("coffer-daemon did not become ready within {DAEMON_READY_TIMEOUT_SECS}s");
+            log::warn!("handshake: {msg}");
+            Err(msg)
+        }
+    };
+    reveal_main_window(&app);
+    outcome
 }
 
 #[cfg(test)]
@@ -206,6 +309,47 @@ mod tests {
         // silently agree.
         assert_eq!(APP_VERSION, env!("CARGO_PKG_VERSION"));
         assert!(!APP_VERSION.is_empty());
+    }
+
+    // --- the readiness budget: a ceiling, not an expectation. ---
+
+    #[test]
+    fn the_readiness_budget_clears_a_real_daemon_boot() {
+        use std::time::{Duration, Instant};
+        // Measured on a real vault: five to fourteen seconds from spawn to
+        // serving, and longer when a remote MCP upstream is slow to answer in
+        // the lifespan. The previous fifteen-second ceiling sat inside that
+        // spread, so a launch that landed on the slow end declared a daemon
+        // dead while it was seconds away — and the page had no way back.
+        // Pinning it keeps a future "tidy-up" from walking the budget back
+        // into the boot times it exists to clear.
+        let budget = ready_deadline().saturating_duration_since(Instant::now());
+        assert!(
+            budget >= Duration::from_secs(60),
+            "a budget inside a real daemon's boot time is the bug, not the fix"
+        );
+    }
+
+    #[test]
+    fn the_base_url_is_the_loopback_api_root() {
+        // The one address the webview is given, and the only one the CSP
+        // admits (`connect-src http://127.0.0.1:*`).
+        assert_eq!(base_url_for(8000), "http://127.0.0.1:8000/api/v1");
+    }
+
+    /// The ready-wait is what a restart hands its caller a connection from,
+    /// and it must give up rather than hang when nothing ever answers.
+    // acceptance(spec = "desktop-app", scenario = "a restart hands back the connection it waited for")
+    #[test]
+    fn the_ready_wait_gives_up_at_its_deadline() {
+        use std::time::{Duration, Instant};
+        // A deadline already in the past: one probe, then out. Whether that
+        // single probe finds this machine's own daemon is not the point —
+        // returning at all is, because a wait that never ended would hold the
+        // restart (and its lock) open forever.
+        let started = Instant::now();
+        let _ = wait_for_daemon_ready(Instant::now() - Duration::from_secs(1));
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[test]

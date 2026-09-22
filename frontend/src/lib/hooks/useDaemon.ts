@@ -1,9 +1,8 @@
 // frontend/src/lib/hooks/useDaemon.ts
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
-import { connectToShellDaemon, daemonVersionMatches, restartDaemon } from "@/lib/tauri";
+import { applyDaemonConnection, daemonVersionMatches, restartDaemon } from "@/lib/tauri";
 import type { components } from "@/lib/api/types";
 import { daemonStatusKey, daemonVersionSkewKey } from "@/lib/api/queryKeys";
 
@@ -50,30 +49,27 @@ export function useDaemonOutOfDate(version: string | undefined) {
 }
 
 /**
- * Restart the daemon from the desktop shell, then reconnect. useMutation owns
- * the in-flight / error state and dedups double-clicks. No toast: the
- * offline banner renders the error inline, next to the button that caused it.
+ * Restart the daemon from the desktop shell and take over the replacement it
+ * hands back. useMutation owns the in-flight / error state and dedups
+ * double-clicks. No toast: the offline banner renders the error inline, next
+ * to the button that caused it.
  */
 export function useRestartDaemon() {
   const qc = useQueryClient();
-  const { t } = useTranslation();
   return useMutation({
     mutationFn: async () => {
-      const result = await restartDaemon();
       // The daemon mints a fresh token on every start, so the credentials the
-      // shell handed over at launch are now revoked. Re-run the handshake
-      // (get_daemon_info waits for the new daemon to publish daemon.json and
-      // listen) and swap the connection in before anything refetches —
-      // otherwise every request 401s until the app is relaunched.
-      try {
-        await connectToShellDaemon();
-      } catch (e) {
-        // Distinct failure: the daemon DID restart but we couldn't fetch its
-        // new credentials — tell the user to relaunch rather than implying the
-        // restart itself failed.
-        const message = e instanceof Error ? e.message : String(e);
-        throw new Error(t("daemon.offline.reconnectFailed", { message }));
-      }
+      // shell handed over at launch are now revoked. The restart already
+      // waited for the replacement to answer and returned its connection, so
+      // swap that in before anything refetches — otherwise every request 401s
+      // until the app is relaunched.
+      //
+      // Installing what the restart returned, rather than asking for a
+      // connection again, is also what keeps a restart to ONE daemon: the
+      // second ask used to arrive before the new daemon had bound a port, and
+      // the handshake answers "no daemon running" by spawning one.
+      const result = await restartDaemon();
+      applyDaemonConnection(result);
       return result;
     },
     // The token changed, so every cached query (not just daemon/status) was

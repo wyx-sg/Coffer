@@ -8,15 +8,15 @@
 
 ### User Story 1 — Open Coffer the way you open an application (Priority: P1)
 
-Someone who is not mid-terminal-session wants to open Coffer: from the Dock, from Spotlight, from Cmd-Tab. They double-click the app, a window appears immediately, and if no daemon is running the app starts one for them. Closing the window puts Coffer in the tray rather than shutting it down, because the daemon it supervises keeps serving agents either way.
+Someone who is not mid-terminal-session wants to open Coffer: from the Dock, from Spotlight, from Cmd-Tab. They double-click the app and it opens on a working application — because the daemon is a login service that is normally already running, and on the rare launch where it is not, the app starts one and opens when it answers. Closing the window puts Coffer in the tray rather than shutting it down, because the daemon it supervises keeps serving agents either way.
 
 **Why this priority**: Without it Coffer is one `127.0.0.1` tab among dozens, and reaching it requires knowing a port. That is a fair ask of a CLI user and an unfair one of anybody else.
 
-**Independent Test**: With no daemon running, double-click the installed app. A window renders at once, a daemon starts, the UI fills in, the app has a Dock icon and a tray entry, and closing the window leaves both in place.
+**Independent Test**: Double-click the installed app. It opens on the real UI, with data in it, not on an application apologising for itself; with no daemon running it starts one first and the window follows. The app has a Dock icon and a tray entry, and closing the window leaves both in place.
 
 **Covering scenarios** (full Given/When/Then under `## Acceptance Scenarios` below):
 
-- the window renders before the daemon answers
+- the window waits for a daemon, and opens either way
 - closing the window hides the app to the tray
 - the handshake credentials a locally-hosted page
 
@@ -79,12 +79,13 @@ The retirement's failure mode is bounded rather than gone: a stale `.app` can st
 
 Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is referenced by at least one test marked `acceptance(spec="desktop-app", scenario="…")`. Coverage is audited by `make verify-acceptance`. Several of these are covered by `cargo test` in the `desktop` crate, where the marker is a line comment above the test's attributes rather than a call — Rust has no user-defined test attribute without a proc-macro crate, so the audit reads a comment the compiler ignores. Those tests are gated: `.github/workflows/desktop.yml` runs them. See `## Assumptions` for what that workflow does and does not cover.
 
-### Scenario: the window renders before the daemon answers
+### Scenario: the window waits for a daemon, and opens either way
 
 - **Given** the app is launched with no daemon running,
-- **When** the window opens,
-- **Then** the UI is rendered from the app's own bundled assets without waiting for the handshake,
-- **And** queries issued before the handshake resolves come back unauthenticated and are refetched once it lands, rather than leaving a permanent error.
+- **When** the app starts one,
+- **Then** no window is shown until that daemon answers, so the application is never on screen in a state where nothing in it works,
+- **And** the window is shown anyway once the attempt has failed, because an invisible app cannot report that it could not start a daemon,
+- **And** the page itself is built without waiting on the handshake, so the wait is the shell's and not a blank webview's.
 
 ### Scenario: closing the window hides the app to the tray
 
@@ -99,6 +100,27 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 - **When** the webview asks the shell for them over IPC,
 - **Then** it receives that daemon's base URL and live token, resolved into the same two globals a daemon-served browser page receives,
 - **And** the shell mints no credential of its own and stores none.
+
+### Scenario: a handshake that misses is retried until it lands
+
+- **Given** a daemon that takes longer to start serving than one handshake attempt waits for,
+- **When** that attempt gives up,
+- **Then** the app asks again on a backoff until a daemon answers, and credentials the page the moment one does,
+- **And** the user does nothing: the offline banner clears itself rather than waiting for the restart control.
+
+### Scenario: a page nobody served does not guess where the API is
+
+- **Given** the shell's window, whose document was loaded from a local asset origin rather than served by a daemon,
+- **When** a query is issued before the handshake has supplied a base URL,
+- **Then** it fails as "daemon not ready" rather than as a request to the asset origin,
+- **And** the banner reports a daemon that is still starting, not a daemon that is offline.
+
+### Scenario: a restart hands back the connection it waited for
+
+- **Given** the user restarts the daemon from the tray or the offline banner,
+- **When** the replacement starts answering,
+- **Then** the shell returns its base URL and token alongside the new PID,
+- **And** the page installs those rather than running a second handshake, so the restart starts exactly one daemon.
 
 ### Scenario: the shell takes over a running daemon instead of spawning a second
 
@@ -162,19 +184,19 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 
 **The shell and its window ([The Desktop Shell Returns](../../docs/decisions/desktop-shell-over-a-shared-frontend.md))**
 
-- **FR-001**: Coffer MUST ship a macOS desktop shell that hosts the built web UI **as a local asset**, not as a page loaded from the daemon's origin. Hosting it locally is what distinguishes an application from a bookmarked browser window: the UI is rendered before the daemon answers, so a daemon that is slow, absent or wedged yields an actionable screen rather than a connection error, and the daemon's port is never visible in an address bar. The shell MUST present a window the OS treats as an application — Dock icon, Cmd-Tab entry — and a resident tray offering at least open, restart daemon, and quit; closing the window MUST hide to the tray rather than exit, and re-activating from the Dock MUST restore it.
+- **FR-001**: Coffer MUST ship a macOS desktop shell that hosts the built web UI **as a local asset**, not as a page loaded from the daemon's origin. Hosting it locally is what distinguishes an application from a bookmarked browser window: a daemon that is slow, absent or wedged yields an actionable screen rather than a connection error, and the daemon's port is never visible in an address bar. The window MUST NOT be shown before a daemon answers. Every surface the UI can offer before then is an apology — a page whose every query reports "not ready" under a banner explaining why — and an application that opens on that reads as broken rather than as early; with the daemon running as a login service (spec daemon) the wait is normally imperceptible. It MUST be shown once the attempt to reach a daemon has failed, since an invisible app cannot report why it has nothing to show. Building the page MUST NOT wait on the handshake either — the wait belongs to the shell, and a webview that blocks on a retrying handshake would never paint at all. The shell MUST present a window the OS treats as an application — Dock icon, Cmd-Tab entry — and a resident tray offering at least open, restart daemon, and quit; closing the window MUST hide to the tray rather than exit, and re-activating from the Dock MUST restore it.
 - **FR-002**: The shell MUST consume the same `frontend/dist` build the daemon serves. It adds a credential *supplier* (FR-004) and MUST NOT introduce a second frontend code path, a host-conditional branch, or a separate UI build — one artifact is what keeps the two hosts from drifting.
 - **FR-003**: The webview's content-security policy MUST permit loopback origins on any port and the shell's own IPC scheme, and nothing else; scripts and styles MUST be served from the bundle itself. The port is not known until the handshake, which is why the loopback allowance is port-wildcarded rather than absent.
 
 **Credentialing a locally-hosted page**
 
-- **FR-004**: The shell MUST supply the frontend with the running daemon's base URL and live API token through an IPC command, and MUST NOT hold up the first render waiting for it. Blocking would contradict FR-001: the handshake spawns a daemon and polls when none is running, so awaiting it would leave every launch-after-reboot on an empty window for as long as that takes, which is the failure hosting the UI locally exists to prevent. Queries issued before it resolves come back `UNAUTHENTICATED`, which the offline banner already reads as "daemon not ready"; the frontend MUST therefore refetch them once the handshake lands, or they keep a 401 nothing else will clear. The daemon's own injection of the token into a served document cannot reach a locally-hosted page — nobody served that document — so this is the only channel, and it MUST resolve to the same `window.__COFFER_BASE_URL__` / `window.__COFFER_TOKEN__` globals the browser host receives, so the frontend gains a second *supplier* and not a second *code path*. When the handshake fails the frontend MUST still render and surface the failure in the offline banner; a blank window is not an acceptable report of "no daemon".
+- **FR-004**: The shell MUST supply the frontend with the running daemon's base URL and live API token through an IPC command, and MUST NOT hold up the first render waiting for it. Blocking would contradict FR-001: the handshake spawns a daemon and polls when none is running, so awaiting it would leave every launch-after-reboot on an empty window for as long as that takes, which is the failure hosting the UI locally exists to prevent. Queries issued before it resolves come back `UNAUTHENTICATED`, which the offline banner already reads as "daemon not ready"; the frontend MUST therefore refetch them once the handshake lands, or they keep a 401 nothing else will clear. The daemon's own injection of the token into a served document cannot reach a locally-hosted page — nobody served that document — so this is the only channel, and it MUST resolve to the same `window.__COFFER_BASE_URL__` / `window.__COFFER_TOKEN__` globals the browser host receives, so the frontend gains a second *supplier* and not a second *code path*. When the handshake fails the frontend MUST still render and surface the failure in the offline banner; a blank window is not an acceptable report of "no daemon". A failed handshake MUST be retried on a backoff until one lands: a single attempt is a cliff, and the app that fell off it reported a daemon that was seconds from serving as dead, permanently — the page kept no address to retry with, so its own status poll could not clear the banner and only a manual restart could. Until a supplier has named a base URL, the frontend MUST NOT infer one from the document's own origin: a page the daemon served is same-origin with the API and may, but a page nobody served is not, and guessing there produced a URL the webview refuses outright, turning "still connecting" into an unreadable transport error on every surface.
 - **FR-005**: The shell MUST read the daemon's port and token from `~/.coffer/daemon.json` like every other client, and MUST NOT mint, store or cache a credential of its own. The file's format and lifecycle are spec daemon's; the shell is one of its readers, in a different language, so any change to it MUST be made on both sides together.
 
 **Finding, starting and restarting a daemon**
 
-- **FR-006**: The shell MUST locate a daemon by a fixed resolution order — a live daemon named by `~/.coffer/daemon.json`, then its own bundle, then `~/.coffer/bin/`, then `PATH` — taking over an already-running daemon rather than spawning a second one. The liveness probe MUST come first: the other three answer which binary to spawn, while it answers whether to spawn at all, and reversing them makes a bundled app race the daemon the user already started for its port. The probe MUST be an HTTP status check rather than a bare TCP connect, so a process squatting the recorded port is not mistaken for a daemon. When no daemon can be found or started it MUST say so in terms a user who has never opened a terminal can act on. It MUST offer a restart, reachable from both the tray and the offline banner — an affordance the browser host cannot have, because a daemon that is down cannot serve the page the control would live on. It MUST detect version skew between itself and the daemon it is talking to, since a previous installation's daemon may still be listening.
-- **FR-007**: Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind.
+- **FR-006**: The shell MUST locate a daemon by a fixed resolution order — a live daemon named by `~/.coffer/daemon.json`, then its own bundle, then `~/.coffer/bin/`, then `PATH` — taking over an already-running daemon rather than spawning a second one. The liveness probe MUST come first: the other three answer which binary to spawn, while it answers whether to spawn at all, and reversing them makes a bundled app race the daemon the user already started for its port. The probe MUST be an HTTP status check rather than a bare TCP connect, so a process squatting the recorded port is not mistaken for a daemon. When no daemon can be found or started it MUST say so in terms a user who has never opened a terminal can act on. It MUST offer a restart, reachable from both the tray and the offline banner — an affordance the browser host cannot have, because a daemon that is down cannot serve the page the control would live on. It MUST detect version skew between itself and the daemon it is talking to, since a previous installation's daemon may still be listening. A daemon it starts MUST be given a readiness budget that is a ceiling rather than an expectation — clear of the seconds a real vault's daemon spends unpacking, migrating and bringing its upstreams up before it accepts — and the outcome of every handshake, reused or spawned or failed, MUST be recorded (FR-012). Neither waiting nor resolving may run on the thread that draws the window.
+- **FR-007**: Restart MUST be a true restart: when a daemon is responsive it MUST be asked to shut down over its token-gated shutdown route and the port MUST be observed free before a replacement is spawned. A restart that silently became a no-op would do nothing at exactly the moment a user reaches for it — a wedged-but-listening daemon — and a failure to free the port MUST be reported rather than followed by a spawn that cannot bind. A restart MUST wait for its replacement to answer and return that daemon's connection with the result, and the page MUST install what it is handed rather than run a handshake of its own — a page that asked again the instant the restart returned asked before the new daemon had bound anything, and the handshake's cold-start branch answered by spawning a rival for it.
 - **FR-008**: Restarts MUST be serialised and rate-limited to at most one every five seconds, measured from the last **successful** restart. A failed spawn MUST NOT consume the window, so the user can retry immediately rather than waiting out a cooldown a failure earned.
 - **FR-009**: A daemon the shell spawns MUST be detached and MUST outlive the app. It MUST NOT be started through the framework's managed-sidecar mechanism, which tears its children down when the app quits — the daemon serves agents that have nothing to do with the window being open.
 - **FR-010**: Before spawning a daemon, an app launched from Finder or the Dock MUST discover the user's real `$PATH` by probing the login shell, and pass it on. A GUI-launched application inherits a minimal `$PATH`, so without this the daemon — and the `npx` / `uvx` MCP upstreams it spawns in turn — fail to resolve. The probe MUST be bounded in time and MUST degrade to the inherited `$PATH` rather than delay the launch.

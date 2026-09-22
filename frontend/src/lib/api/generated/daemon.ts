@@ -21,6 +21,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/daemon/residency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the daemon starts at login, and when it stands down */
+        get: operations["getDaemonResidency"];
+        /**
+         * Install or remove the login service, and set the idle window
+         * @description Two settings, one request, because they are one question with two
+         *     halves: what starts the daemon (spec daemon FR-028) and what ends it
+         *     (FR-029). The login service takes effect immediately — launchd is a
+         *     different process. The idle window takes effect at the next daemon
+         *     start, because this one read it when it booted.
+         *
+         *     This pair has a REST surface where the port deliberately does not
+         *     (FR-011): a port is changed when the daemon cannot start, so a route it
+         *     would have to serve is useless exactly then, while residency is a
+         *     settings question asked of a daemon that is working.
+         */
+        put: operations["setDaemonResidency"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/daemon/logs": {
         parameters: {
             query?: never;
@@ -217,6 +247,18 @@ export interface components {
                 };
             };
         };
+        DaemonResidencyOut: {
+            /** @description False where there is no launchd to install into. The control renders as unavailable rather than as off, which is a different claim. */
+            login_service_supported: boolean;
+            login_service_installed: boolean;
+            /** @description Hours of disuse before standing down; null means never. */
+            idle_shutdown_hours?: number | null;
+        };
+        DaemonResidencyIn: {
+            login_service_installed: boolean;
+            /** @description Required, because null already means "never stand down" here. A caller that omitted it would turn the idle shutdown off without saying so. */
+            idle_shutdown_hours: number | null;
+        };
         DaemonStatusOut: {
             /**
              * @description The daemon's lifecycle phase.
@@ -321,6 +363,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description The request was understood and refused */
+        ValidationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
     };
     parameters: never;
     requestBodies: never;
@@ -347,6 +398,53 @@ export interface operations {
                     "application/json": components["schemas"]["DaemonStatusOut"];
                 };
             };
+        };
+    };
+    getDaemonResidency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonResidencyOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setDaemonResidency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DaemonResidencyIn"];
+            };
+        };
+        responses: {
+            /** @description What is true after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonResidencyOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationError"];
         };
     };
     listDaemonLogs: {
