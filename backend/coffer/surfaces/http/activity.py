@@ -7,12 +7,17 @@ past the host guard and reached the application. A DNS-rebinding attempt the
 guard refuses is traffic, not use, and counting it would keep the daemon
 resident on the strength of an attack.
 
+A request counts for as long as it is *open*, not just at the instant it
+arrives. ``/mcp`` is served over SSE and an agent's shim holds that stream for
+the whole session, so an arrival-only clock would read a connected agent that
+has not called a tool since last night as nobody at all.
+
 Raw ASGI rather than ``BaseHTTPMiddleware``, for the reason
 :mod:`coffer.surfaces.http.host_guard` gives: that base class buffers, which
 breaks the long-lived SSE streams ``/mcp`` serves. Nothing here touches the
-message stream anyway — it stamps the clock and gets out of the way, including
-when the application raises, since a request that failed still wanted an
-answer from this daemon.
+message stream anyway — it brackets the call and gets out of the way,
+including when the application raises, since a request that failed still
+wanted an answer from this daemon.
 """
 
 from __future__ import annotations
@@ -28,9 +33,14 @@ class ActivityMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] in ("http", "websocket"):
-            activity.touch()
-        await self.app(scope, receive, send)
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+        activity.request_started()
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            activity.request_ended()
 
 
 def install(app: FastAPI) -> None:

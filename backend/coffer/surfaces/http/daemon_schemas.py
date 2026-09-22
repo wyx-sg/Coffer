@@ -50,8 +50,12 @@ class DaemonResidencyOut(BaseModel):
 
 class DaemonResidencyIn(BaseModel):
     login_service_installed: bool
+    #: Required, with no default, because ``None`` already means something
+    #: here: "never stand down". A caller that meant to flip only the login
+    #: service and left this out would turn the idle shutdown off without
+    #: saying so, and nothing downstream could tell that apart from an
+    #: explicit null.
     idle_shutdown_hours: float | None = Field(
-        default=None,
         description="Hours of disuse before standing down; null to never stand down",
     )
 

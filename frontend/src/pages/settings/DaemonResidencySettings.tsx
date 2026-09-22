@@ -34,6 +34,11 @@ export function DaemonResidencySettings() {
   const { t } = useTranslation();
   const { data } = useDaemonResidency();
   const save = useSetDaemonResidency();
+  // Until the daemon has answered, the controls below are showing defaults
+  // rather than settings. A click in that window would PUT those defaults
+  // over whatever the daemon actually holds — turning "never stand down"
+  // into twelve hours, for instance, without anyone asking for it.
+  const loaded = data !== undefined;
 
   // Local mirror so a click reads as instant; corrected from the response,
   // which is what is true rather than what was asked.
@@ -71,6 +76,11 @@ export function DaemonResidencySettings() {
   };
 
   const unsupported = data?.login_service_supported === false;
+  // `coffer daemon idle set 3` is legal and this list does not offer 3. A
+  // Select with no matching item renders empty, so the setting the user has
+  // would be the one thing the page cannot show them.
+  const options: string[] = IDLE_OPTIONS.map(String);
+  if (idle !== NEVER && !options.includes(idle)) options.push(idle);
 
   return (
     <Card>
@@ -89,7 +99,7 @@ export function DaemonResidencySettings() {
           </div>
           <Switch
             checked={autostart}
-            disabled={unsupported || save.isPending}
+            disabled={!loaded || unsupported || save.isPending}
             onCheckedChange={(checked) => commit({ autostart: checked })}
             aria-label={t("settings.daemon.autostart")}
           />
@@ -100,14 +110,14 @@ export function DaemonResidencySettings() {
             <p className="text-sm font-medium">{t("settings.daemon.idle")}</p>
             <p className="text-sm text-muted-foreground">{t("settings.daemon.idleHelp")}</p>
           </div>
-          <Select value={idle} onValueChange={(v) => commit({ idle: v })}>
+          <Select value={idle} onValueChange={(v) => commit({ idle: v })} disabled={!loaded}>
             <SelectTrigger className="w-44" aria-label={t("settings.daemon.idle")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {IDLE_OPTIONS.map((hours) => (
-                <SelectItem key={hours} value={String(hours)}>
-                  {t("settings.daemon.idleHours", { count: hours })}
+              {options.map((hours) => (
+                <SelectItem key={hours} value={hours}>
+                  {t("settings.daemon.idleHours", { count: Number(hours) })}
                 </SelectItem>
               ))}
               <SelectItem value={NEVER}>{t("settings.daemon.idleNever")}</SelectItem>

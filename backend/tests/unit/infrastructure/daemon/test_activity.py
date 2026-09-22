@@ -47,9 +47,10 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> _Clock:
     return c
 
 
-def test_touching_restarts_the_clock(clock: _Clock) -> None:
+def test_a_finished_request_restarts_the_clock(clock: _Clock) -> None:
     clock.now = 1_000.0
-    activity.touch()
+    activity.request_started()
+    activity.request_ended()
     clock.now = 1_100.0
     assert activity.idle_seconds() == pytest.approx(100.0)
 
@@ -62,7 +63,8 @@ def test_a_hold_means_the_daemon_is_never_idle(clock: _Clock) -> None:
     """The channel listener's case: hours with no request is exactly what it
     is for, because the message that justifies it arrives the next morning.
     A hold is not weighed against elapsed time — it settles the question."""
-    activity.touch()
+    activity.request_started()
+    activity.request_ended()
     clock.now += 86_400.0  # a day with nothing asking
     activity.hold("channel-listener")
     assert activity.idle_seconds() == 0.0
@@ -70,6 +72,34 @@ def test_a_hold_means_the_daemon_is_never_idle(clock: _Clock) -> None:
 
     activity.release("channel-listener")
     assert activity.idle_seconds() == pytest.approx(86_400.0)
+
+
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a daemon nothing has wanted stands down",
+)
+def test_a_request_still_open_is_not_idleness(clock: _Clock) -> None:
+    """`/mcp` is SSE, and an agent's shim holds that stream for a whole
+    session. Counting only the instant a request arrived would read a
+    connected agent that has not called a tool since last night as nobody at
+    all — and then stand down waiting on the very stream that should have
+    stopped it."""
+    activity.request_started()
+    clock.now += 86_400.0  # a day, with the stream still open
+    assert activity.in_flight() == 1
+    assert activity.idle_seconds() == 0.0
+
+    activity.request_ended()
+    clock.now += 60.0
+    assert activity.idle_seconds() == pytest.approx(60.0)
+
+
+def test_the_in_flight_count_never_goes_negative() -> None:
+    # An unbalanced end (a middleware that raised before its start, a test
+    # that reset mid-request) must not leave the daemon permanently "busy"
+    # by wrapping around.
+    activity.request_ended()
+    assert activity.in_flight() == 0
 
 
 def test_holds_are_idempotent_by_name() -> None:

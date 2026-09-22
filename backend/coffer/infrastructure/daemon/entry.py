@@ -47,6 +47,14 @@ _ORPHAN_CHECK_INTERVAL = 30.0
 # keeps a sleeping daemon's wakeups down to one a minute.
 _IDLE_CHECK_INTERVAL = 60.0
 
+# How long a shutdown waits for open connections before closing them itself.
+# Without a bound, uvicorn's graceful shutdown waits forever on a connection
+# that never ends — and this daemon serves `/mcp` over SSE, which is exactly
+# such a connection. A stand-down or a restart that stopped accepting and then
+# hung would be worse than either: launchd would not restart it (nothing
+# exited) and the next client would find a port that no longer answers.
+_SHUTDOWN_GRACE_SECONDS = 10
+
 # Ceiling for the RLIMIT_NOFILE soft limit we raise at startup. Comfortably
 # above what a healthy daemon needs (sqlite + uvicorn socket + channel
 # listeners + ~2 pipe fds per live stdio upstream) so transient spikes never
@@ -187,6 +195,7 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
         fd=sock.fileno(),
         log_level="warning",
         access_log=False,
+        timeout_graceful_shutdown=_SHUTDOWN_GRACE_SECONDS,
     )
     server = uvicorn.Server(config)
 

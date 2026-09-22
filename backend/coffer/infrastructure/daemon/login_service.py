@@ -27,10 +27,23 @@ Installing is opt-in and reversible, and the plist names the binary it found
 at install time rather than a launcher that re-resolves — an agent that
 silently follows a symlink to a binary from another install is worse than one
 that fails visibly and is reinstalled.
+
+**Nothing here boots a loaded job out**, and that is the rule that keeps this
+module from being the most destructive thing in Coffer. Once the agent has
+started the daemon, the running daemon *is* the launchd job — so
+``launchctl bootout`` terminates it. The install and the uninstall are both
+reached from the Settings page, which is served BY that daemon: booting out
+would kill the process answering the request, so the reply never arrives, the
+switch reverts over a change that did happen, and the replacement mints a
+token the open page does not have. Writing or deleting the plist is enough for
+"does it start at login", which is the whole question; a job already loaded
+stays loaded until the user logs out, and a crash in the meantime is one more
+restart rather than a problem.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 import plistlib
 import subprocess
@@ -39,6 +52,8 @@ from pathlib import Path
 
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
+
+_logger = logging.getLogger(__name__)
 
 #: The launchd label, and the plist's basename. Reverse-DNS under the same
 #: domain as the desktop bundle (`dev.coffer.desktop`), distinct from it
@@ -84,6 +99,44 @@ def build_plist(*, program: list[str], path_env: str, log_file: Path) -> dict[st
     }
 
 
+#: How long the login-shell probe is allowed to take. A shell profile that
+#: hangs must not hang an install; the inherited PATH is a worse answer, not
+#: no answer.
+_SHELL_PROBE_TIMEOUT = 3.0
+
+
+def login_shell_path() -> str:
+    """The user's real `PATH`, as their login shell reports it.
+
+    Not `os.environ["PATH"]`, and the difference is the whole point of the
+    key. This code usually runs *inside the daemon* — reached from the
+    Settings page — and that daemon was commonly auto-spawned by an MCP shim
+    belonging to a GUI-launched editor, whose `PATH` is the truncated one
+    macOS hands a Dock launch. Baking that into the agent would install
+    exactly the minimal `PATH` this key exists to avoid, and the `npx`/`uvx`
+    upstreams would resolve to nothing at the next login.
+
+    The shell is asked the same way `desktop/src/env_path.rs` asks it, and
+    falls back to the inherited value on any failure: a probe that cannot
+    answer must not stop an install.
+    """
+    shell = os.environ.get("SHELL", "/bin/zsh")
+    inherited = os.environ.get("PATH", "")
+    try:
+        result = subprocess.run(
+            [shell, "-l", "-c", 'printf %s "$PATH"'],
+            capture_output=True,
+            text=True,
+            timeout=_SHELL_PROBE_TIMEOUT,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        _logger.warning("login shell PATH probe failed (%r); using the inherited PATH", exc)
+        return inherited
+    probed = result.stdout.strip()
+    return probed or inherited
+
+
 def _launchctl(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["launchctl", *args],
@@ -97,12 +150,18 @@ def _domain() -> str:
     return f"gui/{os.getuid()}"
 
 
-def install() -> Path:
-    """Write the agent and load it. Returns the plist path.
+def _is_loaded() -> bool:
+    """Whether launchd currently holds this label in the user's GUI domain."""
+    return _launchctl("print", f"{_domain()}/{LABEL}").returncode == 0
 
-    Idempotent: an existing agent is booted out first, so reinstalling after
-    an upgrade re-points it at the new binary rather than leaving the old one
-    loaded.
+
+def install() -> Path:
+    """Write the agent, and load it when launchd does not already hold it.
+
+    Idempotent, and deliberately gentle: an agent that is already loaded is
+    left loaded and the rewritten plist takes effect at the next login. The
+    alternative — boot it out and bootstrap the new one — reloads a *running
+    daemon*, which on this machine is usually the process running this code.
     """
     if not is_supported():
         raise ServiceUnsupported("a login service is macOS-only; there is no launchd here")
@@ -110,29 +169,32 @@ def install() -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = build_plist(
         program=daemon_spawn_command(),
-        path_env=os.environ.get("PATH", ""),
+        path_env=login_shell_path(),
         log_file=log_dir() / "daemon.log",
     )
-    # Boot out BEFORE rewriting: launchd holds the loaded copy, so a rewrite
-    # alone would leave the previous program running until the next login.
-    _launchctl("bootout", f"{_domain()}/{LABEL}")
     path.write_bytes(plistlib.dumps(payload))
+    if _is_loaded():
+        return path
     result = _launchctl("bootstrap", _domain(), str(path))
     if result.returncode != 0:
-        # `bootstrap` fails on an already-loaded label; the bootout above makes
-        # that unlikely, but older systems answer `load -w` and not much else.
+        # Older systems answer `load -w` and not much else.
         _launchctl("load", "-w", str(path))
     return path
 
 
 def uninstall() -> bool:
-    """Unload and remove the agent. False when there was nothing installed."""
+    """Remove the agent. False when there was nothing installed.
+
+    Removes the plist and stops there. "Stop starting it at login" is not
+    "stop it now", and the running daemon is very often the loaded job — so
+    unloading here would shut Coffer down on the way to a settings change.
+    launchd forgets the job at the next login, which is exactly when the
+    setting was going to matter.
+    """
     if not is_supported():
         raise ServiceUnsupported("a login service is macOS-only; there is no launchd here")
     path = plist_path()
     if not path.exists():
         return False
-    _launchctl("bootout", f"{_domain()}/{LABEL}")
-    _launchctl("unload", str(path))
     path.unlink(missing_ok=True)
     return True

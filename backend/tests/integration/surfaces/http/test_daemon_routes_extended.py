@@ -341,3 +341,41 @@ async def test_the_change_is_audited_with_what_became_true(tmp_path, monkeypatch
             {"login_service_installed": False, "idle_shutdown_hours": 6},
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_a_login_service_failure_leaves_the_idle_window_alone(tmp_path, monkeypatch):
+    """No half-applied change. The step that can fail runs first, so a 500
+    means nothing was written — rather than a 500 over an idle window that
+    quietly changed anyway."""
+    from coffer.infrastructure.daemon import login_service
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: True)
+    monkeypatch.setattr(
+        login_service, "install", lambda: (_ for _ in ()).throw(OSError("no launchd for you"))
+    )
+
+    c, home = await _client(tmp_path)
+    async with c:
+        r = await c.put(
+            "/api/v1/daemon/residency",
+            json={"login_service_installed": True, "idle_shutdown_hours": 4},
+        )
+        assert r.status_code == 500
+
+    config_path = home / ".coffer" / "daemon-config.json"
+    written = json.loads(config_path.read_text()) if config_path.exists() else {}
+    assert "idle_shutdown_hours" not in written
+
+
+@pytest.mark.asyncio
+async def test_the_idle_window_is_required_on_the_put(tmp_path, monkeypatch):
+    """`null` already means "never stand down", so an omitted field cannot
+    also mean "leave it alone" — the request is refused instead."""
+    from coffer.infrastructure.daemon import login_service
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: False)
+    c, _ = await _client(tmp_path)
+    async with c:
+        r = await c.put("/api/v1/daemon/residency", json={"login_service_installed": False})
+        assert r.status_code == 422

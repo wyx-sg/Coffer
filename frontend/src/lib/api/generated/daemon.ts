@@ -256,7 +256,8 @@ export interface components {
         };
         DaemonResidencyIn: {
             login_service_installed: boolean;
-            idle_shutdown_hours?: number | null;
+            /** @description Required, because null already means "never stand down" here. A caller that omitted it would turn the idle shutdown off without saying so. */
+            idle_shutdown_hours: number | null;
         };
         DaemonStatusOut: {
             /**

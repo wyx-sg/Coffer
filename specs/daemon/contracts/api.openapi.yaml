@@ -346,12 +346,16 @@ components:
 
     DaemonResidencyIn:
       type: object
-      required: [login_service_installed]
+      required: [login_service_installed, idle_shutdown_hours]
       properties:
         login_service_installed: { type: boolean }
         idle_shutdown_hours:
           type: number
           nullable: true
+          description: >-
+            Required, because null already means "never stand down" here. A
+            caller that omitted it would turn the idle shutdown off without
+            saying so.
 
     DaemonStatusOut:
       type: object

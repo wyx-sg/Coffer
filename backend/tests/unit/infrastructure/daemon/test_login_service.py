@@ -66,3 +66,29 @@ def test_the_label_is_distinct_from_the_desktop_bundle() -> None:
     # identifier is `dev.coffer.desktop`.
     assert login_service.LABEL == "dev.coffer.daemon"
     assert login_service.plist_path().name == "dev.coffer.daemon.plist"
+
+
+# --- the rule that keeps this module from shutting Coffer down -------------
+
+
+def test_nothing_here_boots_a_loaded_job_out() -> None:
+    """`launchctl bootout` terminates the job's process, and on this machine
+    that process is usually the daemon serving the Settings page the call
+    came from. The reply never arrives, the switch reverts over a change that
+    did happen, and the replacement mints a token the open page does not
+    have. Read off the source, because the failure needs a Mac with a loaded
+    agent and a live request to show itself."""
+    import inspect
+
+    # The quoted form is the argument a `_launchctl(...)` call would pass;
+    # the prose above may name the verb freely, and does.
+    assert '"bootout"' not in inspect.getsource(login_service)
+
+
+def test_the_path_comes_from_the_login_shell_not_the_daemons_environment() -> None:
+    """The key exists because a GUI-launched process has a truncated PATH —
+    and when this runs inside the daemon, `os.environ` IS that truncated
+    one."""
+    import inspect
+
+    assert "login_shell_path()" in inspect.getsource(login_service.install)

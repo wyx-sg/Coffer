@@ -7,11 +7,14 @@
 //! and the stop-then-start sequence — lives in `restart.rs`. This file owns
 //! the commands themselves and the credential handshake.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::{AppHandle, Manager};
 
 use crate::discovery::{
     daemon_responds_ok, read_daemon_info, request_daemon_shutdown, wait_for_port_free,
 };
+use crate::ready::{base_url_for, ready_deadline, wait_for_daemon_ready, DAEMON_READY_TIMEOUT_SECS};
 use crate::resolve::{daemon_source, DaemonSource};
 use crate::restart::{record_restart_outcome, restart_rate_limit_refusal, stop_running_daemon};
 use crate::spawn::spawn_resolved_daemon;
@@ -35,25 +38,6 @@ pub struct RestartResult {
 /// avoid an accidental tight-loop spawning many daemon processes.
 static LAST_RESTART_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 const RESTART_MIN_INTERVAL_SECS: u64 = 5;
-
-/// How long a daemon the shell just started is given to answer before the
-/// shell calls it a failure.
-///
-/// It is a ceiling, not an expectation. A daemon does not serve the moment it
-/// is spawned: the frozen binary unpacks itself, migrations run, the MCP
-/// upstreams and channel listeners come up in the FastAPI lifespan, and only
-/// then does uvicorn accept. On a real vault that takes anywhere from five to
-/// fifteen seconds, and longer when a remote upstream is slow to answer — the
-/// previous fifteen-second ceiling sat *inside* that spread, so a launch that
-/// landed on the slow end declared a daemon dead while it was seconds from
-/// serving. The value now sits well clear of it; the page retries anyway
-/// (`credentialDesktopHost`), so this bound only decides how long one attempt
-/// waits, never whether the app recovers.
-pub const DAEMON_READY_TIMEOUT_SECS: u64 = 90;
-
-/// How often the ready-wait re-probes. Short enough that a daemon that comes
-/// up fast is picked up straight away, long enough not to busy-spin.
-const DAEMON_READY_POLL_MS: u64 = 250;
 
 /// Restart the daemon: stop the running one (if any), spawn a fresh one.
 ///
@@ -82,9 +66,10 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     // closing the double-spawn race. The blocking TCP probe (~250ms) + spawn
     // happen under the lock; that's acceptable for a rare, user-initiated
     // manual restart.
-    let mut guard = LAST_RESTART_AT
-        .lock()
-        .map_err(|e| format!("restart lock poisoned: {e}"))?;
+    // A panic under this lock must not make every later restart impossible:
+    // the state it guards is one timestamp, and a poisoned one is still a
+    // perfectly good timestamp. Recover it rather than refusing forever.
+    let mut guard = LAST_RESTART_AT.lock().unwrap_or_else(|e| e.into_inner());
 
     // (1) Rate-limit guard. We only CHECK here against the last *successful*
     // spawn — we do NOT record `now` yet. The timestamp is recorded only
@@ -121,9 +106,14 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
 
     log::info!("daemon restarted (pid {})", pid);
 
-    // (4) Wait for it to serve, and hand its credentials back. The guard is
-    // still held: a second restart arriving mid-wait must queue behind this
-    // one rather than shut down the daemon this call is waiting for.
+    // Release before the wait. The lock exists to serialise the decision —
+    // rate limit, stop, spawn — and holding it through a ninety-second wait
+    // would block a tray restart, and a webview one on a runtime worker, for
+    // the whole of it. What it protects is already recorded: a second
+    // restart arriving now reads the timestamp above and is refused.
+    drop(guard);
+
+    // (4) Wait for it to serve, and hand its credentials back.
     let Some((port, token)) = wait_for_daemon_ready(ready_deadline()) else {
         let msg = format!(
             "coffer-daemon (pid {pid}) was started but did not answer within {DAEMON_READY_TIMEOUT_SECS}s"
@@ -155,7 +145,17 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
 /// appears at all when no daemon can be started, and an invisible app cannot
 /// tell anyone why. On failure the window opens on the offline banner, which
 /// is the surface that explains it and offers the restart.
+///
+/// **Once per run.** The page retries a failed handshake for as long as the
+/// app is open, so this is reached again every time one misses — and showing
+/// and focusing a window that is already up would steal the user's focus
+/// every thirty seconds, then undo the close-to-tray they just performed.
+/// The first appearance is the handshake's to decide; after that the window
+/// belongs to the user and the tray.
 pub fn reveal_main_window(app: &AppHandle) {
+    if MAIN_WINDOW_REVEALED.swap(true, Ordering::SeqCst) {
+        return;
+    }
     let Some(window) = app.get_webview_window("main") else {
         log::warn!("no main window to reveal");
         return;
@@ -164,38 +164,8 @@ pub fn reveal_main_window(app: &AppHandle) {
     let _ = window.set_focus();
 }
 
-/// The instant a ready-wait started now should give up at.
-fn ready_deadline() -> std::time::Instant {
-    std::time::Instant::now() + std::time::Duration::from_secs(DAEMON_READY_TIMEOUT_SECS)
-}
-
-/// The base URL the webview calls a daemon on `port` at.
-fn base_url_for(port: u16) -> String {
-    format!("http://127.0.0.1:{port}/api/v1")
-}
-
-/// Poll `~/.coffer/daemon.json` + the status route until a daemon answers, or
-/// `deadline` passes. Returns its port and token.
-///
-/// Both halves matter and neither is enough alone: the file appears when the
-/// port is bound, which is *before* the app is serving, so a reader that
-/// trusted the file would hand the page a token for a socket that does not
-/// answer yet.
-fn wait_for_daemon_ready(deadline: std::time::Instant) -> Option<(u16, String)> {
-    use std::thread::sleep;
-    use std::time::{Duration, Instant};
-    loop {
-        if let Some((port, token)) = read_daemon_info() {
-            if daemon_responds_ok(port) {
-                return Some((port, token));
-            }
-        }
-        if Instant::now() >= deadline {
-            return None;
-        }
-        sleep(Duration::from_millis(DAEMON_READY_POLL_MS));
-    }
-}
+/// Whether the launch reveal has already happened. See `reveal_main_window`.
+static MAIN_WINDOW_REVEALED: AtomicBool = AtomicBool::new(false);
 
 /// The version this app build expects the daemon to report. Sourced from the
 /// crate version (`Cargo.toml`) at compile time, never a hardcoded literal —

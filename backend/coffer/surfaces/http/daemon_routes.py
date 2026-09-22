@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import secrets
@@ -250,19 +251,26 @@ async def put_residency(
     immediately, because launchd is a different process and does not care what
     this one is doing.
     """
+    # Validate before writing anything, and do the step that can fail FIRST.
+    # Written the other way round, a launchd error left the idle window
+    # already changed on disk under a 500 that says nothing happened.
     try:
-        daemon_config.write_idle_shutdown_hours(body.idle_shutdown_hours)
+        daemon_config.validate_idle_shutdown_hours(body.idle_shutdown_hours)
     except daemon_config.InvalidIdleShutdown as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
     if login_service.is_supported():
+        # `launchctl` and the login-shell PATH probe are blocking subprocess
+        # calls; on the event loop they stall every other request for their
+        # duration, SSE streams included.
         try:
-            if body.login_service_installed:
-                login_service.install()
-            else:
-                login_service.uninstall()
+            await asyncio.to_thread(
+                login_service.install if body.login_service_installed else login_service.uninstall
+            )
         except OSError as exc:
             raise HTTPException(status_code=500, detail=f"login service: {exc}") from None
+
+    daemon_config.write_idle_shutdown_hours(body.idle_shutdown_hours)
 
     after = _residency()
     await audit.record(

@@ -24,6 +24,7 @@ mod daemon;
 mod discovery;
 mod env_path;
 mod logging;
+mod ready;
 mod resolve;
 mod restart;
 mod sidecar;
@@ -90,7 +91,9 @@ pub fn run() {
                 std::thread::sleep(WINDOW_REVEAL_FLOOR);
                 if let Some(window) = watchdog.get_webview_window("main") {
                     if !window.is_visible().unwrap_or(true) {
-                        log::warn!("revealing the window without a handshake: nothing asked for a daemon");
+                        log::warn!(
+                            "revealing the window without a handshake: nothing asked for a daemon"
+                        );
                         crate::daemon::reveal_main_window(&watchdog);
                     }
                 }
@@ -150,7 +153,7 @@ mod tests {
     // acceptance(spec = "desktop-app", scenario = "the window waits for a daemon, and opens either way")
     #[test]
     fn the_reveal_floor_outlasts_the_handshake_it_backs_up() {
-        let budget = std::time::Duration::from_secs(daemon::DAEMON_READY_TIMEOUT_SECS);
+        let budget = std::time::Duration::from_secs(ready::DAEMON_READY_TIMEOUT_SECS);
         assert!(
             WINDOW_REVEAL_FLOOR > budget,
             "the floor ({WINDOW_REVEAL_FLOOR:?}) must not race the handshake ({budget:?})"

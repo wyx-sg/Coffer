@@ -133,3 +133,32 @@ test("a failed save puts the control back — it never left the daemon unchanged
   await waitFor(() => expect(screen.getByText(/unexpected error/i)).toBeInTheDocument());
   expect(toggle).not.toBeChecked();
 });
+
+test("a window the option list does not offer is still shown", async () => {
+  // `coffer daemon idle set 3` is legal; a Select with no matching item
+  // renders blank, which would hide the very setting the page is for.
+  getMock.mockResolvedValue({
+    data: {
+      login_service_supported: true,
+      login_service_installed: true,
+      idle_shutdown_hours: 3,
+    },
+  });
+
+  render(wrap(<DaemonResidencySettings />));
+
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: /stand down after/i })).toHaveTextContent(/3/),
+  );
+});
+
+test("nothing is clickable until the daemon has answered", () => {
+  // The controls show defaults before the GET lands. A click then would PUT
+  // those defaults over whatever the daemon actually holds.
+  getMock.mockReturnValue(new Promise(() => {}));
+
+  render(wrap(<DaemonResidencySettings />));
+
+  expect(screen.getByRole("switch", { name: /start at login/i })).toBeDisabled();
+  expect(screen.getByRole("combobox", { name: /stand down after/i })).toBeDisabled();
+});
