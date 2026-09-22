@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from coffer.application.sync.convergence_ops import diff_between
 from coffer.domain.sync.convergence import ConvergeRun, ConvergeStatus
 from coffer.domain.sync.diff import ChangeStatus, DiffSummary
 
@@ -28,16 +29,20 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 class BackwardsMixin:
     """Rollback and rebuild, mixed into ``ConvergeRound``.
 
-    The four members below are what this half borrows from the forward round.
+    The three members below are what this half borrows from the forward round.
     Declaring them is what lets this file be type-checked on its own rather
     than on the assumption that whatever it is mixed into happens to provide
     them.
+
+    Taking a diff is deliberately NOT one of them any more. It used to be a
+    stub here that ``ConvergeRound`` overrode, which type-checks whether or not
+    the override exists — so when the forward round stopped defining it, every
+    rollback raised ``NotImplementedError`` at run time with mypy clean. It is
+    a free function in ``convergence_ops`` now, called directly by both halves,
+    and there is nothing left to forget to provide.
     """
 
     _mirror: GitMirrorPort
-
-    async def _diff(self, base: str, head: str) -> DiffSummary:
-        raise NotImplementedError  # pragma: no cover - provided by ConvergeRound
 
     async def _serialize_and_commit(self, pointer: str) -> str:
         raise NotImplementedError  # pragma: no cover - provided by ConvergeRound
@@ -68,7 +73,7 @@ class BackwardsMixin:
         part of the question (spec vault-sync ``## Restore``).
         """
         started = datetime.now(tz=UTC)
-        diff = await self._diff(current, target)
+        diff = await diff_between(self._mirror, current, target)
         if not delete:
             diff = DiffSummary.of([c for c in diff.changes if c.status is not ChangeStatus.DELETED])
         await self._mirror.reset_hard(target)

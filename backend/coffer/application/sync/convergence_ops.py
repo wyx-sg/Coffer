@@ -211,6 +211,35 @@ async def snapshot(mirror: GitMirrorPort, commit: str) -> None:
         await mirror.delete_tag(stale)
 
 
+#: git's one-letter raw status → what the round calls it. Statuses outside this
+#: map (a type change, an unmerged path) are not changes a document survives
+#: having applied, and are dropped rather than guessed at.
+_STATUS_TO_CHANGE = {"A": ChangeStatus.ADDED, "M": ChangeStatus.MODIFIED, "D": ChangeStatus.DELETED}
+
+
+async def diff_between(mirror: GitMirrorPort, base: str, head: str) -> DiffSummary:
+    """What changed between two commits, and which of it merely moved.
+
+    Two questions to git, deliberately separate. ``diff_paths`` is rename-blind
+    because the vault applies one path at a time and that must not change;
+    ``renames`` is the **guard's** reading of the same diff, and it is what
+    keeps a layout migration — a rename that also rewrites the document — from
+    being counted as the loss of everything it touched (spec vault-sync
+    FR-090, FR-095).
+    """
+    if base == head:
+        return DiffSummary()
+    raw = await mirror.diff_paths(base, head)
+    return DiffSummary.of(
+        [
+            DocChange(path, _STATUS_TO_CHANGE[status], blob=blob or None)
+            for status, path, blob in raw
+            if status in _STATUS_TO_CHANGE
+        ],
+        await mirror.renames(base, head),
+    )
+
+
 async def breached(
     mirror: GitMirrorPort, guard: DeletionGuard, diff: DiffSummary, at: str
 ) -> list[tuple[str, int, int]]:
@@ -224,7 +253,7 @@ async def breached(
     if not deleted_areas:
         return []
     totals = {area: await mirror.file_count(at, f"{area}/") for area in deleted_areas}
-    return guard.breached_areas(diff.vault_changes, totals)
+    return guard.breached_areas(diff.vault_changes, totals, diff.renames)
 
 
 async def outstanding_holds(

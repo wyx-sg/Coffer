@@ -177,6 +177,48 @@ rewrites its documents is therefore held, and a deletion with nothing receiving
 its content — a wiped disk, a failed restore, a stray `rm -rf` — is held
 exactly as it was before.
 
+### 2026-09-19 — "a relocation that also rewrites is held" is withdrawn
+
+The clause above survived exactly one more migration. Giving every resource an
+[immutable uid](resource-identity-is-an-immutable-uid.md) renamed each document
+*and* added a `uid:` line to it, so the content ids differed on the two sides
+and nothing paired: 28 of 28 resources read as lost, the publish-side breaker
+tripped, and the vault stopped converging for four days with nothing wrong with
+it. git had reported that same diff as 28 renames all along.
+
+Twice now the breaker has fired in the field, both times on a migration this
+project shipped, and never once on a loss. That is not a guard being cautious,
+it is a guard that stops convergence whenever Coffer changes its own
+serialization — and "moves documents and rewrites them" is the *definition* of
+a layout migration, not an unusual case it happens to catch.
+
+The asymmetry the clause rested on is real: wrongly excusing a deletion loses
+data, wrongly holding one costs a click. What is wrong is that it reaches this
+mechanism at all. A similarity pairing can only excuse a deletion when a
+sufficiently similar **addition exists in the same diff**, and the three losses
+the breaker was built for — a wiped disk, a failed restore, a stray `rm -rf` —
+produce diffs with no additions whatsoever. There is nothing for git to pair
+them with, so they are held exactly as before. The clause was not buying the
+protection it was written to buy.
+
+So a deletion now has a destination if **either** test shows one: the same
+content id reappearing, or git's own rename detection pairing the two sides.
+Three restrictions keep the second test from widening anything else. It is
+asked as a separate `git diff` invocation, so the diff the vault *applies*
+stays rename-blind and still lands one path at a time. Its pairings are
+filtered by area in the domain, because git pairs across the whole tree while
+the breaker's unit is the area. And it runs at git's own default similarity
+rather than a number of ours, because there is nothing to base a different one
+on.
+
+What this does not do is make the breaker exact, and the same incident shows
+where the edge is: one of those 28 documents — the channel, whose every
+internal reference switched to uid form at once — fell below the similarity
+threshold and would not have paired either. Twenty-seven of twenty-eight keeps
+an area under its share, so that round would have proceeded; a migration that
+rewrites *most* of what it moves past recognition is still held. That is the
+conservative half of the trade, and it is left standing.
+
 ### A hold is a question about one diff, not a state the vault sits in
 
 The same incident exposed a second defect, in what a *held* vault does next. A

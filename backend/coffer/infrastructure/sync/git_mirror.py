@@ -202,6 +202,39 @@ class GitMirror:
             changes.append((status, fields[i + 1], "" if _NULL_BLOB.match(blob) else blob))
         return changes
 
+    async def renames(self, base: str, head: str) -> list[tuple[str, str]]:
+        """``(source, destination)`` for the renames git detects between two
+        commits — the guard's second way to show a deletion had a destination.
+
+        A separate invocation from :meth:`diff_paths` on purpose. That one is
+        rename-blind because the vault applies one path at a time, and it stays
+        that way; this asks git the *other* question, and neither answer can
+        disturb the other. The cost is one extra ``git diff`` per diff taken,
+        over a tree of a few hundred small files.
+
+        ``--diff-filter=R`` so every record is a rename and each is exactly
+        three NUL-separated fields — metadata, source, destination — which is
+        what makes this parse simpler than the raw one above rather than
+        harder. ``-M`` at git's own default similarity: lowering it would
+        excuse more deletions on less evidence, and there is nothing to base a
+        different number on.
+
+        Two ways this can legitimately return nothing, and both are safe by
+        construction: git skips rename detection entirely once a diff exceeds
+        ``diff.renameLimit``, and a relocation that rewrites a document past
+        the similarity threshold is not paired. Either way the deletions simply
+        count, and the round is held rather than waved through."""
+        out = await self._git(
+            "diff", "--raw", "--abbrev=40", "-M", "--diff-filter=R", "-z", base, head
+        )
+        fields = [field for field in out.stdout.split("\0") if field]
+        # ``:<old mode> <new mode> <old blob> <new blob> R<score>\0<src>\0<dst>``
+        return [
+            (fields[i + 1], fields[i + 2])
+            for i in range(0, len(fields) - 2, 3)
+            if fields[i].startswith(":")
+        ]
+
     async def file_count(self, revision: str, prefix: str) -> int:
         """Files a commit holds under ``prefix``, read from the tree so the share
         the deletion guard measures against cannot move mid-round."""

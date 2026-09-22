@@ -87,7 +87,22 @@ class DocChange:
         return self.area not in NON_VAULT_AREAS
 
 
-def losses(changes: Iterable[DocChange]) -> tuple[DocChange, ...]:
+def _received_in_area(
+    renames: Sequence[tuple[str, str]],
+) -> dict[str, str]:
+    """Rename sources whose destination stays inside their own area.
+
+    git pairs renames across the whole tree; the guard's unit is the area, so
+    a pairing that crosses one is dropped here rather than trusted. Same
+    content in the wrong place is still a botched relocation.
+    """
+    return {src: dst for src, dst in renames if area_of(src) == area_of(dst)}
+
+
+def losses(
+    changes: Iterable[DocChange],
+    renames: Sequence[tuple[str, str]] = (),
+) -> tuple[DocChange, ...]:
     """The deletions in a diff that actually lose content: moves excluded.
 
     A re-layout is the case this exists for. When the knowledge two-lane
@@ -97,19 +112,36 @@ def losses(changes: Iterable[DocChange]) -> tuple[DocChange, ...]:
     saw 56 of 58 documents disappearing and held the round, for a round in
     which nothing at all was lost. The vault sat unpublished for a day.
 
-    A deletion is a **move** when the content it removed reappears, in the same
-    diff, under another path in the same area. The pairing is on content, never
-    on name similarity: git hands us a content id per side of every change, so
-    "these are the same bytes" is a fact we can read rather than a resemblance
-    we would have to guess at — and a guess that wrongly excuses a deletion
-    loses data, while a guess that wrongly holds one costs a click.
+    A deletion is a **move** when it has a destination in the same area, and
+    there are two ways to show one. Either the exact bytes reappear elsewhere
+    in the diff — a fact, read off the content ids git hands us per side — or
+    git's own rename detection paired the deletion with an addition it judged
+    sufficiently similar.
 
-    Four edges, decided:
+    The second test was added after the first proved too narrow. It was
+    originally rejected on the grounds that a guess which wrongly excuses a
+    deletion loses data while a guess which wrongly holds one costs a click,
+    and that asymmetry is real. But it does not reach this mechanism: a
+    similarity pairing can only excuse a deletion when a **sufficiently similar
+    addition exists in the same diff**, and the losses the guard was built for
+    — a wiped disk, a failed restore, a stray ``rm -rf`` — carry no additions
+    at all. Nothing is there to pair with, so they are held exactly as before.
 
-    * **Moved and edited.** The content differs, so it is not a move and the
-      deletion counts. A mass relocation that also rewrites its documents is
-      held and asked about once, which is the honest answer: nothing here can
-      tell it apart from a mass deletion beside a mass addition.
+    What the narrow test could not survive is a **layout migration**, which by
+    definition moves documents *and* rewrites them. Exact-bytes pairing holds
+    the vault every single time one lands, and it did: the knowledge two-lane
+    rewrite cost a day, and giving every resource an immutable uid (which
+    renamed each document and added a ``uid:`` line to it) cost four more, with
+    nothing lost on either occasion. A rule that stops convergence on every
+    schema change Coffer itself ships is not a guard, it is a tax.
+
+    Five edges, decided:
+
+    * **Moved and edited.** A move now, when git pairs the two sides. It is a
+      similarity judgement rather than a fact, and it is bounded by the
+      argument above. Below git's threshold the deletion still counts — a
+      relocation that rewrites a document past recognition is held, and that
+      is the conservative half of the trade rather than an oversight.
     * **The destination may be an addition or a modification.** A move that
       lands on a path the diff also modified still put the content somewhere,
       and requiring the destination to be brand new would hold a re-layout for
@@ -119,11 +151,13 @@ def losses(changes: Iterable[DocChange]) -> tuple[DocChange, ...]:
       set membership, not a one-to-one matching: the guard protects content,
       and the content of a duplicate is still in the vault. Pairing one-to-one
       would also cost a matching pass for no gain in what is protected.
-    * **A move that crosses areas is not a move.** The guard's unit is the
-      area — its share is measured against that area's own documents — so
-      "knowledge lost 56 of 58, and 56 identical files turned up under
-      ``credentials/``" is exactly the shape of a botched relocation that did
-      damage the knowledge area. Same content, wrong place, still asked about.
+    * **A move that crosses areas is not a move**, by either test. The guard's
+      unit is the area — its share is measured against that area's own
+      documents — so "knowledge lost 56 of 58, and 56 identical files turned
+      up under ``credentials/``" is exactly the shape of a botched relocation
+      that did damage the knowledge area. Same content, wrong place, still
+      asked about. git pairs renames across the whole tree, so its answers are
+      filtered here rather than trusted (:func:`_received_in_area`).
 
     The empty blob is excluded outright. Every empty file has identical
     content, so a single added empty file would otherwise excuse the deletion
@@ -131,9 +165,11 @@ def losses(changes: Iterable[DocChange]) -> tuple[DocChange, ...]:
     than evidence of a move.
 
     Linear in the number of changes: one pass to collect the content that
-    landed per area, one to test the deletions against it. No bytes are read.
+    landed per area, one to test the deletions against it. No bytes are read
+    here — git read them once, when it computed the rename pairings.
     """
     changes = tuple(changes)
+    received = _received_in_area(renames)
     landed: dict[str, set[str]] = {}
     for change in changes:
         if change.status is not ChangeStatus.DELETED and change.blob:
@@ -142,6 +178,7 @@ def losses(changes: Iterable[DocChange]) -> tuple[DocChange, ...]:
         change
         for change in changes
         if change.status is ChangeStatus.DELETED
+        and change.path not in received
         and not (
             change.blob
             and change.blob != EMPTY_BLOB
@@ -181,7 +218,10 @@ class DeletionGuard:
             raise ValueError("deletion floor must be at least 1")
 
     def breached_areas(
-        self, changes: Iterable[DocChange], totals: dict[str, int]
+        self,
+        changes: Iterable[DocChange],
+        totals: dict[str, int],
+        renames: Sequence[tuple[str, str]] = (),
     ) -> list[tuple[str, int, int]]:
         """Areas whose losses exceed the guard, as (area, lost, total).
 
@@ -192,7 +232,7 @@ class DeletionGuard:
         from an area this side does not know about is not something to do
         unattended.
         """
-        deleted = Counter(c.area for c in losses(c for c in changes if c.touches_vault))
+        deleted = Counter(c.area for c in losses((c for c in changes if c.touches_vault), renames))
         breached = []
         for area, count in sorted(deleted.items()):
             total = totals.get(area, 0)
@@ -206,10 +246,20 @@ class DiffSummary:
     """A round's diff, grouped for reporting."""
 
     changes: tuple[DocChange, ...] = ()
+    #: ``(source, destination)`` for every rename git detected in the same
+    #: diff. Carried on the summary rather than passed around because it is a
+    #: property *of this diff*: a summary rebuilt from history or assembled
+    #: from the retry set has none, and a deletion with no pairing counts,
+    #: which is the conservative answer.
+    renames: tuple[tuple[str, str], ...] = ()
 
     @classmethod
-    def of(cls, changes: Sequence[DocChange]) -> DiffSummary:
-        return cls(tuple(sorted(changes, key=lambda c: c.path)))
+    def of(
+        cls,
+        changes: Sequence[DocChange],
+        renames: Sequence[tuple[str, str]] = (),
+    ) -> DiffSummary:
+        return cls(tuple(sorted(changes, key=lambda c: c.path)), tuple(renames))
 
     def __bool__(self) -> bool:
         return bool(self.changes)
@@ -235,4 +285,4 @@ class DiffSummary:
         beside the 25 deletions the guard actually stopped, with nothing to
         tell them apart.
         """
-        return tuple(c.path for c in losses(self.vault_changes))
+        return tuple(c.path for c in losses(self.vault_changes, self.renames))

@@ -422,15 +422,19 @@ guards are normative.
   about to apply — the incoming diff **and** the retry set, since a held path
   the tree has since dropped is absorbed as a deletion.
 - **FR-090**: The guard MUST count what a round **loses**, not what it deletes.
-  A deletion whose content reappears at another path **in the same area of the
-  same diff** is a **move**: it MUST NOT count towards either threshold, and it
-  MUST NOT appear in the list a hold puts in front of the user, because a
-  document that turned up under another name was not removed. The pairing MUST
-  be on content and never on name similarity — a deletion whose content cannot
-  be shown to reappear counts, so a wiped disk, a failed restore or a stray
-  `rm -rf` is held exactly as before. A relocation that also *rewrites* its
-  documents is not a move and is held; the empty document is never paired,
-  since every empty file has identical content by construction.
+  A deletion with a destination **in the same area of the same diff** is a
+  **move**: it MUST NOT count towards either threshold, and it MUST NOT appear
+  in the list a hold puts in front of the user, because a document that turned
+  up under another name was not removed. A destination MAY be shown two ways —
+  the same content id reappearing, or git's own rename detection pairing the
+  two sides — and a deletion with neither counts. A pairing that crosses an
+  area MUST be discarded, since the guard's unit is the area. The empty
+  document is never paired on content, every empty file being identical by
+  construction.
+- **FR-095**: The two tests MUST be asked of git as **separate** questions: the
+  diff a round applies stays rename-blind, because the vault applies one path
+  at a time, and the guard's reading of the same diff MUST NOT change what is
+  applied or in what order.
 - **FR-091**: A round MUST re-derive its diff even while a confirmation is
   outstanding, and MUST **release** the hold where the direction it was raised
   for no longer breaches. A latch is an unanswered question about one diff, not
@@ -758,6 +762,23 @@ reported as a conflict.
 - **Then** the guard does not hold it, the round publishes unattended, the other
   machine absorbs the move with no confirmation of its own, and a deletion in
   the same round that no addition received is still held and listed on its own.
+
+### Scenario: a re-layout that rewrites its documents publishes without asking
+
+- **Given** a vault whose documents have all been moved to new addresses **and
+  edited on the way**, which is what a layout migration does — so the two sides
+  of every change differ and no content id pairs them,
+- **When** a round runs,
+- **Then** the guard reads git's own rename detection, does not hold the round,
+  and the other machine absorbs the migration with no confirmation of its own.
+
+### Scenario: a wiped area is held although rename pairings are consulted
+
+- **Given** a vault that has lost every document in an area with nothing added
+  in their place — a wiped disk, a failed restore, a stray `rm -rf`,
+- **When** a round runs,
+- **Then** there is nothing for a pairing to match, the round is held on the
+  publish side, and the loss is not published to the remote.
 
 ### Scenario: a hold is released once its diff no longer breaches
 

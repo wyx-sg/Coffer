@@ -47,6 +47,7 @@ from coffer.application.sync.convergence_ops import (
     applier_for,
     breached,
     commit_message,
+    diff_between,
     failed_run,
     hold_round,
     is_inapplicable,
@@ -72,12 +73,10 @@ from coffer.domain.sync.convergence import (
     JoinKind,
     PendingConfirmation,
 )
-from coffer.domain.sync.diff import ChangeStatus, DeletionGuard, DiffSummary, DocChange
+from coffer.domain.sync.diff import ChangeStatus, DeletionGuard, DiffSummary
 from coffer.domain.sync.models import ExportSummary
 
 _logger = logging.getLogger(__name__)
-
-_STATUS_TO_CHANGE = {"A": ChangeStatus.ADDED, "M": ChangeStatus.MODIFIED, "D": ChangeStatus.DELETED}
 
 
 class ConvergeRound(BackwardsMixin):
@@ -153,7 +152,7 @@ class ConvergeRound(BackwardsMixin):
 
         # --- 1 serialize ---------------------------------------------------
         local = await self._serialize_and_commit(pointer)
-        published = await self._diff(pointer, local)
+        published = await diff_between(self._mirror, pointer, local)
 
         breach = (
             []
@@ -182,13 +181,19 @@ class ConvergeRound(BackwardsMixin):
             )
 
         # --- 3 diff --------------------------------------------------------
-        applied = await self._diff(local, merged)
+        applied = await diff_between(self._mirror, local, merged)
         # The retry set is applied alongside the diff, so the guard must see
         # it too: a held path the tree has since dropped is a deletion this
         # round is about to perform, and a guard that only looked at ``D``
         # would let any number of those through unasked.
         retried = await outstanding_holds(self._mirror, self._state, applied)
-        everything = DiffSummary.of([*applied.changes, *retried.changes])
+        everything = DiffSummary.of(
+            [*applied.changes, *retried.changes],
+            # The retry set has no pairings of its own — it is reconstructed
+            # from held paths rather than read out of a diff — so the incoming
+            # diff's are the whole of what the guard has to go on here.
+            applied.renames,
+        )
 
         # --- 4 guard + snapshot --------------------------------------------
         breach = (
@@ -339,18 +344,6 @@ class ConvergeRound(BackwardsMixin):
             return local, resolved, unresolved
         merged = await self._mirror.commit_merge("coffer converge (merge)")
         return merged, resolved, []
-
-    async def _diff(self, base: str, head: str) -> DiffSummary:
-        if base == head:
-            return DiffSummary()
-        raw = await self._mirror.diff_paths(base, head)
-        return DiffSummary.of(
-            [
-                DocChange(path, _STATUS_TO_CHANGE[status], blob=blob or None)
-                for status, path, blob in raw
-                if status in _STATUS_TO_CHANGE
-            ]
-        )
 
     async def apply(self, diff: DiffSummary) -> list[tuple[str, str]]:
         """Step 5. Each path, independently; a failure is reported, not fatal.
