@@ -73,6 +73,15 @@ e2e/
 Run both with `cd e2e && npm test` (`playwright test`), or one leg with
 `npx playwright test --project=web` / `--project=mcp`.
 
+Both legs run the checkout they are launched from, and say so rather than
+assume it: `coffer` is installed into the venv editable, so `-m coffer...`
+resolves to whichever tree the venv was built in — which in a git worktree is
+the main checkout, because `.venv` there is a symlink to it. `start_daemon.sh`
+and `spawnShim` both put `<repo>/backend` on `PYTHONPATH` for that reason, and
+the daemon launcher refuses to start if `coffer` still resolves somewhere else.
+A suite that tests the wrong tree passes, which is why this is a hard failure
+rather than a warning.
+
 ## Layout Rationale
 
 - **Why `e2e/` is top-level (not under `backend/`)**: e2e is the seam exercised through real surfaces — a browser clicks through the UI the daemon serves, and an MCP client talks to `coffer-mcp-shim` over stdio, which talks to the daemon over `/mcp`, which fans out to upstream MCP servers and SQLite. Neither leg belongs to one package: putting them under `backend/` (or `frontend/`) would misrepresent ownership; they drive the assembled product.
