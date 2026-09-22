@@ -18,6 +18,13 @@ this script holds the line:
   3. Every relative markdown link inside `docs/decisions/` resolves.
   4. The ADR README index lists exactly the ADRs that exist, in both
      languages, each linking its own language's file.
+  5. No spec defines the same `FR-<digits>` twice. Requirement ids are the one
+     place numbers survive, and they are what every other spec, every ADR and
+     every code comment cites. Two requirements under one id is the recycled
+     number all over again, at the granularity that actually gets referenced:
+     `specs/vault-sync/spec.md` carried two different FR-093s for four days
+     after two PRs landed in the same week, and seventeen references across
+     the tree pointed at one of them with nothing to say so.
 
 Stdlib only. Exits non-zero on any failure.
 """
@@ -37,6 +44,10 @@ NUMBERED_ADR = re.compile(r"ADR-\d+")
 #: `spec 001`, `Specs 004`, `spec-009` — every shape the prose used to take.
 NUMBERED_SPEC = re.compile(r"\b[Ss]pecs?[ -](00[1-9]|0[1-9][0-9])\b")
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+#: A requirement DEFINITION, which is a top-level bullet: `- **FR-012**: …`.
+#: Deliberately anchored, so a mention of FR-012 inside another requirement's
+#: prose is a reference and not a second definition.
+FR_DEFINITION = re.compile(r"^- \*\*(FR-\d+)\*\*", re.MULTILINE)
 #: An index row links the ADR file as its first cell: `| [Title](slug.md) | … |`
 INDEX_ROW = re.compile(r"^\|\s*\[[^\]]+\]\(([^)]+\.md)\)")
 
@@ -134,6 +145,26 @@ def check_index() -> list[str]:
     return errors
 
 
+def check_unique_requirement_ids() -> list[str]:
+    """No spec defines one `FR-<digits>` twice.
+
+    Scoped per spec file, because ids are only ever cited with their spec —
+    `spec vault-sync FR-093` — so the same number in two different specs is
+    not an ambiguity. Within one spec it is: a reader, and every one of the
+    references in the tree, has no way to tell which requirement was meant.
+    """
+    errors = []
+    for spec in sorted(SPECS.rglob("spec.md")):
+        seen: dict[str, int] = {}
+        for match in FR_DEFINITION.finditer(spec.read_text(encoding="utf-8")):
+            seen[match.group(1)] = seen.get(match.group(1), 0) + 1
+        rel = spec.relative_to(REPO_ROOT)
+        for fr, count in sorted(seen.items()):
+            if count > 1:
+                errors.append(f"{rel}: {fr} is defined {count} times")
+    return errors
+
+
 def main() -> int:
     adrs = adr_files()
     if not adrs:
@@ -143,7 +174,12 @@ def main() -> int:
         )
         return 1
 
-    errors = check_no_numbers(tracked_files()) + check_links() + check_index()
+    errors = (
+        check_no_numbers(tracked_files())
+        + check_links()
+        + check_index()
+        + check_unique_requirement_ids()
+    )
     if errors:
         for error in errors:
             print(error, file=sys.stderr)
@@ -154,7 +190,8 @@ def main() -> int:
     # tree nests, and would count a spec's own `contracts/` folder as a spec.
     specs = sum(1 for _ in SPECS.rglob("spec.md"))
     print(
-        f"check_doc_numbering: {len(adrs)} ADRs and {specs} specs, all named, all links resolve"
+        f"check_doc_numbering: {len(adrs)} ADRs and {specs} specs, all named, "
+        f"all links resolve, no requirement id defined twice"
     )
     return 0
 

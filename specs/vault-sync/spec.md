@@ -46,7 +46,7 @@ enough for the two to stay alike.
   `channel` definitions MUST converge, serialized to text from SQLite, which
   stays the system of record. A resource document is identity, description and
   config — what the resource *is*. What it reaches is not in it (FR-014).
-- **FR-093**: A resource document MUST be stored at a path keyed by the
+- **FR-097**: A resource document MUST be stored at a path keyed by the
   resource's **uid**, and MUST carry that uid inside it. A machine receiving a
   document MUST match it to a local resource by uid, and MUST create a missing
   one *at that uid* rather than minting its own — two machines holding one
