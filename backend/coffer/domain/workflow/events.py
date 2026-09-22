@@ -118,7 +118,7 @@ _STATUS_BY_EVENT: dict[EventType, RunStatus] = {
     EventType.RUN_COMPLETED: RunStatus.COMPLETED,
     EventType.RUN_FAILED: RunStatus.FAILED,
     # Exceeding the budget pauses the run rather than continuing to spend
-    # (FR-018) — the event is its own type so the reason survives, but the
+    # — the event is its own type so the reason survives, but the
     # status it leaves behind is an ordinary pause.
 }
 

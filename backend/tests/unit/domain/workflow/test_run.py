@@ -77,7 +77,9 @@ def test_the_status_vocabularies_are_exactly_the_documented_ones():
         "expired",
         "superseded",
     }
-    assert {k.value for k in ApprovalKind} == {"tool_call", "node_action"}
+    # One kind, because one kind is all anything ever creates. A second value
+    # named an approval the code could not build — see ``ApprovalKind``.
+    assert {k.value for k in ApprovalKind} == {"tool_call"}
     assert {r.value for r in FailureReason} == {
         "interrupted",
         "agent_error",

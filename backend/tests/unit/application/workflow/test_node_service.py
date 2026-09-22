@@ -216,68 +216,80 @@ async def test_retry_inserts_a_new_attempt_and_leaves_the_old_one_alone(
     assert engine.types(run_id)[-1] == "node.retried"
 
 
-async def test_a_failing_node_that_says_stop_fails_the_run(engine: Engine) -> None:
-    """FR-024: the node's declared behaviour decides, not the engine."""
-    run_id, _version = await _running_first_node(engine)
+def _workflow_failing_with(on_failure: dict[str, object]) -> dict[str, object]:
+    """One stage, two tasks, the first declaring ``on_failure``.
 
-    result = await engine.nodes.record_failure(run_id, "draft_td", detail="agent died")
-
-    assert result.run.status == RunStatus.FAILED.value
-    assert engine.types(run_id)[-2:] == ["node.failed", "run.failed"]
-    assert engine.audit.types()[-1] == "workflow_run_finished"
-
-
-async def test_a_failing_node_that_says_retry_opens_the_next_attempt_itself(
-    engine: Engine,
-) -> None:
-    run = await engine.started()
-    engine.artifacts.add(run.id, "draft_td", 1, "td.md")
-    started = await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
-    await engine.nodes.record_output(run.id, "draft_td", summary="drafted")
-    position = await engine.nodes.next_position(run.id)
-    assert position is not None
-    current = await engine.run_repo.get_run(run.id)
-    await engine.nodes.act(run.id, "write_code", NodeAction.START, version=current.version)
-    del started
-
-    result = await engine.nodes.record_failure(run.id, "write_code", detail="tests red")
-
-    # `write_code` declares retry x1, so the engine opens attempt 2 rather than
-    # failing the run.
-    assert result.run.status == RunStatus.RUNNING.value
-    assert (await engine.attempts.latest_attempt(run.id, "write_code")).attempt == 2
-    assert engine.types(run.id)[-2:] == ["node.failed", "node.retried"]
-
-
-async def test_a_failing_node_that_says_continue_lets_the_run_finish(engine: Engine) -> None:
-    engine = build_engine(
-        {
-            "delivery": with_template(
-                stages=[
-                    {
-                        "key": "only",
-                        "name": "Only",
-                        "nodes": [
-                            {
-                                "key": "flaky",
-                                "name": "Flaky",
-                                "type": "ai",
-                                "on_failure": {"action": "continue"},
-                            }
-                        ],
-                    }
+    Two tasks rather than one because `continue` and `stop` are only
+    distinguishable when there is something after the task that failed: with a
+    single task both leave nothing to run.
+    """
+    return with_template(
+        stages=[
+            {
+                "key": "only",
+                "name": "Only",
+                "nodes": [
+                    {"key": "flaky", "name": "Flaky", "type": "ai", "on_failure": on_failure},
+                    {"key": "after", "name": "After", "type": "ai"},
                 ],
-                edges=[],
-            )
-        }
+            }
+        ]
     )
+
+
+async def _fail_the_first_task(engine: Engine) -> str:
     run = await engine.started()
     await engine.nodes.act(run.id, "flaky", NodeAction.START, version=run.version)
+    await engine.nodes.record_failure(run.id, "flaky", detail="tests red")
+    return str(run.id)
 
-    result = await engine.nodes.record_failure(run.id, "flaky", detail="never mind")
 
-    assert result.run.status == RunStatus.COMPLETED.value
-    assert engine.types(run.id)[-2:] == ["node.failed", "run.completed"]
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a failed task does what its workflow said to do about failure"
+)
+async def test_a_failed_task_does_what_its_workflow_declared_about_failure() -> None:
+    """FR-024: three workflows differing in one field, the same task failing in
+    each, three different outcomes — and the engine chose none of them.
+
+    Proved together rather than one behaviour per test because the claim is
+    that the DECLARATION decides: three passing tests that each pin one branch
+    would still pass if the engine had hard-coded that branch's outcome for
+    every workflow.
+    """
+    # `stop`: the run ends on the task that failed, and `after` never runs.
+    stops = build_engine({"delivery": _workflow_failing_with({"action": "stop"})})
+    run_id = await _fail_the_first_task(stops)
+    assert (await stops.latest(run_id)).status == RunStatus.FAILED.value
+    assert stops.types(run_id)[-2:] == ["node.failed", "run.failed"]
+    assert stops.audit.types()[-1] == "workflow_run_finished"
+    # And `after` does not run: the walk steps over a settled node whatever its
+    # status, so what holds the run is the run's own status — assert on that
+    # rather than on the walk, which would pass either way.
+    stopped = await stops.latest(run_id)
+    with pytest.raises(IllegalTransition):
+        await stops.nodes.act(run_id, "after", NodeAction.START, version=stopped.version)
+
+    # `continue`: the run carries on to the task after it.
+    carries_on = build_engine({"delivery": _workflow_failing_with({"action": "continue"})})
+    run_id = await _fail_the_first_task(carries_on)
+    assert (await carries_on.latest(run_id)).status == RunStatus.RUNNING.value
+    position = await carries_on.nodes.next_position(run_id)
+    assert position is not None and position.node_key == "after"
+    current = await carries_on.latest(run_id)
+    await carries_on.nodes.act(run_id, "after", NodeAction.START, version=current.version)
+
+    # `retry` twice: two more attempts, and the third failure stops the run.
+    retries = build_engine({"delivery": _workflow_failing_with({"action": "retry", "times": 2})})
+    run_id = await _fail_the_first_task(retries)
+    for expected in (2, 3):
+        assert (await retries.attempts.latest_attempt(run_id, "flaky")).attempt == expected
+        assert (await retries.latest(run_id)).status == RunStatus.RUNNING.value
+        current = await retries.latest(run_id)
+        await retries.nodes.act(run_id, "flaky", NodeAction.START, version=current.version)
+        await retries.nodes.record_failure(run_id, "flaky", detail="tests red")
+
+    assert (await retries.attempts.latest_attempt(run_id, "flaky")).attempt == 3
+    assert (await retries.latest(run_id)).status == RunStatus.FAILED.value
 
 
 async def test_skip_settles_a_node_and_restore_opens_the_next_attempt(
@@ -314,6 +326,10 @@ async def test_the_last_node_completing_completes_the_run(engine: Engine) -> Non
     await engine.nodes.record_output(run.id, "draft_td", summary="drafted")
     current = await engine.run_repo.get_run(run.id)
     await engine.nodes.act(run.id, "write_code", NodeAction.START, version=current.version)
+    # The last task declares no artifacts of its own, so what it owes is the
+    # default `report.md` (FR-072) — without it the run would stop for the
+    # developer rather than completing.
+    engine.artifacts.add(run.id, "write_code", 1, "report.md")
 
     result = await engine.nodes.record_output(run.id, "write_code", summary="pushed")
 
@@ -337,7 +353,6 @@ async def test_a_manual_node_never_completes_itself(engine: Engine) -> None:
                         ],
                     }
                 ],
-                edges=[],
             )
         }
     )
@@ -574,3 +589,63 @@ async def test_an_agent_this_machine_does_not_have_is_refused_when_it_is_chosen(
     # And nothing was written: the task still runs on the workflow's answer.
     await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
     assert engine.dispatcher.last.agent_key == "claude_code"
+
+
+@pytest.mark.acceptance(
+    spec="workflow",
+    scenario=("a task whose workflow demands approval holds the run until the developer decides"),
+)
+async def test_a_task_whose_policy_demands_approval_holds_the_run() -> None:
+    """FR-033, as the engine actually implements it.
+
+    `approval: always` is a decision about WORK, not about a payload: the task
+    runs, and then the run stops until the developer says it may go on. There
+    is no approval ROW — an approval carries an exact payload, and a task's
+    work is a conversation, which has none to carry. What that task's writes
+    needed was decided at the gateway while it ran (FR-034).
+
+    The regression this catches is the one that would make the policy
+    decorative: the task reaching `completed` on its own, or the task after it
+    starting behind its back.
+    """
+    template = with_template(
+        stages=[
+            {
+                "key": "design",
+                "name": "Design",
+                "nodes": [
+                    {
+                        "key": "draft_td",
+                        "name": "Draft the technical design",
+                        "type": "ai",
+                        "approval": "always",
+                    }
+                ],
+            },
+            {
+                "key": "coding",
+                "name": "Coding",
+                "nodes": [{"key": "write_code", "name": "Write the code", "type": "ai"}],
+            },
+        ]
+    )
+    engine = build_engine({"delivery": template})
+    run = await engine.started()
+    await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
+
+    result = await engine.nodes.record_output(run.id, "draft_td", summary="here is the design")
+
+    assert result.attempt is not None
+    assert result.attempt.status == NodeStatus.WAITING_REVIEW.value
+    # Nothing is raised to decide: the gateway holds payloads, this holds work.
+    assert await engine.approvals.list_approvals(run.id) == []
+    # And the run does not walk past it.
+    assert await engine.nodes.next_position(run.id) is None
+
+    await engine.nodes.act(
+        run.id, "draft_td", NodeAction.COMPLETE, version=result.run.version, waive_artifacts=True
+    )
+
+    position = await engine.nodes.next_position(run.id)
+    assert position is not None
+    assert position.node_key == "write_code"

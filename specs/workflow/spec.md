@@ -15,6 +15,14 @@ A stage holds one or more **nodes**, and each node is one conversation. The node
 
 That has a consequence the rest of this document leans on: **everything the developer does, they do inside a conversation.** The run's own page is a map — where the delivery is, what it has produced, what it is reading — and carries no controls. Retry, skip, redirect, correct: all of it is said in the node's conversation, where the thing being decided is in front of them. The single exception is an approval's Approve / Reject, which is a decision about an exact payload and cannot honestly be made by typing "ok".
 
+## A task's deliverable is what the next task reads
+
+Tasks do not hand each other their conversations. Each task owes at least one **artifact** — a file written at a path the task was told — and that artifact is the whole of what it says to the tasks that follow. A task opens with an INDEX of the run so far: every task that has run, what became of it, and the paths of what it produced. It opens what it needs from those paths and leaves the rest closed.
+
+That is the rule the whole opening context is built from: **name it, do not paste it.** Carrying the earlier tasks' transcripts forward instead was tried and does not survive a real delivery — the opening message then grows with every task that preceded it, and the fortieth task cannot start. An index costs one line per task however long the run gets, and a task that wants the detail is one `read` away from it.
+
+It has a consequence for the template. A task that owes nothing tells the next task nothing, so **every task owes a deliverable**; one the developer did not name is given a `report.md` to write.
+
 ## What this layer is not
 
 It is not a CI system — it never builds or tests on its own; a node asks an agent to, and the agent runs the repository's own commands. It is not a project tracker — Jira stays Jira, and a node writes to it through the gateway like any other external system. It is not a second agent runtime.
@@ -39,13 +47,13 @@ The developer points a template at a repository and a requirement, and the run a
 
 ### User Story 2 - The developer redirects a run in plain language (Priority: P1)
 
-Halfway through, the requirement changes. The developer opens the task that is running, says so in its conversation — in ordinary words, not through a form — and every task that opens afterwards knows, because a task opens with what the earlier ones said.
+Halfway through, the requirement changes. The developer opens the task that is running, says so in its conversation — in ordinary words, not through a form — and the deliverable that task writes says what was decided, which is what every task after it reads.
 
 **Why this priority**: A delivery that cannot be redirected mid-flight is a delivery the developer will abandon and do by hand.
 
-**Independent Test**: Say something in one task's conversation, then start the next task and assert its opening context carries it.
+**Independent Test**: Say something in one task's conversation, let the task finish, and assert the change of direction is in the artifact it wrote and that the next task's opening index names that artifact by path.
 
-**Covered by**: "a task is its own conversation, opened from the run", "a later task opens with what the earlier ones said", "the run's own page offers no controls"
+**Covered by**: "a task is its own conversation, opened from the run", "a later task opens with an index of what the run produced", "the run's own page offers no controls"
 
 ---
 
@@ -75,7 +83,7 @@ A three-stage flow for a small change, an eight-stage flow for a release train, 
 
 ### User Story 5 - The developer authors the flow in the app (Priority: P1)
 
-The shape of the work is the developer's, so they must be able to write it without leaving Coffer and without writing JSON: add a stage, name it, put nodes in it, pick the skill each node runs, say what it owes and whether it needs approval, and draw the edge that sends testing back to coding.
+The shape of the work is the developer's, so they must be able to write it without leaving Coffer and without writing JSON: add a stage, name it, put nodes in it, pick the skill each node runs, and say what it owes and whether it needs approval.
 
 **Why this priority**: A flow that can only be authored by hand-editing a file is a flow that will be authored once and never adjusted, which defeats the point of the template being data.
 
@@ -111,13 +119,13 @@ A delivery starts from things that already exist: a PRD, a ticket, a design doc,
 
 ### User Story 8 - A long delivery still fits (Priority: P2)
 
-Some nodes run for hours and some deliveries run for weeks. Neither one conversation nor the run's accumulated history may grow until a node cannot open.
+Some tasks run for hours and some deliveries run for weeks. Neither one conversation nor the run's accumulated history may grow until a task cannot open.
 
-**Why this priority**: Unbounded context is not a degraded experience, it is a broken one: the node fails to start at all.
+**Why this priority**: Unbounded context is not a degraded experience, it is a broken one: the task fails to start at all.
 
-**Independent Test**: Build a run whose earlier tasks exceed the context budget, open the next node, and assert its context is within budget and says what it summarised.
+**Independent Test**: Build a run of forty finished tasks, open the next one, and assert its opening context names them rather than quoting them, and is within budget.
 
-**Covered by**: "earlier tasks are summarised when they exceed the budget", "a long conversation is compacted rather than truncated"
+**Covered by**: "a later task opens with an index of what the run produced", "a task that produced nothing is still in the index", "a long conversation is compacted rather than truncated"
 
 ---
 
@@ -136,13 +144,13 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 ### Edge Cases
 
 - Two clients submit a command against the same run with the same observed version.
-- A feedback edge points back into a stage that has already completed.
+- A task the developer declared no deliverable for.
 - A node declares an artifact as required and the agent never writes it.
 - An approval is decided twice, or decided after it expired.
 - The agent calls a write-class tool the vault has never seen.
 - A run's working directory is deleted while the run is paused.
 - A run is opened on a machine that is not the one advancing it.
-- A feedback edge and a retry ceiling interact: testing keeps sending work back to coding.
+- A task fails or is skipped, so the tasks after it find nothing of its under that name.
 - An uploaded input is larger than the context budget on its own.
 
 ## Requirements *(mandatory)*
@@ -154,7 +162,6 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-003**: The system MUST attach no behaviour to any stage key — a stage's meaning is its position in the template and nothing else.
 - **FR-004**: A stage MUST carry an ordered list of nodes; a node names its type, an optional skill to run, optional additional instructions, the artifacts it owes, its approval policy, its failure behaviour and optionally the agent it runs on.
 - **FR-067**: A node's type MUST name who does the work and nothing else: an agent, or a person. The system MUST NOT carry a type that only describes what the work is ABOUT — a task's name and its instructions say that — and MUST NOT carry a type whose executor it cannot actually run.
-- **FR-005**: A template MUST support feedback edges — an edge from a later stage back to an earlier one, carrying the reason that takes it.
 - **FR-006**: The system MUST validate a template on write and refuse an invalid one naming the offending path, never storing a template that would stall a run.
 - **FR-007**: A template's scope MUST be read inverted, as the agents this template may drive; a node naming an agent outside that scope MUST be refused at validation.
 - **FR-008**: A template MUST travel with vault sync, so a flow defined on one machine is available on the developer's others.
@@ -180,21 +187,20 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-022**: A retry MUST append a new attempt; an attempt's conversation, output and feedback MUST survive it.
 - **FR-023**: A node that owes a required artifact and has not produced it MUST NOT complete; it MUST wait for the developer to supply it or waive it.
 - **FR-024**: A node failure MUST be handled by the node's declared failure behaviour: stop the run, continue to the next node, or retry up to a stated number of times.
-- **FR-025**: Taking a feedback edge MUST add a new task to the target stage carrying what was found, and MUST NOT reopen, retry or reset any node that already ran.
-- **FR-026**: Every task MUST declare how many attempts it may open, and every route that sends work back MUST declare how many times it may fire; reaching either MUST fail the run with the reason rather than loop. The limit MUST belong to the task and the route rather than to the workflow as a whole — a draft that is cheap to redo and a deploy that must not be tried twice are not the same judgement — and a task that names no limit MUST be given a default rather than an unbounded one.
+- **FR-025**: Sending work back MUST be the developer's own action and MUST NOT be a route the template draws. A finding in a later task is acted on by retrying the task that was wrong or by adding a task that fixes it (FR-021, FR-028); either way the tasks that already ran keep their result, their conversation and their artifacts. The template MUST NOT carry an edge between stages, because the judgement it would encode — whether this finding means redo the code or redo the design — is one only the person or the agent holding the finding can make, and a route fixed when the template was written makes it in advance and wrongly.
+- **FR-026**: Every task MUST declare how many attempts it may open, and reaching that limit MUST fail the run with the reason rather than open another. The limit MUST belong to the task rather than to the workflow as a whole — a draft that is cheap to redo and a deploy that must not be tried twice are not the same judgement — and a task that names no limit MUST be given a default rather than an unbounded one.
 - **FR-027**: A node whose turn was interrupted by a daemon restart MUST be reported as failed with an `interrupted` reason, with its conversation preserved and readable.
 - **FR-028**: The developer MUST be able to add an ad-hoc task to any stage of a run at any time, writing its instructions themselves; it MUST be recorded, contextualised and attributed exactly as a template node is.
 
 ### Shared context
 
-- **FR-029**: Every node MUST open with the same shared context: its own brief, its bound skill's instructions, the transcripts of the run's earlier tasks, the artifact catalogue, and the run's mounted inputs.
+- **FR-029**: Every task MUST open with the same four parts: its own brief including the exact path of each deliverable it owes, its bound skill's instructions, an index of the run's earlier tasks, and the run's mounted inputs. The skill's instructions are the only part carried as CONTENT, and even they are bounded (FR-047) — everything else MUST be named with the path or address that opens it, because a collection, an artifact or a repository can each be larger than the whole message. A task's opening context MUST NOT carry another task's conversation.
 - **FR-030**: A run MUST NOT have a conversation of its own. Every conversation in a run belongs to one task, the developer speaks to a task inside it, and what they say reaches the rest of the run by being part of the transcript the next task opens with.
-- **FR-031**: The artifact catalogue MUST be generated from what is on disk, never hand-maintained, and MUST name the node and attempt that produced each artifact.
+- **FR-031**: The index of earlier tasks MUST be generated rather than hand-maintained: the artifacts from what is on disk, each named with the task and attempt that produced it, and the tasks from the run's own record. A task the run has already opened and that produced nothing — because it failed, or was skipped — MUST still appear, with what became of it, because a task missing from the index reads as a task that never existed and the next one works from a hole it cannot see. The index MUST carry the LATEST attempt of each task and not the ones before it: a run reopens a task because what it produced was not right, so listing both would offer the next task a discarded deliverable beside the real one with nothing to tell them apart.
 - **FR-032**: A run's mounted inputs MUST be able to include knowledge collections, uploaded files, notes the developer wrote, external references and local repositories, and MUST be listed to every node rather than inlined wholesale.
 - **FR-057**: Mounting a repository input MUST give the run its own checkout of it inside the run's working directory. When the path is a git repository the system MUST create a git worktree on a branch of the run's own; otherwise it MUST link the directory in and say that it did. A run MUST NOT be pointed at the developer's working checkout in a way that lets it write there, because a run advances unattended and the developer's uncommitted work is not its to touch.
 - **FR-058**: Unmounting a repository input MUST remove what the run was given and MUST leave the source repository, its branches and its working tree untouched.
-- **FR-047**: The system MUST keep a node's opening context within a stated token budget, and MUST say in the context itself what it summarised rather than silently dropping it.
-- **FR-048**: When the earlier tasks' transcripts exceed their share of that budget, the system MUST summarise the oldest of them rather than truncate them.
+- **FR-047**: The system MUST keep a task's opening context within a stated token budget, and MUST say in the context itself what it shortened rather than silently dropping it. The budget is a backstop rather than the mechanism: an index of names is what keeps the context small, and a run long enough to overrun even that MUST be told which of its older tasks were elided and where the whole index can be read.
 - **FR-049**: When one node's own conversation exceeds its share, the system MUST compact its oldest turns into a summary that stays in the conversation.
 
 ### Inputs
@@ -204,7 +210,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 ### Approvals and the tool gate
 
-- **FR-033**: A node action whose approval policy requires it MUST create an approval carrying the exact payload that will be executed, and MUST NOT execute before a decision.
+- **FR-033**: A task whose approval policy requires it MUST stop for the developer when its turn ends and MUST NOT let the run move past it until they say so. This is a decision about WORK, not about a payload: a task's work is a conversation, and a conversation has no single exact payload to hold up in front of someone before it runs. The decision that IS about an exact payload is the one the gateway makes on a write-class tool call (FR-034), which is where a payload exists and where holding it actually stops the outside world being touched. The system MUST NOT carry a second approval mechanism at the task level claiming to do the gateway's job at a level that cannot do it.
 - **FR-034**: The gateway MUST refuse a write-class upstream tool call made on behalf of a run that has no approved, unexpired approval for it.
 - **FR-035**: The system MUST make a run's identity available to the gateway at the point a tool call is dispatched, so a call can be attributed to the run and node that caused it.
 - **FR-036**: A tool the vault has no write-class judgement for MUST be treated as write-class, and the developer's answer MUST be remembered so the same tool is not asked about twice.
@@ -215,6 +221,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 ### Artifacts
 
+- **FR-072**: Every task MUST owe at least one artifact, and a task whose template declared none MUST be given a required `report.md`. A deliverable is the only thing a task says to the tasks after it (FR-029), so a task that owes nothing is a task whose work leaves the run when its conversation closes. The default MUST be applied where the template is read rather than written into the developer's template, so a task they later give a deliverable of its own is not left owing two.
 - **FR-041**: A node's artifacts MUST be files under the run's own directory, attributed to the node and attempt that wrote them.
 - **FR-042**: A run's directory MUST NOT be indexed, chunked or embedded — the files are the only copy.
 - **FR-043**: What a run is MADE OF MUST be promotable into a knowledge collection in one action, so a delivery's output becomes the next delivery's input. Its artifacts, its uploaded files and its notes MUST travel as files; the links, collections and repositories it read MUST travel as one written record of having been read, because those are not the run's bytes to copy. It MUST NOT wait for the run to produce anything: a delivery that has so far only been given a brief is one whose brief is worth keeping.
@@ -224,13 +231,13 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **FR-044**: The system MUST expose templates, runs, nodes, approvals and events over the REST API.
 - **FR-045**: The web UI MUST list runs; show a run's stages and its tasks with their status; show what the run reads and what it has produced together in one list; open any task as its own conversation page; and let the developer decide that task's approvals from that page.
 - **FR-046**: The CLI MUST create, list, inspect, signal and abort runs, manage a run's inputs, act on a node, and decide approvals.
-- **FR-054**: The web UI MUST let the developer author a template: list templates, create one, and edit its stages and their order, the nodes in each stage and their order, each node's type, bound skill, instructions, declared artifacts, approval policy, failure behaviour, agent and attempt ceiling, and the routes that send work back between stages with each route's own ceiling. The workflow's name and description MUST be editable in place, on the workflow's own page, rather than only at creation.
+- **FR-054**: The web UI MUST let the developer author a template: list templates, create one, and edit its stages and their order, the nodes in each stage and their order, each node's type, bound skill, instructions, declared artifacts, approval policy, failure behaviour, agent and attempt ceiling. The workflow's name and description MUST be editable in place, on the workflow's own page, rather than only at creation.
 - **FR-055**: A refusal from template validation MUST be shown against the field it names rather than as a whole-form error, since the refusal already carries the offending path (FR-006).
 - **FR-056**: The template editor MUST write through the same resource endpoint every other client uses; it MUST NOT have a write path of its own.
 - **FR-052**: The run's own page MUST offer no controls that advance or alter the run. Every such action belongs to the node's conversation page, where what is being decided is in front of the developer.
 - **FR-059**: Templates and runs MUST be separate surfaces in the web UI: a template is a resource and MUST be reached where the other resource kinds are, and a run is operational state and MUST NOT be. Neither may be reachable only through the other.
-- **FR-060**: The template editor MUST NOT ask the developer for a stage's or a task's key. A key is an identity the engine reads no meaning from (FR-003), so it MUST be derived from the name, made unique, and rewritten through the feedback edges that named it in the same edit.
-- **FR-061**: The template editor MUST show a template as its SHAPE — every stage in the order it runs, with the routes that send work back drawn between them — beside the tasks of the one stage being edited, and MUST keep a stage's and a task's own fields behind opening that stage or task. A run MUST show its own stages and tasks the same way, because it is the same shape with state on it.
+- **FR-060**: The template editor MUST NOT ask the developer for a stage's or a task's key. A key is an identity the engine reads no meaning from (FR-003), so it MUST be derived from the name and made unique.
+- **FR-061**: The template editor MUST show a template as its SHAPE — every stage in the order it runs — beside the tasks of the one stage being edited, and MUST keep a stage's and a task's own fields behind opening that stage or task. A run MUST show its own stages and tasks the same way, because it is the same shape with state on it.
 - **FR-062**: The template editor MUST write each edit as it is made and MUST NOT hold unsaved state. A stage's and a task's fields are saved from the dialog that holds them; adding, reordering and deleting save themselves.
 - **FR-066**: A disabled workflow MUST start no new runs, and the refusal MUST come from the daemon rather than from one client's list — a rule that lives only in the web UI is not a rule. Runs already created from it MUST be unaffected: they froze their own snapshot (FR-011), so switching a workflow off retires it from the menu and does not reach into work already under way.
 - **FR-065**: A mounted external reference MUST be reported with what it points at — Confluence, Jira, a Google doc — when that can be recognised from its address, and with nothing when it cannot. The node's context MUST carry it, so that "go and read this" resolves to one tool rather than a guess. It MUST be derived on read rather than stored, so a reference mounted before its provider was recognisable is recognised without a migration.
@@ -243,7 +250,7 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 ### Key Entities
 
-- **Workflow Template**: a named, versioned, user-defined shape of work — stages, their nodes, and the edges between them. A resource.
+- **Workflow Template**: a named, versioned, user-defined shape of work — stages and the tasks in them, in the order they run. A resource.
 - **Run**: one execution of a frozen template snapshot against a working directory on one machine.
 - **Run Event**: an append-only record of something that happened to a run; the run's truth.
 - **Node Attempt**: one try at one node, with its conversation, status, output and artifacts.
@@ -263,6 +270,18 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **Given** a template whose three stages are named by the user
 - **When** a run is created from it
 - **Then** the run's stages are exactly those three, in that order, and no stage carries behaviour Coffer supplied (FR-002, FR-003)
+
+### Scenario: a task carries everything the engine needs to run it
+
+- **Given** a stage holding two tasks in the order the developer put them
+- **When** the template is read back
+- **Then** each task carries its type, its bound skill, its own instructions, the artifacts it owes, its approval policy, its failure behaviour and the agent it runs on, and the stage's tasks are in the order they were written (FR-004, FR-002)
+
+### Scenario: a workflow defined on one machine is there on the other
+
+- **Given** a workflow registered on one machine and a vault that syncs
+- **When** the developer's other machine converges
+- **Then** the workflow is there to run from, taking the same path every other resource kind takes (FR-008, FR-001)
 
 ### Scenario: an invalid template is refused with the offending path
 
@@ -294,6 +313,12 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** that node completes
 - **Then** the run is `completed` and refuses further mutating commands (FR-013)
 
+### Scenario: an aborted run refuses everything afterwards
+
+- **Given** a running run
+- **When** it is paused, resumed and then aborted
+- **Then** each signal is accepted in turn, and after the abort every mutating command is refused rather than applied (FR-016, FR-013)
+
 ### Scenario: a stale version is refused rather than applied
 
 - **Given** two clients holding the same observed version
@@ -318,17 +343,17 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** its turn ends without that artifact
 - **Then** the node does not complete and waits for the developer (FR-023)
 
-### Scenario: sending work back adds a task and resets nothing
+### Scenario: a failed task does what its workflow said to do about failure
 
-- **Given** a completed coding node and a testing node that found a code issue
-- **When** the feedback edge is taken
-- **Then** a task describing the issue joins the coding stage, the run goes back to it, and every node that already ran keeps its result and its conversation (FR-025)
+- **Given** three workflows whose task declares `stop`, `continue` and `retry` twice
+- **When** that task fails in each
+- **Then** the first run stops on it, the second carries on to the next task, and the third opens two more attempts before it stops — the behaviour the task declared, not one the engine chose (FR-024)
 
-### Scenario: a loop between two stages stops at the attempt ceiling
+### Scenario: sending work back is the developer's hand, not the template's route
 
-- **Given** a feedback edge that has fired its own ceiling
-- **When** it would send work back once more
-- **Then** the run fails with the reason instead of looping (FR-026)
+- **Given** a completed coding task and a testing task that found a code issue
+- **When** the developer acts on the finding
+- **Then** the template offers no route to take, and what they do instead — retry the coding task, or add a task that fixes it — leaves every task that already ran holding its result, its conversation and its artifacts (FR-025, FR-021, FR-028)
 
 ### Scenario: each task is given its own number of tries
 
@@ -348,17 +373,35 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** the developer opens that task
 - **Then** they get the task's own conversation, and the run has no conversation of its own to open (FR-030)
 
-### Scenario: a later task opens with what the earlier ones said
+### Scenario: a later task opens with an index of what the run produced
 
-- **Given** a run with completed tasks, things said in their conversations, and artifacts
-- **When** the next node starts
-- **Then** its opening context carries the earlier tasks' transcripts, the artifact catalogue naming each artifact's node and attempt, and the mounted inputs (FR-029, FR-031, FR-032)
+- **Given** a run with completed tasks, long conversations in them, and the artifacts they wrote
+- **When** the next task starts
+- **Then** its opening context lists each earlier task with what became of it and the path of each artifact it produced, lists the mounted inputs by name and address, and carries no earlier task's conversation (FR-029, FR-031, FR-032)
+
+### Scenario: a task that produced nothing is still in the index
+
+- **Given** a run whose second task failed and whose third was skipped
+- **When** the fourth task opens
+- **Then** both appear in its index with what became of them, so the absence of their deliverables is something it was told rather than something it has to infer (FR-031)
+
+### Scenario: a task the developer gave no deliverable still owes one
+
+- **Given** a workflow whose task declares no artifacts
+- **When** a run reaches that task
+- **Then** it opens owing a required `report.md` at an exact path, it does not complete until that file is there, and the developer's stored template is unchanged (FR-072, FR-023)
 
 ### Scenario: the run's own page offers no controls
 
 - **Given** a run mid-flight
 - **When** its page is read
 - **Then** it describes where the run is, what it produced and what it reads, and offers nothing that advances or alters it (FR-052)
+
+### Scenario: a vault that has never been touched already has a workflow
+
+- **Given** a vault with no workflow of the developer's own
+- **When** they look for one to run
+- **Then** exactly one built-in workflow is there, it names no skill and assumes nothing about what this vault has registered, and it can be edited, disabled or deleted like any other (FR-009, FR-001)
 
 ### Scenario: a template is found where the other resources are, and a run is not
 
@@ -368,9 +411,9 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 
 ### Scenario: the editor shows the whole flow beside the one stage being edited
 
-- **Given** a template of three stages, each with tasks, and an edge sending work back
+- **Given** a template of three stages, each with tasks
 - **When** the editor is opened
-- **Then** every stage is listed in order with the route back drawn between them, the tasks of one stage are shown and no other stage's are, and a task's fields appear only when that task is opened (FR-061)
+- **Then** every stage is listed in the order it runs, the tasks of one stage are shown and no other stage's are, and a task's fields appear only when that task is opened (FR-061)
 
 ### Scenario: a note the developer wrote is part of the run's context
 
@@ -408,6 +451,24 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** it is read
 - **Then** there is nothing to save and nothing to discard, because each edit was written as it was made (FR-062)
 
+### Scenario: everything the engine holds is on the API
+
+- **Given** a run with tasks, an approval and an event log
+- **When** the API is read
+- **Then** the workflows, the runs, their tasks, their approvals and their events are all reachable over REST, and no surface reads the engine another way (FR-044, FR-056)
+
+### Scenario: the web UI shows a delivery without opening its files by hand
+
+- **Given** a run mid-flight
+- **When** the developer opens the runs list and then that run
+- **Then** the list shows the run, the run shows its stages and its tasks with their status, what it reads and what it has produced are one list, any task opens as its own conversation page, and its approvals are decided from that page (FR-045, FR-039)
+
+### Scenario: the same delivery can be driven from the command line
+
+- **Given** a registered workflow
+- **When** the developer works only from the CLI
+- **Then** they can create, list, inspect, signal and abort a run, add and remove its inputs, act on a task, and decide an approval (FR-046)
+
 ### Scenario: a file in the run's context can be read from the app
 
 - **Given** a run with an uploaded input and an artifact a task wrote
@@ -432,11 +493,11 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** the engine decides what to do with each
 - **Then** the only question the type answers is whether a turn is dispatched or the run waits for a person (FR-067, FR-020)
 
-### Scenario: earlier tasks are summarised when they exceed the budget
+### Scenario: an index too long for the budget says what it left out
 
-- **Given** a run whose earlier tasks' transcripts exceed their share of the context budget
-- **When** the next node opens
-- **Then** the oldest are replaced by summaries, the context says so, and the whole is within budget (FR-047, FR-048)
+- **Given** a run of so many tasks that even their index exceeds the context budget
+- **When** the next task opens
+- **Then** the oldest entries are elided, the context says which and where the whole index can be read, and what remains is within budget (FR-047)
 
 ### Scenario: a long conversation is compacted rather than truncated
 
@@ -486,6 +547,12 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **When** the developer adds a task to a stage with instructions of their own
 - **Then** it runs with the same shared context and its artifacts are attributed to it as to any node (FR-028)
 
+### Scenario: a task whose workflow demands approval holds the run until the developer decides
+
+- **Given** a task whose approval policy is `always` and a task after it
+- **When** its turn ends
+- **Then** it waits for the developer rather than completing, the task after it does not start, and no approval of its own is raised — what its writes needed was decided at the gateway while it ran (FR-033, FR-034)
+
 ### Scenario: a write-class tool call without an approval is refused
 
 - **Given** a node whose agent calls a write-class upstream tool with no approved approval
@@ -521,6 +588,12 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **Given** a run with a bound channel
 - **When** an approval is created
 - **Then** it is shown on the conversation of the task that raised it and is delivered through that channel (FR-039)
+
+### Scenario: an artifact is a file, attributed to what wrote it
+
+- **Given** a task on its second attempt that writes the deliverable it owes
+- **When** the run's artifacts are read
+- **Then** the file is under the run's own directory and is named with that task and that attempt, so the first attempt's copy is still distinguishable from it (FR-041, FR-022)
 
 ### Scenario: a run's artifacts become a knowledge collection
 
@@ -559,9 +632,9 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - **SC-001**: A developer can take a requirement to a reviewed technical design, a branch of code, and a test report without issuing a command between stages other than review and approval decisions.
 - **SC-002**: No upstream write executed on behalf of a run without an approval the developer decided.
 - **SC-003**: A run's position after a daemon restart matches its position before, for every run that was not mid-turn.
-- **SC-004**: A change of direction stated once in a task's conversation is visible to every task that runs afterwards, without being restated.
+- **SC-004**: A change of direction stated once in a task's conversation reaches every task that runs afterwards, without being restated, by way of the deliverable that task writes.
 - **SC-005**: A delivery flow can be redefined — stages added, removed or reordered — without changing any code.
-- **SC-006**: A node opens within its context budget however long the run has been going.
+- **SC-006**: A task's opening context grows by one line per task that preceded it, so the last task of a forty-task delivery opens on roughly what the first one did.
 
 ## Assumptions
 
@@ -569,12 +642,11 @@ The daemon restarts. The run comes back exactly as it was, except the node that 
 - A run's work happens in one working directory; work in a second repository is an ad-hoc task pointed at it.
 - The agents a node runs on are the registered ones; this layer adds no agent type.
 - A node's external reach is whatever the gateway already exposes; this layer registers no upstream server of its own.
-
-- Summarising a transcript uses the internal connection the rest of the vault already uses for its own model calls; with none configured, the oldest transcripts are listed rather than summarised, and the context says so.
+- Compacting one task's own conversation uses the internal connection the rest of the vault already uses for its own model calls; with none configured, nothing is removed and the conversation is told why (FR-049). Nothing else in a task's opening context needs a model, because none of it is summarised — it is named.
 
 ## Out of Scope
 
-- Parallel nodes within a run — one node at a time, so shared context and approvals stay answerable.
+- Parallel tasks within a run — one task at a time, so the index a task opens with and the approvals it raises stay answerable.
 - Multi-person review or assignment; there is one owner and no reviewer role.
 - Scheduling a run to start at a time; a run starts when the developer starts it.
 - Driving the engine from an agent over MCP — an agent does a node's work, it does not decide the run's shape.

@@ -1,4 +1,4 @@
-"""The shared opening context every node receives (FR-029, FR-031, FR-032)."""
+"""The opening context every task receives (FR-029, FR-031, FR-032, FR-072)."""
 
 from __future__ import annotations
 
@@ -8,12 +8,16 @@ from datetime import UTC, datetime
 
 import pytest
 
+from coffer.application.workflow.context_budget import (
+    NODE_CONTEXT_TOKEN_BUDGET,
+    estimate_tokens,
+)
 from coffer.application.workflow.context_composer import (
     ContextComposer,
     NodeContextRequest,
     parse_inputs,
 )
-from coffer.application.workflow.transcripts import TaskTranscript, TranscriptMessage
+from coffer.application.workflow.task_index import EarlierTask
 from coffer.domain.workflow.run import (
     REPO_MOUNT_LINK,
     REPO_MOUNT_WORKTREE,
@@ -73,24 +77,14 @@ class FakeSkills:
         return self.texts.get(skill_name)
 
 
-class FakeTranscripts:
-    def __init__(self, items: Sequence[TaskTranscript] = ()) -> None:
+class FakeEarlierTasks:
+    def __init__(self, items: Sequence[EarlierTask] = ()) -> None:
         self.items = list(items)
         self.asked: list[tuple[str, str]] = []
 
-    async def transcripts(self, run_id: str, before_attempt_id: str) -> Sequence[TaskTranscript]:
+    async def earlier(self, run_id: str, before_attempt_id: str) -> Sequence[EarlierTask]:
         self.asked.append((run_id, before_attempt_id))
         return list(self.items)
-
-
-class FakeSummariser:
-    def __init__(self, text: str | None = "The design settled on the retry ceiling.") -> None:
-        self.text = text
-        self.asked: list[str] = []
-
-    async def summarise(self, text: str, *, hint: str) -> str | None:
-        self.asked.append(text)
-        return self.text
 
 
 class FakeKnowledge:
@@ -109,8 +103,7 @@ def make_composer(
     entries: Sequence[FakeEntry] = (),
     skills: dict[str, str] | None = None,
     collections: dict[str, str] | None = None,
-    transcripts: Sequence[TaskTranscript] = (),
-    summary: str | None = "The design settled on the retry ceiling.",
+    earlier: Sequence[EarlierTask] = (),
 ) -> tuple[ContextComposer, FakeStore, FakeSkills]:
     store = FakeStore(entries)
     skill_port = FakeSkills(skills)
@@ -118,8 +111,7 @@ def make_composer(
         skills=skill_port,
         knowledge=FakeKnowledge(collections),
         artifacts=store,
-        transcripts=FakeTranscripts(transcripts),
-        summariser=FakeSummariser(summary),
+        earlier=FakeEarlierTasks(earlier),
     )
     return composer, store, skill_port
 
@@ -145,17 +137,18 @@ def make_request(node: Node | None = None, **overrides: object) -> NodeContextRe
     return NodeContextRequest(**base)  # type: ignore[arg-type]
 
 
-def task(node_key: str, *texts: str, attempt: int = 1, name: str | None = None) -> TaskTranscript:
-    return TaskTranscript(
-        node_key=node_key,
-        attempt=attempt,
-        name=name,
-        messages=tuple(TranscriptMessage(role="developer", text=text) for text in texts),
-    )
+def task(
+    node_key: str,
+    *,
+    attempt: int = 1,
+    name: str = "An earlier task",
+    status: str = "completed",
+) -> EarlierTask:
+    return EarlierTask(node_key=node_key, name=name, attempt=attempt, status=status)
 
 
 @pytest.mark.acceptance(
-    spec="workflow", scenario="a later task opens with what the earlier ones said"
+    spec="workflow", scenario="a later task opens with an index of what the run produced"
 )
 async def test_the_four_parts_arrive_in_the_order_fr029_fixes() -> None:
     composer, _store, _skills = make_composer(skills={"coffer-writing-td": "Write it well."})
@@ -165,8 +158,8 @@ async def test_the_four_parts_arrive_in_the_order_fr029_fixes() -> None:
     positions = [
         text.index("## 1. Your brief"),
         text.index("## 2. Skill"),
-        text.index("## 3. What the earlier tasks said"),
-        text.index("## 4. Artifacts and mounted inputs"),
+        text.index("## 3. What this run has done so far"),
+        text.index("## 4. Mounted inputs"),
     ]
     assert positions == sorted(positions)
 
@@ -217,62 +210,13 @@ async def test_a_skill_deleted_since_the_template_was_written_does_not_stall_the
     text = await composer.compose(make_request())
 
     assert "no longer registered" in text
-    assert "## 3. What the earlier tasks said" in text
+    assert "## 3. What this run has done so far" in text
 
 
 @pytest.mark.acceptance(
-    spec="workflow", scenario="a later task opens with what the earlier ones said"
+    spec="workflow", scenario="a later task opens with an index of what the run produced"
 )
-async def test_the_earlier_tasks_transcripts_are_quoted_oldest_first() -> None:
-    transcripts = (
-        task("draft_td", "Target friday."),
-        task("write_code", "Actually, drop the migration."),
-    )
-    composer, _store, _skills = make_composer(transcripts=transcripts)
-
-    text = await composer.compose(make_request())
-
-    assert text.index("Target friday.") < text.index("Actually, drop the migration.")
-    assert "**developer**" in text
-    assert "`draft_td` attempt 1" in text
-
-
-async def test_the_transcripts_are_asked_for_by_the_attempt_now_opening() -> None:
-    store = FakeStore()
-    transcripts = FakeTranscripts()
-    composer = ContextComposer(
-        skills=FakeSkills(),
-        knowledge=FakeKnowledge(),
-        artifacts=store,
-        transcripts=transcripts,
-        summariser=FakeSummariser(),
-    )
-
-    await composer.compose(make_request(attempt_id="attempt-42"))
-
-    assert transcripts.asked == [("run-1", "attempt-42")]
-
-
-async def test_a_run_whose_first_task_is_opening_says_nothing_ran_before_it() -> None:
-    composer, _store, _skills = make_composer()
-
-    text = await composer.compose(make_request())
-
-    assert "No task has run before yours." in text
-
-
-async def test_the_message_says_the_run_has_no_conversation_of_its_own() -> None:
-    composer, _store, _skills = make_composer()
-
-    text = await composer.compose(make_request())
-
-    assert "This run has no conversation of its own." in text
-
-
-@pytest.mark.acceptance(
-    spec="workflow", scenario="a later task opens with what the earlier ones said"
-)
-async def test_the_catalogue_is_regenerated_into_the_context_naming_node_and_attempt() -> None:
+async def test_the_earlier_tasks_are_indexed_oldest_first_by_what_they_produced() -> None:
     entries = [
         FakeEntry(
             name="td.md",
@@ -283,17 +227,102 @@ async def test_the_catalogue_is_regenerated_into_the_context_naming_node_and_att
             modified_at=datetime(2026, 9, 17, 8, 0, tzinfo=UTC),
         )
     ]
-    composer, store, _skills = make_composer(entries=entries)
+    earlier = (
+        task("draft_td", name="Draft the technical design"),
+        task("write_code", name="Write the code"),
+    )
+    composer, _store, _skills = make_composer(entries=entries, earlier=earlier)
 
     text = await composer.compose(make_request())
 
-    assert store.written, "composing must regenerate CATALOG.md from the directory"
-    assert "`artifacts/draft_td/1/td.md`" in text
-    assert "`draft_td`" in text
+    assert text.index("`draft_td`") < text.index("`write_code`")
+    assert "`/vault/workflows/run-1/artifacts/draft_td/1/td.md`" in text
+
+
+async def test_no_earlier_conversation_reaches_the_opening_message() -> None:
+    """The change this module exists for, asserted as an absence.
+
+    A task hands the next one its deliverable, not its transcript (FR-029). The
+    composer has no port that could reach a conversation any more, so what this
+    pins is that nobody reintroduces one by putting a summary or an output on
+    the index row — which is how the unbounded growth came back last time.
+    """
+    composer, _store, _skills = make_composer(
+        earlier=(task("draft_td", name="Draft the technical design"),)
+    )
+
+    text = await composer.compose(make_request())
+
+    assert "**developer**" not in text
+    assert "You will not be shown any other task's conversation" in text
+
+
+async def test_the_index_is_asked_for_by_the_attempt_now_opening() -> None:
+    store = FakeStore()
+    earlier = FakeEarlierTasks()
+    composer = ContextComposer(
+        skills=FakeSkills(),
+        knowledge=FakeKnowledge(),
+        artifacts=store,
+        earlier=earlier,
+    )
+
+    await composer.compose(make_request(attempt_id="attempt-42"))
+
+    assert earlier.asked == [("run-1", "attempt-42")]
+
+
+async def test_a_run_whose_first_task_is_opening_says_nothing_ran_before_it() -> None:
+    composer, _store, _skills = make_composer()
+
+    text = await composer.compose(make_request())
+
+    assert "No task of this run has run before yours." in text
+
+
+async def test_the_message_says_what_carries_work_to_the_rest_of_the_run() -> None:
+    """The handover rule, stated to the agent rather than assumed of it.
+
+    A task that does not know its conversation is private will answer in the
+    conversation and write nothing, and the run afterwards has a task that
+    reported success and produced no deliverable to show for it.
+    """
+    composer, _store, _skills = make_composer()
+
+    text = await composer.compose(make_request())
+
+    assert "What a task hands the rest of the run is the DELIVERABLE it writes" in text
 
 
 @pytest.mark.acceptance(
-    spec="workflow", scenario="a later task opens with what the earlier ones said"
+    spec="workflow", scenario="a later task opens with an index of what the run produced"
+)
+async def test_composing_regenerates_the_catalogue_the_index_points_at() -> None:
+    entries = [
+        FakeEntry(
+            name="td.md",
+            node_key="draft_td",
+            attempt=1,
+            path="draft_td/1/td.md",
+            size=64,
+            modified_at=datetime(2026, 9, 17, 8, 0, tzinfo=UTC),
+        )
+    ]
+    composer, store, _skills = make_composer(
+        entries=entries, earlier=(task("draft_td", name="Draft the technical design"),)
+    )
+
+    text = await composer.compose(make_request())
+
+    # The index names `CATALOG.md` as where the whole of it can be read when it
+    # is itself too long (FR-047), so the file has to exist by then — a path
+    # offered to an agent that resolves to nothing is worse than no path.
+    assert store.written, "composing must regenerate CATALOG.md from the directory"
+    assert "`/vault/workflows/run-1/artifacts/draft_td/1/td.md`" in text
+
+
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a later task opens with an index of what the run produced"
 )
 async def test_mounted_inputs_are_listed_and_never_inlined() -> None:
     inputs = (
@@ -342,26 +371,26 @@ async def test_a_collection_deleted_since_it_was_mounted_is_still_listed() -> No
     assert "- knowledge `gone` — not found in this vault" in text
 
 
-async def test_the_message_says_the_context_is_shared_and_may_be_read_further() -> None:
+async def test_the_message_says_it_holds_names_and_invites_the_task_to_open_them() -> None:
     composer, _store, _skills = make_composer()
 
     text = await composer.compose(make_request())
 
-    assert "every task of this run" in text
-    assert "Nothing here is inlined" in text
+    assert "Sections 3 and 4 are names, not contents" in text
+    assert "go and open what you need" in text
 
 
-async def test_two_tasks_of_one_run_get_the_same_three_run_level_parts() -> None:
-    transcripts = (task("draft_td", "Keep it small."),)
+async def test_two_tasks_of_one_run_get_the_same_run_level_parts() -> None:
+    earlier = (task("draft_td", name="Draft the technical design"),)
     inputs = (RunInput(kind=RunInputKind.LINK, ref="https://example.invalid/x"),)
-    composer, _store, _skills = make_composer(transcripts=transcripts)
+    composer, _store, _skills = make_composer(earlier=earlier)
     second_node = Node(key="review", name="Review it", type=NodeType.AI)
 
     first = await composer.compose(make_request(inputs=inputs))
     second = await composer.compose(make_request(second_node, inputs=inputs))
 
     def tail(text: str) -> str:
-        return text[text.index("## 3. What the earlier tasks said") :]
+        return text[text.index("## 3. What this run has done so far") :]
 
     assert tail(first) == tail(second)
 
@@ -388,85 +417,6 @@ def test_a_boolean_size_is_not_a_size() -> None:
     parsed = parse_inputs([{"kind": "file", "ref": "prd.pdf", "size": True}])
 
     assert parsed[0].size is None
-
-
-async def test_the_embedded_catalogue_does_not_open_a_second_h1() -> None:
-    entries = [
-        FakeEntry(
-            name="td.md",
-            node_key="draft_td",
-            attempt=1,
-            path="draft_td/1/td.md",
-            size=64,
-            modified_at=datetime(2026, 9, 17, 8, 0, tzinfo=UTC),
-        )
-    ]
-    composer, _store, _skills = make_composer(entries=entries)
-
-    text = await composer.compose(make_request())
-
-    assert text.count("\n# ") == 0
-    assert "Edits are overwritten" in text
-
-
-@pytest.mark.acceptance(
-    spec="workflow", scenario="earlier tasks are summarised when they exceed the budget"
-)
-async def test_the_oldest_transcripts_are_summarised_and_the_context_says_which() -> None:
-    # 200k ASCII characters is ~50k tokens — over the transcripts' 33k share.
-    huge = "x" * 200_000
-    transcripts = (
-        task("draft_td", huge, name="Draft the technical design"),
-        task("write_code", "Kept verbatim."),
-    )
-    composer, _store, _skills = make_composer(transcripts=transcripts)
-
-    text = await composer.compose(make_request())
-
-    assert "summaries, not transcripts" in text
-    assert "`draft_td` attempt 1 — Draft the technical design" in text
-    assert "The design settled on the retry ceiling." in text
-    assert "Kept verbatim." in text
-    assert huge not in text
-
-
-async def test_with_no_summariser_the_omitted_transcripts_are_named_not_dropped() -> None:
-    # 200k ASCII characters is ~50k tokens — over the transcripts' 33k share.
-    huge = "x" * 200_000
-    transcripts = (
-        task("draft_td", huge, name="Draft the technical design"),
-        task("write_code", "Kept verbatim."),
-    )
-    composer, _store, _skills = make_composer(transcripts=transcripts, summary=None)
-
-    text = await composer.compose(make_request())
-
-    assert "no internal model connection is configured" in text
-    assert "`draft_td` attempt 1 — Draft the technical design" in text
-    assert huge not in text
-    assert "Kept verbatim." in text
-
-
-async def test_a_catalogue_larger_than_its_share_is_cut_and_points_at_the_file() -> None:
-    entries = [
-        FakeEntry(
-            name=f"artifact-{index}.md",
-            node_key=f"node_{index}",
-            attempt=1,
-            path=f"node_{index}/1/artifact-{index}.md",
-            size=64,
-            modified_at=datetime(2026, 9, 17, 8, 0, tzinfo=UTC),
-        )
-        for index in range(4000)
-    ]
-    composer, store, _skills = make_composer(entries=entries)
-
-    text = await composer.compose(make_request())
-
-    assert "older catalogue line(s) are omitted here" in text
-    assert "`/vault/workflows/run-1/CATALOG.md`" in text
-    # The file on disk still holds every row — only the embedded copy is cut.
-    assert "artifact-0.md" in store.written[-1]
 
 
 async def test_a_mounted_worktree_is_named_as_the_runs_own_checkout() -> None:
@@ -505,3 +455,58 @@ async def test_a_linked_directory_is_not_dressed_up_as_a_checkout() -> None:
     # the developer's directory believing it is its own.
     assert "a LINK to `/Users/dev/notes`" in text
     assert "anything you write there, you write in the original" in text
+
+
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a task the developer gave no deliverable still owes one"
+)
+async def test_a_task_that_declared_no_artifacts_is_still_told_what_to_write() -> None:
+    """FR-072, at the one place it has to be visible: the brief.
+
+    The default is applied on READ, so the task's own declaration stays empty
+    and round-trips through the editor unchanged — but the brief it opens with
+    has to name a path anyway, or the task has nothing to hand the rest of the
+    run and no way to know it was supposed to.
+    """
+    node = Node(key="verify", name="Run the checks", type=NodeType.AI)
+    composer, _store, _skills = make_composer()
+
+    text = await composer.compose(make_request(node))
+
+    assert node.artifacts == ()
+    assert "| `report.md` | yes | `/vault/workflows/run-1/artifacts/verify/1/report.md` |" in text
+    # And said as an obligation, not as an option.
+    assert "blocks this task from completing" in text
+
+
+async def test_an_enormous_skill_is_cut_and_says_where_the_rest_is() -> None:
+    """FR-047, at the only place the budget can actually be breached.
+
+    Every other part of the opening message is names — a path, a task key, a
+    URL — and fits by construction. The skill's instructions are the one part
+    carried as content, so they are the one part that can overrun, and for a
+    while the share that was supposed to bound them was declared and never
+    applied. What this catches is that regression returning: a budget nothing
+    enforces is a number in a comment.
+    """
+    huge = "\n".join(["# Rules", "Follow them.", *(f"Example {i}." for i in range(60_000))])
+    composer, _store, _skills = make_composer(skills={"coffer-writing-td": huge})
+
+    text = await composer.compose(make_request())
+
+    assert estimate_tokens(text) <= NODE_CONTEXT_TOKEN_BUDGET
+    # Cut from the end, so the purpose and the rules survive and the examples go.
+    assert "# Rules" in text
+    assert "Example 59999." not in text
+    # And never silently: the task is told, and told what to open.
+    assert "cut off here" in text
+    assert "coffer-writing-td" in text
+
+
+async def test_a_skill_that_fits_is_carried_whole() -> None:
+    composer, _store, _skills = make_composer(skills={"coffer-writing-td": "Ground identifiers."})
+
+    text = await composer.compose(make_request())
+
+    assert "Ground identifiers." in text
+    assert "cut off here" not in text

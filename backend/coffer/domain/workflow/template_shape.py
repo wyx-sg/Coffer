@@ -23,6 +23,15 @@ from enum import StrEnum
 #: so the absence of the field is a default rather than "no ceiling".
 DEFAULT_ATTEMPT_CEILING = 3
 
+#: What a task that declared no deliverable is given (FR-072). A task's
+#: artifacts are the only thing it says to the tasks after it — those open with
+#: an index of what the run produced, not with anybody's conversation — so a
+#: task owing nothing is a task whose work leaves the run when its conversation
+#: closes. Supplied where the template is READ rather than written into the
+#: developer's stored template, so a task they later give a deliverable of its
+#: own does not end up owing two.
+DEFAULT_ARTIFACT_NAME = "report.md"
+
 
 class NodeType(StrEnum):
     """Who does the work.
@@ -113,8 +122,24 @@ class Node:
 
     @property
     def required_artifacts(self) -> tuple[ArtifactSpec, ...]:
-        """The artifacts whose absence blocks completion (FR-023)."""
-        return tuple(a for a in self.artifacts if a.required)
+        """The artifacts whose absence blocks completion (FR-023).
+
+        Read off ``owed_artifacts``, not off ``artifacts``: the deliverable a
+        task was given because it declared none (FR-072) is required like any
+        other, or the default would be a line in a brief that nothing checks.
+        """
+        return tuple(a for a in self.owed_artifacts if a.required)
+
+    @property
+    def owed_artifacts(self) -> tuple[ArtifactSpec, ...]:
+        """What this task owes, never empty (FR-072).
+
+        Read this rather than ``artifacts`` wherever the answer drives
+        behaviour — the brief a task opens with, and whether it may complete.
+        ``artifacts`` stays the developer's own declaration so that editing the
+        template round-trips what they wrote.
+        """
+        return self.artifacts or (ArtifactSpec(name=DEFAULT_ARTIFACT_NAME, required=True),)
 
 
 @dataclass(frozen=True)
@@ -128,30 +153,18 @@ class Stage:
 
 
 @dataclass(frozen=True)
-class FeedbackEdge:
-    """An edge from a later stage back to an earlier one, with the reason that
-    takes it (FR-005). A forward edge is the default order and is not written,
-    so every edge here is strictly backwards.
+class WorkflowTemplate:
+    """The whole shape of the work. Frozen at run creation (FR-010).
 
-    ``attempt_ceiling`` bounds how many times this route may send work back
-    before the run stops (FR-026). It belongs to the edge because the work it
-    creates is an ad-hoc task that exists nowhere else in the template — the
-    edge is that task's declaration, so it is where the task's limit is
-    written.
+    Stages in the order they run, and that is the whole of the order. There is
+    no route back: a finding in a later task is acted on by retrying the task
+    that was wrong or by adding one that fixes it (FR-025), because whether a
+    failing test means redo the code or redo the design is a judgement only
+    whoever is holding the finding can make — an edge drawn when the template
+    was written makes it in advance, and for every run alike.
     """
 
-    from_stage: str
-    to_stage: str
-    reason: str
-    attempt_ceiling: int = DEFAULT_ATTEMPT_CEILING
-
-
-@dataclass(frozen=True)
-class WorkflowTemplate:
-    """The whole shape of the work. Frozen at run creation (FR-010)."""
-
     stages: tuple[Stage, ...]
-    edges: tuple[FeedbackEdge, ...] = ()
     description: str | None = None
 
     def stage(self, key: str) -> Stage | None:

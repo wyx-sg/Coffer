@@ -1,9 +1,10 @@
 """One engine, all fakes — the fixture every test in this package drives.
 
 The template below is the smallest one that can still exercise everything the
-spec asks of the engine: two stages so there is a "next node", a feedback edge
-so the loop can be taken, a required artifact so completion can be blocked, and
-an attempt ceiling low enough that a test can reach it in three moves.
+spec asks of the engine: two stages so there is a "next node", a declared
+required artifact on the first task so completion can be blocked, and a second
+task that declares none — which is the shape FR-072 gives a default `report.md`
+to, so the two halves of that rule are both under test from the same fixture.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from .fakes import (
 )
 
 TEMPLATE: dict[str, Any] = {
-    "description": "Two stages, one edge",
+    "description": "Two stages, two tasks",
     "stages": [
         {
             "key": "design",
@@ -64,14 +65,6 @@ TEMPLATE: dict[str, Any] = {
                 }
             ],
         },
-    ],
-    "edges": [
-        {
-            "from_stage": "coding",
-            "to_stage": "design",
-            "reason": "design_issue",
-            "attempt_ceiling": 3,
-        }
     ],
 }
 
@@ -200,16 +193,15 @@ def with_template(**overrides: Any) -> dict[str, Any]:
 
 
 def with_ceiling(ceiling: int) -> dict[str, Any]:
-    """The default template with EVERY task and every route capped at
-    ``ceiling``. The number is per-task now (FR-026), so a test that wants one
-    limit for the whole flow has to say it on each of them."""
+    """The default template with EVERY task capped at ``ceiling``. The number is
+    per-task (FR-026), so a test that wants one limit for the whole flow has to
+    say it on each of them."""
     return {
         **TEMPLATE,
         "stages": [
             {**stage, "nodes": [{**node, "attempt_ceiling": ceiling} for node in stage["nodes"]]}
             for stage in TEMPLATE["stages"]
         ],
-        "edges": [{**edge, "attempt_ceiling": ceiling} for edge in TEMPLATE["edges"]],
     }
 
 

@@ -194,29 +194,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workflow/runs/{run_id}/send-back": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Send work back to an earlier stage along a feedback edge.
-         * @description Adds a task to the edge's target stage carrying what was found (FR-025).
-         *     No node that already ran is reopened. An edge that has already fired the
-         *     template's ceiling fails the run instead, which comes back as `200` with
-         *     a null `task` and the run's new status (FR-026).
-         */
-        post: operations["sendWorkflowRunBack"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/workflow/runs/{run_id}/inputs": {
         parameters: {
             query?: never;
@@ -482,8 +459,6 @@ export interface components {
         WorkflowTemplate: {
             description?: string | null;
             stages: components["schemas"]["TemplateStage"][];
-            /** @description Feedback edges only — the forward order is the array order (FR-005). */
-            edges?: components["schemas"]["TemplateEdge"][];
         };
         TemplateStage: {
             /** @description Unique within the template; a lowercase slug. Carries no meaning to the engine. */
@@ -508,6 +483,13 @@ export interface components {
             skill?: string | null;
             /** @description Added on top of the skill, for what is specific to this flow. */
             instructions?: string | null;
+            /**
+             * @description What this task owes. A task stored with none is READ BACK owing a
+             *     required `report.md` (FR-072): a deliverable is the only thing a
+             *     task says to the tasks after it, so none means its work leaves the
+             *     run when its conversation closes. The default is applied on read,
+             *     never written into the developer's stored template.
+             */
             artifacts?: components["schemas"]["TemplateArtifact"][];
             /** @enum {string} */
             approval?: "never" | "always";
@@ -532,18 +514,6 @@ export interface components {
             action: "stop" | "continue" | "retry";
             /** @description Required when `action` is `retry`. */
             times?: number;
-        };
-        TemplateEdge: {
-            from_stage: string;
-            /** @description Strictly earlier than `from_stage` — a forward edge is the default order. */
-            to_stage: string;
-            reason: string;
-            /**
-             * @description How many times this route may send work back before the run fails
-             *     (FR-026). It belongs to the edge because the work it creates is an
-             *     ad-hoc task declared nowhere else.
-             */
-            attempt_ceiling?: number;
         };
         /**
          * @description A template and a title, and nothing else (FR-011). The working
@@ -674,11 +644,6 @@ export interface components {
             run: components["schemas"]["RunOut"];
             stages: components["schemas"]["StageOut"][];
             inputs?: components["schemas"]["RunInput"][];
-            /**
-             * @description Every feedback edge in the run's frozen template, so a surface can
-             *     offer the ones leaving the stage it is showing.
-             */
-            send_backs?: components["schemas"]["SendBackEdgeOut"][];
         };
         StageOut: {
             key: string;
@@ -792,31 +757,6 @@ export interface components {
             /** @description What the developer wants this task to know. */
             text: string;
         };
-        SendBackIn: {
-            version: number;
-            from_stage: string;
-            /** @description Names the edge; matched exactly against the template's edges. */
-            reason: string;
-            /**
-             * @description What is wrong, in the developer's words. It becomes the brief of the
-             *     task that lands in the earlier stage.
-             */
-            note?: string | null;
-        };
-        SendBackOut: {
-            run: components["schemas"]["RunOut"];
-            /**
-             * @description Null in one case only: the edge had already fired the template's
-             *     ceiling, so the run failed instead of sending work back (FR-026).
-             */
-            task?: components["schemas"]["NodeAttemptOut"] | null;
-        };
-        SendBackEdgeOut: {
-            from_stage: string;
-            to_stage: string;
-            to_stage_name: string;
-            reason: string;
-        };
         /**
          * @description What a client may SAY when mounting an input. Deliberately narrower than
          *     `RunInput`: `size`, `path` and `mount` are what the server made of the
@@ -877,7 +817,7 @@ export interface components {
             run_id: string;
             attempt_id?: string | null;
             /** @enum {string} */
-            kind: "tool_call" | "node_action";
+            kind: "tool_call";
             tool_name?: string | null;
             /** @enum {string} */
             status: "pending" | "approved" | "rejected" | "expired" | "superseded";
@@ -1296,36 +1236,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NodeAttemptOut"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-        };
-    };
-    sendWorkflowRunBack: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The run's id. */
-                run_id: components["parameters"]["RunId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SendBackIn"];
-            };
-        };
-        responses: {
-            /** @description The run afterwards, and the task the edge created. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SendBackOut"];
                 };
             };
             400: components["responses"]["BadRequest"];

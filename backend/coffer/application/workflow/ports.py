@@ -299,7 +299,7 @@ class AuditPort(Protocol):
 
 
 class SummariserPort(Protocol):
-    """One short summary of a long piece of text (FR-048, FR-049).
+    """One short summary of a long piece of text (FR-049).
 
     The same seam the rest of the vault uses for its own model calls: the
     composition root resolves Coffer's internal-default connection and runs one

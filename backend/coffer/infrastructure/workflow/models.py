@@ -181,7 +181,7 @@ class WorkflowApprovalModel(Base):
     attempt_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("workflow_node_attempts.id", ondelete="CASCADE"), nullable=True
     )
-    #: ``tool_call`` | ``node_action``
+    #: ``tool_call`` — the only kind. See ``domain.workflow.run.ApprovalKind``.
     kind: Mapped[str] = mapped_column(String, nullable=False)
     #: The prefixed upstream tool name, for a ``tool_call``; NULL otherwise.
     tool_name: Mapped[str | None] = mapped_column(String, nullable=True)

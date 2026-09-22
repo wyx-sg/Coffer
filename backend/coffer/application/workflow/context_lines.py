@@ -1,11 +1,10 @@
-"""How one mounted input is written into a node's context, and how the
-catalogue is cut to fit.
+"""How one mounted input is written into a task's context.
 
-Split out of ``context_composer`` because these four are the only things in
+Split out of ``context_composer`` because these three are the only things in
 that module that answer to the INPUT rather than to the message: what a link
-points at, whether a repository is the run's own checkout, how much of the
-catalogue fits, and what ``RunRow.inputs`` means as value objects. The composer
-decides the shape of the message; this decides what one line of it says.
+points at, whether a repository is the run's own checkout, and what
+``RunRow.inputs`` means as value objects. The composer decides the shape of the
+message; this decides what one line of it says.
 """
 
 from __future__ import annotations
@@ -13,15 +12,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from coffer.application.workflow.context_budget import (
-    CATALOGUE_SHARE,
-    estimate_tokens,
-    share_of,
-)
 from coffer.domain.workflow.links import classify_link
 from coffer.domain.workflow.run import REPO_MOUNT_WORKTREE, RunInput, RunInputKind
 
-__all__ = ["fit_catalogue", "link_line", "parse_inputs", "repo_line"]
+__all__ = ["link_line", "parse_inputs", "repo_line"]
 
 
 def link_line(item: RunInput, label: str) -> str:
@@ -58,36 +52,6 @@ def repo_line(item: RunInput, label: str) -> str:
         f"- repo `{item.path}`{label} — a LINK to `{item.ref}`, which is not a git repository. "
         f"It is not a copy: anything you write there, you write in the original."
     )
-
-
-def fit_catalogue(body: str, catalogue_path: str) -> str:
-    """The catalogue, cut to its share of the budget, saying if it was cut.
-
-    Trimmed from the OLDEST rows, which sort first: the catalogue is ordered by
-    node then attempt, so the tail is what the run made most recently. The
-    whole of it is on disk either way — this is the one part of the message
-    that can be replaced by a path without losing anything, because the file it
-    points at was regenerated a line ago.
-    """
-    allowance = share_of(CATALOGUE_SHARE)
-    if estimate_tokens(body) <= allowance:
-        return body
-    lines = body.splitlines()
-    kept: list[str] = []
-    spent = 0
-    for line in reversed(lines):
-        spent += estimate_tokens(line)
-        if spent > allowance:
-            break
-        kept.append(line)
-    kept.reverse()
-    dropped = len(lines) - len(kept)
-    header = (
-        f"_{dropped} older catalogue line(s) are omitted here — this run has produced more "
-        f"artifacts than fit in the context budget. The whole catalogue is at "
-        f"`{catalogue_path}`._"
-    )
-    return "\n".join([header, "", *kept])
 
 
 def parse_inputs(raw: Sequence[Mapping[str, Any]]) -> tuple[RunInput, ...]:

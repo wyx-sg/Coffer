@@ -22,7 +22,13 @@ from datetime import UTC
 
 from coffer.application.workflow.ports import ArtifactEntry, ArtifactStorePort
 
-__all__ = ["CATALOGUE_TITLE", "regenerate_catalogue", "render_catalogue"]
+__all__ = ["CATALOGUE_FILE", "CATALOGUE_TITLE", "regenerate_catalogue", "render_catalogue"]
+
+#: The catalogue's file name under the run's own directory. Mirrors
+#: ``infrastructure.workflow.paths.CATALOG_NAME``, which this layer may not
+#: import; a task's opening context names the path so that an index too long
+#: for the budget can point at the whole of it (FR-047).
+CATALOGUE_FILE = "CATALOG.md"
 
 #: The file's own H1. Exported because the composer embeds the catalogue under
 #: a heading of its own and strips this one rather than nesting an H1 inside an

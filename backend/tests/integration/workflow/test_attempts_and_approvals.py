@@ -256,14 +256,14 @@ async def test_aborting_supersedes_only_this_run_s_pending_approvals(repos: Repo
     mine = await repos.approvals.create_approval(
         approval_id=uuid.uuid4().hex,
         run_id=aborted,
-        kind="node_action",
+        kind="tool_call",
         payload={"action": "complete"},
         expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )
     theirs = await repos.approvals.create_approval(
         approval_id=uuid.uuid4().hex,
         run_id=other,
-        kind="node_action",
+        kind="tool_call",
         payload={},
         expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )

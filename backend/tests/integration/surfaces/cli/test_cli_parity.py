@@ -274,6 +274,30 @@ def _long_options(path: str) -> set[str]:
 
 
 @pytest.mark.acceptance(
+    spec="workflow", scenario="the same delivery can be driven from the command line"
+)
+def test_a_delivery_can_be_driven_from_the_command_line():
+    """spec workflow FR-046: everything a developer working only from the
+    terminal has to be able to do to a delivery, named one command at a time.
+
+    Asserted from the requirement rather than from ``_EXPECTED_GROUPS``, which
+    is a drift detector: that table goes red when the tree changes and would
+    stay green if a command were dropped from BOTH sides of it. These names
+    come from the spec, so removing one reddens this test whatever the table
+    says.
+    """
+    run = _subcommands("workflow run")
+    # Create, list, inspect, signal and abort.
+    assert {"create", "list", "show", "start", "pause", "resume", "abort"} <= run
+    # Add and remove its inputs.
+    assert {"add", "rm"} <= _subcommands("workflow run inputs")
+    # Act on a task.
+    assert "act" in _subcommands("workflow node")
+    # Decide an approval, and see the ones waiting.
+    assert {"approvals", "approve", "reject"} <= _subcommands("workflow")
+
+
+@pytest.mark.acceptance(
     spec="resource-framework",
     scenario="command line covers every visual operation",
 )

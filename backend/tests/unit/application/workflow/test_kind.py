@@ -73,15 +73,17 @@ def test_a_valid_template_round_trips_unchanged() -> None:
             },
             "stages[0].nodes[0].artifacts[0].name",
         ),
+        # A template carrying a route between stages, which is what an editor
+        # written against the old shape would still send (FR-025).
         (
             {
                 "stages": [
                     {"key": "a", "name": "A", "nodes": [{"key": "x", "name": "X", "type": "ai"}]},
                     {"key": "b", "name": "B", "nodes": [{"key": "y", "name": "Y", "type": "ai"}]},
                 ],
-                "edges": [{"from_stage": "a", "to_stage": "b", "reason": "r"}],
+                "edges": [{"from_stage": "b", "to_stage": "a", "reason": "r"}],
             },
-            "edges[0].to_stage",
+            "edges",
         ),
     ],
 )

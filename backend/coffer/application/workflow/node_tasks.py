@@ -1,15 +1,16 @@
-"""Two commands that change the SHAPE of a run rather than a node's status.
+"""Adding work to a run that its workflow never anticipated (FR-028).
 
-A feedback edge sends the run backwards (FR-025, FR-026); an ad-hoc task adds
-work the template never anticipated (FR-028). Both are ordinary commands — same
-guard, same log, same projection — but neither is one of the six node actions,
-and keeping them out of ``node_service``'s action dispatch is what stops the
-surfaces from offering "skip" and "add a task" from the same enum.
+An ad-hoc task is an ordinary command — same guard, same log, same projection —
+but it is not one of the six node actions, and keeping it out of
+``node_service``'s action dispatch is what stops the surfaces from offering
+"skip" and "add a task" from the same enum.
 
-They also end in the same place. Sending work back does not rewind the node
-that passed: it adds a task to the earlier stage saying what is wrong, and that
-task is an ad-hoc task like any other. So both commands below funnel into
-``_add_task`` and the run has one way for unplanned work to exist, not two.
+It is also how a run goes backwards. There is no route in the template that
+sends work to an earlier stage (FR-025): a finding in a later task is acted on
+by retrying the task that was wrong, or by adding a task here that fixes what
+was found. Nothing that already ran is rewound either way, and the judgement
+about which of the two to reach for belongs to whoever is holding the finding
+rather than to an edge drawn before the run existed.
 """
 
 from __future__ import annotations
@@ -23,82 +24,11 @@ from coffer.application.workflow.commands import (
     template_of,
 )
 from coffer.application.workflow.node_ops import NodeOps
-from coffer.application.workflow.node_walk import adhoc_keys_named, adhoc_node_key
+from coffer.application.workflow.node_walk import adhoc_node_key
 from coffer.application.workflow.ports import RunRow
-from coffer.domain.workflow.errors import AttemptCeilingReached, IllegalTransition
+from coffer.domain.workflow.errors import IllegalTransition
 from coffer.domain.workflow.events import EventActor, EventType
-from coffer.domain.workflow.run import FailureReason
 from coffer.domain.workflow.template import DEFAULT_ATTEMPT_CEILING
-from coffer.domain.workflow.transitions import take_feedback_edge
-
-
-async def take_feedback(
-    ops: NodeOps,
-    run_id: str,
-    *,
-    from_stage: str,
-    reason: str,
-    note: str | None = None,
-    version: int,
-    actor: EventActor,
-) -> CommandResult:
-    """Send the run back along a feedback edge (FR-025, FR-026).
-
-    What arrives in the earlier stage is a new task named after the edge's
-    reason, carrying ``note`` — what the developer found — as its brief. The
-    node that already passed there is not reopened: its conversation was about
-    a different problem, and the fix deserves its own.
-
-    The ceiling counts this edge's own crossings, which it reads off the tasks
-    the edge has already created (see ``adhoc_keys_named``). Reaching it fails
-    the run with the reason rather than sending work back again.
-    """
-    run = await ops.cmd.require_run(run_id)
-    ops.cmd.guard(run, "feedback_edge", version)
-    template = template_of(run)
-    taken = set(await ops.cmd.latest_attempts(run_id))
-    try:
-        outcome = take_feedback_edge(
-            template,
-            from_stage,
-            reason,
-            task_key=adhoc_node_key(reason, taken),
-            firings_used=len(adhoc_keys_named(reason, taken)),
-        )
-    except AttemptCeilingReached as exc:
-        # FR-026: the loop ends with the run failing and saying why, rather than
-        # sending work back one more time.
-        failed = await ops.cmd.commit(
-            run,
-            [ops.run_failed(FailureReason.ATTEMPT_CEILING, from_stage, exc.node_key, exc)],
-            actor=actor,
-        )
-        # The run ended here as surely as it does on a completion, so it is
-        # audited here too (FR-040) — a run that stopped because it hit a
-        # ceiling is precisely the one the developer will come looking for.
-        await ops.audit_finished(failed)
-        return failed
-    return await _add_task(
-        ops,
-        run,
-        stage_key=outcome.target.stage_key,
-        node_key=outcome.target.node_key,
-        name=reason,
-        instructions=(note or "").strip() or f"Sent back from {from_stage}: {reason}.",
-        agent=None,
-        workdir=None,
-        actor=actor,
-        # The route's own ceiling. It declares this task, so its limit is the
-        # task's limit too — otherwise a workflow that allows one try at a
-        # deploy would hand the fix it sent back three.
-        attempt_ceiling=outcome.edge.attempt_ceiling,
-        extra={
-            "cause": "feedback_edge",
-            "reason": reason,
-            "from_stage": from_stage,
-            "firing": outcome.firing,
-        },
-    )
 
 
 async def add_adhoc_task(
@@ -158,9 +88,8 @@ async def _add_task(
 ) -> CommandResult:
     """The attempt row and the event that make an ad-hoc task exist.
 
-    ``extra`` is how a task says where it came from — a feedback edge records
-    the edge it crossed there. Nothing reads it to decide anything; the task
-    behaves identically either way, and that is the point.
+    ``extra`` is how a task says where it came from. Nothing reads it to decide
+    anything; the task behaves identically either way, and that is the point.
     """
     row = await ops.attempts.insert_attempt(
         attempt_id=uuid4().hex,

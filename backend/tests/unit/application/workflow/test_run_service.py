@@ -18,6 +18,7 @@ from coffer.domain.workflow.errors import (
 )
 from coffer.domain.workflow.run import (
     FailureReason,
+    NodeAction,
     NodeStatus,
     RunSignal,
     RunStatus,
@@ -114,13 +115,44 @@ async def test_an_illegal_signal_says_what_is_allowed(engine: Engine) -> None:
     assert caught.value.allowed == ("abort", "start")
 
 
+@pytest.mark.acceptance(spec="workflow", scenario="an aborted run refuses everything afterwards")
 async def test_an_aborted_run_refuses_every_later_command(engine: Engine) -> None:
-    """FR-016: "never again" is a different answer from "not from here"."""
+    """FR-016 / FR-013: each signal is taken in turn, and the abort is the end.
+
+    "Never again" is a different answer from "not from here", and the refusal
+    has to cover the commands that name a NODE as well as the ones that name
+    the run: a node action is the path an aborted run is most likely to be
+    moved down by mistake, because the developer is looking at a task rather
+    than at the run's status. What the last assertion holds is "refused rather
+    than applied" — a refusal that had already written its event would leave
+    the run's log saying something happened after the abort.
+    """
     run = await engine.started()
-    aborted = await engine.runs.signal(run.id, RunSignal.ABORT, version=run.version)
+    paused = await engine.runs.signal(run.id, RunSignal.PAUSE, version=run.version)
+    assert paused.run.status == RunStatus.PAUSED.value
+    resumed = await engine.runs.signal(run.id, RunSignal.RESUME, version=paused.run.version)
+    assert resumed.run.status == RunStatus.RUNNING.value
+    aborted = await engine.runs.signal(run.id, RunSignal.ABORT, version=resumed.run.version)
+    assert aborted.run.status == RunStatus.ABORTED.value
+
+    version = aborted.run.version
+    settled = engine.types(run.id)
 
     with pytest.raises(RunTerminal):
-        await engine.runs.signal(run.id, RunSignal.RESUME, version=aborted.run.version)
+        await engine.runs.signal(run.id, RunSignal.RESUME, version=version)
+    with pytest.raises(RunTerminal):
+        await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=version)
+    with pytest.raises(RunTerminal):
+        await engine.nodes.add_adhoc_task(
+            run.id, stage_key="design", name="One more", instructions="x", version=version
+        )
+    with pytest.raises(RunTerminal):
+        await engine.nodes.say(run.id, "draft_td", text="carry on")
+
+    # Nothing was applied: same version, same log, same status.
+    after = await engine.latest(run.id)
+    assert (after.version, after.status) == (version, RunStatus.ABORTED.value)
+    assert engine.types(run.id) == settled
 
 
 async def test_abort_supersedes_the_approvals_waiting_on_the_developer(engine: Engine) -> None:

@@ -34,11 +34,11 @@ describe("templateRefusal", () => {
 
   test("prefers a structured path and reason over the message", () => {
     const error = new ApiError("WORKFLOW_TEMPLATE_INVALID", "stages: something", {
-      path: "edges[0].to_stage",
+      path: "stages[1].name",
       reason: "no stage named 'shipping'",
     });
     expect(templateRefusal(error)).toEqual({
-      path: "edges[0].to_stage",
+      path: "stages[1].name",
       message: "no stage named 'shipping'",
     });
   });

@@ -38,7 +38,6 @@ from coffer.domain.workflow.template_shape import (
     ApprovalPolicy,
     ArtifactSpec,
     FailureAction,
-    FeedbackEdge,
     Node,
     NodeType,
     OnFailure,
@@ -51,7 +50,6 @@ __all__ = [
     "ApprovalPolicy",
     "ArtifactSpec",
     "FailureAction",
-    "FeedbackEdge",
     "Node",
     "NodeType",
     "OnFailure",
@@ -81,15 +79,17 @@ def parse_template(
         TemplateInvalid: naming the JSON path of the offending field.
     """
     root = as_object(config, "")
-    reject_unknown(root, {"description", "stages", "edges"}, "")
+    # ``edges`` is deliberately NOT accepted. A template that still carries
+    # one is refused naming it, rather than having it dropped in silence: the
+    # route it describes no longer exists (FR-025), and a workflow that still
+    # thinks it has one would send work nowhere.
+    reject_unknown(root, {"description", "stages"}, "")
 
     stages = _parse_stages(root, known_skills=known_skills, allowed_agents=allowed_agents)
-    template = WorkflowTemplate(
+    return WorkflowTemplate(
         stages=stages,
-        edges=_parse_edges(root.get("edges"), stages),
         description=as_optional_str(root.get("description"), "description"),
     )
-    return template
 
 
 def _parse_stages(
@@ -255,43 +255,3 @@ def _parse_on_failure(raw: Any, node_path: str) -> OnFailure:
     if times < 1:
         raise TemplateInvalid(f"{path}.times", "must be >= 1 when the action is retry")
     return OnFailure(action=action, times=times)
-
-
-def _parse_edges(raw: Any, stages: tuple[Stage, ...]) -> tuple[FeedbackEdge, ...]:
-    if raw is None:
-        return ()
-    if not isinstance(raw, list):
-        raise TemplateInvalid("edges", "must be a list")
-    order = {stage.key: index for index, stage in enumerate(stages)}
-    edges: list[FeedbackEdge] = []
-    for i, item in enumerate(raw):
-        path = f"edges[{i}]"
-        obj = as_object(item, path)
-        reject_unknown(obj, {"from_stage", "to_stage", "reason", "attempt_ceiling"}, path)
-        from_stage = as_required_str(obj.get("from_stage"), f"{path}.from_stage")
-        to_stage = as_required_str(obj.get("to_stage"), f"{path}.to_stage")
-        if from_stage not in order:
-            raise TemplateInvalid(f"{path}.from_stage", f"no stage named {from_stage!r}")
-        if to_stage not in order:
-            raise TemplateInvalid(f"{path}.to_stage", f"no stage named {to_stage!r}")
-        # A forward edge is the default order and is never written, so one here
-        # is a mistake rather than a shortcut — and a self-edge would be a loop
-        # with no progress between its ends.
-        if order[to_stage] >= order[from_stage]:
-            raise TemplateInvalid(
-                f"{path}.to_stage",
-                f"{to_stage!r} must come strictly before {from_stage!r}",
-            )
-        edges.append(
-            FeedbackEdge(
-                from_stage=from_stage,
-                to_stage=to_stage,
-                reason=as_required_str(obj.get("reason"), f"{path}.reason"),
-                attempt_ceiling=as_attempt_ceiling(
-                    obj.get("attempt_ceiling"),
-                    f"{path}.attempt_ceiling",
-                    default=DEFAULT_ATTEMPT_CEILING,
-                ),
-            )
-        )
-    return tuple(edges)

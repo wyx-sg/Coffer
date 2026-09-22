@@ -46,7 +46,6 @@ from coffer.domain.workflow.template import (
     ApprovalPolicy,
     ArtifactSpec,
     FailureAction,
-    FeedbackEdge,
     Node,
     NodeType,
     OnFailure,
@@ -55,7 +54,6 @@ from coffer.domain.workflow.template import (
     parse_template,
 )
 from coffer.domain.workflow.transitions import (
-    FeedbackOutcome,
     NodePosition,
     allowed_node_actions,
     allowed_run_signals,
@@ -66,8 +64,6 @@ from coffer.domain.workflow.transitions import (
     ensure_run_mutable,
     ensure_version,
     next_node,
-    resolve_feedback_edge,
-    take_feedback_edge,
 )
 
 __all__ = [
@@ -87,8 +83,6 @@ __all__ = [
     "EventType",
     "FailureAction",
     "FailureReason",
-    "FeedbackEdge",
-    "FeedbackOutcome",
     "IllegalTransition",
     "Node",
     "NodeAction",
@@ -123,6 +117,4 @@ __all__ = [
     "next_node",
     "parse_template",
     "project",
-    "resolve_feedback_edge",
-    "take_feedback_edge",
 ]

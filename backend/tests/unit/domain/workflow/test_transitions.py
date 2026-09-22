@@ -31,8 +31,6 @@ from coffer.domain.workflow.transitions import (
     ensure_run_mutable,
     ensure_version,
     next_node,
-    resolve_feedback_edge,
-    take_feedback_edge,
 )
 
 from .test_template import valid_config
@@ -299,93 +297,18 @@ def test_the_walk_returns_to_a_reopened_node_and_then_skips_what_is_still_done()
 
 
 # --------------------------------------------------------------------------
-# Feedback edges and the ceiling (FR-025, FR-026)
+# The attempt ceiling (FR-026)
 # --------------------------------------------------------------------------
 
 
-def test_an_edge_resolves_on_an_exact_stage_and_reason():
-    edge = resolve_feedback_edge(template(), "testing", "code_issue")
-    assert edge is not None and edge.to_stage == "coding"
-
-
-@pytest.mark.parametrize(
-    ("from_stage", "reason"),
-    [
-        ("testing", "design_issue"),  # right stage, no such reason
-        ("coding", "code_issue"),  # right reason, no edge leaves this stage
-        ("release", "code_issue"),  # no such stage
-    ],
-)
-def test_a_near_miss_resolves_to_nothing_rather_than_a_guess(from_stage: str, reason: str):
-    assert resolve_feedback_edge(template(), from_stage, reason) is None
-
-
-@pytest.mark.acceptance(
-    spec="workflow", scenario="sending work back adds a task and resets nothing"
-)
-def test_taking_an_edge_puts_a_new_task_in_the_target_stage():
-    outcome = take_feedback_edge(
-        template(),
-        "testing",
-        "code_issue",
-        task_key="adhoc:code-issue",
-        firings_used=0,
-    )
-    assert outcome.target.stage_key == "coding"
-    assert outcome.target.node_key == "adhoc:code-issue"
-    assert outcome.firing == 1
-    # Nothing that ran is named: the outcome has no way to express "reopen
-    # `implement`", which is FR-025 held up by the type rather than by care.
-    assert not hasattr(outcome, "reopened_keys")
-
-
-def test_taking_an_edge_the_template_does_not_have_is_refused():
-    with pytest.raises(IllegalTransition) as caught:
-        take_feedback_edge(
-            template(),
-            "testing",
-            "design_issue",
-            task_key="adhoc:design-issue",
-            firings_used=0,
-        )
-    assert caught.value.attempted == "design_issue"
-    assert caught.value.allowed == ("code_issue->coding",)
-
-
-@pytest.mark.acceptance(
-    spec="workflow", scenario="a loop between two stages stops at the attempt ceiling"
-)
-def test_the_ceiling_ends_the_loop_instead_of_adding_another_task():
-    """FR-026: testing sends work back to coding three times; the fourth fails
-    the run with the reason."""
-    with pytest.raises(AttemptCeilingReached) as caught:
-        take_feedback_edge(
-            template(),
-            "testing",
-            "code_issue",
-            task_key="adhoc:code-issue-4",
-            firings_used=3,  # the template's ceiling
-        )
-    # The refusal names the task it declined to create, not a node that passed.
-    assert caught.value.node_key == "adhoc:code-issue-4"
-    assert caught.value.ceiling == 3
-
-
-def test_the_last_firing_under_the_ceiling_is_still_allowed():
-    outcome = take_feedback_edge(
-        template(),
-        "testing",
-        "code_issue",
-        task_key="adhoc:code-issue-3",
-        firings_used=2,
-    )
-    assert outcome.firing == 3
-
-
-def test_a_retry_and_a_feedback_edge_stop_at_the_same_number():
+def test_a_task_may_be_tried_up_to_its_ceiling_and_no_further():
+    """The ceiling belongs to the task, and `check_attempt_ceiling` is the only
+    place that answer is computed — a retry, and a failure the task declared
+    should be retried, both stop at the same number."""
     assert check_attempt_ceiling("implement", 2, 3) == 3
     with pytest.raises(AttemptCeilingReached) as caught:
         check_attempt_ceiling("implement", 3, 3)
+    assert caught.value.node_key == "implement"
     assert caught.value.ceiling == 3
 
 

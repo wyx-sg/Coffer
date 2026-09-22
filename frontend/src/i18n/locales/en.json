@@ -1957,11 +1957,6 @@
       "artifactPlaceholder": "td.md",
       "artifactRequired": "Required",
       "removeArtifact": "Remove artifact {{name}}",
-      "addEdge": "Add feedback edge",
-      "edgeTo": "Back to",
-      "edgeReason": "Reason",
-      "edgeReasonPlaceholder": "code_issue",
-      "removeEdge": "Remove the edge from {{from}} back to {{to}}",
       "tabs": {
         "stages": "Stages"
       },
@@ -1975,16 +1970,12 @@
       "editStage": "Edit stage {{name}}",
       "editStageTitle": "Edit stage",
       "addStageDescription": "A stage is a step of the delivery. It starts with one task, which you can rename and add to.",
-      "editStageDescription": "What this stage is called, whether a run may skip it, and where it sends work back to.",
+      "editStageDescription": "What this stage is called, whether a run may skip it, and where in the order it runs.",
       "optionalHint": "A run may skip this stage instead of stopping when it has nothing to do here.",
       "lastStage": "A workflow needs at least one stage.",
       "lastNode": "A stage needs at least one task. Delete the stage instead.",
       "editNodeTitle": "Edit task",
       "nodeDescription": "One task in {{stage}}: what it runs, what it owes, and what happens when it fails.",
-      "sendBack": "Sends work back",
-      "sendBackHint": "When something here says an earlier stage has to be redone, the run goes back to it and carries on from there. Without one it only ever moves forward.",
-      "sendsBack": "{{reason}} → back to {{stage}}",
-      "anyReason": "on feedback",
       "enabledAria": "Enabled: {{name}}",
       "positionOption": "{{position}} of {{count}}",
       "stagePosition": "Runs at",
@@ -1995,7 +1986,7 @@
       "stageCount_one": "{{count}} stage",
       "stageCount_other": "{{count}} stages",
       "deleteStageTitle": "Delete stage",
-      "deleteStageConfirm": "Delete “{{name}}”? Its {{count}} task(s) go with it, and so does any route back to it. Runs already created from this workflow froze their own copy and are unaffected.",
+      "deleteStageConfirm": "Delete “{{name}}”? Its {{count}} task(s) go with it. Runs already created from this workflow froze their own copy and are unaffected.",
       "deleteNodeTitle": "Delete task",
       "deleteNodeConfirm": "Delete “{{name}}”? Runs already created from this workflow froze their own copy and are unaffected.",
       "taskCount_one": "{{count}} task",
@@ -2004,11 +1995,7 @@
       "editDescription": "What this flow is called and what it is for. Its stages and tasks are edited below.",
       "nameField": "Name",
       "descriptionField": "Description",
-      "editNode": "Edit task {{name}}",
-      "sendsBackTo": "Sends work back",
-      "sendsBackToLine": "When a task here reports “{{reason}}”, work goes back to {{stage}} — up to {{count}} times.",
-      "comesBackHere": "Work comes back here",
-      "comesBackHereLine": "{{stage}} sends work back here when it reports “{{reason}}”."
+      "editNode": "Edit task {{name}}"
     },
     "context": {
       "description": "What this run reads and what it has produced, in one place. Mount a collection, a file, a link or a repository at any point in the run's life — every task that opens afterwards is told it is there. Produced files appear as the tasks write them.",
@@ -2041,17 +2028,6 @@
       "notTextTitle": "Nothing to show",
       "backToList": "Back to the list",
       "resize": "Drag to resize the context panel"
-    },
-    "sendBack": {
-      "action": "Send back",
-      "title": "Send this back to {{stage}}",
-      "description": "A task describing what you found joins that stage and runs next. Nothing that already passed is reopened — it answered a different question, and it keeps its answer.",
-      "reasonLabel": "Reason",
-      "reasonOption": "{{reason}} — back to {{stage}}",
-      "noteLabel": "What is wrong",
-      "notePlaceholder": "You are writing the brief of the task that will fix it. What did you find, and where?",
-      "submit": "Send back to {{stage}}",
-      "ceiling": "This send-back has been used as many times as the workflow allows, so the run failed instead of going round again."
     },
     "brief": {
       "label": "Task brief",

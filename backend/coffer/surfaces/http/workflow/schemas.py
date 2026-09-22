@@ -43,7 +43,6 @@ from coffer.surfaces.http.workflow.schemas_in import (
     RunNoteIn,
     RunSignalIn,
     SayIn,
-    SendBackIn,
 )
 
 #: Re-exported so every caller keeps one import for the whole wire vocabulary;
@@ -77,9 +76,6 @@ __all__ = [
     "RunOut",
     "RunSignalIn",
     "SayIn",
-    "SendBackEdgeOut",
-    "SendBackIn",
-    "SendBackOut",
     "StageOut",
 ]
 
@@ -183,40 +179,10 @@ class InputListOut(BaseModel):
     items: list[RunInput]
 
 
-class SendBackEdgeOut(BaseModel):
-    """An edge the template wrote, resolved for display (FR-005).
-
-    The target's display name travels with it: a surface offering "send back"
-    would otherwise have to look the stage up, and one of them would eventually
-    show a key to a person.
-    """
-
-    from_stage: str
-    to_stage: str
-    to_stage_name: str
-    reason: str
-
-
 class RunDetailOut(BaseModel):
     run: RunOut
     stages: list[StageOut]
     inputs: list[RunInput] = Field(default_factory=list)
-    #: Every feedback edge in the run's frozen template, so a surface can offer
-    #: the ones leaving the stage it is showing.
-    send_backs: list[SendBackEdgeOut] = Field(default_factory=list)
-
-
-class SendBackOut(BaseModel):
-    """What sending work back did.
-
-    ``task`` is null in exactly one case: the edge had already fired the
-    template's ceiling, so what the run got instead of a task was a failure
-    (FR-026). The run says so in its status, which is why this is an answer
-    rather than an error — the command was accepted, and it ended the run.
-    """
-
-    run: RunOut
-    task: NodeAttemptOut | None = None
 
 
 class EventActorOut(BaseModel):

@@ -30,14 +30,16 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         r = c.get("/api/v1/daemon/status")
         assert r.status_code == 200
 
-        # /resources (token required; a fresh vault has none)
+        # /resources (token required; a fresh vault holds only Coffer's own)
         r = c.get("/api/v1/resources", headers=headers)
         assert r.status_code == 200
-        # One row, and it is Coffer's own skill (spec knowledge FR-034): the
-        # manual it seeds for itself at every boot. The user has made nothing,
+        # Two rows, and both are Coffer's own: the manual it seeds for itself
+        # at every boot (spec knowledge FR-034) and the one workflow a fresh
+        # vault starts with (spec workflow FR-009). The user has made nothing,
         # so anything else here would be a route returning someone else's rows.
         assert [(x["kind"], x["name"]) for x in r.json()["resources"]] == [
-            ("skill", "coffer-guide")
+            ("skill", "coffer-guide"),
+            ("workflow", "ship-a-change"),
         ]
 
         # /audit (token required)

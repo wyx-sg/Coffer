@@ -2,7 +2,7 @@
 
 Split out of :mod:`coffer.domain.workflow.template` for the file-size ceiling,
 and it is the natural seam: everything here answers "is this scalar the right
-shape?" and knows nothing about stages, nodes or edges. Every refusal names the
+shape?" and knows nothing about stages or the tasks in them. Every refusal names the
 JSON path it was given, which is how the path in ``TemplateInvalid`` ends up
 being the real one rather than an approximation assembled at the top.
 

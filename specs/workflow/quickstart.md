@@ -59,14 +59,19 @@ coffer workflow template add small-change --file ./small-change.json
         }
       ]
     }
-  ],
-  "edges": [{ "from_stage": "testing", "to_stage": "coding", "reason": "code_issue" }]
+  ]
 }
 ```
 
-The `edges` entry is the one that makes this a workflow rather than a checklist:
-when testing finds a code problem, the run opens a **new attempt** of
-`implement` without discarding what passed in between.
+Every task owes a deliverable, and a task you give none is read back owing a
+`report.md`. That file is the whole of what the task says to the tasks after
+it, so it is worth naming on purpose.
+
+When testing finds a code problem there is no route in the template to take:
+you retry `implement`, or you add a task that fixes what was found. Nothing
+that already passed is discarded either way. The judgement — redo the code, or
+redo the design — is one only whoever is holding the finding can make, and a
+route fixed when you wrote the template would make it in advance and wrongly.
 
 The web UI writes the same thing through the same resource endpoint: the
 templates are listed under **Resources → Workflows**, with the other kinds,
@@ -94,10 +99,17 @@ Every node is a conversation, and that is where you steer it. Open the node that
 is running — in the web UI, clicking it opens its conversation page — and say
 what changed in ordinary words.
 
-You do not repeat yourself per node: a node opens with the transcripts of the
-run's earlier tasks, so what you said in one reaches every node that starts
-afterwards. When those transcripts outgrow the context budget the oldest are
-summarised rather than dropped, and the context says which ones.
+You do not repeat yourself per node — but say it where it will land. A task
+opens with an INDEX of the run so far: every earlier task, what became of it,
+and the path of each file it wrote. It does not open with anybody else's
+conversation. So what you say inside a running task reaches the tasks after it
+by way of the deliverable that task writes, which is why the redirect is worth
+making while the task is still running rather than after it has finished. If it
+has already finished, retry it.
+
+That is also what keeps a forty-task delivery startable: the index costs a line
+per task however long the run gets, where carrying the transcripts forward
+costs everything ever said.
 
 The run's own page carries no buttons. Retry, skip, complete — all of it is said
 in the node's conversation, where the thing being decided is in front of you.

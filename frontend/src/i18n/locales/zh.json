@@ -1957,11 +1957,6 @@
       "artifactPlaceholder": "td.md",
       "artifactRequired": "必需",
       "removeArtifact": "删除产物 {{name}}",
-      "addEdge": "添加回流边",
-      "edgeTo": "回到",
-      "edgeReason": "原因",
-      "edgeReasonPlaceholder": "code_issue",
-      "removeEdge": "删除从 {{from}} 回到 {{to}} 的这条边",
       "tabs": {
         "stages": "阶段"
       },
@@ -1975,16 +1970,12 @@
       "editStage": "编辑阶段 {{name}}",
       "editStageTitle": "编辑阶段",
       "addStageDescription": "阶段是交付的一个步骤。它会带一个任务创建出来，之后可以改名、再添加。",
-      "editStageDescription": "这个阶段叫什么、运行能不能跳过它，以及它把工作送回到哪里。",
+      "editStageDescription": "这个阶段叫什么、运行能不能跳过它，以及它在顺序里的位置。",
       "optionalHint": "当这个阶段没事可做时，运行可以跳过它而不是停下来。",
       "lastStage": "工作流至少要有一个阶段。",
       "lastNode": "阶段至少要有一个任务。要清空就直接删掉这个阶段。",
       "editNodeTitle": "编辑任务",
       "nodeDescription": "{{stage}} 里的一个任务：它跑什么、要交出什么、失败了怎么办。",
-      "sendBack": "把工作送回",
-      "sendBackHint": "当这里发现更早的阶段需要重做时，运行会退回到那个阶段，并从那里继续往下跑。不配置的话，运行就只会一路向前。",
-      "sendsBack": "{{reason}} → 退回到 {{stage}}",
-      "anyReason": "收到反馈时",
       "enabledAria": "启用：{{name}}",
       "positionOption": "第 {{position}} / 共 {{count}}",
       "stagePosition": "执行位置",
@@ -1995,7 +1986,7 @@
       "stageCount_one": "{{count}} 个阶段",
       "stageCount_other": "{{count}} 个阶段",
       "deleteStageTitle": "删除阶段",
-      "deleteStageConfirm": "确定删除「{{name}}」？它里面的 {{count}} 个任务会一起删掉，退回到它的路径也会删掉。已经由这个工作流创建的运行冻结了自己的副本，不受影响。",
+      "deleteStageConfirm": "确定删除「{{name}}」？它里面的 {{count}} 个任务会一起删掉。已经由这个工作流创建的运行冻结了自己的副本，不受影响。",
       "deleteNodeTitle": "删除任务",
       "deleteNodeConfirm": "确定删除「{{name}}」？已经由这个工作流创建的运行冻结了自己的副本，不受影响。",
       "taskCount_one": "{{count}} 个任务",
@@ -2004,11 +1995,7 @@
       "editDescription": "这条流程叫什么、是做什么的。阶段和任务在下方编辑。",
       "nameField": "名称",
       "descriptionField": "描述",
-      "editNode": "编辑任务 {{name}}",
-      "sendsBackTo": "把工作送回",
-      "sendsBackToLine": "这里的任务报告「{{reason}}」时，工作退回到 {{stage}}，最多 {{count}} 次。",
-      "comesBackHere": "工作会退回这里",
-      "comesBackHereLine": "{{stage}} 报告「{{reason}}」时，工作会退回这里。"
+      "editNode": "编辑任务 {{name}}"
     },
     "context": {
       "description": "这次运行读什么、又产出了什么，都在这里。集合、文件、链接、仓库都可以在运行的任何阶段挂上来——之后开启的每个任务都会知道它的存在。产出的文件会随着任务写出而出现。",
@@ -2041,17 +2028,6 @@
       "notTextTitle": "没什么可显示的",
       "backToList": "返回列表",
       "resize": "拖动可以调整上下文面板的宽度"
-    },
-    "sendBack": {
-      "action": "退回",
-      "title": "退回到 {{stage}}",
-      "description": "会在那个阶段新建一个任务，写上你发现的问题，并接着往下跑。已经跑完的节点不会被重开——它回答的是另一个问题，答案保留。",
-      "reasonLabel": "原因",
-      "reasonOption": "{{reason}} —— 退回到 {{stage}}",
-      "noteLabel": "问题是什么",
-      "notePlaceholder": "你写的就是那个修复任务的任务书：你发现了什么，在哪里？",
-      "submit": "退回到 {{stage}}",
-      "ceiling": "这条退回已经用满了工作流允许的次数，运行直接失败，而不是再绕一圈。"
     },
     "brief": {
       "label": "任务任务书",

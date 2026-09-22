@@ -43,8 +43,6 @@ _SETTLED: frozenset[NodeStatus] = frozenset(
 )
 
 _SLUG_STRIP = re.compile(r"[^a-z0-9]+")
-#: The ``-2``, ``-3`` a repeated name gets, as ``adhoc_node_key`` spells it.
-_SUFFIXED = re.compile(r"-\d+")
 
 
 @dataclass(frozen=True)
@@ -78,10 +76,11 @@ def walk_run(
     overtaken by the node after it.
 
     Ordering first-unsettled rather than "is anything open anywhere" is also
-    what makes a feedback edge work (FR-025): the edge adds its task to a stage
-    EARLIER in the order, and the walk hands that task straight back even though
-    the node the edge was taken from is still sitting in review. When the fix is
-    done the walk returns to that node, because it never stopped being open.
+    what makes going backwards work (FR-025): a task the developer adds to an
+    EARLIER stage is handed straight back even though the task that prompted it
+    is still sitting in review, and when the fix is done the walk returns to
+    that task, because it never stopped being open. No route in the template
+    does this — the developer does, having seen what was found.
 
     An ad-hoc task runs at the END of the stage it was added to: the stage's own
     plan was written first, and a task that joined later has no claim to come
@@ -189,25 +188,6 @@ def adhoc_node_key(name: str, taken: Collection[str]) -> str:
         candidate = f"{ADHOC_KEY_PREFIX}{base}-{suffix}"
         suffix += 1
     return candidate
-
-
-def adhoc_keys_named(name: str, taken: Collection[str]) -> tuple[str, ...]:
-    """Every key ``adhoc_node_key(name, ...)`` has already minted for ``name``.
-
-    This is how a feedback edge counts its own crossings (FR-026): the edge
-    names the tasks it creates after itself, so the tasks bearing that name ARE
-    the firings, and no counter has to be stored and kept honest across a
-    restart.
-
-    It counts by name, so a task the developer added by hand under the same
-    name is counted too. That is the direction to be wrong in: the count comes
-    out high, the edge stops sooner, and the failure mode is a loop that ends
-    early rather than one that never ends.
-    """
-    base = f"{ADHOC_KEY_PREFIX}{adhoc_slug(name)}"
-    return tuple(
-        sorted(key for key in taken if key == base or _SUFFIXED.fullmatch(key[len(base) :]))
-    )
 
 
 def artifact_gap(

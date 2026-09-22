@@ -27,11 +27,11 @@ export interface TemplateRefusal {
   message: string;
 }
 
-// `stages`/`edges` optionally indexed and followed by dotted (optionally
-// indexed) segments. There are no run-level scalar fields left to name: the
-// attempt ceiling is a task's and an edge's own, so it arrives inside one of
-// these two paths like every other field.
-const PATH_PATTERN = /(?:stages|edges)(?:\[\d+\])?(?:\.[a-z_]+(?:\[\d+\])?)*/;
+// `stages`, optionally indexed and followed by dotted (optionally indexed)
+// segments. There are no template-level scalar fields left to name: the
+// attempt ceiling is a task's own, so it arrives inside this path like every
+// other field.
+const PATH_PATTERN = /stages(?:\[\d+\])?(?:\.[a-z_]+(?:\[\d+\])?)*/;
 
 /**
  * The field a refusal names, or `null` when it names none — a transport

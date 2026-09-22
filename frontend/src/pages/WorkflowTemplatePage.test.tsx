@@ -69,9 +69,6 @@ function threeStages(): TemplateConfig {
         nodes: [node("verify", "Verify")],
       },
     ],
-    edges: [
-      { from_stage: "testing", to_stage: "coding", reason: "code_issue", attempt_ceiling: 3 },
-    ],
   } as TemplateConfig;
 }
 
@@ -192,24 +189,6 @@ describe("WorkflowTemplatePage", () => {
     },
   );
 
-  test("a stage says both where it sends work back to and what comes back to it", async () => {
-    // In words, beside the tasks, not as a line in a gutter — and in BOTH
-    // directions, because "why might this stage run again" is a different
-    // question from "what can this stage reject", and only the first explains
-    // a stage a developer finds alive after they thought it was finished.
-    mount(threeStages());
-
-    await openStage("testing");
-    expect(
-      await screen.findByText(/reports “code_issue”, work goes back to Coding/),
-    ).toBeInTheDocument();
-
-    await openStage("coding");
-    expect(
-      await screen.findByText(/Testing sends work back here when it reports “code_issue”/),
-    ).toBeInTheDocument();
-  });
-
   acceptance("workflow", "the editor never asks for an identifier it can derive", async () => {
     mount(threeStages());
     await screen.findByRole("heading", { name: "delivery" });
@@ -256,16 +235,20 @@ describe("WorkflowTemplatePage", () => {
     expect(config.stages[0].nodes[0].key).toBe("draft_the_technical_design");
   });
 
-  test("a stage's dialog holds its feedback edge, and there is no edges tab", async () => {
+  test("a stage's dialog asks for its own fields and no route out of it", async () => {
+    // The editor used to offer a route back to an earlier stage here. There is
+    // no such route any more (spec workflow FR-025), and the regression worth
+    // pinning is somebody reintroducing the field rather than the judgement —
+    // which stage a finding sends work to is the developer's, made when they
+    // have the finding, not the template's, made before the run existed.
     mount(threeStages());
     await screen.findByRole("heading", { name: "delivery" });
-
-    expect(screen.queryByRole("tab", { name: "Feedback" })).not.toBeInTheDocument();
 
     await openStage("testing");
     fireEvent.click(await screen.findByRole("button", { name: "Edit stage Testing" }));
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByDisplayValue("code_issue")).toBeInTheDocument();
+    expect(within(dialog).queryByDisplayValue("code_issue")).not.toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue("Testing")).toBeInTheDocument();
   });
 
   test("deleting a stage asks first, then writes the template without it", async () => {
@@ -285,8 +268,9 @@ describe("WorkflowTemplatePage", () => {
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
     const config = written();
     expect(config.stages.map((s) => s.key)).toEqual(["tech_design", "testing"]);
-    // …and the edge that named it, which would otherwise refuse the next save.
-    expect(config.edges).toEqual([]);
+    // Nothing else references a stage by key any more, so deleting one is the
+    // whole of the edit — there is no second place to keep in step with it.
+    expect(config).not.toHaveProperty("edges");
   });
 
   test("deleting a task asks first as well", async () => {

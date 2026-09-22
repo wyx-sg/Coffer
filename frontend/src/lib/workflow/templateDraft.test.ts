@@ -3,41 +3,35 @@
 // developer never sees and would be hurt by if it were wrong:
 //
 //   • a KEY is derived from the name and never asked for (FR-060), so it has
-//     to be unique, stable enough to be readable, and rewritten through the
-//     feedback edges that named it;
+//     to be unique and stable enough to be readable;
 //   • a stage always has at least one task, because the contract's minimum is
-//     one and the engine takes `stage.nodes[0]` on a feedback edge;
-//   • a feedback edge only ever points BACKWARDS (FR-005).
+//     one;
+//   • the array order is the forward path, so moving a stage is the only way
+//     to change what runs after what.
 import { describe, expect, test } from "vitest";
 
 import {
   addNode,
   addStage,
   blankNode,
-  earlierStages,
   emptyTemplate,
   moveStage,
   removeNode,
   removeStage,
   saveNode,
   saveStage,
-  sendBackOf,
   slugify,
 } from "./templateDraft";
 import type { TemplateConfig } from "@/lib/api/workflow";
 
-const STAGE = (name: string) => ({ name, optional: false, sendBack: [] });
+const STAGE = (name: string) => ({ name, optional: false });
 
-/** Design → Coding → Testing, one task each, testing sending work back. */
+/** Design → Coding → Testing, one task each. */
 function threeStages(): TemplateConfig {
-  let config: TemplateConfig = { stages: [], edges: [] };
+  let config: TemplateConfig = { stages: [] };
   config = addStage(config, STAGE("Tech Design"));
   config = addStage(config, STAGE("Coding"));
-  config = addStage(config, {
-    name: "Testing",
-    optional: false,
-    sendBack: [{ reason: "code_issue", to_stage: "coding", attempt_ceiling: 3 }],
-  });
+  config = addStage(config, STAGE("Testing"));
   return config;
 }
 
@@ -62,27 +56,17 @@ describe("keys are derived, never typed", () => {
   });
 
   test("two stages with the same name get their own keys", () => {
-    let config: TemplateConfig = { stages: [], edges: [] };
+    let config: TemplateConfig = { stages: [] };
     config = addStage(config, STAGE("Review"));
     config = addStage(config, STAGE("Review"));
 
     expect(config.stages.map((s) => s.key)).toEqual(["review", "review_2"]);
   });
 
-  test("renaming a stage re-derives its key and carries the edges with it", () => {
+  test("renaming a stage re-derives its key", () => {
     const config = saveStage(threeStages(), 1, STAGE("Implementation"));
 
     expect(config.stages[1].key).toBe("implementation");
-    // The edge that pointed at `coding` points at the same stage, not at a
-    // key that no longer exists.
-    expect(config.edges).toEqual([
-      {
-        from_stage: "testing",
-        to_stage: "implementation",
-        reason: "code_issue",
-        attempt_ceiling: 3,
-      },
-    ]);
   });
 
   test("re-saving a stage under its own name does not suffix its key", () => {
@@ -133,43 +117,11 @@ describe("a stage always has a task", () => {
   });
 });
 
-describe("feedback edges", () => {
-  test("a stage may only send work back to one that runs before it", () => {
-    const config = threeStages();
-
-    expect(earlierStages(config, 0)).toEqual([]);
-    expect(earlierStages(config, 2).map((s) => s.key)).toEqual(["tech_design", "coding"]);
-  });
-
-  test("saving a stage replaces its own edges and leaves every other one", () => {
-    let config = saveStage(threeStages(), 2, {
-      name: "Testing",
-      optional: false,
-      sendBack: [{ reason: "spec_issue", to_stage: "tech_design", attempt_ceiling: 3 }],
-    });
-    config = saveStage(config, 1, STAGE("Coding"));
-
-    expect(sendBackOf(config, "testing")).toEqual([
-      { reason: "spec_issue", to_stage: "tech_design", attempt_ceiling: 3 },
-    ]);
-  });
-
-  test("an edge with no target chosen is not written", () => {
-    const config = saveStage(threeStages(), 2, {
-      name: "Testing",
-      optional: false,
-      sendBack: [{ reason: "code_issue", to_stage: "", attempt_ceiling: 3 }],
-    });
-
-    expect(config.edges).toEqual([]);
-  });
-
-  test("removing a stage removes every edge that named it", () => {
-    // Left behind, the edge would refuse a save the developer never made.
+describe("removing a stage", () => {
+  test("takes that stage and nothing else", () => {
     const config = removeStage(threeStages(), 1);
 
     expect(config.stages.map((s) => s.key)).toEqual(["tech_design", "testing"]);
-    expect(config.edges).toEqual([]);
   });
 });
 

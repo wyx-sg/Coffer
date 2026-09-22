@@ -10,14 +10,10 @@
 // what the panel is showing, which is the tasks — and the one thing it must
 // not be misread as is a way to edit a task.
 //
-// SENDING WORK BACK IS STATED IN WORDS, BOTH WAYS. Drawn as arrows between
-// boxes the routes were a tangle nobody could follow; written as sentences
-// under the stage they concern, they are readable. Both directions are here
-// because a stage answers two different questions — what makes this stage send
-// work backwards, and what makes work come BACK here — and only the second
-// explains why a developer standing on a stage might find it running again.
-// The reason itself is edited in the stage's own dialog, where it was written.
-import { ChevronDown, CornerLeftUp, CornerRightDown, Plus } from "lucide-react";
+// Nothing here says where work goes when something is found wrong, because a
+// workflow draws no route back (FR-025): the stages run in the order they sit
+// in, and a finding is acted on by the developer holding it.
+import { ChevronDown, Plus } from "lucide-react";
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -25,13 +21,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TemplateFieldError } from "@/components/workflow/TemplateFieldError";
 import { TemplateTaskCard } from "@/components/workflow/TemplateTaskCard";
-import type { TemplateConfig, TemplateStage } from "@/lib/api/workflow";
+import type { TemplateStage } from "@/lib/api/workflow";
 import type { TemplateEditor } from "@/lib/hooks/useTemplateEditor";
-import { DEFAULT_ATTEMPT_CEILING } from "@/lib/workflow/templateDraft";
 import type { TemplateRefusal } from "@/lib/workflow/templateErrors";
 
 interface Props {
-  config: TemplateConfig;
   stage: TemplateStage;
   index: number;
   refusal: TemplateRefusal | null;
@@ -43,7 +37,6 @@ interface Props {
 }
 
 export function TemplateNodeFlow({
-  config,
   stage,
   index,
   refusal,
@@ -54,12 +47,6 @@ export function TemplateNodeFlow({
   const { t } = useTranslation();
   const path = `stages[${index}]`;
   const label = stage.name.length > 0 ? stage.name : stage.key;
-  const nameOf = (key: string) => {
-    const found = config.stages.find((s) => s.key === key);
-    return found === undefined || found.name.length === 0 ? key : found.name;
-  };
-  const leaving = (config.edges ?? []).filter((edge) => edge.from_stage === stage.key);
-  const arriving = (config.edges ?? []).filter((edge) => edge.to_stage === stage.key);
 
   return (
     <div className="space-y-4">
@@ -100,55 +87,6 @@ export function TemplateNodeFlow({
         <Plus className="mr-1 size-3.5" aria-hidden />
         {t("workflow.templates.addNode")}
       </Button>
-
-      {leaving.length + arriving.length > 0 ? (
-        <div className="space-y-3 border-t border-border pt-3">
-          {leaving.length > 0 ? (
-            <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {t("workflow.templates.sendsBackTo")}
-              </p>
-              {leaving.map((edge) => (
-                <p
-                  key={`out-${edge.reason}-${edge.to_stage}`}
-                  className="flex items-start gap-1.5 text-sm text-muted-foreground"
-                >
-                  <CornerLeftUp className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
-                  <span>
-                    {t("workflow.templates.sendsBackToLine", {
-                      reason: edge.reason,
-                      stage: nameOf(edge.to_stage),
-                      count: edge.attempt_ceiling ?? DEFAULT_ATTEMPT_CEILING,
-                    })}
-                  </span>
-                </p>
-              ))}
-            </div>
-          ) : null}
-
-          {arriving.length > 0 ? (
-            <div className="space-y-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {t("workflow.templates.comesBackHere")}
-              </p>
-              {arriving.map((edge) => (
-                <p
-                  key={`in-${edge.reason}-${edge.from_stage}`}
-                  className="flex items-start gap-1.5 text-sm text-muted-foreground"
-                >
-                  <CornerRightDown className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden />
-                  <span>
-                    {t("workflow.templates.comesBackHereLine", {
-                      reason: edge.reason,
-                      stage: nameOf(edge.from_stage),
-                    })}
-                  </span>
-                </p>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }

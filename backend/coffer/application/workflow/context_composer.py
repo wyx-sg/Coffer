@@ -1,39 +1,42 @@
-"""The opening message every node of a run receives (FR-029).
+"""The opening message every task of a run receives (FR-029).
 
-Four parts, always in this order: the node's own brief, its bound skill's
-instructions, the transcripts of the run's EARLIER TASKS, and the artifact
-catalogue with the list of mounted inputs.
+Four parts, always in this order: the task's own brief with the exact path of
+each deliverable it owes, its bound skill's instructions, an INDEX of the run's
+earlier tasks and what they produced, and the run's mounted inputs.
 
-The last three are **run-level**. They are the same question asked at each
-node — what has this run said, made and been given — which is the whole point:
-a change of direction stated once inside one task's conversation is read by
-everything that runs afterwards without being restated (SC-004, FR-030). There
-is no main thread to state it in, and there does not need to be one: the
-developer says it where the thing being decided is in front of them, and it is
-part of that task's transcript from then on.
+One rule shapes all four: **name it, do not paste it.** Only the skill's
+instructions are carried as content — they are what the task is being asked to
+do, and they are bounded by the person who wrote them. Everything else is a
+path, a collection or an address, with the message saying out loud that the
+task may go and open it. A task not told it may read will answer from the
+names alone.
 
-Nothing bulky is inlined (FR-032). A knowledge collection can be larger than a
-context window, an artifact can be a hundred pages, and a repository is right
-there on disk. So the message *names* them — path, collection, catalogue row —
-and says so out loud, because a node that is not told it may go and read will
-answer from the summary it was given instead of from the thing itself.
+That rule is why part 3 is an index rather than the earlier tasks'
+conversations. Carrying those forward was tried: the opening message then grows
+with every task that preceded it, and the fortieth task of a delivery cannot
+start at all. So a task hands the next one its **deliverable**, not its
+transcript (FR-072) — which also means a change of direction the developer
+states inside a running task reaches the rest of the run by way of the file
+that task writes (SC-004), and is worth stating while the task is still running
+rather than after it has closed.
 
-The whole message is bounded (FR-047). ``context_budget`` holds the ceiling and
-each part's share of it; what overruns is summarised, and what could not even
-be summarised is named. Every cut this module makes is stated in the message
-that carries it — a node told nothing answers from a hole it cannot see.
+The whole message is bounded (FR-047), but the bound is a backstop: the index
+costs a line per task, so a run would have to be hundreds of tasks long to
+reach it. Every cut this module does make is stated in the message that carries
+it — a task told nothing works from a hole it cannot see.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from coffer.application.workflow.catalogue import CATALOGUE_TITLE, regenerate_catalogue
+from coffer.application.workflow.catalogue import CATALOGUE_FILE, regenerate_catalogue
 from coffer.application.workflow.context_budget import (
-    TranscriptFitter,
+    BRIEF_SHARE,
+    estimate_tokens,
+    share_of,
 )
 from coffer.application.workflow.context_lines import (
-    fit_catalogue,
     link_line,
     parse_inputs,
     repo_line,
@@ -42,22 +45,20 @@ from coffer.application.workflow.ports import (
     ArtifactStorePort,
     KnowledgeInputPort,
     SkillTextPort,
-    SummariserPort,
 )
-from coffer.application.workflow.transcripts import (
-    TaskTranscript,
-    TaskTranscriptsPort,
-    TranscriptMessage,
+from coffer.application.workflow.task_index import (
+    EarlierTask,
+    EarlierTasksPort,
+    render_index,
 )
 from coffer.domain.workflow.run import RunInput, RunInputKind
 from coffer.domain.workflow.template import Node
 
 __all__ = [
     "ContextComposer",
+    "EarlierTask",
+    "EarlierTasksPort",
     "NodeContextRequest",
-    "TaskTranscript",
-    "TaskTranscriptsPort",
-    "TranscriptMessage",
     "parse_inputs",
 ]
 
@@ -110,14 +111,12 @@ class ContextComposer:
         skills: SkillTextPort,
         knowledge: KnowledgeInputPort,
         artifacts: ArtifactStorePort,
-        transcripts: TaskTranscriptsPort,
-        summariser: SummariserPort,
+        earlier: EarlierTasksPort,
     ) -> None:
         self._skills = skills
         self._knowledge = knowledge
         self._artifacts = artifacts
-        self._transcripts = transcripts
-        self._fitter = TranscriptFitter(summariser=summariser)
+        self._earlier = earlier
 
     async def compose(self, request: NodeContextRequest) -> str:
         """The whole message, in the four-part order FR-029 fixes."""
@@ -126,7 +125,7 @@ class ContextComposer:
             self._brief(request),
             await self._skill(request),
             await self._earlier_tasks(request),
-            await self._artifacts_and_inputs(request),
+            await self._inputs(request),
         ]
         return "\n\n".join(section.rstrip() for section in sections) + "\n"
 
@@ -135,19 +134,19 @@ class ContextComposer:
     def _preamble(self, request: NodeContextRequest) -> str:
         return "\n".join(
             [
-                f"# Workflow node: {request.node.name}",
+                f"# Workflow task: {request.node.name}",
                 "",
                 f'You are running one task of the Coffer workflow run "{request.run_title}".',
-                "Sections 2 to 4 below are the run's shared context — every task of this run,",
-                "planned or ad-hoc, opens with the same three, so what you read there is what",
-                "the task before you read plus whatever it said and left behind.",
                 "",
-                "This run has no conversation of its own. Anything the developer wants the rest",
-                "of the run to know, they say inside a task's conversation — including this one.",
+                "You will not be shown any other task's conversation, and no later task will be",
+                "shown yours. What a task hands the rest of the run is the DELIVERABLE it writes",
+                "— section 1 says which files you owe and exactly where to put them. Anything you",
+                "work out that the tasks after you need, put in there; anything you leave only in",
+                "this conversation stays here.",
                 "",
-                "Nothing here is inlined. Knowledge collections, artifacts and the repository are",
-                "named, not pasted, because any of them can be larger than this message. You have",
-                "a filesystem and `coffer__search` / `coffer__read` — go and open what you need",
+                "Sections 3 and 4 are names, not contents: a path, a collection, a URL. Nothing is",
+                "pasted, because any of them can be larger than this whole message. You have a",
+                "filesystem and `coffer__search` / `coffer__read` — go and open what you need",
                 "rather than answering from the names alone.",
             ]
         )
@@ -159,7 +158,7 @@ class ContextComposer:
         lines = [
             "## 1. Your brief",
             "",
-            f"- Node: `{node.key}` — {node.name}",
+            f"- Task: `{node.key}` — {node.name}",
             f"- Type: `{node.type.value}`",
             f"- Attempt: {request.attempt}",
             f"- Working directory: `{request.workdir}`",
@@ -176,29 +175,30 @@ class ContextComposer:
         return "\n".join(lines)
 
     def _deliverables(self, request: NodeContextRequest) -> list[str]:
-        """The artifacts this node owes, each with the path to write it at.
+        """The artifacts this task owes, each with the path to write it at.
+
+        Never empty: a task whose workflow declared no deliverable is given a
+        ``report.md`` (FR-072), because a deliverable is the only thing a task
+        says to the tasks after it and one that owes nothing would leave its
+        work behind when its conversation closes.
 
         The path is exact and absolute. A required artifact that is not at its
-        path is not produced, and the node will not complete (FR-023) — so
+        path is not produced, and the task will not complete (FR-023) — so
         guessing at the location is the one mistake worth pre-empting here.
         """
         node = request.node
-        if not node.artifacts:
-            return [
-                "This node owes no artifact. Report what you did in your reply; "
-                "that reply is what the developer reviews."
-            ]
         attempt_dir = self._attempt_dir(request)
         lines = [
             "Deliverables — write each file at exactly this path. A required artifact that is",
-            "not there when your turn ends blocks this node from completing.",
+            "not there when your turn ends blocks this task from completing. These files are",
+            "what the rest of the run reads of your work, so write them for that reader.",
             "",
             "| Artifact | Required | Write to |",
             "| --- | --- | --- |",
         ]
         lines.extend(
             f"| `{spec.name}` | {'yes' if spec.required else 'no'} | `{attempt_dir}/{spec.name}` |"
-            for spec in node.artifacts
+            for spec in node.owed_artifacts
         )
         return lines
 
@@ -214,7 +214,7 @@ class ContextComposer:
     async def _skill(self, request: NodeContextRequest) -> str:
         name = request.node.skill
         if not name:
-            return "## 2. Skill\n\nNo skill is bound to this node."
+            return "## 2. Skill\n\nNo skill is bound to this task."
         text = await self._skills.instructions(name)
         if text is None:
             # A template may name a skill that has since been deleted. The run
@@ -222,56 +222,49 @@ class ContextComposer:
             # developer can re-add at any time.
             return (
                 f"## 2. Skill: `{name}`\n\n"
-                f"This node's skill is no longer registered in the vault, so its instructions "
+                f"This task's skill is no longer registered in the vault, so its instructions "
                 f"are unavailable. Proceed on the brief above and say so in your reply."
             )
-        return f"## 2. Skill: `{name}`\n\n{text.strip()}"
+        return f"## 2. Skill: `{name}`\n\n{_fit_skill(text.strip(), name)}"
 
-    # -- part 3: what the earlier tasks said --------------------------------
+    # -- part 3: what the run has done so far --------------------------------
 
     async def _earlier_tasks(self, request: NodeContextRequest) -> str:
-        """Every task that ran before this attempt, cut to fit (FR-048)."""
-        transcripts = await self._transcripts.transcripts(request.run_id, request.attempt_id)
+        """Every task that ran before this attempt, and what it produced."""
+        tasks = await self._earlier.earlier(request.run_id, request.attempt_id)
+        run_dir = self._run_dir(request.run_id)
+        # Written, not merely named. The index points at `CATALOG.md` for the
+        # case where it is itself too long to render in full (FR-047), and a
+        # path offered to an agent that resolves to nothing is worse than no
+        # path at all. Regenerating is a directory read, and it keeps the file
+        # honest on the same schedule the index is (FR-031).
+        regenerate_catalogue(self._artifacts, request.run_id)
         lines = [
-            "## 3. What the earlier tasks said",
+            "## 3. What this run has done so far",
             "",
-            "The conversations of every task of this run that opened before yours, oldest",
-            "first. The developer steers this run by talking inside a task's conversation, so",
-            "a correction they made in one of these is a correction to your brief above — read",
-            "the newest of them as the current intent where they disagree.",
+            "Every task of this run that opened before yours, oldest first, with the files it",
+            "produced. These files are the handover: open the ones that bear on your brief.",
+            "You are not being shown their conversations — what a task decided is in what it",
+            "wrote. If a deliverable does not answer a question you have, say so in your own",
+            "rather than guessing at what was meant.",
             "",
+            render_index(
+                tasks,
+                self._artifacts.list_artifacts(request.run_id),
+                run_dir=run_dir,
+                catalogue_path=f"{run_dir}/{CATALOGUE_FILE}",
+            ),
         ]
-        if not transcripts:
-            lines.append("No task has run before yours.")
-            return "\n".join(lines)
-        fitted = await self._fitter.fit(transcripts)
-        notice = fitted.notice
-        if notice:
-            lines.extend([notice, ""])
-        lines.append("\n\n".join(fitted.blocks))
         return "\n".join(lines)
 
-    # -- part 4: artifacts and mounted inputs -------------------------------
+    # -- part 4: what the developer mounted ----------------------------------
 
-    async def _artifacts_and_inputs(self, request: NodeContextRequest) -> str:
-        catalogue = regenerate_catalogue(self._artifacts, request.run_id)
-        # The file has its own H1; here it sits under an H3, and a second H1
-        # mid-message reads as a new document rather than as a section.
-        body = catalogue.removeprefix(CATALOGUE_TITLE).strip()
+    async def _inputs(self, request: NodeContextRequest) -> str:
         lines = [
-            "## 4. Artifacts and mounted inputs",
+            "## 4. Mounted inputs",
             "",
-            "### Artifacts produced so far",
-            "",
-            "Every file below was written by a node of this run and is named with the node and",
-            "attempt that produced it. Open the ones you need; they are on disk, not here.",
-            "",
-            fit_catalogue(body, f"{self._run_dir(request.run_id)}/CATALOG.md"),
-            "",
-            "### Mounted inputs",
-            "",
+            *await self._input_lines(request),
         ]
-        lines.extend(await self._input_lines(request))
         return "\n".join(lines)
 
     async def _input_lines(self, request: NodeContextRequest) -> list[str]:
@@ -279,7 +272,7 @@ class ContextComposer:
         if not inputs:
             return ["Nothing is mounted on this run."]
         lines = [
-            "These are the run's inputs (FR-032). They are listed, never pasted — reach a",
+            "These are the run's inputs. They are listed, never pasted — reach a",
             "collection with `coffer__search`, and open a file or a link yourself. An uploaded",
             f"file is on this machine under `{self._run_dir(request.run_id)}/{_INPUTS_DIR}/`.",
             "",
@@ -312,3 +305,42 @@ class ContextComposer:
         # node needs rather than silence.
         detail = described or "not found in this vault"
         return f"- knowledge `{item.ref}`{label} — {detail}"
+
+
+def _fit_skill(text: str, name: str) -> str:
+    """The skill's instructions, capped at their share of the budget (FR-047).
+
+    This is the one part of the message carried as CONTENT rather than as a
+    name, so it is the one part that can overrun on its own — and a skill is a
+    file the developer writes, with nothing stopping it being a hundred pages.
+    Left uncapped the budget would be a number in a comment: every other part
+    fits by construction, so the ceiling could only ever be breached here,
+    which is precisely where nothing was checking.
+
+    Cut from the END and said out loud, with the name of the whole. A skill
+    opens with its purpose and its rules and closes with its examples, so
+    keeping the head keeps the part the task cannot work without. A task told
+    its skill was truncated can go and open the file; a task handed a silently
+    short one follows rules it was never shown.
+    """
+    allowance = share_of(BRIEF_SHARE)
+    if estimate_tokens(text) <= allowance:
+        return text
+    # On a line boundary rather than mid-sentence: a skill is markdown, and
+    # half a heading reads as a corrupted document rather than a shortened one.
+    kept: list[str] = []
+    spent = 0
+    for line in text.splitlines():
+        spent += estimate_tokens(line)
+        if spent > allowance and kept:
+            break
+        kept.append(line)
+    return "\n".join(
+        [
+            *kept,
+            "",
+            f"_This skill's instructions are longer than a task's context budget allows, so "
+            f"they are cut off here. Open `{name}` in the vault yourself before relying on "
+            f"anything it says past this point._",
+        ]
+    )

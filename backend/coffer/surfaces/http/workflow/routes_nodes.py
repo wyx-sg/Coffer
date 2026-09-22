@@ -1,9 +1,13 @@
 """``/api/v1/workflow/runs/{run_id}/nodes`` and ``…/tasks`` — one node at a time.
 
-Four routes: the six node actions (FR-021), one sentence to a task whatever
-state it is in (FR-068), the ad-hoc task that joins a stage with instructions of
-the developer's own (FR-028), and the feedback edge that sends work back to an
-earlier stage by adding a task there (FR-025).
+Three routes: the six node actions (FR-021), one sentence to a task whatever
+state it is in (FR-068), and the ad-hoc task that joins a stage with
+instructions of the developer's own (FR-028).
+
+There is no fourth that sends work back to an earlier stage. A finding is acted
+on by retrying the task that was wrong or by adding one that fixes it (FR-025),
+both of which are already here — the route that existed took a template's own
+edge, and the template no longer draws one.
 
 Neither route decides anything. Which actions are legal, what an action leaves
 behind, whether a required artifact may be waived and where the ceiling is are
@@ -17,19 +21,16 @@ from fastapi import APIRouter, Depends, status
 
 from coffer.application.workflow.node_service import WorkflowNodeService
 from coffer.application.workflow.ports import AttemptRepoPort
-from coffer.application.workflow.run_service import WorkflowRunService
 from coffer.domain.workflow.errors import IllegalTransition
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.workflow.converters import (
     attempt_out,
     event_actor,
-    run_out,
 )
 from coffer.surfaces.http.workflow.dependencies import (
     get_workflow_attempt_repo,
     get_workflow_node_service,
-    get_workflow_run_service,
 )
 from coffer.surfaces.http.workflow.schemas import (
     AdhocTaskIn,
@@ -37,8 +38,6 @@ from coffer.surfaces.http.workflow.schemas import (
     NodeActionIn,
     NodeAttemptOut,
     SayIn,
-    SendBackIn,
-    SendBackOut,
 )
 
 router = APIRouter(
@@ -70,7 +69,7 @@ async def act_on_node(
     row = await attempts.latest_attempt(run_id, node_key) or result.attempt
     if row is None:
         # The one accepted command that opens no attempt: a ``start`` refused
-        # by the token budget pauses the run instead (FR-018). There is no
+        # by the token budget pauses the run instead. There is no
         # attempt to answer with, and the run's new status is the answer.
         raise IllegalTransition(f"run {run_id}", result.run.status, f"node.{body.action.value}", ())
     return attempt_out(row)
@@ -161,36 +160,3 @@ async def add_adhoc_task(
     if result.attempt is None:  # pragma: no cover - the command opens the attempt it answers with
         raise IllegalTransition(f"run {run_id}", "adhoc", body.stage_key, ())
     return attempt_out(result.attempt)
-
-
-@router.post("/runs/{run_id}/send-back", response_model=SendBackOut)
-async def send_back(
-    run_id: str,
-    body: SendBackIn,
-    nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
-    runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> SendBackOut:
-    """Send work back to an earlier stage along a feedback edge (FR-025).
-
-    What lands there is a new task carrying ``note`` as its brief. The node
-    that already passed in that stage is not reopened, retried or rewound —
-    it answered a different question, and it keeps its answer.
-
-    The one case with no task in the answer is the ceiling (FR-026): an edge
-    that has already fired as many times as the template allows fails the run
-    instead of sending work back again. That is an outcome, not a refusal, so
-    it comes back as this run with ``task`` null rather than as an error.
-    """
-    result = await nodes.take_feedback(
-        run_id,
-        from_stage=body.from_stage,
-        reason=body.reason,
-        note=body.note,
-        version=body.version,
-        actor=event_actor(actor),
-    )
-    return SendBackOut(
-        run=run_out(result.run, owned_here=runs.owned_here(result.run)),
-        task=None if result.attempt is None else attempt_out(result.attempt),
-    )

@@ -266,7 +266,7 @@ async def _drain(queue: asyncio.Queue[AgentEvent | None]) -> _TurnResult:
     The assistant's text is accumulated from the deltas — it is the node's
     summary, which is what the developer reviews. Token counts are summed from
     every ``TurnDone``, and an adapter that reports none contributes zero rather
-    than making the run's spend a guess (FR-018).
+    than making the run's spend a guess.
 
     The first ``TurnError`` wins: a stream that errors and then keeps talking is
     still a turn that failed, and the first reason is the one that explains it.

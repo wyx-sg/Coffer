@@ -17,7 +17,8 @@ from typing import Any
 from uuid import uuid4
 
 from coffer.application.workflow.ports import RunProjectionValue
-from coffer.application.workflow.transcripts import TaskTranscript, TranscriptMessage
+from coffer.application.workflow.task_index import EarlierTask
+from coffer.application.workflow.transcripts import TranscriptMessage
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
 
@@ -539,14 +540,14 @@ class FakeSummariser:
         return self.text
 
 
-class FakeTranscripts:
-    """``TaskTranscriptsPort`` — the run's earlier tasks, canned."""
+class FakeEarlierTasks:
+    """``EarlierTasksPort`` — the run's earlier tasks, canned."""
 
-    def __init__(self, items: Sequence[TaskTranscript] = ()) -> None:
+    def __init__(self, items: Sequence[EarlierTask] = ()) -> None:
         self.items = list(items)
         self.asked: list[tuple[str, str]] = []
 
-    async def transcripts(self, run_id: str, before_attempt_id: str) -> Sequence[TaskTranscript]:
+    async def earlier(self, run_id: str, before_attempt_id: str) -> Sequence[EarlierTask]:
         self.asked.append((run_id, before_attempt_id))
         return list(self.items)
 

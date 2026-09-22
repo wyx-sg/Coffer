@@ -68,7 +68,6 @@ from coffer.surfaces.http.workflow.schemas import (
     RunListOut,
     RunOut,
     RunSignalIn,
-    SendBackEdgeOut,
     StageOut,
 )
 
@@ -161,15 +160,6 @@ async def get_run(
         run=run_out(run, owned_here=owned_here),
         stages=stages,
         inputs=inputs_out(run.inputs),
-        send_backs=[
-            SendBackEdgeOut(
-                from_stage=edge.from_stage,
-                to_stage=edge.to_stage,
-                to_stage_name=_stage_name(template, edge.to_stage),
-                reason=edge.reason,
-            )
-            for edge in template.edges
-        ],
     )
 
 

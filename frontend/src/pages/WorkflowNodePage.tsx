@@ -23,18 +23,11 @@
 // the agent already reading; every other state hands it to the engine, which
 // decides whether it carries the attempt on or opens the next one.
 //
-// SEND BACK is in the header and is not an exception to any of that, because
-// it does nothing to this task: it opens a NEW task in an earlier stage
-// (FR-025), the way "Add task" does on the map. It is a button rather than a
-// sentence because which edge is crossed and how often it may be crossed are
-// the template's to answer, and this task's agent cannot answer them.
-//
 // The page is a WORKSPACE rather than a document — full-bleed, one screen
 // tall, the conversation taking every pixel the header does not — because a
 // transcript that a run spent hours writing is the content, not an attachment
 // to a status header.
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Workflow } from "lucide-react";
 
@@ -43,7 +36,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NodeHeader } from "@/components/workflow/NodeHeader";
 import { NodeWorkspace } from "@/components/workflow/NodeWorkspace";
-import { SendBackDialog } from "@/components/workflow/SendBackDialog";
 import { translateApiError } from "@/lib/api/errors";
 import { useSayToTask, useWorkflowRun } from "@/lib/hooks/useWorkflowRun";
 import type { RunDetail } from "@/lib/api/workflow";
@@ -65,16 +57,11 @@ const WORKSPACE = "-mx-6 -my-10 flex h-screen flex-col overflow-hidden md:-mx-10
  *  work, and the work runs to the edges. */
 const GUTTER = "shrink-0 border-b border-border px-6 py-4 md:px-8";
 
-/** Run statuses that refuse every command, send-back included (FR-013). */
-const TERMINAL = ["completed", "aborted", "failed"];
-
 export function WorkflowNodePage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { runId = "", nodeKey = "" } = useParams<{ runId: string; nodeKey: string }>();
   const { data: detail, isPending, error } = useWorkflowRun(runId);
   const say = useSayToTask(runId);
-  const [sendingBack, setSendingBack] = useState(false);
 
   const back = { to: `/runs/${runId}`, label: t("workflow.nodeConversation.backToRun") };
 
@@ -104,22 +91,11 @@ export function WorkflowNodePage() {
   const { run } = detail;
   const { stage, node } = found;
   const latest = node.latest;
-  // Only the edges leaving THIS stage, and only while this machine may still
-  // command the run: a send-back is a command like any other (FR-012, FR-013).
-  const edges = (detail.send_backs ?? []).filter((edge) => edge.from_stage === stage.key);
-  const canSendBack = edges.length > 0 && run.owned_here && !TERMINAL.includes(run.status);
 
   return (
     <div className={WORKSPACE}>
       <div className={GUTTER}>
-        <NodeHeader
-          run={run}
-          stage={stage}
-          node={node}
-          back={back}
-          canSendBack={canSendBack}
-          onSendBack={() => setSendingBack(true)}
-        />
+        <NodeHeader run={run} stage={stage} node={node} back={back} />
 
         {latest?.failure_reason ? (
           <p className="pt-2 text-sm text-destructive">
@@ -146,15 +122,6 @@ export function WorkflowNodePage() {
             : (text: string) => say.mutate({ nodeKey: node.key, text })
         }
         saying={say.isPending}
-      />
-
-      <SendBackDialog
-        runId={run.id}
-        version={run.version}
-        edges={edges}
-        open={sendingBack}
-        onClose={() => setSendingBack(false)}
-        onSent={(key) => navigate(`/runs/${run.id}/nodes/${encodeURIComponent(key)}`)}
       />
     </div>
   );

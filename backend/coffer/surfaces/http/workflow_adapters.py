@@ -26,10 +26,13 @@ from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.resource_service import ResourceService
 from coffer.application.skill.service import SkillService
-from coffer.application.workflow.transcripts import TaskTranscript, TranscriptMessage
+from coffer.application.workflow.commands import template_of
+from coffer.application.workflow.task_index import EarlierTask
+from coffer.application.workflow.transcripts import TranscriptMessage
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Role, TextBlock
 from coffer.domain.errors import CofferError
+from coffer.domain.workflow.run import ADHOC_KEY_PREFIX
 from coffer.infrastructure.chat.persistence import MessageRepo
 from coffer.infrastructure.sync.identity import resolve_identity
 
@@ -39,9 +42,9 @@ from coffer.surfaces.http.workflow_artifact_adapter import FileArtifactStore
 
 __all__ = [
     "ChatTurnPlatform",
+    "EarlierTasks",
     "FileArtifactStore",
     "KnowledgeInputs",
-    "TaskTranscripts",
     "ThisMachine",
     "WorkflowAudit",
     "WorkflowNotify",
@@ -158,43 +161,73 @@ class ChatTurnPlatform:
         self._orchestrator.interrupt_turn(conversation_id)
 
 
-class TaskTranscripts:
-    """``TaskTranscriptsPort`` — what the run's earlier tasks said (FR-029).
+class EarlierTasks:
+    """``EarlierTasksPort`` — what the run did before this attempt (FR-029).
 
-    This is what replaced the run's main thread. There is no conversation
-    belonging to the run, so "what has been said so far" is the concatenation
-    of the tasks that came before this one — which is also why a correction the
-    developer types into any task reaches every task that opens afterwards.
+    Answers with the LATEST attempt of each task. An earlier attempt is
+    superseded by definition — the run reopened that task because what it
+    produced was not right — and listing both would offer the next task a
+    choice between an answer and a discarded one.
+
+    It reaches for two things the composer cannot: the attempt rows, which say
+    what became of each task, and the run's frozen template, which says what
+    each task is CALLED. A name is worth the lookup: the index is read by an
+    agent that has to act on it, and `draft_td` is a key where "Draft the
+    technical design" is an instruction.
     """
 
-    def __init__(self, *, chat: ChatService, attempts: Any) -> None:
-        self._chat = chat
+    def __init__(self, *, runs: Any, attempts: Any) -> None:
+        self._runs = runs
         self._attempts = attempts
 
-    async def transcripts(self, run_id: str, before_attempt_id: str) -> list[TaskTranscript]:
+    async def earlier(self, run_id: str, before_attempt_id: str) -> list[EarlierTask]:
         rows = sorted(
             await self._attempts.list_attempts(run_id),
             key=lambda row: (row.started_at or row.id, row.id),
         )
-        out: list[TaskTranscript] = []
+        names = await self._names(run_id)
+        # Dict rather than list: keyed by task, each assignment overwrites the
+        # attempt before it, and insertion order keeps the tasks themselves in
+        # the order the run first reached them.
+        latest: dict[str, EarlierTask] = {}
         for row in rows:
             if row.id == before_attempt_id:
                 break
-            if not row.conversation_id:
-                # A manual node opens no conversation; it has nothing to quote.
-                continue
-            messages = tuple(
-                TranscriptMessage(role=str(m.role), text=text)
-                for m in await self._chat.list_messages(row.conversation_id)
-                if (
-                    text := "\n".join(b.text for b in m.content if isinstance(b, TextBlock)).strip()
-                )
+            latest[row.node_key] = EarlierTask(
+                node_key=row.node_key,
+                name=names.get(row.node_key) or _adhoc_name(row.node_key),
+                attempt=row.attempt,
+                status=row.status,
+                failure_reason=row.failure_reason,
             )
-            if messages:
-                out.append(
-                    TaskTranscript(node_key=row.node_key, attempt=row.attempt, messages=messages)
-                )
-        return out
+        return list(latest.values())
+
+    async def _names(self, run_id: str) -> dict[str, str]:
+        """What the frozen template calls each of its tasks, or nothing.
+
+        A run whose snapshot will not parse still gets an index — the keys are
+        readable on their own, and refusing to open a task over a display name
+        would be the context layer deciding a run is over.
+        """
+        run = await self._runs.get_run(run_id)
+        if run is None:
+            return {}
+        try:
+            template = template_of(run)
+        except CofferError:
+            logger.warning("workflow.index.template_unreadable", extra={"run_id": run_id})
+            return {}
+        return {node.key: node.name for _stage, node in template.ordered_nodes()}
+
+
+def _adhoc_name(node_key: str) -> str:
+    """A readable name for a task the template never had (FR-028).
+
+    Its real name lives on the event that recorded it, which this adapter does
+    not read; the key was slugged from that name, so un-slugging it gets close
+    enough to be useful and is never wrong about which task it is.
+    """
+    return node_key.removeprefix(ADHOC_KEY_PREFIX).replace("-", " ").strip() or node_key
 
 
 class SkillText:

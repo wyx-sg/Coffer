@@ -142,19 +142,6 @@ class SayIn(BaseModel):
     text: str
 
 
-class SendBackIn(BaseModel):
-    """Take a feedback edge out of ``from_stage`` (FR-025)."""
-
-    version: int
-    from_stage: str
-    #: Names the edge; matched exactly against the template's edges.
-    reason: str
-    #: What is wrong, in the developer's words. It becomes the brief of the
-    #: task that lands in the earlier stage, so it is the one field worth
-    #: writing carefully.
-    note: str | None = None
-
-
 class PromotionIn(BaseModel):
     collection: str
 

@@ -42,8 +42,8 @@ class WorkflowTemplateConfig(RootModel[dict[str, Any]]):
     """The whole template definition, as the resource framework wants it.
 
     A ``RootModel`` for the same reason ``channel`` uses one: the config is a
-    shape the domain already describes, and restating stages, nodes, artifacts
-    and edges as Pydantic models would create a second definition of the
+    shape the domain already describes, and restating stages, nodes and their
+    artifacts as Pydantic models would create a second definition of the
     template that could drift from the one that runs. Validation accepts the
     flat config dict and ``model_dump`` returns it unchanged, so what is stored
     is what the developer wrote.

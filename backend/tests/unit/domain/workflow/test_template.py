@@ -69,7 +69,6 @@ def valid_config() -> dict[str, Any]:
                 ],
             },
         ],
-        "edges": [{"from_stage": "testing", "to_stage": "coding", "reason": "code_issue"}],
     }
 
 
@@ -129,7 +128,6 @@ def test_omitted_fields_take_the_documented_defaults():
     )
     node = template.stages[0].nodes[0]
     assert node.attempt_ceiling == DEFAULT_ATTEMPT_CEILING
-    assert template.edges == ()
     assert template.stages[0].optional is False
     assert node.approval is ApprovalPolicy.NEVER
     assert node.on_failure.action is FailureAction.STOP
@@ -137,6 +135,61 @@ def test_omitted_fields_take_the_documented_defaults():
     assert node.artifacts == ()
     assert node.skill is None and node.agent is None
     assert node.type is NodeType.MANUAL
+
+
+@pytest.mark.acceptance(
+    spec="workflow", scenario="a task carries everything the engine needs to run it"
+)
+def test_a_task_is_read_back_with_every_field_the_engine_runs_it_on():
+    """FR-004: a node is not a name and a pointer — it carries the whole of what
+    dispatching it needs, and the stage keeps the order the developer wrote.
+
+    Asserted field by field against a stage holding TWO tasks, because the two
+    ways this breaks are a field that parses into nothing and a stage that
+    reorders its tasks. Both are invisible until a run opens the second task
+    first, or opens it with no skill bound and no approval policy.
+    """
+    config = valid_config()
+    config["stages"][1]["nodes"] = [
+        {
+            "key": "implement",
+            "name": "Implement the change",
+            "type": "ai",
+            "skill": "coffer-writing-td",
+            "instructions": "Follow the design exactly.",
+            "artifacts": [{"name": "change-summary.md", "required": True}],
+            "approval": "always",
+            "on_failure": {"action": "retry", "times": 2},
+            "agent": "codex",
+            "attempt_ceiling": 2,
+        },
+        {"key": "review_diff", "name": "Read the diff back", "type": "manual"},
+    ]
+    stage = parse_template(config).stages[1]
+
+    # The order the developer put them in, not the order a dict or a sort gives.
+    assert [n.key for n in stage.nodes] == ["implement", "review_diff"]
+
+    first = stage.nodes[0]
+    assert first.type is NodeType.AI
+    assert first.skill == "coffer-writing-td"
+    assert first.instructions == "Follow the design exactly."
+    assert [(a.name, a.required) for a in first.artifacts] == [("change-summary.md", True)]
+    assert first.approval is ApprovalPolicy.ALWAYS
+    assert (first.on_failure.action, first.on_failure.times) == (FailureAction.RETRY, 2)
+    assert first.agent == "codex"
+    assert first.attempt_ceiling == 2
+
+    # The second task declares almost nothing, and what it gets is the
+    # documented default rather than a null the dispatcher would have to guess
+    # about — including the deliverable every task owes (FR-072).
+    second = stage.nodes[1]
+    assert second.type is NodeType.MANUAL
+    assert (second.skill, second.instructions, second.agent) == (None, None, None)
+    assert second.approval is ApprovalPolicy.NEVER
+    assert second.on_failure.action is FailureAction.STOP
+    assert second.attempt_ceiling == DEFAULT_ATTEMPT_CEILING
+    assert [a.name for a in second.owed_artifacts] == ["report.md"]
 
 
 def test_an_artifact_defaults_to_required():
@@ -157,13 +210,6 @@ def test_required_artifacts_excludes_the_optional_ones():
     assert [a.name for a in node.required_artifacts] == ["td.md"]
 
 
-def test_feedback_edges_are_parsed_with_their_reason():
-    template = parse_template(valid_config())
-    assert len(template.edges) == 1
-    edge = template.edges[0]
-    assert (edge.from_stage, edge.to_stage, edge.reason) == ("testing", "coding", "code_issue")
-
-
 def test_stage_index_reports_template_order():
     template = parse_template(valid_config())
     assert template.stage_index("design") == 0
@@ -182,7 +228,6 @@ def test_the_engine_reads_no_meaning_from_a_key():
     config = valid_config()
     config["stages"] = [config["stages"][0]]
     config["stages"][0]["key"] = "zhang-san-1"
-    config["edges"] = []
     template = parse_template(config)
     assert template.stages[0].key == "zhang-san-1"
     assert template.stage_index("zhang-san-1") == 0
@@ -363,46 +408,16 @@ REFUSALS: list[tuple[str, dict[str, Any], str]] = [
         _mutate(["stages", 0, "nodes", 0, "attempt_ceiling"], True),
         "stages[0].nodes[0].attempt_ceiling",
     ),
-    (
-        "a route's ceiling at zero",
-        _mutate(["edges", 0, "attempt_ceiling"], 0),
-        "edges[0].attempt_ceiling",
-    ),
     ("a run-wide token budget", _mutate(["token_budget"], 4_000_000), "token_budget"),
-    ("edges not a list", _mutate(["edges"], {"testing": "coding"}), "edges"),
-    ("edge not an object", _mutate(["edges"], ["testing->coding"]), "edges[0]"),
+    # A route between stages is not a field a template may carry any more
+    # (FR-025). This is the shape a template stored before that change still
+    # has, so it is refused naming `edges` rather than parsed with the route
+    # silently dropped — a workflow that still believes it has one would send
+    # work nowhere.
     (
-        "edge unknown field",
-        _mutate(
-            ["edges"],
-            [{"from_stage": "testing", "to_stage": "coding", "reason": "r", "weight": 1}],
-        ),
-        "edges[0].weight",
-    ),
-    (
-        "edge from an unknown stage",
-        _mutate(["edges"], [{"from_stage": "release", "to_stage": "coding", "reason": "r"}]),
-        "edges[0].from_stage",
-    ),
-    (
-        "edge to an unknown stage",
-        _mutate(["edges"], [{"from_stage": "testing", "to_stage": "release", "reason": "r"}]),
-        "edges[0].to_stage",
-    ),
-    (
-        "edge pointing forwards",
-        _mutate(["edges"], [{"from_stage": "design", "to_stage": "testing", "reason": "r"}]),
-        "edges[0].to_stage",
-    ),
-    (
-        "edge pointing at its own stage",
-        _mutate(["edges"], [{"from_stage": "coding", "to_stage": "coding", "reason": "r"}]),
-        "edges[0].to_stage",
-    ),
-    (
-        "edge without a reason",
-        _mutate(["edges"], [{"from_stage": "testing", "to_stage": "coding"}]),
-        "edges[0].reason",
+        "a route between stages",
+        _mutate(["edges"], [{"from_stage": "testing", "to_stage": "coding", "reason": "r"}]),
+        "edges",
     ),
     ("root unknown field", _mutate(["retries"], 2), "retries"),
 ]

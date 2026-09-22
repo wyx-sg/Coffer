@@ -163,8 +163,8 @@ def test_no_workflow_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_twenty_four_routes(spec_doc: dict[str, Any]) -> None:
-    """A run's whole management plane, counted. A twenty-fifth arriving is a
+def test_the_management_plane_is_twenty_three_routes(spec_doc: dict[str, Any]) -> None:
+    """A run's whole management plane, counted. A twenty-fourth arriving is a
     decision, not an accident.
 
     It was thirteen while a run had a main thread of its own. Four inputs
@@ -172,21 +172,60 @@ def test_the_management_plane_is_twenty_four_routes(spec_doc: dict[str, Any]) ->
     run has no conversation to say anything in. The seventeenth reads ONE file
     out of the run's directory (FR-064), so the context table can show what it
     lists rather than only naming it — read-only, one path, and guarded
-    against everything that is not this run's to read. The eighteenth takes a
-    feedback edge (FR-025): the edges were in every template and no surface
-    could cross one, which made "send work back" a promise the product did not
-    keep. The nineteenth is one sentence to one task (FR-068) — a run is driven
-    by talking, and until it existed a task could only be talked to during the
-    hours its turn was in flight. The last three are the developer's own notes
-    (FR-069) — writing one, rewriting it, and serving the bytes of an image
-    pasted into it, which the text preview cannot answer for by design. The
-    twenty-third rewrites the run's LABEL (FR-070): its title is typed before
-    the first task has opened, when the developer knows least about the work,
-    and until this existed it could never be corrected. The twenty-fourth
-    chooses who runs a task and on what (FR-071), which the pickers on a
-    conversation cannot answer for a task that has no conversation yet.
+    against everything that is not this run's to read. The eighteenth is one
+    sentence to one task (FR-068) — a run is driven by talking, and until it
+    existed a task could only be talked to during the hours its turn was in
+    flight. The next three are the developer's own notes (FR-069) — writing
+    one, rewriting it, and serving the bytes of an image pasted into it, which
+    the text preview cannot answer for by design. The twenty-second rewrites
+    the run's LABEL (FR-070): its title is typed before the first task has
+    opened, when the developer knows least about the work, and until this
+    existed it could never be corrected. The twenty-third chooses who runs a
+    task and on what (FR-071), which the pickers on a conversation cannot
+    answer for a task that has no conversation yet.
+
+    A twenty-fourth was here and is gone: the route that crossed a feedback
+    edge. Sending work back is the developer retrying a task or adding one
+    (FR-025), and both of those already had routes — the edge route was a
+    second way to do what `actions` and `tasks` do.
     """
-    assert len(_declared_operations(spec_doc)) == 24
+    assert len(_declared_operations(spec_doc)) == 23
+
+
+@pytest.mark.acceptance(spec="workflow", scenario="everything the engine holds is on the API")
+def test_everything_the_engine_holds_is_reachable_over_rest(
+    generated_schema: dict[str, Any],
+    spec_doc: dict[str, Any],
+) -> None:
+    """FR-044: a run's tasks, its approvals and its event log are each readable
+    over REST, and the workflow itself is read where every resource is.
+
+    Asserted against the SERVED schema rather than the yaml, because the claim
+    is about what the API offers and a yaml can declare a route the app never
+    mounted. What this catches is the failure mode this engine is prone to:
+    state that only the daemon's own machinery can see, so a surface that wants
+    it reaches past the API for it (FR-056).
+    """
+    served = _served_operations(generated_schema)
+    for operation in [
+        ("GET", "/api/v1/workflow/runs"),
+        ("GET", "/api/v1/workflow/runs/{run_id}"),
+        ("GET", "/api/v1/workflow/runs/{run_id}/events"),
+        ("GET", "/api/v1/workflow/approvals"),
+    ]:
+        assert operation in served, f"{operation} is not served"
+
+    # The tasks come back ON the run's detail rather than from a route of their
+    # own: a run's shape is its stages and their tasks, and splitting them
+    # would let a client render a stage before knowing what is in it.
+    stages = spec_doc["components"]["schemas"]["RunDetailOut"]["properties"]["stages"]
+    assert stages["items"]["$ref"].endswith("/StageOut")
+    assert "nodes" in spec_doc["components"]["schemas"]["StageOut"]["properties"]
+
+    # And the workflow itself: a template is a resource (FR-001), so it is read
+    # through the kind-agnostic resource routes. This surface offering one of
+    # its own would be the second reader FR-056 forbids.
+    assert "get" in generated_schema["paths"]["/api/v1/resources/{uid}"]
 
 
 def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]) -> None:

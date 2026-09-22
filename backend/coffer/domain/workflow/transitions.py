@@ -8,12 +8,14 @@ application layer has exactly one place to ask "may this happen?".
 The two rules worth stating up front, because they are the ones a delivery
 engine usually gets wrong:
 
-* A **feedback edge** sends the run back by adding ONE new task to the target
-  stage, and resets nothing (FR-025). The work that already passed keeps its
-  results and its history; the fix is a new piece of work with its own
-  conversation, not a second version of an old one.
-* A **ceiling** ends a loop (FR-026). Testing can send work back to coding
-  three times; the fourth fails the run instead of spending the night on it.
+* **Nothing here sends a run backwards.** There is no route between stages
+  (FR-025): a finding in a later task is acted on by retrying the task that was
+  wrong or by adding one that fixes it, and either way the work that already
+  passed keeps its result and its history. The judgement — redo the code, or
+  redo the design — belongs to whoever holds the finding, and a table in this
+  module could only make it in advance.
+* A **ceiling** ends a loop (FR-026). A task may be tried the number of times
+  it declared; the next try fails the run instead of spending the night on it.
 """
 
 from __future__ import annotations
@@ -35,7 +37,7 @@ from coffer.domain.workflow.run import (
     RunSignal,
     RunStatus,
 )
-from coffer.domain.workflow.template import FeedbackEdge, NodeType, WorkflowTemplate
+from coffer.domain.workflow.template import NodeType, WorkflowTemplate
 
 _RUN_SIGNALS: dict[RunStatus, frozenset[RunSignal]] = {
     RunStatus.DRAFT: frozenset({RunSignal.START, RunSignal.ABORT}),
@@ -91,25 +93,6 @@ class NodePosition:
 
     stage_key: str
     node_key: str
-
-
-@dataclass(frozen=True)
-class FeedbackOutcome:
-    """What taking a feedback edge does: one new task, and nothing else.
-
-    ``target`` is where that task goes — the edge's stage, and the key minted
-    for the task. No existing node appears here at all, which is FR-025
-    expressed as data rather than as a promise in a docstring: a node that
-    passed is not reopened, retried or rewound by somebody else's finding.
-
-    ``firing`` is which crossing of this edge the task is, counted from one. It
-    is what the ceiling is measured against (FR-026), because the loop that
-    needs bounding is the edge, not any one node.
-    """
-
-    edge: FeedbackEdge
-    target: NodePosition
-    firing: int
 
 
 def allowed_run_signals(status: RunStatus) -> frozenset[RunSignal]:
@@ -222,10 +205,10 @@ def next_node(
     """The next node to run, or ``None`` when the run is finished.
 
     The rule is one line on purpose: walk the template in order and return the
-    first node that is not done. That is what makes a feedback edge cost
-    nothing extra — the edge removes the target stage's nodes from
-    ``completed_keys`` and the same walk hands them back, then walks forward
-    past everything that is still done (FR-025).
+    first node that is not done. A task the developer reopened is not done, so
+    the same walk hands it back and then walks forward past everything that
+    still is — which is the whole of what "send it back" needs to mean now that
+    no route in the template claims to do it (FR-025).
 
     A skipped node counts as done for ordering: it will not run, so the run
     must not stop on it. An optional stage is *not* skipped here — ``optional``
@@ -239,76 +222,13 @@ def next_node(
     return None
 
 
-def resolve_feedback_edge(
-    template: WorkflowTemplate, from_stage: str, reason: str
-) -> FeedbackEdge | None:
-    """The edge leaving ``from_stage`` for ``reason``, or ``None``.
-
-    Matching is exact on both fields. A near-miss returns ``None`` rather than
-    a best guess: taking the wrong edge would rerun a stage the developer never
-    asked to rerun, and "no edge" is a recoverable answer.
-    """
-    for edge in template.edges:
-        if edge.from_stage == from_stage and edge.reason == reason:
-            return edge
-    return None
-
-
-def take_feedback_edge(
-    template: WorkflowTemplate,
-    from_stage: str,
-    reason: str,
-    *,
-    task_key: str,
-    firings_used: int,
-) -> FeedbackOutcome:
-    """Take a feedback edge: say where the fix goes and which crossing it is.
-
-    The caller applies the outcome — it inserts an attempt row for a NEW task
-    at ``target``, carrying whatever the developer wrote about what is wrong.
-    Nothing that already ran is touched (FR-025): the coding node that passed
-    review keeps its conversation, its summary and its artifacts, and the fix
-    is a separate piece of work that the stage's walk picks up next.
-
-    ``task_key`` is minted by the caller, which is the layer that can see the
-    run's other node keys. It is needed here only so the ceiling refusal can
-    name the task it declined to create.
-
-    Raises:
-        IllegalTransition: no edge leaves ``from_stage`` for ``reason``.
-        AttemptCeilingReached: this edge has fired its own ceiling already,
-            so the run fails with that reason instead of sending work back a
-            fourth time (FR-026).
-    """
-    edge = resolve_feedback_edge(template, from_stage, reason)
-    if edge is None:
-        offered = tuple(
-            sorted(
-                f"{e.reason}->{e.to_stage}" for e in template.edges if e.from_stage == from_stage
-            )
-        )
-        raise IllegalTransition(f"stage {from_stage!r}", "no feedback edge", reason, offered)
-
-    target_stage = template.stage(edge.to_stage)
-    if target_stage is None:  # pragma: no cover - parse_template proves both ends exist
-        raise IllegalTransition(f"stage {from_stage!r}", "unknown target", edge.to_stage, ())
-
-    firing = check_attempt_ceiling(task_key, firings_used, edge.attempt_ceiling)
-    return FeedbackOutcome(
-        edge=edge,
-        target=NodePosition(stage_key=target_stage.key, node_key=task_key),
-        firing=firing,
-    )
-
-
 def check_attempt_ceiling(node_key: str, attempts_used: int, ceiling: int) -> int:
     """The attempt number a retry would open, or a refusal at the ceiling.
 
-    Shared by the retry action and the feedback edge so both loops stop the
-    same way — a ceiling honoured on one path and not the other is no ceiling
-    at all (FR-026). What is counted differs, and deliberately: a retry counts
-    one task's tries against that task's ceiling, an edge counts its own
-    crossings against the edge's.
+    One task's tries against that task's own ceiling (FR-026). The limit
+    belongs to the task rather than to the workflow, because a draft that is
+    cheap to redo and a deploy that must not be tried twice are not the same
+    judgement.
 
     Raises:
         AttemptCeilingReached: when the next attempt would exceed the ceiling.

@@ -36,14 +36,6 @@ which holds the whole definition:
         }
       ]
     }
-  ],
-  "edges": [
-    {
-      "from_stage": "testing",
-      "to_stage": "coding",
-      "reason": "code_issue",
-      "attempt_ceiling": 3
-    }
   ]
 }
 ```
@@ -59,11 +51,10 @@ JSON path of the offending field:
 | `nodes[].skill` | `null`, or the name of a registered `skill` resource |
 | `nodes[].agent` | `null` (the run's default), or a registered agent inside the template's scope |
 | `nodes[].artifacts[].name` | a single path segment; no separators, no dots-only |
+| `nodes[].artifacts` | may be omitted or empty in what is STORED; a task read back with none is given `[{"name": "report.md", "required": true}]` (FR-072). The default is supplied on read, so a task later given a deliverable of its own does not end up owing two |
 | `nodes[].approval` | `never` \| `always` |
 | `nodes[].on_failure.action` | `stop` \| `continue` \| `retry`, with `times` ≥ 1 when `retry` |
-| `edges[]` | both stages exist; `to_stage` strictly earlier than `from_stage` — a forward edge is the default order and is not written |
 | `nodes[].attempt_ceiling` | ≥ 1, default 3; how many attempts THIS task may open across a run (FR-026) |
-| `edges[].attempt_ceiling` | ≥ 1, default 3; how many times THIS route may send work back — the work it creates is an ad-hoc task declared nowhere else (FR-026) |
 
 The engine reads no meaning from any `key` (FR-003). `design`, `coding`,
 `张三的阶段` are the same to it.
@@ -163,7 +154,7 @@ An attempt row is never rewritten by a retry — a retry inserts `attempt + 1`
 | `id` | TEXT PK | |
 | `run_id` | TEXT not null → `workflow_runs.id` | |
 | `attempt_id` | TEXT nullable → `workflow_node_attempts.id` | |
-| `kind` | TEXT not null | `tool_call` \| `node_action` |
+| `kind` | TEXT not null | `tool_call` — the only kind an approval is ever created with |
 | `tool_name` | TEXT nullable | prefixed upstream name, for `tool_call` |
 | `payload` | JSON not null | the exact arguments that will execute (FR-033) |
 | `status` | TEXT not null | `pending` \| `approved` \| `rejected` \| `expired` \| `superseded` |

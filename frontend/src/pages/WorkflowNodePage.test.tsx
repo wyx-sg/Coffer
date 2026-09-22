@@ -22,7 +22,6 @@ import type { Approval, RunDetail } from "@/lib/api/workflow";
 
 const getRun = vi.fn();
 const listApprovals = vi.fn();
-const sendBack = vi.fn();
 const sayToNode = vi.fn();
 
 vi.mock("@/lib/api/workflow", () => ({
@@ -31,7 +30,6 @@ vi.mock("@/lib/api/workflow", () => ({
     getRun: (...a: unknown[]) => getRun(...a),
     listApprovals: (...a: unknown[]) => listApprovals(...a),
     decideApproval: vi.fn(),
-    sendBack: (...a: unknown[]) => sendBack(...a),
     sayToNode: (...a: unknown[]) => sayToNode(...a),
   },
 }));
@@ -159,10 +157,6 @@ describe("WorkflowNodePage", () => {
   beforeEach(() => {
     getRun.mockResolvedValue(detail());
     listApprovals.mockResolvedValue({ items: [] });
-    sendBack.mockResolvedValue({
-      run: detail().run,
-      task: { node_key: "adhoc:code-issue", stage_key: "design", attempt: 1 },
-    });
     sayToNode.mockResolvedValue({
       id: "att-3",
       node_key: "review_td",
@@ -191,7 +185,18 @@ describe("WorkflowNodePage", () => {
     await screen.findByRole("heading", { name: "Write the TD" });
 
     // Not one of them, however the API described this node's allowed actions.
-    for (const label of ["Start", "Retry", "Skip", "Complete", "Send feedback", "Restore"]) {
+    // "Send back" is in the list because the header carried it longest: a
+    // workflow draws no route between stages now (FR-025), so acting on a
+    // finding is retrying a task or adding one, both of which are sentences.
+    for (const label of [
+      "Start",
+      "Retry",
+      "Skip",
+      "Complete",
+      "Send feedback",
+      "Send back",
+      "Restore",
+    ]) {
       expect(screen.queryByRole("button", { name: label })).not.toBeInTheDocument();
     }
     // What replaced them: the composer, in the task's own conversation.
@@ -269,44 +274,6 @@ describe("WorkflowNodePage", () => {
   test("a node key this run does not have is reported, not rendered blank", async () => {
     render(wrap("/runs/run-1/nodes/nope"));
     expect(await screen.findByText("This task is not part of this run")).toBeInTheDocument();
-  });
-
-  test("a stage the template sends nothing back from offers no send-back", async () => {
-    render(wrap());
-    await screen.findByRole("heading", { name: "Write the TD" });
-    expect(screen.queryByRole("button", { name: "Send back" })).not.toBeInTheDocument();
-  });
-
-  acceptance("workflow", "sending work back adds a task and resets nothing", async () => {
-    getRun.mockResolvedValue({
-      ...detail(),
-      send_backs: [
-        {
-          from_stage: "design",
-          to_stage: "intake",
-          to_stage_name: "Intake",
-          reason: "missing_requirement",
-        },
-      ],
-    });
-    render(wrap());
-    fireEvent.click(await screen.findByRole("button", { name: "Send back" }));
-
-    // The dialog names the stage the work goes to, not a key.
-    expect(await screen.findByRole("heading", { name: "Send this back to Intake" })).toBeVisible();
-    fireEvent.change(screen.getByLabelText("What is wrong"), {
-      target: { value: "the acceptance criteria contradict section 2" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send back to Intake" }));
-
-    await waitFor(() =>
-      expect(sendBack).toHaveBeenCalledWith("run-1", {
-        version: 4,
-        from_stage: "design",
-        reason: "missing_requirement",
-        note: "the acceptance criteria contradict section 2",
-      }),
-    );
   });
 
   test("a run another machine advances is read-only here", async () => {

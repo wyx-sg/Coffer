@@ -7,10 +7,10 @@
 // a time, which fixed that and cost the other half: inside a stage you could
 // no longer see the flow you were editing.
 //
-// So both, side by side: the stages on the left in the order they run with the
-// routes back drawn beside them, one stage's tasks on the right, and a task's
-// own fields one click further in a dialog. Two questions on screen, never
-// three — a second stage's tasks are still behind selecting that stage.
+// So both, side by side: the stages on the left in the order they run, one
+// stage's tasks on the right, and a task's own fields one click further in a
+// dialog. Two questions on screen, never three — a second stage's tasks are
+// still behind selecting that stage.
 //
 // Which stage is open is state and not a route. It is a reading position
 // inside one resource's editor, and a URL that restored it would also have to
@@ -95,7 +95,6 @@ export function TemplateFlow({ config, refusal, editor }: Props) {
 
       {stage === undefined ? null : (
         <TemplateNodeFlow
-          config={config}
           stage={stage}
           index={selected}
           refusal={refusal}

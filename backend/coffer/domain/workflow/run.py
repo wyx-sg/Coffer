@@ -94,13 +94,20 @@ class NodeAction(StrEnum):
 class ApprovalKind(StrEnum):
     """What a pending approval stands in front of.
 
-    ``tool_call`` is a write-class upstream call the gateway is holding
-    (FR-034); ``node_action`` is a node whose declared policy is ``always``
-    (FR-033).
+    One value, and the enum is kept for the honesty of saying so: an approval
+    is always a write-class upstream call the gateway is holding (FR-034).
+
+    There was a second, ``node_action``, for a task whose declared policy is
+    ``always``. Nothing ever constructed it. A task's work is a conversation,
+    and a conversation has no single exact payload to put in front of someone
+    before it runs — so the value described an approval that could not be
+    built, while the decision that task's policy really asks for (stop when
+    the turn ends, and let the developer say whether the run goes on) is a node
+    STATUS and was there all along. What its writes needed was decided at the
+    gateway while it ran, where a payload exists.
     """
 
     TOOL_CALL = "tool_call"
-    NODE_ACTION = "node_action"
 
 
 class ApprovalStatus(StrEnum):

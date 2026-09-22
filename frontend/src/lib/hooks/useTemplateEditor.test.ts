@@ -45,7 +45,7 @@ describe("useTemplateEditor", () => {
       name: "delivery",
       description: null,
       enabled: true,
-      config: { description: null, stages: [stage("a")], edges: [] } as TemplateConfig,
+      config: { description: null, stages: [stage("a")] } as TemplateConfig,
     });
 
     const wrapper = ({ children }: { children: ReactNode }) =>

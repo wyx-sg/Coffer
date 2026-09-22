@@ -22,9 +22,10 @@ info:
     Every conversation in a run belongs to one **task** (FR-030), so there is no
     route here for writing to the run: the developer speaks to a task through
     the ordinary chat API, on that task's `conversation_id`, and what they say
-    reaches the rest of the run by being part of the transcript the next task
-    opens with. A run-level message route existed briefly and is gone — it
-    described a main thread this layer no longer has.
+    reaches the rest of the run through the deliverable that task writes
+    (FR-029). No route here returns another task's conversation, because no
+    task's opening context carries one. A run-level message route existed
+    briefly and is gone — it described a main thread this layer never had.
 
     ## Runs are operational state
 
@@ -353,38 +354,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/NodeAttemptOut"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-
-  /api/v1/workflow/runs/{run_id}/send-back:
-    post:
-      tags: [workflow]
-      operationId: sendWorkflowRunBack
-      summary: Send work back to an earlier stage along a feedback edge.
-      description: |
-        Adds a task to the edge's target stage carrying what was found (FR-025).
-        No node that already ran is reopened. An edge that has already fired the
-        template's ceiling fails the run instead, which comes back as `200` with
-        a null `task` and the run's new status (FR-026).
-      parameters:
-        - $ref: "#/components/parameters/RunId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SendBackIn"
-      responses:
-        "200":
-          description: The run afterwards, and the task the edge created.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SendBackOut"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -829,11 +798,6 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/TemplateStage"
-        edges:
-          type: array
-          description: Feedback edges only — the forward order is the array order (FR-005).
-          items:
-            $ref: "#/components/schemas/TemplateEdge"
 
     TemplateStage:
       type: object
@@ -876,6 +840,12 @@ components:
           description: Added on top of the skill, for what is specific to this flow.
         artifacts:
           type: array
+          description: |
+            What this task owes. A task stored with none is READ BACK owing a
+            required `report.md` (FR-072): a deliverable is the only thing a
+            task says to the tasks after it, so none means its work leaves the
+            run when its conversation closes. The default is applied on read,
+            never written into the developer's stored template.
           items:
             $ref: "#/components/schemas/TemplateArtifact"
         approval:
@@ -917,23 +887,6 @@ components:
           type: integer
           minimum: 1
           description: Required when `action` is `retry`.
-
-    TemplateEdge:
-      type: object
-      required: [from_stage, to_stage, reason]
-      properties:
-        from_stage: { type: string }
-        to_stage:
-          type: string
-          description: Strictly earlier than `from_stage` — a forward edge is the default order.
-        reason: { type: string }
-        attempt_ceiling:
-          type: integer
-          minimum: 1
-          description: |
-            How many times this route may send work back before the run fails
-            (FR-026). It belongs to the edge because the work it creates is an
-            ad-hoc task declared nowhere else.
 
     RunCreateIn:
       type: object
@@ -1120,13 +1073,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RunInput"
-        send_backs:
-          type: array
-          description: |
-            Every feedback edge in the run's frozen template, so a surface can
-            offer the ones leaving the stage it is showing.
-          items:
-            $ref: "#/components/schemas/SendBackEdgeOut"
 
     StageOut:
       type: object
@@ -1309,45 +1255,6 @@ components:
           type: string
           description: What the developer wants this task to know.
 
-    SendBackIn:
-      type: object
-      required: [version, from_stage, reason]
-      properties:
-        version: { type: integer }
-        from_stage: { type: string }
-        reason:
-          type: string
-          description: Names the edge; matched exactly against the template's edges.
-        note:
-          type: string
-          nullable: true
-          description: |
-            What is wrong, in the developer's words. It becomes the brief of the
-            task that lands in the earlier stage.
-
-    SendBackOut:
-      type: object
-      required: [run]
-      properties:
-        run:
-          $ref: "#/components/schemas/RunOut"
-        task:
-          allOf:
-            - $ref: "#/components/schemas/NodeAttemptOut"
-          nullable: true
-          description: |
-            Null in one case only: the edge had already fired the template's
-            ceiling, so the run failed instead of sending work back (FR-026).
-
-    SendBackEdgeOut:
-      type: object
-      required: [from_stage, to_stage, to_stage_name, reason]
-      properties:
-        from_stage: { type: string }
-        to_stage: { type: string }
-        to_stage_name: { type: string }
-        reason: { type: string }
-
     RunInputIn:
       type: object
       required: [kind, ref]
@@ -1447,7 +1354,7 @@ components:
         attempt_id: { type: string, nullable: true }
         kind:
           type: string
-          enum: [tool_call, node_action]
+          enum: [tool_call]
         tool_name: { type: string, nullable: true }
         status:
           type: string

@@ -260,65 +260,20 @@ def test_a_task_added_to_a_stage_that_is_not_in_the_template_is_409(surface: Sur
     assert code_of(response) == "WORKFLOW_ILLEGAL_TRANSITION"
 
 
-# --- sending work back -------------------------------------------------------
-
-
-def _send_back(surface: Surface, run_id: str, **body: Any):
-    return surface.client.post(
-        f"{_RUNS}/{run_id}/send-back",
-        json={"version": _version(surface, run_id), "from_stage": "coding", **body},
-    )
-
-
-@pytest.mark.acceptance(
-    spec="workflow", scenario="sending work back adds a task and resets nothing"
-)
-def test_sending_work_back_puts_a_task_in_the_earlier_stage(surface: Surface) -> None:
-    """FR-025: what lands there is new work, briefed with what was found."""
-    run = started_run(surface.client)
-    act(surface.client, run["id"], "draft_td", "start", run["version"])
-    _reviewable(surface, run["id"], "draft_td")
-    before = node_of(detail(surface.client, run["id"]), "draft_td")
-
-    response = _send_back(
-        surface, run["id"], reason="design_issue", note="section 3 contradicts the retry policy"
-    )
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["task"]["node_key"] == "adhoc:design-issue"
-    assert body["task"]["stage_key"] == "design"
-    assert body["task"]["attempt"] == 1
-    # The node that already ran is exactly as it was: same attempt, same status.
-    after = node_of(detail(surface.client, run["id"]), "draft_td")
-    assert (after["status"], after["attempt"]) == (before["status"], before["attempt"])
-
-
-def test_the_run_s_detail_offers_the_edges_the_template_wrote(surface: Surface) -> None:
-    """A surface cannot offer "send back" without being told where to."""
-    run = started_run(surface.client)
-    assert detail(surface.client, run["id"])["send_backs"] == [
-        {
-            "from_stage": "coding",
-            "to_stage": "design",
-            "to_stage_name": "Tech Design",
-            "reason": "design_issue",
-        }
-    ]
-
-
-def test_a_reason_no_edge_carries_is_409(surface: Surface) -> None:
-    run = started_run(surface.client)
-    response = _send_back(surface, run["id"], reason="typo")
-    assert response.status_code == 409
-    assert code_of(response) == "WORKFLOW_ILLEGAL_TRANSITION"
-
-
 def test_a_stale_version_never_creates_the_task(surface: Surface) -> None:
+    """The lock is checked before anything is written (FR-015): a task the
+    developer added against a run that has since moved must leave no half-added
+    node behind, because nothing on the run's detail would explain where it
+    came from."""
     run = started_run(surface.client)
     response = surface.client.post(
-        f"{_RUNS}/{run['id']}/send-back",
-        json={"version": run["version"] - 1, "from_stage": "coding", "reason": "design_issue"},
+        f"{_RUNS}/{run['id']}/tasks",
+        json={
+            "version": run["version"] - 1,
+            "stage_key": "design",
+            "name": "Check the vendor docs",
+            "instructions": "Read the vendor's rate limits.",
+        },
     )
     assert response.status_code == 409
     assert code_of(response) == "WORKFLOW_VERSION_CONFLICT"
@@ -327,23 +282,6 @@ def test_a_stale_version_never_creates_the_task(surface: Surface) -> None:
         for stage in detail(surface.client, run["id"])["stages"]
         for node in stage["nodes"]
     )
-
-
-def test_the_crossing_past_the_ceiling_answers_with_a_failed_run_and_no_task(
-    surface: Surface,
-) -> None:
-    """FR-026: an outcome, not a refusal — the command was accepted and it
-    ended the run, so the wire carries the run rather than an error."""
-    run = started_run(surface.client)
-    for _ in range(3):  # the template's ceiling
-        assert _send_back(surface, run["id"], reason="design_issue").status_code == 200
-
-    response = _send_back(surface, run["id"], reason="design_issue")
-
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert body["task"] is None
-    assert body["run"]["status"] == "failed"
 
 
 # --- saying something to a task ----------------------------------------------

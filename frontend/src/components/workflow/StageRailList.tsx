@@ -8,13 +8,6 @@
 // run. Keeping that true by convention would have lasted about two changes;
 // keeping it true by sharing the component is structural.
 //
-// The routes back are NOT drawn here. They were, as nested lines in a rail,
-// and lines between four rows of a list is a diagram whose cost — a gutter
-// wide enough to route them, arrowheads competing with the names beside them —
-// bought less than the one sentence that says the same thing: the panel
-// showing a stage states where that stage sends work back to, in words, where
-// it can also be changed.
-//
 // One line per stage: index, name, and two slots the caller fills — a trailing
 // fact (how many tasks in the editor, where the run got to in a run) and, in
 // the editor, that stage's own Edit and Delete.

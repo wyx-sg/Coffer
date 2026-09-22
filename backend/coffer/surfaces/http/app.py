@@ -87,6 +87,7 @@ from coffer.surfaces.http.removed_agent_notice import report_removed_agent_lefto
 from coffer.surfaces.http.routing import include_all_routers
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.workflow_adapters import conversation_env_lookup
+from coffer.surfaces.http.workflow_seed_wiring import run_builtin_workflow_seed
 from coffer.surfaces.http.workflow_wiring import (
     build_attempt_repo,
     start_workflow,
@@ -273,6 +274,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # edited, and it is what upgrades a vault that still holds the previous
     # per-agent rendering.
     await run_builtin_guide_refresh(kinds.guide)
+    # Coffer's own workflow, into a vault that has never had one (FR-009).
+    # Unlike the skill above it is NOT re-asserted: the row is the developer's
+    # from the moment it exists, so an edit, a rename or a delete stands.
+    await run_builtin_workflow_seed(resource_svc)
 
     # CODE-020: start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.

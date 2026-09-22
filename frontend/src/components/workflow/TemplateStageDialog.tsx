@@ -1,15 +1,14 @@
 // frontend/src/components/workflow/TemplateStageDialog.tsx
 // A stage's own fields: what it is called, whether it may be skipped, and
-// where it sends work back to when something later says it has to (FR-025).
+// where in the order it runs.
 //
-// The feedback edges are HERE rather than in a tab of their own. An edge
-// belongs to the stage it leaves — "testing sends work back to coding" is a
-// fact about testing — and a tab listing every edge in the template made the
-// developer hold the whole graph in their head to read one line of it.
+// There is nothing here about sending work back, because a workflow draws no
+// route between stages (FR-025): a finding in a later task is acted on by the
+// developer who is holding it, by retrying the task that was wrong or adding
+// one that fixes it, and neither is a decision a template can make in advance.
 //
 // The stage's KEY is not asked for and not shown (FR-060): it is derived from
-// the name on save, and the edges that named the old one are rewritten in the
-// same edit.
+// the name on save.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -27,18 +26,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TemplateFieldError } from "@/components/workflow/TemplateFieldError";
 import { TemplatePositionField } from "@/components/workflow/TemplatePositionField";
-import { TemplateSendBack } from "@/components/workflow/TemplateSendBack";
 import { translateApiError } from "@/lib/api/errors";
 import type { TemplateConfig } from "@/lib/api/workflow";
 import type { TemplateEditor } from "@/lib/hooks/useTemplateEditor";
-import {
-  addStage,
-  earlierStages,
-  moveStage,
-  saveStage,
-  sendBackOf,
-  type StageValues,
-} from "@/lib/workflow/templateDraft";
+import { addStage, moveStage, saveStage, type StageValues } from "@/lib/workflow/templateDraft";
 import { fieldErrorProps, type TemplateRefusal } from "@/lib/workflow/templateErrors";
 
 interface Props {
@@ -56,15 +47,11 @@ export function TemplateStageDialog({ config, index, refusal, editor, onClose }:
   const [values, setValues] = useState<StageValues>({
     name: existing?.name ?? "",
     optional: existing?.optional ?? false,
-    sendBack: existing === undefined ? [] : sendBackOf(config, existing.key),
   });
   // A new stage goes on the end and has nowhere else to be until it exists.
   const [position, setPosition] = useState(index ?? config.stages.length);
 
   const path = index === null ? "stages" : `stages[${index}]`;
-  // A new stage goes on the end, so what it may send back to is every stage
-  // there is; an existing one may only point at the stages before it (FR-005).
-  const targets = earlierStages(config, index ?? config.stages.length);
   const incomplete = values.name.trim().length === 0;
 
   const patch = (next: Partial<StageValues>) => setValues((current) => ({ ...current, ...next }));
@@ -74,9 +61,9 @@ export function TemplateStageDialog({ config, index, refusal, editor, onClose }:
     void editor
       .apply((c) => {
         if (index === null) return addStage(c, trimmed);
-        // Saved, then moved: `saveStage` re-derives the key and rewrites the
-        // edges that named it, and doing that at the old index keeps the two
-        // edits from having to agree about where the stage is.
+        // Saved, then moved: `saveStage` re-derives the key at the old index,
+        // which keeps the two edits from having to agree about where the stage
+        // is.
         const saved = saveStage(c, index, trimmed);
         return moveStage(saved, index, position - index);
       })
@@ -140,13 +127,6 @@ export function TemplateStageDialog({ config, index, refusal, editor, onClose }:
               </span>
             </span>
           </label>
-
-          <TemplateSendBack
-            targets={targets}
-            value={values.sendBack}
-            onChange={(sendBack) => patch({ sendBack })}
-            stageName={values.name}
-          />
 
           {editor.error && refusal === null ? (
             <p className="text-sm text-destructive" role="alert">

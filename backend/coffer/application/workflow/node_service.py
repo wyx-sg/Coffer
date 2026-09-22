@@ -1,7 +1,7 @@
 """``WorkflowNodeService`` — the commands that act on one node (spec workflow).
 
-The six node actions (FR-021), the feedback edge (FR-025, FR-026), the ad-hoc
-task (FR-028), and the reports the driver makes back when a turn ends.
+The six node actions (FR-021), each task's own attempt ceiling (FR-026), the
+ad-hoc task (FR-028), and the reports the driver makes back when a turn ends.
 
 This service owns node STATE and nothing else. It never opens a conversation:
 when a node becomes ``running`` it hands a ``NodeDispatch`` to the dispatcher
@@ -328,28 +328,7 @@ class WorkflowNodeService:
             self._ops, run_id, node_key, agent=agent, model=model, effort=effort, actor=actor
         )
 
-    # -- feedback edges and ad-hoc work -----------------------------------
-
-    async def take_feedback(
-        self,
-        run_id: str,
-        *,
-        from_stage: str,
-        reason: str,
-        note: str | None = None,
-        version: int,
-        actor: EventActor = DEFAULT_ACTOR,
-    ) -> CommandResult:
-        """Send the run back along a feedback edge (FR-025, FR-026)."""
-        return await node_tasks.take_feedback(
-            self._ops,
-            run_id,
-            from_stage=from_stage,
-            reason=reason,
-            note=note,
-            version=version,
-            actor=actor,
-        )
+    # -- unplanned work ----------------------------------------------------
 
     async def add_adhoc_task(
         self,

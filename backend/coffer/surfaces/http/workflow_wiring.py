@@ -65,10 +65,10 @@ from coffer.surfaces.http.workflow.dependencies import (
 )
 from coffer.surfaces.http.workflow_adapters import (
     ChatTurnPlatform,
+    EarlierTasks,
     FileArtifactStore,
     KnowledgeInputs,
     SkillText,
-    TaskTranscripts,
     ThisMachine,
     WorkflowAudit,
     WorkflowNotify,
@@ -209,8 +209,7 @@ def wire_workflow_kind(
         skills=SkillText(skills),
         knowledge=KnowledgeInputs(knowledge),
         artifacts=artifacts,
-        transcripts=TaskTranscripts(chat=chat.chat_service, attempts=attempts),
-        summariser=summariser,
+        earlier=EarlierTasks(runs=runs, attempts=attempts),
     )
 
     # 3. The engine.

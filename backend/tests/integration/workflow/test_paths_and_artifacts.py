@@ -149,13 +149,29 @@ def test_ensure_run_dirs_creates_the_two_fixed_children(
     assert (run / "artifacts").is_dir()
 
 
+@pytest.mark.acceptance(
+    spec="workflow", scenario="an artifact is a file, attributed to what wrote it"
+)
 def test_listing_attributes_every_artifact_to_its_node_and_attempt(
     isolated_workflow_root: pathlib.Path,
 ) -> None:
-    """FR-031: the catalogue's facts come from where the file is."""
-    artifacts.write_artifact(RUN, "draft_td", 1, "td.md", "first try")
-    artifacts.write_artifact(RUN, "draft_td", 2, "td.md", "second try, longer")
+    """FR-041 / FR-031: the catalogue's facts come from where the file is.
+
+    ``draft_td`` writes the same deliverable on two attempts, which is the case
+    the attribution exists for (FR-022): the second attempt's copy must not
+    replace the first's or shadow it in the listing, or a run that reopened a
+    task would lose the evidence of what the first try produced.
+    """
+    first = artifacts.write_artifact(RUN, "draft_td", 1, "td.md", "first try")
+    second = artifacts.write_artifact(RUN, "draft_td", 2, "td.md", "second try, longer")
     artifacts.write_artifact(RUN, "adhoc:rerun-migration", 1, "notes.md", "ran it")
+
+    # Real files, both still there, both under THIS run's own directory.
+    assert first.read_text(encoding="utf-8") == "first try"
+    assert second.read_text(encoding="utf-8") == "second try, longer"
+    assert first != second
+    for written in (first, second):
+        assert written.is_relative_to(paths.run_dir(RUN))
 
     entries = artifacts.list_artifacts(RUN)
 
