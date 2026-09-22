@@ -28,6 +28,8 @@ mod resolve;
 mod restart;
 mod sidecar;
 mod spawn;
+mod sync_alert;
+mod sync_watch;
 mod tray;
 
 use tauri::{RunEvent, WindowEvent};
@@ -53,7 +55,11 @@ pub fn run() {
 
     // No `dialog` / `opener` plugins: the frontend reaches OS file actions
     // through daemon HTTP routes in both hosts, so registering them here would
-    // only widen the capability set for code nothing calls.
+    // only widen the capability set for code nothing calls. `notification` IS
+    // registered, and `Cargo.toml` says why that is the same test rather than
+    // an exception to it: no daemon route can raise a macOS notification as
+    // Coffer, and nothing in the frontend calls this one — it is Rust-side
+    // only, for a vault held where nobody is looking (spec vault-sync FR-096).
     //
     // No binary deployment either. The daemon's own frozen-start path
     // (spec daemon FR-027) deploys `coffer`, `coffer-daemon`,
@@ -61,13 +67,17 @@ pub fn run() {
     // also how installing only the .app installs the CLI. Doing it here as
     // well would put two processes in a race to write that directory.
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             daemon::restart_daemon,
             daemon::get_daemon_info,
             daemon::daemon_version_matches,
         ])
         .setup(|app| {
-            tray::build_tray(app.handle())?;
+            let sync_item = tray::build_tray(app.handle())?;
+            // The watcher renames that entry, badges the tray and the Dock, and
+            // raises one notification per transition into an attention state.
+            sync_watch::start(app.handle().clone(), sync_item);
             Ok(())
         })
         .on_window_event(|window, event| {

@@ -22,8 +22,23 @@ tauri-build = { version = "2", features = [] }
 # tab does (see docs/decisions/daemon-proxies-os-file-actions.md). Re-adding
 # the plugins would recreate the `isTauri()` fan-out in the frontend for
 # nothing a user could perceive.
+#
+# `notification` IS admitted, and the test above is why rather than an
+# exception to it. That test is not "is there a plugin for it" but "can a
+# loopback HTTP route the webview already calls do this instead" — the two
+# absent plugins fail it because a local daemon can open Finder as well as any
+# process on the machine. A system notification fails it in the other
+# direction: the daemon could raise one, but only the app the user installed
+# can raise one *as Coffer*, and a notification's whole job is to reach a user
+# who is not looking at the page. There is no daemon route to prefer here, and
+# no frontend fan-out to recreate — nothing in `frontend/` calls this, and the
+# webview is granted no permission to (see `capabilities/default.json`). It is
+# Rust-side only, driven by `sync_watch.rs`, and it exists because a vault held
+# for a confirmation nobody sees stops converging in silence — the first one in
+# the field stood for four days (spec vault-sync FR-096).
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"

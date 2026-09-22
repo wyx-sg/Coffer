@@ -217,7 +217,15 @@ def restore(
 
 @app.command("status")
 def status(ctx: typer.Context) -> None:
-    """What the remote is, and how the last round went."""
+    """What the remote is, and how the last round went.
+
+    Exits **non-zero** when the last round needs a human — held for
+    confirmation, conflicted, or failed to push or run at all — so that a
+    prompt, a cron line or a monitor can notice without reading the text. A
+    vault held on a confirmation nobody sees converges no further, and the
+    first time that happened in the field it went unnoticed for four days
+    (spec vault-sync FR-096).
+    """
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -237,8 +245,10 @@ def status(ctx: typer.Context) -> None:
     last = payload.get("last_run")
     if last is None:
         _console.print("no round yet")
-    else:
-        _print_round(last)
+        return
+    _print_round(last)
+    if last.get("status") in _NEEDS_ATTENTION:
+        raise typer.Exit(code=1)
 
 
 @app.command("history")

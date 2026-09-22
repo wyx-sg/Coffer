@@ -181,7 +181,7 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 
 **What the shell must not do**
 
-- **FR-011**: The shell MUST NOT reimplement any capability the daemon already exposes over HTTP. Native folder selection, opening a file in the user's editor and revealing it in the file manager are daemon routes, and a webview reaches them exactly as a browser tab does; duplicating them in the shell would reintroduce a host-conditional branch in the frontend for no user-visible gain. It MUST declare no native dialog or opener plugin. The shell MUST NOT deploy binaries into `~/.coffer/bin/` — that is the daemon's frozen-start job (spec daemon, distribution), and two processes writing that directory race.
+- **FR-011**: The shell MUST NOT reimplement any capability the daemon already exposes over HTTP. Native folder selection, opening a file in the user's editor and revealing it in the file manager are daemon routes, and a webview reaches them exactly as a browser tab does; duplicating them in the shell would reintroduce a host-conditional branch in the frontend for no user-visible gain. It MUST declare no native dialog or opener plugin. A native plugin is admissible only where the daemon **cannot** stand in: a system notification is the one such case today, because there is no loopback route that raises one and only the installed bundle can post a notification as Coffer at all (spec vault-sync FR-096). The shell MUST NOT deploy binaries into `~/.coffer/bin/` — that is the daemon's frozen-start job (spec daemon, distribution), and two processes writing that directory race.
 
 **The shell's own records**
 

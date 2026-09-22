@@ -278,6 +278,35 @@ def test_a_held_round_shows_what_it_would_delete(fleet: Fleet) -> None:
     assert "knowledge/notes/only.md" in fleet.run(fleet.a.remote_paths())
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a held vault says so where the user already is"
+)
+def test_status_exits_non_zero_while_a_round_is_held(fleet: Fleet) -> None:
+    """A held vault converges no further, so the exit code has to say so.
+
+    The first hold in the field stood for four days because the only surface
+    that reported it was a page nobody had reason to open (spec vault-sync
+    FR-096). A non-zero exit is what lets a prompt, a cron line or a monitor
+    notice without reading the text.
+    """
+    _hold_a_deletion(fleet)
+
+    result = fleet.invoke("sync", "status")
+
+    assert result.exit_code == 1, result.output
+    assert "awaiting_confirmation" in result.output
+
+
+def test_status_exits_zero_once_the_hold_is_answered(fleet: Fleet) -> None:
+    """And it must go back to zero, or the signal is a stuck alarm."""
+    _hold_a_deletion(fleet)
+    fleet.ok("sync", "confirm")
+
+    result = fleet.invoke("sync", "status")
+
+    assert result.exit_code == 0, result.output
+
+
 def test_confirm_lets_the_held_deletion_through(fleet: Fleet) -> None:
     _hold_a_deletion(fleet)
 

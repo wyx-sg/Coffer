@@ -28,8 +28,24 @@ import {
   syncStatusKey,
 } from "@/lib/api/queryKeys";
 
+/**
+ * The remote, the last round and this machine's id.
+ *
+ * Polled, because `SyncAttentionBanner` mounts this on every page and a round
+ * that needs a human can start needing one while the user sits on some other
+ * page. Slowly, though: the timer converges on the order of minutes and a hold
+ * is an at-most-once-an-hour event, so a minute's lag costs nothing and a
+ * background tab wakes the daemon for nothing. The key is shared with the Sync
+ * page, so answering a hold there clears the banner through the same
+ * invalidation rather than on the next tick.
+ */
 export function useSyncStatus() {
-  return useQuery({ queryKey: syncStatusKey, queryFn: () => syncApi.status() });
+  return useQuery({
+    queryKey: syncStatusKey,
+    queryFn: () => syncApi.status(),
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+  });
 }
 
 /**

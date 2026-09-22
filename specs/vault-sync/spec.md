@@ -435,6 +435,14 @@ guards are normative.
   diff a round applies stays rename-blind, because the vault applies one path
   at a time, and the guard's reading of the same diff MUST NOT change what is
   applied or in what order.
+- **FR-096**: A vault whose last round needs a human — held for confirmation,
+  conflicted, or failed to push or run — MUST say so where the user already
+  is, not only on the page built for it. `coffer sync status` MUST exit
+  non-zero, the web UI MUST carry it on every page **except the sync page
+  itself**, where the round and the action that answers it already are, and the
+  desktop shell MUST raise it as a notification and mark its icon. A held
+  vault converges no further, so a hold nobody sees is an outage that looks
+  like silence: the first one in the field stood for four days.
 - **FR-091**: A round MUST re-derive its diff even while a confirmation is
   outstanding, and MUST **release** the hold where the direction it was raised
   for no longer breaches. A latch is an unanswered question about one diff, not
@@ -762,6 +770,16 @@ reported as a conflict.
 - **Then** the guard does not hold it, the round publishes unattended, the other
   machine absorbs the move with no confirmation of its own, and a deletion in
   the same round that no addition received is still held and listed on its own.
+
+### Scenario: a held vault says so where the user already is
+
+- **Given** a round held at the deletion guard, so nothing converges and
+  nothing is backed up until someone answers it,
+- **When** the user is anywhere other than the sync page — at a terminal, on
+  another page of the web UI, or with only the desktop shell in front of them,
+- **Then** `coffer sync status` exits non-zero, a banner reports it over
+  whatever page they are on, and the shell has marked its icon and raised one
+  notification — once for that condition, not once per poll.
 
 ### Scenario: a re-layout that rewrites its documents publishes without asking
 

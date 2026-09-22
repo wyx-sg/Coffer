@@ -1444,6 +1444,15 @@
       "machines": "Machines",
       "other": "Other"
     },
+    "attention": {
+      "title": "Sync needs you",
+      "heldTitle": "Sync is waiting for your answer",
+      "heldBody": "A round was held for your confirmation: nothing is converging and nothing is being backed up until you answer it.",
+      "conflictBody": "The last round stopped on a conflict, so nothing is being applied or published until you resolve it.",
+      "pushFailedBody": "The last round applied here but could not reach the remote, so the other machines and your backup are behind.",
+      "failedBody": "The last round failed, so this vault is no longer converging or being backed up.",
+      "open": "Open Sync"
+    },
     "conflict": {
       "title": "A conflict stopped this round",
       "body": "Two machines changed the same lines of the same document. Nothing was applied and nothing was published — the vault and the pointer are exactly where they were.",
