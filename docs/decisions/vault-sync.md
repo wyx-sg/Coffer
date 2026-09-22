@@ -352,6 +352,28 @@ just decided while the deletion is a housekeeping judgement the next pass will
 make again. The retention worker needs none of this: it prunes the audit log,
 MCP invocation records and conversations, none of which sync.
 
+**"The owner is off, so no pass happens" is only the right trade while the
+owner exists.** That sentence was written about a machine that is asleep and
+will come back. It also covers, silently, a machine that is *gone* — retired,
+reinstalled under a new identity, never converged with — and there the pass
+stops on every machine, permanently, over a name nothing resolves.
+
+The field is a machine id inside a document every machine holds, which is the
+same shape as a channel's `runs_on`, and the channel had already learned what
+that shape needs: a binding naming a machine the registry does not hold is a
+**fault**, reported as one and distinguished from a binding that merely points
+elsewhere, and rebindable in one action. The curation owner had none of the
+three — no surface showed it, nothing reported it, and no route changed it, so
+the only repair was editing SQLite. It now carries all three (spec vault-sync
+FR-098), under the channel's own four-state vocabulary rather than a second one
+invented for it, because a reader should not have to learn the same fact twice.
+
+One state is deliberately NOT shared. An unbound channel runs **nowhere**,
+because answering a platform twice cannot be walked back; an unowned pass runs
+**here**, because a vault that never named an owner is a vault with one
+machine, and the cost of being wrong is a duplicated topic document rather than
+a bot answering itself.
+
 ## Alternatives considered
 
 - **Leave the file trees to the user's own git and sync only the structured

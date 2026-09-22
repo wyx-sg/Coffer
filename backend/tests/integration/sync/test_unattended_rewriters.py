@@ -128,6 +128,48 @@ async def test_curation_names_one_owner_machine_and_is_a_no_op_elsewhere(pair) -
     assert off.curate_runs_on(a.machine_id) is False
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an owner naming a machine that is gone is reported, not silent"
+)
+async def test_an_orphaned_owner_is_a_reportable_fault_and_can_be_taken_over(pair) -> None:
+    """The half the test above could not say, against a real registry.
+
+    ``curate_runs_on`` answers False for an owner that is another live machine
+    and False for an owner that no longer exists, and those two are a vault
+    that is fine and a vault whose curation stopped everywhere. Until this the
+    difference was unrepresentable, so the second one looked exactly like the
+    first and nothing in the product said otherwise (spec vault-sync FR-098).
+    """
+    from coffer.domain.internal_engine_config import (
+        CurationOwner,
+        GlobalInternalEngineConfig,
+    )
+
+    a, b = pair
+    await settle(a, b)
+    known = [m.descriptor.machine_id for m in await a.registry.list(a.bundle)]
+    assert {a.machine_id, b.machine_id} <= set(known), "the pair should both be registered"
+
+    config = GlobalInternalEngineConfig(
+        model="m", updated_at=datetime.now(tz=UTC), auto_curate_enabled=True
+    )
+    owned_by_b = dataclasses.replace(config, curate_owner_machine_id=b.machine_id)
+    orphaned = dataclasses.replace(config, curate_owner_machine_id="0000000000000000")
+
+    # The timer cannot tell these apart, which is the whole problem.
+    assert owned_by_b.curate_runs_on(a.machine_id) is False
+    assert orphaned.curate_runs_on(a.machine_id) is False
+
+    # A surface can.
+    assert owned_by_b.curation_owner(a.machine_id, known) is CurationOwner.OTHER
+    assert orphaned.curation_owner(a.machine_id, known) is CurationOwner.UNKNOWN
+
+    # And taking it over here resolves it, without anything having to guess.
+    taken = dataclasses.replace(orphaned, curate_owner_machine_id=a.machine_id)
+    assert taken.curation_owner(a.machine_id, known) is CurationOwner.SELF
+    assert taken.curate_runs_on(a.machine_id) is True
+
+
 @pytest.mark.acceptance(spec="vault-sync", scenario="an edit outlives a tidy deletion")
 async def test_an_edit_beats_a_curation_deletion_without_reporting_a_conflict(pair) -> None:
     a, b = pair

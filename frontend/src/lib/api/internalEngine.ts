@@ -34,6 +34,19 @@ export const internalEngineApi = {
   // a switch cannot write back a stale copy of another pass's interval.
   setUpkeep: (body: UpkeepUpdate) =>
     call<InternalEngineConfig>(`${PATH}/upkeep`, { method: "PUT", body }),
+  /** Name the one machine allowed to run the curation pass; `null` clears the
+   *  owner and returns the vault to curating wherever the setting is read.
+   *
+   *  Its own call for the reason `setUpkeep` is: one setting per request, so
+   *  taking curation over cannot write back a stale copy of a pass's switch.
+   *  The id is not checked against the registry here — a vault that has never
+   *  converged has no registry and must still be able to name its own
+   *  machine. */
+  setCurationOwner: (machineId: string | null) =>
+    call<InternalEngineConfig>(`${PATH}/curation-owner`, {
+      method: "PUT",
+      body: { machine_id: machineId },
+    }),
   /** Bound one call to Coffer's own model; `null` returns it to the built-in
    *  default, which is the only way back — the server keeps the number. Out of
    *  range is refused rather than clamped, so the caller hears about a typo. */

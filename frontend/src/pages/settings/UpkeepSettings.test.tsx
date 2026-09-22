@@ -13,13 +13,42 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { UpkeepSettings } from "./UpkeepSettings";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { InternalEngineConfig } from "@/lib/api/internalEngine";
 
 const mutate = vi.fn();
+const setOwner = vi.fn();
 
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
   useInternalEngineConfig: vi.fn(),
   useSetUpkeep: () => ({ mutate, isPending: false }),
+  useSetCurationOwner: () => ({ mutate: setOwner, isPending: false, error: null }),
+}));
+// Curation's row carries the machine that owns the pass, which joins the
+// binding against the registry and this machine's id; both are stubbed so the
+// row renders the same way on every run.
+vi.mock("@/lib/hooks/useMachines", () => ({
+  useMachines: () => ({
+    data: {
+      machines: [
+        {
+          machine_id: "machine-here",
+          name: "Laptop",
+          os: "darwin",
+          hostname: "laptop",
+          coffer_version: "0.5.0",
+          last_converged_on: null,
+          key_matches: true,
+          agents: [],
+          is_self: true,
+        },
+      ],
+    },
+    isPending: false,
+  }),
+}));
+vi.mock("@/lib/hooks/useSync", () => ({
+  useSyncStatus: () => ({ data: { machine_id: "machine-here" }, isPending: false }),
 }));
 
 const hooks = await import("@/lib/hooks/useInternalEngine");
@@ -37,7 +66,21 @@ const CONFIG: InternalEngineConfig = {
     // empty topics lane forever.
     curate: { enabled: true, interval_s: null, default_interval_s: 21600 },
   },
+  // The machine allowed to run curation — this one, in the fixture, which is
+  // the state that says nothing is wrong.
+  curate_owner_machine_id: "machine-here",
 };
+
+/** The card under one TooltipProvider, which `Layout` mounts in the app: the
+ *  curation-owner row hangs the reason a take-over is or is not possible off a
+ *  Tooltip, and Radix has no provider of its own to fall back to. */
+function renderCard() {
+  return render(
+    <TooltipProvider>
+      <UpkeepSettings />
+    </TooltipProvider>,
+  );
+}
 
 // Takes the config explicitly: `stub(undefined)` would fall back to the
 // default parameter and quietly stub the loaded config instead of the loading
@@ -56,7 +99,7 @@ describe("UpkeepSettings", () => {
     // The difference that matters between them: what each one puts on disk,
     // and — for curation — what it explicitly does not touch.
     stub(CONFIG);
-    render(<UpkeepSettings />);
+    renderCard();
 
     expect(screen.getByText(/reads your agents' own memory files/i)).toBeInTheDocument();
     expect(screen.getByText(/turns the entries read from your agents into/i)).toBeInTheDocument();
@@ -69,7 +112,7 @@ describe("UpkeepSettings", () => {
     // The consequence worth a warning is the opposite one: off, nothing an
     // agent reads is ever derived.
     stub(CONFIG);
-    render(<UpkeepSettings />);
+    renderCard();
 
     expect(screen.getByText(/the documents agents read stay empty/i)).toBeInTheDocument();
   });
@@ -78,14 +121,14 @@ describe("UpkeepSettings", () => {
     // A blank here would leave the reader unable to tell how often the pass
     // they are looking at actually runs.
     stub(CONFIG);
-    render(<UpkeepSettings />);
+    renderCard();
 
     expect(screen.getByText("Default (Every 1h)")).toBeInTheDocument();
   });
 
   test("a chosen interval is shown instead of the default", () => {
     stub(CONFIG);
-    render(<UpkeepSettings />);
+    renderCard();
 
     expect(screen.getByText("Every 15 min")).toBeInTheDocument();
   });
@@ -94,7 +137,7 @@ describe("UpkeepSettings", () => {
     // One pass per write: a body carrying all three would make every toggle a
     // chance to write back a stale copy of the other two.
     stub(CONFIG);
-    render(<UpkeepSettings />);
+    renderCard();
 
     fireEvent.click(screen.getByRole("switch", { name: CURATE_SWITCH }));
 
@@ -104,7 +147,7 @@ describe("UpkeepSettings", () => {
 
   test("curation ships on, like the other derived-file passes", () => {
     stub(CONFIG);
-    render(<UpkeepSettings />);
+    renderCard();
 
     expect(screen.getByRole("switch", { name: "Read from agents" })).toBeChecked();
     expect(screen.getByRole("switch", { name: CURATE_SWITCH })).toBeChecked();
@@ -115,22 +158,44 @@ describe("UpkeepSettings", () => {
       ...CONFIG,
       upkeep: { ...CONFIG.upkeep, curate: { ...CONFIG.upkeep!.curate, enabled: false } },
     });
-    render(<UpkeepSettings />);
+    renderCard();
 
     expect(screen.getByRole("switch", { name: CURATE_SWITCH })).not.toBeChecked();
   });
 
   test("a pass this build does not know about is skipped, not rendered broken", () => {
     stub({ ...CONFIG, upkeep: { aggregate: CONFIG.upkeep!.aggregate } });
-    render(<UpkeepSettings />);
+    renderCard();
 
     expect(screen.getByRole("switch", { name: "Read from agents" })).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: CURATE_SWITCH })).toBeNull();
   });
 
+  test("only curation says which machine runs it", () => {
+    // The other two passes read and write this machine's own files; only
+    // curation derives documents a second machine would derive differently,
+    // so only curation names an owner.
+    stub(CONFIG);
+    renderCard();
+
+    expect(screen.getAllByTestId("curation-owner")).toHaveLength(1);
+    expect(screen.getByText(/curation runs here/i)).toBeInTheDocument();
+  });
+
+  test("an owner the registry has forgotten reads as a fault on this card", () => {
+    // The pass is switched on, its interval still reads every six hours, and
+    // it is running on no machine at all. This row is the only thing that says
+    // so, which is why it is asserted through the card and not only the unit.
+    stub({ ...CONFIG, curate_owner_machine_id: "machine-retired" });
+    renderCard();
+
+    expect(screen.getByRole("switch", { name: CURATE_SWITCH })).toBeChecked();
+    expect(screen.getByRole("alert")).toHaveTextContent(/no machine in the registry claims/i);
+  });
+
   test("renders nothing rather than guessing while the config is loading", () => {
     stub(null);
-    const { container } = render(<UpkeepSettings />);
+    const { container } = renderCard();
 
     expect(within(container).queryAllByRole("switch")).toHaveLength(0);
   });

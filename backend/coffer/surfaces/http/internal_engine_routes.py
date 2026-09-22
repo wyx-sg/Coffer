@@ -78,6 +78,15 @@ class InternalEngineConfigOut(BaseModel):
     #: has chosen none — and ``default_model_timeout_s`` is what runs then, sent
     #: for the same reason ``default_interval_s`` is: a settings page can name
     #: the default instead of showing a blank where a number belongs.
+    #: The one machine allowed to run the curation pass, or ``null`` on a vault
+    #: that has never named one. The raw id rather than a resolved state, for
+    #: the same reason a channel's ``runs_on`` is raw: resolving it needs the
+    #: machine registry, which is a derived view of the sync working tree
+    #: rather than DB state, and a settings read must not go near git. A reader
+    #: resolves it against ``GET /sync/machines`` —
+    #: ``GlobalInternalEngineConfig.curation_owner`` does exactly that, and is
+    #: what the CLI calls.
+    curate_owner_machine_id: str | None = None
     model_timeout_s: int | None = None
     default_model_timeout_s: int
     #: The speech-to-text model. ``null`` means Coffer transcribes nothing and
@@ -90,6 +99,18 @@ class InternalEngineConfigUpdate(BaseModel):
     """Set the internal-engine model; ``null``/empty clears it."""
 
     model: str | None = None
+
+
+class CurationOwnerUpdate(BaseModel):
+    """Name the machine that may run the curation pass; ``null`` clears it.
+
+    Deliberately NOT validated against the registry. A vault that has never
+    converged has no registry at all and must still be able to name its own
+    machine — the one install where checking would refuse the only correct
+    answer.
+    """
+
+    machine_id: str | None = None
 
 
 class ModelTimeoutUpdate(BaseModel):
@@ -157,6 +178,7 @@ def _to_out(cfg: GlobalInternalEngineConfig) -> InternalEngineConfigOut:
             )
             for name in _PASSES
         },
+        curate_owner_machine_id=cfg.curate_owner_machine_id,
         model_timeout_s=cfg.model_timeout_s,
         default_model_timeout_s=int(DEFAULT_MODEL_TIMEOUT_S),
         transcribe_model=cfg.transcribe_model,
@@ -205,6 +227,22 @@ async def update_upkeep(
         interval_s=interval,
     )
     return _to_out(await svc.set_upkeep(body.pass_name, setting, actor=actor))
+
+
+@router.put("/curation-owner", response_model=InternalEngineConfigOut)
+async def update_curation_owner(
+    body: CurationOwnerUpdate,
+    svc: InternalEngineConfigService = Depends(get_internal_engine_config_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> InternalEngineConfigOut:
+    """Name the machine that runs the curation pass; ``null`` clears it.
+
+    Clearing returns the vault to "curate wherever this is read", which is
+    correct for a vault down to one machine and wrong for one that still spans
+    several — so it is something the user asks for, never a repair anything
+    performs on its own.
+    """
+    return _to_out(await svc.set_curation_owner(body.machine_id, actor=actor))
 
 
 @router.put("/timeout", response_model=InternalEngineConfigOut)

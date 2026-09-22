@@ -483,6 +483,34 @@ reported as a conflict.
   which is the accepted trade for a background nicety. The retention worker is
   exempt: it prunes the audit log, MCP invocation records and conversations,
   none of which sync.
+- **FR-098**: The owner MUST be **reportable and changeable**, on the same
+  terms as a channel's machine binding (spec [channels](../channels/spec.md)
+  FR-026), because it is the same fact in the same shape: one machine named in
+  a document every machine holds.
+  - A surface MUST be able to say which machine owns the pass, and MUST
+    distinguish **four** states — no owner named, this machine, another machine
+    in the registry, and a machine **the registry does not hold**. Only the
+    last is a fault, and it MUST be reported as one rather than folded into
+    "runs elsewhere": the pass then runs on no machine at all, and no other
+    part of the product says so.
+  - An **empty** registry MUST NOT produce that fault. A vault that has never
+    converged has no registry to be absent from, and every single-machine
+    install has an owner naming its own machine.
+  - A user MUST be able to take the pass over on this machine, and to clear the
+    owner. Clearing returns the vault to running the pass wherever the setting
+    is read, which is right for a vault down to one machine and wrong for one
+    that still spans several, so it MUST be an explicit choice and never a
+    repair anything performs on its own.
+  - The four states MUST be **derived from the setting and the registry**, not
+    stored: the owner is one field, and a second field recording what that
+    field means is a second thing to keep true.
+
+  This exists because the pass failed silently in exactly the way the
+  requirement above accepts and the one below does not. "If the owner machine
+  is off, no pass happens" (FR-070) is the accepted trade for a machine that
+  will come back; an owner naming a machine that is **gone** is not that trade,
+  it is curation stopped everywhere with nothing to say why and — until this
+  requirement — no way to take it back short of editing the database.
 - **FR-071**: A tidy pass and a converge round MUST NOT overlap. Both write the
   vault and an export taken mid-rewrite is a torn snapshot, so they MUST take
   the same lock. A pass MUST additionally be skipped while a conflict or a
@@ -770,6 +798,15 @@ reported as a conflict.
 - **Then** the guard does not hold it, the round publishes unattended, the other
   machine absorbs the move with no confirmation of its own, and a deletion in
   the same round that no addition received is still held and listed on its own.
+
+### Scenario: an owner naming a machine that is gone is reported, not silent
+
+- **Given** an unattended rewriter whose owner setting names a machine the
+  registry does not hold — a machine retired, reinstalled under a new identity,
+  or never converged with,
+- **When** a surface reports where the pass runs,
+- **Then** it names that as a fault distinct from "runs on another machine",
+  because the pass is running on none, and the user can take it over here.
 
 ### Scenario: a held vault says so where the user already is
 

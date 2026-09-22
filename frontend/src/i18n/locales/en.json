@@ -597,6 +597,24 @@
       "defaultInterval": "Default ({{interval}})",
       "everyHours": "Every {{count}}h",
       "everyMinutes": "Every {{count}} min",
+      "owner": {
+        "label": "Runs on:",
+        "thisMachine": "This machine",
+        "everyMachine": "Every machine",
+        "unknownMachine": "Unknown machine ({{id}})",
+        "self": "Curation runs here. The other machines sharing this vault leave the derived documents to this one.",
+        "other": "Curation runs on {{machine}}. This machine reads what that one derives and never rewrites it.",
+        "unowned": "No machine has been named, so curation runs wherever this vault is opened. That is right for a vault on one machine; on two, both fold the same sources into their own documents and the vault ends up holding the same knowledge twice.",
+        "fault": "Curation is assigned to {{id}}, which no machine in the registry claims. It is running on no machine at all — the switch above still reads on, and nothing else in Coffer reports this. Take it over here to start it again.",
+        "takeOver": "Run curation on this machine",
+        "takeOverHint": "Names this machine as the owner. Whichever machine held it stops curating after the next sync round brings the change over; this one starts at its next pass.",
+        "noMachineId": "This machine has no id yet, so it cannot be named as the owner.",
+        "clear": "Clear owner",
+        "clearTitle": "Let every machine curate?",
+        "clearBody": "With no owner, every machine sharing this vault derives documents from the same sources. On a vault with one machine that changes nothing; on more, expect the same knowledge to be written twice under two names.",
+        "claimedToast": "Curation now runs on this machine",
+        "clearedToast": "Curation is no longer tied to one machine"
+      },
       "passes": {
         "aggregate": {
           "name": "Read from agents",

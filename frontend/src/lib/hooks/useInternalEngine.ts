@@ -63,6 +63,32 @@ export function useSetUpkeep() {
   });
 }
 
+/**
+ * Name the machine that runs the curation pass, or clear the name with `null`.
+ *
+ * Success toasts, which the settings mutations around it do not: this one is
+ * about a machine OTHER than the one being read, and the surface it is driven
+ * from cannot show the outcome on that machine. Taking curation over here
+ * stops it there, and the confirmation is the only evidence of that.
+ */
+export function useSetCurationOwner() {
+  const qc = useQueryClient();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (machineId: string | null) => internalEngineApi.setCurationOwner(machineId),
+    onSuccess: (_config, machineId) => {
+      void qc.invalidateQueries({ queryKey: internalEngineKey });
+      toast.success(
+        machineId === null
+          ? t("settings.upkeep.owner.clearedToast")
+          : t("settings.upkeep.owner.claimedToast"),
+      );
+    },
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
 /** Bound one call to Coffer's own model; `null` returns it to the default.
  *
  *  A separate mutation from the model above for the reason `useSetUpkeep`

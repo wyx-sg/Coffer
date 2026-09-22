@@ -10,11 +10,48 @@ the engine has nothing to run on and every pass it drives is a no-op."""
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 #: The fixed primary key of the singleton ``internal_engine_config`` row.
 SINGLETON_ID = 1
+
+
+class CurationOwner(StrEnum):
+    """What ``curate_owner_machine_id`` IS, from this machine's point of view.
+
+    The same four **states** a channel's machine binding has (frontend
+    ``lib/machineBinding.ts``, spec channels ``## Where a channel runs``),
+    because the two facts have the same shape — one machine named in a document
+    every machine holds — and must not grow two ways of resolving it.
+
+    The state NAMES are not shared, and that is deliberate rather than drift.
+    A channel with no machine named is ``unbound``; a pass with none is
+    ``UNOWNED``, because what is missing is an owner and not a binding. Both
+    words reach a user — this one through ``coffer engine curate-owner show
+    --json`` — so neither may be "corrected" into the other. What must stay
+    identical is the rule that picks between them, not the spelling.
+
+    ``UNKNOWN`` is the only one that is a **fault**. The owner names a machine
+    no registry entry claims, so no timer anywhere will run the pass and
+    nothing else in the product will say why. It is reported rather than
+    quietly folded into ``OTHER``, which is exactly the difference between "it
+    is running somewhere else" and "it is running nowhere".
+
+    One state differs from the channel's in what it *does*, and the difference
+    is deliberate. An unbound channel runs **nowhere**, because answering a
+    platform twice cannot be walked back. An unowned curation pass runs
+    **here**, because a vault that has never named an owner is a vault with one
+    machine, and the cost of being wrong is a duplicated topic document rather
+    than a bot answering itself.
+    """
+
+    UNOWNED = "unowned"
+    SELF = "self"
+    OTHER = "other"
+    UNKNOWN = "unknown"
 
 
 #: The passes Coffer runs on its own behalf, and where each one's built-in
@@ -128,3 +165,41 @@ class GlobalInternalEngineConfig:
         if self.curate_owner_machine_id is None:
             return True
         return self.curate_owner_machine_id == machine_id
+
+    def curation_owner(self, machine_id: str | None, known: Collection[str] = ()) -> CurationOwner:
+        """Which of the four states the owner is in, for a surface to report.
+
+        Deliberately separate from :meth:`curate_runs_on`, which answers the
+        timer and may only ever say yes or no. This answers the **user**, and
+        the two questions it can tell apart that a boolean cannot are the whole
+        reason it exists: "another machine is doing it" and "nobody is doing
+        it, because the machine named no longer exists" both read as "not here"
+        to the timer, and only one of them is something to fix.
+
+        ``known`` is every machine id the registry holds, and this is
+        deliberately the **same rule, statement for statement**, as the
+        frontend's ``bindingState`` in ``lib/machineBinding.ts``. Two facts of
+        one shape resolving by two rules is worse than either rule: a reader
+        would have to learn which surface to believe.
+
+        An **empty** registry can never yield ``UNKNOWN``, and the reason is
+        what ``UNKNOWN`` claims. A non-empty registry that does not hold the
+        owner has **shown** that no machine claims that id. An empty one has
+        shown nothing — there is no registry when no remote is configured, and
+        none for a moment after the working tree is rebuilt. Reporting "no
+        machine claims this" from "we cannot say" is overclaiming, and it is
+        overclaiming the one state that is a fault.
+
+        ``auto_curate_enabled`` is not consulted. Whether the pass is switched
+        on and where it would run are two facts, and a surface that hid the
+        owner while the switch was off would hide it precisely when someone is
+        about to turn it on.
+        """
+        owner = self.curate_owner_machine_id
+        if owner is None:
+            return CurationOwner.UNOWNED
+        if owner == machine_id:
+            return CurationOwner.SELF
+        if not known or owner in known:
+            return CurationOwner.OTHER
+        return CurationOwner.UNKNOWN
