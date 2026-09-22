@@ -7,23 +7,54 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager,
+    AppHandle, Manager, Wry,
 };
 
-pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+use crate::sync_watch::{SYNC_MENU_IDLE_LABEL, SYNC_MENU_ITEM_ID};
+
+/// The tray's id, so `sync_watch.rs` can find it again to repaint its icon.
+pub const TRAY_ID: &str = "coffer-tray";
+
+/// The unmarked tray icon: the app's own window icon, falling back to the
+/// bundled PNG. Shared with `sync_watch.rs`, which badges this image rather
+/// than shipping a second asset that could drift from it.
+pub fn base_tray_icon(app: &AppHandle) -> Image<'static> {
+    app.default_window_icon()
+        .cloned()
+        .map(Image::to_owned)
+        .unwrap_or_else(|| {
+            Image::from_bytes(include_bytes!("../icons/icon.png"))
+                .expect("tray icon bytes valid PNG")
+                .to_owned()
+        })
+}
+
+/// Build the tray. Returns the sync entry, which `lib.rs` hands to the watcher
+/// — the watcher renames it as the vault's state changes (spec vault-sync
+/// FR-096), so the two have to be introduced somewhere and the composition
+/// root is the honest place.
+pub fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
     let open = MenuItem::with_id(app, "open", "Open Coffer", true, None::<&str>)?;
+    // Always present, always a route to the `/sync` page. Its label is where a
+    // held, conflicted or unpushed vault says so in the one place a user who
+    // has closed the window still looks.
+    let sync = MenuItem::with_id(
+        app,
+        SYNC_MENU_ITEM_ID,
+        SYNC_MENU_IDLE_LABEL,
+        true,
+        None::<&str>,
+    )?;
     // The tray must offer "Restart daemon" (spec desktop-app FR-006). It is one
     // of the two places that action lives; the other is the offline banner.
     let restart = MenuItem::with_id(app, "restart_daemon", "Restart daemon", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Coffer", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &restart, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &sync, &restart, &sep, &quit])?;
 
-    let icon = app.default_window_icon().cloned().unwrap_or_else(|| {
-        Image::from_bytes(include_bytes!("../icons/icon.png")).expect("tray icon bytes valid PNG")
-    });
+    let icon = base_tray_icon(app);
 
-    let _tray = TrayIconBuilder::with_id("coffer-tray")
+    let _tray = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .show_menu_on_left_click(true)
         .icon(icon)
@@ -53,13 +84,20 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                     Err(e) => log::warn!("tray.restart_daemon failed: {e}"),
                 });
             }
+            SYNC_MENU_ITEM_ID => {
+                // The click target FR-096 asks for. A desktop notification
+                // raised through `tauri-plugin-notification` carries no click
+                // handler on macOS, so this entry — whose label is the alert —
+                // is what takes the user to the page that can resolve it.
+                crate::sync_watch::open_sync_page(app);
+            }
             "quit" => {
                 app.exit(0);
             }
             _ => {}
         })
         .build(app)?;
-    Ok(())
+    Ok(sync)
 }
 
 /// Return `true` when the close event should actually exit the application.

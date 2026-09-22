@@ -10,6 +10,7 @@ difference between that and a CLI writing somewhere else entirely.
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC
 from datetime import datetime as dt
 
@@ -328,3 +329,178 @@ def test_provider_transcribe_default_names_the_connection_speech_runs_on(engine_
     # `provider internal-default` does.
     r = _runner.invoke(cli_app, ["provider", "transcribe-default", "nope"])
     assert r.exit_code == 4, r.output
+
+
+# --- the machine that may curate -------------------------------------------
+#
+# Curation is the one unattended pass that may run on exactly ONE machine, so
+# its owner is a binding with the same four states a channel's has. What is
+# asserted below is every one of them, and above all the two that a boolean
+# cannot tell apart: an owner that names a machine still in the registry
+# ("somewhere else") and one that names a machine nobody claims ("nowhere at
+# all"). Only the second is a fault, and it is the state that silently stops
+# curation on every machine at once.
+
+
+def _machine_id(http) -> str:
+    """This daemon's own machine id, from the surface the CLI reads it from."""
+    return str(http.get("/sync/status").json()["machine_id"])
+
+
+def _configure_remote(tmp_path) -> None:
+    """Give this vault a remote, which is what makes a registry exist at all.
+
+    ``GET /sync/machines`` reads ``machines/*.yaml`` out of the working tree
+    (spec vault-sync: the registry is a derived view, not a table), and there
+    is no working tree until a remote is configured. A real bare repository,
+    because the route probes the one it is given.
+    """
+    bare = tmp_path / "curate-owner-remote.git"
+    subprocess.run(
+        ["git", "init", "--bare", "-b", "main", str(bare)], check=True, capture_output=True
+    )
+    r = _runner.invoke(cli_app, ["sync", "remote", "set", str(bare)])
+    assert r.exit_code == 0, r.output
+
+
+def _publish_machine(tmp_path, machine_id: str, name: str) -> None:
+    """Put one machine in the registry by writing the file the registry IS.
+
+    Each machine owns exactly ``machines/<id>.yaml`` and writes no other's, so
+    a peer appearing is literally a file appearing — no round is needed to
+    make one visible here.
+    """
+    machines = tmp_path / ".coffer" / "sync" / "machines"
+    machines.mkdir(parents=True, exist_ok=True)
+    (machines / f"{machine_id}.yaml").write_text(
+        f"name: {name}\nos: Linux\nhostname: {name}\ncoffer_version: 0\nagents: []\n",
+        encoding="utf-8",
+    )
+
+
+def test_curate_owner_show_on_a_vault_that_has_named_nobody(engine_cli_daemon):
+    """No owner is not a fault: the pass runs wherever the setting is read.
+
+    That is the right answer for a vault with one machine, and it is why
+    curation can ship on without forcing a choice before there is anything to
+    choose between.
+    """
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "show"])
+    assert r.exit_code == 0, r.output
+    assert "none" in r.output
+    assert "wherever this vault is read" in r.output
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"])
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.output)["state"] == "unowned"
+
+
+def test_curate_owner_set_defaults_to_this_machine(engine_cli_daemon):
+    """No argument means "the machine I am typing on", like ``channel bind``."""
+    http = engine_cli_daemon
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "set"])
+    assert r.exit_code == 0, r.output
+    assert "this machine" in r.output
+
+    # The same row the page writes, through the same route.
+    assert http.get("/internal-engine-config").json()["curate_owner_machine_id"] == _machine_id(
+        http
+    )
+
+    shown = _runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"])
+    assert json.loads(shown.output)["state"] == "self"
+
+    # ...and the audit entry a terminal leaves, stamped with the CLI as actor.
+    # The event type is the engine singleton's own (``internal_engine_model_set``),
+    # which is what every setting on this document records under today; the
+    # DETAILS are what say which setting moved.
+    events = http.get("/audit", params={"event_type": "internal_engine_model_set"}).json()[
+        "entries"
+    ]
+    assert events, "the CLI write recorded no audit entry"
+    assert events[0]["actor"] == "cli"
+    assert events[0]["details"]["curate_owner_machine_id"] == _machine_id(http)
+
+
+def test_curate_owner_set_takes_an_explicit_machine(engine_cli_daemon, tmp_path):
+    """A named machine that the registry holds is "another machine", not a fault."""
+    http = engine_cli_daemon
+    _configure_remote(tmp_path)
+    _publish_machine(tmp_path, _machine_id(http), "here")
+    _publish_machine(tmp_path, "peer-machine-id", "laptop")
+    # Stated so this scenario cannot pass for the reason the empty-registry one
+    # below does: the registry really does hold both machines here.
+    assert len(http.get("/sync/machines").json()["machines"]) == 2
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "set", "peer-machine-id"])
+    assert r.exit_code == 0, r.output
+    assert "another machine" in r.output
+    assert "NO machine" not in r.output
+
+    shown = _runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"])
+    assert json.loads(shown.output)["state"] == "other"
+
+
+def test_curate_owner_reports_an_owner_no_machine_claims_as_a_fault(engine_cli_daemon, tmp_path):
+    """The state that stops curation EVERYWHERE, called out as such.
+
+    A registry that holds machines but not this owner is the retired-owner
+    case: no timer anywhere will run the pass, and printing the id the way an
+    ordinary remote owner is printed would read as "it is running elsewhere".
+    """
+    http = engine_cli_daemon
+    _configure_remote(tmp_path)
+    _publish_machine(tmp_path, _machine_id(http), "here")
+    _publish_machine(tmp_path, "still-here", "laptop")
+
+    # Written even though nobody claims it: the route does not validate against
+    # the registry, deliberately. What changes is how it is read back.
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "set", "retired-machine"])
+    assert r.exit_code == 0, r.output
+    assert "NO machine in this vault claims that id" in r.output
+    assert "runs nowhere" in r.output
+    # A fault a reader cannot act on is half a report.
+    assert "curate-owner set" in r.output
+
+    shown = _runner.invoke(cli_app, ["engine", "curate-owner", "show"])
+    assert shown.exit_code == 0, shown.output
+    assert "NO machine in this vault claims that id" in shown.output
+    assert (
+        json.loads(_runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"]).output)[
+            "state"
+        ]
+        == "unknown"
+    )
+
+
+def test_an_empty_registry_is_never_reported_as_a_fault(engine_cli_daemon):
+    """A vault that has never converged has no registry, and is not broken.
+
+    This is the single-machine install — the commonest one there is. Reading
+    "not in the registry" as "that machine is gone" would report a fault on
+    every one of them, so an empty registry can only ever yield "another
+    machine".
+    """
+    # No remote, so no working tree, so no registry at all — the state this
+    # carve-out is about.
+    assert engine_cli_daemon.get("/sync/machines").json()["machines"] == []
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "set", "some-other-machine"])
+    assert r.exit_code == 0, r.output
+    assert "another machine" in r.output
+    assert "NO machine" not in r.output
+
+    shown = _runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"])
+    assert json.loads(shown.output)["state"] == "other"
+
+
+def test_curate_owner_clear_returns_the_pass_to_every_machine(engine_cli_daemon):
+    """Clearing is an operating decision, never a repair anything performs."""
+    http = engine_cli_daemon
+    assert _runner.invoke(cli_app, ["engine", "curate-owner", "set"]).exit_code == 0
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "clear"])
+    assert r.exit_code == 0, r.output
+    assert "wherever this vault is read" in r.output
+    assert http.get("/internal-engine-config").json()["curate_owner_machine_id"] is None

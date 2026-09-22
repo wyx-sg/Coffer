@@ -65,6 +65,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/internal-engine-config/curation-owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Name the machine that runs the curation pass
+         * @description Curation rewrites the `topics/` lane with no diff anyone approved, so
+         *     once a vault spans machines exactly one may run it: two machines fold
+         *     the same pair of sources into two DIFFERENT topic documents, git merges
+         *     that cleanly as two additions at different paths, and the vault ends up
+         *     holding the same knowledge twice with nothing in conflict (spec
+         *     vault-sync `## Unattended rewriters`).
+         *
+         *     This is how that machine is chosen — the counterpart of binding a
+         *     channel, and it exists for the same reason: the owner travels with the
+         *     settings document, so a machine that is retired leaves an owner nobody
+         *     claims, curation stops on every machine, and until this route there was
+         *     no way to say so or to take it back.
+         *
+         *     `null` clears the owner, which returns the vault to "curate wherever
+         *     this is read". That is the right answer for a vault down to one
+         *     machine and the wrong one for a vault that still spans several, so it
+         *     is an explicit choice rather than a repair anything performs on its own.
+         */
+        put: operations["updateCurationOwner"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/internal-engine-config/timeout": {
         parameters: {
             query?: never;
@@ -136,6 +172,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description The machine that may run the curation pass. `null` clears the owner and returns the vault to curating wherever the setting is read. */
+        CurationOwnerUpdate: {
+            /** @description A machine id as `GET /sync/machines` reports it. Not validated against the registry: a vault that has never converged has no registry, and must still be able to name its own machine. */
+            machine_id?: string | null;
+        };
         /** @description Coffer's own operating settings: the model its internal engine runs on (the connection used is the `internal_default` — endpoint + key), and the switch and timer of every pass it runs unattended. */
         InternalEngineConfigOut: {
             /** @description The chosen model id, or null when unset. */
@@ -146,6 +187,8 @@ export interface components {
             upkeep?: {
                 [key: string]: components["schemas"]["UpkeepSettingOut"];
             };
+            /** @description The one machine allowed to run the curation pass, or null on a vault that has never named one (which curates wherever it is read — a vault with no owner is a vault with one machine). Resolve it against `GET /sync/machines`, the same way a channel's `runs_on` is resolved: an id no entry there claims is a FAULT, because the pass then runs on no machine at all and nothing else in the product reports it. An empty registry is not that fault — a vault that has never converged has no registry to be absent from. */
+            curate_owner_machine_id?: string | null;
             /** @description The chosen bound on one model call, or null while none has been chosen. */
             model_timeout_s?: number | null;
             /** @description What bounds a call while `model_timeout_s` is null — reported for the same reason `default_interval_s` is, so a settings surface can name the default rather than show a blank. */
@@ -297,6 +340,33 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpkeepUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalEngineConfigOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    updateCurationOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CurationOwnerUpdate"];
             };
         };
         responses: {

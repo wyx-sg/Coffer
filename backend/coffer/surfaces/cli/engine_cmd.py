@@ -2,10 +2,12 @@
 
 The same settings the Settings → Engine page shows: WHICH MODEL Coffer thinks
 with (``engine model``), WHAT IT DOES while nobody is looking (``engine
-upkeep``), HOW LONG one call to that model may take (``engine timeout``) and
-WHICH MODEL hears speech (``engine transcribe-model``). All four are thin
-shells over ``/api/v1/internal-engine-config``, so the terminal and the page
-write the same row through the same service and record the same audit entry.
+upkeep``), WHICH MACHINE does the one unattended thing that may only happen
+once (``engine curate-owner``), HOW LONG one call to that model may take
+(``engine timeout``) and WHICH MODEL hears speech (``engine
+transcribe-model``). All five are thin shells over
+``/api/v1/internal-engine-config``, so the terminal and the page write the same
+row through the same service and record the same audit entry.
 
 The upkeep half is why this group must exist rather than being a page-only
 surface (spec internal-engine FR-020/FR-021, ``.agents/sdd.md``): one of the
@@ -26,6 +28,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli.engine_curate_owner_cmd import curate_owner_app
 
 app = typer.Typer(help="Coffer's own engine: the model it thinks with, and its unattended work")
 model_app = typer.Typer(help="The model Coffer's own passes run on")
@@ -34,6 +37,7 @@ timeout_app = typer.Typer(help="How long one call to Coffer's own model may take
 transcribe_app = typer.Typer(help="The model Coffer transcribes speech with")
 app.add_typer(model_app, name="model")
 app.add_typer(upkeep_app, name="upkeep")
+app.add_typer(curate_owner_app, name="curate-owner")
 app.add_typer(timeout_app, name="timeout")
 app.add_typer(transcribe_app, name="transcribe-model")
 

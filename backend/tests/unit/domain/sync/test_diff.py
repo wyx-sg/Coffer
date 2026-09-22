@@ -277,16 +277,77 @@ def test_a_deletion_with_no_content_id_counts() -> None:
     ]
 
 
-def test_a_move_that_also_edits_the_document_is_not_a_move() -> None:
-    """Content, never resemblance. A document that arrived somewhere else with
-    different bytes is asked about, because nothing here can tell it from a
-    deletion standing beside an unrelated addition."""
+def test_a_move_that_also_edits_the_document_counts_when_nothing_paired_it() -> None:
+    """With no pairing to go on there is only content, and different bytes at
+    another path are indistinguishable from a deletion standing beside an
+    unrelated addition. So it is asked about."""
     guard = DeletionGuard(share=0.2, floor=20)
     changes = [
         DocChange("knowledge/c/d0.md", ChangeStatus.DELETED, blob="a" * 40),
         DocChange("knowledge/c/sources/d0.md", ChangeStatus.ADDED, blob="b" * 40),
     ]
     assert guard.breached_areas(changes, {"knowledge": 1}) == [("knowledge", 1, 1)]
+
+
+def test_a_move_that_also_edits_the_document_is_a_move_once_git_pairs_it() -> None:
+    """The 2026-09-19 shape: giving every resource an immutable uid renamed
+    each document *and* added a ``uid:`` line to it, so exact-bytes pairing saw
+    28 of 28 resources disappear and held the vault for four days. git had
+    reported the same diff as 28 renames all along."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = [
+        DocChange("resources/agent/codex.yaml", ChangeStatus.DELETED, blob="a" * 40),
+        DocChange("resources/agent/bc0eff32.yaml", ChangeStatus.ADDED, blob="b" * 40),
+    ]
+    renames = [("resources/agent/codex.yaml", "resources/agent/bc0eff32.yaml")]
+    assert guard.breached_areas(changes, {"resources": 1}, renames) == []
+
+
+def test_a_pairing_that_crosses_an_area_is_not_a_move() -> None:
+    """git pairs renames over the whole tree; the guard's unit is the area, so
+    the domain filters rather than trusts. Same content, wrong place, still
+    asked about."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = [
+        DocChange("knowledge/c/d0.md", ChangeStatus.DELETED, blob="a" * 40),
+        DocChange("credentials/c/d0.md", ChangeStatus.ADDED, blob="b" * 40),
+    ]
+    renames = [("knowledge/c/d0.md", "credentials/c/d0.md")]
+    assert guard.breached_areas(changes, {"knowledge": 1}, renames) == [("knowledge", 1, 1)]
+
+
+def test_a_wiped_area_is_held_even_though_pairings_are_now_consulted() -> None:
+    """The argument for admitting a similarity judgement at all: it can only
+    excuse a deletion that has an addition to be paired *with*. A wiped disk, a
+    failed restore and a stray ``rm -rf`` carry no additions, so git returns no
+    pairings and they are held exactly as before."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = _deletions("knowledge", 40)
+    assert guard.breached_areas(changes, {"knowledge": 40}, renames=[]) == [("knowledge", 40, 40)]
+
+
+def test_a_pairing_names_a_source_the_diff_never_deleted() -> None:
+    """A pairing for a path that is not a deletion in this diff excuses
+    nothing. The lookup is by the deletion's own path, so a stale or unrelated
+    pairing cannot widen the guard."""
+    guard = DeletionGuard(share=0.2, floor=20)
+    changes = _deletions("knowledge", 30)
+    renames = [("knowledge/somewhere-else.md", "knowledge/elsewhere.md")]
+    assert guard.breached_areas(changes, {"knowledge": 30}, renames) == [("knowledge", 30, 30)]
+
+
+def test_lost_paths_leaves_out_what_git_paired() -> None:
+    """A hold lists what the round would *remove*. A document that turned up
+    under another name was not removed, by either test."""
+    summary = DiffSummary.of(
+        [
+            DocChange("resources/agent/codex.yaml", ChangeStatus.DELETED, blob="a" * 40),
+            DocChange("resources/agent/bc0eff32.yaml", ChangeStatus.ADDED, blob="b" * 40),
+            DocChange("resources/skill/gone.yaml", ChangeStatus.DELETED, blob="c" * 40),
+        ],
+        [("resources/agent/codex.yaml", "resources/agent/bc0eff32.yaml")],
+    )
+    assert summary.lost_paths() == ("resources/skill/gone.yaml",)
 
 
 def test_a_move_onto_a_path_the_diff_modified_is_still_a_move() -> None:

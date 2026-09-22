@@ -844,6 +844,89 @@ async def test_a_mass_deletion_beside_a_relayout_is_still_held_for_the_deletion(
     assert len({p for p in await a.remote_paths() if p.startswith("knowledge/")}) == 30
 
 
+def _body(name: str) -> str:
+    """A document with enough lines that adding one keeps the two sides
+    recognisably the same — the shape of a real serialized document, and what
+    makes the difference between git pairing the rename and not."""
+    return "\n".join(f"{name} line {i}" for i in range(12)) + "\n"
+
+
+def _relayout_rewriting(machine: VaultMachine, names: list[str]) -> None:
+    """Move documents AND rewrite them, which is what a layout migration *is*.
+
+    Giving every resource an immutable uid renamed each document and added a
+    ``uid:`` line to it. Byte-for-byte pairing cannot see that, so the guard
+    read 28 of 28 resources as lost; git had reported the same diff as 28
+    renames all along.
+    """
+    for name in names:
+        body = machine.read_knowledge("notes", name)
+        assert body is not None
+        machine.write_knowledge("notes/sources", name, body + f"uid: {name}-uid\n")
+        machine.delete_knowledge("notes", name)
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a re-layout that rewrites its documents publishes without asking"
+)
+async def test_a_relayout_that_rewrites_its_documents_publishes_unattended(pair) -> None:
+    """The 2026-09-19 bug: the vault was held for four days over a migration
+    this project shipped, with nothing lost. Exact-bytes pairing could not see
+    it because the migration edited every document on its way; git's rename
+    detection can (spec vault-sync FR-090).
+    """
+    a, b = pair
+    names = [f"n{i:02d}" for i in range(30)]
+    for name in names:
+        a.write_knowledge("notes", name, _body(name))
+    await settle(a, b)
+    assert len(b.knowledge_paths()) == 30
+
+    _relayout_rewriting(a, names)
+    published = await a.converge()
+
+    assert published.status is ConvergeStatus.OK, published.error
+    assert published.pending is None
+    assert await a.state.pending() is None
+    assert len(deleted(published.published)) == 30
+    assert len(added(published.published)) == 30
+    assert {p for p in await a.remote_paths() if p.startswith("knowledge/")} == {
+        f"knowledge/notes/sources/{name}.md" for name in names
+    }
+
+    applied = await b.converge()
+
+    assert applied.status is ConvergeStatus.OK, applied.error
+    assert applied.pending is None
+    assert b.knowledge_paths() == {f"notes/sources/{name}.md" for name in names}
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a wiped area is held although rename pairings are consulted"
+)
+async def test_a_wipe_is_still_held_now_that_pairings_are_consulted(pair) -> None:
+    """The argument that admitting a similarity judgement is safe, tested
+    rather than asserted: a pairing can only excuse a deletion that has an
+    addition to be paired *with*, and a wipe has none.
+    """
+    a, b = pair
+    names = [f"n{i:02d}" for i in range(30)]
+    for name in names:
+        a.write_knowledge("notes", name, _body(name))
+    await settle(a, b)
+
+    for name in names:
+        a.delete_knowledge("notes", name)
+
+    held = await a.converge()
+
+    assert held.status is ConvergeStatus.AWAITING_CONFIRMATION
+    assert held.pending is not None
+    assert held.pending.direction is GuardDirection.PUBLISH
+    assert held.pending.breaches == (("knowledge", 30, 30),)
+    assert len({p for p in await a.remote_paths() if p.startswith("knowledge/")}) == 30
+
+
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a hold is released once its diff no longer breaches"
 )

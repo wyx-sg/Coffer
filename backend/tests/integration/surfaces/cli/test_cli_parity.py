@@ -154,9 +154,15 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # it runs unattended. Listed here because `.agents/sdd.md` requires every
     # management operation to be reachable from a terminal, and one of these
     # passes rewrites the user's own knowledge files on a timer.
-    "engine": {"model", "upkeep", "timeout", "transcribe-model"},
+    "engine": {"model", "upkeep", "curate-owner", "timeout", "transcribe-model"},
     "engine model": {"show", "set", "clear"},
     "engine upkeep": {"list", "set"},
+    # Which MACHINE runs the one pass that may only run on one of them. Shaped
+    # like `channel bind` — show, set (defaulting to this machine), clear —
+    # because it is the same fact: one machine named in a document every
+    # machine holds. Without `set` a retired owner stops curation on every
+    # machine with no way back short of editing SQLite.
+    "engine curate-owner": {"show", "set", "clear"},
     # The other two settings on the same singleton (spec internal-engine
     # FR-027). `timeout default` and `transcribe-model clear` are named
     # verbs rather than a null argument because a terminal has no way to spell

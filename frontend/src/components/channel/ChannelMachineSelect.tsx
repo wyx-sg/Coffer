@@ -27,9 +27,10 @@ import {
 import { useRebindChannel } from "@/lib/hooks/useChannels";
 import { useMachines } from "@/lib/hooks/useMachines";
 import { useSyncStatus } from "@/lib/hooks/useSync";
+import { machineOptions, type MachineOption } from "@/lib/machineBinding";
 import { toneClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
-import { bindingState, machineOptions, type MachineOption } from "./channelBinding";
+import { bindingState } from "./channelBinding";
 
 interface Props {
   /** The channel being bound — its identity, which the PATCH is addressed to. */

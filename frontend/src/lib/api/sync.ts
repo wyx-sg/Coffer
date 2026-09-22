@@ -69,9 +69,17 @@ export interface PendingConfirmation {
   raised_at: string;
 }
 
+/**
+ * The outcomes a round can end in, taken from the generated contract rather
+ * than restated. Every surface that decides something from a round's status
+ * narrows this union, so a status renamed or added on the backend fails
+ * `npm run typecheck` here instead of being silently carried by one surface.
+ */
+export type RoundStatus = Schemas["RoundOut"]["status"];
+
 /** One converge round's outcome (`RoundOut`). */
 export interface ConvergeRound {
-  status: string;
+  status: RoundStatus;
   /** `new` or `returning` when this round joined a remote; null otherwise. */
   join: "new" | "returning" | null;
   applied: DiffCounts;

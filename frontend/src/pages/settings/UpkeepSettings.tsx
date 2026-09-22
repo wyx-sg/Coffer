@@ -19,11 +19,20 @@
 // switching it off is what leaves the lane an agent reads empty forever: it is
 // the only path from a source to something an agent can read.
 //
+// Curation's row carries one more thing the other two have no use for: the
+// machine allowed to run it. A pass that derives documents must run on exactly
+// one machine once a vault spans several, and the machine that owns it was
+// until now readable nowhere in the product — including when it names a
+// machine the registry no longer holds, which stops curation everywhere
+// without saying so. `CurationOwner` is that row's footer.
+//
 // Edits auto-save, like every other settings surface here (no Save button):
 // the switch persists on toggle, the interval on selection.
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarClock } from "lucide-react";
 
+import { CurationOwner } from "@/components/settings/CurationOwner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -62,64 +71,72 @@ function PassRow({
   setting,
   onChange,
   busy,
+  footer,
 }: {
   pass: UpkeepPass;
   setting: UpkeepSetting;
   onChange: (next: { enabled?: boolean; interval_s?: number | null }) => void;
   busy: boolean;
+  /** Rendered full-width under the row. Curation uses it for the machine that
+   *  owns the pass: a fact about WHERE it runs, which does not belong in the
+   *  column that says how often or the one that says whether. */
+  footer?: ReactNode;
 }) {
   const { t } = useTranslation();
   const switchId = `upkeep-${pass}`;
 
   return (
-    <div className="flex flex-col gap-3 border-t py-4 first:border-t-0 first:pt-0 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 space-y-1">
-        <Label htmlFor={switchId} className="text-sm font-medium">
-          {t(`settings.upkeep.passes.${pass}.name`)}
-        </Label>
-        <p className="text-xs text-muted-foreground">
-          {t(`settings.upkeep.passes.${pass}.writes`)}
-        </p>
-        {pass === "curate" ? (
-          <p className="text-xs text-status-warn">{t("settings.upkeep.passes.curate.caution")}</p>
-        ) : null}
-      </div>
+    <div className="border-t py-4 first:border-t-0 first:pt-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <Label htmlFor={switchId} className="text-sm font-medium">
+            {t(`settings.upkeep.passes.${pass}.name`)}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t(`settings.upkeep.passes.${pass}.writes`)}
+          </p>
+          {pass === "curate" ? (
+            <p className="text-xs text-status-warn">{t("settings.upkeep.passes.curate.caution")}</p>
+          ) : null}
+        </div>
 
-      <div className="flex shrink-0 items-center gap-3">
-        <Select
-          value={setting.interval_s === null ? DEFAULT_VALUE : String(setting.interval_s)}
-          onValueChange={(v) => onChange({ interval_s: v === DEFAULT_VALUE ? null : Number(v) })}
-          disabled={busy || !setting.enabled}
-        >
-          <SelectTrigger
-            className="w-40"
-            aria-label={t("settings.upkeep.interval", {
-              pass: t(`settings.upkeep.passes.${pass}.name`),
-            })}
+        <div className="flex shrink-0 items-center gap-3">
+          <Select
+            value={setting.interval_s === null ? DEFAULT_VALUE : String(setting.interval_s)}
+            onValueChange={(v) => onChange({ interval_s: v === DEFAULT_VALUE ? null : Number(v) })}
+            disabled={busy || !setting.enabled}
           >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={DEFAULT_VALUE}>
-              {t("settings.upkeep.defaultInterval", {
-                interval: intervalLabel(t, setting.default_interval_s),
+            <SelectTrigger
+              className="w-40"
+              aria-label={t("settings.upkeep.interval", {
+                pass: t(`settings.upkeep.passes.${pass}.name`),
               })}
-            </SelectItem>
-            {INTERVAL_CHOICES.map((s) => (
-              <SelectItem key={s} value={String(s)}>
-                {intervalLabel(t, s)}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_VALUE}>
+                {t("settings.upkeep.defaultInterval", {
+                  interval: intervalLabel(t, setting.default_interval_s),
+                })}
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Switch
-          id={switchId}
-          checked={setting.enabled}
-          onCheckedChange={(enabled) => onChange({ enabled })}
-          disabled={busy}
-          aria-label={t(`settings.upkeep.passes.${pass}.name`)}
-        />
+              {INTERVAL_CHOICES.map((s) => (
+                <SelectItem key={s} value={String(s)}>
+                  {intervalLabel(t, s)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Switch
+            id={switchId}
+            checked={setting.enabled}
+            onCheckedChange={(enabled) => onChange({ enabled })}
+            disabled={busy}
+            aria-label={t(`settings.upkeep.passes.${pass}.name`)}
+          />
+        </div>
       </div>
+      {footer}
     </div>
   );
 }
@@ -150,6 +167,15 @@ export function UpkeepSettings() {
               setting={setting}
               busy={setUpkeep.isPending}
               onChange={(next) => setUpkeep.mutate({ pass, ...next })}
+              // Only curation names a machine, and only curation can afford
+              // to: the pass rewrites derived documents, so two machines
+              // running it fold the same sources into two documents git then
+              // merges as two perfectly good additions.
+              footer={
+                pass === "curate" ? (
+                  <CurationOwner ownerId={config?.curate_owner_machine_id ?? null} />
+                ) : undefined
+              }
             />
           ) : null;
         })}

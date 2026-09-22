@@ -28,6 +28,22 @@ function wrap(ui: React.ReactNode) {
 }
 
 describe("DaemonOfflineBanner", () => {
+  test("brings its own card and not its own fixed slot", () => {
+    // `FloatingBanners` owns the slot, and it is shared with
+    // SyncAttentionBanner. While both owned an identical `fixed inset-x-0
+    // top-4` wrapper they were drawn at the same coordinates, and a daemon
+    // that is merely OUT OF DATE answers the sync status perfectly well — so
+    // the pair really can be up at once.
+    useDaemonStatusMock.mockReturnValue({
+      isError: true,
+      error: new Error("ECONNREFUSED"),
+    } as never);
+    useDaemonOutOfDateMock.mockReturnValue({ data: false } as never);
+    const { container } = render(wrap(<DaemonOfflineBanner />));
+    expect(container.querySelector(".fixed")).toBeNull();
+    expect(screen.getByTestId("daemon-banner")).toBeInTheDocument();
+  });
+
   test("renders nothing when daemon is healthy", () => {
     useDaemonStatusMock.mockReturnValue({
       isError: false,

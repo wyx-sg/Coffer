@@ -15,6 +15,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
+import { FloatingBanners } from "./FloatingBanners";
+import { SyncAttentionBanner } from "./SyncAttentionBanner";
 import { SidebarNav } from "./SidebarNav";
 
 const COLLAPSE_KEY = "coffer.nav.collapsed";
@@ -50,9 +52,20 @@ export function Layout() {
         >
           {t("nav.skipToContent")}
         </a>
-        {/* Floats over the whole app (fixed, top-centered) — rendered at the root
-            so it overlays the sidebar too and never shifts page content. */}
-        <DaemonOfflineBanner />
+        {/* Floats over the whole app (fixed, top-centered) — rendered at the
+            root so it overlays the sidebar too and never shifts page content.
+            Both banners can be up at once: an out-of-date daemon answers the
+            sync status perfectly well, and a held round is still cached while
+            a newly-failed status query retries. They stack, because each is a
+            different thing to do something about. */}
+        <FloatingBanners>
+          <DaemonOfflineBanner />
+          {/* A held or failed round has to reach the user wherever they are:
+              the Sync page is the one place they have no reason to open, and a
+              vault waiting on an answer converges no further until it gets one
+              (spec vault-sync FR-096). */}
+          <SyncAttentionBanner />
+        </FloatingBanners>
         <aside
           className={cn(
             "flex shrink-0 flex-col border-r border-border bg-card/50 transition-[width] duration-200",

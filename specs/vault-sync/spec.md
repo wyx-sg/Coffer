@@ -46,7 +46,7 @@ enough for the two to stay alike.
   `channel` definitions MUST converge, serialized to text from SQLite, which
   stays the system of record. A resource document is identity, description and
   config — what the resource *is*. What it reaches is not in it (FR-014).
-- **FR-093**: A resource document MUST be stored at a path keyed by the
+- **FR-097**: A resource document MUST be stored at a path keyed by the
   resource's **uid**, and MUST carry that uid inside it. A machine receiving a
   document MUST match it to a local resource by uid, and MUST create a missing
   one *at that uid* rather than minting its own — two machines holding one
@@ -422,15 +422,27 @@ guards are normative.
   about to apply — the incoming diff **and** the retry set, since a held path
   the tree has since dropped is absorbed as a deletion.
 - **FR-090**: The guard MUST count what a round **loses**, not what it deletes.
-  A deletion whose content reappears at another path **in the same area of the
-  same diff** is a **move**: it MUST NOT count towards either threshold, and it
-  MUST NOT appear in the list a hold puts in front of the user, because a
-  document that turned up under another name was not removed. The pairing MUST
-  be on content and never on name similarity — a deletion whose content cannot
-  be shown to reappear counts, so a wiped disk, a failed restore or a stray
-  `rm -rf` is held exactly as before. A relocation that also *rewrites* its
-  documents is not a move and is held; the empty document is never paired,
-  since every empty file has identical content by construction.
+  A deletion with a destination **in the same area of the same diff** is a
+  **move**: it MUST NOT count towards either threshold, and it MUST NOT appear
+  in the list a hold puts in front of the user, because a document that turned
+  up under another name was not removed. A destination MAY be shown two ways —
+  the same content id reappearing, or git's own rename detection pairing the
+  two sides — and a deletion with neither counts. A pairing that crosses an
+  area MUST be discarded, since the guard's unit is the area. The empty
+  document is never paired on content, every empty file being identical by
+  construction.
+- **FR-095**: The two tests MUST be asked of git as **separate** questions: the
+  diff a round applies stays rename-blind, because the vault applies one path
+  at a time, and the guard's reading of the same diff MUST NOT change what is
+  applied or in what order.
+- **FR-096**: A vault whose last round needs a human — held for confirmation,
+  conflicted, or failed to push or run — MUST say so where the user already
+  is, not only on the page built for it. `coffer sync status` MUST exit
+  non-zero, the web UI MUST carry it on every page **except the sync page
+  itself**, where the round and the action that answers it already are, and the
+  desktop shell MUST raise it as a notification and mark its icon. A held
+  vault converges no further, so a hold nobody sees is an outage that looks
+  like silence: the first one in the field stood for four days.
 - **FR-091**: A round MUST re-derive its diff even while a confirmation is
   outstanding, and MUST **release** the hold where the direction it was raised
   for no longer breaches. A latch is an unanswered question about one diff, not
@@ -471,6 +483,34 @@ reported as a conflict.
   which is the accepted trade for a background nicety. The retention worker is
   exempt: it prunes the audit log, MCP invocation records and conversations,
   none of which sync.
+- **FR-098**: The owner MUST be **reportable and changeable**, on the same
+  terms as a channel's machine binding (spec [channels](../channels/spec.md)
+  FR-026), because it is the same fact in the same shape: one machine named in
+  a document every machine holds.
+  - A surface MUST be able to say which machine owns the pass, and MUST
+    distinguish **four** states — no owner named, this machine, another machine
+    in the registry, and a machine **the registry does not hold**. Only the
+    last is a fault, and it MUST be reported as one rather than folded into
+    "runs elsewhere": the pass then runs on no machine at all, and no other
+    part of the product says so.
+  - An **empty** registry MUST NOT produce that fault. A vault that has never
+    converged has no registry to be absent from, and every single-machine
+    install has an owner naming its own machine.
+  - A user MUST be able to take the pass over on this machine, and to clear the
+    owner. Clearing returns the vault to running the pass wherever the setting
+    is read, which is right for a vault down to one machine and wrong for one
+    that still spans several, so it MUST be an explicit choice and never a
+    repair anything performs on its own.
+  - The four states MUST be **derived from the setting and the registry**, not
+    stored: the owner is one field, and a second field recording what that
+    field means is a second thing to keep true.
+
+  This exists because the pass failed silently in exactly the way the
+  requirement above accepts and the one below does not. "If the owner machine
+  is off, no pass happens" (FR-070) is the accepted trade for a machine that
+  will come back; an owner naming a machine that is **gone** is not that trade,
+  it is curation stopped everywhere with nothing to say why and — until this
+  requirement — no way to take it back short of editing the database.
 - **FR-071**: A tidy pass and a converge round MUST NOT overlap. Both write the
   vault and an export taken mid-rewrite is a torn snapshot, so they MUST take
   the same lock. A pass MUST additionally be skipped while a conflict or a
@@ -758,6 +798,42 @@ reported as a conflict.
 - **Then** the guard does not hold it, the round publishes unattended, the other
   machine absorbs the move with no confirmation of its own, and a deletion in
   the same round that no addition received is still held and listed on its own.
+
+### Scenario: an owner naming a machine that is gone is reported, not silent
+
+- **Given** an unattended rewriter whose owner setting names a machine the
+  registry does not hold — a machine retired, reinstalled under a new identity,
+  or never converged with,
+- **When** a surface reports where the pass runs,
+- **Then** it names that as a fault distinct from "runs on another machine",
+  because the pass is running on none, and the user can take it over here.
+
+### Scenario: a held vault says so where the user already is
+
+- **Given** a round held at the deletion guard, so nothing converges and
+  nothing is backed up until someone answers it,
+- **When** the user is anywhere other than the sync page — at a terminal, on
+  another page of the web UI, or with only the desktop shell in front of them,
+- **Then** `coffer sync status` exits non-zero, a banner reports it over
+  whatever page they are on, and the shell has marked its icon and raised one
+  notification — once for that condition, not once per poll.
+
+### Scenario: a re-layout that rewrites its documents publishes without asking
+
+- **Given** a vault whose documents have all been moved to new addresses **and
+  edited on the way**, which is what a layout migration does — so the two sides
+  of every change differ and no content id pairs them,
+- **When** a round runs,
+- **Then** the guard reads git's own rename detection, does not hold the round,
+  and the other machine absorbs the migration with no confirmation of its own.
+
+### Scenario: a wiped area is held although rename pairings are consulted
+
+- **Given** a vault that has lost every document in an area with nothing added
+  in their place — a wiped disk, a failed restore, a stray `rm -rf`,
+- **When** a round runs,
+- **Then** there is nothing for a pairing to match, the round is held on the
+  publish side, and the loss is not published to the remote.
 
 ### Scenario: a hold is released once its diff no longer breaches
 

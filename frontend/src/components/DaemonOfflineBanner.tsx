@@ -56,63 +56,61 @@ export function DaemonOfflineBanner() {
   // pointer-events-none on the wrapper lets clicks pass through the empty gutter;
   // the card itself re-enables them.
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-4 z-50 flex justify-center px-4">
-      <Alert
-        variant="warning"
-        className="pointer-events-auto w-full max-w-xl shadow-lg"
-        data-testid="daemon-banner"
-        data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
-      >
-        <AlertCircle className="size-4" />
-        <AlertTitle className="font-serif text-base">
+    <Alert
+      variant="warning"
+      className="pointer-events-auto w-full max-w-xl shadow-lg"
+      data-testid="daemon-banner"
+      data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
+    >
+      <AlertCircle className="size-4" />
+      <AlertTitle className="font-serif text-base">
+        {isStale
+          ? t("daemon.offline.outOfDateTitle")
+          : isAuthGap
+            ? t("daemon.offline.notReadyTitle")
+            : t("daemon.offline.title")}
+      </AlertTitle>
+      <AlertDescription>
+        <p className="mb-3 text-foreground/80">
           {isStale
-            ? t("daemon.offline.outOfDateTitle")
+            ? t("daemon.offline.outOfDateBody")
             : isAuthGap
-              ? t("daemon.offline.notReadyTitle")
-              : t("daemon.offline.title")}
-        </AlertTitle>
-        <AlertDescription>
-          <p className="mb-3 text-foreground/80">
-            {isStale
-              ? t("daemon.offline.outOfDateBody")
-              : isAuthGap
-                ? t("daemon.offline.notReadyBody")
-                : t("daemon.offline.body")}
-          </p>
-          {isTauri() ? (
-            <div className="space-y-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => restart.mutate()}
-                disabled={restart.isPending}
-                data-testid="daemon-banner-restart"
-              >
-                {restart.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" />
-                    {t("daemon.offline.restarting")}
-                  </>
-                ) : (
-                  t("daemon.offline.restart")
-                )}
-              </Button>
-              {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {/* The browser can't kill/respawn the daemon. Tell the user how to
-                  actually bring it back; the 30s status poll clears the banner. */}
-              <p className="text-xs text-foreground/60">
-                {t("daemon.offline.webRestartHint")}{" "}
-                <code className="rounded-sm bg-muted px-1 py-0.5 font-mono">
-                  coffer daemon start
-                </code>
-              </p>
-            </div>
-          )}
-        </AlertDescription>
-      </Alert>
-    </div>
+              ? t("daemon.offline.notReadyBody")
+              : t("daemon.offline.body")}
+        </p>
+        {isTauri() ? (
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => restart.mutate()}
+              disabled={restart.isPending}
+              data-testid="daemon-banner-restart"
+            >
+              {restart.isPending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {t("daemon.offline.restarting")}
+                </>
+              ) : (
+                t("daemon.offline.restart")
+              )}
+            </Button>
+            {restartError ? <p className="text-xs text-destructive">{restartError}</p> : null}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {/* The browser can't kill/respawn the daemon. Tell the user how to
+                actually bring it back; the 30s status poll clears the banner. */}
+            <p className="text-xs text-foreground/60">
+              {t("daemon.offline.webRestartHint")}{" "}
+              <code className="rounded-sm bg-muted px-1 py-0.5 font-mono">
+                coffer daemon start
+              </code>
+            </p>
+          </div>
+        )}
+      </AlertDescription>
+    </Alert>
   );
 }

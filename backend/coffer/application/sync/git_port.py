@@ -59,6 +59,23 @@ class GitMirrorPort(Protocol):
         than a prefix of one, and the empty string where the change has no such
         side. ``base`` may be ``EMPTY_TREE``."""
 
+    async def renames(self, base: str, head: str) -> list[tuple[str, str]]:
+        """``(source, destination)`` for every rename git detects in that diff.
+
+        The **second** way the deletion guard can show that a deletion has a
+        destination, and the one that survives a document being rewritten on
+        its way — which every layout migration does, and which content ids
+        alone therefore cannot see (domain ``sync.diff.losses``).
+
+        Deliberately a separate question from :meth:`diff_paths`, which stays
+        rename-blind: what the vault *applies* is still one path at a time, a
+        delete and an add, and nothing about the guard's reading may change
+        that. An implementation MUST return only pairings for this diff and MAY
+        return none — a deletion with no pairing simply counts, which is the
+        conservative answer. Pairings that cross an area are filtered by the
+        domain, so an implementation need not and MUST NOT filter them itself.
+        ``base`` may be ``EMPTY_TREE``, which can only yield additions."""
+
     async def file_count(self, revision: str, prefix: str) -> int:
         """How many files a revision holds under ``prefix``.
 

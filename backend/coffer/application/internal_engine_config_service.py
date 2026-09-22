@@ -32,6 +32,7 @@ class InternalEngineConfigRepo(Protocol):
     ) -> GlobalInternalEngineConfig: ...
     async def set_model_timeout(self, seconds: int | None) -> GlobalInternalEngineConfig: ...
     async def set_transcribe_model(self, model: str | None) -> GlobalInternalEngineConfig: ...
+    async def set_curation_owner(self, machine_id: str | None) -> GlobalInternalEngineConfig: ...
 
 
 class InternalEngineConfigService:
@@ -110,6 +111,31 @@ class InternalEngineConfigService:
             AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
             actor=actor,
             details={"transcribe_model": saved.transcribe_model},
+        )
+        return saved
+
+    async def set_curation_owner(
+        self, machine_id: str | None, *, actor: str = "api"
+    ) -> GlobalInternalEngineConfig:
+        """Name the one machine that may run the curation pass; ``None`` clears.
+
+        The counterpart of binding a channel, and it exists for the same
+        reason: the owner travels with this document, so a retired machine
+        leaves an owner nobody claims, the pass stops on every machine, and
+        without this there was no way to take it back (spec vault-sync
+        ``## Unattended rewriters``).
+
+        The id is not checked against the machine registry. Reading the
+        registry means reading the sync working tree, and a vault that has
+        never converged has no registry at all — the one install where
+        validating would refuse the only correct answer, its own machine.
+        """
+        cleaned = machine_id.strip() if machine_id and machine_id.strip() else None
+        saved = await self._repo.set_curation_owner(cleaned)
+        await self._audit.record(
+            AuditEventType.INTERNAL_ENGINE_MODEL_SET.value,
+            actor=actor,
+            details={"curate_owner_machine_id": saved.curate_owner_machine_id},
         )
         return saved
 
