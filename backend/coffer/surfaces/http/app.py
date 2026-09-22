@@ -81,6 +81,7 @@ from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
+from coffer.surfaces.http.memory_wiring import run_memory_delivery_boot_heal
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
@@ -244,6 +245,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(kinds.provider.boot_heal)
     await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
+    await run_memory_delivery_boot_heal(kinds.memory.delivery_service)
     # Coffer's own skill, re-rendered from this build and whatever the corpus
     # holds right now, and seeded into the master store as an ordinary skill
     # resource. Done every boot rather than only on change: it is cheap when

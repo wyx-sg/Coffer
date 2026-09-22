@@ -415,3 +415,70 @@ async def test_malformed_config_fails_loudly_with_the_path(
 async def test_unknown_agent_raises_resource_not_found(svc: DeliveryService) -> None:
     with pytest.raises(ResourceNotFound):
         await svc.install("00000000000000000000000000000000", actor="tester")
+
+
+# ---------------------------------------------------------------------------
+# heal_drift: an installed hook whose command Coffer no longer writes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a hook whose command went stale is repaired without being asked",
+)
+async def test_heal_drift_rewrites_a_hook_whose_arguments_went_stale(
+    svc: DeliveryService, store: FakeStore
+) -> None:
+    """The real one, found in the field. `coffer memory context` dropped
+    `--agent` for `--agent-uid`, and every hook already on disk kept passing
+    the option that no longer existed — so the agent printed a usage error at
+    the start of every session and Coffer's memory reached it never again.
+
+    Nothing noticed because detection matches the marker and never reads the
+    arguments: the stale entry read as perfectly installed.
+    """
+    await svc.install(_CC_UID, actor="ui")
+    fresh = json.loads(store._files[_CC_SETTINGS_PATH])
+    # Age the installed entry the way the CLI change aged it in the field.
+    entry = fresh["hooks"]["SessionStart"][0]["hooks"][0]
+    entry["command"] = f': {MARKER}; coffer memory context --agent cc --cwd "$PWD"'
+    store._files[_CC_SETTINGS_PATH] = json.dumps(fresh)
+
+    before = await svc.status(_CC_UID)
+    assert before[0].installed is True  # the entry that cannot work reads as installed
+
+    notes = await svc.heal_drift()
+
+    after = await svc.status(_CC_UID)
+    assert "--agent-uid" in after[0].command
+    assert "--agent cc" not in after[0].command
+    assert (
+        after[0].command == f': {MARKER}; coffer memory context --agent-uid {_CC_UID} --cwd "$PWD"'
+    )
+    assert any("cc" in note for note in notes)
+
+
+async def test_heal_drift_leaves_a_current_hook_alone(
+    svc: DeliveryService, store: FakeStore
+) -> None:
+    # A no-op must cost no write and no audit entry, or every boot would
+    # rewrite every agent's settings file for nothing.
+    await svc.install(_CC_UID, actor="ui")
+    before = store._files[_CC_SETTINGS_PATH]
+
+    assert await svc.heal_drift() == ()
+
+    assert store._files[_CC_SETTINGS_PATH] == before
+
+
+@pytest.mark.acceptance(
+    spec="memory",
+    scenario="a hook whose command went stale is repaired without being asked",
+)
+async def test_heal_drift_installs_nothing_the_user_removed(
+    svc: DeliveryService, store: FakeStore
+) -> None:
+    """Repair, not evangelism. An agent with no hook chose not to have one,
+    and a boot that installed one would be Coffer overriding that silently."""
+    assert await svc.heal_drift() == ()
+    assert _CC_SETTINGS_PATH not in store._files
