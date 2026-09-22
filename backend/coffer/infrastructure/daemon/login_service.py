@@ -23,10 +23,10 @@ launchd is the fix macOS already has. This module writes one user agent:
   (``desktop/src/env_path.rs``); here the install is already running in the
   user's own environment, so the honest source is that environment.
 
-Installing is opt-in and reversible, and the plist names the binary it found
-at install time rather than a launcher that re-resolves — an agent that
-silently follows a symlink to a binary from another install is worse than one
-that fails visibly and is reinstalled.
+Installing is opt-in and reversible, and the agent execs the deploy's own
+``~/.coffer/bin/coffer-daemon`` symlink rather than the versioned path behind
+it — see :func:`agent_program` for why pinning the version is a job that
+stops working two upgrades later, without saying so.
 
 **Nothing here boots a loaded job out**, and that is the rule that keeps this
 module from being the most destructive thing in Coffer. Once the agent has
@@ -137,6 +137,33 @@ def login_shell_path() -> str:
     return probed or inherited
 
 
+def agent_program() -> list[str]:
+    """What the launchd agent execs.
+
+    The public ``~/.coffer/bin/coffer-daemon`` symlink when there is one, and
+    that is the whole point rather than a convenience. The frozen deploy
+    copies each build into ``~/.coffer/bin/<version>/`` and flips that symlink
+    atomically, keeping only the newest two version directories
+    (``application.binary_deploy``). An agent pinned to the versioned path it
+    happened to resolve at install time therefore survives exactly two
+    upgrades and then execs a file that has been pruned — and a launchd job
+    that cannot exec its program fails **silently**, which is the one way
+    autostart could stop working without anyone finding out.
+
+    Following the symlink is not following "some other install": it is
+    following Coffer's own record of which build is current, flipped by the
+    same daemon that would be started. That is what "start the daemon at
+    login" means.
+
+    A source install has no such symlink, and falls back to the resolved
+    command (`python -m …`), which does not move either.
+    """
+    deployed = Path.home() / ".coffer" / "bin" / "coffer-daemon"
+    if deployed.is_symlink() or deployed.is_file():
+        return [str(deployed)]
+    return daemon_spawn_command()
+
+
 def _launchctl(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["launchctl", *args],
@@ -168,7 +195,7 @@ def install() -> Path:
     path = plist_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = build_plist(
-        program=daemon_spawn_command(),
+        program=agent_program(),
         path_env=login_shell_path(),
         log_file=log_dir() / "daemon.log",
     )

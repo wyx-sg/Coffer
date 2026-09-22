@@ -92,3 +92,36 @@ def test_the_path_comes_from_the_login_shell_not_the_daemons_environment() -> No
     import inspect
 
     assert "login_shell_path()" in inspect.getsource(login_service.install)
+
+
+def test_the_agent_execs_the_deploys_current_build_symlink(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Not the versioned path behind it.
+
+    The frozen deploy copies each build into `~/.coffer/bin/<version>/`,
+    flips `~/.coffer/bin/coffer-daemon` to it, and keeps only the newest two
+    version directories. An agent pinned to `…/0.1.1/coffer-daemon` survives
+    exactly two upgrades and then execs a pruned file — and a launchd job
+    that cannot exec fails silently, so autostart would stop with nothing
+    said.
+    """
+    monkeypatch.setenv("HOME", str(tmp_path))
+    versioned = tmp_path / ".coffer" / "bin" / "0.1.1"
+    versioned.mkdir(parents=True)
+    (versioned / "coffer-daemon").write_text("#!/bin/sh\n")
+    link = tmp_path / ".coffer" / "bin" / "coffer-daemon"
+    link.symlink_to(versioned / "coffer-daemon")
+
+    assert login_service.agent_program() == [str(link)]
+    # The version is what moves; the link is what does not.
+    assert "0.1.1" not in login_service.agent_program()[0]
+
+
+def test_a_source_install_has_no_symlink_and_falls_back(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from coffer.infrastructure.daemon.spawn import daemon_spawn_command
+
+    assert login_service.agent_program() == daemon_spawn_command()
