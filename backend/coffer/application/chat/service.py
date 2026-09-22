@@ -158,9 +158,9 @@ class ChatService:
 
         ``owner`` names the surface this conversation belongs to, and only a
         caller that is not the developer passes one. It keeps the conversation
-        out of the chat list without keeping it out of this table: a workflow
-        task's transcript is an ordinary transcript, read through this service
-        like any other, and that is the whole reason a task IS a conversation.
+        out of the chat list without keeping it out of this table: such a
+        transcript is an ordinary transcript, read through this service like
+        any other.
         """
         provider = self._registry.get(agent_key)  # raises UnknownAgent (-> 400)
 

@@ -50,10 +50,6 @@ acceptance(
       // Agents
       /^Agents$/i,
       /^Chat$/i,
-      // A RUN is operational state rather than a vault asset, so it sits here
-      // beside Chat — both are things you do WITH an agent — and the WORKFLOW
-      // it runs sits under Resources with the other kinds.
-      /^Runs$/i,
       // Resources — one per resource kind with a list UI
       /^MCP servers$/i,
       /^Skills$/i,
@@ -61,7 +57,6 @@ acceptance(
       /^Memory$/i,
       /^Model providers$/i,
       /^Channels$/i,
-      /^Workflows$/i,
       // System
       /^Activity$/i,
       /^Sync$/i,

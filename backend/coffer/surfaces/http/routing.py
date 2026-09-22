@@ -46,13 +46,6 @@ from coffer.surfaces.http.skill_file_routes import router as skill_file_router
 from coffer.surfaces.http.skill_routes import router as skill_router
 from coffer.surfaces.http.sync_routes import router as sync_router
 from coffer.surfaces.http.upkeep_routes import router as upkeep_router
-from coffer.surfaces.http.workflow import (
-    approvals_router,
-    artifacts_router,
-    inputs_router,
-    nodes_router,
-    runs_router,
-)
 
 
 def include_all_routers(app: FastAPI) -> None:
@@ -92,12 +85,5 @@ def include_all_routers(app: FastAPI) -> None:
         chat_turn_router,  # … and its turn/SSE half
         channel_router,  # spec channels
         provider_router,  # spec provider-switching
-        # spec workflow — one prefix, five routers (run, node, input, approval,
-        # file)
-        runs_router,
-        nodes_router,
-        inputs_router,
-        artifacts_router,
-        approvals_router,
     ):
         app.include_router(sub_router)

@@ -78,48 +78,6 @@ export const routes: RouteObject[] = [
         path: "channels/:uid",
         element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
       },
-      // The WORKFLOWS are the resource (kind `workflow`, FR-001): the shapes
-      // of work this vault knows how to run. They live under `/workflows`
-      // beside the other kinds' list pages, and a RUN of one lives under
-      // `/runs` — a run is operational state, belongs to one machine and does
-      // not sync, so it is not a vault asset and does not sit with the kinds.
-      {
-        path: "workflows",
-        element: lazyPage(() => import("./pages/WorkflowTemplatesPage"), "WorkflowTemplatesPage"),
-      },
-      {
-        path: "workflows/:uid",
-        element: lazyPage(() => import("./pages/WorkflowTemplatePage"), "WorkflowTemplatePage"),
-      },
-      // Runs: the list is eager like every other landing list; the run's own
-      // page pulls in the context table and the task's conversation page pulls
-      // in the chat thread, so both load on first visit.
-      {
-        path: "runs",
-        element: lazyPage(() => import("./pages/WorkflowRunsPage"), "WorkflowRunsPage"),
-      },
-      {
-        path: "runs/:runId",
-        element: lazyPage(() => import("./pages/WorkflowRunPage"), "WorkflowRunPage"),
-      },
-      // One task = one conversation, and that is where a run is driven
-      // (FR-030/FR-052). The run's page links here; nothing else does.
-      // One file the run reads or wrote. A page rather than a dialog: a file
-      // a task produced is read, scrolled and linked to (FR-064).
-      {
-        path: "runs/:runId/files",
-        element: lazyPage(() => import("./pages/WorkflowFilePage"), "WorkflowFilePage"),
-      },
-      // The developer's own note, which is also the one thing in a run's
-      // context they can rewrite (FR-069).
-      {
-        path: "runs/:runId/notes/:noteRef",
-        element: lazyPage(() => import("./pages/WorkflowNotePage"), "WorkflowNotePage"),
-      },
-      {
-        path: "runs/:runId/nodes/:nodeKey",
-        element: lazyPage(() => import("./pages/WorkflowNodePage"), "WorkflowNodePage"),
-      },
       { path: "skills", element: <SkillsPage /> },
       {
         path: "skills/:uid",
