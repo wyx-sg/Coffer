@@ -4,6 +4,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { GeneralSettings } from "./GeneralSettings";
 import { acceptance } from "@/test/acceptance";
 
+// The daemon-residency card is General's second card and has its own tests
+// (and its own daemon route); stub it so these stay about the preferences
+// this page actually owns, and need no query client.
+vi.mock("./DaemonResidencySettings", () => ({
+  DaemonResidencySettings: () => null,
+}));
+
 // The picker lists editors the daemon detected as installed; stub that out so
 // these tests drive a fixed set without a live daemon.
 vi.mock("@/lib/hooks/useEditors", () => ({

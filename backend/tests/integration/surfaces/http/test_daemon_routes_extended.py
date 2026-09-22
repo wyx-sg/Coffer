@@ -228,3 +228,116 @@ async def test_rotate_token_records_token_rotated_audit(tmp_path):
     finally:
         await engine.dispose()
         set_active_token(None)
+
+
+# --- residency: what starts the daemon, and what ends it (FR-028/FR-029) ---
+
+
+@pytest.mark.asyncio
+async def test_residency_reports_both_halves(tmp_path, monkeypatch):
+    c, _ = await _client(tmp_path)
+    async with c:
+        r = await c.get("/api/v1/daemon/residency")
+        assert r.status_code == 200
+        body = r.json()
+        # The default is the setting, not the absence of one.
+        assert body["idle_shutdown_hours"] == 12
+        assert "login_service_supported" in body
+        assert "login_service_installed" in body
+
+
+@pytest.mark.asyncio
+async def test_residency_requires_the_token(tmp_path):
+    c, _ = await _client(tmp_path)
+    async with c:
+        r = await c.get("/api/v1/daemon/residency", headers={"X-Coffer-Token": ""})
+        assert r.status_code == 401
+
+
+@pytest.mark.acceptance(spec="daemon", scenario="a daemon nothing has wanted stands down")
+@pytest.mark.asyncio
+async def test_setting_the_idle_window_persists_where_the_next_start_reads_it(
+    tmp_path, monkeypatch
+):
+    """It has to land in daemon-config.json, not in the database: the window
+    is read before the database is open, by the next daemon rather than this
+    one."""
+    from coffer.infrastructure.daemon import login_service
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: False)
+    c, home = await _client(tmp_path)
+    async with c:
+        r = await c.put(
+            "/api/v1/daemon/residency",
+            json={"login_service_installed": False, "idle_shutdown_hours": 4},
+        )
+        assert r.status_code == 200
+        assert r.json()["idle_shutdown_hours"] == 4
+
+    config = json.loads((home / ".coffer" / "daemon-config.json").read_text())
+    assert config["idle_shutdown_hours"] == 4
+
+
+@pytest.mark.asyncio
+async def test_never_standing_down_is_a_setting_not_an_absent_one(tmp_path, monkeypatch):
+    from coffer.infrastructure.daemon import login_service
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: False)
+    c, _ = await _client(tmp_path)
+    async with c:
+        r = await c.put(
+            "/api/v1/daemon/residency",
+            json={"login_service_installed": False, "idle_shutdown_hours": None},
+        )
+        assert r.status_code == 200
+        assert r.json()["idle_shutdown_hours"] is None
+
+
+@pytest.mark.asyncio
+async def test_an_idle_window_too_short_to_mean_anything_is_refused(tmp_path, monkeypatch):
+    from coffer.infrastructure.daemon import login_service
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: False)
+    c, _ = await _client(tmp_path)
+    async with c:
+        r = await c.put(
+            "/api/v1/daemon/residency",
+            json={"login_service_installed": False, "idle_shutdown_hours": 0.01},
+        )
+        assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_the_change_is_audited_with_what_became_true(tmp_path, monkeypatch):
+    """Recorded from the outcome, not the request. A login service the host
+    cannot install is a change that did not happen, and an audit line saying
+    it did would be the one place a user goes to find out."""
+    from coffer.infrastructure.daemon import login_service
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: False)
+
+    recorded: list[tuple[str, dict]] = []
+
+    class _Spy:
+        async def record(self, event_type, *, actor, details=None, **kwargs):
+            recorded.append((event_type, details or {}))
+
+    c, _ = await _client(tmp_path)
+    # Replace the injected audit service on the app the client is bound to.
+    c._transport.app.dependency_overrides[get_audit_service] = lambda: _Spy()
+    async with c:
+        r = await c.put(
+            "/api/v1/daemon/residency",
+            json={"login_service_installed": True, "idle_shutdown_hours": 6},
+        )
+        assert r.status_code == 200
+        # Asked for on a host that has no launchd — so it is off, and both the
+        # response and the audit line say so.
+        assert r.json()["login_service_installed"] is False
+
+    assert recorded == [
+        (
+            "daemon_residency_updated",
+            {"login_service_installed": False, "idle_shutdown_hours": 6},
+        )
+    ]

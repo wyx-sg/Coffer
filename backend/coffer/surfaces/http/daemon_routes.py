@@ -1,4 +1,4 @@
-"""/api/v1/daemon/* routes — status, logs, shutdown, rotate-token."""
+"""/api/v1/daemon/* routes — status, residency, logs, shutdown, rotate-token."""
 
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ from coffer.application.log_reader import (
 )
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
+from coffer.infrastructure.daemon import config as daemon_config
+from coffer.infrastructure.daemon import login_service
 from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.surfaces.http.auth import require_token, set_active_token
@@ -36,6 +38,8 @@ from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 from coffer.surfaces.http.schemas import (
     DaemonLogListOut,
     DaemonLogRecordOut,
+    DaemonResidencyIn,
+    DaemonResidencyOut,
     DaemonStatusOut,
     TokenRotationOut,
     UpstreamSummary,
@@ -207,6 +211,69 @@ async def rotate_token(
     set_active_token(new_token)
     await audit.record(AuditEventType.TOKEN_ROTATED.value, actor=actor)
     return TokenRotationOut(token=new_token)
+
+
+# === residency: what starts the daemon, and what ends it ===
+#
+# This pair has a REST surface where the port (FR-011) deliberately does not,
+# and the difference is which state each setting is reached from. A port is
+# changed when the daemon CANNOT start, so a route the daemon would have to
+# serve is useless exactly then. Residency is changed while Coffer is working
+# fine and the user is deciding how it should behave tomorrow — a settings
+# question, on the surface where settings live.
+
+
+def _residency() -> DaemonResidencyOut:
+    return DaemonResidencyOut(
+        login_service_supported=login_service.is_supported(),
+        login_service_installed=login_service.is_installed(),
+        idle_shutdown_hours=daemon_config.read_idle_shutdown_hours(),
+    )
+
+
+@router.get("/residency", response_model=DaemonResidencyOut, dependencies=[Depends(require_token)])
+async def get_residency() -> DaemonResidencyOut:
+    return _residency()
+
+
+@router.put("/residency", response_model=DaemonResidencyOut, dependencies=[Depends(require_token)])
+async def put_residency(
+    body: DaemonResidencyIn,
+    audit: AuditService = Depends(get_audit_service),  # noqa: B008
+    actor: str = Depends(get_actor),
+) -> DaemonResidencyOut:
+    """Set both halves, and say what is true afterwards.
+
+    The idle window takes effect at the next daemon start — this process read
+    it when it booted, and a value that re-read itself mid-run would be a
+    second way for the same setting to be true. The login service takes effect
+    immediately, because launchd is a different process and does not care what
+    this one is doing.
+    """
+    try:
+        daemon_config.write_idle_shutdown_hours(body.idle_shutdown_hours)
+    except daemon_config.InvalidIdleShutdown as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    if login_service.is_supported():
+        try:
+            if body.login_service_installed:
+                login_service.install()
+            else:
+                login_service.uninstall()
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"login service: {exc}") from None
+
+    after = _residency()
+    await audit.record(
+        AuditEventType.DAEMON_RESIDENCY_UPDATED.value,
+        actor=actor,
+        details={
+            "login_service_installed": after.login_service_installed,
+            "idle_shutdown_hours": after.idle_shutdown_hours,
+        },
+    )
+    return after
 
 
 @router.post(

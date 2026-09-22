@@ -7,7 +7,7 @@
 //! and the stop-then-start sequence — lives in `restart.rs`. This file owns
 //! the commands themselves and the credential handshake.
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::discovery::{
     daemon_responds_ok, read_daemon_info, request_daemon_shutdown, wait_for_port_free,
@@ -49,7 +49,7 @@ const RESTART_MIN_INTERVAL_SECS: u64 = 5;
 /// serving. The value now sits well clear of it; the page retries anyway
 /// (`credentialDesktopHost`), so this bound only decides how long one attempt
 /// waits, never whether the app recovers.
-const DAEMON_READY_TIMEOUT_SECS: u64 = 90;
+pub const DAEMON_READY_TIMEOUT_SECS: u64 = 90;
 
 /// How often the ready-wait re-probes. Short enough that a daemon that comes
 /// up fast is picked up straight away, long enough not to busy-spin.
@@ -138,6 +138,30 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
         base_url: base_url_for(port),
         token,
     })
+}
+
+/// Show the main window, which the app opens hidden.
+///
+/// The window waits for a daemon rather than opening in front of one that is
+/// not there yet (spec desktop-app FR-001). Everything the UI can show before
+/// the handshake is a lie or an apology — a page whose every query answers
+/// "not ready", under a banner explaining why — and an application that opens
+/// like that reads as broken even when it is merely early. With the daemon
+/// resident (spec daemon, the login service) the wait is normally
+/// imperceptible; when it is not, a Dock icon bouncing is the honest signal.
+///
+/// Called on BOTH outcomes of the handshake, which is the part that must not
+/// be "tidied up": a window shown only on success is a window that never
+/// appears at all when no daemon can be started, and an invisible app cannot
+/// tell anyone why. On failure the window opens on the offline banner, which
+/// is the surface that explains it and offers the restart.
+pub fn reveal_main_window(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        log::warn!("no main window to reveal");
+        return;
+    };
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 /// The instant a ready-wait started now should give up at.
@@ -243,18 +267,24 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
     match daemon_source(&app) {
         Ok(DaemonSource::Running { port, token }) => {
             log::info!("handshake: attached to the daemon serving on port {port}");
+            reveal_main_window(&app);
             return Ok(ready(port, token));
         }
         Ok(DaemonSource::Binary { .. }) => {}
         Err(e) => {
             log::warn!("handshake: no daemon and none to start: {e}");
+            reveal_main_window(&app);
             return Err(e);
         }
     }
 
     // Cold start: spawn the resolved binary, then poll until it answers.
-    spawn_resolved_daemon(&app)?;
-    match wait_for_daemon_ready(ready_deadline()) {
+    let spawned = spawn_resolved_daemon(&app);
+    if spawned.is_err() {
+        reveal_main_window(&app);
+    }
+    spawned?;
+    let outcome = match wait_for_daemon_ready(ready_deadline()) {
         Some((port, token)) => {
             log::info!("handshake: spawned daemon is serving on port {port}");
             Ok(ready(port, token))
@@ -265,7 +295,9 @@ pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
             log::warn!("handshake: {msg}");
             Err(msg)
         }
-    }
+    };
+    reveal_main_window(&app);
+    outcome
 }
 
 #[cfg(test)]

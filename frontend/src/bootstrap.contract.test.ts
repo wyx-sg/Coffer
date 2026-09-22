@@ -30,7 +30,7 @@ import { acceptance } from "@/test/acceptance";
 const MAIN = readFileSync(resolve(process.cwd(), "src/main.tsx"), "utf-8");
 
 describe("main.tsx bootstrap", () => {
-  acceptance("desktop-app", "the window renders before the daemon answers", () => {
+  acceptance("desktop-app", "the window waits for a daemon, and opens either way", () => {
     // The call must exist — otherwise the desktop host never gets a token.
     expect(MAIN).toContain("credentialDesktopHost");
 
@@ -48,7 +48,7 @@ describe("main.tsx bootstrap", () => {
     expect(MAIN).not.toMatch(/await\s+connectToShellDaemon\s*\(/);
   });
 
-  acceptance("desktop-app", "the window renders before the daemon answers", () => {
+  acceptance("desktop-app", "the window waits for a daemon, and opens either way", () => {
     // Queries that went out before the connection arrived hold a
     // DAEMON_NOT_READY that nothing else clears; the invalidate is the repair,
     // not a nicety. It is what `credentialDesktopHost` is handed to run.

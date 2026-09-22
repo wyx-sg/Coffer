@@ -8,15 +8,15 @@
 
 ### User Story 1 — Open Coffer the way you open an application (Priority: P1)
 
-Someone who is not mid-terminal-session wants to open Coffer: from the Dock, from Spotlight, from Cmd-Tab. They double-click the app, a window appears immediately, and if no daemon is running the app starts one for them. Closing the window puts Coffer in the tray rather than shutting it down, because the daemon it supervises keeps serving agents either way.
+Someone who is not mid-terminal-session wants to open Coffer: from the Dock, from Spotlight, from Cmd-Tab. They double-click the app and it opens on a working application — because the daemon is a login service that is normally already running, and on the rare launch where it is not, the app starts one and opens when it answers. Closing the window puts Coffer in the tray rather than shutting it down, because the daemon it supervises keeps serving agents either way.
 
 **Why this priority**: Without it Coffer is one `127.0.0.1` tab among dozens, and reaching it requires knowing a port. That is a fair ask of a CLI user and an unfair one of anybody else.
 
-**Independent Test**: With no daemon running, double-click the installed app. A window renders at once, a daemon starts, the UI fills in, the app has a Dock icon and a tray entry, and closing the window leaves both in place.
+**Independent Test**: Double-click the installed app. It opens on the real UI, with data in it, not on an application apologising for itself; with no daemon running it starts one first and the window follows. The app has a Dock icon and a tray entry, and closing the window leaves both in place.
 
 **Covering scenarios** (full Given/When/Then under `## Acceptance Scenarios` below):
 
-- the window renders before the daemon answers
+- the window waits for a daemon, and opens either way
 - closing the window hides the app to the tray
 - the handshake credentials a locally-hosted page
 
@@ -79,12 +79,13 @@ The retirement's failure mode is bounded rather than gone: a stale `.app` can st
 
 Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is referenced by at least one test marked `acceptance(spec="desktop-app", scenario="…")`. Coverage is audited by `make verify-acceptance`. Several of these are covered by `cargo test` in the `desktop` crate, where the marker is a line comment above the test's attributes rather than a call — Rust has no user-defined test attribute without a proc-macro crate, so the audit reads a comment the compiler ignores. Those tests are gated: `.github/workflows/desktop.yml` runs them. See `## Assumptions` for what that workflow does and does not cover.
 
-### Scenario: the window renders before the daemon answers
+### Scenario: the window waits for a daemon, and opens either way
 
 - **Given** the app is launched with no daemon running,
-- **When** the window opens,
-- **Then** the UI is rendered from the app's own bundled assets without waiting for the handshake,
-- **And** queries issued before the handshake resolves come back unauthenticated and are refetched once it lands, rather than leaving a permanent error.
+- **When** the app starts one,
+- **Then** no window is shown until that daemon answers, so the application is never on screen in a state where nothing in it works,
+- **And** the window is shown anyway once the attempt has failed, because an invisible app cannot report that it could not start a daemon,
+- **And** the page itself is built without waiting on the handshake, so the wait is the shell's and not a blank webview's.
 
 ### Scenario: closing the window hides the app to the tray
 
@@ -183,7 +184,7 @@ Per `.agents/sdd.md` and `.agents/testing.md`, every scenario in this section is
 
 **The shell and its window ([The Desktop Shell Returns](../../docs/decisions/desktop-shell-over-a-shared-frontend.md))**
 
-- **FR-001**: Coffer MUST ship a macOS desktop shell that hosts the built web UI **as a local asset**, not as a page loaded from the daemon's origin. Hosting it locally is what distinguishes an application from a bookmarked browser window: the UI is rendered before the daemon answers, so a daemon that is slow, absent or wedged yields an actionable screen rather than a connection error, and the daemon's port is never visible in an address bar. The shell MUST present a window the OS treats as an application — Dock icon, Cmd-Tab entry — and a resident tray offering at least open, restart daemon, and quit; closing the window MUST hide to the tray rather than exit, and re-activating from the Dock MUST restore it.
+- **FR-001**: Coffer MUST ship a macOS desktop shell that hosts the built web UI **as a local asset**, not as a page loaded from the daemon's origin. Hosting it locally is what distinguishes an application from a bookmarked browser window: a daemon that is slow, absent or wedged yields an actionable screen rather than a connection error, and the daemon's port is never visible in an address bar. The window MUST NOT be shown before a daemon answers. Every surface the UI can offer before then is an apology — a page whose every query reports "not ready" under a banner explaining why — and an application that opens on that reads as broken rather than as early; with the daemon running as a login service (spec daemon) the wait is normally imperceptible. It MUST be shown once the attempt to reach a daemon has failed, since an invisible app cannot report why it has nothing to show. Building the page MUST NOT wait on the handshake either — the wait belongs to the shell, and a webview that blocks on a retrying handshake would never paint at all. The shell MUST present a window the OS treats as an application — Dock icon, Cmd-Tab entry — and a resident tray offering at least open, restart daemon, and quit; closing the window MUST hide to the tray rather than exit, and re-activating from the Dock MUST restore it.
 - **FR-002**: The shell MUST consume the same `frontend/dist` build the daemon serves. It adds a credential *supplier* (FR-004) and MUST NOT introduce a second frontend code path, a host-conditional branch, or a separate UI build — one artifact is what keeps the two hosts from drifting.
 - **FR-003**: The webview's content-security policy MUST permit loopback origins on any port and the shell's own IPC scheme, and nothing else; scripts and styles MUST be served from the bundle itself. The port is not known until the handshake, which is why the loopback allowance is port-wildcarded rather than absent.
 

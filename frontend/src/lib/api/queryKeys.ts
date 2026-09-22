@@ -126,6 +126,7 @@ export const daemonLogsKey = (filters: Record<string, unknown>) =>
   ["daemon", "logs", filters] as const;
 export const daemonVersionSkewKey = (version: string | undefined) =>
   ["daemon", "version-skew", version] as const;
+export const daemonResidencyKey = ["daemon", "residency"] as const;
 
 // ---------------------------------------------------------------------------
 // fs — the loopback daemon's view of the local filesystem

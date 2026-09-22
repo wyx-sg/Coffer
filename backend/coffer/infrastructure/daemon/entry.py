@@ -26,7 +26,8 @@ from collections.abc import Callable
 
 import uvicorn
 
-from coffer.infrastructure.daemon import bootstrap
+from coffer.infrastructure.daemon import activity, bootstrap
+from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.port_alloc import PortInUse
 
 _logger = logging.getLogger(__name__)
@@ -40,6 +41,11 @@ _STARTED_POLL_INTERVAL = 0.02
 # has taken it over (detect-or-spawn amendment). Long enough to be free, short
 # that an orphan cannot linger through a work session holding its port.
 _ORPHAN_CHECK_INTERVAL = 30.0
+
+# How often the idle watcher looks at the clock. The window it is comparing
+# against is measured in hours, so a minute's granularity costs nothing and
+# keeps a sleeping daemon's wakeups down to one a minute.
+_IDLE_CHECK_INTERVAL = 60.0
 
 # Ceiling for the RLIMIT_NOFILE soft limit we raise at startup. Comfortably
 # above what a healthy daemon needs (sqlite + uvicorn socket + channel
@@ -123,6 +129,44 @@ async def _evict_when_superseded(
         return
 
 
+async def _stand_down_when_idle(
+    server: uvicorn.Server,
+    *,
+    idle_window_seconds: float,
+    interval: float = _IDLE_CHECK_INTERVAL,
+) -> None:
+    """Exit cleanly once nothing has wanted this daemon for long enough.
+
+    The counterpart to being a login service. launchd starts the daemon at
+    login and restarts it when it dies badly, which is what makes an agent's
+    ``coffer__*`` call work at any hour without an app being open; this is what
+    stops that turning into a process that outlives every reason for it.
+
+    Standing down is a NORMAL exit, and that is the whole contract with
+    launchd: the service is installed with ``KeepAlive`` restricted to
+    unsuccessful exits, so a clean stand-down stays down and a crash does not.
+    Getting that backwards would make this a restart loop rather than a
+    shutdown. Whoever next wants a daemon — the app, the CLI, an agent's MCP
+    shim — starts one, which every one of them already knows how to do.
+
+    What counts as "wanted" is :mod:`coffer.infrastructure.daemon.activity`:
+    requests that reached the application, plus holds from subsystems whose
+    job is to be reachable rather than to be called (the channel listener).
+    """
+    while True:
+        await asyncio.sleep(interval)
+        idle = activity.idle_seconds()
+        if idle < idle_window_seconds:
+            continue
+        _logger.info(
+            "daemon idle for %.0fs (window %.0fs); standing down",
+            idle,
+            idle_window_seconds,
+        )
+        server.should_exit = True
+        return
+
+
 def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
     """Serve the app on the pre-bound loopback fd; call ``on_started`` once the
     server is actually serving HTTP (uvicorn ``Server.started``).
@@ -156,12 +200,26 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
         # Only now that the spawn lock is freed can another daemon take
         # daemon.json from us, so the watcher starts here rather than at boot.
         evictor = asyncio.create_task(_evict_when_superseded(server), name="daemon-orphan-evictor")
+        # Unset means "never stand down" — the setting for someone whose
+        # channels must answer at any hour (spec daemon FR-029).
+        idle_hours = daemon_config.read_idle_shutdown_hours()
+        idler = (
+            None
+            if idle_hours is None
+            else asyncio.create_task(
+                _stand_down_when_idle(server, idle_window_seconds=idle_hours * 3600.0),
+                name="daemon-idle-watcher",
+            )
+        )
         try:
             await serve_task
         finally:
-            evictor.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await evictor
+            for task in (evictor, idler):
+                if task is None:
+                    continue
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
 
     asyncio.run(_runner())
 

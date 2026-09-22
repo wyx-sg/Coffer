@@ -42,6 +42,7 @@ from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocket
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.tunnel_spawn import TunnelController
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.daemon import activity
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
@@ -54,6 +55,22 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.resource_service import ResourceService
+
+#: The name the channel listener holds the daemon's idle clock open under.
+_CHANNEL_HOLD = "channel-listener"
+
+
+def _hold_for_channel_listener(listener_running: bool) -> None:
+    """Translate "a listener is up" into the daemon's idle-clock vocabulary.
+
+    The composition root's job, in two lines: the runtime knows whether it has
+    a listener and nothing about daemons, the clock knows about holds and
+    nothing about channels, and this says which is which.
+    """
+    if listener_running:
+        activity.hold(_CHANNEL_HOLD)
+    else:
+        activity.release(_CHANNEL_HOLD)
 
 
 def _daemon_info() -> tuple[str, str]:
@@ -149,6 +166,10 @@ def wire_channel_kind(
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
         machine_id=local_machine_id,
+        # A live listener keeps the daemon from standing down as idle
+        # (spec daemon FR-029): it exists to be reachable, so the hours it
+        # spends waiting for a message are exactly what it is for.
+        service_hold=_hold_for_channel_listener,
     )
 
     async def on_delete(channel: Resource) -> None:
