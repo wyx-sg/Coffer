@@ -17,9 +17,17 @@ use crate::restart::{record_restart_outcome, restart_rate_limit_refusal, stop_ru
 use crate::spawn::spawn_resolved_daemon;
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RestartResult {
     pub pid: u32,
     pub started: bool,
+    /// The replacement's connection, so the page does not have to ask for one.
+    /// Asking again is what used to start a SECOND daemon: the page called
+    /// `get_daemon_info` the instant this returned, before the daemon just
+    /// spawned had bound a port, and that command's cold-start branch spawned
+    /// a rival for it (FR-006/FR-007).
+    pub base_url: String,
+    pub token: String,
 }
 
 /// Rate-limit state for `restart_daemon`. We refuse calls that arrive less
@@ -27,6 +35,25 @@ pub struct RestartResult {
 /// avoid an accidental tight-loop spawning many daemon processes.
 static LAST_RESTART_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 const RESTART_MIN_INTERVAL_SECS: u64 = 5;
+
+/// How long a daemon the shell just started is given to answer before the
+/// shell calls it a failure.
+///
+/// It is a ceiling, not an expectation. A daemon does not serve the moment it
+/// is spawned: the frozen binary unpacks itself, migrations run, the MCP
+/// upstreams and channel listeners come up in the FastAPI lifespan, and only
+/// then does uvicorn accept. On a real vault that takes anywhere from five to
+/// fifteen seconds, and longer when a remote upstream is slow to answer — the
+/// previous fifteen-second ceiling sat *inside* that spread, so a launch that
+/// landed on the slow end declared a daemon dead while it was seconds from
+/// serving. The value now sits well clear of it; the page retries anyway
+/// (`credentialDesktopHost`), so this bound only decides how long one attempt
+/// waits, never whether the app recovers.
+const DAEMON_READY_TIMEOUT_SECS: u64 = 90;
+
+/// How often the ready-wait re-probes. Short enough that a daemon that comes
+/// up fast is picked up straight away, long enough not to busy-spin.
+const DAEMON_READY_POLL_MS: u64 = 250;
 
 /// Restart the daemon: stop the running one (if any), spawn a fresh one.
 ///
@@ -36,8 +63,15 @@ const RESTART_MIN_INTERVAL_SECS: u64 = 5;
 ///   2. True restart: if `~/.coffer/daemon.json` lists a responsive daemon,
 ///      POST its token-gated /daemon/shutdown route and wait for the port
 ///      to free.
-///   3. Resolve (five-step chain) and spawn detached; return the PID.
-#[tauri::command]
+///   3. Resolve (five-step chain) and spawn detached.
+///   4. Wait for the replacement to answer, and return its connection with
+///      the PID — the caller installs it rather than handshaking again.
+///
+/// Declared `async` so the framework runs it off the main thread: steps 2-4
+/// block for seconds, and on the main thread that is a frozen window for the
+/// whole restart. The tray's own call already spawns a thread for this reason
+/// (`tray.rs`); the webview's had no such protection.
+#[tauri::command(async)]
 pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     use std::time::{Duration, Instant};
 
@@ -86,7 +120,57 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
     let pid = spawned?;
 
     log::info!("daemon restarted (pid {})", pid);
-    Ok(RestartResult { pid, started: true })
+
+    // (4) Wait for it to serve, and hand its credentials back. The guard is
+    // still held: a second restart arriving mid-wait must queue behind this
+    // one rather than shut down the daemon this call is waiting for.
+    let Some((port, token)) = wait_for_daemon_ready(ready_deadline()) else {
+        let msg = format!(
+            "coffer-daemon (pid {pid}) was started but did not answer within {DAEMON_READY_TIMEOUT_SECS}s"
+        );
+        log::warn!("{msg}");
+        return Err(msg);
+    };
+    log::info!("daemon restarted and serving on port {port} (pid {pid})");
+    Ok(RestartResult {
+        pid,
+        started: true,
+        base_url: base_url_for(port),
+        token,
+    })
+}
+
+/// The instant a ready-wait started now should give up at.
+fn ready_deadline() -> std::time::Instant {
+    std::time::Instant::now() + std::time::Duration::from_secs(DAEMON_READY_TIMEOUT_SECS)
+}
+
+/// The base URL the webview calls a daemon on `port` at.
+fn base_url_for(port: u16) -> String {
+    format!("http://127.0.0.1:{port}/api/v1")
+}
+
+/// Poll `~/.coffer/daemon.json` + the status route until a daemon answers, or
+/// `deadline` passes. Returns its port and token.
+///
+/// Both halves matter and neither is enough alone: the file appears when the
+/// port is bound, which is *before* the app is serving, so a reader that
+/// trusted the file would hand the page a token for a socket that does not
+/// answer yet.
+fn wait_for_daemon_ready(deadline: std::time::Instant) -> Option<(u16, String)> {
+    use std::thread::sleep;
+    use std::time::{Duration, Instant};
+    loop {
+        if let Some((port, token)) = read_daemon_info() {
+            if daemon_responds_ok(port) {
+                return Some((port, token));
+            }
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        sleep(Duration::from_millis(DAEMON_READY_POLL_MS));
+    }
 }
 
 /// The version this app build expects the daemon to report. Sourced from the
@@ -136,35 +220,52 @@ pub struct DaemonInfo {
 /// `__COFFER_BASE_URL__` before any API request.
 ///
 /// Detect-or-spawn runs through the five-step chain: a daemon we can take over
-/// is reused as-is; otherwise we spawn the binary the chain found and wait (up
-/// to ~15s) for it to publish `daemon.json` and answer.
-#[tauri::command]
+/// is reused as-is; otherwise we spawn the binary the chain found and wait
+/// (up to [`DAEMON_READY_TIMEOUT_SECS`]) for it to publish `daemon.json` and
+/// answer.
+///
+/// Every outcome is logged (FR-012). It used to be the one thing the shell
+/// did silently, and it is the one a user most needs an account of: a
+/// handshake that failed here left the page with no API address at all, and
+/// nothing in `~/.coffer/logs/daemon.log` said so.
+///
+/// Declared `async` so the framework runs it off the main thread — the
+/// cold-start branch blocks for as long as a daemon takes to boot, and on the
+/// main thread that is a frozen window for the whole of it.
+#[tauri::command(async)]
 pub fn get_daemon_info(app: AppHandle) -> Result<DaemonInfo, String> {
-    use std::thread::sleep;
-    use std::time::{Duration, Instant};
-
     let ready = |port: u16, token: String| DaemonInfo {
-        base_url: format!("http://127.0.0.1:{port}/api/v1"),
+        base_url: base_url_for(port),
         token,
     };
 
     // Step 1 of the chain short-circuits the whole cold start.
-    if let DaemonSource::Running { port, token } = daemon_source(&app)? {
-        return Ok(ready(port, token));
+    match daemon_source(&app) {
+        Ok(DaemonSource::Running { port, token }) => {
+            log::info!("handshake: attached to the daemon serving on port {port}");
+            return Ok(ready(port, token));
+        }
+        Ok(DaemonSource::Binary { .. }) => {}
+        Err(e) => {
+            log::warn!("handshake: no daemon and none to start: {e}");
+            return Err(e);
+        }
     }
 
     // Cold start: spawn the resolved binary, then poll until it answers.
     spawn_resolved_daemon(&app)?;
-    let deadline = Instant::now() + Duration::from_secs(15);
-    while Instant::now() < deadline {
-        if let Some((port, token)) = read_daemon_info() {
-            if daemon_responds_ok(port) {
-                return Ok(ready(port, token));
-            }
+    match wait_for_daemon_ready(ready_deadline()) {
+        Some((port, token)) => {
+            log::info!("handshake: spawned daemon is serving on port {port}");
+            Ok(ready(port, token))
         }
-        sleep(Duration::from_millis(250));
+        None => {
+            let msg =
+                format!("coffer-daemon did not become ready within {DAEMON_READY_TIMEOUT_SECS}s");
+            log::warn!("handshake: {msg}");
+            Err(msg)
+        }
     }
-    Err("coffer-daemon did not become ready within 15s".to_string())
 }
 
 #[cfg(test)]
@@ -206,6 +307,47 @@ mod tests {
         // silently agree.
         assert_eq!(APP_VERSION, env!("CARGO_PKG_VERSION"));
         assert!(!APP_VERSION.is_empty());
+    }
+
+    // --- the readiness budget: a ceiling, not an expectation. ---
+
+    #[test]
+    fn the_readiness_budget_clears_a_real_daemon_boot() {
+        use std::time::{Duration, Instant};
+        // Measured on a real vault: five to fourteen seconds from spawn to
+        // serving, and longer when a remote MCP upstream is slow to answer in
+        // the lifespan. The previous fifteen-second ceiling sat inside that
+        // spread, so a launch that landed on the slow end declared a daemon
+        // dead while it was seconds away — and the page had no way back.
+        // Pinning it keeps a future "tidy-up" from walking the budget back
+        // into the boot times it exists to clear.
+        let budget = ready_deadline().saturating_duration_since(Instant::now());
+        assert!(
+            budget >= Duration::from_secs(60),
+            "a budget inside a real daemon's boot time is the bug, not the fix"
+        );
+    }
+
+    #[test]
+    fn the_base_url_is_the_loopback_api_root() {
+        // The one address the webview is given, and the only one the CSP
+        // admits (`connect-src http://127.0.0.1:*`).
+        assert_eq!(base_url_for(8000), "http://127.0.0.1:8000/api/v1");
+    }
+
+    /// The ready-wait is what a restart hands its caller a connection from,
+    /// and it must give up rather than hang when nothing ever answers.
+    // acceptance(spec = "desktop-app", scenario = "a restart hands back the connection it waited for")
+    #[test]
+    fn the_ready_wait_gives_up_at_its_deadline() {
+        use std::time::{Duration, Instant};
+        // A deadline already in the past: one probe, then out. Whether that
+        // single probe finds this machine's own daemon is not the point —
+        // returning at all is, because a wait that never ended would hold the
+        // restart (and its lock) open forever.
+        let started = Instant::now();
+        let _ = wait_for_daemon_ready(Instant::now() - Duration::from_secs(1));
+        assert!(started.elapsed() < Duration::from_secs(5));
     }
 
     #[test]

@@ -14,6 +14,39 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The envelope code the daemon answers a request it is not ready for with
+ * (backend `surfaces/http/errors.py`), reused here for the request that never
+ * left: a page whose supplier has not named a base URL yet is in exactly that
+ * state, and saying so in the daemon's own vocabulary means the offline banner
+ * and the `errors.DAEMON_NOT_READY` translation already know what to do with
+ * it. See `getCofferBaseUrl`.
+ */
+const DAEMON_NOT_READY = "DAEMON_NOT_READY";
+
+/** The error a caller raises when no base URL has been supplied yet. */
+export function daemonNotReadyError(): ApiError {
+  return new ApiError(DAEMON_NOT_READY, "the daemon connection has not been supplied yet");
+}
+
+/**
+ * The same thing as a response, for the one caller that short-circuits inside
+ * `fetch` rather than before it — the generated client's middleware, which can
+ * return a `Response` but cannot throw one.
+ */
+export function daemonNotReadyResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: DAEMON_NOT_READY,
+        message: "the daemon connection has not been supplied yet",
+        details: {},
+      },
+    }),
+    { status: 503, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 /** The error envelope shape openapi-fetch returns on a non-2xx response. */
 type ErrorEnvelope =
   | { error?: { code?: string; message?: string; details?: unknown } }

@@ -12,7 +12,7 @@
 //   - HTTP error responses (non-200, e.g. 404 — JSON body)
 
 import { getCofferBaseUrl, getCofferToken } from "../auth";
-import { ApiError } from "../api/errors";
+import { ApiError, daemonNotReadyError } from "../api/errors";
 
 // ---------------------------------------------------------------------------
 // Event types
@@ -139,7 +139,10 @@ export async function* subscribeConversationEvents(
   conversationId: string,
   signal?: AbortSignal,
 ): AsyncGenerator<AgentEvent, void, unknown> {
-  const url = `${getCofferBaseUrl()}/chat/conversations/${conversationId}/events`;
+  const baseUrl = getCofferBaseUrl();
+  // Nothing has named the API's address yet; see getCofferBaseUrl.
+  if (baseUrl === null) throw daemonNotReadyError();
+  const url = `${baseUrl}/chat/conversations/${conversationId}/events`;
   const response = await fetch(url, {
     method: "GET",
     headers: {

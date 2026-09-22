@@ -642,7 +642,6 @@
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
-      "reconnectFailed": "The daemon restarted, but the app could not reconnect to it: {{message}}. Quit and reopen Coffer.",
       "webRestartHint": "The browser can't restart it — run this in your terminal:"
     }
   },
