@@ -203,6 +203,11 @@ EXPECTED_TABLES = {
     "sync_convergence_state",
     "sync_held_paths",
     "sync_runs",
+    # Orphans on purpose. The delivery feature that wrote these four is parked
+    # on its own branch and nothing here reads them any more, but a migration
+    # is history: 0090 created them in a release people have already upgraded
+    # through, so head still carries them and this list still names them. They
+    # go when a revision drops them, not before.
     "workflow_runs",
     "workflow_events",
     "workflow_node_attempts",

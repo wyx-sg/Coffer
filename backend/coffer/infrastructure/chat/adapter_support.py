@@ -9,8 +9,6 @@ app-server-backed (:mod:`codex_agent`) adapters both need:
 - :data:`SessionSink` — the callback an adapter calls to persist a newly
   discovered upstream session id back onto the conversation, so the next turn
   can ``--resume`` it.
-- :data:`ConversationEnv` — the lookup a provider asks for the extra
-  environment one conversation's agent process should be launched with.
 - :func:`last_user_text` — the prompt for a turn: the text of the most recent
   user message in the history.
 - :func:`channel_system_context` — the append telling a channel-driven agent it
@@ -30,16 +28,6 @@ from coffer.domain.chat.message import Message, Role, TextBlock
 
 #: Persist a discovered upstream session id back onto the conversation.
 SessionSink = Callable[[str], Awaitable[None]]
-
-#: Extra environment variables for one conversation's agent process, looked up
-#: per turn by conversation id. ``None`` — the answer for every conversation a
-#: person is driving — means the process is launched exactly as it was before
-#: anything supplied one. Deliberately a narrow callable rather than anything
-#: imported from ``application.workflow``: this layer carries a caller's
-#: environment without knowing what the caller is, which is why a workflow run
-#: can identify its node's turn to the shim without the chat layer growing a
-#: dependency on the workflow kind.
-ConversationEnv = Callable[[str], Awaitable[dict[str, str] | None]]
 
 
 @dataclass

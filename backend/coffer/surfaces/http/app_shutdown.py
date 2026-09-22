@@ -7,9 +7,8 @@ the half whose ORDER is load-bearing, so it is worth reading on its own.
 
 Three rules the order encodes:
 
-* **Stop what starts work before stopping what work needs.** The advance
-  worker is first because it is the one worker that starts agent turns; the
-  channel adapters are next for the same reason.
+* **Stop what starts work before stopping what work needs.** The channel
+  adapters go early because they are what starts agent turns.
 * **Cancel the reconciler before disposing it.** An in-flight tick would
   otherwise resurrect the adapters ``dispose()`` just stopped.
 * **Every step is best-effort.** A dead component must not abort the teardown
@@ -33,7 +32,6 @@ from coffer.surfaces.http.mcp.protocol_routes import shutdown_all_sessions
 from coffer.surfaces.http.memory_wiring import stop_aggregate_worker, stop_distil_worker
 from coffer.surfaces.http.sync_wiring import stop_converge_worker
 from coffer.surfaces.http.transcript_warm_wiring import stop_transcript_warm_worker
-from coffer.surfaces.http.workflow_wiring import stop_advance_worker
 
 _logger = logging.getLogger(__name__)
 
@@ -49,7 +47,6 @@ class Running:
     """
 
     workers: Any
-    workflow: Any
     channel_runtime: Any
     channel_runtime_task: asyncio.Task[None]
     reaper_task: asyncio.Task[Any]
@@ -75,8 +72,6 @@ async def shutdown(running: Running) -> None:
     """Stop everything, in the order above."""
     daemon_routes.set_daemon_phase("draining")
     running.workers.retention_worker.stop()
-    # First — it is the one worker that starts agent turns.
-    await stop_advance_worker(running.workflow.worker)
     await stop_converge_worker(running.workers.converge_worker)
     await stop_curation_worker(running.workers.curation_task)
     await stop_distil_worker(running.workers.distil_task)

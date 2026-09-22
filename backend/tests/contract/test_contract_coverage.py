@@ -77,7 +77,6 @@ _CONTRACTS: dict[str, str | None] = {
     "specs/resource-framework/contracts/api.openapi.yaml": None,
     "specs/skill-manager/contracts/api.openapi.yaml": None,
     "specs/vault-sync/contracts/api.openapi.yaml": "test_sync_openapi.py",
-    "specs/workflow/contracts/api.openapi.yaml": "test_workflow_openapi.py",
 }
 
 

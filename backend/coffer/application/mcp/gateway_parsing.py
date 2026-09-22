@@ -20,9 +20,6 @@ _CWD_META_KEY = "coffer/cwd"
 #: quietly matched against a scope by a stale label (ADR
 #: resource-identity-is-an-immutable-uid; "no name fallback").
 _AGENT_UID_META_KEY = "coffer/agent-uid"
-#: The extension key the shim stamps a workflow run identity into, present only
-#: when the shim was launched inside a node's turn (spec workflow FR-035).
-_RUN_META_KEY = "coffer/run"
 
 
 def _extract_cwd(params: dict[str, Any]) -> str | None:
@@ -46,20 +43,6 @@ def _extract_agent_uid(params: dict[str, Any]) -> str | None:
         agent_uid = meta.get(_AGENT_UID_META_KEY)
         if isinstance(agent_uid, str) and agent_uid:
             return agent_uid
-    return None
-
-
-def _extract_run(params: dict[str, Any]) -> str | None:
-    """Pull the workflow run identity from an ``initialize`` envelope's
-    ``params._meta["coffer/run"]`` (set by the shim from its environment when a
-    node's turn launched it). Absent → None, which is every ordinary
-    conversation. Returned opaque: the string is ``"<run_id>/<attempt_id>"``,
-    but splitting it belongs to the workflow kind that reads it, not here."""
-    meta = params.get("_meta")
-    if isinstance(meta, dict):
-        run = meta.get(_RUN_META_KEY)
-        if isinstance(run, str) and run:
-            return run
     return None
 
 

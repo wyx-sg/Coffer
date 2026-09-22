@@ -67,23 +67,6 @@ export async function call<T>(path: string, { method = "GET", body }: Options = 
   return (await response.json()) as T;
 }
 
-/**
- * GET `path` and return its BYTES.
- *
- * Here rather than in a caller because the token is a HEADER: an `<img src>`
- * cannot carry one, so anything the app has to display and the daemon has to
- * authorise is fetched with the same credentials as every other request and
- * turned into an object URL by the component that shows it. The caller owns
- * that URL and must revoke it.
- */
-export async function callBlob(path: string): Promise<Blob> {
-  const response = await fetch(`${getCofferBaseUrl()}${path}`, { headers: authHeaders() });
-  if (!response.ok) {
-    throw new ApiError("INTERNAL_ERROR", `request failed: ${response.status}`);
-  }
-  return await response.blob();
-}
-
 function authHeaders(): Record<string, string> {
   return {
     "X-Coffer-Token": getCofferToken() ?? "",

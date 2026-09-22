@@ -20,7 +20,6 @@ from coffer.surfaces.cli import (
     scope_cmd,
     skill_cmd,
     sync_cmd,
-    workflow_cmd,
 )
 from coffer.surfaces.cli import mcp as mcp_cmd
 
@@ -58,7 +57,6 @@ app.add_typer(memory_cmd.app, name="memory")
 app.add_typer(provider_cmd.app, name="provider")
 app.add_typer(engine_cmd.app, name="engine")
 app.add_typer(sync_cmd.app, name="sync")
-app.add_typer(workflow_cmd.app, name="workflow")
 
 
 def run() -> None:

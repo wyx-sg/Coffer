@@ -20,7 +20,6 @@ from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNameResolver,
-    ConversationEnv,
     MemoryContextComposer,
     ModelLister,
     compose_system_context,
@@ -73,7 +72,6 @@ class ClaudeSdkProvider:
         transcriber_factory: TranscriberFactory | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel_name: ChannelNameResolver | None = None,
-        conversation_env: ConversationEnv | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -93,9 +91,6 @@ class ClaudeSdkProvider:
         # just without naming the channel — the uid is what decides that it IS a
         # channel turn, and the label was only ever colour.
         self._resolve_channel_name = resolve_channel_name
-        # None ⇒ the agent process inherits the daemon's environment untouched,
-        # which is what every conversation a person is driving gets.
-        self._conversation_env = conversation_env
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -158,11 +153,6 @@ class ClaudeSdkProvider:
             session_factory=self._session_factory,
             on_session=_save_session,
             system_context=system_context,
-            # Whatever this conversation's caller needs the agent process to
-            # know about itself — a workflow node's run identity, which the CLI
-            # hands to the shim it spawns, and the shim reports at the gateway
-            # handshake. None (the default) leaves the environment as it was.
-            env=await self._extra_env(conversation_id),
             # Claude cannot hear audio. A voice attachment is transcribed by the
             # user's configured connection, or handed over untouched when there
             # is none (spec channels FR-019).
@@ -174,16 +164,6 @@ class ClaudeSdkProvider:
 
     async def on_conversation_deleted(self, conversation_id: str) -> None:
         return
-
-    async def _extra_env(self, conversation_id: str) -> dict[str, str] | None:
-        """This conversation's extra environment, or None when nothing supplies
-        one. An overlay, not a full environment: the SDK merges
-        ``ClaudeAgentOptions.env`` over what the daemon inherited, so passing a
-        bare dict here cannot strip PATH (the codex side has to merge
-        ``os.environ`` itself — ``create_subprocess_exec`` replaces it)."""
-        if self._conversation_env is None:
-            return None
-        return await self._conversation_env(conversation_id)
 
     async def _transcriber(self) -> Transcriber | None:
         if self._transcriber_factory is None:

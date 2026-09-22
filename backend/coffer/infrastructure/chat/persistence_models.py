@@ -55,9 +55,9 @@ class ConversationModel(Base):
     channel_uid: Mapped[str | None] = mapped_column(String, nullable=True)
     peer_chat_id: Mapped[str | None] = mapped_column(String, nullable=True)
     # Whose conversation this is. NULL is the developer's own — the only kind
-    # the chat list shows — and a name is the surface that owns it, which today
-    # is only ``workflow``. Chat needs no idea what that means: it lists the
-    # unowned ones, and everything else belongs to whoever put a name here.
+    # the chat list shows — and a name is the surface that owns it. Chat needs
+    # no idea what any such name means: it lists the unowned ones, and
+    # everything else belongs to whoever put a name here.
     owner: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (

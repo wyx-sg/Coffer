@@ -77,16 +77,6 @@ class AuditEventType(StrEnum):
     # A projection write refused because the agent's native config file changed
     # on disk between Coffer's read and its write (optimistic concurrency).
     PROVIDER_PROJECTION_REFUSED = "provider_projection_refused"
-    # spec workflow. A run's own event log is the fine-grained record; these are
-    # the vault-level facts the Activity page answers for — a run began, it
-    # ended one way or another, and every decision that let something reach the
-    # outside world.
-    WORKFLOW_RUN_STARTED = "workflow_run_started"
-    WORKFLOW_RUN_FINISHED = "workflow_run_finished"
-    WORKFLOW_APPROVAL_DECIDED = "workflow_approval_decided"
-    # A write-class tool call that the gate held, and what became of it. This is
-    # the one audit event that records something Coffer REFUSED to do.
-    WORKFLOW_TOOL_CALL_GATED = "workflow_tool_call_gated"
 
 
 @dataclass
