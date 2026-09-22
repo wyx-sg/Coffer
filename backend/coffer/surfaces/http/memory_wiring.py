@@ -103,6 +103,27 @@ class MemoryWiring:
     distil: DistilRunner
 
 
+async def run_memory_delivery_boot_heal(delivery: DeliveryService) -> None:
+    """Boot hook: rewrite hooks whose command Coffer no longer writes.
+
+    An installed hook is a string in somebody else's settings file, and the
+    CLI it calls ships in a binary that keeps moving; detection matches only
+    the marker, so an entry whose arguments went stale reads as installed and
+    fails at every session start. Repairing it needs no user, which is why it
+    happens here rather than behind a button.
+
+    Best-effort, like the sweeps it sits beside: whatever it finds is logged,
+    and nothing here is allowed to fail boot.
+    """
+    try:
+        notes = await delivery.heal_drift()
+    except Exception:
+        logger.exception("memory_delivery_boot_heal.failed")
+        return
+    for note in notes:
+        logger.warning("memory_delivery_boot_heal %s", note)
+
+
 def wire_memory_kind(
     app: FastAPI,
     resource_svc: ResourceService,

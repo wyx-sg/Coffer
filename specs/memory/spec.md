@@ -243,6 +243,13 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **Then** install adds exactly **one** entry carrying Coffer's marker, a second install leaves one entry, and every foreign hook, every other event and every unrelated key is untouched
 - **And** remove takes out only the marked entry — dropping the event array and the top-level hooks key once they are empty — and with nothing installed it is a clean no-op that writes no file and records no audit event (FR-032)
 
+### Scenario: a hook whose command went stale is repaired without being asked
+
+- **Given** an agent with Coffer's hook installed, and a Coffer build whose delivery command is no longer the one in that agent's settings file,
+- **When** the daemon starts,
+- **Then** the entry is rewritten in place to the command this build would install, so the next session is served rather than shown a usage error,
+- **And** an agent whose hook is already current is left untouched, and an agent with no hook is not given one.
+
 ### Scenario: every hook fire is recorded in the audit log
 
 - **Given** an agent for which delivery has been installed
@@ -312,6 +319,7 @@ Session-start delivery requires touching an agent's own settings, so Coffer neve
 - **FR-030**: Delivery MUST be bounded by a ceiling, and the ceiling MUST be sized for **an index** rather than for a handful of lines. When the index does not fit, the trim MUST drop the oldest lines, MUST state how many were dropped, and MUST name the directory holding them — a trimmed delivery still leaves every note reachable as a file, which is why a trim here is a much smaller loss than it was under the previous design. When the two partitions compete for the ceiling, **the current repository's lines MUST be preferred over `global`'s**. The previous design spent the budget the other way round and, on a live vault of 189 entries, delivered 8 lines of which **none** were about the project the session was open in.
 - **FR-031**: A **channel-driven turn** MUST receive the same payload through the system-prompt append the turn platform already composes (spec [channels](../channels/spec.md)). It MUST NOT require a hook, since Coffer owns that context itself.
 - **FR-032**: For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it; where it has none, delivery MUST use its earliest per-session event with a **once-per-session guard**. Installation MUST be an **explicit act** on Coffer's surface, marker-scoped, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing.
+- **FR-032a**: An installed hook MUST be repaired when the command Coffer would write is no longer the command that is installed, without waiting for a user to notice. A hook is a string left in somebody else's settings file, and the CLI it invokes ships in a binary that keeps moving: when `coffer memory context` stopped taking `--agent` and started taking `--agent-uid`, every hook already on disk kept passing an option that no longer existed, so the agent printed a usage error at the start of every session and this layer reached it never again. Nothing reported it, because detection is marker-scoped and never reads the arguments — which is exactly what lets a reinstall replace an entry in place, and exactly why a stale entry reads as installed. The repair MUST therefore be the install, chosen by comparing what is installed against what would be installed now, and it MUST be best-effort per agent so one unreadable settings file cannot strand the rest. It MUST NOT install a hook for an agent that has none: an agent without one chose that, and a repair that added one would be an install Coffer made silently, which FR-032 forbids.
 - **FR-033**: Coffer MUST record **an audit event for every delivery fire**, so that whether delivery is actually happening is answerable after the fact. A fire is an event, not a property of the agent: the per-agent delivery status MUST report installation only, and MUST NOT carry a last-fired timestamp.
 
 ### Surfaces

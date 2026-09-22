@@ -198,6 +198,48 @@ class DeliveryService:
         )
         return await self._status_for(agent, cfg)
 
+    async def heal_drift(self, *, actor: str = "system") -> tuple[str, ...]:
+        """Rewrite every installed hook whose command is no longer the one
+        Coffer would write. Returns a note per agent repaired.
+
+        An installed hook is a string sitting in somebody else's settings file
+        for months, and the CLI it invokes ships in a binary that keeps
+        moving. When `coffer memory context` dropped `--agent` for
+        `--agent-uid` (ADR resource-identity-is-an-immutable-uid), every hook
+        already on disk kept passing the option that no longer existed — so
+        the agent printed a usage error at the start of every session and
+        Coffer's memory reached it never again. Nothing noticed: detection
+        matches the marker and never reads the arguments, which is what makes
+        a reinstall able to replace an entry in place, and is also why a
+        stale entry looked perfectly installed to `status`.
+
+        So the repair is the same act as the install, decided by comparing
+        what is there with what `command_for` says now. Best-effort per agent:
+        one unreadable settings file must not stop the others from being
+        fixed.
+        """
+        notes: list[str] = []
+        for resource in await self._agents.list():
+            try:
+                cfg = AgentConfig.model_validate(resource.config)
+            except Exception:
+                continue
+            if cfg.type not in _ADAPTERS:
+                continue
+            try:
+                status = await self._status_for(resource, cfg)
+                if not status.installed:
+                    continue
+                wanted = self._adapter(cfg.type).command_for(resource.uid)
+                if status.command == wanted:
+                    continue
+                await self.install(resource.uid, actor=actor)
+            except Exception as exc:
+                notes.append(f"{resource.name}: could not repair the delivery hook ({exc!r})")
+                continue
+            notes.append(f"{resource.name}: delivery hook rewritten to the current command")
+        return tuple(notes)
+
     async def remove(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
         """Remove Coffer's hook for one agent. A clean no-op — no write, no
         audit entry — when nothing is installed."""
