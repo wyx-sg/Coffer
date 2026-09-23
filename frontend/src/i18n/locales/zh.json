@@ -105,7 +105,8 @@
     "activity": "活动",
     "chat": "聊天",
     "modelProviders": "模型提供商",
-    "sync": "同步"
+    "sync": "同步",
+    "needsAttention": "有待处理的事项"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -1611,6 +1612,7 @@
         "no_change": "没有变化",
         "conflict": "因冲突中止",
         "awaiting_confirmation": "已暂停，等你确认",
+        "awaiting_confirmation_past": "已暂停",
         "push_failed": "本地已应用，推送失败",
         "failed": "失败",
         "disabled": "已关闭"

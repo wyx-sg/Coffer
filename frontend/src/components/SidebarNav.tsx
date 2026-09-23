@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -88,7 +89,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
+function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; dot: boolean }) {
   const { t } = useTranslation();
   const label = t(item.labelKey);
   // A plain Link + useMatch rather than NavLink: NavLink's className callback
@@ -100,7 +101,7 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
       aria-current={isActive ? "page" : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
-        "flex items-center rounded-md py-2 font-medium transition-colors",
+        "relative flex items-center rounded-md py-2 font-medium transition-colors",
         collapsed ? "justify-center px-2" : "gap-2.5 px-3",
         isActive
           ? "bg-primary/10 text-primary"
@@ -109,6 +110,19 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
     >
       <item.icon className="size-4 shrink-0" strokeWidth={1.75} />
       {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
+      {/* A dot, not a count: what is waiting is one situation to look at, and
+          a number here would be the number of times the timer re-raised it.
+          On a collapsed rail it rides the icon, which is all there is. */}
+      {dot ? (
+        <span
+          data-testid={`nav-dot-${item.to.replace(/\//g, "")}`}
+          aria-label={t("nav.needsAttention")}
+          className={cn(
+            "size-1.5 shrink-0 rounded-full bg-destructive",
+            collapsed ? "absolute right-1.5 top-1.5" : null,
+          )}
+        />
+      ) : null}
     </Link>
   );
   if (!collapsed) return link;
@@ -122,6 +136,10 @@ function NavRow({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
 
 export function SidebarNav({ collapsed }: { collapsed: boolean }) {
   const { t } = useTranslation();
+  // A held or failed vault stops converging and stops backing up, and the one
+  // surface that says so is the page a user has no reason to open. The dot is
+  // what gets them there; going there is what clears it.
+  const syncNeedsAttention = useSyncAttention();
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-3 text-sm">
       {NAV_GROUPS.map((group, i) => (
@@ -134,7 +152,12 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
             <div className="nav-group-label">{t(group.labelKey)}</div>
           )}
           {group.items.map((item) => (
-            <NavRow key={item.to} item={item} collapsed={collapsed} />
+            <NavRow
+              key={item.to}
+              item={item}
+              collapsed={collapsed}
+              dot={item.to === "/sync" && syncNeedsAttention}
+            />
           ))}
         </div>
       ))}

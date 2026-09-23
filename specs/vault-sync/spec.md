@@ -438,11 +438,18 @@ guards are normative.
 - **FR-096**: A vault whose last round needs a human — held for confirmation,
   conflicted, or failed to push or run — MUST say so where the user already
   is, not only on the page built for it. `coffer sync status` MUST exit
-  non-zero, the web UI MUST carry it on every page **except the sync page
-  itself**, where the round and the action that answers it already are, and the
-  desktop shell MUST raise it as a notification and mark its icon. A held
-  vault converges no further, so a hold nobody sees is an outage that looks
-  like silence: the first one in the field stood for four days.
+  non-zero, the web UI MUST mark its **navigation entry** for the sync page,
+  and the desktop shell MUST raise it as a notification and mark its icon. A
+  held vault converges no further, so a hold nobody sees is an outage that
+  looks like silence: the first one in the field stood for four days.
+
+  The web UI's mark MUST be cleared by **visiting the page**, not by the
+  situation changing, and MUST NOT return for the same situation. The rounds
+  are timer-driven: one broken remote is a fresh round every hour, and a
+  notice that re-raised itself on each would cover every page in the app
+  hourly with something the user read the first time. A mark keyed on what is
+  wrong — the outcome, the error, the direction and areas a hold was raised
+  over — asks once, and asks again only when the answer would be different.
 - **FR-091**: A round MUST re-derive its diff even while a confirmation is
   outstanding, and MUST **release** the hold where the direction it was raised
   for no longer breaches. A latch is an unanswered question about one diff, not
@@ -822,9 +829,11 @@ reported as a conflict.
   nothing is backed up until someone answers it,
 - **When** the user is anywhere other than the sync page — at a terminal, on
   another page of the web UI, or with only the desktop shell in front of them,
-- **Then** `coffer sync status` exits non-zero, a banner reports it over
-  whatever page they are on, and the shell has marked its icon and raised one
-  notification — once for that condition, not once per poll.
+- **Then** `coffer sync status` exits non-zero, the web UI's navigation entry
+  for sync is marked, and the shell has marked its icon and raised one
+  notification — once for that condition, not once per poll,
+- **And** opening the sync page clears the web UI's mark, which does not
+  return while the same thing is wrong, however many rounds re-raise it.
 
 ### Scenario: a re-layout that rewrites its documents publishes without asking
 
