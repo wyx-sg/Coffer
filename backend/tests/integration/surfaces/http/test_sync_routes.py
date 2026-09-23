@@ -1049,14 +1049,15 @@ def test_every_sync_operation_is_served_under_api_v1_sync() -> None:
     app = FastAPI()
     app.include_router(sync_router)
     served: set[tuple[str, str]] = set()
-    for route in app.routes:
-        path = getattr(route, "path", "")
+    # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
+    # router's routes into ``app.routes``, so walking that list finds nothing.
+    for path, operations in (app.openapi().get("paths") or {}).items():
         if not path.startswith("/api/v1/sync"):
             continue
         # A path parameter's name is the implementation's; the shape is the contract.
         shape = re.sub(r"\{[^}]+\}", "{id}", path.removeprefix("/api/v1/sync"))
-        for method in getattr(route, "methods", set()) or set():
-            served.add((method, shape))
+        for method in operations:
+            served.add((method.upper(), shape))
 
     missing = _SYNC_OPERATIONS - served
     assert not missing, f"not served: {sorted(missing)}"

@@ -472,11 +472,14 @@ _FORBIDDEN_ROUTE_WORDS = ("index", "reindex", "source", "embedding", "scope", "r
 def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_daemon):
     from coffer.surfaces.cli.knowledge_cmd import app as knowledge_app
 
+    # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
+    # router's routes into ``app.routes``, so walking that list finds nothing.
+    schema = _daemon()._inner.app.openapi()  # type: ignore[attr-defined]
     routes = {
-        (method, route.path)
-        for route in _daemon()._inner.app.routes  # type: ignore[attr-defined]
-        if getattr(route, "path", "").startswith("/api/v1/knowledge")
-        for method in getattr(route, "methods", ())
+        (method.upper(), path)
+        for path, operations in (schema.get("paths") or {}).items()
+        if path.startswith("/api/v1/knowledge")
+        for method in operations
     }
     assert routes >= _KNOWLEDGE_OPERATIONS
 

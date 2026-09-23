@@ -13,7 +13,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from coffer.surfaces.http.app import create_app
@@ -44,11 +43,14 @@ def test_every_management_route_refuses_a_missing_or_wrong_token(
 ) -> None:
     monkeypatch.setenv("COFFER_WEBUI_DIR", str(tmp_path / "no-ui"))
     app = create_app()
+    # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
+    # router's routes into ``app.routes``, so walking that list finds nothing.
     routes = [
-        (method, route.path)
-        for route in app.routes
-        if isinstance(route, APIRoute) and route.path.startswith("/api/v1/")
-        for method in sorted(route.methods - {"HEAD", "OPTIONS"})
+        (method.upper(), path)
+        for path, operations in sorted((app.openapi().get("paths") or {}).items())
+        if path.startswith("/api/v1/")
+        for method in sorted(operations)
+        if method.upper() not in {"HEAD", "OPTIONS"}
     ]
     assert len(routes) >= 50, "the management API must be enumerated, not an empty list"
 

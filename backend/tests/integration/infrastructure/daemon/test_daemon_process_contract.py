@@ -236,6 +236,8 @@ def test_the_daemon_listens_on_loopback_only(
     assert captured["app"] == "coffer.main:app"
     from coffer.main import app
 
-    paths = {getattr(r, "path", "") for r in app.routes}
+    # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
+    # router's routes into ``app.routes``, so walking that list finds nothing.
+    paths = set(app.openapi().get("paths") or {})
     assert "/mcp" in paths or any(p.startswith("/mcp") for p in paths)
     assert any(p.startswith("/api/v1/") for p in paths)
